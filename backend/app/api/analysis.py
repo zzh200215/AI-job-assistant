@@ -1,0 +1,610 @@
+# -*- coding: utf-8 -*-
+"""Analysis APIs for smart matching, optimization, and references."""
+import json
+import traceback
+from fastapi.responses import Response
+from fastapi.responses import FileResponse
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.api.auth import get_current_user
+from app.core.database import get_db
+from app.core.user_roles import RECRUITER_ROLE
+from app.models.agent import AgentStepLog, AgentTask
+from app.models.history import AnalysisRecord, JobDescription, Resume
+from app.models.user import User
+from app.orchestration.protocol import normalize_step_name
+from app.schemas.analysis import CandidateScreeningReq, CandidateScreeningSaveReq, ExplainMatchReq, FullAnalysisReq, MatchReq
+from app.services.candidate_screening_service import (
+    export_screening_session_csv,
+    get_screening_session,
+    list_screening_sessions,
+    save_screening_session,
+    screen_candidates,
+)
+from app.services.screening_report_export_service import export_screening_docx, export_screening_pdf
+from app.services.match_explainer_service import MatchExplainer
+from app.services import interview_service, match_service, optimize_service
+from app.services.analysis_service import run_smart_analysis
+from app.services.rag_service import get_knowledge_references
+from app.utils.file_access import resolve_upload_path
+from app.utils.http_errors import api_error
+from app.utils.job_access import get_accessible_job
+from app.utils.response import ERR_AI, ERR_COMMON, ERR_DB, ERR_FILE, ERR_PARAM, fail, ok
+
+
+def _deep_parse_json(obj):
+    """递归解析对象中所有 JSON 字符串（兼容 LLM 双重序列化或 DB 驱动差异）"""
+    if isinstance(obj, str):
+        try:
+            parsed = json.loads(obj)
+            return _deep_parse_json(parsed)
+        except Exception:
+            return obj
+    if isinstance(obj, dict):
+        return {k: _deep_parse_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_deep_parse_json(i) for i in obj]
+    return obj
+
+
+def _score_value(value, default=0):
+    """Return a numeric score from either a plain number or {'score': number}."""
+    if isinstance(value, dict):
+        value = value.get("score", default)
+    try:
+        return int(round(float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_dimension_scores(match_report):
+    """Normalize dimension_scores so frontend can read a stable {score, matched, missing} shape."""
+    if not isinstance(match_report, dict):
+        return match_report
+
+    report = dict(match_report)
+    raw = report.get("dimension_scores") or {}
+    if not isinstance(raw, dict):
+        raw = {}
+
+    normalized = {}
+    for key in ("skills", "experience", "education", "industry"):
+        value = raw.get(key, 0)
+        if isinstance(value, dict):
+            item = dict(value)
+            item["score"] = _score_value(item.get("score", 0))
+        else:
+            item = {"score": _score_value(value, 0)}
+        item.setdefault("matched", [])
+        item.setdefault("missing", [])
+        normalized[key] = item
+
+    report["dimension_scores"] = normalized
+    return report
+
+
+def _normalize_interview_questions(interview_questions):
+    """Normalize old basic/tech/project/scenario output and new *_questions output."""
+    if not isinstance(interview_questions, dict):
+        return interview_questions
+
+    data = dict(interview_questions)
+    mapping = {
+        "hr_questions": ("hr_questions", "basic"),
+        "tech_questions": ("tech_questions", "tech"),
+        "project_questions": ("project_questions", "project"),
+        "scenario_questions": ("scenario_questions", "scenario"),
+    }
+
+    normalized = {}
+    total = 0
+    for target, sources in mapping.items():
+        items = []
+        for source in sources:
+            source_items = data.get(source)
+            if isinstance(source_items, list):
+                items = source_items
+                break
+        normalized[target] = items
+        total += len(items)
+
+    for key, value in data.items():
+        if key not in {"basic", "tech", "project", "scenario", *mapping.keys()}:
+            normalized[key] = value
+
+    normalized["total_questions"] = _score_value(data.get("total_questions", total), total)
+    return normalized
+
+
+def _load_task_outputs(db: Session, user_id: int, record_id: int):
+    """Load orchestrated outputs attached to an analysis record."""
+    task = (
+        db.query(AgentTask)
+        .filter(
+            AgentTask.analysis_record_id == record_id,
+            AgentTask.user_id == user_id,
+        )
+        .order_by(AgentTask.id.desc())
+        .first()
+    )
+    if not task:
+        return {}, {}, {}
+
+    career_planning = {}
+    rag_confidence = {}
+    steps = (
+        db.query(AgentStepLog)
+        .filter(AgentStepLog.task_id == task.id)
+        .order_by(AgentStepLog.step_index.desc())
+        .all()
+    )
+    for step in steps:
+        step_norm = normalize_step_name(step.step_name)
+        parsed = _deep_parse_json(step.output_data)
+        if step_norm == "knowledge_retrieval" and isinstance(parsed, dict) and parsed.get("rag_confidence"):
+            rag_confidence = parsed["rag_confidence"]
+        if step_norm == "career_planning":
+            career_planning = parsed
+            break
+        # Fallback: some pipelines store career_planning nested in SummaryAgent output
+        if isinstance(parsed, dict) and "career_planning" in parsed and parsed["career_planning"]:
+            career_planning = parsed["career_planning"]
+            break
+
+    final_report = _deep_parse_json(task.final_report)
+    return final_report, career_planning, rag_confidence
+
+
+def _get_owned_resume(db: Session, user: User, resume_id: int | None) -> Resume | None:
+    if not resume_id:
+        return None
+    return (
+        db.query(Resume)
+        .filter(Resume.id == resume_id, Resume.user_id == user.id)
+        .first()
+    )
+
+
+def _get_owned_resumes(db: Session, user: User, resume_ids: list[int]) -> list[Resume]:
+    if not resume_ids:
+        return []
+    rows = (
+        db.query(Resume)
+        .filter(
+            Resume.id.in_(resume_ids),
+            Resume.user_id == user.id,
+            Resume.is_deleted == 0,
+        )
+        .all()
+    )
+    by_id = {row.id: row for row in rows}
+    return [by_id[rid] for rid in resume_ids if rid in by_id]
+
+
+def _ensure_recruiter_access(user: User):
+    if user.role != RECRUITER_ROLE:
+        raise api_error(403, "仅招聘者可使用企业筛选功能", ERR_PARAM)
+
+router = APIRouter()
+
+
+@router.post("/full", summary="一键智能分析：统一编排 Agent 工作流")
+async def full_smart_analysis(
+    payload: FullAnalysisReq,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    resume = (
+        db.query(Resume)
+        .filter(
+            Resume.id == payload.resume_id,
+            Resume.user_id == current_user.id,
+            Resume.is_deleted == 0,
+        )
+        .first()
+    )
+    jd = get_accessible_job(db, payload.jd_id, current_user)
+    if not resume or not jd:
+        raise api_error(404, "简历或 JD 不存在，或无权限访问", ERR_PARAM)
+
+    try:
+        task_id = run_smart_analysis(
+            resume_id=payload.resume_id,
+            jd_id=payload.jd_id,
+            user_id=current_user.id,
+        )
+        return ok(data={"task_id": task_id}, message="智能分析已启动")
+    except Exception as exc:
+        traceback.print_exc()
+        raise api_error(500, f"启动分析失败: {exc}", ERR_COMMON)
+
+
+@router.post("/match", summary="一键分析：匹配度 + 优化 + 面试题")
+async def full_match(
+    payload: MatchReq,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    resume = (
+        db.query(Resume)
+        .filter(Resume.id == payload.resume_id, Resume.user_id == current_user.id)
+        .first()
+    )
+    jd = get_accessible_job(db, payload.jd_id, current_user)
+    if not resume or not jd:
+        raise api_error(404, "简历或 JD 不存在，或无权限访问", ERR_PARAM)
+
+    try:
+        record = match_service.run_full_analysis(
+            db,
+            payload.resume_id,
+            payload.jd_id,
+            remark=payload.remark if hasattr(payload, "remark") else "",
+            user_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise api_error(400, str(exc), ERR_PARAM)
+    except RuntimeError as exc:
+        raise api_error(502, f"AI 服务出错: {exc}", ERR_AI)
+    except Exception as exc:
+        traceback.print_exc()
+        raise api_error(500, f"分析失败: {exc}", ERR_COMMON)
+
+    references = getattr(record, "_references", [])
+    return ok(
+        {
+            "record_id": record.id,
+            "match_score": record.match_score,
+            "match_report": _normalize_dimension_scores(_deep_parse_json(record.match_report)),
+            "optimize_suggestions": _deep_parse_json(record.optimize_suggestions),
+            "interview_questions": _normalize_interview_questions(_deep_parse_json(record.interview_questions)),
+            "references": references,
+        },
+        message="分析完成",
+    )
+
+
+@router.post("/screen-candidates", summary="企业端候选人批量筛选")
+async def screen_candidates_api(
+    payload: CandidateScreeningReq,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_recruiter_access(current_user)
+    jd = get_accessible_job(db, payload.jd_id, current_user)
+    if not jd:
+        raise api_error(404, "JD 不存在，或无权限访问", ERR_PARAM)
+
+    resumes = _get_owned_resumes(db, current_user, payload.resume_ids)
+    if not resumes:
+        raise api_error(404, "未找到可筛选的简历", ERR_PARAM)
+
+    if len(resumes) != len(set(payload.resume_ids)):
+        raise api_error(404, "部分简历不存在或无权限访问", ERR_PARAM)
+
+    try:
+        data = screen_candidates(
+            db,
+            user_id=current_user.id,
+            jd=jd,
+            resumes=resumes,
+            top_k=payload.top_k,
+        )
+        return ok(data, message="候选人筛选完成")
+    except Exception as exc:
+        traceback.print_exc()
+        raise api_error(500, f"候选人筛选失败: {exc}", ERR_COMMON)
+
+
+@router.post("/screen-candidates/save", summary="保存候选人筛选记录")
+async def save_screen_candidates_api(
+    payload: CandidateScreeningSaveReq,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_recruiter_access(current_user)
+    jd = get_accessible_job(db, payload.jd_id, current_user)
+    if not jd:
+        raise api_error(404, "JD 不存在，或无权限访问", ERR_PARAM)
+
+    resumes = _get_owned_resumes(db, current_user, payload.resume_ids)
+    if not resumes:
+        raise api_error(404, "未找到可筛选的简历", ERR_PARAM)
+    if len(resumes) != len(set(payload.resume_ids)):
+        raise api_error(404, "部分简历不存在或无权限访问", ERR_PARAM)
+
+    try:
+        result_data = screen_candidates(
+            db,
+            user_id=current_user.id,
+            jd=jd,
+            resumes=resumes,
+            top_k=payload.top_k,
+        )
+        session = save_screening_session(
+            db,
+            user_id=current_user.id,
+            jd=jd,
+            request_payload=payload.model_dump(),
+            result_payload=result_data,
+            name=payload.name,
+        )
+        return ok(session.to_dict(), message="筛选记录已保存")
+    except Exception as exc:
+        traceback.print_exc()
+        raise api_error(500, f"保存筛选记录失败: {exc}", ERR_COMMON)
+
+
+@router.get("/screen-candidates/sessions", summary="获取筛选记录列表")
+async def list_screen_candidates_sessions_api(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_recruiter_access(current_user)
+    try:
+        items = list_screening_sessions(db, user_id=current_user.id)
+        return ok({"total": len(items), "items": [item.to_dict() for item in items]})
+    except Exception as exc:
+        raise api_error(500, f"查询筛选记录失败: {exc}", ERR_DB)
+
+
+@router.get("/screen-candidates/sessions/{session_id}", summary="获取筛选记录详情")
+async def get_screen_candidates_session_api(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_recruiter_access(current_user)
+    session = get_screening_session(db, user_id=current_user.id, session_id=session_id)
+    if not session:
+        raise api_error(404, "筛选记录不存在或无权限访问", ERR_PARAM)
+    return ok(session.to_dict())
+
+
+@router.get("/screen-candidates/sessions/{session_id}/export", summary="导出筛选记录 CSV")
+async def export_screen_candidates_session_api(
+    session_id: int,
+    format: str = "csv",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_recruiter_access(current_user)
+    session = get_screening_session(db, user_id=current_user.id, session_id=session_id)
+    if not session:
+        raise api_error(404, "筛选记录不存在或无权限访问", ERR_PARAM)
+
+    if format == "csv":
+        content = export_screening_session_csv(session)
+        file_name = f"screening_session_{session.id}.csv"
+        return Response(
+            content=content,
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{file_name}"'},
+        )
+
+    try:
+        if format == "docx":
+            rel_path = export_screening_docx(session)
+            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            file_name = f"screening_session_{session.id}.docx"
+        elif format == "pdf":
+            rel_path = export_screening_pdf(session)
+            media_type = "application/pdf"
+            file_name = f"screening_session_{session.id}.pdf"
+        else:
+            raise api_error(400, "不支持的导出格式", ERR_PARAM)
+
+        abs_path = resolve_upload_path(rel_path)
+        if not abs_path.exists() or not abs_path.is_file():
+            raise api_error(404, "导出文件不存在", ERR_FILE)
+        return FileResponse(path=abs_path, filename=file_name, media_type=media_type)
+    except RuntimeError as exc:
+        raise api_error(500, str(exc), ERR_COMMON)
+    except ValueError:
+        raise api_error(500, "导出路径无效", ERR_COMMON)
+
+
+@router.post("/{record_id}/optimize/regenerate", summary="重新生成简历优化建议")
+async def regen_optimize(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rec = (
+        db.query(AnalysisRecord)
+        .filter(AnalysisRecord.id == record_id, AnalysisRecord.user_id == current_user.id)
+        .first()
+    )
+    if not rec:
+        raise api_error(404, "记录不存在，或无权限访问", ERR_PARAM)
+
+    try:
+        record = optimize_service.regenerate_optimize(db, record_id, user_id=current_user.id)
+    except ValueError as exc:
+        raise api_error(400, str(exc), ERR_PARAM)
+    except Exception as exc:
+        traceback.print_exc()
+        raise api_error(502, f"重新生成失败: {exc}", ERR_AI)
+
+    return ok(
+        {
+            "record_id": record.id,
+            "optimize_suggestions": _deep_parse_json(record.optimize_suggestions),
+        },
+        message="简历优化建议已重新生成",
+    )
+
+
+@router.post("/{record_id}/interview/regenerate", summary="重新生成面试题")
+async def regen_interview(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rec = (
+        db.query(AnalysisRecord)
+        .filter(AnalysisRecord.id == record_id, AnalysisRecord.user_id == current_user.id)
+        .first()
+    )
+    if not rec:
+        raise api_error(404, "记录不存在，或无权限访问", ERR_PARAM)
+
+    try:
+        record = interview_service.regenerate_interview(db, record_id, user_id=current_user.id)
+    except ValueError as exc:
+        raise api_error(400, str(exc), ERR_PARAM)
+    except Exception as exc:
+        traceback.print_exc()
+        raise api_error(502, f"重新生成失败: {exc}", ERR_AI)
+
+    return ok(
+        {
+            "record_id": record.id,
+            "interview_questions": _normalize_interview_questions(_deep_parse_json(record.interview_questions)),
+        },
+        message="面试题已重新生成",
+    )
+
+
+@router.get("/{record_id}", summary="获取单条分析结果详情")
+async def get_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        rec = (
+            db.query(AnalysisRecord)
+            .filter(AnalysisRecord.id == record_id, AnalysisRecord.user_id == current_user.id)
+            .first()
+        )
+    except Exception as exc:
+        raise api_error(500, f"查询失败: {exc}", ERR_DB)
+
+    if not rec:
+        raise api_error(404, "记录不存在，或无权限访问", ERR_PARAM)
+
+    resume = _get_owned_resume(db, current_user, rec.resume_id)
+    jd = get_accessible_job(db, rec.jd_id, current_user) if rec.jd_id else None
+
+    resume_parsed = resume.parsed_json or {} if resume else {}
+    jd_parsed = jd.parsed_json or {} if jd else {}
+    resume_skills = resume_parsed.get("skills") or []
+    if isinstance(resume_skills, list):
+        resume_skills = [s if isinstance(s, str) else s.get("skill", "") for s in resume_skills]
+    jd_skills = jd_parsed.get("required_skills") or []
+    if isinstance(jd_skills, list):
+        jd_skills = [s if isinstance(s, str) else s.get("skill", "") for s in jd_skills]
+    jd_nice = jd_parsed.get("nice_to_have") or []
+    if isinstance(jd_nice, list):
+        jd_nice = [s if isinstance(s, str) else s.get("skill", "") for s in jd_nice]
+    all_jd_skills = list(set(jd_skills + jd_nice))
+
+    resume_set = {s.lower().strip() for s in resume_skills if s}
+    jd_set = {s.lower().strip() for s in all_jd_skills if s}
+    matched = list(resume_set & jd_set)
+    missing = list(jd_set - resume_set)
+
+    parsed_match = _normalize_dimension_scores(_deep_parse_json(rec.match_report))
+    parsed_interview = _normalize_interview_questions(_deep_parse_json(rec.interview_questions))
+    final_report, career_planning, rag_confidence = _load_task_outputs(db, current_user.id, rec.id)
+
+    return ok(
+        {
+            "id": rec.id,
+            "record_id": rec.id,
+            "resume_id": rec.resume_id,
+            "jd_id": rec.jd_id,
+            "match_score": rec.match_score,
+            "match_report": parsed_match,
+            "optimize_suggestions": _deep_parse_json(rec.optimize_suggestions),
+            "interview_questions": parsed_interview,
+            "remark": rec.remark,
+            "resume_title": resume.file_name if resume else "",
+            "jd_title": jd.title if jd else "",
+            "resume_skills": resume_skills,
+            "jd_skills": all_jd_skills,
+            "matched_skills": matched,
+            "missing_skills": missing,
+            "final_report": final_report,
+            "career_planning": career_planning,
+            "rag_confidence": rag_confidence,
+            "create_time": rec.create_time.isoformat() if rec.create_time else None,
+        }
+    )
+
+
+@router.get("/{record_id}/references", summary="获取分析引用的知识库来源")
+async def get_record_references(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rec = (
+        db.query(AnalysisRecord)
+        .filter(
+            AnalysisRecord.id == record_id,
+            AnalysisRecord.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not rec:
+        raise api_error(404, "记录不存在，或无权限访问", ERR_PARAM)
+
+    resume = _get_owned_resume(db, current_user, rec.resume_id)
+    jd = get_accessible_job(db, rec.jd_id, current_user) if rec.jd_id else None
+    if not resume or not jd:
+        return ok(data={"references": []})
+
+    jd_data = jd.parsed_json or {}
+    title = jd_data.get("title", "") or jd.title or ""
+    skills = jd_data.get("required_skills", []) or []
+    keywords = jd_data.get("keywords", []) or []
+    query_parts = [title]
+    if isinstance(skills, list):
+        query_parts.extend(skills[:5])
+    if isinstance(keywords, list):
+        query_parts.extend(keywords[:5])
+    query = " ".join(query_parts)
+
+    references = get_knowledge_references(query, db, user_id=current_user.id)
+    _, _, rag_confidence = _load_task_outputs(db, current_user.id, rec.id)
+    return ok(data={"references": references, "query": query, "rag_confidence": rag_confidence})
+
+
+@router.post("/explain-match", summary="匹配度解释器")
+async def explain_match(
+    payload: ExplainMatchReq,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """基于规则+LLM的匹配度深度解释
+
+    流程:
+      1. 规则引擎计算 6 维基础分
+      2. 加权汇总
+      3. LLM 生成自然语言解释
+      4. 返回完整解释结果
+    """
+    resume = db.query(Resume).filter(
+        Resume.id == payload.resume_id,
+        Resume.user_id == current_user.id,
+        Resume.is_deleted == 0,
+    ).first()
+    jd = get_accessible_job(db, payload.jd_id, current_user)
+    if not resume:
+        return fail(message="简历不存在或无权限", code=ERR_PARAM)
+    if not jd:
+        return fail(message="JD不存在或无权限", code=ERR_PARAM)
+    if not resume.parsed_json:
+        return fail(message="简历尚未解析", code=ERR_PARAM)
+
+    try:
+        explainer = MatchExplainer()
+        result = explainer.explain(resume, jd)
+        return ok(data=result.to_dict(), message="匹配度解释完成")
+    except Exception as e:
+        traceback.print_exc()
+        return fail(message=f"匹配度解释失败: {str(e)[:80]}", code=ERR_COMMON)

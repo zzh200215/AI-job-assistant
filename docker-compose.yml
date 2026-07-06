@@ -1,0 +1,105 @@
+# ============================================================
+# Docker Compose — 智能招聘与职业规划平台
+#   docker compose up -d
+#   open http://localhost:5173
+# ============================================================
+x-backend-environment: &backend-environment
+  APP_ENV: ${APP_ENV:-development}
+  APP_HOST: "0.0.0.0"
+  APP_PORT: 8000
+  APP_DEBUG: ${APP_DEBUG:-true}
+  AUTO_CREATE_TABLES: ${AUTO_CREATE_TABLES:-true}
+  CORS_ORIGINS: ""                    # frontend served on same origin via nginx
+  ADMIN_USERNAMES: ${ADMIN_USERNAMES:-admin}
+  MYSQL_HOST: mysql
+  MYSQL_PORT: 3306
+  MYSQL_USER: root
+  MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+  MYSQL_DB: ${MYSQL_DB:-llmXM}
+  JWT_SECRET: ${JWT_SECRET:-replace-with-a-random-32-plus-character-secret}
+  UPLOAD_DIR: /app/uploads
+  # ---- LLM (default: mock — no key needed) ----
+  LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  LLM_MODEL: ${LLM_MODEL:-gpt-3.5-turbo}
+  LLM_TIMEOUT: ${LLM_TIMEOUT:-60}
+  # ---- Embedding ----
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-mock}
+  EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+  EMBEDDING_MODEL: text-embedding-v3
+  # ---- Reranker ----
+  RERANKER_PROVIDER: auto
+  RERANKER_BATCH_SIZE: 8
+  # ---- Orchestration ----
+  ORCHESTRATION_STRATEGY: ${ORCHESTRATION_STRATEGY:-linear}
+  ORCHESTRATION_ENGINE: native
+  # ---- RAG ----
+  RAG_TOP_K: 5
+  RAG_CHUNK_SIZE: 500
+  RAG_CHUNK_OVERLAP: 50
+
+services:
+  # ---- MySQL 8.0 ----
+  mysql:
+    image: mysql:8.0
+    container_name: recruit-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-change-me}
+      MYSQL_DATABASE: ${MYSQL_DB:-llmXM}
+    command:
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3307:3306"    # mapped to 3307 to avoid conflict with local MySQL
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_PASSWORD:-change-me}"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
+
+  # ---- Backend (FastAPI) ----
+  backend:
+    build: ./backend
+    container_name: recruit-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment: *backend-environment
+    volumes:
+      - uploads:/app/uploads
+      - chroma_data:/app/chroma_db
+    ports:
+      - "8000:8000"
+
+  # ---- One-shot database migration ----
+  migrate:
+    build: ./backend
+    profiles: ["tools"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      <<: *backend-environment
+      AUTO_CREATE_TABLES: "false"
+    command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
+
+  # ---- Frontend (Vue 3 SPA served by nginx) ----
+  frontend:
+    build: ./frontend
+    container_name: recruit-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"     # matches the dev port for consistency
+
+volumes:
+  mysql_data:
+  uploads:
+  chroma_data:

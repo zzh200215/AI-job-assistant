@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Frontend generated files
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+frontend/coverage/
+frontend/.nyc_output/
+frontend/vite.config.js.timestamp-*
+frontend/*.log
+frontend/*.tsbuildinfo
+
+# Env
+.env
+.env.local
+
+# Runtime data
+*.log
+*.sqlite3
+backend/uploads/**
+!backend/uploads/.gitkeep
+backend/chroma_db/*
+!backend/chroma_db/.gitkeep
+backend/models/*
+!backend/models/.gitkeep
+backend/*.log
+fetch.log
+ports.log
+
+# Test/cache data
+.pytest_cache/
+.coverage
+htmlcov/
+backend/reports/
+reports/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+# 向量大模型文件夹
+backend/models/BAAI/bge-small-zh-v1.5/
+# 权重后缀
+*.bin
+*.pth
+*.safetensors
+*.ckpt
+*.model

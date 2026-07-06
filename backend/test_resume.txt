@@ -1,0 +1,1 @@
+﻿姓名：李明|性别：男|年龄：25|学历：本科|学校：华东师范大学|专业：计算机科学|电话：13800138000|邮箱：liming@qq.com|工作经历：2023.7-至今 字节跳动 后端开发工程师 Python FastAPI Django MySQL Redis Docker|2022.7-2023.6 美团 后端开发实习生 Java SpringBoot|项目经历：1. 智能推荐系统 Python PyTorch FAISS 负责召回排序模块 2. 招聘平台后端 FastAPI MySQL Redis|技能：Python FastAPI Django MySQL Redis Docker Kubernetes PyTorch 机器学习

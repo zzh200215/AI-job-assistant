@@ -1,0 +1,50 @@
+{"query": "Python后端开发简历怎么写", "expected_doc_types": ["resume_template"], "expected_keywords": ["Python", "后端", "简历"]}
+{"query": "前端工程师简历模板", "expected_doc_types": ["resume_template"], "expected_keywords": ["前端", "简历"]}
+{"query": "产品经理简历优化建议", "expected_doc_types": ["resume_template"], "expected_keywords": ["产品经理", "简历"]}
+{"query": "技术岗简历项目经验怎么描述", "expected_doc_types": ["resume_template"], "expected_keywords": ["项目", "技术", "简历"]}
+{"query": "应届生简历模板参考", "expected_doc_types": ["resume_template", "transition_guide"], "expected_keywords": ["应届", "简历"]}
+{"query": "Python后端开发岗位JD", "expected_doc_types": ["jd_lib"], "expected_keywords": ["Python", "后端", "岗位"]}
+{"query": "AI算法工程师岗位要求", "expected_doc_types": ["jd_lib", "skill_model"], "expected_keywords": ["AI", "算法", "岗位"]}
+{"query": "产品经理岗位职责描述", "expected_doc_types": ["jd_lib"], "expected_keywords": ["产品经理", "职责"]}
+{"query": "全栈开发岗位招聘要求", "expected_doc_types": ["jd_lib"], "expected_keywords": ["全栈", "开发"]}
+{"query": "数据分析师岗位技能需求", "expected_doc_types": ["jd_lib", "skill_model"], "expected_keywords": ["数据分析", "技能"]}
+{"query": "Python后端面试题", "expected_doc_types": ["interview_q"], "expected_keywords": ["Python", "面试"]}
+{"query": "系统设计面试怎么准备", "expected_doc_types": ["interview_q", "skill_model"], "expected_keywords": ["系统设计", "面试"]}
+{"query": "AI算法岗面试常考什么", "expected_doc_types": ["interview_q"], "expected_keywords": ["AI", "算法", "面试"]}
+{"query": "行为面试STAR法怎么答", "expected_doc_types": ["interview_q"], "expected_keywords": ["行为面试", "STAR"]}
+{"query": "技术面试手撕代码技巧", "expected_doc_types": ["interview_q"], "expected_keywords": ["代码", "面试", "技巧"]}
+{"query": "后端开发需要哪些核心能力", "expected_doc_types": ["skill_model"], "expected_keywords": ["后端", "能力", "技能"]}
+{"query": "AI工程师能力模型", "expected_doc_types": ["skill_model"], "expected_keywords": ["AI", "工程师", "能力"]}
+{"query": "产品经理技能树", "expected_doc_types": ["skill_model"], "expected_keywords": ["产品经理", "技能"]}
+{"query": "DevOps工程师必备技能", "expected_doc_types": ["skill_model"], "expected_keywords": ["DevOps", "技能"]}
+{"query": "数据科学家核心能力要求", "expected_doc_types": ["skill_model"], "expected_keywords": ["数据科学", "能力"]}
+{"query": "互联网行业2026发展趋势", "expected_doc_types": ["industry_report"], "expected_keywords": ["互联网", "行业", "趋势"]}
+{"query": "AI行业人才需求分析", "expected_doc_types": ["industry_report"], "expected_keywords": ["AI", "行业", "人才"]}
+{"query": "金融科技行业报告", "expected_doc_types": ["industry_report"], "expected_keywords": ["金融科技", "行业"]}
+{"query": "新能源行业就业前景", "expected_doc_types": ["industry_report"], "expected_keywords": ["新能源", "就业"]}
+{"query": "芯片半导体行业人才缺口", "expected_doc_types": ["industry_report"], "expected_keywords": ["芯片", "半导体", "人才"]}
+{"query": "后端工程师职业发展路径", "expected_doc_types": ["career_path"], "expected_keywords": ["后端", "职业", "路径"]}
+{"query": "AI应用工程师成长路线", "expected_doc_types": ["career_path"], "expected_keywords": ["AI", "工程师", "成长"]}
+{"query": "技术人员转管理岗建议", "expected_doc_types": ["career_path"], "expected_keywords": ["技术", "管理", "转"]}
+{"query": "架构师晋升路径", "expected_doc_types": ["career_path"], "expected_keywords": ["架构师", "晋升"]}
+{"query": "数据工程师职业发展", "expected_doc_types": ["career_path"], "expected_keywords": ["数据工程师", "职业"]}
+{"query": "AI工程师薪资水平", "expected_doc_types": ["salary_market"], "expected_keywords": ["AI", "薪资"]}
+{"query": "Python开发工程师工资", "expected_doc_types": ["salary_market"], "expected_keywords": ["Python", "工资", "薪资"]}
+{"query": "互联网行业薪酬报告", "expected_doc_types": ["salary_market"], "expected_keywords": ["互联网", "薪酬"]}
+{"query": "校招薪资待遇对比", "expected_doc_types": ["salary_market", "transition_guide"], "expected_keywords": ["校招", "薪资"]}
+{"query": "高级架构师年薪多少", "expected_doc_types": ["salary_market", "career_path"], "expected_keywords": ["架构师", "年薪"]}
+{"query": "校招转正怎么准备", "expected_doc_types": ["transition_guide"], "expected_keywords": ["校招", "转正"]}
+{"query": "非计算机专业转AI开发", "expected_doc_types": ["transition_guide"], "expected_keywords": ["非计算机", "AI", "转行"]}
+{"query": "社招后端开发准备指南", "expected_doc_types": ["transition_guide"], "expected_keywords": ["社招", "后端"]}
+{"query": "文科转产品经理可行吗", "expected_doc_types": ["transition_guide"], "expected_keywords": ["文科", "产品经理", "转"]}
+{"query": "传统行业转互联网经验", "expected_doc_types": ["transition_guide"], "expected_keywords": ["传统行业", "互联网", "转"]}
+{"query": "我的简历和岗位匹配吗", "expected_doc_types": ["resume_template", "jd_lib", "skill_model"], "expected_keywords": ["匹配", "简历", "岗位"]}
+{"query": "帮我全面分析求职竞争力", "expected_doc_types": ["skill_model", "industry_report", "salary_market"], "expected_keywords": ["求职", "竞争力"]}
+{"query": "准备面试应该看什么资料", "expected_doc_types": ["interview_q", "skill_model"], "expected_keywords": ["面试", "资料"]}
+{"query": "简历改写和面试准备", "expected_doc_types": ["resume_template", "interview_q"], "expected_keywords": ["简历", "面试"]}
+{"query": "职业规划和发展建议", "expected_doc_types": ["career_path", "industry_report"], "expected_keywords": ["职业", "规划"]}
+{"query": "转行AI需要学什么技能", "expected_doc_types": ["transition_guide", "skill_model"], "expected_keywords": ["转行", "AI", "技能"]}
+{"query": "应届生求职全流程指导", "expected_doc_types": ["resume_template", "interview_q", "transition_guide"], "expected_keywords": ["应届", "求职"]}
+{"query": "技术面试和薪资谈判", "expected_doc_types": ["interview_q", "salary_market"], "expected_keywords": ["面试", "薪资"]}
+{"query": "开发转产品经理的职业规划", "expected_doc_types": ["career_path", "transition_guide", "skill_model"], "expected_keywords": ["开发", "产品经理", "规划"]}
+{"query": "行业选择和薪资对比", "expected_doc_types": ["industry_report", "salary_market"], "expected_keywords": ["行业", "薪资"]}

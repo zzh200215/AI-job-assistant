@@ -1,0 +1,952 @@
+<template>
+  <div class="recommend-container">
+    <!-- 顶部：选择简历 + 操作 -->
+    <el-card class="top-card" shadow="never">
+      <div class="top-row">
+        <div class="resume-selector">
+          <span class="label">选择简历：</span>
+          <el-select
+            v-model="selectedResumeId"
+            placement="bottom-start"
+            :fallback-placements="['bottom-start']"
+            placeholder="请选择一份简历"
+            style="width: 280px"
+            filterable
+            :loading="loading.resumes"
+            @change="loadRecommendations"
+          >
+            <el-option
+              v-for="r in resumeList"
+              :key="r.id"
+              :label="r.name || r.file_name"
+              :value="r.id"
+            >
+              <span>{{ r.name || r.file_name }}</span>
+              <span class="opt-meta">{{ r.parsed?.current_title || '' }}</span>
+            </el-option>
+          </el-select>
+        </div>
+
+        <div class="top-actions">
+          <el-button @click="$router.push('/jobs/recommend/evaluation')">
+            <el-icon><TrendCharts /></el-icon> 推荐评测
+          </el-button>
+          <el-button type="primary" @click="seedData" :loading="loading.seed">
+            <el-icon><DataAnalysis /></el-icon> 生成模拟岗位
+          </el-button>
+          <el-upload
+            :show-file-list="false"
+            :before-upload="handleImport"
+            accept=".csv,.json"
+          >
+            <el-button>
+              <el-icon><Upload /></el-icon> 导入 JD
+            </el-button>
+          </el-upload>
+        </div>
+      </div>
+
+      <!-- 空状态引导 -->
+      <el-empty v-if="!selectedResumeId && !loading.resumes" :image-size="120" class="empty-hint">
+        <template #description>
+          <span>请先选择一份简历，系统将自动为您匹配推荐岗位</span>
+        </template>
+        <el-button type="primary" @click="$router.push('/resume')">
+          去上传简历
+        </el-button>
+      </el-empty>
+    </el-card>
+
+    <el-card class="stats-card" shadow="never" v-if="feedbackStats">
+      <div class="stats-row">
+        <div class="stats-item">
+          <div class="stats-value">{{ feedbackStats.total || 0 }}</div>
+          <div class="stats-label">总反馈</div>
+        </div>
+        <div class="stats-item">
+          <div class="stats-value">{{ feedbackStats.like_count || 0 }}</div>
+          <div class="stats-label">点赞</div>
+        </div>
+        <div class="stats-item">
+          <div class="stats-value">{{ feedbackStats.dislike_count || 0 }}</div>
+          <div class="stats-label">点踩</div>
+        </div>
+        <div class="stats-item">
+          <div class="stats-value">{{ feedbackStats.avg_match_score ?? '-' }}</div>
+          <div class="stats-label">平均匹配分</div>
+        </div>
+        <div class="stats-item">
+          <div class="stats-value">{{ percentText(feedbackStats.like_rate || 0) }}</div>
+          <div class="stats-label">点赞率</div>
+        </div>
+      </div>
+    </el-card>
+
+    <el-card v-if="hasFeedbackInsights" class="insight-card" shadow="never">
+      <div class="insight-grid">
+        <div class="insight-block">
+          <div class="insight-title">近 7 天反馈趋势</div>
+          <div class="trend-list">
+            <div
+              v-for="point in feedbackStats.trend || []"
+              :key="point.date"
+              class="trend-item"
+            >
+              <div class="trend-head">
+                <span>{{ formatShortDate(point.date) }}</span>
+                <strong>{{ point.total }}</strong>
+              </div>
+              <div class="trend-bar">
+                <span class="trend-like" :style="segmentStyle(point.like, point.total)" />
+                <span class="trend-dislike" :style="segmentStyle(point.dislike, point.total)" />
+              </div>
+              <div class="trend-meta">
+                赞 {{ point.like }} / 踩 {{ point.dislike }}
+                <span v-if="point.avg_match_score !== null">· 均分 {{ point.avg_match_score }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="insight-block">
+          <div class="insight-title">调优建议</div>
+          <div v-if="feedbackStats.tuning_signals?.action_items?.length" class="action-list">
+            <div
+              v-for="item in feedbackStats.tuning_signals.action_items"
+              :key="`${item.type}-${item.title}`"
+              class="action-item"
+              :class="`action-${item.severity || 'low'}`"
+            >
+              <div class="action-title">{{ item.title }}</div>
+              <div class="action-detail">{{ item.detail }}</div>
+            </div>
+          </div>
+          <el-empty v-else :image-size="72" description="反馈样本较少，暂时没有调优建议" />
+        </div>
+      </div>
+
+      <div class="insight-grid secondary-grid">
+        <div class="insight-block">
+          <div class="insight-title">按简历分布</div>
+          <div v-if="feedbackStats.by_resume?.length" class="mix-list">
+            <div
+              v-for="item in feedbackStats.by_resume"
+              :key="item.resume_id"
+              class="mix-item"
+            >
+              <div class="mix-head">
+                <span class="mix-name">{{ item.resume_title }}</span>
+                <span class="mix-rate">{{ percentText(item.like_rate || 0) }}</span>
+              </div>
+              <div class="mix-bar">
+                <span class="mix-like" :style="segmentStyle(item.like, item.total)" />
+                <span class="mix-dislike" :style="segmentStyle(item.dislike, item.total)" />
+              </div>
+              <div class="mix-meta">
+                {{ item.total }} 条反馈
+                <span v-if="item.avg_match_score !== null">· 均分 {{ item.avg_match_score }}</span>
+              </div>
+            </div>
+          </div>
+          <el-empty v-else :image-size="72" description="暂无简历反馈分布" />
+        </div>
+
+        <div class="insight-block">
+          <div class="insight-title">按行业分布</div>
+          <div v-if="feedbackStats.by_industry?.length" class="mix-list">
+            <div
+              v-for="item in feedbackStats.by_industry"
+              :key="item.industry"
+              class="mix-item"
+            >
+              <div class="mix-head">
+                <span class="mix-name">{{ item.industry }}</span>
+                <span class="mix-rate">{{ percentText(item.like_rate || 0) }}</span>
+              </div>
+              <div class="mix-bar">
+                <span class="mix-like" :style="segmentStyle(item.like, item.total)" />
+                <span class="mix-dislike" :style="segmentStyle(item.dislike, item.total)" />
+              </div>
+              <div class="mix-meta">
+                {{ item.total }} 条反馈
+                <span v-if="item.avg_match_score !== null">· 均分 {{ item.avg_match_score }}</span>
+              </div>
+            </div>
+          </div>
+          <el-empty v-else :image-size="72" description="暂无行业反馈分布" />
+        </div>
+      </div>
+
+      <div
+        v-if="hasAnomalySignals"
+        class="insight-grid secondary-grid"
+      >
+        <div class="insight-block">
+          <div class="insight-title">高分却被点踩</div>
+          <div v-if="feedbackStats.tuning_signals?.high_score_dislikes?.length" class="signal-list">
+            <div
+              v-for="item in feedbackStats.tuning_signals.high_score_dislikes"
+              :key="`high-${item.resume_id}-${item.jd_id}-${item.created_at}`"
+              class="signal-item"
+            >
+              <div class="signal-main">{{ item.jd_title || '未命名岗位' }} · {{ item.jd_company || '未知公司' }}</div>
+              <div class="signal-sub">{{ item.resume_title }} · {{ item.match_score }} 分</div>
+            </div>
+          </div>
+          <el-empty v-else :image-size="72" description="暂无高分点踩样本" />
+        </div>
+
+        <div class="insight-block">
+          <div class="insight-title">低分却被点赞</div>
+          <div v-if="feedbackStats.tuning_signals?.low_score_likes?.length" class="signal-list">
+            <div
+              v-for="item in feedbackStats.tuning_signals.low_score_likes"
+              :key="`low-${item.resume_id}-${item.jd_id}-${item.created_at}`"
+              class="signal-item"
+            >
+              <div class="signal-main">{{ item.jd_title || '未命名岗位' }} · {{ item.jd_company || '未知公司' }}</div>
+              <div class="signal-sub">{{ item.resume_title }} · {{ item.match_score }} 分</div>
+            </div>
+          </div>
+          <el-empty v-else :image-size="72" description="暂无低分点赞样本" />
+        </div>
+      </div>
+    </el-card>
+
+    <!-- 筛选栏 -->
+    <el-card v-if="hasResults" class="filter-card" shadow="never">
+      <div class="filter-row">
+        <el-input
+          v-model="filters.location"
+          placeholder="地点筛选"
+          clearable
+          style="width: 140px"
+          size="small"
+          @change="loadRecommendations"
+        >
+          <template #prefix><el-icon><Location /></el-icon></template>
+        </el-input>
+
+        <el-select
+          v-model="filters.industry"
+          placement="bottom-start"
+          :fallback-placements="['bottom-start']"
+          placeholder="行业"
+          clearable
+          style="width: 160px"
+          size="small"
+          @change="loadRecommendations"
+        >
+          <el-option label="互联网" value="internet" />
+          <el-option label="AI" value="ai" />
+          <el-option label="电商" value="e-commerce" />
+          <el-option label="云计算" value="cloud" />
+          <el-option label="数据" value="data" />
+        </el-select>
+
+        <el-select
+          v-model="filters.exp_level"
+          placement="bottom-start"
+          :fallback-placements="['bottom-start']"
+          placeholder="经验要求"
+          clearable
+          style="width: 130px"
+          size="small"
+          @change="loadRecommendations"
+        >
+          <el-option label="初级 (1-3年)" value="junior" />
+          <el-option label="中级 (3-5年)" value="mid" />
+          <el-option label="高级 (5年+)" value="senior" />
+        </el-select>
+
+        <div class="salary-filter">
+          <span class="filter-label">最低薪资：</span>
+          <el-slider
+            v-model="filters.salary_min"
+            :min="0"
+            :max="100"
+            :step="5"
+            style="width: 160px"
+            @change="loadRecommendations"
+          />
+          <span class="salary-val">{{ filters.salary_min || 0 }}k</span>
+        </div>
+
+        <el-button size="small" text @click="resetFilters">重置</el-button>
+      </div>
+    </el-card>
+
+    <!-- 推荐结果 -->
+    <div v-if="loading.recommend" class="loading-area">
+      <el-icon class="is-loading" size="28"><Loading /></el-icon>
+      <p>正在分析您的简历，智能匹配岗位...</p>
+    </div>
+
+    <template v-else-if="hasResults">
+      <div class="result-summary">
+        <span class="summary-text">
+          🎯 为您推荐 <strong>{{ recommendations.length }}</strong> 个岗位
+          <span v-if="appliedFilters" class="summary-filters">（已应用筛选条件）</span>
+        </span>
+      </div>
+
+      <div class="card-grid">
+        <el-card
+          v-for="(job, idx) in recommendations"
+          :key="job.jd_id"
+          class="job-card"
+          shadow="hover"
+        >
+          <!-- 匹配度徽标 -->
+          <div class="score-badge" :class="scoreLevel(job.match_score)">
+            <span class="score-num">{{ job.match_score }}</span>
+            <span class="score-unit">分</span>
+          </div>
+
+          <div class="card-body">
+            <!-- 头部 -->
+            <div class="card-header">
+              <div class="job-title-row">
+                <h3 class="job-title">{{ job.job_title }}</h3>
+                <el-tag
+                  v-if="job.source"
+                  size="small"
+                  effect="plain"
+                  class="source-tag"
+                >{{ sourceText(job.source) }}</el-tag>
+                <el-tag
+                  size="small"
+                  :type="recommendTagType(job.recommendation_type)"
+                  effect="dark"
+                >{{ job.recommendation_type }}</el-tag>
+              </div>
+              <div class="job-company">
+                <el-icon><OfficeBuilding /></el-icon>
+                {{ job.company }}
+              </div>
+            </div>
+
+            <!-- 匹配原因 -->
+            <p class="match-reason">📌 {{ job.match_reason }}</p>
+
+            <!-- 技能标签 -->
+            <div class="skill-section">
+              <div v-if="job.skill_overlap?.length" class="skill-group">
+                <span class="skill-label overlap-label">重合</span>
+                <el-tag
+                  v-for="s in job.skill_overlap"
+                  :key="s"
+                  size="small"
+                  type="success"
+                  effect="plain"
+                >{{ s }}</el-tag>
+              </div>
+              <div v-if="job.skill_gap?.length" class="skill-group">
+                <span class="skill-label gap-label">缺失</span>
+                <el-tag
+                  v-for="s in job.skill_gap"
+                  :key="s"
+                  size="small"
+                  type="danger"
+                  effect="plain"
+                >{{ s }}</el-tag>
+              </div>
+            </div>
+
+            <!-- 匹配详情 -->
+            <div class="match-details">
+              <span v-if="job.salary_match !== undefined" class="detail-tag" :class="job.salary_match ? 'dt-ok' : 'dt-no'">
+                <el-icon><Money /></el-icon> 薪资{{ job.salary_match ? '匹配' : '不匹配' }}
+              </span>
+              <span v-if="job.location_match !== undefined" class="detail-tag" :class="job.location_match ? 'dt-ok' : 'dt-no'">
+                <el-icon><Location /></el-icon> 地点{{ job.location_match ? '匹配' : '不匹配' }}
+              </span>
+              <span v-if="job.experience_match !== undefined" class="detail-tag" :class="job.experience_match !== false ? 'dt-ok' : 'dt-no'">
+                <el-icon><Timer /></el-icon> 经验{{ job.experience_match !== false ? '匹配' : '不匹配' }}
+              </span>
+            </div>
+
+            <!-- 操作 -->
+            <div class="card-actions">
+              <el-button size="small" @click="viewDetail(job.jd_id)">
+                查看详情
+              </el-button>
+              <el-button
+                size="small"
+                type="primary"
+                :loading="analyzingId === job.jd_id"
+                @click="analyzeJob(job.jd_id)"
+              >
+                立即分析
+              </el-button>
+              <div class="feedback-btns">
+                <el-button
+                  text
+                  :type="job._feedback === 'like' ? 'success' : ''"
+                  :icon="job._feedback === 'like' ? 'ThumbsUp' : 'ThumbsUp'"
+                  @click="toggleFeedback(job, 'like')"
+                />
+                <el-button
+                  text
+                  :type="job._feedback === 'dislike' ? 'danger' : ''"
+                  :icon="job._feedback === 'dislike' ? 'ThumbsDown' : 'ThumbsDown'"
+                  @click="toggleFeedback(job, 'dislike')"
+                />
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </div>
+    </template>
+
+    <!-- 无结果 -->
+    <el-empty v-else-if="!loading.recommend && selectedResumeId" :image-size="120">
+      <template #description>
+        <span v-if="appliedFilters">没有找到符合条件的岗位，试试调整筛选条件</span>
+        <span v-else>暂无匹配的岗位推荐，请完善简历信息或导入更多岗位数据</span>
+      </template>
+      <el-button v-if="appliedFilters" @click="resetFilters">清除筛选</el-button>
+      <el-button v-else type="primary" @click="seedData">生成模拟岗位</el-button>
+    </el-empty>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
+import { getResumeList } from '@/api/resume'
+import {
+  getJobRecommendations,
+  getJobFeedbackStats,
+  seedMockJobs,
+  batchImportJobs,
+  submitJobFeedback,
+  startFullAnalysis,
+} from '@/api/jobs'
+import { ElMessage, ElMessageBox } from '@/plugins/element-services'
+import { DataAnalysis, Upload, Location, Money, Timer, TrendCharts } from '@element-plus/icons-vue'
+import { OfficeBuilding } from '@element-plus/icons-vue'
+
+const router = useRouter()
+
+// === 状态 ===
+const selectedResumeId = ref(null)
+const resumeList = ref([])
+const recommendations = ref([])
+const analyzingId = ref(null)
+const feedbackStats = ref(null)
+
+const loading = reactive({
+  resumes: false,
+  recommend: false,
+  seed: false,
+})
+
+const filters = reactive({
+  location: '',
+  industry: '',
+  exp_level: '',
+  salary_min: null,
+})
+
+const appliedFilters = computed(() =>
+  filters.location || filters.industry || filters.exp_level || filters.salary_min !== null
+)
+
+const hasResults = computed(() => recommendations.value.length > 0)
+const hasFeedbackInsights = computed(() => (feedbackStats.value?.total || 0) > 0)
+const hasAnomalySignals = computed(() => {
+  const signals = feedbackStats.value?.tuning_signals
+  return Boolean(signals?.high_score_dislikes?.length || signals?.low_score_likes?.length)
+})
+
+// === 生命周期 ===
+onMounted(() => {
+  fetchResumes()
+  loadFeedbackStats()
+})
+
+// === 数据加载 ===
+async function fetchResumes() {
+  loading.resumes = true
+  try {
+    const data = await getResumeList()
+    resumeList.value = data?.items || (Array.isArray(data) ? data : [])
+  } catch (e) {
+    console.error('获取简历列表失败:', e)
+  } finally {
+    loading.resumes = false
+  }
+}
+
+async function loadRecommendations() {
+  if (!selectedResumeId.value) return
+  loading.recommend = true
+  try {
+    const params = { resume_id: selectedResumeId.value, limit: 10 }
+    if (filters.location) params.location = filters.location
+    if (filters.industry) params.industry = filters.industry
+    if (filters.exp_level) params.exp_level = filters.exp_level
+    if (filters.salary_min !== null) params.salary_min = filters.salary_min
+
+    const data = await getJobRecommendations(params)
+    recommendations.value = (data?.recommendations || []).map(j => ({
+      ...j,
+      _feedback: null, // 本地反馈状态
+    }))
+  } catch (e) {
+    console.error('获取推荐失败:', e)
+    recommendations.value = []
+  } finally {
+    loading.recommend = false
+  }
+}
+
+async function loadFeedbackStats() {
+  try {
+    feedbackStats.value = await getJobFeedbackStats()
+  } catch (e) {
+    feedbackStats.value = null
+  }
+}
+
+// === 操作 ===
+async function seedData() {
+  loading.seed = true
+  try {
+    const data = await seedMockJobs()
+    ElMessage.success(data?.message || `模拟岗位数据写入成功`)
+    if (selectedResumeId.value) {
+      await loadRecommendations()
+    }
+  } catch (e) {
+    ElMessage.error('生成失败: ' + (e.message || e))
+  } finally {
+    loading.seed = false
+  }
+}
+
+async function handleImport(file) {
+  try {
+    const data = await batchImportJobs(file)
+    ElMessage.success(data?.message || '导入成功')
+    if (selectedResumeId.value) {
+      await loadRecommendations()
+    }
+  } catch (e) {
+    ElMessage.error('导入失败: ' + (e.message || e))
+  }
+  return false // 阻止默认上传
+}
+
+async function analyzeJob(jdId) {
+  if (!selectedResumeId.value) return
+  analyzingId.value = jdId
+  try {
+    const data = await startFullAnalysis(selectedResumeId.value, jdId)
+    ElMessage.success('分析已启动')
+    if (data?.task_id) {
+      router.push(`/agent?task_id=${data.task_id}`)
+      return
+    }
+    router.push('/smart-analysis')
+  } catch (e) {
+    ElMessage.error('分析启动失败: ' + (e.message || e))
+  } finally {
+    analyzingId.value = null
+  }
+}
+
+async function toggleFeedback(job, type) {
+  if (job._feedback === type) {
+    ElMessage.info('该反馈已记录，无需重复提交')
+    return
+  }
+  try {
+    await submitJobFeedback(selectedResumeId.value, job.jd_id, type, job.match_score)
+    job._feedback = type
+    ElMessage.success(type === 'like' ? '已点赞' : '已点踩')
+    await loadFeedbackStats()
+  } catch (e) {
+    ElMessage.error('反馈提交失败')
+  }
+}
+
+function viewDetail(jdId) {
+  router.push({
+    path: '/jobs/search',
+    query: {
+      tab: 'recommend',
+      job_id: String(jdId),
+      resume_id: selectedResumeId.value ? String(selectedResumeId.value) : undefined,
+    },
+  })
+}
+
+function resetFilters() {
+  filters.location = ''
+  filters.industry = ''
+  filters.exp_level = ''
+  filters.salary_min = null
+  nextTick(() => loadRecommendations())
+}
+
+// === 样式工具 ===
+function scoreLevel(score) {
+  if (score >= 80) return 'score-high'
+  if (score >= 60) return 'score-mid'
+  return 'score-low'
+}
+
+function recommendTagType(type) {
+  if (type?.includes('高度推荐')) return 'success'
+  if (type?.includes('值得一试')) return 'warning'
+  return 'info'
+}
+
+function sourceText(value) {
+  const sourceMap = {
+    imported: '导入',
+    api: '接口',
+    manual: '手工',
+    crawled: '抓取',
+    local: '本地',
+    recommend: '推荐',
+    boss: 'BOSS',
+    _mock: '演示',
+  }
+  return sourceMap[value] || value || '未知'
+}
+
+function percentText(value) {
+  return `${Math.round((Number(value) || 0) * 100)}%`
+}
+
+function segmentStyle(value, total) {
+  const safeTotal = Number(total) || 0
+  const width = safeTotal > 0 ? Math.max((Number(value) || 0) / safeTotal * 100, 0) : 0
+  return { width: `${width}%` }
+}
+
+function formatShortDate(dateText) {
+  if (!dateText || typeof dateText !== 'string') return '--'
+  return dateText.slice(5)
+}
+</script>
+
+<style scoped>
+.recommend-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 18px 0 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* 顶部 */
+.top-card,
+.filter-card,
+.stats-card,
+.insight-card,
+.job-card { border-radius: 24px; }
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+.stats-item {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #f7faf8;
+}
+.stats-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--app-text);
+}
+.stats-label {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.insight-card {
+  padding: 4px 0;
+}
+.insight-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+}
+.secondary-grid {
+  margin-top: 16px;
+  grid-template-columns: 1fr 1fr;
+}
+.insight-block {
+  padding: 16px;
+  border-radius: 18px;
+  background: #fbfcfa;
+  border: 1px solid rgba(215, 228, 219, 0.9);
+}
+.insight-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--app-text);
+  margin-bottom: 12px;
+}
+.trend-list,
+.mix-list,
+.signal-list,
+.action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.trend-item,
+.mix-item,
+.signal-item,
+.action-item {
+  padding: 12px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid rgba(223, 233, 227, 0.95);
+}
+.trend-head,
+.mix-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--app-text);
+}
+.trend-bar,
+.mix-bar {
+  display: flex;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf2ee;
+}
+.trend-like,
+.mix-like {
+  display: block;
+  background: linear-gradient(90deg, #2ea866, #5ec388);
+}
+.trend-dislike,
+.mix-dislike {
+  display: block;
+  background: linear-gradient(90deg, #df8d72, #d96a6a);
+}
+.trend-meta,
+.mix-meta,
+.signal-sub,
+.action-detail {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.mix-name,
+.signal-main,
+.action-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+.mix-rate {
+  color: #2f7a58;
+  font-weight: 700;
+}
+.action-high {
+  border-color: rgba(223, 106, 106, 0.22);
+  background: #fff7f5;
+}
+.action-medium {
+  border-color: rgba(220, 156, 63, 0.2);
+  background: #fffaf1;
+}
+.action-low {
+  border-color: rgba(94, 195, 136, 0.2);
+  background: #f5fbf7;
+}
+.top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.resume-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.label { font-weight: 700; color: var(--app-text); white-space: nowrap; }
+.opt-meta { float: right; color: var(--app-muted); font-size: 12px; margin-left: 12px; }
+.top-actions { display: flex; gap: 8px; }
+.empty-hint { padding: 24px 0 8px; }
+
+/* 筛选栏 */
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.salary-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.filter-label { font-size: 12px; color: var(--app-muted); white-space: nowrap; }
+.salary-val { font-size: 12px; color: var(--app-primary-dark); font-weight: 700; min-width: 30px; }
+
+/* 结果 */
+.loading-area {
+  text-align: center;
+  padding: 80px 0;
+  color: var(--app-muted);
+}
+
+.result-summary {
+  font-size: 14px;
+  color: #55695f;
+}
+.summary-filters { font-size: 12px; color: var(--app-muted); }
+
+/* 卡片网格 */
+.card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.job-card {
+  position: relative;
+  overflow: hidden;
+}
+
+/* 匹配度徽标 */
+.score-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  z-index: 1;
+}
+.score-high { background: linear-gradient(135deg, #2ea866, #5cc084); }
+.score-mid  { background: linear-gradient(135deg, #dc9c3f, #e7b567); }
+.score-low  { background: linear-gradient(135deg, #d46e6e, #e18e8e); }
+.score-num  { font-size: 18px; font-weight: 700; line-height: 1; }
+.score-unit  { font-size: 10px; opacity: 0.9; }
+
+/* 卡片内容 */
+.card-body { padding-right: 10px; }
+
+.job-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.job-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--app-text);
+}
+.job-company {
+  font-size: 13px;
+  color: var(--app-muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.source-tag {
+  border-color: #dbe7ff;
+  color: #556fdc;
+}
+
+.match-reason {
+  font-size: 13px;
+  color: #55695f;
+  line-height: 1.5;
+  margin: 8px 0;
+}
+
+/* 技能标签 */
+.skill-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+}
+.skill-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.skill-label {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: #fff;
+  margin-right: 4px;
+}
+.overlap-label { background: #2ea866; }
+.gap-label { background: #d46e6e; }
+
+/* 匹配详情 */
+.match-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+.detail-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.dt-ok { background: #eff8f1; color: #2ea866; }
+.dt-no { background: #fff3f0; color: #d46e6e; }
+
+/* 操作 */
+.card-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(217, 231, 222, 0.92);
+}
+.feedback-btns {
+  display: flex;
+  gap: 2px;
+}
+
+@media (max-width: 768px) {
+  .card-grid { grid-template-columns: 1fr; }
+  .top-row { flex-direction: column; align-items: stretch; }
+  .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .insight-grid,
+  .secondary-grid { grid-template-columns: 1fr; }
+}
+</style>
