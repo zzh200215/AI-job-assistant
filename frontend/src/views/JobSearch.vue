@@ -1,9 +1,9 @@
-﻿<template>
-  <div class="market-page">
+<template>
+  <div class="page-shell">
     <section class="hero">
       <div class="hero-copy">
         <div class="hero-title-row">
-          <h1>岗位市场</h1>
+          <h2>岗位市场</h2>
           <div class="hero-orbits" aria-hidden="true">
             <span></span>
             <span></span>
@@ -2115,20 +2115,11 @@ function saveLocalArray(key, value) {
 </script>
 
 <style scoped>
-.market-page {
-  --paper: #eef4ff;
-  --ink: #18222f;
-  --muted: #6f7b88;
-  --line: rgba(24, 34, 47, 0.1);
-  --orange: #7c6cff;
-  --blue: #3b82f6;
-  --green: #14b8a6;
-  --sand: #dfe9fb;
-  --deep: #15202b;
+.page-shell {
   max-width: 1480px;
   margin: 0 auto;
   padding: 18px 0 28px;
-  color: var(--ink);
+  color: var(--app-text);
 }
 
 .hero {
@@ -2136,15 +2127,12 @@ function saveLocalArray(key, value) {
   grid-template-columns: 1.4fr 1fr;
   gap: 18px;
   padding: 26px;
-  border-radius: 28px;
+  border-radius: var(--app-radius-md, 16px);
   position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(circle at left bottom, rgba(255, 255, 255, 0.72), transparent 30%),
-    radial-gradient(circle at top right, rgba(124, 108, 255, 0.22), transparent 38%),
-    linear-gradient(135deg, #f4f8ff 0%, #eaf1ff 48%, #dce8fb 100%);
-  border: 1px solid rgba(24, 34, 47, 0.08);
-  box-shadow: 0 20px 40px rgba(21, 32, 43, 0.08);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
+  box-shadow: var(--app-shadow-soft);
 }
 
 .hero::before {
@@ -2153,8 +2141,8 @@ function saveLocalArray(key, value) {
   inset: 18px auto auto 18px;
   width: 120px;
   height: 120px;
-  border-radius: 32px;
-  border: 1px solid rgba(21, 32, 43, 0.08);
+  border-radius: var(--app-radius-md, 16px);
+  border: 1px solid var(--app-line);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.08));
   transform: rotate(-10deg);
   pointer-events: none;
@@ -2168,11 +2156,11 @@ function saveLocalArray(key, value) {
   width: 180px;
   height: 180px;
   border-radius: 50%;
-  border: 1px dashed rgba(21, 32, 43, 0.16);
+  border: 1px dashed var(--app-line);
   pointer-events: none;
 }
 
-.hero h1 {
+.hero h2 {
   margin: 0;
   font-size: 38px;
   line-height: 1.05;
@@ -2193,9 +2181,9 @@ function saveLocalArray(key, value) {
   justify-content: space-between;
   gap: 16px;
   padding: 18px 20px;
-  border-radius: 24px;
+  border-radius: var(--app-radius-sm, 12px);
   background: rgba(255, 255, 255, 0.52);
-  border: 1px solid rgba(21, 32, 43, 0.08);
+  border: 1px solid var(--app-line);
   backdrop-filter: blur(10px);
 }
 
@@ -2209,7 +2197,7 @@ function saveLocalArray(key, value) {
 .hero-orbits span {
   display: block;
   border-radius: 999px;
-  background: linear-gradient(135deg, #7c6cff, #9ca1ff);
+  background: linear-gradient(135deg, var(--app-primary, #7c6cff), var(--app-primary, #9ca1ff));
   box-shadow: 0 8px 18px rgba(124, 108, 255, 0.22);
 }
 
@@ -2245,20 +2233,20 @@ function saveLocalArray(key, value) {
   gap: 4px;
   margin-top: 16px;
   padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(24, 34, 47, 0.08);
+  border-radius: var(--app-radius-xs, 8px);
+  border: 1px solid var(--app-line);
   background: rgba(255, 255, 255, 0.58);
 }
 
 .source-banner strong,
 .result-source-note strong {
   font-size: 13px;
-  color: var(--ink);
+  color: var(--app-text);
 }
 
 .source-banner span,
 .result-source-note span {
-  color: var(--muted);
+  color: var(--app-muted);
   font-size: 13px;
   line-height: 1.55;
 }
@@ -2300,7 +2288,7 @@ function saveLocalArray(key, value) {
   justify-content: space-between;
   min-height: 124px;
   padding: 16px;
-  border-radius: 20px;
+  border-radius: var(--app-radius-sm, 12px);
   color: #fff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
@@ -2315,7 +2303,7 @@ function saveLocalArray(key, value) {
   opacity: 0.9;
 }
 
-.accent-orange { background: linear-gradient(135deg, #7c6cff, #9b8cff); }
+.accent-orange { background: linear-gradient(135deg, var(--app-primary, #7c6cff), #9b8cff); }
 .accent-blue { background: linear-gradient(135deg, #3b82f6, #6aa6ff); }
 .accent-green { background: linear-gradient(135deg, #14b8a6, #39d2bf); }
 .accent-dark { background: linear-gradient(135deg, #15202b, #314456); }
@@ -2335,9 +2323,9 @@ function saveLocalArray(key, value) {
 .control-card,
 .panel-card,
 .board-card {
-  border-radius: 24px;
-  border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 245, 255, 0.94));
+  border-radius: var(--app-radius-md, 16px);
+  border: 1px solid var(--app-line);
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .panel-card,
@@ -2369,7 +2357,7 @@ function saveLocalArray(key, value) {
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
 .preset-row,
@@ -2384,8 +2372,8 @@ function saveLocalArray(key, value) {
 .rewrite-row {
   margin-top: 16px;
   padding: 14px;
-  border-radius: 18px;
-  background: rgba(21, 32, 43, 0.035);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
 }
 
 .rewrite-head {
@@ -2401,7 +2389,7 @@ function saveLocalArray(key, value) {
 .compare-reason,
 .compare-summary,
 .compare-company {
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
 .rewrite-note,
@@ -2419,11 +2407,11 @@ function saveLocalArray(key, value) {
 
 .preset-chip,
 .history-chip {
-  border: 1px solid rgba(24, 34, 47, 0.14);
+  border: 1px solid var(--app-line);
   background: #fff;
   border-radius: 999px;
   padding: 8px 12px;
-  color: var(--ink);
+  color: var(--app-text);
   cursor: pointer;
   transition: 0.2s ease;
 }
@@ -2434,7 +2422,7 @@ function saveLocalArray(key, value) {
 .short-item:hover,
 .cta-item:hover {
   transform: translateY(-1px);
-  border-color: rgba(24, 34, 47, 0.28);
+  border-color: var(--app-line);
 }
 
 .filter-row {
@@ -2478,7 +2466,7 @@ function saveLocalArray(key, value) {
 .recommend-reason,
 .drawer-company,
 .drawer-section p {
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
 .result-toolbar,
@@ -2505,9 +2493,9 @@ function saveLocalArray(key, value) {
   gap: 10px;
   min-height: 140px;
   justify-content: center;
-  border-radius: 18px;
-  background: rgba(21, 32, 43, 0.03);
-  color: var(--muted);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  color: var(--app-muted);
 }
 
 .result-grid,
@@ -2521,11 +2509,9 @@ function saveLocalArray(key, value) {
 .recommend-card {
   position: relative;
   padding: 18px;
-  border-radius: 22px;
-  border: 1px solid rgba(24, 34, 47, 0.08);
-  background:
-    radial-gradient(circle at top right, rgba(124, 108, 255, 0.08), transparent 34%),
-    linear-gradient(180deg, #fff, #f5f8ff);
+  border-radius: var(--app-radius-sm, 12px);
+  border: 1px solid var(--app-line);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .job-shell-top {
@@ -2558,12 +2544,12 @@ function saveLocalArray(key, value) {
 
 .source-pill {
   background: rgba(45, 108, 223, 0.1);
-  color: var(--blue);
+  color: var(--app-primary, #3b82f6);
 }
 
 .local-pill {
   background: rgba(44, 143, 105, 0.12);
-  color: var(--green);
+  color: var(--app-success, #14b8a6);
 }
 
 .job-company,
@@ -2584,7 +2570,7 @@ function saveLocalArray(key, value) {
 .job-facts span {
   padding: 6px 10px;
   border-radius: 999px;
-  background: rgba(21, 32, 43, 0.05);
+  background: var(--app-bg);
   font-size: 13px;
 }
 
@@ -2593,7 +2579,7 @@ function saveLocalArray(key, value) {
 }
 
 .fact-emphasis {
-  color: var(--orange);
+  color: var(--app-primary, #7c6cff);
   font-weight: 700;
 }
 
@@ -2635,9 +2621,9 @@ function saveLocalArray(key, value) {
 .text-btn,
 .short-item,
 .cta-item {
-  border: 1px solid rgba(24, 34, 47, 0.1);
+  border: 1px solid var(--app-line);
   background: #fff;
-  border-radius: 14px;
+  border-radius: var(--app-radius-xs, 8px);
   cursor: pointer;
   transition: 0.2s ease;
 }
@@ -2657,8 +2643,8 @@ function saveLocalArray(key, value) {
   grid-template-columns: minmax(0, 1fr) 220px;
   gap: 16px;
   padding: 16px;
-  border-radius: 18px;
-  background: rgba(21, 32, 43, 0.03);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
 }
 
 .warehouse-actions {
@@ -2684,8 +2670,8 @@ function saveLocalArray(key, value) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #18222f, #304151);
+  border-radius: var(--app-radius-sm, 12px);
+  background: linear-gradient(180deg, var(--app-text, #18222f), #304151);
   color: #fff;
   min-height: 94px;
 }
@@ -2710,12 +2696,12 @@ function saveLocalArray(key, value) {
 
 .tag-label.ok {
   background: rgba(44, 143, 105, 0.12);
-  color: var(--green);
+  color: var(--app-success, #14b8a6);
 }
 
 .tag-label.gap {
   background: rgba(217, 111, 50, 0.12);
-  color: var(--orange);
+  color: var(--app-warning, #7c6cff);
 }
 
 .recommend-signals {
@@ -2733,12 +2719,12 @@ function saveLocalArray(key, value) {
 
 .signal.positive {
   background: rgba(44, 143, 105, 0.12);
-  color: var(--green);
+  color: var(--app-success, #14b8a6);
 }
 
 .signal.neutral {
-  background: rgba(21, 32, 43, 0.06);
-  color: var(--muted);
+  background: var(--app-bg);
+  color: var(--app-muted);
 }
 
 .board-card {
@@ -2749,7 +2735,7 @@ function saveLocalArray(key, value) {
 .board-block + .board-block {
   margin-top: 18px;
   padding-top: 18px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--app-line);
 }
 
 .board-label {
@@ -2758,7 +2744,7 @@ function saveLocalArray(key, value) {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
 .insight-grid {
@@ -2769,8 +2755,8 @@ function saveLocalArray(key, value) {
 
 .insight-item {
   padding: 12px;
-  border-radius: 16px;
-  background: rgba(21, 32, 43, 0.04);
+  border-radius: var(--app-radius-xs, 8px);
+  background: var(--app-bg);
 }
 
 .insight-item strong {
@@ -2779,7 +2765,7 @@ function saveLocalArray(key, value) {
 }
 
 .insight-item small {
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
 .shortlist {
@@ -2797,7 +2783,7 @@ function saveLocalArray(key, value) {
 }
 
 .short-item span {
-  color: var(--muted);
+  color: var(--app-muted);
   font-size: 12px;
 }
 
@@ -2821,7 +2807,7 @@ function saveLocalArray(key, value) {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
 .drawer-actions {
@@ -2841,8 +2827,8 @@ function saveLocalArray(key, value) {
 .drawer-content {
   margin: 0;
   padding: 14px;
-  border-radius: 16px;
-  background: rgba(21, 32, 43, 0.04);
+  border-radius: var(--app-radius-xs, 8px);
+  background: var(--app-bg);
   white-space: pre-wrap;
   line-height: 1.7;
   font-family: inherit;
@@ -2850,8 +2836,8 @@ function saveLocalArray(key, value) {
 
 .explain-box {
   padding: 14px;
-  border-radius: 16px;
-  background: rgba(21, 32, 43, 0.04);
+  border-radius: var(--app-radius-xs, 8px);
+  background: var(--app-bg);
 }
 
 .explain-top {
@@ -2866,7 +2852,7 @@ function saveLocalArray(key, value) {
   margin-top: 10px;
   margin-bottom: 6px;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
 .compare-grid {
@@ -2877,9 +2863,9 @@ function saveLocalArray(key, value) {
 
 .compare-card {
   padding: 16px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #fff, #f3f7ff);
-  border: 1px solid var(--line);
+  border-radius: var(--app-radius-sm, 12px);
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid var(--app-line);
 }
 
 .compare-head {
@@ -2909,7 +2895,7 @@ function saveLocalArray(key, value) {
 .compare-meta span {
   padding: 5px 8px;
   border-radius: 999px;
-  background: rgba(21, 32, 43, 0.05);
+  background: var(--app-bg);
   font-size: 12px;
 }
 
@@ -2957,8 +2943,8 @@ function saveLocalArray(key, value) {
 .pipeline-stage-pill,
 .pipeline-summary-item {
   padding: 14px;
-  border-radius: 18px;
-  border: 1px solid var(--line);
+  border-radius: var(--app-radius-sm, 12px);
+  border: 1px solid var(--app-line);
   background: rgba(255, 255, 255, 0.82);
 }
 
@@ -2975,7 +2961,7 @@ function saveLocalArray(key, value) {
 
 .pipeline-stage-pill span,
 .pipeline-summary-item span {
-  color: var(--muted);
+  color: var(--app-muted);
   font-size: 13px;
 }
 
@@ -2994,9 +2980,9 @@ function saveLocalArray(key, value) {
 
 .pipeline-column {
   padding: 16px;
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(238, 244, 255, 0.92));
-  border: 1px solid rgba(24, 34, 47, 0.08);
+  border-radius: var(--app-radius-sm, 12px);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--app-line);
 }
 
 .pipeline-column-head {
@@ -3015,7 +3001,7 @@ function saveLocalArray(key, value) {
 .pipeline-column-note,
 .pipeline-meta,
 .pipeline-history span {
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
 .pipeline-column-note {
@@ -3032,10 +3018,10 @@ function saveLocalArray(key, value) {
 
 .pipeline-card {
   padding: 14px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   background: rgba(255, 255, 255, 0.95);
-  border: 1px solid var(--line);
-  box-shadow: 0 10px 24px rgba(21, 32, 43, 0.05);
+  border: 1px solid var(--app-line);
+  box-shadow: var(--app-shadow-soft);
 }
 
 .pipeline-card-head {
@@ -3053,7 +3039,7 @@ function saveLocalArray(key, value) {
 
 .pipeline-card-head p {
   margin: 6px 0 0;
-  color: var(--muted);
+  color: var(--app-muted);
   font-size: 13px;
 }
 
@@ -3116,7 +3102,7 @@ function saveLocalArray(key, value) {
 }
 
 @media (max-width: 768px) {
-  .market-page {
+  .page-shell {
     padding-top: 8px;
   }
 
@@ -3128,7 +3114,7 @@ function saveLocalArray(key, value) {
     padding: 16px;
   }
 
-  .hero h1 {
+  .hero h2 {
     font-size: 30px;
   }
 

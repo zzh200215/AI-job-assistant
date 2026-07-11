@@ -1,105 +1,179 @@
 <template>
-  <div class="profile-page">
-    <section class="hero-card">
+  <div class="page-shell">
+    <header class="page-header">
       <div>
         <p class="eyebrow">Account</p>
-        <h1>个人中心</h1>
-        <p class="hero-copy">统一查看当前账号身份、系统运行模式和交付能力状态。</p>
+        <h2>个人中心</h2>
+        <div class="page-header-sub">统一查看当前账号身份、系统运行模式和交付能力状态。</div>
       </div>
       <div class="hero-badges">
         <span>{{ authStore.roleLabel }}</span>
         <span>{{ status.demo_mode ? 'Demo Mode' : 'Live Mode' }}</span>
       </div>
-    </section>
+    </header>
 
     <section class="grid">
-      <article class="panel identity-panel">
-        <div class="panel-head">
-          <h2>账号信息</h2>
+      <div class="panel identity-panel">
+        <div class="panel-header">
+          <h3>账号信息</h3>
           <el-button text @click="refreshAll" :loading="loading">刷新</el-button>
         </div>
-        <div class="identity-card">
-          <div class="avatar">{{ avatarText }}</div>
-          <div class="identity-copy">
-            <strong>{{ authStore.user?.username || '--' }}</strong>
-            <span>{{ authStore.user?.email || '--' }}</span>
-            <div class="identity-pills">
-              <span>{{ authStore.roleLabel }}</span>
-              <span v-if="authStore.user?.is_admin">Admin</span>
-              <span v-else>Standard</span>
+        <div class="panel-body">
+          <div class="identity-card">
+            <div class="avatar">{{ avatarText }}</div>
+            <div class="identity-copy">
+              <strong>{{ authStore.user?.username || '--' }}</strong>
+              <span>{{ authStore.user?.email || '--' }}</span>
+              <div class="identity-pills">
+                <span>{{ authStore.roleLabel }}</span>
+                <span v-if="authStore.user?.is_admin">Admin</span>
+                <span v-else>Standard</span>
+              </div>
+            </div>
+          </div>
+          <dl class="info-list">
+            <div class="info-row">
+              <dt>用户 ID</dt>
+              <dd>{{ authStore.user?.id ?? '--' }}</dd>
+            </div>
+            <div class="info-row">
+              <dt>注册时间</dt>
+              <dd>{{ formatDate(authStore.user?.created_at) }}</dd>
+            </div>
+            <div class="info-row">
+              <dt>默认工作台</dt>
+              <dd>{{ authStore.homeRoute }}</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h3>系统模式</h3>
+          <span class="panel-tip">运行时状态</span>
+        </div>
+        <div class="panel-body">
+          <div class="status-grid">
+            <div class="status-card" :class="{ alert: status.demo_mode }">
+              <span>当前模式</span>
+              <strong>{{ status.demo_mode ? '演示模式' : '正式模式' }}</strong>
+              <small>{{ status.demo_mode ? '仍有 mock 依赖，适合演示和联调。' : '核心依赖已切到真实模式。' }}</small>
+            </div>
+            <div class="status-card">
+              <span>LLM</span>
+              <strong>{{ formatProvider(status.llm_provider) }}</strong>
+              <small>编排引擎：{{ status.orchestration_engine || '--' }}</small>
+            </div>
+            <div class="status-card">
+              <span>Embedding</span>
+              <strong>{{ formatProvider(status.embedding_provider) }}</strong>
+              <small>编排策略：{{ status.orchestration_strategy || '--' }}</small>
+            </div>
+            <div class="status-card">
+              <span>Reranker</span>
+              <strong>{{ formatProvider(status.reranker_provider) }}</strong>
+              <small>运行环境：{{ status.app_env || '--' }}</small>
             </div>
           </div>
         </div>
-        <dl class="info-list">
-          <div class="info-row">
-            <dt>用户 ID</dt>
-            <dd>{{ authStore.user?.id ?? '--' }}</dd>
-          </div>
-          <div class="info-row">
-            <dt>注册时间</dt>
-            <dd>{{ formatDate(authStore.user?.created_at) }}</dd>
-          </div>
-          <div class="info-row">
-            <dt>默认工作台</dt>
-            <dd>{{ authStore.homeRoute }}</dd>
-          </div>
-        </dl>
-      </article>
-
-      <article class="panel">
-        <div class="panel-head">
-          <h2>系统模式</h2>
-          <span class="panel-tip">运行时状态</span>
-        </div>
-        <div class="status-grid">
-          <div class="status-card" :class="{ alert: status.demo_mode }">
-            <span>当前模式</span>
-            <strong>{{ status.demo_mode ? '演示模式' : '正式模式' }}</strong>
-            <small>{{ status.demo_mode ? '仍有 mock 依赖，适合演示和联调。' : '核心依赖已切到真实模式。' }}</small>
-          </div>
-          <div class="status-card">
-            <span>LLM</span>
-            <strong>{{ formatProvider(status.llm_provider) }}</strong>
-            <small>编排引擎：{{ status.orchestration_engine || '--' }}</small>
-          </div>
-          <div class="status-card">
-            <span>Embedding</span>
-            <strong>{{ formatProvider(status.embedding_provider) }}</strong>
-            <small>编排策略：{{ status.orchestration_strategy || '--' }}</small>
-          </div>
-          <div class="status-card">
-            <span>Reranker</span>
-            <strong>{{ formatProvider(status.reranker_provider) }}</strong>
-            <small>运行环境：{{ status.app_env || '--' }}</small>
-          </div>
-        </div>
-      </article>
+      </div>
     </section>
 
-    <section class="panel capability-panel">
-      <div class="panel-head">
-        <h2>能力状态</h2>
+    <div class="panel capability-panel">
+      <div class="panel-header">
+        <h3>能力状态</h3>
         <span class="panel-tip">按交付闭环检查</span>
       </div>
-      <div class="capability-list">
-        <div class="capability-item" :class="{ done: status.capabilities?.tool_calling }">
-          <strong>LLM 工具调用</strong>
-          <span>{{ status.capabilities?.tool_calling ? '已开启' : '未开启' }}</span>
-        </div>
-        <div class="capability-item" :class="{ done: status.capabilities?.ocr_resume_parse }">
-          <strong>OCR 简历识别</strong>
-          <span>{{ status.capabilities?.ocr_resume_parse ? '已开启' : '未开启' }}</span>
-        </div>
-        <div class="capability-item" :class="{ done: status.capabilities?.password_reset }">
-          <strong>忘记密码</strong>
-          <span>{{ status.capabilities?.password_reset ? '已开启' : '未开启' }}</span>
-        </div>
-        <div class="capability-item" :class="{ done: status.capabilities?.social_login }">
-          <strong>第三方登录</strong>
-          <span>{{ status.capabilities?.social_login ? '已开启' : '未开启' }}</span>
+      <div class="panel-body">
+        <div class="capability-list">
+          <div class="capability-item" :class="{ done: status.capabilities?.tool_calling }">
+            <strong>LLM 工具调用</strong>
+            <span>{{ status.capabilities?.tool_calling ? '已开启' : '未开启' }}</span>
+          </div>
+          <div class="capability-item" :class="{ done: status.capabilities?.ocr_resume_parse }">
+            <strong>OCR 简历识别</strong>
+            <span>{{ status.capabilities?.ocr_resume_parse ? '已开启' : '未开启' }}</span>
+          </div>
+          <div class="capability-item" :class="{ done: status.capabilities?.password_reset }">
+            <strong>忘记密码</strong>
+            <span>{{ status.capabilities?.password_reset ? '已开启' : '未开启' }}</span>
+          </div>
+          <div class="capability-item" :class="{ done: status.capabilities?.social_login }">
+            <strong>第三方登录</strong>
+            <span>{{ status.capabilities?.social_login ? '已开启' : '未开启' }}</span>
+          </div>
         </div>
       </div>
-    </section>
+    </div>
+
+    <!-- 账号安全与隐私 -->
+    <div class="panel">
+      <div class="panel-header">
+        <h3>账号安全与隐私</h3>
+      </div>
+      <div class="panel-body">
+        <div class="settings-list">
+          <div class="setting-row">
+            <div class="setting-info">
+              <strong>邮箱验证</strong>
+              <span>验证邮箱以提高账号安全性</span>
+            </div>
+            <div class="setting-action">
+              <el-tag v-if="authStore.user?.email_verified" type="success" size="small">已验证</el-tag>
+              <el-button v-else size="small" type="primary" @click="verifyEmail" :loading="verifying">发送验证邮件</el-button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <strong>修改密码</strong>
+              <span>定期更换密码保障账号安全</span>
+            </div>
+            <div class="setting-action">
+              <el-button size="small" @click="$router.push('/reset-password')">修改密码</el-button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <strong>数据导出</strong>
+              <span>导出您的所有数据（简历、投递记录、面试记录等）</span>
+            </div>
+            <div class="setting-action">
+              <el-button size="small" @click="exportData" :loading="exporting">导出数据</el-button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <strong>隐私设置</strong>
+              <span>控制简历和数据的可见范围</span>
+            </div>
+            <div class="setting-action">
+              <el-switch v-model="privacySettings.resumePublic" active-text="简历公开" @change="savePrivacy" />
+              <el-switch v-model="privacySettings.allowRecommend" active-text="允许推荐" @change="savePrivacy" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 危险操作 -->
+    <div class="panel danger-zone">
+      <div class="panel-header">
+        <h3>危险操作</h3>
+        <span class="panel-tip danger-tip">以下操作不可逆</span>
+      </div>
+      <div class="panel-body">
+        <div class="danger-content">
+          <div class="danger-row">
+            <div>
+              <strong>注销账号</strong>
+              <p>永久删除账号和所有数据，此操作不可恢复</p>
+            </div>
+            <el-button type="danger" plain @click="deleteAccount">注销账号</el-button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -107,11 +181,18 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { getSystemStatus } from '@/api/system'
-import { ElMessage } from '@/plugins/element-services'
+import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import { useAuthStore } from '@/stores/auth'
+import request from '@/api/request'
 
 const authStore = useAuthStore()
 const loading = ref(false)
+const verifying = ref(false)
+const exporting = ref(false)
+const privacySettings = reactive({
+  resumePublic: true,
+  allowRecommend: true,
+})
 const status = reactive({
   app_env: '',
   orchestration_strategy: '',
@@ -154,6 +235,60 @@ async function refreshAll() {
   }
 }
 
+async function verifyEmail() {
+  verifying.value = true
+  try {
+    await request.post('/auth/send-verify-email')
+    ElMessage.success('验证邮件已发送，请查收')
+  } catch {
+    ElMessage.error('发送失败')
+  } finally {
+    verifying.value = false
+  }
+}
+
+async function exportData() {
+  exporting.value = true
+  try {
+    const res = await request.get('/auth/export-data', { responseType: 'blob' })
+    const url = window.URL.createObjectURL(res)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `my_data_${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('数据导出成功')
+  } catch {
+    ElMessage.error('导出失败')
+  } finally {
+    exporting.value = false
+  }
+}
+
+function savePrivacy() {
+  localStorage.setItem('recruit.privacy', JSON.stringify(privacySettings))
+  ElMessage.success('隐私设置已保存')
+}
+
+async function deleteAccount() {
+  try {
+    await ElMessageBox.confirm(
+      '此操作将永久删除您的账号和所有数据，不可恢复！确定继续？',
+      '注销账号',
+      { confirmButtonText: '确定注销', cancelButtonText: '取消', type: 'error' }
+    )
+    await ElMessageBox.prompt('请输入"确认注销"以继续', '最终确认', {
+      confirmButtonText: '注销',
+      cancelButtonText: '取消',
+      inputPattern: /确认注销/,
+      inputErrorMessage: '请输入"确认注销"',
+    })
+    await request.delete('/auth/account')
+    ElMessage.success('账号已注销')
+    authStore.logout()
+  } catch {}
+}
+
 onMounted(async () => {
   try {
     await refreshAll()
@@ -164,21 +299,12 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.profile-page {
+.page-shell {
   display: grid;
   gap: 18px;
 }
 
-.hero-card,
-.panel {
-  background: rgba(255, 255, 255, 0.84);
-  border: 1px solid rgba(203, 221, 230, 0.82);
-  border-radius: 24px;
-  box-shadow: 0 16px 32px rgba(145, 176, 193, 0.12);
-  backdrop-filter: blur(10px);
-}
-
-.hero-card {
+.page-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -187,31 +313,25 @@ onMounted(async () => {
   background:
     radial-gradient(circle at top right, rgba(114, 187, 143, 0.18), transparent 34%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(245, 250, 246, 0.94));
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-md, 16px);
+  box-shadow: 0 16px 32px rgba(145, 176, 193, 0.12);
+  backdrop-filter: blur(10px);
 }
 
 .eyebrow {
   margin: 0 0 10px;
-  color: #7a8aa1;
+  color: var(--app-muted);
   font-size: 12px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-.hero-card h1,
-.panel h2 {
+.page-header h2 {
   margin: 0;
-  color: #1f2b3d;
-}
-
-.hero-card h1 {
+  color: var(--app-text);
   font-size: 34px;
   line-height: 1.05;
-}
-
-.hero-copy {
-  margin: 12px 0 0;
-  color: #66758a;
-  line-height: 1.75;
 }
 
 .hero-badges {
@@ -236,37 +356,20 @@ onMounted(async () => {
   gap: 18px;
 }
 
-.panel {
-  padding: 24px;
-}
-
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-
-.panel-tip {
-  color: #8a97ac;
-  font-size: 13px;
-}
-
 .identity-card {
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 18px;
-  border-radius: 20px;
+  border-radius: var(--app-radius-md, 16px);
   background: linear-gradient(135deg, #f4fbf6, #faf7ef);
-  border: 1px solid rgba(211, 231, 218, 0.9);
+  border: 1px solid var(--app-line);
 }
 
 .avatar {
   width: 58px;
   height: 58px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   display: grid;
   place-items: center;
   background: linear-gradient(135deg, #1c8c5e, #c66a3d);
@@ -285,13 +388,13 @@ onMounted(async () => {
 }
 
 .identity-copy strong {
-  color: #1f2b3d;
+  color: var(--app-text);
   font-size: 22px;
 }
 
 .identity-copy > span {
   margin-top: 6px;
-  color: #6f8096;
+  color: var(--app-muted);
 }
 
 .identity-pills {
@@ -311,7 +414,7 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 12px;
   padding: 14px 0;
-  border-bottom: 1px solid rgba(224, 233, 242, 0.86);
+  border-bottom: 1px solid var(--app-line);
 }
 
 .info-row:last-child {
@@ -320,12 +423,12 @@ onMounted(async () => {
 }
 
 .info-row dt {
-  color: #8190a4;
+  color: var(--app-muted);
 }
 
 .info-row dd {
   margin: 0;
-  color: #1f2b3d;
+  color: var(--app-text);
   font-weight: 600;
   text-align: right;
 }
@@ -339,9 +442,9 @@ onMounted(async () => {
 .status-card {
   min-height: 128px;
   padding: 18px;
-  border-radius: 20px;
+  border-radius: var(--app-radius-md, 16px);
   background: #f8fbfe;
-  border: 1px solid rgba(214, 226, 238, 0.9);
+  border: 1px solid var(--app-line);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -349,22 +452,22 @@ onMounted(async () => {
 
 .status-card.alert {
   background: linear-gradient(135deg, #fff7ed, #fffbf4);
-  border-color: rgba(246, 197, 125, 0.9);
+  border-color: var(--app-line);
 }
 
 .status-card span {
-  color: #7f8da2;
+  color: var(--app-muted);
   font-size: 13px;
 }
 
 .status-card strong {
-  color: #1f2b3d;
+  color: var(--app-text);
   font-size: 22px;
   line-height: 1.15;
 }
 
 .status-card small {
-  color: #67778d;
+  color: var(--app-muted);
   line-height: 1.6;
 }
 
@@ -377,9 +480,9 @@ onMounted(async () => {
 .capability-item {
   min-height: 120px;
   padding: 18px;
-  border-radius: 20px;
+  border-radius: var(--app-radius-md, 16px);
   background: linear-gradient(135deg, #fff7f7, #fffdfd);
-  border: 1px solid rgba(238, 209, 209, 0.95);
+  border: 1px solid var(--app-line);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -388,18 +491,87 @@ onMounted(async () => {
 
 .capability-item.done {
   background: linear-gradient(135deg, #f1fbf4, #f8fffd);
-  border-color: rgba(188, 228, 201, 0.95);
+  border-color: var(--app-line);
 }
 
 .capability-item strong {
-  color: #1f2b3d;
+  color: var(--app-text);
   font-size: 16px;
   line-height: 1.5;
 }
 
 .capability-item span {
-  color: #66758a;
+  color: var(--app-muted);
   font-size: 14px;
+}
+
+/* Settings list */
+.settings-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--app-line);
+  gap: 16px;
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+.setting-info strong {
+  display: block;
+  font-size: 15px;
+  color: var(--app-text);
+}
+
+.setting-info span {
+  font-size: 13px;
+  color: var(--app-muted);
+}
+
+.setting-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* Danger zone */
+.danger-zone {
+  border-color: rgba(238, 180, 180, 0.9) !important;
+}
+
+.danger-tip {
+  color: var(--app-danger) !important;
+}
+
+.danger-content {
+  padding: 0;
+}
+
+.danger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.danger-row strong {
+  display: block;
+  font-size: 15px;
+  color: var(--app-danger);
+}
+
+.danger-row p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--app-muted);
 }
 
 @media (max-width: 1080px) {
@@ -411,16 +583,16 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
-  .hero-card,
+  .page-header,
   .panel {
     padding: 20px;
   }
 
-  .hero-card {
+  .page-header {
     flex-direction: column;
   }
 
-  .hero-card h1 {
+  .page-header h2 {
     font-size: 28px;
   }
 }

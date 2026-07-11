@@ -25,9 +25,20 @@ from app.core.database import Base, engine
 from app.core.logging_utils import configure_logging
 from app.core.request_context import set_request_id
 from app.core.runtime_metrics import record_request
+from app.core.scheduler import start_scheduler, shutdown_scheduler
 from app.core.schema_bootstrap import (
     ensure_agent_message_usage_columns,
     ensure_agent_task_columns,
+    ensure_analysis_record_columns,
+    ensure_interview_question_table,
+    ensure_jd_columns,
+    ensure_job_bookmark_table,
+    ensure_job_journal_table,
+    ensure_job_pipeline_columns,
+    ensure_job_target_table,
+    ensure_notification_table,
+    ensure_resume_columns,
+    ensure_user_profile_columns,
     ensure_user_role_column,
 )
 from app.services.orchestration_runner import mark_stale_running_tasks_failed, shutdown_orchestration_executor
@@ -44,8 +55,20 @@ async def lifespan(_app: FastAPI):
     ensure_user_role_column(engine)
     ensure_agent_task_columns(engine)
     ensure_agent_message_usage_columns(engine)
+    ensure_user_profile_columns(engine)
+    ensure_job_bookmark_table(engine)
+    ensure_notification_table(engine)
+    ensure_interview_question_table(engine)
+    ensure_job_journal_table(engine)
+    ensure_job_target_table(engine)
+    ensure_job_pipeline_columns(engine)
+    ensure_resume_columns(engine)
+    ensure_jd_columns(engine)
+    ensure_analysis_record_columns(engine)
     mark_stale_running_tasks_failed()
+    start_scheduler()
     yield
+    shutdown_scheduler()
     shutdown_orchestration_executor()
 
 

@@ -6,6 +6,7 @@ import router from './router'
 import { installElement } from './plugins/element'
 import './plugins/element.css'
 import './styles/main.css'
+import './styles/panels.css'
 
 const app = createApp(App)
 

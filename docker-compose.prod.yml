@@ -1,0 +1,199 @@
+# ============================================================
+# Docker Compose — 智能招聘与职业规划平台（生产环境）
+#
+# 使用方式：
+#   1. cp .env.production.example .env
+#   2. 编辑 .env，填入强密码、JWT 密钥、真实 LLM/Embedding 配置
+#   3. docker compose -f docker-compose.prod.yml --profile tools run --rm migrate
+#   4. docker compose -f docker-compose.prod.yml up -d
+# ============================================================
+
+x-backend-environment: &backend-environment
+  APP_ENV: production
+  APP_HOST: "0.0.0.0"
+  APP_PORT: 8000
+  APP_DEBUG: "false"
+  AUTO_CREATE_TABLES: "false"
+  LOG_LEVEL: INFO
+  CORS_ORIGINS: ""                    # 前端通过 nginx 同源代理，不暴露额外来源
+  ADMIN_USERNAMES: ${ADMIN_USERNAMES:-admin}
+  MYSQL_HOST: mysql
+  MYSQL_PORT: 3306
+  MYSQL_USER: root
+  MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required in production}
+  MYSQL_DB: ${MYSQL_DB:-llmXM}
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in production}
+  JWT_ACCESS_TOKEN_EXPIRE_DAYS: ${JWT_ACCESS_TOKEN_EXPIRE_DAYS:-7}
+  UPLOAD_DIR: /app/uploads
+  MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+  # 生产禁止回退到 mock，必须显式配置真实 provider
+  LLM_PROVIDER: ${LLM_PROVIDER:?LLM_PROVIDER is required in production}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+  LLM_TIMEOUT: ${LLM_TIMEOUT:-60}
+  EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:?EMBEDDING_PROVIDER is required in production}
+  EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+  EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+  RERANKER_PROVIDER: ${RERANKER_PROVIDER:-auto}
+  RERANKER_BATCH_SIZE: ${RERANKER_BATCH_SIZE:-8}
+  ORCHESTRATION_STRATEGY: ${ORCHESTRATION_STRATEGY:-linear}
+  ORCHESTRATION_ENGINE: ${ORCHESTRATION_ENGINE:-native}
+  ORCHESTRATION_BACKEND: ${ORCHESTRATION_BACKEND:-thread}
+  RAG_TOP_K: ${RAG_TOP_K:-5}
+  RAG_CHUNK_SIZE: ${RAG_CHUNK_SIZE:-500}
+  RAG_CHUNK_OVERLAP: ${RAG_CHUNK_OVERLAP:-50}
+
+services:
+  # ---- MySQL 8.0 ----
+  mysql:
+    image: mysql:8.0
+    container_name: recruit-mysql-prod
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required in production}
+      MYSQL_DATABASE: ${MYSQL_DB:-llmXM}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+    # 生产环境不对外暴露 MySQL 端口
+    networks:
+      - recruit-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service_name"
+        env: "OS_ENVIRONMENT"
+
+  # ---- Backend (FastAPI) ----
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: recruit-backend-prod
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment: *backend-environment
+    volumes:
+      - uploads:/app/uploads
+      - chroma_data:/app/chroma_db
+    # 生产环境不对外暴露后端端口，仅通过 frontend nginx 访问
+    networks:
+      - recruit-net
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/').read()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 3G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service_name"
+        env: "OS_ENVIRONMENT"
+
+  # ---- One-shot database migration ----
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: recruit-migrate-prod
+    profiles: ["tools"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      <<: *backend-environment
+      AUTO_CREATE_TABLES: "false"
+    command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
+    networks:
+      - recruit-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---- Frontend (Vue 3 SPA served by nginx) ----
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: /api
+    container_name: recruit-frontend-prod
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      # 如需 HTTPS，建议在外层反向代理或负载均衡处终止 TLS，不直接暴露 443 给容器
+    networks:
+      - recruit-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:80/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service_name"
+        env: "OS_ENVIRONMENT"
+
+networks:
+  recruit-net:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  uploads:
+  chroma_data:

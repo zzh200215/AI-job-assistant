@@ -15,6 +15,8 @@ from app.models.history import JobDescription, Resume, ResumeVersion
 from app.models.user import User
 from app.schemas.resume import ResumeParseResp, ResumeUploadResp
 from app.services import resume_export_service, resume_service
+from app.services.resume_tailor_service import tailor_resume_for_jd
+from app.services.resume_analysis_service import analyze_resume, quick_score_resume
 from app.utils.file_access import resolve_upload_path
 from app.utils.job_access import get_accessible_job
 from app.utils.response import ERR_AI, ERR_COMMON, ERR_FILE, ERR_PARAM, fail, ok
@@ -554,17 +556,26 @@ async def export_resume(
 ):
     fmt = (payload or {}).get("format", "docx")
     version = (payload or {}).get("version", "optimized")
+    template = (payload or {}).get("template", "classic")
+    version_id = (payload or {}).get("version_id")
 
     resume = _get_owned_resume(db, resume_id, current_user.id)
     error = _validate_export_request(resume, fmt, version)
     if error:
         return error
 
+    # 构建下载URL参数
+    params = f"format={fmt}&version={version}&template={template}"
+    if version_id:
+        params += f"&version_id={version_id}"
+
     return ok(
         data={
-            "download_url": f"/api/resume/{resume_id}/download?format={fmt}&version={version}",
+            "download_url": f"/api/resume/{resume_id}/download?{params}",
             "format": fmt,
             "version": version,
+            "template": template,
+            "available_templates": resume_export_service.AVAILABLE_TEMPLATES,
         },
         message=f"{fmt.upper()} 导出成功",
     )
@@ -575,6 +586,8 @@ async def download_resume_export(
     resume_id: int,
     format: str = Query("docx"),
     version: str = Query("optimized"),
+    template: str = Query("classic"),
+    version_id: int = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -585,10 +598,16 @@ async def download_resume_export(
 
     try:
         if format == "docx":
-            rel_path = resume_export_service.export_docx(resume_id, version, db, user_id=current_user.id)
+            rel_path = resume_export_service.export_docx(
+                resume_id, version, db, user_id=current_user.id,
+                template=template, version_id=version_id,
+            )
             media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         else:
-            rel_path = resume_export_service.export_pdf(resume_id, version, db, user_id=current_user.id)
+            rel_path = resume_export_service.export_pdf(
+                resume_id, version, db, user_id=current_user.id,
+                template=template, version_id=version_id,
+            )
             media_type = "application/pdf"
 
         abs_path = resolve_upload_path(rel_path)
@@ -604,3 +623,95 @@ async def download_resume_export(
         return fail(message="导出路径无效", code=ERR_COMMON)
     except Exception as exc:
         return fail(message=f"导出失败: {exc}", code=ERR_COMMON)
+
+
+@router.post("/{resume_id}/tailor", summary="针对目标JD自适应改写简历")
+async def tailor_resume(
+    resume_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    根据目标JD，生成一份专门针对该岗位的定制版简历。
+    - 保持事实真实性，不编造经历
+    - 调整措辞、重点和结构，突出与JD的匹配度
+    - 同时返回匹配分析和改写说明
+    """
+    jd_id = payload.get("jd_id")
+    if not jd_id:
+        return fail(message="jd_id 必填", code=ERR_PARAM)
+
+    resume = _get_owned_resume(db, resume_id, current_user.id)
+    if not resume:
+        return fail(message="简历不存在或无权限", code=ERR_PARAM)
+
+    if not resume.parsed_json:
+        return fail(message="简历尚未解析，请先解析简历", code=ERR_PARAM)
+
+    jd = get_accessible_job(db, int(jd_id), current_user)
+    if not jd:
+        return fail(message="目标岗位不存在或无权限", code=ERR_PARAM)
+
+    try:
+        result = tailor_resume_for_jd(db, resume_id, int(jd_id), user_id=current_user.id)
+        return ok(data=result, message="简历自适应改写完成")
+    except ValueError as exc:
+        return fail(message=str(exc), code=ERR_PARAM)
+    except Exception as exc:
+        traceback.print_exc()
+        return fail(message=f"改写失败: {exc}", code=ERR_AI)
+
+
+# ============================================================
+# 简历深度分析
+# ============================================================
+
+@router.get("/{resume_id}/quick-score", summary="简历快速评分（基于规则）")
+async def get_resume_quick_score(
+    resume_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    基于规则的快速评分，不调用LLM。
+    适用于列表页快速展示简历质量等级。
+    """
+    try:
+        result = quick_score_resume(db, resume_id, user_id=current_user.id)
+        return ok(result)
+    except ValueError as exc:
+        return fail(message=str(exc), code=ERR_PARAM)
+
+
+@router.post("/{resume_id}/analyze", summary="简历深度分析（AI）")
+async def analyze_resume_api(
+    resume_id: int,
+    payload: dict = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    AI深度分析简历，包含5维度评分、改进路线图、目标岗位匹配差距分析。
+    - structure: 结构完整性
+    - content_quality: 内容质量
+    - keyword_density: 关键词密度
+    - differentiation: 差异化竞争力
+    - ats_friendly: ATS友好度
+    """
+    target_position = ""
+    if payload:
+        target_position = payload.get("target_position", "")
+
+    resume = _get_owned_resume(db, resume_id, current_user.id)
+    if not resume:
+        return fail(message="简历不存在或无权限", code=ERR_PARAM)
+
+    try:
+        result = analyze_resume(db, resume_id, target_position=target_position, user_id=current_user.id)
+        return ok(result, message="简历深度分析完成")
+    except ValueError as exc:
+        return fail(message=str(exc), code=ERR_PARAM)
+    except Exception as exc:
+        traceback.print_exc()
+        return fail(message=f"分析失败: {exc}", code=ERR_AI)

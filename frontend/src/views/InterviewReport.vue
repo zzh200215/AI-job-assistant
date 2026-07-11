@@ -1,5 +1,5 @@
 <template>
-  <div class="report-page" v-loading="loading">
+  <div class="page-shell" v-loading="loading">
     <template v-if="report">
       <section class="report-hero">
         <div>
@@ -19,191 +19,206 @@
       </section>
 
       <section class="summary-grid">
-        <div class="summary-card">
-          <span>完成题数</span>
+        <div class="stat-card">
+          <span class="stat-label">完成题数</span>
           <strong>{{ report.answered_questions }} / {{ report.total_questions }}</strong>
         </div>
-        <div class="summary-card">
-          <span>总用时</span>
+        <div class="stat-card">
+          <span class="stat-label">总用时</span>
           <strong>{{ formattedDuration }}</strong>
         </div>
-        <div class="summary-card">
-          <span>超时次数</span>
+        <div class="stat-card">
+          <span class="stat-label">超时次数</span>
           <strong>{{ timeoutCount }}</strong>
         </div>
-        <div class="summary-card">
-          <span>最强维度</span>
+        <div class="stat-card">
+          <span class="stat-label">最强维度</span>
           <strong>{{ strongestDimension.label }}</strong>
         </div>
       </section>
 
       <section class="report-grid">
         <div class="main-column">
-          <el-card shadow="never" class="report-card">
-            <template #header>
+          <div class="panel">
+            <div class="panel-header">
               <div class="card-header">
                 <span>面试结论</span>
                 <span class="sub">把分数翻译成更接近真实面试判断的语言</span>
               </div>
-            </template>
-            <div class="decision-strip" :style="{ borderColor: scoreColor(report.overall_score) }">
-              <div>
-                <div class="decision-label">当前判断</div>
-                <strong>{{ verdictTitle }}</strong>
-              </div>
-              <p>{{ localizedOverallEvaluation || fallbackEvaluation }}</p>
             </div>
-          </el-card>
+            <div class="panel-body">
+              <div class="decision-strip" :style="{ borderColor: scoreColor(report.overall_score) }">
+                <div>
+                  <div class="decision-label">当前判断</div>
+                  <strong>{{ verdictTitle }}</strong>
+                </div>
+                <p>{{ localizedOverallEvaluation || fallbackEvaluation }}</p>
+              </div>
+            </div>
+          </div>
 
-          <el-card shadow="never" class="report-card">
-            <template #header>
+          <div class="panel">
+            <div class="panel-header">
               <div class="card-header">
                 <span>能力画像</span>
                 <span class="sub">看清楚强项和最容易失分的点</span>
               </div>
-            </template>
-            <div class="dimension-list">
-              <div v-for="(score, key) in report.dimension_scores" :key="key" class="dimension-item">
-                <div class="dimension-top">
-                  <span>{{ dimLabels[key] || key }}</span>
-                  <strong :style="{ color: scoreColor(score) }">{{ score }}</strong>
+            </div>
+            <div class="panel-body">
+              <div class="dimension-list">
+                <div v-for="(score, key) in report.dimension_scores" :key="key" class="dimension-item">
+                  <div class="dimension-top">
+                    <span>{{ dimLabels[key] || key }}</span>
+                    <strong :style="{ color: scoreColor(score) }">{{ score }}</strong>
+                  </div>
+                  <div class="dimension-track">
+                    <div class="dimension-fill" :style="{ width: `${score}%`, background: scoreColor(score) }"></div>
+                  </div>
+                  <p>{{ dimensionComment(key, score) }}</p>
                 </div>
-                <div class="dimension-track">
-                  <div class="dimension-fill" :style="{ width: `${score}%`, background: scoreColor(score) }"></div>
-                </div>
-                <p>{{ dimensionComment(key, score) }}</p>
               </div>
             </div>
-          </el-card>
+          </div>
 
           <div class="two-col">
-            <el-card shadow="never" class="report-card">
-              <template #header>
+            <div class="panel">
+              <div class="panel-header">
                 <div class="card-header">
                   <span>亮点</span>
                 </div>
-              </template>
-              <ul class="plain-list">
-                <li v-for="item in localizedStrengths.length ? localizedStrengths : fallbackStrengths" :key="item">
-                  {{ item }}
-                </li>
-              </ul>
-            </el-card>
+              </div>
+              <div class="panel-body">
+                <ul class="plain-list">
+                  <li v-for="item in localizedStrengths.length ? localizedStrengths : fallbackStrengths" :key="item">
+                    {{ item }}
+                  </li>
+                </ul>
+              </div>
+            </div>
 
-            <el-card shadow="never" class="report-card">
-              <template #header>
+            <div class="panel">
+              <div class="panel-header">
                 <div class="card-header">
                   <span>风险点</span>
                 </div>
-              </template>
-              <ul class="plain-list warning">
-                <li v-for="item in localizedWeaknesses.length ? localizedWeaknesses : fallbackWeaknesses" :key="item">
-                  {{ item }}
-                </li>
-              </ul>
-            </el-card>
+              </div>
+              <div class="panel-body">
+                <ul class="plain-list warning">
+                  <li v-for="item in localizedWeaknesses.length ? localizedWeaknesses : fallbackWeaknesses" :key="item">
+                    {{ item }}
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
 
-          <el-card shadow="never" class="report-card">
-            <template #header>
+          <div class="panel">
+            <div class="panel-header">
               <div class="card-header">
                 <span>逐题时间线</span>
                 <span class="sub">比单纯堆分数更接近真实面试复盘</span>
               </div>
-            </template>
-
-            <div class="timeline-list">
-              <div
-                v-for="(item, index) in report.question_evaluations"
-                :key="`${index}-${item.question_index}`"
-                class="timeline-item"
-              >
-                <div class="timeline-badge">{{ index + 1 }}</div>
-                <div class="timeline-content">
-                  <div class="timeline-top">
-                    <div>
-                      <strong>{{ item.category || '通用问题' }}</strong>
-                      <p>{{ item.question }}</p>
+            </div>
+            <div class="panel-body">
+              <div class="timeline-list">
+                <div
+                  v-for="(item, index) in report.question_evaluations"
+                  :key="`${index}-${item.question_index}`"
+                  class="timeline-item"
+                >
+                  <div class="timeline-badge">{{ index + 1 }}</div>
+                  <div class="timeline-content">
+                    <div class="timeline-top">
+                      <div>
+                        <strong>{{ item.category || '通用问题' }}</strong>
+                        <p>{{ item.question }}</p>
+                      </div>
+                      <div class="timeline-score" :style="{ color: scoreColor(item.overall_score) }">
+                        {{ item.overall_score }}
+                      </div>
                     </div>
-                    <div class="timeline-score" :style="{ color: scoreColor(item.overall_score) }">
-                      {{ item.overall_score }}
+
+                    <div class="timeline-tags">
+                      <span>完整 {{ item.completeness }}</span>
+                      <span>准确 {{ item.accuracy }}</span>
+                      <span>深度 {{ item.depth }}</span>
+                      <span>表达 {{ item.expression }}</span>
                     </div>
-                  </div>
 
-                  <div class="timeline-tags">
-                    <span>完整 {{ item.completeness }}</span>
-                    <span>准确 {{ item.accuracy }}</span>
-                    <span>深度 {{ item.depth }}</span>
-                    <span>表达 {{ item.expression }}</span>
-                  </div>
+                    <div class="timeline-answer">
+                      <div class="field-label">你的回答</div>
+                      <p>{{ item.user_answer || '本题超时或未作答' }}</p>
+                    </div>
 
-                  <div class="timeline-answer">
-                    <div class="field-label">你的回答</div>
-                    <p>{{ item.user_answer || '本题超时或未作答' }}</p>
-                  </div>
+                    <div class="timeline-answer">
+                      <div class="field-label">面试官反馈</div>
+                      <p>{{ item.feedback || '暂无反馈' }}</p>
+                    </div>
 
-                  <div class="timeline-answer">
-                    <div class="field-label">面试官反馈</div>
-                    <p>{{ item.feedback || '暂无反馈' }}</p>
-                  </div>
-
-                  <div v-if="item.improvement" class="timeline-answer">
-                    <div class="field-label">如何补强</div>
-                    <p class="improvement">{{ item.improvement }}</p>
+                    <div v-if="item.improvement" class="timeline-answer">
+                      <div class="field-label">如何补强</div>
+                      <p class="improvement">{{ item.improvement }}</p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </el-card>
+          </div>
         </div>
 
         <aside class="side-column">
-          <el-card shadow="never" class="report-card">
-            <template #header>
+          <div class="panel">
+            <div class="panel-header">
               <div class="card-header">
                 <span>下一步训练</span>
               </div>
-            </template>
-            <div class="training-list">
-              <div v-for="(item, index) in trainingPlan" :key="`${index}-${item}`" class="training-item">
-                <span>{{ String(index + 1).padStart(2, '0') }}</span>
-                <p>{{ item }}</p>
+            </div>
+            <div class="panel-body">
+              <div class="training-list">
+                <div v-for="(item, index) in trainingPlan" :key="`${index}-${item}`" class="training-item">
+                  <span>{{ String(index + 1).padStart(2, '0') }}</span>
+                  <p>{{ item }}</p>
+                </div>
               </div>
             </div>
-          </el-card>
+          </div>
 
-          <el-card shadow="never" class="report-card">
-            <template #header>
+          <div class="panel">
+            <div class="panel-header">
               <div class="card-header">
                 <span>岗位对照</span>
               </div>
-            </template>
-            <div class="job-panel">
-              <strong>{{ report.jd_summary?.title || '目标岗位' }}</strong>
-              <p>{{ report.jd_summary?.company || '未填写公司' }}</p>
-              <div class="job-skills">
-                <span
-                  v-for="skill in (report.jd_summary?.required_skills || []).slice(0, 8)"
-                  :key="skill"
-                >
-                  {{ skill }}
-                </span>
+            </div>
+            <div class="panel-body">
+              <div class="job-panel">
+                <strong>{{ report.jd_summary?.title || '目标岗位' }}</strong>
+                <p>{{ report.jd_summary?.company || '未填写公司' }}</p>
+                <div class="job-skills">
+                  <span
+                    v-for="skill in (report.jd_summary?.required_skills || []).slice(0, 8)"
+                    :key="skill"
+                  >
+                    {{ skill }}
+                  </span>
+                </div>
               </div>
             </div>
-          </el-card>
+          </div>
 
-          <el-card shadow="never" class="report-card">
-            <template #header>
+          <div class="panel">
+            <div class="panel-header">
               <div class="card-header">
                 <span>复盘摘要</span>
               </div>
-            </template>
-            <ul class="plain-list">
-              <li>如果只看一项，先补 {{ weakestDimension.label }}。</li>
-              <li>当前最稳定的能力维度是 {{ strongestDimension.label }}。</li>
-                <li>{{ localizedHiringRecommendation || '系统当前未给出明确推进建议。' }}</li>
-              </ul>
-            </el-card>
+            </div>
+            <div class="panel-body">
+              <ul class="plain-list">
+                <li>如果只看一项，先补 {{ weakestDimension.label }}。</li>
+                <li>当前最稳定的能力维度是 {{ strongestDimension.label }}。</li>
+                  <li>{{ localizedHiringRecommendation || '系统当前未给出明确推进建议。' }}</li>
+                </ul>
+            </div>
+          </div>
         </aside>
       </section>
 
@@ -384,19 +399,21 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.report-page {
+/* ---- Page shell overrides (base .page-shell from panels.css) ---- */
+.page-shell {
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 
+/* ---- Dark hero — intentionally unique ---- */
 .report-hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
   padding: 28px;
-  border-radius: 26px;
+  border-radius: var(--app-radius-md, 16px);
   background:
     radial-gradient(circle at top right, rgba(214, 93, 47, 0.18), transparent 32%),
     linear-gradient(135deg, #16253c, #243a59 52%, #35556f);
@@ -448,31 +465,27 @@ onMounted(() => {
   color: rgba(255, 255, 255, 0.74);
 }
 
+/* ---- Summary grid — uses global .stat-card ---- */
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 14px;
 }
 
-.summary-card {
-  padding: 18px;
-  border-radius: 20px;
-  background: #fff;
+.summary-grid .stat-card {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
 }
 
-.summary-card span {
-  display: block;
-  color: #8b95a7;
-  font-size: 12px;
-}
-
-.summary-card strong {
+.summary-grid .stat-card strong {
   display: block;
   margin-top: 8px;
   font-size: 24px;
-  color: #1e2b3b;
+  color: var(--app-text);
 }
 
+/* ---- Report two-column grid ---- */
 .report-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.8fr) 340px;
@@ -487,11 +500,7 @@ onMounted(() => {
   gap: 18px;
 }
 
-.report-card {
-  border: none;
-  border-radius: 22px;
-}
-
+/* ---- Card-header inside panel-header ---- */
 .card-header {
   display: flex;
   align-items: center;
@@ -502,19 +511,20 @@ onMounted(() => {
 
 .sub {
   font-size: 12px;
-  color: #8b95a7;
+  color: var(--app-muted);
   font-weight: 400;
 }
 
+/* ---- Decision strip ---- */
 .decision-strip {
   padding: 18px;
-  border-left: 4px solid #2f6fde;
-  border-radius: 18px;
-  background: #f7f9fd;
+  border-left: 4px solid var(--app-primary);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
 }
 
 .decision-label {
-  color: #8b95a7;
+  color: var(--app-muted);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -523,16 +533,17 @@ onMounted(() => {
 .decision-strip strong {
   display: block;
   margin-top: 8px;
-  color: #1e2b3b;
+  color: var(--app-text);
   font-size: 24px;
 }
 
 .decision-strip p {
   margin: 12px 0 0;
-  color: #617083;
+  color: var(--app-muted);
   line-height: 1.8;
 }
 
+/* ---- Dimension list ---- */
 .dimension-list {
   display: grid;
   gap: 16px;
@@ -540,8 +551,8 @@ onMounted(() => {
 
 .dimension-item {
   padding: 16px;
-  border-radius: 18px;
-  background: #f7f9fc;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-surface-muted);
 }
 
 .dimension-top {
@@ -554,7 +565,7 @@ onMounted(() => {
 .dimension-track {
   margin: 12px 0 10px;
   height: 10px;
-  background: #e8edf5;
+  background: var(--app-line);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -566,27 +577,30 @@ onMounted(() => {
 
 .dimension-item p {
   margin: 0;
-  color: #6b778a;
+  color: var(--app-muted);
   line-height: 1.7;
 }
 
+/* ---- Two-col layout ---- */
 .two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 18px;
 }
 
+/* ---- Plain list ---- */
 .plain-list {
   margin: 0;
   padding-left: 18px;
-  color: #4f5d71;
+  color: var(--app-muted);
   line-height: 1.9;
 }
 
 .plain-list.warning {
-  color: #8a5529;
+  color: var(--app-warning);
 }
 
+/* ---- Timeline ---- */
 .timeline-list {
   display: grid;
   gap: 14px;
@@ -604,7 +618,7 @@ onMounted(() => {
   justify-content: center;
   width: 44px;
   height: 44px;
-  border-radius: 14px;
+  border-radius: var(--app-radius-xs, 8px);
   background: #1d3655;
   color: #fff;
   font-weight: 700;
@@ -612,8 +626,8 @@ onMounted(() => {
 
 .timeline-content {
   padding: 16px;
-  border-radius: 18px;
-  background: #f7f9fc;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-surface-muted);
 }
 
 .timeline-top {
@@ -624,12 +638,12 @@ onMounted(() => {
 }
 
 .timeline-top strong {
-  color: #1f2d3d;
+  color: var(--app-text);
 }
 
 .timeline-top p {
   margin: 6px 0 0;
-  color: #607086;
+  color: var(--app-muted);
   line-height: 1.7;
 }
 
@@ -648,8 +662,8 @@ onMounted(() => {
 .timeline-tags span {
   padding: 5px 10px;
   border-radius: 999px;
-  background: #eaf0fb;
-  color: #3f5d88;
+  background: var(--app-primary-light);
+  color: var(--app-primary);
   font-size: 12px;
 }
 
@@ -659,7 +673,7 @@ onMounted(() => {
 
 .field-label {
   margin-bottom: 6px;
-  color: #8b95a7;
+  color: var(--app-muted);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -667,15 +681,16 @@ onMounted(() => {
 
 .timeline-answer p {
   margin: 0;
-  color: #546477;
+  color: var(--app-muted);
   line-height: 1.8;
   white-space: pre-wrap;
 }
 
 .timeline-answer p.improvement {
-  color: #a75a1e;
+  color: var(--app-warning);
 }
 
+/* ---- Training list ---- */
 .training-list {
   display: grid;
   gap: 12px;
@@ -686,8 +701,8 @@ onMounted(() => {
   grid-template-columns: 42px 1fr;
   gap: 12px;
   padding: 14px;
-  border-radius: 18px;
-  background: #f7f9fc;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-surface-muted);
 }
 
 .training-item span {
@@ -696,26 +711,27 @@ onMounted(() => {
   justify-content: center;
   width: 42px;
   height: 42px;
-  border-radius: 14px;
-  background: #eef2ff;
-  color: #2f57b9;
+  border-radius: var(--app-radius-xs, 8px);
+  background: var(--app-primary-light);
+  color: var(--app-primary);
   font-weight: 700;
 }
 
 .training-item p {
   margin: 0;
-  color: #4f5d71;
+  color: var(--app-muted);
   line-height: 1.7;
 }
 
+/* ---- Job panel ---- */
 .job-panel strong {
   display: block;
-  color: #1e2b3b;
+  color: var(--app-text);
 }
 
 .job-panel p {
   margin: 6px 0 12px;
-  color: #7a8699;
+  color: var(--app-muted);
 }
 
 .job-skills {
@@ -727,11 +743,12 @@ onMounted(() => {
 .job-skills span {
   padding: 5px 10px;
   border-radius: 999px;
-  background: #f3f6fb;
-  color: #44556c;
+  background: var(--app-surface-muted);
+  color: var(--app-muted);
   font-size: 12px;
 }
 
+/* ---- Actions ---- */
 .report-actions {
   display: flex;
   justify-content: center;
@@ -739,6 +756,7 @@ onMounted(() => {
   padding-bottom: 8px;
 }
 
+/* ---- Responsive ---- */
 @media (max-width: 1100px) {
   .report-grid {
     grid-template-columns: 1fr;

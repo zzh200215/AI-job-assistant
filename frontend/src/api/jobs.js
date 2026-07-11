@@ -79,7 +79,7 @@ export const deleteJobPipelineEntry = (entryId) =>
 
 // 清理已淘汰记录
 export const clearRejectedJobPipeline = () =>
-  request.delete('/jobs/pipeline/rejected')
+  request.delete('/jobs/pipeline/terminal')
 
 // 发起完整分析（复用已有接口）
 export const startFullAnalysis = (resumeId, jdId) =>

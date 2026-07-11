@@ -55,6 +55,42 @@ const routes = [
         meta: { title: '智能分析', roles: [USER_ROLES.candidate] },
       },
       {
+        path: 'targets',
+        name: 'job-targets',
+        component: () => import('@/views/JobTargets.vue'),
+        meta: { title: '求职目标', roles: [USER_ROLES.candidate] },
+      },
+      {
+        path: 'jobs/pipeline/kanban',
+        name: 'pipeline-kanban',
+        component: () => import('@/views/PipelineKanban.vue'),
+        meta: { title: '投递看板', roles: [USER_ROLES.candidate] },
+      },
+      {
+        path: 'salary',
+        name: 'salary-insight',
+        component: () => import('@/views/SalaryInsight.vue'),
+        meta: { title: '薪资洞察', roles: [USER_ROLES.candidate] },
+      },
+      {
+        path: 'offer',
+        name: 'offer-compare',
+        component: () => import('@/views/OfferCompare.vue'),
+        meta: { title: 'Offer决策', roles: [USER_ROLES.candidate] },
+      },
+      {
+        path: 'weekly-report',
+        name: 'weekly-report',
+        component: () => import('@/views/WeeklyReport.vue'),
+        meta: { title: '求职周报', roles: [USER_ROLES.candidate] },
+      },
+      {
+        path: 'tasks',
+        name: 'task-center',
+        component: () => import('@/views/TaskCenter.vue'),
+        meta: { title: '任务中心', roles: BOTH_ROLES },
+      },
+      {
         path: 'career-planning',
         name: 'career-planning',
         component: () => import('@/views/CareerPlanning.vue'),
@@ -65,12 +101,6 @@ const routes = [
         name: 'history',
         component: () => import('@/views/History.vue'),
         meta: { title: '历史记录', roles: BOTH_ROLES },
-      },
-      {
-        path: 'tasks',
-        name: 'task-center',
-        component: () => import('@/views/TaskCenter.vue'),
-        meta: { title: '任务中心', roles: [USER_ROLES.candidate] },
       },
       {
         path: 'prompt-traces',

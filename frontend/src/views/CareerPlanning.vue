@@ -1,12 +1,12 @@
 <template>
-  <div class="career-page">
+  <div class="page-shell">
     <section class="career-hero">
       <div class="hero-copy">
         <div class="hero-kicker">Career Planning</div>
-        <h1>职业规划工作台</h1>
-        <p>
+        <h2>职业规划工作台</h2>
+	        <div class="page-header-sub">
           用现有简历做职业现状判断，设定目标岗位，再生成能力差距、成长路线图和投递策略。
-        </p>
+        </div>
         <div class="hero-pills">
           <span>目标岗位建模</span>
           <span>能力雷达</span>
@@ -998,22 +998,14 @@ function stepIcon(status) {
 </script>
 
 <style scoped>
-.career-page {
-  --paper: #f7fbf8;
-  --ink: #1d2a23;
-  --muted: #66786f;
-  --line: rgba(190, 209, 198, 0.82);
-  --blue: #1c8c5e;
-  --green: #2ea866;
-  --amber: #c66a3d;
-  --navy: #556fdc;
+.page-shell {
   max-width: 1480px;
   margin: 0 auto;
   padding: 18px 0 32px;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  color: var(--ink);
+  color: var(--app-text);
 }
 
 .career-hero {
@@ -1021,13 +1013,10 @@ function stepIcon(status) {
   grid-template-columns: minmax(0, 1.2fr) minmax(360px, 1fr);
   gap: 18px;
   padding: 28px;
-  border-radius: 30px;
-  background:
-    radial-gradient(circle at top center, rgba(223, 185, 122, 0.18), transparent 28%),
-    radial-gradient(circle at right top, rgba(120, 193, 150, 0.14), transparent 24%),
-    linear-gradient(180deg, rgba(251, 253, 250, 0.98) 0%, rgba(242, 248, 243, 0.94) 100%);
-  border: 1px solid var(--line);
-  box-shadow: 0 24px 48px rgba(111, 137, 121, 0.14);
+  border-radius: var(--app-radius-md, 16px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
+  box-shadow: var(--app-shadow-soft);
 }
 
 .hero-copy,
@@ -1038,19 +1027,19 @@ function stepIcon(status) {
 
 .hero-copy {
   padding: 24px;
-  border-radius: 26px;
+  border-radius: var(--app-radius-sm, 12px);
   background: rgba(255, 255, 255, 0.84);
-  border: 1px solid rgba(217, 231, 222, 0.94);
+  border: 1px solid var(--app-line);
 }
 
 .hero-kicker {
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
-.hero-copy h1 {
+.hero-copy h2 {
   margin: 10px 0 0;
   font-size: 40px;
   line-height: 1.05;
@@ -1059,7 +1048,7 @@ function stepIcon(status) {
 .hero-copy p {
   margin: 14px 0 0;
   max-width: 620px;
-  color: var(--muted);
+  color: var(--app-muted);
   line-height: 1.8;
 }
 
@@ -1073,8 +1062,8 @@ function stepIcon(status) {
 .hero-pills span {
   padding: 8px 14px;
   border-radius: 999px;
-  background: rgba(248, 251, 248, 0.94);
-  border: 1px solid rgba(217, 231, 222, 0.94);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
   font-size: 12px;
 }
 
@@ -1088,14 +1077,14 @@ function stepIcon(status) {
   position: relative;
   min-height: 134px;
   padding: 18px 18px 18px 76px;
-  border-radius: 24px;
-  color: var(--ink);
+  border-radius: var(--app-radius-sm, 12px);
+  color: var(--app-text);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  border: 1px solid rgba(217, 231, 222, 0.94);
+  border: 1px solid var(--app-line);
   background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 16px 28px rgba(111, 137, 121, 0.12);
+  box-shadow: var(--app-shadow-soft);
 }
 
 .summary-card::before {
@@ -1105,18 +1094,18 @@ function stepIcon(status) {
   top: 18px;
   width: 42px;
   height: 42px;
-  border-radius: 14px;
+  border-radius: var(--app-radius-xs, 8px);
 }
 
 .summary-card span,
 .summary-card small {
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
 .summary-card strong {
   font-size: 24px;
   line-height: 1.2;
-  color: var(--ink);
+  color: var(--app-text);
 }
 
 .tone-blue::before { background: linear-gradient(135deg, #dff5e7, #c7ead4); }
@@ -1134,10 +1123,10 @@ function stepIcon(status) {
 .gap-card,
 .direction-card,
 .next-card {
-  border-radius: 28px;
-  border: 1px solid var(--line);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 252, 248, 0.95));
-  box-shadow: 0 18px 36px rgba(111, 137, 121, 0.12);
+  border-radius: var(--app-radius-md, 16px);
+  border: 1px solid var(--app-line);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: var(--app-shadow-soft);
 }
 
 .control-card :deep(.el-card__header),
@@ -1151,8 +1140,8 @@ function stepIcon(status) {
 .direction-card :deep(.el-card__header),
 .next-card :deep(.el-card__header) {
   padding: 22px 24px 16px;
-  border-bottom: 1px solid rgba(217, 231, 222, 0.94);
-  background: linear-gradient(180deg, rgba(250, 253, 250, 0.96), rgba(243, 248, 244, 0.72));
+  border-bottom: 1px solid var(--app-line);
+  background: var(--app-bg);
 }
 
 .control-card :deep(.el-card__body),
@@ -1184,11 +1173,9 @@ function stepIcon(status) {
 
 .control-column {
   padding: 22px;
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at top right, rgba(148, 219, 255, 0.18), transparent 30%),
-    rgba(242, 251, 253, 0.92);
-  border: 1px solid rgba(214, 232, 238, 0.94);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
 }
 
 .field-label {
@@ -1208,7 +1195,7 @@ function stepIcon(status) {
   gap: 16px;
   margin-top: 18px;
   padding-top: 18px;
-  border-top: 1px solid rgba(22, 34, 49, 0.07);
+  border-top: 1px solid var(--app-line);
 }
 
 .action-copy {
@@ -1218,7 +1205,7 @@ function stepIcon(status) {
 }
 
 .action-copy span {
-  color: var(--muted);
+  color: var(--app-muted);
   font-size: 13px;
 }
 
@@ -1236,14 +1223,14 @@ function stepIcon(status) {
 
 .snapshot-item {
   padding: 16px;
-  border-radius: 20px;
-  background: rgba(242, 251, 253, 0.92);
-  border: 1px solid rgba(214, 232, 238, 0.94);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
 }
 
 .snapshot-item span {
   display: block;
-  color: var(--muted);
+  color: var(--app-muted);
   font-size: 12px;
 }
 
@@ -1256,8 +1243,8 @@ function stepIcon(status) {
 .progress-timeline {
   margin-top: 18px;
   padding: 12px 12px 0;
-  border-radius: 22px;
-  background: rgba(246, 252, 253, 0.92);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
 }
 
 .timeline-title {
@@ -1268,11 +1255,11 @@ function stepIcon(status) {
 .timeline-error {
   margin-top: 6px;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
 .timeline-error {
-  color: #d03050;
+  color: var(--app-danger, #d03050);
 }
 
 .result-grid {
@@ -1293,11 +1280,9 @@ function stepIcon(status) {
 
 .status-panel {
   padding: 18px;
-  border-radius: 22px;
-  background:
-    radial-gradient(circle at top right, rgba(148, 219, 255, 0.18), transparent 32%),
-    rgba(242, 251, 253, 0.92);
-  border: 1px solid rgba(214, 232, 238, 0.94);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
 }
 
 .status-panel span,
@@ -1307,7 +1292,7 @@ function stepIcon(status) {
 
 .status-panel span,
 .status-panel small {
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
 .status-panel strong {
@@ -1333,12 +1318,12 @@ function stepIcon(status) {
 
 .legend-current {
   background: rgba(215, 251, 246, 0.94);
-  color: var(--blue);
+  color: var(--app-success, #1c8c5e);
 }
 
 .legend-target {
   background: rgba(236, 229, 255, 0.94);
-  color: var(--green);
+  color: var(--app-primary, #2ea866);
 }
 
 .radar-layout {
@@ -1350,11 +1335,9 @@ function stepIcon(status) {
 
 .radar-svg-shell {
   padding: 16px;
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at center, rgba(182, 236, 255, 0.24), transparent 48%),
-    rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(214, 232, 238, 0.94);
+  border-radius: var(--app-radius-sm, 12px);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--app-line);
 }
 
 .radar-svg {
@@ -1366,12 +1349,12 @@ function stepIcon(status) {
 
 .radar-ring {
   fill: none;
-  stroke: rgba(196, 219, 228, 0.9);
+  stroke: var(--app-line);
   stroke-width: 1;
 }
 
 .radar-axis {
-  stroke: rgba(196, 219, 228, 0.9);
+  stroke: var(--app-line);
   stroke-width: 1;
 }
 
@@ -1389,7 +1372,7 @@ function stepIcon(status) {
 }
 
 .radar-text {
-  fill: var(--ink);
+  fill: var(--app-text);
   font-size: 12px;
   text-anchor: middle;
 }
@@ -1402,9 +1385,9 @@ function stepIcon(status) {
 
 .radar-row {
   padding: 14px;
-  border-radius: 20px;
-  background: rgba(246, 252, 253, 0.92);
-  border: 1px solid rgba(214, 232, 238, 0.94);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
 }
 
 .radar-copy {
@@ -1415,7 +1398,7 @@ function stepIcon(status) {
 }
 
 .radar-copy span {
-  color: var(--muted);
+  color: var(--app-muted);
   font-size: 12px;
 }
 
@@ -1428,7 +1411,7 @@ function stepIcon(status) {
   height: 10px;
   border-radius: 999px;
   overflow: hidden;
-  background: rgba(212, 238, 242, 0.94);
+  background: var(--app-line);
 }
 
 .target-track {
@@ -1453,17 +1436,15 @@ function stepIcon(status) {
   display: flex;
   justify-content: space-between;
   margin-top: 10px;
-  color: var(--muted);
+  color: var(--app-muted);
   font-size: 12px;
 }
 
 .phase-card {
   padding: 16px;
-  border-radius: 20px;
-  background:
-    radial-gradient(circle at top right, rgba(182, 236, 255, 0.2), transparent 32%),
-    rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(214, 232, 238, 0.94);
+  border-radius: var(--app-radius-sm, 12px);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--app-line);
 }
 
 .phase-head {
@@ -1474,7 +1455,7 @@ function stepIcon(status) {
 }
 
 .phase-head span {
-  color: var(--muted);
+  color: var(--app-muted);
   font-size: 12px;
 }
 
@@ -1497,7 +1478,7 @@ function stepIcon(status) {
 .strategy-list li,
 .next-block li {
   line-height: 1.8;
-  color: var(--ink);
+  color: var(--app-text);
 }
 
 .project-grid,
@@ -1515,11 +1496,9 @@ function stepIcon(status) {
 .gap-item,
 .direction-item {
   padding: 18px;
-  border-radius: 22px;
-  background:
-    radial-gradient(circle at top right, rgba(182, 236, 255, 0.18), transparent 30%),
-    rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(214, 232, 238, 0.94);
+  border-radius: var(--app-radius-sm, 12px);
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--app-line);
 }
 
 .project-top,
@@ -1536,14 +1515,14 @@ function stepIcon(status) {
 .direction-item p,
 .strategy-score p {
   margin: 10px 0 0;
-  color: var(--muted);
+  color: var(--app-muted);
   line-height: 1.75;
 }
 
 .project-meta,
 .gap-levels {
   margin-top: 10px;
-  color: var(--muted);
+  color: var(--app-muted);
   font-size: 12px;
 }
 
@@ -1562,7 +1541,7 @@ function stepIcon(status) {
 .score-circle {
   width: 92px;
   height: 92px;
-  border-radius: 28px;
+  border-radius: var(--app-radius-md, 16px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1599,7 +1578,7 @@ function stepIcon(status) {
   height: 10px;
   border-radius: 999px;
   overflow: hidden;
-  background: rgba(212, 238, 242, 0.94);
+  background: var(--app-line);
 }
 
 .split-fill {
@@ -1611,7 +1590,7 @@ function stepIcon(status) {
 .next-block + .next-block {
   margin-top: 18px;
   padding-top: 18px;
-  border-top: 1px solid rgba(22, 34, 49, 0.07);
+  border-top: 1px solid var(--app-line);
 }
 
 .next-title {
@@ -1629,7 +1608,7 @@ function stepIcon(status) {
 }
 
 @media (max-width: 768px) {
-  .career-page {
+  .page-shell {
     padding-top: 8px;
   }
 
@@ -1637,7 +1616,7 @@ function stepIcon(status) {
     padding: 18px;
   }
 
-  .hero-copy h1 {
+  .hero-copy h2 {
     font-size: 30px;
   }
 
@@ -1661,7 +1640,7 @@ function stepIcon(status) {
   .score-circle {
     width: 80px;
     height: 80px;
-    border-radius: 24px;
+    border-radius: var(--app-radius-sm, 12px);
   }
 }
 </style>

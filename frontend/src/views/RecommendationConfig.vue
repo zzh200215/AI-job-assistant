@@ -1,144 +1,156 @@
 <template>
-  <div class="config-page">
-    <el-card class="hero-card" shadow="never">
-      <div class="hero-row">
-        <div>
-          <p class="eyebrow">Recommendation Tuning</p>
-          <h1>推荐权重配置</h1>
-          <p class="hero-desc">
-            调整向量/规则权重、规则子项占比和推荐阈值。保存后会直接作用于后续岗位推荐结果。
-          </p>
-        </div>
-        <div class="hero-actions">
-          <el-button @click="router.push('/jobs/recommend/evaluation')">返回推荐评测</el-button>
-          <el-button :loading="loading.compare" type="success" plain @click="runCompare">实验对比</el-button>
-          <el-button :loading="loading.reset" @click="handleReset">恢复默认</el-button>
-          <el-button type="primary" :loading="loading.save" @click="handleSave">保存配置</el-button>
-        </div>
+  <div class="page-shell">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Recommendation Tuning</p>
+        <h2>推荐权重配置</h2>
+        <div class="page-header-sub">调整向量/规则权重、规则子项占比和推荐阈值。保存后会直接作用于后续岗位推荐结果。</div>
       </div>
-    </el-card>
+      <div class="hero-actions">
+        <el-button @click="router.push('/jobs/recommend/evaluation')">返回推荐评测</el-button>
+        <el-button :loading="loading.compare" type="success" plain @click="runCompare">实验对比</el-button>
+        <el-button :loading="loading.reset" @click="handleReset">恢复默认</el-button>
+        <el-button type="primary" :loading="loading.save" @click="handleSave">保存配置</el-button>
+      </div>
+    </header>
 
     <div class="grid-two">
-      <el-card class="panel-card" shadow="never">
-        <template #header><span>主通道权重</span></template>
-        <div class="slider-list">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>主通道权重</h3>
+        </div>
+        <div class="panel-body">
+          <div class="slider-list">
+            <div class="slider-item">
+              <div class="slider-head">
+                <strong>向量通道</strong>
+                <span>{{ percentText(form.vector_weight) }}</span>
+              </div>
+              <el-slider v-model="vectorPercent" :min="0" :max="100" />
+            </div>
+            <div class="slider-item locked-item">
+              <div class="slider-head">
+                <strong>规则通道</strong>
+                <span>{{ percentText(form.rule_weight) }}</span>
+              </div>
+              <el-progress :percentage="rulePercent" :show-text="false" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h3>推荐阈值</h3>
+        </div>
+        <div class="panel-body">
+          <div class="threshold-grid">
+            <div class="threshold-item">
+              <span>高度推荐</span>
+              <el-input-number v-model="form.thresholds.high" :min="1" :max="100" />
+            </div>
+            <div class="threshold-item">
+              <span>值得一试</span>
+              <el-input-number v-model="form.thresholds.medium" :min="0" :max="99" />
+            </div>
+          </div>
+          <div class="helper-text">要求 `高度推荐` 必须大于 `值得一试`。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <h3>规则子项权重</h3>
+          <span class="muted">四项总和需为 100%</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="component-grid">
           <div class="slider-item">
             <div class="slider-head">
-              <strong>向量通道</strong>
-              <span>{{ percentText(form.vector_weight) }}</span>
+              <strong>技能匹配</strong>
+              <span>{{ percentText(form.rule_components.skill) }}</span>
             </div>
-            <el-slider v-model="vectorPercent" :min="0" :max="100" />
+            <el-slider v-model="skillPercent" :min="0" :max="100" />
+          </div>
+          <div class="slider-item">
+            <div class="slider-head">
+              <strong>经验匹配</strong>
+              <span>{{ percentText(form.rule_components.experience) }}</span>
+            </div>
+            <el-slider v-model="experiencePercent" :min="0" :max="remainingAfterSkill" />
+          </div>
+          <div class="slider-item">
+            <div class="slider-head">
+              <strong>薪资匹配</strong>
+              <span>{{ percentText(form.rule_components.salary) }}</span>
+            </div>
+            <el-slider v-model="salaryPercent" :min="0" :max="remainingAfterExperience" />
           </div>
           <div class="slider-item locked-item">
             <div class="slider-head">
-              <strong>规则通道</strong>
-              <span>{{ percentText(form.rule_weight) }}</span>
+              <strong>地点匹配</strong>
+              <span>{{ percentText(form.rule_components.location) }}</span>
             </div>
-            <el-progress :percentage="rulePercent" :show-text="false" />
+            <el-progress :percentage="locationPercent" :show-text="false" />
           </div>
         </div>
-      </el-card>
-
-      <el-card class="panel-card" shadow="never">
-        <template #header><span>推荐阈值</span></template>
-        <div class="threshold-grid">
-          <div class="threshold-item">
-            <span>高度推荐</span>
-            <el-input-number v-model="form.thresholds.high" :min="1" :max="100" />
-          </div>
-          <div class="threshold-item">
-            <span>值得一试</span>
-            <el-input-number v-model="form.thresholds.medium" :min="0" :max="99" />
-          </div>
-        </div>
-        <p class="helper-text">要求 `高度推荐` 必须大于 `值得一试`。</p>
-      </el-card>
+      </div>
     </div>
 
-    <el-card class="panel-card" shadow="never">
-      <template #header>
-        <div class="card-head">
-          <span>规则子项权重</span>
-          <span class="muted">四项总和需为 100%</span>
-        </div>
-      </template>
-      <div class="component-grid">
-        <div class="slider-item">
-          <div class="slider-head">
-            <strong>技能匹配</strong>
-            <span>{{ percentText(form.rule_components.skill) }}</span>
-          </div>
-          <el-slider v-model="skillPercent" :min="0" :max="100" />
-        </div>
-        <div class="slider-item">
-          <div class="slider-head">
-            <strong>经验匹配</strong>
-            <span>{{ percentText(form.rule_components.experience) }}</span>
-          </div>
-          <el-slider v-model="experiencePercent" :min="0" :max="remainingAfterSkill" />
-        </div>
-        <div class="slider-item">
-          <div class="slider-head">
-            <strong>薪资匹配</strong>
-            <span>{{ percentText(form.rule_components.salary) }}</span>
-          </div>
-          <el-slider v-model="salaryPercent" :min="0" :max="remainingAfterExperience" />
-        </div>
-        <div class="slider-item locked-item">
-          <div class="slider-head">
-            <strong>地点匹配</strong>
-            <span>{{ percentText(form.rule_components.location) }}</span>
-          </div>
-          <el-progress :percentage="locationPercent" :show-text="false" />
-        </div>
+    <div class="panel">
+      <div class="panel-header">
+        <h3>当前配置摘要</h3>
       </div>
-    </el-card>
+      <div class="panel-body">
+        <pre class="code-block">{{ configPreview }}</pre>
+      </div>
+    </div>
 
-    <el-card class="panel-card" shadow="never">
-      <template #header><span>当前配置摘要</span></template>
-      <pre class="code-block">{{ configPreview }}</pre>
-    </el-card>
-
-    <el-card v-if="compareResult" class="panel-card" shadow="never">
-      <template #header>
-        <div class="card-head">
-          <span>实验对比结果</span>
+    <div v-if="compareResult" class="panel">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <h3>实验对比结果</h3>
           <span class="muted">{{ compareResult.sample_total }} 条历史反馈样本</span>
         </div>
-      </template>
-      <div class="compare-grid">
-        <div class="compare-card">
-          <span class="compare-label">{{ compareResult.variant_a.label }}</span>
-          <strong>{{ percentText(compareResult.variant_a.summary.agreement_rate) }}</strong>
-          <small>一致率</small>
-          <p>高分点踩 {{ compareResult.variant_a.summary.high_score_dislike_count }} · 低分点赞 {{ compareResult.variant_a.summary.low_score_like_count }}</p>
-        </div>
-        <div class="compare-card">
-          <span class="compare-label">{{ compareResult.variant_b.label }}</span>
-          <strong>{{ percentText(compareResult.variant_b.summary.agreement_rate) }}</strong>
-          <small>一致率</small>
-          <p>高分点踩 {{ compareResult.variant_b.summary.high_score_dislike_count }} · 低分点赞 {{ compareResult.variant_b.summary.low_score_like_count }}</p>
-        </div>
-        <div class="compare-card delta-card">
-          <span class="compare-label">变化</span>
-          <strong>{{ signedPercent(compareResult.delta.agreement_rate) }}</strong>
-          <small>一致率变化</small>
-          <p>均分变化 {{ signedNumber(compareResult.delta.avg_combined_score) }}</p>
-        </div>
       </div>
+      <div class="panel-body">
+        <div class="compare-grid">
+          <div class="compare-card">
+            <span class="compare-label">{{ compareResult.variant_a.label }}</span>
+            <strong>{{ percentText(compareResult.variant_a.summary.agreement_rate) }}</strong>
+            <small>一致率</small>
+            <p>高分点踩 {{ compareResult.variant_a.summary.high_score_dislike_count }} · 低分点赞 {{ compareResult.variant_a.summary.low_score_like_count }}</p>
+          </div>
+          <div class="compare-card">
+            <span class="compare-label">{{ compareResult.variant_b.label }}</span>
+            <strong>{{ percentText(compareResult.variant_b.summary.agreement_rate) }}</strong>
+            <small>一致率</small>
+            <p>高分点踩 {{ compareResult.variant_b.summary.high_score_dislike_count }} · 低分点赞 {{ compareResult.variant_b.summary.low_score_like_count }}</p>
+          </div>
+          <div class="compare-card delta-card">
+            <span class="compare-label">变化</span>
+            <strong>{{ signedPercent(compareResult.delta.agreement_rate) }}</strong>
+            <small>一致率变化</small>
+            <p>均分变化 {{ signedNumber(compareResult.delta.avg_combined_score) }}</p>
+          </div>
+        </div>
 
-      <div class="mover-list" v-if="compareResult.delta.top_movers?.length">
-        <div class="mover-title">变化最大的样本</div>
-        <div class="mover-items">
-          <div v-for="item in compareResult.delta.top_movers" :key="item.feedback_id" class="mover-item">
-            <strong>{{ item.jd_title }}</strong>
-            <span>{{ item.resume_title }} · {{ item.feedback_type }}</span>
-            <span>{{ item.score_a }} → {{ item.score_b }}（{{ signedNumber(item.score_delta) }}）</span>
-            <span>{{ item.type_a }} → {{ item.type_b }}</span>
+        <div class="mover-list" v-if="compareResult.delta.top_movers?.length">
+          <div class="mover-title">变化最大的样本</div>
+          <div class="mover-items">
+            <div v-for="item in compareResult.delta.top_movers" :key="item.feedback_id" class="mover-item">
+              <strong>{{ item.jd_title }}</strong>
+              <span>{{ item.resume_title }} · {{ item.feedback_type }}</span>
+              <span>{{ item.score_a }} → {{ item.score_b }}（{{ signedNumber(item.score_delta) }}）</span>
+              <span>{{ item.type_a }} → {{ item.type_b }}</span>
+            </div>
           </div>
         </div>
       </div>
-    </el-card>
+    </div>
   </div>
 </template>
 
@@ -349,7 +361,7 @@ function structuredCloneSafe(value) {
 </script>
 
 <style scoped>
-.config-page {
+.page-shell {
   max-width: 1040px;
   margin: 0 auto;
   padding: 12px 0 28px;
@@ -358,36 +370,19 @@ function structuredCloneSafe(value) {
   gap: 16px;
 }
 
-.hero-card,
-.panel-card {
-  border-radius: 24px;
-}
-
-.hero-row,
-.hero-actions,
-.grid-two,
-.compare-grid,
-.slider-list,
-.slider-head,
-.threshold-grid,
-.component-grid,
-.card-head,
-.mover-item {
+.page-header {
   display: flex;
-  gap: 12px;
-}
-
-.hero-row,
-.card-head,
-.slider-head {
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.hero-row,
-.hero-actions,
-.card-head {
+.hero-actions {
+  display: flex;
   align-items: center;
   flex-wrap: wrap;
+  gap: 12px;
 }
 
 .eyebrow {
@@ -398,7 +393,6 @@ function structuredCloneSafe(value) {
   color: var(--app-muted);
 }
 
-.hero-desc,
 .helper-text,
 .muted {
   color: var(--app-muted);
@@ -407,24 +401,34 @@ function structuredCloneSafe(value) {
 .grid-two {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 16px;
 }
 
 .compare-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .slider-list,
 .component-grid {
+  display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 
 .slider-item,
 .threshold-item {
   padding: 14px;
-  border-radius: 16px;
-  background: #f7fbf8;
-  border: 1px solid rgba(217, 231, 222, 0.94);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
+}
+
+.slider-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .slider-head strong,
@@ -439,6 +443,7 @@ function structuredCloneSafe(value) {
 .threshold-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
 
 .threshold-item {
@@ -450,7 +455,7 @@ function structuredCloneSafe(value) {
 .code-block {
   margin: 0;
   padding: 14px;
-  border-radius: 16px;
+  border-radius: var(--app-radius-sm, 12px);
   background: #0f1720;
   color: #dde7f2;
   font-size: 12px;
@@ -461,9 +466,9 @@ function structuredCloneSafe(value) {
 .compare-card,
 .mover-item {
   padding: 14px;
-  border-radius: 16px;
-  background: #f7fbf8;
-  border: 1px solid rgba(217, 231, 222, 0.94);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
 }
 
 .compare-card strong,
@@ -515,7 +520,9 @@ function structuredCloneSafe(value) {
 }
 
 .mover-item {
+  display: flex;
   flex-direction: column;
+  gap: 4px;
 }
 
 @media (max-width: 960px) {

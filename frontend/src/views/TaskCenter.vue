@@ -1,421 +1,237 @@
 <template>
-  <div class="task-center-page">
-    <el-card shadow="never" class="hero-card">
-      <template #header>
-        <span>Task Center</span>
-      </template>
+  <div class="page-shell">
+    <div class="page-header">
+      <div>
+        <h2>任务中心</h2>
+        <div class="page-header-sub">查看所有异步分析任务的进度和结果</div>
+      </div>
+      <el-button @click="loadTasks" :loading="loading">
+        <el-icon><Refresh /></el-icon> 刷新
+      </el-button>
+    </div>
 
-      <div class="hero-top">
-        <div>
-          <p class="eyebrow">Async Workflows</p>
-          <h1>Unified Task Status Center</h1>
-          <p class="hero-desc">
-            Track long-running analysis workflows, inspect progress, and jump back to result pages without repeating input.
-          </p>
+    <div v-if="loading && !tasks.length" class="loading-state">
+      <el-icon class="is-loading"><Loading /></el-icon> 加载中...
+    </div>
+
+    <div v-else-if="!tasks.length" class="empty-state">
+      <el-empty :image-size="120" description="暂无任务记录" />
+    </div>
+
+    <div v-else class="task-list">
+      <div
+        v-for="task in tasks"
+        :key="task.id"
+        class="task-card"
+        :class="'status-' + task.status"
+      >
+        <div class="task-top">
+          <div class="task-dot" :class="'dot-' + task.status" />
+          <div class="task-info">
+            <strong>{{ task.name || task.task_type || '分析任务' }}</strong>
+            <span>{{ formatDate(task.create_time) }}</span>
+          </div>
+          <el-tag :type="statusType(task.status)" size="small">{{ statusLabel(task.status) }}</el-tag>
         </div>
 
-        <div class="hero-actions">
-          <el-select v-model="statusFilter" class="filter-select" placeholder="Filter by status" @change="loadTaskData">
-            <el-option label="All Statuses" value="" />
-            <el-option label="Pending" value="pending" />
-            <el-option label="Running" value="running" />
-            <el-option label="Completed" value="completed" />
-            <el-option label="Failed" value="failed" />
-            <el-option label="Partial" value="partial" />
-            <el-option label="Cancelled" value="cancelled" />
-          </el-select>
-          <el-button :loading="loading" @click="loadTaskData">Refresh</el-button>
+        <!-- 进度条 -->
+        <div v-if="task.progress !== undefined" class="task-progress">
+          <el-progress
+            :percentage="task.progress"
+            :status="task.status === 'failed' ? 'exception' : task.status === 'completed' ? 'success' : undefined"
+            :stroke-width="8"
+          />
+        </div>
+
+        <div class="task-meta">
+          <span v-if="task.current_step">当前步骤：{{ task.current_step }}</span>
+          <span v-if="task.duration_ms">耗时：{{ formatDuration(task.duration_ms) }}</span>
+        </div>
+
+        <div v-if="task.error_message" class="task-error">
+          <el-alert :title="task.error_message" type="error" :closable="false" show-icon />
+        </div>
+
+        <div class="task-actions">
+          <el-button v-if="task.status === 'completed' && task.result_url" size="small" type="primary" @click="viewResult(task)">
+            查看结果
+          </el-button>
+          <el-button v-if="task.status === 'failed'" size="small" @click="retryTask(task)">
+            重试
+          </el-button>
+          <el-button v-if="['pending', 'running'].includes(task.status)" size="small" @click="cancelTask(task)">
+            取消
+          </el-button>
         </div>
       </div>
-
-      <el-row :gutter="16" class="summary-grid">
-        <el-col v-for="item in summaryCards" :key="item.label" :xs="12" :sm="8" :md="4">
-          <div class="summary-card">
-            <span>{{ item.label }}</span>
-            <strong>{{ item.value }}</strong>
-          </div>
-        </el-col>
-      </el-row>
-    </el-card>
-
-    <el-card shadow="never" class="table-card">
-      <template #header>
-        <div class="section-header">
-          <span>Recent Tasks</span>
-          <small>{{ tableHint }}</small>
-        </div>
-      </template>
-
-      <el-table v-loading="loading" :data="tasks" empty-text="No tasks found">
-        <el-table-column label="Task ID" min-width="110">
-          <template #default="{ row }">
-            <strong>#{{ row.id }}</strong>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="Status" min-width="120">
-          <template #default="{ row }">
-            <el-tag :type="statusTagType(row.status)">
-              {{ statusLabel(row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="Progress" min-width="220">
-          <template #default="{ row }">
-            <div class="progress-cell">
-              <el-progress :percentage="row.progress?.progress_percent || 0" :stroke-width="10" />
-              <small>
-                {{ row.progress?.finished_steps || 0 }} / {{ row.progress?.total_steps || 0 }}
-                · {{ row.progress?.current_step?.label || 'Waiting to start' }}
-              </small>
-            </div>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="Resume / JD" min-width="160">
-          <template #default="{ row }">
-            <div class="meta-block">
-              <span>Resume #{{ row.resume_id }}</span>
-              <span>JD #{{ row.jd_id }}</span>
-            </div>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="Duration" min-width="110">
-          <template #default="{ row }">
-            {{ formatDuration(row.progress?.duration_ms) }}
-          </template>
-        </el-table-column>
-
-        <el-table-column label="LLM Cost" min-width="140">
-          <template #default="{ row }">
-            <div class="meta-block">
-              <span>{{ formatTokens(row.usage?.tokens_used) }} tokens</span>
-              <span>{{ formatCost(row.usage?.cost_cents) }}</span>
-            </div>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="Created At" min-width="180">
-          <template #default="{ row }">
-            {{ row.create_time || '-' }}
-          </template>
-        </el-table-column>
-
-        <el-table-column label="Action" width="320" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openTask(row)">Open</el-button>
-            <el-button link type="info" @click="openTrace(row)">Trace</el-button>
-            <el-button
-              v-if="row.analysis_record_id"
-              link
-              type="success"
-              @click="openResult(row)"
-            >
-              Result
-            </el-button>
-            <el-button
-              v-if="['pending', 'running'].includes(row.status)"
-              link
-              type="danger"
-              @click="handleCancel(row)"
-            >
-              Cancel
-            </el-button>
-            <el-button
-              v-if="['failed', 'partial', 'cancelled', 'completed'].includes(row.status)"
-              link
-              type="warning"
-              @click="handleRetry(row)"
-            >
-              Retry
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-
+import { Refresh, Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
-import {
-  cancelAgentTask,
-  getAgentTaskSummary,
-  getAgentTasks,
-  retryAgentTask,
-} from '@/api/agent'
+import request from '@/api/request'
 
 const router = useRouter()
 const loading = ref(false)
-const statusFilter = ref('')
-const summary = ref({ counts: {}, total: 0, recent: [] })
-const taskList = ref({ items: [], total: 0, limit: 20, offset: 0 })
-let refreshTimer = null
+const tasks = ref([])
+let pollTimer = null
 
-const tasks = computed(() => taskList.value.items || [])
-
-const summaryCards = computed(() => {
-  const counts = summary.value.counts || {}
-  return [
-    { label: 'Total', value: summary.value.total || 0 },
-    { label: 'Pending', value: counts.pending || 0 },
-    { label: 'Running', value: counts.running || 0 },
-    { label: 'Completed', value: counts.completed || 0 },
-    { label: 'Failed', value: counts.failed || 0 },
-    { label: 'Partial', value: counts.partial || 0 },
-    { label: 'Cancelled', value: counts.cancelled || 0 },
-  ]
-})
-
-const tableHint = computed(() => {
-  const total = taskList.value.total || 0
-  return `${total} task${total === 1 ? '' : 's'}`
-})
-
-function statusLabel(status) {
-  const map = {
-    pending: 'Pending',
-    running: 'Running',
-    completed: 'Completed',
-    failed: 'Failed',
-    partial: 'Partial',
-    cancelled: 'Cancelled',
-  }
-  return map[status] || status || '-'
+function formatDate(d) {
+  if (!d) return ''
+  try { return new Date(d).toLocaleString('zh-CN') } catch { return d }
 }
 
-function statusTagType(status) {
-  const map = {
-    pending: 'info',
-    running: 'warning',
-    completed: 'success',
-    failed: 'danger',
-    partial: '',
-    cancelled: 'info',
-  }
-  return map[status] || 'info'
+function formatDuration(ms) {
+  if (!ms) return '-'
+  if (ms < 1000) return ms + 'ms'
+  if (ms < 60000) return (ms / 1000).toFixed(1) + 's'
+  return (ms / 60000).toFixed(1) + 'min'
 }
 
-function formatDuration(durationMs) {
-  if (!durationMs && durationMs !== 0) return '-'
-  if (durationMs < 1000) return `${durationMs} ms`
-  return `${(durationMs / 1000).toFixed(1)} s`
+function statusType(s) {
+  const map = { completed: 'success', failed: 'danger', running: 'primary', pending: 'info' }
+  return map[s] || 'info'
 }
 
-function formatTokens(tokens) {
-  const value = Number(tokens || 0)
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`
-  return String(value)
+function statusLabel(s) {
+  const map = { completed: '已完成', failed: '失败', running: '运行中', pending: '等待中', cancelled: '已取消' }
+  return map[s] || s
 }
 
-function formatCost(costCents) {
-  const value = Number(costCents || 0)
-  if (!value) return '$0.0000'
-  return `$${(value / 100).toFixed(4)}`
-}
-
-function openTask(task) {
-  router.push(`/agent?task_id=${task.id}`)
-}
-
-function openResult(task) {
-  if (!task.analysis_record_id) return
-  router.push(`/analysis/${task.analysis_record_id}`)
-}
-
-function openTrace(task) {
-  router.push({
-    name: 'prompt-traces',
-    query: {
-      task_id: String(task.id),
-      analysis_record_id: task.analysis_record_id ? String(task.analysis_record_id) : undefined,
-    },
-  })
-}
-
-async function handleCancel(task) {
-  await ElMessageBox.confirm(
-    `Cancel task #${task.id}? Running work will stop after the current step finishes.`,
-    'Cancel Task',
-    { type: 'warning' },
-  )
-  await cancelAgentTask(task.id)
-  ElMessage.success(`Task #${task.id} cancelled`)
-  await loadTaskData()
-}
-
-async function handleRetry(task) {
-  await ElMessageBox.confirm(
-    `Retry task #${task.id}? A new task will be created immediately.`,
-    'Retry Task',
-    { type: 'info' },
-  )
-  const data = await retryAgentTask(task.id)
-  const nextTask = data?.data || data
-  ElMessage.success(`Retry task started${nextTask?.id ? ` (#${nextTask.id})` : ''}`)
-  await loadTaskData()
-}
-
-function stopAutoRefresh() {
-  if (refreshTimer) {
-    clearTimeout(refreshTimer)
-    refreshTimer = null
-  }
-}
-
-function scheduleAutoRefresh() {
-  stopAutoRefresh()
-  if (tasks.value.some(task => ['pending', 'running'].includes(task.status))) {
-    refreshTimer = setTimeout(() => {
-      loadTaskData({ silent: true })
-    }, 5000)
-  }
-}
-
-async function loadTaskData({ silent = false } = {}) {
-  stopAutoRefresh()
-  if (!silent) {
-    loading.value = true
-  }
+async function loadTasks() {
+  loading.value = true
   try {
-    const [summaryRes, listRes] = await Promise.all([
-      getAgentTaskSummary(),
-      getAgentTasks({
-        status: statusFilter.value || undefined,
-        limit: 20,
-        offset: 0,
-      }),
-    ])
-    summary.value = summaryRes?.data || summaryRes || { counts: {}, total: 0, recent: [] }
-    taskList.value = listRes?.data || listRes || { items: [], total: 0, limit: 20, offset: 0 }
-  } finally {
+    const res = await request.get('/agent/tasks', { params: { limit: 50 } })
+    tasks.value = res?.items || res || []
+  } catch {} finally {
     loading.value = false
-    scheduleAutoRefresh()
   }
+}
+
+function viewResult(task) {
+  if (task.result_url) {
+    router.push(task.result_url)
+  }
+}
+
+async function retryTask(task) {
+  try {
+    await request.post(`/agent/task/${task.id}/retry`)
+    ElMessage.success('已重新提交')
+    await loadTasks()
+  } catch {
+    ElMessage.error('重试失败')
+  }
+}
+
+async function cancelTask(task) {
+  try {
+    await ElMessageBox.confirm('确定取消此任务？', '取消确认', { type: 'warning' })
+    await request.post(`/agent/task/${task.id}/cancel`)
+    ElMessage.success('已取消')
+    await loadTasks()
+  } catch {}
 }
 
 onMounted(() => {
-  loadTaskData()
+  loadTasks()
+  // Auto refresh every 10s
+  pollTimer = setInterval(loadTasks, 10000)
 })
 
 onUnmounted(() => {
-  stopAutoRefresh()
+  if (pollTimer) clearInterval(pollTimer)
 })
 </script>
 
 <style scoped>
-.task-center-page {
+.task-list {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 
-.hero-card,
-.table-card {
-  border-radius: 26px;
+.task-card {
+  background: #fff;
+  border-radius: var(--app-radius-md, 16px);
+  border: 1px solid var(--app-line);
+  box-shadow: var(--app-shadow-soft);
+  padding: 18px 20px;
 }
 
-.hero-top {
+.task-card.status-running {
+  border-left: 3px solid var(--app-primary);
+}
+
+.task-card.status-failed {
+  border-left: 3px solid var(--app-danger);
+}
+
+.task-card.status-completed {
+  border-left: 3px solid var(--app-success);
+}
+
+.task-top {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.task-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-pending { background: var(--app-muted); }
+.dot-running { background: var(--app-primary); animation: pulse 1.5s infinite; }
+.dot-completed { background: var(--app-success); }
+.dot-failed { background: var(--app-danger); }
+.dot-cancelled { background: var(--app-muted); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.task-info {
+  flex: 1;
+}
+
+.task-info strong {
+  display: block;
+  font-size: 14px;
+}
+
+.task-info span {
+  font-size: 12px;
+  color: var(--app-muted);
+}
+
+.task-progress {
+  margin-bottom: 8px;
+}
+
+.task-meta {
+  display: flex;
   gap: 16px;
-  align-items: flex-start;
-  margin-bottom: 16px;
-}
-
-.eyebrow {
-  margin: 0;
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--app-muted);
-}
-
-.hero-top h1 {
-  margin: 8px 0 0;
-}
-
-.hero-desc {
-  margin: 10px 0 0;
-  color: var(--app-muted);
-  max-width: 720px;
-  line-height: 1.8;
-}
-
-.hero-actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.filter-select {
-  width: 180px;
-}
-
-.summary-grid {
-  margin-top: 8px;
-}
-
-.summary-card {
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: #f7fbf8;
-  border: 1px solid rgba(217, 231, 222, 0.94);
-}
-
-.summary-card span {
-  display: block;
   font-size: 12px;
   color: var(--app-muted);
+  margin-bottom: 8px;
 }
 
-.summary-card strong {
-  display: block;
-  margin-top: 8px;
-  font-size: 24px;
+.task-error {
+  margin-bottom: 8px;
 }
 
-.section-header {
+.task-actions {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-}
-
-.section-header small {
-  color: var(--app-muted);
-}
-
-.progress-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.progress-cell small {
-  color: var(--app-muted);
-}
-
-.meta-block {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  color: #506257;
-}
-
-.table-card :deep(.el-table th.el-table__cell) {
-  background: #f7fbf8;
-}
-
-@media (max-width: 768px) {
-  .hero-top {
-    flex-direction: column;
-  }
+  gap: 8px;
 }
 </style>

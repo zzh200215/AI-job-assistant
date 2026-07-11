@@ -1,0 +1,7 @@
+dist/
+node_modules/
+.vite/
+coverage/
+public/
+*.lock
+package-lock.json

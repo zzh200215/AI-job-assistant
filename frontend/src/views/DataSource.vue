@@ -1,12 +1,17 @@
 <template>
-  <div class="page">
-    <el-card>
-      <template #header>
-        <span><el-icon><DataLine /></el-icon> 岗位数据源管理</span>
-        <el-button size="small" type="primary" class="fr" @click="openCreate">
-          <el-icon><Plus /></el-icon> 新建数据源
-        </el-button>
-      </template>
+  <div class="page-shell">
+    <div class="page-header">
+      <div>
+        <h2>岗位数据源管理</h2>
+        <div class="page-header-sub">配置招聘数据源与同步</div>
+      </div>
+      <el-button size="small" type="primary" @click="openCreate">
+        <el-icon><Plus /></el-icon> 新建数据源
+      </el-button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-body">
 
       <el-table :data="sources" v-loading="loading" border stripe>
         <el-table-column prop="id" label="ID" width="70" />
@@ -37,7 +42,8 @@
           </template>
         </el-table-column>
       </el-table>
-    </el-card>
+      </div>
+    </div>
 
     <!-- 创建/编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑数据源' : '新建数据源'" width="600px">
@@ -245,10 +251,13 @@
     </el-dialog>
 
     <!-- 同步日志 -->
-    <el-card class="mt-3">
-      <template #header>
-        <span><el-icon><List /></el-icon> 最近同步日志</span>
-      </template>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <h3>最近同步日志</h3>
+        </div>
+      </div>
+      <div class="panel-body">
       <el-table :data="logs" v-loading="logLoading" border stripe size="small">
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="source_id" label="数据源" width="80" />
@@ -270,7 +279,8 @@
         </el-table-column>
         <el-table-column prop="error_msg" label="错误信息" show-overflow-tooltip />
       </el-table>
-    </el-card>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -521,8 +531,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page { padding: 20px; }
 .fr { float: right; }
 .mt-2 { margin-top: 12px; }
-.mt-3 { margin-top: 20px; }
 </style>

@@ -1,7 +1,14 @@
 <template>
-  <div class="trace-page">
-    <el-card class="panel-card" shadow="never">
-      <div class="filter-row">
+  <div class="page-shell">
+    <div class="page-header">
+      <div>
+        <h2>Prompt 追踪</h2>
+        <div class="page-header-sub">版本对比、实验分组和结果回放</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-body">
         <el-select
           v-model="filters.source"
           clearable
@@ -67,7 +74,7 @@
         />
         <el-button @click="resetFilters">重置</el-button>
       </div>
-    </el-card>
+    </div>
 
     <el-alert
       v-if="scopeHint"
@@ -78,158 +85,160 @@
       :title="scopeHint"
     />
 
-    <div class="stats-grid">
-      <el-card class="stat-card" shadow="never">
+    <div class="grid-5">
+      <div class="stat-card">
         <div class="stat-value">{{ summary.total || 0 }}</div>
         <div class="stat-label">总调用</div>
-      </el-card>
-      <el-card class="stat-card" shadow="never">
+      </div>
+      <div class="stat-card">
         <div class="stat-value">{{ percentText(summary.success_rate || 0) }}</div>
         <div class="stat-label">成功率</div>
-      </el-card>
-      <el-card class="stat-card" shadow="never">
+      </div>
+      <div class="stat-card">
         <div class="stat-value">{{ summary.avg_duration_ms ?? '-' }}</div>
         <div class="stat-label">平均耗时(ms)</div>
-      </el-card>
-      <el-card class="stat-card" shadow="never">
+      </div>
+      <div class="stat-card">
         <div class="stat-value">{{ summary.avg_total_tokens ?? '-' }}</div>
         <div class="stat-label">平均 Tokens</div>
-      </el-card>
-      <el-card class="stat-card" shadow="never">
+      </div>
+      <div class="stat-card">
         <div class="stat-value">{{ summary.avg_cost_cents ?? '-' }}</div>
         <div class="stat-label">平均成本(cents)</div>
-      </el-card>
+      </div>
     </div>
 
     <div class="dual-grid">
-      <el-card class="panel-card" shadow="never">
-        <template #header>
-          <div class="card-head">
-            <span>版本对比</span>
-            <el-button type="primary" :loading="loading.compare" @click="runCompare">开始对比</el-button>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title-row">
+            <h3>版本对比</h3>
           </div>
-        </template>
-
-        <div class="compare-controls">
-          <el-select
-            v-model="compareForm.source"
-            clearable
-            filterable
-            placeholder="选择来源"
-            style="width: 260px"
-          >
-            <el-option
-              v-for="item in summary.sources || []"
-              :key="item"
-              :label="item"
-              :value="item"
-            />
-          </el-select>
-          <el-select
-            v-model="compareForm.versionA"
-            filterable
-            placeholder="版本 A"
-            style="width: 180px"
-          >
-            <el-option
-              v-for="item in compareVersionOptions"
-              :key="`a-${item}`"
-              :label="item"
-              :value="item"
-            />
-          </el-select>
-          <el-select
-            v-model="compareForm.versionB"
-            filterable
-            placeholder="版本 B"
-            style="width: 180px"
-          >
-            <el-option
-              v-for="item in compareVersionOptions"
-              :key="`b-${item}`"
-              :label="item"
-              :value="item"
-            />
-          </el-select>
+          <el-button type="primary" size="small" :loading="loading.compare" @click="runCompare">开始对比</el-button>
         </div>
+        <div class="panel-body">
+          <div class="compare-controls">
+            <el-select
+              v-model="compareForm.source"
+              clearable
+              filterable
+              placeholder="选择来源"
+              style="width: 260px"
+            >
+              <el-option
+                v-for="item in summary.sources || []"
+                :key="item"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
+            <el-select
+              v-model="compareForm.versionA"
+              filterable
+              placeholder="版本 A"
+              style="width: 180px"
+            >
+              <el-option
+                v-for="item in compareVersionOptions"
+                :key="`a-${item}`"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
+            <el-select
+              v-model="compareForm.versionB"
+              filterable
+              placeholder="版本 B"
+              style="width: 180px"
+            >
+              <el-option
+                v-for="item in compareVersionOptions"
+                :key="`b-${item}`"
+                :label="item"
+                :value="item"
+              />
+            </el-select>
+          </div>
 
-        <div v-if="compareResult" class="compare-grid">
-          <div class="compare-col">
-            <div class="compare-title">{{ compareResult.version_a.prompt_version }}</div>
-            <div class="compare-metrics">
-              <div>调用数：{{ compareResult.version_a.metrics.total }}</div>
-              <div>成功率：{{ percentText(compareResult.version_a.metrics.success_rate || 0) }}</div>
-              <div>平均耗时：{{ compareResult.version_a.metrics.avg_duration_ms ?? '-' }}</div>
-              <div>平均 Tokens：{{ compareResult.version_a.metrics.avg_total_tokens ?? '-' }}</div>
-              <div>平均成本：{{ compareResult.version_a.metrics.avg_cost_cents ?? '-' }}</div>
+          <div v-if="compareResult" class="compare-grid">
+            <div class="compare-col">
+              <div class="compare-title">{{ compareResult.version_a.prompt_version }}</div>
+              <div class="compare-metrics">
+                <div>调用数：{{ compareResult.version_a.metrics.total }}</div>
+                <div>成功率：{{ percentText(compareResult.version_a.metrics.success_rate || 0) }}</div>
+                <div>平均耗时：{{ compareResult.version_a.metrics.avg_duration_ms ?? '-' }}</div>
+                <div>平均 Tokens：{{ compareResult.version_a.metrics.avg_total_tokens ?? '-' }}</div>
+                <div>平均成本：{{ compareResult.version_a.metrics.avg_cost_cents ?? '-' }}</div>
+              </div>
+            </div>
+            <div class="compare-col">
+              <div class="compare-title">{{ compareResult.version_b.prompt_version }}</div>
+              <div class="compare-metrics">
+                <div>调用数：{{ compareResult.version_b.metrics.total }}</div>
+                <div>成功率：{{ percentText(compareResult.version_b.metrics.success_rate || 0) }}</div>
+                <div>平均耗时：{{ compareResult.version_b.metrics.avg_duration_ms ?? '-' }}</div>
+                <div>平均 Tokens：{{ compareResult.version_b.metrics.avg_total_tokens ?? '-' }}</div>
+                <div>平均成本：{{ compareResult.version_b.metrics.avg_cost_cents ?? '-' }}</div>
+              </div>
+            </div>
+            <div class="compare-col delta-col">
+              <div class="compare-title">差异</div>
+              <div class="compare-metrics">
+                <div>成功率差：{{ signed(compareResult.delta.success_rate, true) }}</div>
+                <div>耗时差：{{ signed(compareResult.delta.avg_duration_ms) }}</div>
+                <div>Tokens 差：{{ signed(compareResult.delta.avg_total_tokens) }}</div>
+                <div>成本差：{{ signed(compareResult.delta.avg_cost_cents) }}</div>
+              </div>
             </div>
           </div>
-          <div class="compare-col">
-            <div class="compare-title">{{ compareResult.version_b.prompt_version }}</div>
-            <div class="compare-metrics">
-              <div>调用数：{{ compareResult.version_b.metrics.total }}</div>
-              <div>成功率：{{ percentText(compareResult.version_b.metrics.success_rate || 0) }}</div>
-              <div>平均耗时：{{ compareResult.version_b.metrics.avg_duration_ms ?? '-' }}</div>
-              <div>平均 Tokens：{{ compareResult.version_b.metrics.avg_total_tokens ?? '-' }}</div>
-              <div>平均成本：{{ compareResult.version_b.metrics.avg_cost_cents ?? '-' }}</div>
-            </div>
-          </div>
-          <div class="compare-col delta-col">
-            <div class="compare-title">差异</div>
-            <div class="compare-metrics">
-              <div>成功率差：{{ signed(compareResult.delta.success_rate, true) }}</div>
-              <div>耗时差：{{ signed(compareResult.delta.avg_duration_ms) }}</div>
-              <div>Tokens 差：{{ signed(compareResult.delta.avg_total_tokens) }}</div>
-              <div>成本差：{{ signed(compareResult.delta.avg_cost_cents) }}</div>
-            </div>
-          </div>
+          <el-empty v-else :image-size="72" description="选择两个版本后可查看对比结果" />
         </div>
-        <el-empty v-else :image-size="72" description="选择两个版本后可查看对比结果" />
-      </el-card>
+      </div>
 
-      <el-card class="panel-card" shadow="never">
-        <template #header>
-          <div class="card-head">
-            <span>实验分组</span>
-            <span class="muted">按 source + prompt_version 聚合</span>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title-row">
+            <h3>实验分组</h3>
           </div>
-        </template>
-
-        <div v-if="summary.version_groups?.length" class="group-list">
-          <div
-            v-for="item in summary.version_groups"
-            :key="`${item.source}-${item.prompt_version}`"
-            class="group-item"
-          >
-            <div class="group-top">
-              <strong>{{ item.prompt_version }}</strong>
-              <span>{{ item.source }}</span>
-            </div>
-            <div class="group-meta">
-              <span>{{ item.total }} 次</span>
-              <span>成功率 {{ percentText(item.success_rate || 0) }}</span>
-              <span>均耗时 {{ item.avg_duration_ms ?? '-' }}</span>
-            </div>
-          </div>
+          <span class="muted">按 source + prompt_version 聚合</span>
         </div>
-        <el-empty v-else :image-size="72" description="暂无版本样本" />
-      </el-card>
+        <div class="panel-body">
+          <div v-if="summary.version_groups?.length" class="group-list">
+            <div
+              v-for="item in summary.version_groups"
+              :key="`${item.source}-${item.prompt_version}`"
+              class="group-item"
+            >
+              <div class="group-top">
+                <strong>{{ item.prompt_version }}</strong>
+                <span>{{ item.source }}</span>
+              </div>
+              <div class="group-meta">
+                <span>{{ item.total }} 次</span>
+                <span>成功率 {{ percentText(item.success_rate || 0) }}</span>
+                <span>均耗时 {{ item.avg_duration_ms ?? '-' }}</span>
+              </div>
+            </div>
+          </div>
+          <el-empty v-else :image-size="72" description="暂无版本样本" />
+        </div>
+      </div>
     </div>
 
-    <el-card class="panel-card" shadow="never">
-      <template #header>
-        <div class="card-head">
-          <span>调用明细</span>
-          <span class="muted">点击查看完整 Prompt 与输出回放</span>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <h3>调用明细</h3>
         </div>
-      </template>
-
-      <el-table
-        :data="traceList.items"
-        v-loading="loading.list"
-        stripe
-        class="trace-table"
-      >
+        <span class="muted">点击查看完整 Prompt 与输出回放</span>
+      </div>
+      <div class="panel-body">
+        <el-table
+          :data="traceList.items"
+          v-loading="loading.list"
+          stripe
+          class="trace-table"
+        >
         <el-table-column prop="created_at" label="时间" min-width="168">
           <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
         </el-table-column>
@@ -251,19 +260,20 @@
             <el-button text type="primary" @click="openDetail(row.id)">回放</el-button>
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
 
-      <div class="pager-row">
-        <el-pagination
-          background
-          layout="prev, pager, next, total"
-          :current-page="pagination.page"
-          :page-size="pagination.page_size"
-          :total="traceList.total || 0"
-          @current-change="handlePageChange"
-        />
+        <div class="pager-row">
+          <el-pagination
+            background
+            layout="prev, pager, next, total"
+            :current-page="pagination.page"
+            :page-size="pagination.page_size"
+            :total="traceList.total || 0"
+            @current-change="handlePageChange"
+          />
+        </div>
       </div>
-    </el-card>
+    </div>
 
     <el-drawer
       v-model="detailVisible"
@@ -550,33 +560,16 @@ function formatDate(value) {
 </script>
 
 <style scoped>
-.trace-page {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.panel + .panel {
+  margin-top: 16px;
 }
 
-.panel-card,
-.stat-card {
-  border-radius: 22px;
-}
-
-.scope-alert {
-  border-radius: 18px;
-}
-
-.filter-row,
-.compare-controls,
-.card-head,
-.pager-row {
+.compare-controls {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-.card-head {
-  justify-content: space-between;
+  margin-bottom: 16px;
 }
 
 .muted {
@@ -584,20 +577,26 @@ function formatDate(value) {
   color: var(--app-muted);
 }
 
-.stats-grid {
+.grid-5 {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
+  margin-bottom: 16px;
 }
 
 .stat-card {
-  padding: 4px;
+  padding: 16px;
+  border-radius: var(--app-radius-sm, 12px);
+  border: 1px solid var(--app-line);
+  background: #fff;
+  text-align: center;
 }
 
 .stat-value {
   font-size: 24px;
   font-weight: 700;
   color: var(--app-text);
+  font-family: var(--app-font-mono);
 }
 
 .stat-label {
@@ -610,6 +609,7 @@ function formatDate(value) {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
   gap: 16px;
+  margin-bottom: 16px;
 }
 
 .compare-grid {
@@ -621,9 +621,9 @@ function formatDate(value) {
 .compare-col,
 .group-item {
   padding: 14px;
-  border-radius: 16px;
-  background: #fbfcfa;
-  border: 1px solid rgba(218, 229, 222, 0.9);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--app-line);
 }
 
 .compare-title,
@@ -640,11 +640,11 @@ function formatDate(value) {
   flex-direction: column;
   gap: 6px;
   font-size: 13px;
-  color: #53665c;
+  color: var(--app-muted);
 }
 
 .delta-col {
-  background: linear-gradient(180deg, #f6faf7, #fdfefe);
+  background: var(--app-primary-light);
 }
 
 .group-list {
@@ -671,6 +671,7 @@ function formatDate(value) {
 }
 
 .pager-row {
+  display: flex;
   justify-content: flex-end;
   margin-top: 16px;
 }
@@ -688,7 +689,7 @@ function formatDate(value) {
 .code-block {
   margin: 0;
   padding: 14px;
-  border-radius: 16px;
+  border-radius: var(--app-radius-sm, 12px);
   background: #0f1720;
   color: #dde7f2;
   font-size: 12px;
@@ -700,10 +701,9 @@ function formatDate(value) {
 }
 
 @media (max-width: 960px) {
-  .stats-grid {
+  .grid-5 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
   .dual-grid,
   .compare-grid {
     grid-template-columns: 1fr;

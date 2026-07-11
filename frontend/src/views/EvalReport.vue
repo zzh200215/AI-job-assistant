@@ -1,13 +1,13 @@
 <template>
-  <div class="eval-page">
+  <div class="page-shell">
     <el-card shadow="never" class="hero-card">
       <div class="hero-top">
         <div>
           <p class="eyebrow">Offline Evaluation</p>
-          <h1>评测报表</h1>
-          <p class="hero-desc">
+          <h2>评测报表</h2>
+	          <div class="page-header-sub">
             展示 `RAG` 与 `Agent` 离线评测的最新结果、历史快照和版本对比。
-          </p>
+          </div>
         </div>
         <div class="hero-actions">
           <el-select v-model="filters.reportType" style="width: 180px" @change="reloadAll">
@@ -351,7 +351,7 @@ function compareMetricBlock(item) {
 </script>
 
 <style scoped>
-.eval-page {
+.page-shell {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -361,7 +361,7 @@ function compareMetricBlock(item) {
 .summary-card,
 .panel-card,
 .inner-card {
-  border-radius: 24px;
+  border-radius: var(--app-radius-md, 16px);
 }
 
 .hero-top,
@@ -400,7 +400,6 @@ function compareMetricBlock(item) {
   color: var(--app-muted);
 }
 
-.hero-desc,
 .muted {
   color: var(--app-muted);
 }
@@ -427,9 +426,9 @@ function compareMetricBlock(item) {
   flex: 1;
   min-width: 0;
   padding: 14px;
-  border-radius: 16px;
-  background: #f7fbf8;
-  border: 1px solid rgba(217, 231, 222, 0.94);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
 }
 
 .metric-label {
@@ -459,9 +458,9 @@ function compareMetricBlock(item) {
 
 .compare-card {
   padding: 14px;
-  border-radius: 16px;
-  background: #fbfcfa;
-  border: 1px solid rgba(218, 229, 222, 0.9);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
 }
 
 .compare-card strong,
@@ -476,7 +475,7 @@ function compareMetricBlock(item) {
 }
 
 .delta-card {
-  background: linear-gradient(180deg, #f6faf7, #fdfefe);
+  background: var(--app-bg);
 }
 
 .metric-pre,
@@ -490,7 +489,7 @@ function compareMetricBlock(item) {
 .metric-pre {
   margin-top: 10px;
   font-size: 12px;
-  color: #405247;
+  color: var(--app-text);
 }
 
 .detail-wrap {
@@ -516,7 +515,7 @@ function compareMetricBlock(item) {
 
 .code-block {
   padding: 14px;
-  border-radius: 16px;
+  border-radius: var(--app-radius-sm, 12px);
   background: #0f1720;
   color: #dde7f2;
   font-size: 12px;

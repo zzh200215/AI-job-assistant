@@ -1,23 +1,22 @@
 <template>
-  <div class="page history-page">
-    <section class="history-hero">
+  <div class="page-shell">
+    <div class="page-header">
       <div>
-        <span class="hero-kicker">History Center</span>
-        <h1>分析历史记录</h1>
-        <p>回看过去的分析结果、定位面试题和删除无效记录，保证工作台上下文始终干净。</p>
+        <h2>分析历史记录</h2>
+        <div class="page-header-sub">回看过去的分析结果、定位面试题和删除无效记录</div>
       </div>
-      <div class="hero-actions">
-        <el-button @click="loadList">刷新</el-button>
-      </div>
-    </section>
+      <el-button @click="loadList">刷新</el-button>
+    </div>
 
-    <el-card class="history-card" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span><el-icon><Clock /></el-icon> 历史记录</span>
-          <el-tag type="info" effect="plain">{{ total }} 条</el-tag>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <el-icon><Clock /></el-icon>
+          <h3>历史记录</h3>
         </div>
-      </template>
+        <el-tag type="info" effect="plain">{{ total }} 条</el-tag>
+      </div>
+      <div class="panel-body">
 
       <el-table :data="list" v-loading="loading" stripe>
         <el-table-column prop="id" label="ID" width="80" />
@@ -59,9 +58,10 @@
         @current-change="loadList"
         @size-change="loadList"
       />
-    </el-card>
+      </div>
+    </div>
 
-    <!-- 详情弹窗 (优化布局) -->
+    <!-- 详情弹窗 -->
     <el-dialog v-model="showDetail" title="分析详情" width="900px" top="5vh">
       <div v-if="detail" v-loading="detailLoading">
         <!-- 概要信息 -->
@@ -277,65 +277,13 @@ onMounted(loadList)
 </script>
 
 <style scoped>
-.page { display: flex; flex-direction: column; gap: 18px; }
-.history-page { max-width: 1480px; margin: 0 auto; padding: 18px 0 32px; }
-.history-hero {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 16px;
-  padding: 24px 26px;
-  border-radius: 30px;
-  background:
-    radial-gradient(circle at top right, rgba(223, 185, 122, 0.16), transparent 28%),
-    linear-gradient(135deg, rgba(255, 251, 245, 0.96), rgba(245, 251, 246, 0.98));
-  border: 1px solid rgba(210, 223, 214, 0.92);
-}
-.hero-kicker {
-  display: inline-block;
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--app-muted);
-}
-.history-hero h1 {
-  margin: 8px 0 8px;
-  font-size: 32px;
-  color: var(--app-text);
-}
-.history-hero p {
-  margin: 0;
-  max-width: 760px;
-  color: var(--app-muted);
-  line-height: 1.8;
-}
-.hero-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.history-card { border-radius: 26px; }
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.mt   { margin-top: 16px; }
-.muted{ color: var(--app-muted); font-size: 12px; }
+.muted { color: var(--app-muted); font-size: 12px; }
 .pagination { margin-top: 16px; justify-content: flex-end; display: flex; }
-.q-card { margin: 8px 0; border-radius: 18px; }
+.q-card { margin: 8px 0; }
 .q { font-size: 14px; }
 .i { color: var(--app-muted); font-size: 12px; margin: 4px 0; }
 .a { color: var(--app-primary-dark); font-size: 13px; }
 .risk { color: #c96b6b; }
 h4 { margin: 12px 0 6px; color: var(--app-text); }
 ul { padding-left: 18px; margin: 4px 0; }
-
-@media (max-width: 768px) {
-  .history-hero {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
 </style>

@@ -203,6 +203,8 @@ def export_docx(
     version: str = "optimized",
     db: Session = None,
     user_id: int | None = None,
+    template: str = "classic",
+    version_id: int | None = None,
 ) -> str:
     """
     导出简历为 Word 文件。
@@ -225,21 +227,25 @@ def export_docx(
             raise ValueError("简历不存在")
 
         # 获取内容
-        if version == "optimized" and resume.optimized_content:
-            content = resume.optimized_content
-        else:
-            # 原简历：从 parsed_json 构建 markdown
-            content = _build_original_md(resume)
+        content = _resolve_resume_content(resume, version, version_id, db)
 
         # 生成文件
         from docx import Document
         from docx.shared import Pt
         doc = Document()
 
-        # 设置默认字体
+        # 根据模板设置默认字体
+        font_map = {
+            "classic": ("Microsoft YaHei", 11),
+            "modern": ("Helvetica Neue", 11),
+            "minimal": ("Microsoft YaHei", 10),
+            "professional": ("Georgia", 11),
+        }
+        font_name, font_size = font_map.get(template, font_map["classic"])
+
         style = doc.styles["Normal"]
-        style.font.name = "Microsoft YaHei"
-        style.font.size = Pt(11)
+        style.font.name = font_name
+        style.font.size = Pt(font_size)
 
         _build_docx(doc, content, version)
 
@@ -266,10 +272,13 @@ def export_pdf(
     version: str = "optimized",
     db: Session = None,
     user_id: int | None = None,
+    template: str = "classic",
+    version_id: int | None = None,
 ) -> str:
     """
     导出简历为 PDF 文件。
     使用 weasyprint 将 Markdown 转为 HTML 再转 PDF。
+    支持多模板风格（classic/modern/minimal/professional）。
     """
     if db is None:
         from app.core.database import SessionLocal
@@ -287,13 +296,10 @@ def export_pdf(
         if not resume:
             raise ValueError("简历不存在")
 
-        if version == "optimized" and resume.optimized_content:
-            content = resume.optimized_content
-        else:
-            content = _build_original_md(resume)
+        content = _resolve_resume_content(resume, version, version_id, db)
 
-        # Markdown → HTML
-        html = _md_to_html(content)
+        # Markdown → HTML（使用指定模板）
+        html = _md_to_html(content, template=template)
 
         # HTML → PDF
         from weasyprint import HTML as WeasyprintHTML
@@ -315,6 +321,39 @@ def export_pdf(
     finally:
         if close:
             db.close()
+
+
+def _resolve_resume_content(
+    resume: Resume,
+    version: str,
+    version_id: int | None = None,
+    db: Session = None,
+) -> str:
+    """获取简历内容，支持从 ResumeVersion 获取定制版"""
+    # 优先通过 version_id 获取特定版本
+    if version_id and db:
+        rv = db.query(ResumeVersion).filter(
+            ResumeVersion.id == version_id,
+            ResumeVersion.resume_id == resume.id,
+        ).first()
+        if rv and rv.format == "md" and rv.content:
+            return rv.content
+
+    # 根据 version 类型获取
+    if version == "optimized" and resume.optimized_content:
+        return resume.optimized_content
+    elif version == "tailored" and db:
+        # 获取最新的定制版本
+        rv = db.query(ResumeVersion).filter(
+            ResumeVersion.resume_id == resume.id,
+            ResumeVersion.version_type == "tailored",
+            ResumeVersion.format == "md",
+        ).order_by(ResumeVersion.created_at.desc()).first()
+        if rv and rv.content:
+            return rv.content
+
+    # 回退：从 parsed_json 构建
+    return _build_original_md(resume)
 
 
 def _build_original_md(resume: Resume) -> str:
@@ -388,19 +427,12 @@ def _build_original_md(resume: Resume) -> str:
     return "\n".join(lines)
 
 
-def _md_to_html(md: str) -> str:
-    """简易 Markdown → HTML 转换（用于 PDF 导出）"""
+def _md_to_html(md: str, template: str = "classic") -> str:
+    """Markdown → HTML 转换，支持多模板风格"""
+    styles = _TEMPLATE_STYLES.get(template, _TEMPLATE_STYLES["classic"])
     lines = md.split("\n")
     html_parts = ['<!DOCTYPE html><html><head><meta charset="utf-8">',
-                  '<style>',
-                  'body{font-family:"Microsoft YaHei",sans-serif;padding:40px;line-height:1.6;}',
-                  'h1{font-size:22px;text-align:center;margin-bottom:4px;}',
-                  'h2{font-size:16px;color:#0066CC;border-bottom:1px solid #ddd;padding-bottom:4px;margin-top:20px;}',
-                  'h3{font-size:14px;margin-top:12px;}',
-                  'ul{padding-left:20px;}',
-                  'li{margin:4px 0;}',
-                  '.contact{text-align:center;color:#666;font-size:12px;}',
-                  '</style></head><body>']
+                  f'<style>{styles}</style></head><body>']
 
     for line in lines:
         line = line.strip()
@@ -424,3 +456,49 @@ def _md_to_html(md: str) -> str:
 
     html_parts.append("</body></html>")
     return "\n".join(html_parts)
+
+
+# ============================================================
+# 多模板风格
+# ============================================================
+
+_TEMPLATE_STYLES = {
+    "classic": """
+body{font-family:"Microsoft YaHei","Helvetica Neue",sans-serif;padding:40px;line-height:1.6;max-width:800px;margin:0 auto;color:#333;}
+h1{font-size:22px;text-align:center;margin-bottom:4px;color:#1a1a1a;}
+h2{font-size:16px;color:#0066CC;border-bottom:1px solid #ddd;padding-bottom:4px;margin-top:20px;}
+h3{font-size:14px;margin-top:12px;color:#333;}
+ul{padding-left:20px;}li{margin:4px 0;}
+.contact{text-align:center;color:#666;font-size:12px;}
+p{margin:4px 0;}
+""",
+    "modern": """
+body{font-family:"Helvetica Neue","Microsoft YaHei",sans-serif;padding:48px;line-height:1.7;max-width:800px;margin:0 auto;color:#2d2d2d;}
+h1{font-size:28px;text-align:center;margin-bottom:2px;color:#1a1a1a;letter-spacing:2px;text-transform:uppercase;}
+h2{font-size:15px;color:#e74c3c;border-bottom:2px solid #e74c3c;padding-bottom:6px;margin-top:24px;letter-spacing:1px;text-transform:uppercase;}
+h3{font-size:13px;margin-top:14px;color:#2d2d2d;font-weight:600;}
+ul{padding-left:20px;}li{margin:3px 0;color:#444;}
+.contact{text-align:center;color:#888;font-size:11px;letter-spacing:1px;}
+p{margin:4px 0;color:#444;}
+""",
+    "minimal": """
+body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;padding:50px 60px;line-height:1.8;max-width:750px;margin:0 auto;color:#222;}
+h1{font-size:24px;text-align:center;margin-bottom:6px;color:#000;font-weight:300;letter-spacing:4px;}
+h2{font-size:13px;color:#999;border-bottom:1px solid #eee;padding-bottom:8px;margin-top:28px;letter-spacing:3px;text-transform:uppercase;font-weight:400;}
+h3{font-size:13px;margin-top:16px;color:#222;font-weight:500;}
+ul{padding-left:18px;}li{margin:3px 0;color:#555;font-size:12px;}
+.contact{text-align:center;color:#aaa;font-size:11px;letter-spacing:2px;}
+p{margin:4px 0;font-size:12px;color:#555;}
+""",
+    "professional": """
+body{font-family:"Georgia","Microsoft YaHei",serif;padding:44px;line-height:1.65;max-width:800px;margin:0 auto;color:#1a1a1a;}
+h1{font-size:24px;text-align:center;margin-bottom:4px;color:#0d2137;font-weight:700;}
+h2{font-size:15px;color:#0d2137;border-left:3px solid #0d2137;padding-left:10px;margin-top:22px;font-weight:600;}
+h3{font-size:13px;margin-top:14px;color:#333;font-style:italic;}
+ul{padding-left:20px;}li{margin:3px 0;color:#444;}
+.contact{text-align:center;color:#666;font-size:11px;}
+p{margin:4px 0;color:#444;}
+""",
+}
+
+AVAILABLE_TEMPLATES = list(_TEMPLATE_STYLES.keys())

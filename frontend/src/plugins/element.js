@@ -1,6 +1,8 @@
 import { ElAlert } from 'element-plus/es/components/alert/index.mjs'
+import { ElBadge } from 'element-plus/es/components/badge/index.mjs'
 import { ElButton } from 'element-plus/es/components/button/index.mjs'
 import { ElCard } from 'element-plus/es/components/card/index.mjs'
+import { ElCheckbox } from 'element-plus/es/components/checkbox/index.mjs'
 import { ElCol } from 'element-plus/es/components/col/index.mjs'
 import { ElCollapse, ElCollapseItem } from 'element-plus/es/components/collapse/index.mjs'
 import { ElAside, ElContainer, ElHeader, ElMain } from 'element-plus/es/components/container/index.mjs'
@@ -21,6 +23,7 @@ import { ElMenu, ElMenuItem } from 'element-plus/es/components/menu/index.mjs'
 import { ElPagination } from 'element-plus/es/components/pagination/index.mjs'
 import { ElProgress } from 'element-plus/es/components/progress/index.mjs'
 import { ElRadio, ElRadioButton, ElRadioGroup } from 'element-plus/es/components/radio/index.mjs'
+import { ElRate } from 'element-plus/es/components/rate/index.mjs'
 import { ElRow } from 'element-plus/es/components/row/index.mjs'
 import { ElOption, ElSelect } from 'element-plus/es/components/select/index.mjs'
 import { ElSlider } from 'element-plus/es/components/slider/index.mjs'
@@ -36,8 +39,10 @@ import { ElUpload } from 'element-plus/es/components/upload/index.mjs'
 const components = [
   ElAlert,
   ElAside,
+  ElBadge,
   ElButton,
   ElCard,
+  ElCheckbox,
   ElCol,
   ElCollapse,
   ElCollapseItem,
@@ -68,6 +73,7 @@ const components = [
   ElRadio,
   ElRadioButton,
   ElRadioGroup,
+  ElRate,
   ElRow,
   ElSelect,
   ElSlider,

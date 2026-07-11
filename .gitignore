@@ -50,6 +50,8 @@ backend/reports/
 reports/
 
 # IDE
+.claude/
+.trae/
 .idea/
 .vscode/
 *.iml

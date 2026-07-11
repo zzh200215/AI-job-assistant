@@ -8,10 +8,10 @@
       <div class="hero-top">
         <div>
           <p class="eyebrow">Runtime Overview</p>
-          <h1>Project Runtime Dashboard</h1>
-          <p class="hero-desc">
+          <h2>Project Runtime Dashboard</h2>
+	          <div class="page-header-sub">
             Inspect environment mode, orchestration settings, request metrics, and embedding usage from one place.
-          </p>
+          </div>
         </div>
         <div class="hero-badges">
           <el-tag :type="status.demo_mode ? 'warning' : 'success'">
@@ -191,7 +191,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.status-page {
+.page-shell {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -199,7 +199,7 @@ onMounted(async () => {
 
 .hero-card,
 .panel-card {
-  border-radius: 26px;
+  border-radius: var(--app-radius-md, 16px);
 }
 
 .hero-top {
@@ -218,15 +218,8 @@ onMounted(async () => {
   color: var(--app-muted);
 }
 
-.hero-top h1 {
+.hero-top h2 {
   margin: 8px 0 0;
-}
-
-.hero-desc {
-  margin: 10px 0 0;
-  color: var(--app-muted);
-  max-width: 680px;
-  line-height: 1.8;
 }
 
 .hero-badges {
@@ -243,9 +236,9 @@ onMounted(async () => {
 .metric-card,
 .mini-card {
   padding: 14px 16px;
-  border-radius: 18px;
-  background: #f7fbf8;
-  border: 1px solid rgba(217, 231, 222, 0.94);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
 }
 
 .metric-card span,

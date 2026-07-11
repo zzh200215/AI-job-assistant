@@ -1,5 +1,5 @@
 <template>
-  <div class="interview-room-page">
+  <div class="page-shell">
     <section class="room-hero">
       <div>
         <p class="eyebrow">Interview Workspace</p>
@@ -14,194 +14,204 @@
 
     <section class="room-grid">
       <div class="main-column">
-        <el-card shadow="never" class="stage-card">
-          <div class="stage-header">
-            <div>
-              <span class="stage-kicker">当前阶段</span>
-              <h2>{{ currentPhase.title }}</h2>
-              <p>{{ currentPhase.desc }}</p>
-            </div>
-            <div class="stage-meta">
-              <div class="meta-pill">
-                <span>进度</span>
-                <strong>{{ store.currentRound || 0 }} / {{ store.totalQuestions || 0 }}</strong>
+        <div class="panel stage-card">
+          <div class="panel-body">
+            <div class="stage-header">
+              <div>
+                <span class="stage-kicker">当前阶段</span>
+                <h2>{{ currentPhase.title }}</h2>
+                <p>{{ currentPhase.desc }}</p>
               </div>
-              <div class="meta-pill" :class="{ danger: store.roundRemaining <= 10 }">
-                <span>单题倒计时</span>
-                <strong>{{ store.formattedRoundRemaining }}</strong>
+              <div class="stage-meta">
+                <div class="meta-pill">
+                  <span>进度</span>
+                  <strong>{{ store.currentRound || 0 }} / {{ store.totalQuestions || 0 }}</strong>
+                </div>
+                <div class="meta-pill" :class="{ danger: store.roundRemaining <= 10 }">
+                  <span>单题倒计时</span>
+                  <strong>{{ store.formattedRoundRemaining }}</strong>
+                </div>
+                <div class="meta-pill">
+                  <span>总用时</span>
+                  <strong>{{ store.formattedTime }}</strong>
+                </div>
               </div>
-              <div class="meta-pill">
-                <span>总用时</span>
-                <strong>{{ store.formattedTime }}</strong>
+            </div>
+            <el-progress
+              :percentage="store.progress"
+              :show-text="false"
+              :stroke-width="10"
+              class="stage-progress"
+            />
+          </div>
+        </div>
+
+        <div class="panel question-card">
+          <div class="panel-body">
+            <div class="interviewer-header">
+              <div class="interviewer-avatar">AI</div>
+              <div>
+                <div class="interviewer-name">{{ interviewerPersona }}</div>
+                <div class="interviewer-role">{{ interviewerHint }}</div>
+              </div>
+            </div>
+
+            <div class="question-meta">
+              <span class="question-badge">{{ questionCategory }}</span>
+              <span v-if="store.isFollowUp" class="question-badge follow-up">追问</span>
+            </div>
+
+            <h3>{{ spotlightQuestion }}</h3>
+            <p class="question-helper">{{ questionHelperText }}</p>
+
+            <div class="structure-box">
+              <div class="structure-title">建议回答结构</div>
+              <div class="structure-tips">
+                <span v-for="tip in answerStructure" :key="tip">{{ tip }}</span>
               </div>
             </div>
           </div>
-          <el-progress
-            :percentage="store.progress"
-            :show-text="false"
-            :stroke-width="10"
-            class="stage-progress"
-          />
-        </el-card>
+        </div>
 
-        <el-card shadow="never" class="question-card">
-          <div class="interviewer-header">
-            <div class="interviewer-avatar">AI</div>
-            <div>
-              <div class="interviewer-name">{{ interviewerPersona }}</div>
-              <div class="interviewer-role">{{ interviewerHint }}</div>
-            </div>
-          </div>
-
-          <div class="question-meta">
-            <span class="question-badge">{{ questionCategory }}</span>
-            <span v-if="store.isFollowUp" class="question-badge follow-up">追问</span>
-          </div>
-
-          <h3>{{ spotlightQuestion }}</h3>
-          <p class="question-helper">{{ questionHelperText }}</p>
-
-          <div class="structure-box">
-            <div class="structure-title">建议回答结构</div>
-            <div class="structure-tips">
-              <span v-for="tip in answerStructure" :key="tip">{{ tip }}</span>
-            </div>
-          </div>
-        </el-card>
-
-        <el-card shadow="never" class="transcript-card">
-          <template #header>
+        <div class="panel transcript-card">
+          <div class="panel-header">
             <div class="transcript-header">
               <span>面试实录</span>
               <span class="transcript-sub">实时显示提问、作答、评分与超时反馈</span>
             </div>
-          </template>
-
-          <div ref="chatRef" class="transcript-list">
-            <div
-              v-for="(msg, idx) in store.messages"
-              :key="`${idx}-${msg.type}`"
-              class="msg-row"
-              :class="rowClass(msg)"
-            >
-              <template v-if="msg.type === 'question'">
-                <div class="msg-shell ai-shell">
-                  <div class="msg-head">
-                    <span>面试官</span>
-                    <span>{{ msg.metadata?.category || '通用问题' }}</span>
+          </div>
+          <div class="panel-body">
+            <div ref="chatRef" class="transcript-list">
+              <div
+                v-for="(msg, idx) in store.messages"
+                :key="`${idx}-${msg.type}`"
+                class="msg-row"
+                :class="rowClass(msg)"
+              >
+                <template v-if="msg.type === 'question'">
+                  <div class="msg-shell ai-shell">
+                    <div class="msg-head">
+                      <span>面试官</span>
+                      <span>{{ msg.metadata?.category || '通用问题' }}</span>
+                    </div>
+                    <div class="msg-body">{{ msg.content }}</div>
                   </div>
-                  <div class="msg-body">{{ msg.content }}</div>
-                </div>
-              </template>
+                </template>
 
-              <template v-else-if="msg.type === 'answer'">
-                <div class="msg-shell user-shell">
-                  <div class="msg-head">
-                    <span>我的回答</span>
+                <template v-else-if="msg.type === 'answer'">
+                  <div class="msg-shell user-shell">
+                    <div class="msg-head">
+                      <span>我的回答</span>
+                    </div>
+                    <div class="msg-body">{{ msg.content }}</div>
                   </div>
-                  <div class="msg-body">{{ msg.content }}</div>
-                </div>
-              </template>
+                </template>
 
-              <template v-else-if="msg.type === 'evaluation'">
-                <div class="score-shell" :class="scoreClass(msg.metadata?.score)">
-                  <div class="score-top">
-                    <strong>本题评分 {{ msg.metadata?.score || 0 }}</strong>
-                    <span>{{ performanceSummary(msg.metadata?.score) }}</span>
+                <template v-else-if="msg.type === 'evaluation'">
+                  <div class="score-shell" :class="scoreClass(msg.metadata?.score)">
+                    <div class="score-top">
+                      <strong>本题评分 {{ msg.metadata?.score || 0 }}</strong>
+                      <span>{{ performanceSummary(msg.metadata?.score) }}</span>
+                    </div>
+                    <div class="score-dims">
+                      <span>完整 {{ msg.metadata?.completeness ?? '-' }}</span>
+                      <span>准确 {{ msg.metadata?.accuracy ?? '-' }}</span>
+                      <span>深度 {{ msg.metadata?.depth ?? '-' }}</span>
+                      <span>表达 {{ msg.metadata?.expression ?? '-' }}</span>
+                    </div>
+                    <p>{{ msg.content }}</p>
+                    <p v-if="msg.metadata?.improvement" class="score-improvement">
+                      改进建议：{{ msg.metadata.improvement }}
+                    </p>
                   </div>
-                  <div class="score-dims">
-                    <span>完整 {{ msg.metadata?.completeness ?? '-' }}</span>
-                    <span>准确 {{ msg.metadata?.accuracy ?? '-' }}</span>
-                    <span>深度 {{ msg.metadata?.depth ?? '-' }}</span>
-                    <span>表达 {{ msg.metadata?.expression ?? '-' }}</span>
+                </template>
+
+                <template v-else-if="msg.type === 'system'">
+                  <div class="system-shell">{{ msg.content }}</div>
+                </template>
+
+                <template v-else-if="msg.type === 'end'">
+                  <div class="end-shell">
+                    <strong>面试已结束</strong>
+                    <span>{{ msg.content }}</span>
                   </div>
-                  <p>{{ msg.content }}</p>
-                  <p v-if="msg.metadata?.improvement" class="score-improvement">
-                    改进建议：{{ msg.metadata.improvement }}
-                  </p>
-                </div>
-              </template>
-
-              <template v-else-if="msg.type === 'system'">
-                <div class="system-shell">{{ msg.content }}</div>
-              </template>
-
-              <template v-else-if="msg.type === 'end'">
-                <div class="end-shell">
-                  <strong>面试已结束</strong>
-                  <span>{{ msg.content }}</span>
-                </div>
-              </template>
+                </template>
+              </div>
             </div>
 
-            <div v-if="store.status === 'connecting'" class="state-hint">
-              正在接入面试房间...
-            </div>
+            <div v-if="store.status === 'connecting'" class="state-hint">正在接入面试房间...</div>
             <div v-else-if="store.status === 'evaluating'" class="state-hint">
               面试官正在记录你的回答并决定下一问...
             </div>
           </div>
-        </el-card>
+        </div>
 
-        <el-card v-if="!store.isCompleted" shadow="never" class="answer-card">
-          <div class="answer-head">
-            <div>
-              <strong>你的回答</strong>
-              <p>建议先给结论，再补充过程、取舍和结果。</p>
+        <div v-if="!store.isCompleted" class="panel answer-card">
+          <div class="panel-body">
+            <div class="answer-head">
+              <div>
+                <strong>你的回答</strong>
+                <p>建议先给结论，再补充过程、取舍和结果。</p>
+              </div>
+              <div class="answer-shortcut">`Ctrl + Enter` 发送</div>
             </div>
-            <div class="answer-shortcut">`Ctrl + Enter` 发送</div>
-          </div>
-          <el-input
-            ref="inputRef"
-            v-model="userInput"
-            type="textarea"
-            :rows="4"
-            resize="none"
-            :disabled="store.status !== 'ongoing' || wsConnecting"
-            :placeholder="inputPlaceholder"
-            @keydown.ctrl.enter="handleSend"
-          />
-          <div class="voice-toolbar">
-            <button
-              type="button"
-              class="voice-trigger"
-              :class="{
-                active: isListening,
-                unsupported: !speechSupported,
-                disabled: !canToggleSpeech
-              }"
-              :disabled="!canToggleSpeech"
-              @click="toggleSpeechRecognition"
-            >
-              <span class="voice-trigger-core">
-                <span class="voice-trigger-icon">
-                  <el-icon><Microphone /></el-icon>
+            <el-input
+              ref="inputRef"
+              v-model="userInput"
+              type="textarea"
+              :rows="4"
+              resize="none"
+              :disabled="store.status !== 'ongoing' || wsConnecting"
+              :placeholder="inputPlaceholder"
+              @keydown.ctrl.enter="handleSend"
+            />
+            <div class="voice-toolbar">
+              <button
+                type="button"
+                class="voice-trigger"
+                :class="{
+                  active: isListening,
+                  unsupported: !speechSupported,
+                  disabled: !canToggleSpeech,
+                }"
+                :disabled="!canToggleSpeech"
+                @click="toggleSpeechRecognition"
+              >
+                <span class="voice-trigger-core">
+                  <span class="voice-trigger-icon">
+                    <el-icon><Microphone /></el-icon>
+                  </span>
+                  <span class="voice-trigger-copy">
+                    <strong>{{ isListening ? '正在听写' : '点击开始语音输入' }}</strong>
+                    <span>{{ isListening ? '再次点击可停止录音' : '回答会自动写入输入框' }}</span>
+                  </span>
                 </span>
-                <span class="voice-trigger-copy">
-                  <strong>{{ isListening ? '正在听写' : '点击开始语音输入' }}</strong>
-                  <span>{{ isListening ? '再次点击可停止录音' : '回答会自动写入输入框' }}</span>
-                </span>
-              </span>
-              <span class="voice-trigger-signal" :class="{ live: isListening }"></span>
-            </button>
-            <div class="voice-actions">
-              <p class="voice-status" :class="{ active: isListening, unsupported: !speechSupported }">
-                {{ speechStatusText }}
-              </p>
-              <el-button text :disabled="!userInput.trim()" @click="clearAnswerDraft">
-                清空回答
-              </el-button>
+                <span class="voice-trigger-signal" :class="{ live: isListening }"></span>
+              </button>
+              <div class="voice-actions">
+                <p
+                  class="voice-status"
+                  :class="{ active: isListening, unsupported: !speechSupported }"
+                >
+                  {{ speechStatusText }}
+                </p>
+                <el-button text :disabled="!userInput.trim()" @click="clearAnswerDraft">
+                  清空回答
+                </el-button>
+              </div>
+            </div>
+            <p v-if="speechPreview" class="speech-preview">实时听写：{{ speechPreview }}</p>
+            <div class="answer-actions">
+              <el-button @click="handleSkip" :disabled="store.status !== 'ongoing'"
+                >跳过本题</el-button
+              >
+              <el-button type="danger" plain @click="handleEnd">结束面试</el-button>
+              <el-button type="primary" :disabled="!canSend" @click="handleSend"
+                >提交回答</el-button
+              >
             </div>
           </div>
-          <p v-if="speechPreview" class="speech-preview">
-            实时听写：{{ speechPreview }}
-          </p>
-          <div class="answer-actions">
-            <el-button @click="handleSkip" :disabled="store.status !== 'ongoing'">跳过本题</el-button>
-            <el-button type="danger" plain @click="handleEnd">结束面试</el-button>
-            <el-button type="primary" :disabled="!canSend" @click="handleSend">提交回答</el-button>
-          </div>
-        </el-card>
+        </div>
 
         <div v-else class="completed-actions">
           <el-button type="primary" size="large" @click="viewReport">查看面试报告</el-button>
@@ -210,59 +220,65 @@
       </div>
 
       <aside class="side-column">
-        <el-card shadow="never" class="side-panel">
-          <template #header>
+        <div class="panel side-panel">
+          <div class="panel-header">
             <div class="side-title">岗位聚焦</div>
-          </template>
-          <div class="side-block">
-            <strong>{{ store.session?.jd_summary?.title || '目标岗位' }}</strong>
-            <p>{{ store.session?.jd_summary?.company || '未填写公司' }}</p>
-            <div class="skill-grid">
-              <span
-                v-for="skill in (store.session?.jd_summary?.required_skills || []).slice(0, 6)"
-                :key="skill"
-              >
-                {{ skill }}
-              </span>
+          </div>
+          <div class="panel-body">
+            <div class="side-block">
+              <strong>{{ store.session?.jd_summary?.title || '目标岗位' }}</strong>
+              <p>{{ store.session?.jd_summary?.company || '未填写公司' }}</p>
+              <div class="skill-grid">
+                <span
+                  v-for="skill in (store.session?.jd_summary?.required_skills || []).slice(0, 6)"
+                  :key="skill"
+                >
+                  {{ skill }}
+                </span>
+              </div>
             </div>
           </div>
-        </el-card>
+        </div>
 
-        <el-card shadow="never" class="side-panel">
-          <template #header>
+        <div class="panel side-panel">
+          <div class="panel-header">
             <div class="side-title">表现速览</div>
-          </template>
-          <div class="snapshot-grid">
-            <div class="snapshot-item">
-              <span>已评分题数</span>
-              <strong>{{ answeredCount }}</strong>
-            </div>
-            <div class="snapshot-item">
-              <span>超时次数</span>
-              <strong>{{ timeoutCount }}</strong>
-            </div>
-            <div class="snapshot-item">
-              <span>最近得分</span>
-              <strong>{{ store.lastScore?.score ?? '--' }}</strong>
-            </div>
-            <div class="snapshot-item">
-              <span>当前判断</span>
-              <strong>{{ recentSignal }}</strong>
-            </div>
           </div>
-          <p v-if="store.lastScore?.improvement" class="snapshot-note">
-            最近一题建议：{{ store.lastScore.improvement }}
-          </p>
-        </el-card>
+          <div class="panel-body">
+            <div class="snapshot-grid">
+              <div class="snapshot-item">
+                <span>已评分题数</span>
+                <strong>{{ answeredCount }}</strong>
+              </div>
+              <div class="snapshot-item">
+                <span>超时次数</span>
+                <strong>{{ timeoutCount }}</strong>
+              </div>
+              <div class="snapshot-item">
+                <span>最近得分</span>
+                <strong>{{ store.lastScore?.score ?? '--' }}</strong>
+              </div>
+              <div class="snapshot-item">
+                <span>当前判断</span>
+                <strong>{{ recentSignal }}</strong>
+              </div>
+            </div>
+            <p v-if="store.lastScore?.improvement" class="snapshot-note">
+              最近一题建议：{{ store.lastScore.improvement }}
+            </p>
+          </div>
+        </div>
 
-        <el-card shadow="never" class="side-panel">
-          <template #header>
+        <div class="panel side-panel">
+          <div class="panel-header">
             <div class="side-title">本题提醒</div>
-          </template>
-          <ul class="hint-list">
-            <li v-for="tip in answerStructure" :key="tip">{{ tip }}</li>
-          </ul>
-        </el-card>
+          </div>
+          <div class="panel-body">
+            <ul class="hint-list">
+              <li v-for="tip in answerStructure" :key="tip">{{ tip }}</li>
+            </ul>
+          </div>
+        </div>
       </aside>
     </section>
   </div>
@@ -393,11 +409,12 @@ const inputPlaceholder = computed(() => {
 })
 
 const answeredCount = computed(() => {
-  return store.messages.filter(msg => msg.type === 'evaluation').length
+  return store.messages.filter((msg) => msg.type === 'evaluation').length
 })
 
 const timeoutCount = computed(() => {
-  return store.messages.filter(msg => msg.type === 'system' && msg.content.includes('超时')).length
+  return store.messages.filter((msg) => msg.type === 'system' && msg.content.includes('超时'))
+    .length
 })
 
 const recentSignal = computed(() => {
@@ -597,11 +614,13 @@ function handleEnd() {
     confirmButtonText: '结束',
     cancelButtonText: '继续',
     type: 'warning',
-  }).then(() => {
-    stopSpeechRecognition()
-    store.end()
-    scrollToBottom()
-  }).catch(() => {})
+  })
+    .then(() => {
+      stopSpeechRecognition()
+      store.end()
+      scrollToBottom()
+    })
+    .catch(() => {})
 }
 
 function viewReport() {
@@ -620,11 +639,13 @@ function goBack() {
       confirmButtonText: '返回',
       cancelButtonText: '继续面试',
       type: 'warning',
-    }).then(() => {
-      stopSpeechRecognition()
-      store.disconnect()
-      router.push('/interview/setup')
-    }).catch(() => {})
+    })
+      .then(() => {
+        stopSpeechRecognition()
+        store.disconnect()
+        router.push('/interview/setup')
+      })
+      .catch(() => {})
     return
   }
   stopSpeechRecognition()
@@ -640,18 +661,24 @@ function scrollToBottom() {
   })
 }
 
-watch(() => store.messages.length, () => {
-  scrollToBottom()
-})
+watch(
+  () => store.messages.length,
+  () => {
+    scrollToBottom()
+  }
+)
 
-watch(() => store.status, (value) => {
-  if (value !== 'ongoing' && isListening.value) {
-    stopSpeechRecognition()
+watch(
+  () => store.status,
+  (value) => {
+    if (value !== 'ongoing' && isListening.value) {
+      stopSpeechRecognition()
+    }
+    if (value === 'ongoing') {
+      setTimeout(() => focusAnswerInput({ placeCursorAtEnd: true, keepVisible: true }), 150)
+    }
   }
-  if (value === 'ongoing') {
-    setTimeout(() => focusAnswerInput({ placeCursorAtEnd: true, keepVisible: true }), 150)
-  }
-})
+)
 
 onMounted(async () => {
   setupSpeechRecognition()
@@ -685,7 +712,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.interview-room-page {
+.page-shell {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -697,7 +724,7 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 16px;
   padding: 24px 28px;
-  border-radius: 24px;
+  border-radius: var(--app-radius-md, 16px);
   background:
     radial-gradient(circle at left top, rgba(217, 98, 48, 0.18), transparent 28%),
     linear-gradient(135deg, #16263e, #203756 45%, #304f71);
@@ -742,13 +769,9 @@ onUnmounted(() => {
   gap: 18px;
 }
 
-.stage-card,
-.question-card,
-.transcript-card,
-.answer-card,
-.side-panel {
-  border: none;
-  border-radius: 22px;
+.main-column .panel + .panel,
+.side-column .panel + .panel {
+  margin-top: 0;
 }
 
 .stage-header {
@@ -759,7 +782,7 @@ onUnmounted(() => {
 }
 
 .stage-kicker {
-  color: #8b95a7;
+  color: var(--app-muted);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -768,12 +791,12 @@ onUnmounted(() => {
 .stage-header h2 {
   margin: 6px 0 8px;
   font-size: 28px;
-  color: #1e2b3b;
+  color: var(--app-text);
 }
 
 .stage-header p {
   margin: 0;
-  color: #6b778a;
+  color: var(--app-muted);
   line-height: 1.7;
 }
 
@@ -785,20 +808,20 @@ onUnmounted(() => {
 
 .meta-pill {
   padding: 14px;
-  border-radius: 16px;
-  background: #f6f8fb;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
 }
 
 .meta-pill span {
   display: block;
-  color: #8b95a7;
+  color: var(--app-muted);
   font-size: 12px;
 }
 
 .meta-pill strong {
   display: block;
   margin-top: 8px;
-  color: #213147;
+  color: var(--app-text);
 }
 
 .meta-pill.danger {
@@ -821,7 +844,7 @@ onUnmounted(() => {
   justify-content: center;
   width: 54px;
   height: 54px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   background: linear-gradient(135deg, #112b47, #d65d2f);
   color: #fff;
   font-weight: 700;
@@ -829,12 +852,12 @@ onUnmounted(() => {
 
 .interviewer-name {
   font-weight: 700;
-  color: #1e2b3b;
+  color: var(--app-text);
 }
 
 .interviewer-role {
   margin-top: 4px;
-  color: #7b8796;
+  color: var(--app-muted);
   font-size: 13px;
 }
 
@@ -851,7 +874,7 @@ onUnmounted(() => {
   padding: 5px 10px;
   border-radius: 999px;
   background: #edf4ff;
-  color: #2a5bb7;
+  color: var(--app-primary);
   font-size: 12px;
 }
 
@@ -864,19 +887,19 @@ onUnmounted(() => {
   margin: 0;
   font-size: 28px;
   line-height: 1.45;
-  color: #1b2737;
+  color: var(--app-text);
 }
 
 .question-helper {
   margin: 12px 0 0;
-  color: #5d6a7a;
+  color: var(--app-muted);
   line-height: 1.7;
 }
 
 .structure-box {
   margin-top: 18px;
   padding: 16px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   background: linear-gradient(180deg, #fff8f3, #fff);
   border: 1px solid #f2dfd2;
 }
@@ -884,7 +907,7 @@ onUnmounted(() => {
 .structure-title {
   margin-bottom: 10px;
   font-weight: 600;
-  color: #1e2b3b;
+  color: var(--app-text);
 }
 
 .structure-tips {
@@ -911,7 +934,7 @@ onUnmounted(() => {
 
 .transcript-sub {
   font-size: 12px;
-  color: #8b95a7;
+  color: var(--app-muted);
   font-weight: 400;
 }
 
@@ -939,12 +962,12 @@ onUnmounted(() => {
 .msg-shell {
   max-width: 78%;
   padding: 16px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
 }
 
 .ai-shell {
-  background: #f7f9fd;
-  border: 1px solid #e6ebf3;
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
 }
 
 .user-shell {
@@ -971,7 +994,7 @@ onUnmounted(() => {
 .score-shell {
   width: min(100%, 720px);
   padding: 16px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
 }
 
 .score-strong {
@@ -1017,7 +1040,7 @@ onUnmounted(() => {
 
 .score-shell p {
   margin: 0;
-  color: #4d5c70;
+  color: var(--app-muted);
   line-height: 1.7;
 }
 
@@ -1030,8 +1053,8 @@ onUnmounted(() => {
 .end-shell {
   padding: 10px 16px;
   border-radius: 999px;
-  background: #f1f4f9;
-  color: #66748a;
+  background: var(--app-bg);
+  color: var(--app-muted);
   font-size: 13px;
 }
 
@@ -1044,7 +1067,7 @@ onUnmounted(() => {
 .state-hint {
   text-align: center;
   padding: 22px 0;
-  color: #8b95a7;
+  color: var(--app-muted);
 }
 
 .answer-head {
@@ -1057,11 +1080,11 @@ onUnmounted(() => {
 
 .answer-head p {
   margin: 6px 0 0;
-  color: #7b8796;
+  color: var(--app-muted);
 }
 
 .answer-shortcut {
-  color: #8b95a7;
+  color: var(--app-muted);
   font-size: 12px;
 }
 
@@ -1079,18 +1102,21 @@ onUnmounted(() => {
   gap: 14px;
   flex: 1;
   padding: 14px 16px;
-  border: 1px solid #d8e0ea;
-  border-radius: 18px;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-sm, 12px);
   background:
     radial-gradient(circle at left top, rgba(214, 93, 47, 0.12), transparent 32%),
-    linear-gradient(135deg, #f7f9fc, #eef3f9);
+    linear-gradient(135deg, var(--app-bg), #eef3f9);
   cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .voice-trigger:hover:not(.disabled) {
   transform: translateY(-1px);
-  border-color: #bfcad8;
+  border-color: var(--app-line-strong, rgba(185, 190, 197, 0.9));
   box-shadow: 0 12px 26px rgba(26, 46, 71, 0.08);
 }
 
@@ -1122,7 +1148,7 @@ onUnmounted(() => {
   justify-content: center;
   width: 48px;
   height: 48px;
-  border-radius: 16px;
+  border-radius: var(--app-radius-xs, 8px);
   background: linear-gradient(135deg, #17314d, #2f5378);
   color: #fff;
   font-size: 22px;
@@ -1133,7 +1159,7 @@ onUnmounted(() => {
   content: '';
   position: absolute;
   inset: -6px;
-  border-radius: 22px;
+  border-radius: var(--app-radius-md, 16px);
   border: 1px solid rgba(197, 90, 31, 0.28);
   animation: voice-pulse 1.6s ease-out infinite;
 }
@@ -1146,13 +1172,13 @@ onUnmounted(() => {
 }
 
 .voice-trigger-copy strong {
-  color: #1e2b3b;
+  color: var(--app-text);
   font-size: 15px;
 }
 
 .voice-trigger-copy span {
   margin-top: 4px;
-  color: #6f7d90;
+  color: var(--app-muted);
   font-size: 12px;
   line-height: 1.5;
   text-align: left;
@@ -1182,7 +1208,7 @@ onUnmounted(() => {
 
 .voice-status {
   margin: 0;
-  color: #6f7d90;
+  color: var(--app-muted);
   font-size: 13px;
   line-height: 1.6;
   text-align: right;
@@ -1193,12 +1219,12 @@ onUnmounted(() => {
 }
 
 .voice-status.unsupported {
-  color: #8b95a7;
+  color: var(--app-muted);
 }
 
 .speech-preview {
   margin: 10px 0 0;
-  color: #4f5f74;
+  color: var(--app-muted);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -1223,12 +1249,12 @@ onUnmounted(() => {
 
 .side-block strong {
   display: block;
-  color: #1f2d3d;
+  color: var(--app-text);
 }
 
 .side-block p {
   margin: 6px 0 14px;
-  color: #7b8796;
+  color: var(--app-muted);
 }
 
 .skill-grid {
@@ -1240,8 +1266,8 @@ onUnmounted(() => {
 .skill-grid span {
   padding: 5px 10px;
   border-radius: 999px;
-  background: #f4f6fb;
-  color: #42536b;
+  background: var(--app-bg);
+  color: var(--app-muted);
   font-size: 12px;
 }
 
@@ -1253,20 +1279,20 @@ onUnmounted(() => {
 
 .snapshot-item {
   padding: 14px;
-  border-radius: 16px;
-  background: #f6f8fc;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
 }
 
 .snapshot-item span {
   display: block;
-  color: #8b95a7;
+  color: var(--app-muted);
   font-size: 12px;
 }
 
 .snapshot-item strong {
   display: block;
   margin-top: 8px;
-  color: #1f2d3d;
+  color: var(--app-text);
 }
 
 .snapshot-note {
@@ -1278,7 +1304,7 @@ onUnmounted(() => {
 .hint-list {
   margin: 0;
   padding-left: 18px;
-  color: #5a6778;
+  color: var(--app-muted);
   line-height: 1.9;
 }
 

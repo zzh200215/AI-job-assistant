@@ -1,13 +1,13 @@
-﻿<template>
+<template>
   <div class="knowledge-page">
     <el-card shadow="never" class="hero-card">
       <div class="hero-head">
         <div>
           <p class="eyebrow">Knowledge Workspace</p>
-          <h1>知识库管理</h1>
-          <p class="hero-desc">
+          <h2>知识库管理</h2>
+	          <div class="page-header-sub">
             支持增量上传、批量维护、检索验证和 Query Rewrite 调试，覆盖岗位、能力模型、职业路径与薪资资料。
-          </p>
+          </div>
         </div>
         <div class="hero-actions">
           <el-button type="primary" @click="showUpload = true">
@@ -990,7 +990,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.knowledge-page {
+.page-shell {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1000,7 +1000,7 @@ onMounted(() => {
 .workspace-card,
 .panel-card {
   border: none;
-  border-radius: 20px;
+  border-radius: var(--app-radius-md, 16px);
 }
 
 .hero-head,
@@ -1015,23 +1015,22 @@ onMounted(() => {
 .eyebrow {
   margin: 0 0 8px;
   font-size: 12px;
-  color: #8b95a7;
+  color: var(--app-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-.hero-head h1,
+.hero-head h2,
 .panel-header h2,
 .workspace-header h2 {
   margin: 0;
-  color: #1f2d3d;
+  color: var(--app-text);
 }
 
-.hero-desc,
 .workspace-header p,
 .panel-header p {
   margin: 8px 0 0;
-  color: #66758a;
+  color: var(--app-muted);
   line-height: 1.7;
 }
 
@@ -1070,21 +1069,21 @@ onMounted(() => {
 
 .embed-stat-card {
   padding: 18px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   background: #fff;
 }
 
 .embed-stat-card span,
 .metric-row span,
 .embed-footnote {
-  color: #8b95a7;
+  color: var(--app-muted);
   font-size: 12px;
 }
 
 .embed-stat-card strong {
   display: block;
   margin-top: 10px;
-  color: #1f2d3d;
+  color: var(--app-text);
   font-size: 28px;
 }
 
@@ -1099,7 +1098,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 0;
-  border-bottom: 1px solid #eef2f6;
+  border-bottom: 1px solid var(--app-line);
 }
 
 .metric-row:last-child {
@@ -1107,7 +1106,7 @@ onMounted(() => {
 }
 
 .metric-row strong {
-  color: #2b5fc7;
+  color: var(--app-primary);
 }
 
 .embed-footnote {
@@ -1116,20 +1115,20 @@ onMounted(() => {
 
 .stat-card {
   padding: 18px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   background: #fff;
 }
 
 .stat-card span {
   display: block;
-  color: #8b95a7;
+  color: var(--app-muted);
   font-size: 12px;
 }
 
 .stat-card strong {
   display: block;
   margin-top: 10px;
-  color: #2b5fc7;
+  color: var(--app-primary);
   font-size: 28px;
 }
 
@@ -1145,12 +1144,12 @@ onMounted(() => {
 }
 
 .err {
-  color: #f56c6c;
+  color: var(--app-danger);
   font-size: 12px;
 }
 
 .search-text {
-  color: #606266;
+  color: var(--app-text);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -1170,7 +1169,7 @@ onMounted(() => {
 
 .progress-sub {
   margin-top: 4px;
-  color: #909399;
+  color: var(--app-muted);
   font-size: 12px;
   text-align: right;
 }
@@ -1181,7 +1180,7 @@ onMounted(() => {
 
 .inline-tip {
   margin-left: 12px;
-  color: #66758a;
+  color: var(--app-muted);
   font-size: 13px;
 }
 
@@ -1191,7 +1190,7 @@ onMounted(() => {
 
 .rewrite-item-title {
   font-weight: 600;
-  color: #1f2d3d;
+  color: var(--app-text);
 }
 
 .rewrite-item-meta {
@@ -1199,7 +1198,7 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   margin-top: 6px;
-  color: #66758a;
+  color: var(--app-muted);
   font-size: 13px;
 }
 
@@ -1209,15 +1208,15 @@ onMounted(() => {
 
 .expand-label {
   margin: 0 0 6px;
-  color: #66758a;
+  color: var(--app-muted);
   font-size: 12px;
 }
 
 .expand-text {
   margin: 0;
   padding: 8px;
-  border-radius: 6px;
-  background: #f5f7fa;
+  border-radius: var(--app-radius-xs, 8px);
+  background: var(--app-bg);
   white-space: pre-wrap;
 }
 
@@ -1243,27 +1242,27 @@ onMounted(() => {
   justify-content: center;
   width: 68px;
   height: 68px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   font-size: 24px;
   font-weight: 700;
   color: #fff;
 }
 
 .confidence-high {
-  background: linear-gradient(135deg, #2d9b57, #57c77a);
+  background: linear-gradient(135deg, var(--app-success), #57c77a);
 }
 
 .confidence-medium {
-  background: linear-gradient(135deg, #2f6fde, #5f97f0);
+  background: linear-gradient(135deg, var(--app-primary), #5f97f0);
 }
 
 .confidence-low {
-  background: linear-gradient(135deg, #cf4d36, #ef7c66);
+  background: linear-gradient(135deg, var(--app-danger), #ef7c66);
 }
 
 .confidence-main p {
   margin: 6px 0 0;
-  color: #66758a;
+  color: var(--app-muted);
   line-height: 1.7;
 }
 
@@ -1275,27 +1274,27 @@ onMounted(() => {
 
 .signal-item {
   padding: 12px;
-  border-radius: 14px;
-  background: #f6f8fb;
+  border-radius: var(--app-radius-xs, 8px);
+  background: var(--app-bg);
 }
 
 .signal-item span {
   display: block;
-  color: #8b95a7;
+  color: var(--app-muted);
   font-size: 12px;
 }
 
 .signal-item strong {
   display: block;
   margin-top: 6px;
-  color: #1f2d3d;
+  color: var(--app-text);
 }
 
 .rag-context {
   margin: 0;
   padding: 12px;
-  border-radius: 8px;
-  background: #f5f7fa;
+  border-radius: var(--app-radius-xs, 8px);
+  background: var(--app-bg);
   font-size: 13px;
   white-space: pre-wrap;
 }
@@ -1314,8 +1313,8 @@ onMounted(() => {
 
 .chunk-card {
   padding: 14px;
-  border-radius: 12px;
-  background: #f7f9fc;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
 }
 
 .chunk-head {
@@ -1330,7 +1329,7 @@ onMounted(() => {
   margin: 0;
   white-space: pre-wrap;
   line-height: 1.7;
-  color: #425466;
+  color: var(--app-text);
 }
 
 @media (max-width: 900px) {

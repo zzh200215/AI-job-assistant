@@ -1,283 +1,291 @@
 <template>
-  <div class="recommend-container">
+  <div class="page-shell">
     <!-- 顶部：选择简历 + 操作 -->
-    <el-card class="top-card" shadow="never">
-      <div class="top-row">
-        <div class="resume-selector">
-          <span class="label">选择简历：</span>
-          <el-select
-            v-model="selectedResumeId"
-            placement="bottom-start"
-            :fallback-placements="['bottom-start']"
-            placeholder="请选择一份简历"
-            style="width: 280px"
-            filterable
-            :loading="loading.resumes"
-            @change="loadRecommendations"
-          >
-            <el-option
-              v-for="r in resumeList"
-              :key="r.id"
-              :label="r.name || r.file_name"
-              :value="r.id"
+    <div class="panel">
+      <div class="panel-body">
+        <div class="top-row">
+          <div class="resume-selector">
+            <span class="label">选择简历：</span>
+            <el-select
+              v-model="selectedResumeId"
+              placement="bottom-start"
+              :fallback-placements="['bottom-start']"
+              placeholder="请选择一份简历"
+              style="width: 280px"
+              filterable
+              :loading="loading.resumes"
+              @change="loadRecommendations"
             >
-              <span>{{ r.name || r.file_name }}</span>
-              <span class="opt-meta">{{ r.parsed?.current_title || '' }}</span>
-            </el-option>
-          </el-select>
-        </div>
+              <el-option
+                v-for="r in resumeList"
+                :key="r.id"
+                :label="r.name || r.file_name"
+                :value="r.id"
+              >
+                <span>{{ r.name || r.file_name }}</span>
+                <span class="opt-meta">{{ r.parsed?.current_title || '' }}</span>
+              </el-option>
+            </el-select>
+          </div>
 
-        <div class="top-actions">
-          <el-button @click="$router.push('/jobs/recommend/evaluation')">
-            <el-icon><TrendCharts /></el-icon> 推荐评测
-          </el-button>
-          <el-button type="primary" @click="seedData" :loading="loading.seed">
-            <el-icon><DataAnalysis /></el-icon> 生成模拟岗位
-          </el-button>
-          <el-upload
-            :show-file-list="false"
-            :before-upload="handleImport"
-            accept=".csv,.json"
-          >
-            <el-button>
-              <el-icon><Upload /></el-icon> 导入 JD
+          <div class="top-actions">
+            <el-button @click="$router.push('/jobs/recommend/evaluation')">
+              <el-icon><TrendCharts /></el-icon> 推荐评测
             </el-button>
-          </el-upload>
+            <el-button type="primary" @click="seedData" :loading="loading.seed">
+              <el-icon><DataAnalysis /></el-icon> 生成模拟岗位
+            </el-button>
+            <el-upload
+              :show-file-list="false"
+              :before-upload="handleImport"
+              accept=".csv,.json"
+            >
+              <el-button>
+                <el-icon><Upload /></el-icon> 导入 JD
+              </el-button>
+            </el-upload>
+          </div>
+        </div>
+
+        <!-- 空状态引导 -->
+        <el-empty v-if="!selectedResumeId && !loading.resumes" :image-size="120" class="empty-hint">
+          <template #description>
+            <span>请先选择一份简历，系统将自动为您匹配推荐岗位</span>
+          </template>
+          <el-button type="primary" @click="$router.push('/resume')">
+            去上传简历
+          </el-button>
+        </el-empty>
+      </div>
+    </div>
+
+    <div class="panel" v-if="feedbackStats">
+      <div class="panel-body">
+        <div class="stats-row">
+          <div class="stats-item">
+            <div class="stats-value">{{ feedbackStats.total || 0 }}</div>
+            <div class="stats-label">总反馈</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-value">{{ feedbackStats.like_count || 0 }}</div>
+            <div class="stats-label">点赞</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-value">{{ feedbackStats.dislike_count || 0 }}</div>
+            <div class="stats-label">点踩</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-value">{{ feedbackStats.avg_match_score ?? '-' }}</div>
+            <div class="stats-label">平均匹配分</div>
+          </div>
+          <div class="stats-item">
+            <div class="stats-value">{{ percentText(feedbackStats.like_rate || 0) }}</div>
+            <div class="stats-label">点赞率</div>
+          </div>
         </div>
       </div>
+    </div>
 
-      <!-- 空状态引导 -->
-      <el-empty v-if="!selectedResumeId && !loading.resumes" :image-size="120" class="empty-hint">
-        <template #description>
-          <span>请先选择一份简历，系统将自动为您匹配推荐岗位</span>
-        </template>
-        <el-button type="primary" @click="$router.push('/resume')">
-          去上传简历
-        </el-button>
-      </el-empty>
-    </el-card>
+    <div v-if="hasFeedbackInsights" class="panel insight-card">
+      <div class="panel-body">
+        <div class="insight-grid">
+          <div class="insight-block">
+            <div class="insight-title">近 7 天反馈趋势</div>
+            <div class="trend-list">
+              <div
+                v-for="point in feedbackStats.trend || []"
+                :key="point.date"
+                class="trend-item"
+              >
+                <div class="trend-head">
+                  <span>{{ formatShortDate(point.date) }}</span>
+                  <strong>{{ point.total }}</strong>
+                </div>
+                <div class="trend-bar">
+                  <span class="trend-like" :style="segmentStyle(point.like, point.total)" />
+                  <span class="trend-dislike" :style="segmentStyle(point.dislike, point.total)" />
+                </div>
+                <div class="trend-meta">
+                  赞 {{ point.like }} / 踩 {{ point.dislike }}
+                  <span v-if="point.avg_match_score !== null">· 均分 {{ point.avg_match_score }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
 
-    <el-card class="stats-card" shadow="never" v-if="feedbackStats">
-      <div class="stats-row">
-        <div class="stats-item">
-          <div class="stats-value">{{ feedbackStats.total || 0 }}</div>
-          <div class="stats-label">总反馈</div>
+          <div class="insight-block">
+            <div class="insight-title">调优建议</div>
+            <div v-if="feedbackStats.tuning_signals?.action_items?.length" class="action-list">
+              <div
+                v-for="item in feedbackStats.tuning_signals.action_items"
+                :key="`${item.type}-${item.title}`"
+                class="action-item"
+                :class="`action-${item.severity || 'low'}`"
+              >
+                <div class="action-title">{{ item.title }}</div>
+                <div class="action-detail">{{ item.detail }}</div>
+              </div>
+            </div>
+            <el-empty v-else :image-size="72" description="反馈样本较少，暂时没有调优建议" />
+          </div>
         </div>
-        <div class="stats-item">
-          <div class="stats-value">{{ feedbackStats.like_count || 0 }}</div>
-          <div class="stats-label">点赞</div>
+
+        <div class="insight-grid secondary-grid">
+          <div class="insight-block">
+            <div class="insight-title">按简历分布</div>
+            <div v-if="feedbackStats.by_resume?.length" class="mix-list">
+              <div
+                v-for="item in feedbackStats.by_resume"
+                :key="item.resume_id"
+                class="mix-item"
+              >
+                <div class="mix-head">
+                  <span class="mix-name">{{ item.resume_title }}</span>
+                  <span class="mix-rate">{{ percentText(item.like_rate || 0) }}</span>
+                </div>
+                <div class="mix-bar">
+                  <span class="mix-like" :style="segmentStyle(item.like, item.total)" />
+                  <span class="mix-dislike" :style="segmentStyle(item.dislike, item.total)" />
+                </div>
+                <div class="mix-meta">
+                  {{ item.total }} 条反馈
+                  <span v-if="item.avg_match_score !== null">· 均分 {{ item.avg_match_score }}</span>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else :image-size="72" description="暂无简历反馈分布" />
+          </div>
+
+          <div class="insight-block">
+            <div class="insight-title">按行业分布</div>
+            <div v-if="feedbackStats.by_industry?.length" class="mix-list">
+              <div
+                v-for="item in feedbackStats.by_industry"
+                :key="item.industry"
+                class="mix-item"
+              >
+                <div class="mix-head">
+                  <span class="mix-name">{{ item.industry }}</span>
+                  <span class="mix-rate">{{ percentText(item.like_rate || 0) }}</span>
+                </div>
+                <div class="mix-bar">
+                  <span class="mix-like" :style="segmentStyle(item.like, item.total)" />
+                  <span class="mix-dislike" :style="segmentStyle(item.dislike, item.total)" />
+                </div>
+                <div class="mix-meta">
+                  {{ item.total }} 条反馈
+                  <span v-if="item.avg_match_score !== null">· 均分 {{ item.avg_match_score }}</span>
+                </div>
+              </div>
+            </div>
+            <el-empty v-else :image-size="72" description="暂无行业反馈分布" />
+          </div>
         </div>
-        <div class="stats-item">
-          <div class="stats-value">{{ feedbackStats.dislike_count || 0 }}</div>
-          <div class="stats-label">点踩</div>
-        </div>
-        <div class="stats-item">
-          <div class="stats-value">{{ feedbackStats.avg_match_score ?? '-' }}</div>
-          <div class="stats-label">平均匹配分</div>
-        </div>
-        <div class="stats-item">
-          <div class="stats-value">{{ percentText(feedbackStats.like_rate || 0) }}</div>
-          <div class="stats-label">点赞率</div>
+
+        <div
+          v-if="hasAnomalySignals"
+          class="insight-grid secondary-grid"
+        >
+          <div class="insight-block">
+            <div class="insight-title">高分却被点踩</div>
+            <div v-if="feedbackStats.tuning_signals?.high_score_dislikes?.length" class="signal-list">
+              <div
+                v-for="item in feedbackStats.tuning_signals.high_score_dislikes"
+                :key="`high-${item.resume_id}-${item.jd_id}-${item.created_at}`"
+                class="signal-item"
+              >
+                <div class="signal-main">{{ item.jd_title || '未命名岗位' }} · {{ item.jd_company || '未知公司' }}</div>
+                <div class="signal-sub">{{ item.resume_title }} · {{ item.match_score }} 分</div>
+              </div>
+            </div>
+            <el-empty v-else :image-size="72" description="暂无高分点踩样本" />
+          </div>
+
+          <div class="insight-block">
+            <div class="insight-title">低分却被点赞</div>
+            <div v-if="feedbackStats.tuning_signals?.low_score_likes?.length" class="signal-list">
+              <div
+                v-for="item in feedbackStats.tuning_signals.low_score_likes"
+                :key="`low-${item.resume_id}-${item.jd_id}-${item.created_at}`"
+                class="signal-item"
+              >
+                <div class="signal-main">{{ item.jd_title || '未命名岗位' }} · {{ item.jd_company || '未知公司' }}</div>
+                <div class="signal-sub">{{ item.resume_title }} · {{ item.match_score }} 分</div>
+              </div>
+            </div>
+            <el-empty v-else :image-size="72" description="暂无低分点赞样本" />
+          </div>
         </div>
       </div>
-    </el-card>
-
-    <el-card v-if="hasFeedbackInsights" class="insight-card" shadow="never">
-      <div class="insight-grid">
-        <div class="insight-block">
-          <div class="insight-title">近 7 天反馈趋势</div>
-          <div class="trend-list">
-            <div
-              v-for="point in feedbackStats.trend || []"
-              :key="point.date"
-              class="trend-item"
-            >
-              <div class="trend-head">
-                <span>{{ formatShortDate(point.date) }}</span>
-                <strong>{{ point.total }}</strong>
-              </div>
-              <div class="trend-bar">
-                <span class="trend-like" :style="segmentStyle(point.like, point.total)" />
-                <span class="trend-dislike" :style="segmentStyle(point.dislike, point.total)" />
-              </div>
-              <div class="trend-meta">
-                赞 {{ point.like }} / 踩 {{ point.dislike }}
-                <span v-if="point.avg_match_score !== null">· 均分 {{ point.avg_match_score }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="insight-block">
-          <div class="insight-title">调优建议</div>
-          <div v-if="feedbackStats.tuning_signals?.action_items?.length" class="action-list">
-            <div
-              v-for="item in feedbackStats.tuning_signals.action_items"
-              :key="`${item.type}-${item.title}`"
-              class="action-item"
-              :class="`action-${item.severity || 'low'}`"
-            >
-              <div class="action-title">{{ item.title }}</div>
-              <div class="action-detail">{{ item.detail }}</div>
-            </div>
-          </div>
-          <el-empty v-else :image-size="72" description="反馈样本较少，暂时没有调优建议" />
-        </div>
-      </div>
-
-      <div class="insight-grid secondary-grid">
-        <div class="insight-block">
-          <div class="insight-title">按简历分布</div>
-          <div v-if="feedbackStats.by_resume?.length" class="mix-list">
-            <div
-              v-for="item in feedbackStats.by_resume"
-              :key="item.resume_id"
-              class="mix-item"
-            >
-              <div class="mix-head">
-                <span class="mix-name">{{ item.resume_title }}</span>
-                <span class="mix-rate">{{ percentText(item.like_rate || 0) }}</span>
-              </div>
-              <div class="mix-bar">
-                <span class="mix-like" :style="segmentStyle(item.like, item.total)" />
-                <span class="mix-dislike" :style="segmentStyle(item.dislike, item.total)" />
-              </div>
-              <div class="mix-meta">
-                {{ item.total }} 条反馈
-                <span v-if="item.avg_match_score !== null">· 均分 {{ item.avg_match_score }}</span>
-              </div>
-            </div>
-          </div>
-          <el-empty v-else :image-size="72" description="暂无简历反馈分布" />
-        </div>
-
-        <div class="insight-block">
-          <div class="insight-title">按行业分布</div>
-          <div v-if="feedbackStats.by_industry?.length" class="mix-list">
-            <div
-              v-for="item in feedbackStats.by_industry"
-              :key="item.industry"
-              class="mix-item"
-            >
-              <div class="mix-head">
-                <span class="mix-name">{{ item.industry }}</span>
-                <span class="mix-rate">{{ percentText(item.like_rate || 0) }}</span>
-              </div>
-              <div class="mix-bar">
-                <span class="mix-like" :style="segmentStyle(item.like, item.total)" />
-                <span class="mix-dislike" :style="segmentStyle(item.dislike, item.total)" />
-              </div>
-              <div class="mix-meta">
-                {{ item.total }} 条反馈
-                <span v-if="item.avg_match_score !== null">· 均分 {{ item.avg_match_score }}</span>
-              </div>
-            </div>
-          </div>
-          <el-empty v-else :image-size="72" description="暂无行业反馈分布" />
-        </div>
-      </div>
-
-      <div
-        v-if="hasAnomalySignals"
-        class="insight-grid secondary-grid"
-      >
-        <div class="insight-block">
-          <div class="insight-title">高分却被点踩</div>
-          <div v-if="feedbackStats.tuning_signals?.high_score_dislikes?.length" class="signal-list">
-            <div
-              v-for="item in feedbackStats.tuning_signals.high_score_dislikes"
-              :key="`high-${item.resume_id}-${item.jd_id}-${item.created_at}`"
-              class="signal-item"
-            >
-              <div class="signal-main">{{ item.jd_title || '未命名岗位' }} · {{ item.jd_company || '未知公司' }}</div>
-              <div class="signal-sub">{{ item.resume_title }} · {{ item.match_score }} 分</div>
-            </div>
-          </div>
-          <el-empty v-else :image-size="72" description="暂无高分点踩样本" />
-        </div>
-
-        <div class="insight-block">
-          <div class="insight-title">低分却被点赞</div>
-          <div v-if="feedbackStats.tuning_signals?.low_score_likes?.length" class="signal-list">
-            <div
-              v-for="item in feedbackStats.tuning_signals.low_score_likes"
-              :key="`low-${item.resume_id}-${item.jd_id}-${item.created_at}`"
-              class="signal-item"
-            >
-              <div class="signal-main">{{ item.jd_title || '未命名岗位' }} · {{ item.jd_company || '未知公司' }}</div>
-              <div class="signal-sub">{{ item.resume_title }} · {{ item.match_score }} 分</div>
-            </div>
-          </div>
-          <el-empty v-else :image-size="72" description="暂无低分点赞样本" />
-        </div>
-      </div>
-    </el-card>
+    </div>
 
     <!-- 筛选栏 -->
-    <el-card v-if="hasResults" class="filter-card" shadow="never">
-      <div class="filter-row">
-        <el-input
-          v-model="filters.location"
-          placeholder="地点筛选"
-          clearable
-          style="width: 140px"
-          size="small"
-          @change="loadRecommendations"
-        >
-          <template #prefix><el-icon><Location /></el-icon></template>
-        </el-input>
-
-        <el-select
-          v-model="filters.industry"
-          placement="bottom-start"
-          :fallback-placements="['bottom-start']"
-          placeholder="行业"
-          clearable
-          style="width: 160px"
-          size="small"
-          @change="loadRecommendations"
-        >
-          <el-option label="互联网" value="internet" />
-          <el-option label="AI" value="ai" />
-          <el-option label="电商" value="e-commerce" />
-          <el-option label="云计算" value="cloud" />
-          <el-option label="数据" value="data" />
-        </el-select>
-
-        <el-select
-          v-model="filters.exp_level"
-          placement="bottom-start"
-          :fallback-placements="['bottom-start']"
-          placeholder="经验要求"
-          clearable
-          style="width: 130px"
-          size="small"
-          @change="loadRecommendations"
-        >
-          <el-option label="初级 (1-3年)" value="junior" />
-          <el-option label="中级 (3-5年)" value="mid" />
-          <el-option label="高级 (5年+)" value="senior" />
-        </el-select>
-
-        <div class="salary-filter">
-          <span class="filter-label">最低薪资：</span>
-          <el-slider
-            v-model="filters.salary_min"
-            :min="0"
-            :max="100"
-            :step="5"
-            style="width: 160px"
+    <div v-if="hasResults" class="panel">
+      <div class="panel-body">
+        <div class="filter-row">
+          <el-input
+            v-model="filters.location"
+            placeholder="地点筛选"
+            clearable
+            style="width: 140px"
+            size="small"
             @change="loadRecommendations"
-          />
-          <span class="salary-val">{{ filters.salary_min || 0 }}k</span>
-        </div>
+          >
+            <template #prefix><el-icon><Location /></el-icon></template>
+          </el-input>
 
-        <el-button size="small" text @click="resetFilters">重置</el-button>
+          <el-select
+            v-model="filters.industry"
+            placement="bottom-start"
+            :fallback-placements="['bottom-start']"
+            placeholder="行业"
+            clearable
+            style="width: 160px"
+            size="small"
+            @change="loadRecommendations"
+          >
+            <el-option label="互联网" value="internet" />
+            <el-option label="AI" value="ai" />
+            <el-option label="电商" value="e-commerce" />
+            <el-option label="云计算" value="cloud" />
+            <el-option label="数据" value="data" />
+          </el-select>
+
+          <el-select
+            v-model="filters.exp_level"
+            placement="bottom-start"
+            :fallback-placements="['bottom-start']"
+            placeholder="经验要求"
+            clearable
+            style="width: 130px"
+            size="small"
+            @change="loadRecommendations"
+          >
+            <el-option label="初级 (1-3年)" value="junior" />
+            <el-option label="中级 (3-5年)" value="mid" />
+            <el-option label="高级 (5年+)" value="senior" />
+          </el-select>
+
+          <div class="salary-filter">
+            <span class="filter-label">最低薪资：</span>
+            <el-slider
+              v-model="filters.salary_min"
+              :min="0"
+              :max="100"
+              :step="5"
+              style="width: 160px"
+              @change="loadRecommendations"
+            />
+            <span class="salary-val">{{ filters.salary_min || 0 }}k</span>
+          </div>
+
+          <el-button size="small" text @click="resetFilters">重置</el-button>
+        </div>
       </div>
-    </el-card>
+    </div>
 
     <!-- 推荐结果 -->
-    <div v-if="loading.recommend" class="loading-area">
+    <div v-if="loading.recommend" class="loading-state">
       <el-icon class="is-loading" size="28"><Loading /></el-icon>
       <p>正在分析您的简历，智能匹配岗位...</p>
     </div>
@@ -285,117 +293,149 @@
     <template v-else-if="hasResults">
       <div class="result-summary">
         <span class="summary-text">
-          🎯 为您推荐 <strong>{{ recommendations.length }}</strong> 个岗位
+          为您推荐 <strong>{{ recommendations.length }}</strong> 个岗位
           <span v-if="appliedFilters" class="summary-filters">（已应用筛选条件）</span>
         </span>
       </div>
 
       <div class="card-grid">
-        <el-card
+        <div
           v-for="(job, idx) in recommendations"
           :key="job.jd_id"
-          class="job-card"
-          shadow="hover"
+          class="panel job-card"
         >
-          <!-- 匹配度徽标 -->
-          <div class="score-badge" :class="scoreLevel(job.match_score)">
-            <span class="score-num">{{ job.match_score }}</span>
-            <span class="score-unit">分</span>
-          </div>
-
-          <div class="card-body">
-            <!-- 头部 -->
-            <div class="card-header">
-              <div class="job-title-row">
-                <h3 class="job-title">{{ job.job_title }}</h3>
-                <el-tag
-                  v-if="job.source"
-                  size="small"
-                  effect="plain"
-                  class="source-tag"
-                >{{ sourceText(job.source) }}</el-tag>
-                <el-tag
-                  size="small"
-                  :type="recommendTagType(job.recommendation_type)"
-                  effect="dark"
-                >{{ job.recommendation_type }}</el-tag>
-              </div>
-              <div class="job-company">
-                <el-icon><OfficeBuilding /></el-icon>
-                {{ job.company }}
-              </div>
+          <div class="panel-body">
+            <!-- 匹配度徽标 -->
+            <div class="score-badge" :class="scoreLevel(job.match_score)">
+              <span class="score-num">{{ job.match_score }}</span>
+              <span class="score-unit">分</span>
             </div>
 
-            <!-- 匹配原因 -->
-            <p class="match-reason">📌 {{ job.match_reason }}</p>
-
-            <!-- 技能标签 -->
-            <div class="skill-section">
-              <div v-if="job.skill_overlap?.length" class="skill-group">
-                <span class="skill-label overlap-label">重合</span>
-                <el-tag
-                  v-for="s in job.skill_overlap"
-                  :key="s"
-                  size="small"
-                  type="success"
-                  effect="plain"
-                >{{ s }}</el-tag>
+            <div class="card-body">
+              <!-- 头部 -->
+              <div class="card-header">
+                <div class="job-title-row">
+                  <h3 class="job-title">{{ job.job_title }}</h3>
+                  <el-tag
+                    v-if="job._applied"
+                    size="small"
+                    type="success"
+                    effect="dark"
+                  >已投递</el-tag>
+                  <el-tag
+                    v-if="job._bookmarked"
+                    size="small"
+                    type="warning"
+                    effect="plain"
+                  >已收藏</el-tag>
+                  <el-tag
+                    v-if="!job._applied && job.match_score >= 80"
+                    size="small"
+                    type="danger"
+                    effect="dark"
+                  >优先投递</el-tag>
+                  <el-tag
+                    v-if="job.source"
+                    size="small"
+                    effect="plain"
+                    class="source-tag"
+                  >{{ sourceText(job.source) }}</el-tag>
+                  <el-tag
+                    size="small"
+                    :type="recommendTagType(job.recommendation_type)"
+                    effect="dark"
+                  >{{ job.recommendation_type }}</el-tag>
+                </div>
+                <div class="job-company">
+                  <el-icon><OfficeBuilding /></el-icon>
+                  {{ job.company }}
+                </div>
               </div>
-              <div v-if="job.skill_gap?.length" class="skill-group">
-                <span class="skill-label gap-label">缺失</span>
-                <el-tag
-                  v-for="s in job.skill_gap"
-                  :key="s"
-                  size="small"
-                  type="danger"
-                  effect="plain"
-                >{{ s }}</el-tag>
+
+              <!-- 匹配原因 -->
+              <p class="match-reason">{{ job.match_reason }}</p>
+
+              <!-- 技能标签 -->
+              <div class="skill-section">
+                <div v-if="job.skill_overlap?.length" class="skill-group">
+                  <span class="skill-label overlap-label">重合</span>
+                  <el-tag
+                    v-for="s in job.skill_overlap"
+                    :key="s"
+                    size="small"
+                    type="success"
+                    effect="plain"
+                  >{{ s }}</el-tag>
+                </div>
+                <div v-if="job.skill_gap?.length" class="skill-group">
+                  <span class="skill-label gap-label">缺失</span>
+                  <el-tag
+                    v-for="s in job.skill_gap"
+                    :key="s"
+                    size="small"
+                    type="danger"
+                    effect="plain"
+                  >{{ s }}</el-tag>
+                </div>
               </div>
-            </div>
 
-            <!-- 匹配详情 -->
-            <div class="match-details">
-              <span v-if="job.salary_match !== undefined" class="detail-tag" :class="job.salary_match ? 'dt-ok' : 'dt-no'">
-                <el-icon><Money /></el-icon> 薪资{{ job.salary_match ? '匹配' : '不匹配' }}
-              </span>
-              <span v-if="job.location_match !== undefined" class="detail-tag" :class="job.location_match ? 'dt-ok' : 'dt-no'">
-                <el-icon><Location /></el-icon> 地点{{ job.location_match ? '匹配' : '不匹配' }}
-              </span>
-              <span v-if="job.experience_match !== undefined" class="detail-tag" :class="job.experience_match !== false ? 'dt-ok' : 'dt-no'">
-                <el-icon><Timer /></el-icon> 经验{{ job.experience_match !== false ? '匹配' : '不匹配' }}
-              </span>
-            </div>
+              <!-- 匹配详情 -->
+              <div class="match-details">
+                <span v-if="job.salary_match !== undefined" class="detail-tag" :class="job.salary_match ? 'dt-ok' : 'dt-no'">
+                  <el-icon><Money /></el-icon> 薪资{{ job.salary_match ? '匹配' : '不匹配' }}
+                </span>
+                <span v-if="job.location_match !== undefined" class="detail-tag" :class="job.location_match ? 'dt-ok' : 'dt-no'">
+                  <el-icon><Location /></el-icon> 地点{{ job.location_match ? '匹配' : '不匹配' }}
+                </span>
+                <span v-if="job.experience_match !== undefined" class="detail-tag" :class="job.experience_match !== false ? 'dt-ok' : 'dt-no'">
+                  <el-icon><Timer /></el-icon> 经验{{ job.experience_match !== false ? '匹配' : '不匹配' }}
+                </span>
+              </div>
 
-            <!-- 操作 -->
-            <div class="card-actions">
-              <el-button size="small" @click="viewDetail(job.jd_id)">
-                查看详情
-              </el-button>
-              <el-button
-                size="small"
-                type="primary"
-                :loading="analyzingId === job.jd_id"
-                @click="analyzeJob(job.jd_id)"
-              >
-                立即分析
-              </el-button>
-              <div class="feedback-btns">
+              <!-- 操作 -->
+              <div class="card-actions">
+                <el-button size="small" @click="viewDetail(job.jd_id)">
+                  查看详情
+                </el-button>
                 <el-button
-                  text
-                  :type="job._feedback === 'like' ? 'success' : ''"
-                  :icon="job._feedback === 'like' ? 'ThumbsUp' : 'ThumbsUp'"
-                  @click="toggleFeedback(job, 'like')"
-                />
+                  size="small"
+                  type="primary"
+                  :loading="analyzingId === job.jd_id"
+                  @click="analyzeJob(job.jd_id)"
+                >
+                  立即分析
+                </el-button>
+                <el-button size="small" @click="addToKanban(job)">
+                  <el-icon><Grid /></el-icon> 加入看板
+                </el-button>
+                <el-button size="small" @click="generateInterviewPrep(job)">
+                  <el-icon><Microphone /></el-icon> 面试准备
+                </el-button>
                 <el-button
-                  text
-                  :type="job._feedback === 'dislike' ? 'danger' : ''"
-                  :icon="job._feedback === 'dislike' ? 'ThumbsDown' : 'ThumbsDown'"
-                  @click="toggleFeedback(job, 'dislike')"
-                />
+                  size="small"
+                  :type="job._bookmarked ? 'warning' : ''"
+                  @click="toggleBookmark(job)"
+                >
+                  <el-icon><Star /></el-icon> {{ job._bookmarked ? '已收藏' : '收藏' }}
+                </el-button>
+                <div class="feedback-btns">
+                  <el-button
+                    text
+                    :type="job._feedback === 'like' ? 'success' : ''"
+                    :icon="job._feedback === 'like' ? 'ThumbsUp' : 'ThumbsUp'"
+                    @click="toggleFeedback(job, 'like')"
+                  />
+                  <el-button
+                    text
+                    :type="job._feedback === 'dislike' ? 'danger' : ''"
+                    :icon="job._feedback === 'dislike' ? 'ThumbsDown' : 'ThumbsDown'"
+                    @click="toggleFeedback(job, 'dislike')"
+                  />
+                </div>
               </div>
             </div>
           </div>
-        </el-card>
+        </div>
       </div>
     </template>
 
@@ -422,10 +462,12 @@ import {
   batchImportJobs,
   submitJobFeedback,
   startFullAnalysis,
+  getJobPipelineList,
 } from '@/api/jobs'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
-import { DataAnalysis, Upload, Location, Money, Timer, TrendCharts } from '@element-plus/icons-vue'
+import { DataAnalysis, Upload, Location, Money, Timer, TrendCharts, Grid, Microphone, Star } from '@element-plus/icons-vue'
 import { OfficeBuilding } from '@element-plus/icons-vue'
+import { createJobPipelineEntry } from '@/api/targets'
 
 const router = useRouter()
 
@@ -492,8 +534,18 @@ async function loadRecommendations() {
     const data = await getJobRecommendations(params)
     recommendations.value = (data?.recommendations || []).map(j => ({
       ...j,
-      _feedback: null, // 本地反馈状态
+      _feedback: null,
+      _applied: false,
+      _bookmarked: false,
     }))
+    // Check which jobs are already in pipeline
+    try {
+      const pipeline = await getJobPipelineList({ limit: 200 })
+      const applied = (pipeline?.items || pipeline || []).map(p => p.jd_id).filter(Boolean)
+      recommendations.value.forEach(j => {
+        if (applied.includes(j.jd_id)) j._applied = true
+      })
+    } catch {}
   } catch (e) {
     console.error('获取推荐失败:', e)
     recommendations.value = []
@@ -554,6 +606,35 @@ async function analyzeJob(jdId) {
     ElMessage.error('分析启动失败: ' + (e.message || e))
   } finally {
     analyzingId.value = null
+  }
+}
+
+function generateInterviewPrep(job) {
+  router.push({
+    path: '/interview/setup',
+    query: { jd_id: String(job.jd_id) },
+  })
+}
+
+function toggleBookmark(job) {
+  job._bookmarked = !job._bookmarked
+  ElMessage.success(job._bookmarked ? '已收藏' : '已取消收藏')
+}
+
+async function addToKanban(job) {
+  try {
+    await createJobPipelineEntry({
+      title: job.job_title || '',
+      company: job.company || '',
+      jd_id: job.jd_id,
+      salary_range: job.salary_range || '',
+      stage: 'todo',
+      source: job.source || 'recommend',
+    })
+    job._applied = true
+    ElMessage.success('已加入投递看板')
+  } catch (e) {
+    ElMessage.error('加入看板失败')
   }
 }
 
@@ -635,7 +716,7 @@ function formatShortDate(dateText) {
 </script>
 
 <style scoped>
-.recommend-container {
+.page-shell {
   max-width: 1000px;
   margin: 0 auto;
   padding: 18px 0 32px;
@@ -645,12 +726,6 @@ function formatShortDate(dateText) {
 }
 
 /* 顶部 */
-.top-card,
-.filter-card,
-.stats-card,
-.insight-card,
-.job-card { border-radius: 24px; }
-
 .stats-row {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -658,8 +733,8 @@ function formatShortDate(dateText) {
 }
 .stats-item {
   padding: 12px 14px;
-  border-radius: 16px;
-  background: #f7faf8;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
 }
 .stats-value {
   font-size: 22px;
@@ -670,9 +745,6 @@ function formatShortDate(dateText) {
   margin-top: 4px;
   font-size: 12px;
   color: var(--app-muted);
-}
-.insight-card {
-  padding: 4px 0;
 }
 .insight-grid {
   display: grid;
@@ -685,9 +757,9 @@ function formatShortDate(dateText) {
 }
 .insight-block {
   padding: 16px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   background: #fbfcfa;
-  border: 1px solid rgba(215, 228, 219, 0.9);
+  border: 1px solid var(--app-line);
 }
 .insight-title {
   font-size: 14px;
@@ -708,9 +780,9 @@ function formatShortDate(dateText) {
 .signal-item,
 .action-item {
   padding: 12px;
-  border-radius: 14px;
+  border-radius: var(--app-radius-xs, 8px);
   background: #fff;
-  border: 1px solid rgba(223, 233, 227, 0.95);
+  border: 1px solid var(--app-line);
 }
 .trend-head,
 .mix-head {
@@ -757,7 +829,7 @@ function formatShortDate(dateText) {
   color: var(--app-text);
 }
 .mix-rate {
-  color: #2f7a58;
+  color: var(--app-primary);
   font-weight: 700;
 }
 .action-high {
@@ -802,18 +874,12 @@ function formatShortDate(dateText) {
   gap: 8px;
 }
 .filter-label { font-size: 12px; color: var(--app-muted); white-space: nowrap; }
-.salary-val { font-size: 12px; color: var(--app-primary-dark); font-weight: 700; min-width: 30px; }
+.salary-val { font-size: 12px; color: var(--app-primary-dark, #1c8c5e); font-weight: 700; min-width: 30px; }
 
 /* 结果 */
-.loading-area {
-  text-align: center;
-  padding: 80px 0;
-  color: var(--app-muted);
-}
-
 .result-summary {
   font-size: 14px;
-  color: #55695f;
+  color: var(--app-text);
 }
 .summary-filters { font-size: 12px; color: var(--app-muted); }
 
@@ -876,13 +942,13 @@ function formatShortDate(dateText) {
 }
 
 .source-tag {
-  border-color: #dbe7ff;
-  color: #556fdc;
+  border-color: var(--app-line);
+  color: var(--app-primary);
 }
 
 .match-reason {
   font-size: 13px;
-  color: #55695f;
+  color: var(--app-muted);
   line-height: 1.5;
   margin: 8px 0;
 }
@@ -935,7 +1001,7 @@ function formatShortDate(dateText) {
   align-items: center;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid rgba(217, 231, 222, 0.92);
+  border-top: 1px solid var(--app-line);
 }
 .feedback-btns {
   display: flex;

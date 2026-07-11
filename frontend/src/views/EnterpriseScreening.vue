@@ -1,10 +1,10 @@
 <template>
-  <div class="enterprise-page">
+  <div class="page-shell">
     <section class="hero-card">
       <div>
         <span class="hero-kicker">HR Workspace</span>
-        <h1>企业端筛选工作台</h1>
-        <p>围绕单个岗位 JD 做批量比较、保存记录和导出结果，顶部只保留最关键的筛选动作。</p>
+        <h2>企业端筛选工作台</h2>
+        <div class="page-header-sub">围绕单个岗位 JD 做批量比较、保存记录和导出结果，顶部只保留最关键的筛选动作。</div>
         <div class="hero-note">
           直接筛选、直接导出、直接复盘。岗位画像、候选人风险点和共性缺口会自动汇总到结果里。
         </div>
@@ -44,280 +44,286 @@
       </div>
     </section>
 
-    <el-card shadow="never" class="panel-card rule-card">
-      <template #header>
-        <div class="panel-head">
-          <span>筛选规则说明</span>
-        </div>
-      </template>
-      <div class="rule-grid">
-        <div>
-          <strong>岗位画像</strong>
-          <p>系统会读取 JD 的技能、经验、学历、行业和薪资信息，形成统一评估基线。</p>
-        </div>
-        <div>
-          <strong>评分逻辑</strong>
-          <p>按技能命中、经验贴合、学历符合、行业契合与综合风险做排序，不依赖单一关键词。</p>
-        </div>
-        <div>
-          <strong>复盘方式</strong>
-          <p>导出报告会附上 Top 候选人、共性缺口和建议动作，便于 HR 二次筛选。</p>
+    <div class="panel rule-card">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <h3>筛选规则说明</h3>
         </div>
       </div>
-    </el-card>
+      <div class="panel-body">
+        <div class="rule-grid">
+          <div>
+            <strong>岗位画像</strong>
+            <p>系统会读取 JD 的技能、经验、学历、行业和薪资信息，形成统一评估基线。</p>
+          </div>
+          <div>
+            <strong>评分逻辑</strong>
+            <p>按技能命中、经验贴合、学历符合、行业契合与综合风险做排序，不依赖单一关键词。</p>
+          </div>
+          <div>
+            <strong>复盘方式</strong>
+            <p>导出报告会附上 Top 候选人、共性缺口和建议动作，便于 HR 二次筛选。</p>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <section class="workspace-grid">
       <div class="left-column">
-        <el-card shadow="never" class="panel-card">
-          <template #header>
-            <div class="panel-head">
-              <span>筛选配置</span>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <h3>筛选配置</h3>
               <el-button text @click="reloadAll">刷新</el-button>
             </div>
-          </template>
-
-          <el-form label-position="top" class="config-form">
-            <el-form-item label="记录名称">
-              <el-input v-model="sessionName" maxlength="200" placeholder="例如：后端候选人初筛（6月）" />
-            </el-form-item>
-
-            <el-form-item label="岗位 JD">
-              <el-select
-                v-model="jdId"
-                placement="bottom-start"
-                :fallback-placements="['bottom-start']"
-                filterable
-                clearable
-                placeholder="选择一个岗位 JD"
-              >
-                <el-option
-                  v-for="item in jdOptions"
-                  :key="item.id"
-                  :label="`${item.title}${item.company ? ` · ${item.company}` : ''}`"
-                  :value="item.id"
-                />
-              </el-select>
-            </el-form-item>
-
-            <el-form-item label="候选人">
-              <el-select
-                v-model="selectedResumeIds"
-                placement="bottom-start"
-                :fallback-placements="['bottom-start']"
-                multiple
-                collapse-tags
-                collapse-tags-tooltip
-                filterable
-                placeholder="选择待筛选的候选人"
-              >
-                <el-option
-                  v-for="item in resumeOptions"
-                  :key="item.id"
-                  :label="resumeLabel(item)"
-                  :value="item.id"
-                />
-              </el-select>
-            </el-form-item>
-
-            <el-form-item label="返回人数">
-              <el-input-number v-model="topK" :min="1" :max="100" />
-            </el-form-item>
-
-            <div class="config-actions">
-              <el-button type="primary" :loading="loading" @click="runScreening">开始筛选</el-button>
-              <el-button :loading="saving" :disabled="!result" @click="saveCurrentSession">保存记录</el-button>
-              <el-button @click="quickSelectTop6" :disabled="resumeOptions.length === 0">选前 6 份</el-button>
-              <el-button text @click="clearSelection">清空</el-button>
-              <el-divider />
-              <el-button :loading="seeding" type="warning" plain @click="seedDemoData">
-                <el-icon><Promotion /></el-icon>
-                补充演示数据
-              </el-button>
-            </div>
-          </el-form>
-
-          <el-divider />
-
-          <div class="selection-preview">
-            <div class="preview-title">已选候选人</div>
-            <el-tag
-              v-for="resume in selectedResumes"
-              :key="resume.id"
-              size="small"
-              effect="plain"
-              class="preview-tag"
-            >
-              {{ resumeLabel(resume) }}
-            </el-tag>
-            <el-empty v-if="selectedResumes.length === 0" description="还没有选择候选人" :image-size="60" />
           </div>
-        </el-card>
+          <div class="panel-body">
+            <el-form label-position="top" class="config-form">
+              <el-form-item label="记录名称">
+                <el-input v-model="sessionName" maxlength="200" placeholder="例如：后端候选人初筛（6月）" />
+              </el-form-item>
 
-        <el-card shadow="never" class="panel-card">
-          <template #header>
-            <div class="panel-head">
-              <span>记录</span>
+              <el-form-item label="岗位 JD">
+                <el-select
+                  v-model="jdId"
+                  placement="bottom-start"
+                  :fallback-placements="['bottom-start']"
+                  filterable
+                  clearable
+                  placeholder="选择一个岗位 JD"
+                >
+                  <el-option
+                    v-for="item in jdOptions"
+                    :key="item.id"
+                    :label="`${item.title}${item.company ? ` · ${item.company}` : ''}`"
+                    :value="item.id"
+                  />
+                </el-select>
+              </el-form-item>
+
+              <el-form-item label="候选人">
+                <el-select
+                  v-model="selectedResumeIds"
+                  placement="bottom-start"
+                  :fallback-placements="['bottom-start']"
+                  multiple
+                  collapse-tags
+                  collapse-tags-tooltip
+                  filterable
+                  placeholder="选择待筛选的候选人"
+                >
+                  <el-option
+                    v-for="item in resumeOptions"
+                    :key="item.id"
+                    :label="resumeLabel(item)"
+                    :value="item.id"
+                  />
+                </el-select>
+              </el-form-item>
+
+              <el-form-item label="返回人数">
+                <el-input-number v-model="topK" :min="1" :max="100" />
+              </el-form-item>
+
+              <div class="config-actions">
+                <el-button type="primary" :loading="loading" @click="runScreening">开始筛选</el-button>
+                <el-button :loading="saving" :disabled="!result" @click="saveCurrentSession">保存记录</el-button>
+                <el-button @click="quickSelectTop6" :disabled="resumeOptions.length === 0">选前 6 份</el-button>
+                <el-button text @click="clearSelection">清空</el-button>
+                <el-divider />
+                <el-button :loading="seeding" type="warning" plain @click="seedDemoData">
+                  <el-icon><Promotion /></el-icon>
+                  补充演示数据
+                </el-button>
+              </div>
+            </el-form>
+
+            <el-divider />
+
+            <div class="selection-preview">
+              <div class="preview-title">已选候选人</div>
+              <el-tag
+                v-for="resume in selectedResumes"
+                :key="resume.id"
+                size="small"
+                effect="plain"
+                class="preview-tag"
+              >
+                {{ resumeLabel(resume) }}
+              </el-tag>
+              <el-empty v-if="selectedResumes.length === 0" description="还没有选择候选人" :image-size="60" />
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <h3>记录</h3>
               <span class="panel-sub">{{ sessions.length }} 条</span>
             </div>
-          </template>
-
-          <el-empty v-if="sessions.length === 0" description="保存后显示" :image-size="72" />
-
-          <div v-else class="session-list">
-            <button
-              v-for="session in sessions"
-              :key="session.id"
-              type="button"
-              class="session-item"
-              :class="{ active: activeSessionId === session.id }"
-              @click="loadSession(session.id)"
-            >
-              <div class="session-item-head">
-                <strong>{{ session.name || session.jd_title }}</strong>
-                <span>#{{ session.id }}</span>
-              </div>
-              <p>{{ session.jd_title }}{{ session.company ? ` · ${session.company}` : '' }}</p>
-              <small>{{ session.candidate_count }} 人 · Top: {{ session.top_candidate_name || '暂无' }}</small>
-            </button>
           </div>
-        </el-card>
+          <div class="panel-body">
+            <el-empty v-if="sessions.length === 0" description="保存后显示" :image-size="72" />
+
+            <div v-else class="session-list">
+              <button
+                v-for="session in sessions"
+                :key="session.id"
+                type="button"
+                class="session-item"
+                :class="{ active: activeSessionId === session.id }"
+                @click="loadSession(session.id)"
+              >
+                <div class="session-item-head">
+                  <strong>{{ session.name || session.jd_title }}</strong>
+                  <span>#{{ session.id }}</span>
+                </div>
+                <p>{{ session.jd_title }}{{ session.company ? ` · ${session.company}` : '' }}</p>
+                <small>{{ session.candidate_count }} 人 · Top: {{ session.top_candidate_name || '暂无' }}</small>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="result-column">
-        <el-card shadow="never" class="panel-card" v-if="result">
-          <template #header>
-            <div class="panel-head">
-              <span>摘要</span>
+        <div class="panel" v-if="result">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <h3>摘要</h3>
               <div class="head-actions">
                 <el-tag type="success" effect="plain">{{ result.summary.total_candidates }} 人参与</el-tag>
-                  <el-button size="small" @click="openPreview">预览</el-button>
+                <el-button size="small" @click="openPreview">预览</el-button>
                 <template v-if="activeSessionId">
                   <el-button size="small" plain :loading="exporting === 'csv'" @click="exportActiveSession('csv')">
-                      CSV
+                    CSV
                   </el-button>
                   <el-button size="small" plain :loading="exporting === 'docx'" @click="exportActiveSession('docx')">
-                      Word
+                    Word
                   </el-button>
                   <el-button size="small" plain :loading="exporting === 'pdf'" @click="exportActiveSession('pdf')">
-                      PDF
+                    PDF
                   </el-button>
                 </template>
               </div>
             </div>
-          </template>
+          </div>
+          <div class="panel-body">
+            <div class="summary-grid">
+              <div class="summary-block">
+                <span>JD</span>
+                <strong>{{ result.summary.jd_title }}</strong>
+                <small>{{ result.summary.company || '未填写公司' }}</small>
+              </div>
+              <div class="summary-block">
+                <span>Top</span>
+                <strong>{{ topCandidateName }}</strong>
+                <small>{{ topCandidateScore }}</small>
+              </div>
+              <div class="summary-block">
+                <span>共性缺口</span>
+                <strong>{{ topSkillGap }}</strong>
+                <small>按缺失频次排序</small>
+              </div>
+            </div>
 
-          <div class="summary-grid">
-            <div class="summary-block">
-              <span>JD</span>
-              <strong>{{ result.summary.jd_title }}</strong>
-              <small>{{ result.summary.company || '未填写公司' }}</small>
-            </div>
-            <div class="summary-block">
-              <span>Top</span>
-              <strong>{{ topCandidateName }}</strong>
-              <small>{{ topCandidateScore }}</small>
-            </div>
-            <div class="summary-block">
-              <span>共性缺口</span>
-              <strong>{{ topSkillGap }}</strong>
-              <small>按缺失频次排序</small>
+            <div class="distribution-row" v-if="recommendationPairs.length">
+              <div v-for="item in recommendationPairs" :key="item.label" class="distribution-chip">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.count }}</strong>
+              </div>
             </div>
           </div>
+        </div>
 
-          <div class="distribution-row" v-if="recommendationPairs.length">
-            <div v-for="item in recommendationPairs" :key="item.label" class="distribution-chip">
-              <span>{{ item.label }}</span>
-              <strong>{{ item.count }}</strong>
-            </div>
-          </div>
-        </el-card>
-
-        <el-card shadow="never" class="panel-card">
-          <template #header>
-            <div class="panel-head">
-              <span>排名</span>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <h3>排名</h3>
               <span class="panel-sub">{{ loading ? '正在计算中…' : `${rankedCandidates.length} 条结果` }}</span>
             </div>
-          </template>
-
-          <el-empty v-if="!loading && rankedCandidates.length === 0" description="选择 JD 和候选人后开始筛选" :image-size="88" />
-
-          <div v-else class="candidate-list">
-            <article
-              v-for="(item, index) in rankedCandidates"
-              :key="item.resume_id"
-              class="candidate-card"
-            >
-              <div class="candidate-head">
-                <div>
-                  <div class="candidate-rank">#{{ index + 1 }}</div>
-                  <h3>{{ item.candidate_name }}</h3>
-                  <p>{{ item.file_name }} · {{ item.years_exp || 0 }} 年经验</p>
-                </div>
-                <div class="score-pill">
-                  <strong>{{ item.overall_score }}</strong>
-                  <span>{{ item.recommendation }}</span>
-                </div>
-              </div>
-
-              <div class="candidate-body">
-                <div class="skill-row">
-                  <span class="label">命中技能</span>
-                  <el-tag
-                    v-for="skill in item.matched_skills.slice(0, 6)"
-                    :key="skill"
-                    size="small"
-                    type="success"
-                    effect="plain"
-                  >
-                    {{ skill }}
-                  </el-tag>
-                  <span v-if="item.matched_skills.length === 0" class="muted">暂无明显命中</span>
-                </div>
-
-                <div class="skill-row">
-                  <span class="label">缺失核心技能</span>
-                  <el-tag
-                    v-for="skill in item.missing_required_skills.slice(0, 6)"
-                    :key="skill"
-                    size="small"
-                    type="danger"
-                    effect="plain"
-                  >
-                    {{ skill }}
-                  </el-tag>
-                  <span v-if="item.missing_required_skills.length === 0" class="muted">无明显硬缺口</span>
-                </div>
-
-                <div class="dimension-grid">
-                  <div v-for="(label, key) in dimensionLabels" :key="key" class="dimension-item">
-                    <span>{{ label }}</span>
-                    <strong>{{ dimensionScore(item, key) }}</strong>
-                  </div>
-                </div>
-
-                <div class="explain-block">
-                  <div>
-                    <span class="label">综合判断</span>
-                    <p>{{ item.overall_reason || '暂无说明' }}</p>
-                  </div>
-                  <div>
-                    <span class="label">风险点</span>
-                    <ul>
-                      <li v-for="risk in item.risk_points" :key="risk">{{ risk }}</li>
-                    </ul>
-                  </div>
-                  <div>
-                    <span class="label">建议</span>
-                    <ul>
-                      <li v-for="suggestion in item.optimization_suggestions" :key="suggestion">{{ suggestion }}</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </article>
           </div>
-        </el-card>
+          <div class="panel-body">
+            <el-empty v-if="!loading && rankedCandidates.length === 0" description="选择 JD 和候选人后开始筛选" :image-size="88" />
+
+            <div v-else class="candidate-list">
+              <article
+                v-for="(item, index) in rankedCandidates"
+                :key="item.resume_id"
+                class="candidate-card"
+              >
+                <div class="candidate-head">
+                  <div>
+                    <div class="candidate-rank">#{{ index + 1 }}</div>
+                    <h3>{{ item.candidate_name }}</h3>
+                    <p>{{ item.file_name }} · {{ item.years_exp || 0 }} 年经验</p>
+                  </div>
+                  <div class="score-pill">
+                    <strong>{{ item.overall_score }}</strong>
+                    <span>{{ item.recommendation }}</span>
+                  </div>
+                </div>
+
+                <div class="candidate-body">
+                  <div class="skill-row">
+                    <span class="label">命中技能</span>
+                    <el-tag
+                      v-for="skill in item.matched_skills.slice(0, 6)"
+                      :key="skill"
+                      size="small"
+                      type="success"
+                      effect="plain"
+                    >
+                      {{ skill }}
+                    </el-tag>
+                    <span v-if="item.matched_skills.length === 0" class="muted">暂无明显命中</span>
+                  </div>
+
+                  <div class="skill-row">
+                    <span class="label">缺失核心技能</span>
+                    <el-tag
+                      v-for="skill in item.missing_required_skills.slice(0, 6)"
+                      :key="skill"
+                      size="small"
+                      type="danger"
+                      effect="plain"
+                    >
+                      {{ skill }}
+                    </el-tag>
+                    <span v-if="item.missing_required_skills.length === 0" class="muted">无明显硬缺口</span>
+                  </div>
+
+                  <div class="dimension-grid">
+                    <div v-for="(label, key) in dimensionLabels" :key="key" class="dimension-item">
+                      <span>{{ label }}</span>
+                      <strong>{{ dimensionScore(item, key) }}</strong>
+                    </div>
+                  </div>
+
+                  <div class="explain-block">
+                    <div>
+                      <span class="label">综合判断</span>
+                      <p>{{ item.overall_reason || '暂无说明' }}</p>
+                    </div>
+                    <div>
+                      <span class="label">风险点</span>
+                      <ul>
+                        <li v-for="risk in item.risk_points" :key="risk">{{ risk }}</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <span class="label">建议</span>
+                      <ul>
+                        <li v-for="suggestion in item.optimization_suggestions" :key="suggestion">{{ suggestion }}</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -742,22 +748,16 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.enterprise-page {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
 .hero-card {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
   gap: 16px;
   padding: 24px 26px;
-  border-radius: 30px;
+  border-radius: var(--app-radius-md, 16px);
   background:
     radial-gradient(circle at top right, rgba(225, 178, 105, 0.16), transparent 28%),
     linear-gradient(135deg, rgba(255, 251, 245, 0.96), rgba(245, 251, 246, 0.98));
-  border: 1px solid rgba(210, 223, 214, 0.92);
+  border: 1px solid var(--app-line);
 }
 
 .hero-kicker {
@@ -767,21 +767,17 @@ onMounted(async () => {
   color: var(--app-muted);
 }
 
-.hero-card h1 {
+.hero-card h2 {
   margin: 8px 0 8px;
   font-size: 32px;
   color: var(--app-text);
 }
 
-.hero-card p {
-  margin: 0;
-  color: var(--app-muted);
-  line-height: 1.7;
-}
-
 .hero-note {
   margin-top: 14px;
   max-width: 720px;
+  color: var(--app-muted);
+  line-height: 1.7;
 }
 
 .hero-metrics {
@@ -798,9 +794,9 @@ onMounted(async () => {
 
 .workflow-item {
   padding: 16px 18px;
-  border-radius: 20px;
+  border-radius: var(--app-radius-sm, 12px);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(247, 251, 248, 0.98));
-  border: 1px solid rgba(217, 231, 222, 0.92);
+  border: 1px solid var(--app-line);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -826,9 +822,9 @@ onMounted(async () => {
 
 .metric-card {
   padding: 16px 14px;
-  border-radius: 20px;
+  border-radius: var(--app-radius-sm, 12px);
   background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(217, 231, 222, 0.92);
+  border: 1px solid var(--app-line);
 }
 
 .metric-card span,
@@ -858,18 +854,6 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.panel-card {
-  border-radius: 26px;
-  border: 1px solid rgba(217, 231, 222, 0.92);
-}
-
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
 }
 
 .head-actions {
@@ -918,9 +902,9 @@ onMounted(async () => {
 .session-item {
   padding: 14px;
   text-align: left;
-  border-radius: 18px;
-  background: rgba(248, 251, 249, 0.96);
-  border: 1px solid rgba(217, 231, 222, 0.92);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
@@ -960,9 +944,9 @@ onMounted(async () => {
 
 .summary-block {
   padding: 12px 14px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   background: linear-gradient(135deg, #fbfdfb, #f2f7f3);
-  border: 1px solid rgba(217, 231, 222, 0.92);
+  border: 1px solid var(--app-line);
 }
 
 .summary-block span,
@@ -991,8 +975,8 @@ onMounted(async () => {
 .distribution-chip {
   padding: 10px 14px;
   border-radius: 999px;
-  background: rgba(244, 248, 245, 0.96);
-  border: 1px solid rgba(217, 231, 222, 0.92);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
 }
 
 .distribution-chip span {
@@ -1008,9 +992,9 @@ onMounted(async () => {
 
 .candidate-card {
   padding: 16px;
-  border-radius: 22px;
+  border-radius: var(--app-radius-md, 16px);
   background: linear-gradient(135deg, rgba(252, 253, 251, 0.96), rgba(244, 248, 245, 0.98));
-  border: 1px solid rgba(217, 231, 222, 0.92);
+  border: 1px solid var(--app-line);
 }
 
 .candidate-head {
@@ -1040,7 +1024,7 @@ onMounted(async () => {
   min-width: 92px;
   padding: 12px 14px;
   text-align: center;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   background: linear-gradient(135deg, var(--app-primary-dark), #204635);
   color: #f3faf5;
 }
@@ -1076,12 +1060,12 @@ onMounted(async () => {
 
 .label {
   min-width: 88px;
-  color: #5c7066;
+  color: var(--app-muted);
   font-size: 13px;
 }
 
 .muted {
-  color: #8b9e95;
+  color: var(--app-muted);
   font-size: 13px;
 }
 
@@ -1093,9 +1077,9 @@ onMounted(async () => {
 
 .dimension-item {
   padding: 10px;
-  border-radius: 14px;
+  border-radius: var(--app-radius-xs, 8px);
   background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(220, 233, 238, 0.92);
+  border: 1px solid var(--app-line);
 }
 
 .dimension-item span,
@@ -1104,13 +1088,13 @@ onMounted(async () => {
 }
 
 .dimension-item span {
-  color: #6f8592;
+  color: var(--app-muted);
   font-size: 12px;
 }
 
 .dimension-item strong {
   margin-top: 6px;
-  color: #183240;
+  color: var(--app-text);
 }
 
 .explain-block {
@@ -1122,7 +1106,7 @@ onMounted(async () => {
 .explain-block p,
 .explain-block ul {
   margin: 6px 0 0;
-  color: #556d7a;
+  color: var(--app-muted);
   line-height: 1.6;
 }
 
@@ -1138,14 +1122,14 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  color: #213047;
+  color: var(--app-text);
 }
 
 .preview-hero {
   padding: 24px;
-  border-radius: 28px;
+  border-radius: var(--app-radius-md, 16px);
   background: linear-gradient(135deg, #f4f7fb, #e8f0ff);
-  border: 1px solid rgba(211, 224, 245, 0.9);
+  border: 1px solid var(--app-line);
 }
 
 .preview-kicker {
@@ -1153,18 +1137,18 @@ onMounted(async () => {
   font-size: 12px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #71839d;
+  color: var(--app-muted);
 }
 
 .preview-hero-main h2 {
   margin: 10px 0 8px;
   font-size: 28px;
-  color: #203864;
+  color: var(--app-text);
 }
 
 .preview-hero-main p {
   margin: 0;
-  color: #667892;
+  color: var(--app-muted);
 }
 
 .preview-summary-grid {
@@ -1176,9 +1160,9 @@ onMounted(async () => {
 
 .preview-summary-card {
   padding: 14px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(216, 227, 244, 0.96);
+  border: 1px solid var(--app-line);
 }
 
 .preview-summary-card span,
@@ -1187,14 +1171,14 @@ onMounted(async () => {
 }
 
 .preview-summary-card span {
-  color: #70819a;
+  color: var(--app-muted);
   font-size: 12px;
 }
 
 .preview-summary-card strong {
   margin-top: 8px;
   font-size: 22px;
-  color: #203864;
+  color: var(--app-text);
 }
 
 .preview-summary-card .compact {
@@ -1208,36 +1192,36 @@ onMounted(async () => {
   gap: 14px;
   margin-top: 16px;
   padding: 16px;
-  border-radius: 20px;
+  border-radius: var(--app-radius-sm, 12px);
   background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(216, 227, 244, 0.96);
+  border: 1px solid var(--app-line);
 }
 
 .preview-top-label {
   display: inline-block;
   font-size: 12px;
-  color: #70819a;
+  color: var(--app-muted);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .preview-top-card h3 {
   margin: 8px 0 6px;
-  color: #203864;
+  color: var(--app-text);
   font-size: 22px;
 }
 
 .preview-top-card p {
   margin: 6px 0 0;
-  color: #5d718b;
+  color: var(--app-muted);
 }
 
 .preview-top-score {
   min-width: 104px;
   padding: 14px 16px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   text-align: center;
-  background: #203864;
+  background: var(--app-text);
   color: #fff;
 }
 
@@ -1258,9 +1242,9 @@ onMounted(async () => {
 
 .preview-section {
   padding: 18px;
-  border-radius: 22px;
+  border-radius: var(--app-radius-md, 16px);
   background: linear-gradient(135deg, rgba(250, 253, 255, 0.96), rgba(244, 248, 252, 0.96));
-  border: 1px solid rgba(218, 230, 239, 0.94);
+  border: 1px solid var(--app-line);
 }
 
 .preview-section-head {
@@ -1274,19 +1258,19 @@ onMounted(async () => {
 .preview-section-head h3 {
   margin: 0;
   font-size: 18px;
-  color: #203864;
+  color: var(--app-text);
 }
 
 .preview-section-head span {
-  color: #71839d;
+  color: var(--app-muted);
   font-size: 13px;
 }
 
 .preview-gap-table,
 .preview-dimension-table {
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   overflow: hidden;
-  border: 1px solid rgba(216, 227, 244, 0.96);
+  border: 1px solid var(--app-line);
 }
 
 .preview-gap-row,
@@ -1306,14 +1290,14 @@ onMounted(async () => {
 .preview-gap-row span,
 .preview-dimension-row span {
   padding: 11px 12px;
-  border-bottom: 1px solid rgba(216, 227, 244, 0.96);
+  border-bottom: 1px solid var(--app-line);
   background: rgba(255, 255, 255, 0.92);
 }
 
 .preview-gap-head span,
 .preview-dimension-head span {
   background: #eef4ff;
-  color: #203864;
+  color: var(--app-text);
   font-weight: 600;
 }
 
@@ -1330,9 +1314,9 @@ onMounted(async () => {
 
 .preview-candidate-card {
   padding: 16px;
-  border-radius: 20px;
+  border-radius: var(--app-radius-sm, 12px);
   background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(216, 227, 244, 0.96);
+  border: 1px solid var(--app-line);
 }
 
 .preview-candidate-head {
@@ -1351,21 +1335,21 @@ onMounted(async () => {
 .preview-candidate-head h4 {
   margin: 6px 0 4px;
   font-size: 20px;
-  color: #203864;
+  color: var(--app-text);
 }
 
 .preview-candidate-head p {
   margin: 0;
-  color: #6d8098;
+  color: var(--app-muted);
 }
 
 .preview-score-box {
   min-width: 88px;
   padding: 12px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   background: #eff4ff;
   text-align: center;
-  color: #203864;
+  color: var(--app-text);
 }
 
 .preview-score-box strong,
@@ -1394,13 +1378,13 @@ onMounted(async () => {
   padding: 8px 12px;
   border-radius: 999px;
   background: #f3f7fd;
-  color: #476077;
-  border: 1px solid rgba(220, 230, 245, 0.96);
+  color: var(--app-muted);
+  border: 1px solid var(--app-line);
 }
 
 .preview-reason {
   margin: 14px 0;
-  color: #55687f;
+  color: var(--app-muted);
   line-height: 1.7;
 }
 
@@ -1414,7 +1398,7 @@ onMounted(async () => {
 .preview-foot-grid ul {
   margin: 6px 0 0;
   padding-left: 18px;
-  color: #556d7a;
+  color: var(--app-muted);
 }
 
 .preview-footer {
@@ -1425,7 +1409,7 @@ onMounted(async () => {
 }
 
 .preview-footer-tip {
-  color: #71839d;
+  color: var(--app-muted);
   font-size: 13px;
 }
 
@@ -1459,7 +1443,7 @@ onMounted(async () => {
     padding: 20px;
   }
 
-  .hero-card h1 {
+  .hero-card h2 {
     font-size: 28px;
   }
 

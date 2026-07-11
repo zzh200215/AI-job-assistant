@@ -38,11 +38,34 @@ These checks live in `backend/app/core/config.py`.
 Production deployments should run database migrations before starting the backend:
 
 ```bash
-APP_ENV=production AUTO_CREATE_TABLES=false docker compose --profile tools run --rm migrate
-APP_ENV=production AUTO_CREATE_TABLES=false docker compose up -d backend frontend
+docker compose -f docker-compose.prod.yml --profile tools run --rm migrate
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 See `docs/db-migrations.md` for local Alembic commands and existing database guidance.
+
+## Production Network Isolation
+
+`docker-compose.prod.yml` is designed to minimize the exposed attack surface:
+
+- The backend FastAPI container does **not** bind port `8000` on the host; it is only reachable from the `recruit-net` Docker network.
+- MySQL does **not** expose port `3306` on the host; only containers on `recruit-net` can connect.
+- The frontend nginx container is the single entry point (port `80`) and proxies `/api/*` and `/ws/*` to the backend.
+- Uploads and the Chroma vector store use named Docker volumes and are never mounted to public host paths.
+
+If you need external database access for administration, use a jump host, SSH tunnel, or a separate admin container on the same Docker network.
+
+## Production Deployment Checklist
+
+Before running `docker compose -f docker-compose.prod.yml up -d`, verify:
+
+- [ ] You copied `.env.production.example` to `.env` and filled in real values.
+- [ ] `MYSQL_PASSWORD` is strong and not one of the default/weak values.
+- [ ] `JWT_SECRET` is at least 32 characters long and uniquely generated.
+- [ ] `LLM_PROVIDER` and `EMBEDDING_PROVIDER` are explicitly set to real providers (not `mock`).
+- [ ] `LLM_API_KEY` and `EMBEDDING_API_KEY` are populated.
+- [ ] Alembic migrations have been run with the `migrate` profile.
+- [ ] HTTPS/TLS termination is handled by an outer reverse proxy or load balancer.
 
 ## Authenticated File Access
 

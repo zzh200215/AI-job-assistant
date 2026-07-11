@@ -1,48 +1,43 @@
 <template>
-  <div class="interview-setup-page">
-    <section class="hero-card">
-      <div class="hero-copy-shell">
-        <div class="hero-copy-stack">
-          <div class="hero-title-row">
-            <div>
-              <span class="hero-kicker">Interview Workspace</span>
-              <h1>AI 模拟面试</h1>
-            </div>
-            <div class="hero-orbits" aria-hidden="true">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-          </div>
-          <p class="hero-desc">围绕目标岗位生成一场更有节奏的模拟面试，先定配置，再进房间，最后看报告。</p>
-        </div>
+  <div class="page-shell">
+    <div class="page-header">
+      <div>
+        <h2>AI 模拟面试</h2>
+        <div class="page-header-sub">围绕目标岗位生成一场更有节奏的模拟面试，先定配置，再进房间，最后看报告。</div>
       </div>
-      <div class="hero-stats">
-        <div class="stat-card">
+    </div>
+
+    <div class="grid-3 stat-row">
+      <div class="stat-card">
+        <div class="stat-body">
           <span class="stat-label">历史场次</span>
           <strong>{{ stats.total }}</strong>
         </div>
-        <div class="stat-card">
+      </div>
+      <div class="stat-card">
+        <div class="stat-body">
           <span class="stat-label">已完成</span>
           <strong>{{ stats.completed }}</strong>
         </div>
-        <div class="stat-card">
+      </div>
+      <div class="stat-card">
+        <div class="stat-body">
           <span class="stat-label">平均得分</span>
           <strong>{{ stats.avgScore }}</strong>
         </div>
       </div>
-    </section>
+    </div>
 
-    <section class="setup-grid">
-      <el-card shadow="never" class="setup-panel">
-        <template #header>
-          <div class="panel-header">
-            <span>面试配置</span>
-            <el-tag type="danger" effect="plain">基础版</el-tag>
+    <div class="setup-grid">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title-row">
+            <h3>面试配置</h3>
           </div>
-        </template>
-
-        <el-form
+          <el-tag type="danger" effect="plain">基础版</el-tag>
+        </div>
+        <div class="panel-body">
+          <el-form
           ref="formRef"
           :model="form"
           :rules="rules"
@@ -144,16 +139,18 @@
             开始这场模拟面试
           </el-button>
         </el-form>
-      </el-card>
+        </div>
+      </div>
 
       <div class="preview-column">
-        <el-card shadow="never" class="preview-panel">
-          <template #header>
-            <div class="panel-header">
-              <span>面试蓝图</span>
-              <span class="panel-sub">进入房间前先看清楚这场面试会怎么问</span>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <h3>面试蓝图</h3>
             </div>
-          </template>
+            <span class="panel-sub">进入房间前先看清楚这场面试会怎么问</span>
+          </div>
+          <div class="panel-body">
 
           <div class="brief-block">
             <div class="brief-title">候选人画像</div>
@@ -200,15 +197,17 @@
               </div>
             </div>
           </div>
-        </el-card>
+          </div>
+        </div>
 
-        <el-card shadow="never" class="history-panel">
-          <template #header>
-            <div class="panel-header">
-              <span>最近面试记录</span>
-              <span class="panel-sub">可以直接回看报告或继续未完成场次</span>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <h3>最近面试记录</h3>
             </div>
-          </template>
+            <span class="panel-sub">可以直接回看报告或继续未完成场次</span>
+          </div>
+          <div class="panel-body">
 
           <el-empty
             v-if="!historyList.length && !loading.history"
@@ -236,9 +235,10 @@
               </div>
             </div>
           </div>
-        </el-card>
+          </div>
+        </div>
       </div>
-    </section>
+    </div>
   </div>
 </template>
 
@@ -435,178 +435,28 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.interview-setup-page {
-  display: flex;
+/* ---- Stat row ---- */
+.stat-row {
+  margin-bottom: 20px;
+}
+
+.stat-row .stat-card {
   flex-direction: column;
-  gap: 20px;
-}
-
-.hero-card {
-  display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: 20px;
-  padding: 28px;
-  border-radius: 30px;
-  position: relative;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at left bottom, rgba(223, 185, 122, 0.12), transparent 28%),
-    radial-gradient(circle at top right, rgba(120, 193, 150, 0.16), transparent 28%),
-    linear-gradient(135deg, #fbfdfb, #f4faf6 52%, #eef5f0);
-  color: var(--app-text);
-  border: 1px solid rgba(217, 231, 222, 0.92);
-}
-
-.hero-card::before {
-  content: '';
-  position: absolute;
-  left: -32px;
-  top: 22px;
-  width: 180px;
-  height: 180px;
-  border-radius: 40px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0));
-  border: 1px solid rgba(217, 231, 222, 0.9);
-  transform: rotate(-14deg);
-}
-
-.hero-card::after {
-  content: '';
-  position: absolute;
-  right: 56px;
-  bottom: -46px;
-  width: 160px;
-  height: 160px;
-  border-radius: 50%;
-  border: 1px dashed rgba(140, 171, 152, 0.36);
-}
-
-.hero-kicker {
-  display: inline-block;
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--app-muted);
-}
-
-.hero-card h1 {
-  margin: 8px 0 0;
-  font-size: 32px;
-  line-height: 1.2;
-}
-
-.hero-copy-shell {
-  position: relative;
-  z-index: 1;
-  min-height: 140px;
-  display: flex;
-  align-items: center;
-}
-
-.hero-copy-stack {
-  width: 100%;
-}
-
-.hero-title-row {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 20px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(217, 231, 222, 0.9);
-  backdrop-filter: blur(10px);
-}
-
-.hero-desc {
-  margin: 14px 2px 0;
-  max-width: 640px;
-  color: var(--app-muted);
-  line-height: 1.8;
-}
-
-.hero-orbits {
-  display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  flex-shrink: 0;
 }
 
-.hero-orbits span {
-  display: block;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #c66a3d, #dfb76a);
-  box-shadow: 0 8px 18px rgba(198, 106, 61, 0.18);
-}
-
-.hero-orbits span:nth-child(1) {
-  width: 12px;
-  height: 12px;
-}
-
-.hero-orbits span:nth-child(2) {
-  width: 30px;
-  height: 10px;
-  opacity: 0.8;
-}
-
-.hero-orbits span:nth-child(3) {
-  width: 18px;
-  height: 18px;
-  opacity: 0.58;
-}
-
-.hero-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  align-self: end;
-  position: relative;
-  z-index: 1;
-}
-
-.stat-card {
-  padding: 16px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(217, 231, 222, 0.9);
-  backdrop-filter: blur(10px);
-}
-
-.stat-label {
-  display: block;
-  font-size: 12px;
-  color: var(--app-muted);
-}
-
-.stat-card strong {
-  display: block;
-  margin-top: 8px;
+.stat-row .stat-body strong {
   font-size: 28px;
-  color: var(--app-text);
+  margin-top: 4px;
 }
 
+/* ---- Setup grid ---- */
 .setup-grid {
   display: grid;
   grid-template-columns: minmax(340px, 420px) 1fr;
   gap: 20px;
   align-items: start;
-}
-
-.setup-panel,
-.preview-panel,
-.history-panel {
-  border-radius: 26px;
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-weight: 600;
 }
 
 .panel-sub {
@@ -619,6 +469,7 @@ onMounted(() => {
   width: 100%;
 }
 
+/* ---- Option row ---- */
 .option-row {
   display: flex;
   align-items: center;
@@ -631,15 +482,16 @@ onMounted(() => {
   font-size: 12px;
 }
 
+/* ---- Type group ---- */
 .type-group {
   width: 100%;
 }
 
 .type-preview {
   padding: 16px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #fff8f1, #f8fbf8);
-  border: 1px solid rgba(228, 216, 194, 0.92);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
 }
 
 .type-title {
@@ -651,16 +503,17 @@ onMounted(() => {
 }
 
 .type-title span {
-  color: #9a6d4a;
+  color: var(--app-warning);
   font-size: 13px;
 }
 
 .type-preview p {
   margin: 0 0 12px;
-  color: #586a61;
+  color: var(--app-muted);
   line-height: 1.7;
 }
 
+/* ---- Chips ---- */
 .chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -670,20 +523,21 @@ onMounted(() => {
 .focus-chip,
 .plain-chip {
   padding: 5px 10px;
-  border-radius: 999px;
+  border-radius: var(--app-radius-xs, 8px);
   font-size: 12px;
 }
 
 .focus-chip {
-  background: #fff0e4;
-  color: #b66036;
+  background: var(--app-bg);
+  color: var(--app-warning);
 }
 
 .plain-chip {
-  background: #f2f6f3;
-  color: #4d6157;
+  background: var(--app-bg);
+  color: var(--app-success);
 }
 
+/* ---- Checklist ---- */
 .checklist {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -693,9 +547,9 @@ onMounted(() => {
 
 .check-item {
   padding: 14px;
-  border-radius: 16px;
-  background: #f4f8f5;
-  border: 1px solid rgba(217, 231, 222, 0.9);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
 }
 
 .check-item span {
@@ -714,9 +568,10 @@ onMounted(() => {
   width: 100%;
   height: 48px;
   margin-top: 22px;
-  border-radius: 14px;
+  border-radius: var(--app-radius-sm, 12px);
 }
 
+/* ---- Preview column ---- */
 .preview-column {
   display: flex;
   flex-direction: column;
@@ -729,7 +584,7 @@ onMounted(() => {
 
 .brief-title {
   margin-bottom: 10px;
-  color: #8b95a7;
+  color: var(--app-muted);
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -737,15 +592,16 @@ onMounted(() => {
 
 .brief-block h3 {
   margin: 0 0 6px;
-  font-size: 22px;
-  color: #1d2a39;
+  font-size: 18px;
+  color: var(--app-text);
 }
 
 .brief-block p {
   margin: 0 0 12px;
-  color: #64748b;
+  color: var(--app-muted);
 }
 
+/* ---- Blueprint list ---- */
 .blueprint-list {
   display: grid;
   gap: 12px;
@@ -757,8 +613,8 @@ onMounted(() => {
   grid-template-columns: 52px 1fr;
   gap: 12px;
   padding: 14px;
-  border-radius: 18px;
-  background: #f6f8fb;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
 }
 
 .stage-index {
@@ -767,23 +623,24 @@ onMounted(() => {
   justify-content: center;
   width: 52px;
   height: 52px;
-  border-radius: 16px;
-  background: #1c3351;
+  border-radius: var(--app-radius-xs, 8px);
+  background: var(--app-primary);
   color: #fff;
   font-weight: 700;
 }
 
 .stage-card strong {
   display: block;
-  color: #223145;
+  color: var(--app-text);
 }
 
 .stage-card p {
   margin: 6px 0 0;
-  color: #6b778a;
+  color: var(--app-muted);
   line-height: 1.6;
 }
 
+/* ---- History ---- */
 .history-list {
   display: grid;
   gap: 12px;
@@ -795,7 +652,7 @@ onMounted(() => {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 0;
-  border-bottom: 1px solid #edf0f5;
+  border-bottom: 1px solid var(--app-line);
 }
 
 .history-item:last-child {
@@ -805,12 +662,12 @@ onMounted(() => {
 
 .history-title {
   font-weight: 600;
-  color: #1e2b3b;
+  color: var(--app-text);
 }
 
 .history-meta {
   margin-top: 5px;
-  color: #8b95a7;
+  color: var(--app-muted);
   font-size: 13px;
 }
 
@@ -820,43 +677,16 @@ onMounted(() => {
   gap: 8px;
 }
 
+/* ---- Responsive ---- */
 @media (max-width: 1100px) {
-  .hero-card,
   .setup-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 640px) {
-  .hero-card {
-    padding: 22px;
-  }
-
-  .hero-title-row {
-    padding: 16px;
-  }
-
-  .hero-card h1 {
-    font-size: 26px;
-  }
-
-  .hero-copy-shell {
-    min-height: auto;
-  }
-
-  .hero-stats,
   .checklist {
     grid-template-columns: 1fr;
-  }
-
-  .hero-title-row,
-  .history-actions {
-    width: 100%;
-  }
-
-  .hero-title-row {
-    align-items: flex-start;
-    flex-direction: column;
   }
 
   .history-item,

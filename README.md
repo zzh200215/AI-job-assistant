@@ -280,6 +280,42 @@ EMBEDDING_PROVIDER=mock
 ORCHESTRATION_STRATEGY=linear
 ```
 
+### 生产部署
+
+1. 准备环境文件：
+
+```bash
+cp .env.production.example .env
+# 编辑 .env，填入强密码、JWT 密钥、真实 LLM/Embedding 密钥
+```
+
+2. 执行数据库迁移（首次部署或更新后）：
+
+```bash
+docker compose -f docker-compose.prod.yml --profile tools run --rm migrate
+```
+
+3. 启动全部服务：
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+4. 访问：
+
+| 服务 | 地址 |
+| --- | --- |
+| 前端 | `http://<服务器IP>/` |
+| 后端 API | 不对外暴露，仅通过 nginx `/api` 代理 |
+
+5. 查看日志：
+
+```bash
+docker compose -f docker-compose.prod.yml logs -f backend
+```
+
+> 注意：生产环境默认不暴露 MySQL 3306 与后端 8000 端口。如需 HTTPS，建议在 nginx 外层再挂一层反向代理或负载均衡，并负责 TLS 终止。
+
 ### 方式二：本地开发
 
 **前置**：Python 3.10+、Node.js 18+、MySQL 8.0+

@@ -2,11 +2,11 @@
   <div class="guide-page">
     <el-card shadow="never" class="hero-card">
       <p class="eyebrow">Delivery Guide</p>
-      <h1>交付与验收说明</h1>
-      <p class="hero-desc">
+      <h2>交付与验收说明</h2>
+	      <div class="page-header-sub">
         这一页把项目当前可演示范围、生产边界、知识库维护方式和验收建议集中展示，避免信息分散在文档和代码里。
-      </p>
-      <div class="hero-actions">
+      </div>
+	      <div class="hero-actions">
         <el-button type="primary" @click="router.push('/system-status')">查看系统状态</el-button>
         <el-button @click="router.push('/knowledge')">进入知识库</el-button>
         <el-button v-if="authStore.isRecruiter" @click="router.push('/datasource')">查看数据源</el-button>
@@ -80,7 +80,7 @@ const acceptanceChecklist = [
 </script>
 
 <style scoped>
-.guide-page {
+.page-shell {
   max-width: 1320px;
   margin: 0 auto;
   display: flex;
@@ -90,7 +90,7 @@ const acceptanceChecklist = [
 
 .hero-card,
 .panel-card {
-  border-radius: 24px;
+  border-radius: var(--app-radius-md, 16px);
 }
 
 .eyebrow {
@@ -98,12 +98,7 @@ const acceptanceChecklist = [
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #6f8092;
-}
-
-.hero-desc {
-  color: #6f8092;
-  line-height: 1.8;
+  color: var(--app-muted);
 }
 
 .hero-actions {

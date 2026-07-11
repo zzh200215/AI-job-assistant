@@ -1,9 +1,9 @@
 <template>
-  <div class="preview-page">
-    <header class="toolbar no-print">
+  <div class="page-shell preview-page">
+    <header class="page-header no-print">
       <div>
-        <span class="toolbar-kicker">Enterprise Screening</span>
-        <h1>筛选报告打印预览</h1>
+        <p class="eyebrow">Enterprise Screening</p>
+        <h2>筛选报告打印预览</h2>
       </div>
       <div class="toolbar-actions">
         <button type="button" class="ghost-btn" @click="goBack">返回</button>
@@ -12,134 +12,142 @@
     </header>
 
     <main v-if="previewContext" class="report-shell">
-      <section class="report-hero">
-        <div>
-          <span class="report-kicker">Screening Report</span>
-          <h2>{{ previewContext.reportTitle }}</h2>
-          <p>{{ previewContext.jdTitle }} · {{ previewContext.company }} · 生成于 {{ previewContext.generatedAt }}</p>
-        </div>
-
-        <div class="hero-metrics">
-          <div class="metric-card">
-            <span>纳入候选人</span>
-            <strong>{{ previewContext.totalCandidates }}</strong>
-          </div>
-          <div class="metric-card">
-            <span>实际返回</span>
-            <strong>{{ previewContext.candidateCount }}</strong>
-          </div>
-          <div class="metric-card">
-            <span>平均分</span>
-            <strong>{{ previewContext.averageScore }}</strong>
-          </div>
-          <div class="metric-card">
-            <span>推荐分布</span>
-            <strong class="metric-compact">{{ previewContext.recommendationText }}</strong>
-          </div>
-        </div>
-
-        <div v-if="previewContext.topCandidate" class="top-card">
+      <section class="panel report-hero">
+        <div class="panel-body">
           <div>
-            <span class="top-label">Top 候选人</span>
-            <h3>#{{ previewContext.topCandidate.rank }} {{ previewContext.topCandidate.candidateName }}</h3>
-            <p>{{ previewContext.topCandidate.recommendation }} · {{ previewContext.topCandidate.yearsExp }} 年经验</p>
-            <p>命中技能：{{ previewContext.topCandidate.matchedSkillsText }}</p>
-            <p>缺失技能：{{ previewContext.topCandidate.missingSkillsText }}</p>
+            <span class="report-kicker">Screening Report</span>
+            <h3>{{ previewContext.reportTitle }}</h3>
+            <p>{{ previewContext.jdTitle }} · {{ previewContext.company }} · 生成于 {{ previewContext.generatedAt }}</p>
           </div>
-          <div class="top-score">
-            <strong>{{ previewContext.topCandidate.overallScore }}</strong>
-            <span>{{ previewContext.topCandidate.scoreLevel }}</span>
+
+          <div class="hero-metrics">
+            <div class="metric-card">
+              <span>纳入候选人</span>
+              <strong>{{ previewContext.totalCandidates }}</strong>
+            </div>
+            <div class="metric-card">
+              <span>实际返回</span>
+              <strong>{{ previewContext.candidateCount }}</strong>
+            </div>
+            <div class="metric-card">
+              <span>平均分</span>
+              <strong>{{ previewContext.averageScore }}</strong>
+            </div>
+            <div class="metric-card">
+              <span>推荐分布</span>
+              <strong class="metric-compact">{{ previewContext.recommendationText }}</strong>
+            </div>
+          </div>
+
+          <div v-if="previewContext.topCandidate" class="top-card">
+            <div>
+              <span class="top-label">Top 候选人</span>
+              <h4>#{{ previewContext.topCandidate.rank }} {{ previewContext.topCandidate.candidateName }}</h4>
+              <p>{{ previewContext.topCandidate.recommendation }} · {{ previewContext.topCandidate.yearsExp }} 年经验</p>
+              <p>命中技能：{{ previewContext.topCandidate.matchedSkillsText }}</p>
+              <p>缺失技能：{{ previewContext.topCandidate.missingSkillsText }}</p>
+            </div>
+            <div class="top-score">
+              <strong>{{ previewContext.topCandidate.overallScore }}</strong>
+              <span>{{ previewContext.topCandidate.scoreLevel }}</span>
+            </div>
           </div>
         </div>
       </section>
 
-      <section class="report-section">
-        <div class="section-head">
-          <h3>共性技能缺口</h3>
-          <span>{{ previewContext.skillGaps.length ? '按出现频次统计' : '无明显共性缺口' }}</span>
-        </div>
-
-        <div v-if="previewContext.skillGaps.length" class="gap-table">
-          <div class="gap-row gap-head">
-            <span>技能项</span>
-            <span>出现次数</span>
-            <span>占比</span>
-          </div>
-          <div v-for="gap in previewContext.skillGaps" :key="gap.skill" class="gap-row">
-            <span>{{ gap.skill }}</span>
-            <span>{{ gap.count }} 次</span>
-            <span>{{ gap.ratio }}</span>
+      <section class="panel report-section">
+        <div class="panel-header">
+          <div class="panel-title-row">
+            <h3>共性技能缺口</h3>
+            <span>{{ previewContext.skillGaps.length ? '按出现频次统计' : '无明显共性缺口' }}</span>
           </div>
         </div>
-        <div v-else class="empty-tip">本次筛选未发现显著共性技能缺口。</div>
+        <div class="panel-body">
+          <div v-if="previewContext.skillGaps.length" class="gap-table">
+            <div class="gap-row gap-head">
+              <span>技能项</span>
+              <span>出现次数</span>
+              <span>占比</span>
+            </div>
+            <div v-for="gap in previewContext.skillGaps" :key="gap.skill" class="gap-row">
+              <span>{{ gap.skill }}</span>
+              <span>{{ gap.count }} 次</span>
+              <span>{{ gap.ratio }}</span>
+            </div>
+          </div>
+          <div v-else class="empty-tip">本次筛选未发现显著共性技能缺口。</div>
+        </div>
       </section>
 
-      <section class="report-section">
-        <div class="section-head">
-          <h3>候选人明细</h3>
-          <span>{{ previewContext.candidates.length }} 人</span>
+      <section class="panel report-section">
+        <div class="panel-header">
+          <div class="panel-title-row">
+            <h3>候选人明细</h3>
+            <span>{{ previewContext.candidates.length }} 人</span>
+          </div>
         </div>
+        <div class="panel-body">
+          <div class="candidate-list">
+            <article
+              v-for="candidate in previewContext.candidates"
+              :key="candidate.resumeId"
+              class="candidate-card"
+            >
+              <div class="candidate-head">
+                <div>
+                  <div class="candidate-rank">#{{ candidate.rank }}</div>
+                  <h4>{{ candidate.candidateName }}</h4>
+                  <p>{{ candidate.fileName || '未记录文件' }} · {{ candidate.yearsExp }} 年经验 · {{ candidate.recommendation }}</p>
+                </div>
+                <div class="score-box">
+                  <strong>{{ candidate.overallScore }}</strong>
+                  <span>{{ candidate.scoreLevel }}</span>
+                </div>
+              </div>
 
-        <div class="candidate-list">
-          <article
-            v-for="candidate in previewContext.candidates"
-            :key="candidate.resumeId"
-            class="candidate-card"
-          >
-            <div class="candidate-head">
-              <div>
-                <div class="candidate-rank">#{{ candidate.rank }}</div>
-                <h4>{{ candidate.candidateName }}</h4>
-                <p>{{ candidate.fileName || '未记录文件' }} · {{ candidate.yearsExp }} 年经验 · {{ candidate.recommendation }}</p>
+              <div class="chip-row">
+                <span>技能画像：{{ candidate.skillsText }}</span>
+                <span>命中技能：{{ candidate.matchedSkillsText }}</span>
+                <span>缺失技能：{{ candidate.missingSkillsText }}</span>
               </div>
-              <div class="score-box">
-                <strong>{{ candidate.overallScore }}</strong>
-                <span>{{ candidate.scoreLevel }}</span>
-              </div>
-            </div>
 
-            <div class="chip-row">
-              <span>技能画像：{{ candidate.skillsText }}</span>
-              <span>命中技能：{{ candidate.matchedSkillsText }}</span>
-              <span>缺失技能：{{ candidate.missingSkillsText }}</span>
-            </div>
+              <p class="reason">{{ candidate.overallReason || '暂无综合判断说明' }}</p>
 
-            <p class="reason">{{ candidate.overallReason || '暂无综合判断说明' }}</p>
+              <div class="dimension-table">
+                <div class="dimension-row dimension-head">
+                  <span>评估维度</span>
+                  <span>得分</span>
+                  <span>说明</span>
+                </div>
+                <div
+                  v-for="row in candidate.dimensionRows"
+                  :key="`${candidate.resumeId}-${row.key}`"
+                  class="dimension-row"
+                >
+                  <span>{{ row.label }}</span>
+                  <span>{{ row.score }}</span>
+                  <span>{{ row.reason || '-' }}</span>
+                </div>
+              </div>
 
-            <div class="dimension-table">
-              <div class="dimension-row dimension-head">
-                <span>评估维度</span>
-                <span>得分</span>
-                <span>说明</span>
+              <div class="foot-grid">
+                <div>
+                  <span class="label">风险点</span>
+                  <ul>
+                    <li v-for="risk in candidate.riskPoints" :key="risk">{{ risk }}</li>
+                    <li v-if="candidate.riskPoints.length === 0" class="muted">暂无明显风险点</li>
+                  </ul>
+                </div>
+                <div>
+                  <span class="label">建议</span>
+                  <ul>
+                    <li v-for="suggestion in candidate.suggestions" :key="suggestion">{{ suggestion }}</li>
+                    <li v-if="candidate.suggestions.length === 0" class="muted">暂无补充建议</li>
+                  </ul>
+                </div>
               </div>
-              <div
-                v-for="row in candidate.dimensionRows"
-                :key="`${candidate.resumeId}-${row.key}`"
-                class="dimension-row"
-              >
-                <span>{{ row.label }}</span>
-                <span>{{ row.score }}</span>
-                <span>{{ row.reason || '-' }}</span>
-              </div>
-            </div>
-
-            <div class="foot-grid">
-              <div>
-                <span class="label">风险点</span>
-                <ul>
-                  <li v-for="risk in candidate.riskPoints" :key="risk">{{ risk }}</li>
-                  <li v-if="candidate.riskPoints.length === 0" class="muted">暂无明显风险点</li>
-                </ul>
-              </div>
-              <div>
-                <span class="label">建议</span>
-                <ul>
-                  <li v-for="suggestion in candidate.suggestions" :key="suggestion">{{ suggestion }}</li>
-                  <li v-if="candidate.suggestions.length === 0" class="muted">暂无补充建议</li>
-                </ul>
-              </div>
-            </div>
-          </article>
+            </article>
+          </div>
         </div>
       </section>
     </main>
@@ -248,38 +256,28 @@ watch(
   background:
     radial-gradient(circle at top right, rgba(166, 216, 255, 0.18), transparent 28%),
     linear-gradient(180deg, #f7fbff 0%, #eef5fb 100%);
-  color: #20324a;
+  color: var(--app-text);
 }
 
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin: 0 auto 20px;
-  max-width: 1120px;
-  padding: 20px 24px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(210, 223, 238, 0.95);
-  box-shadow: 0 14px 28px rgba(161, 178, 201, 0.14);
+.page-header {
+  margin-bottom: 20px;
 }
 
-.toolbar-kicker,
+.eyebrow,
 .report-kicker,
 .top-label {
   display: inline-block;
   font-size: 12px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #7387a3;
+  color: var(--app-muted);
 }
 
-.toolbar h1,
-.report-hero h2,
-.top-card h3,
+.page-header h2,
+.report-hero h3,
+.top-card h4,
 .candidate-card h4,
-.section-head h3 {
+.panel-header h3 {
   margin: 8px 0 0;
 }
 
@@ -320,21 +318,11 @@ watch(
   gap: 18px;
 }
 
-.report-hero,
-.report-section,
-.empty-shell {
-  padding: 24px;
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(210, 223, 238, 0.95);
-  box-shadow: 0 12px 24px rgba(161, 178, 201, 0.12);
-}
-
 .report-hero p,
 .top-card p,
 .candidate-card p,
 .empty-shell p {
-  color: #61758f;
+  color: var(--app-muted);
   line-height: 1.7;
 }
 
@@ -350,7 +338,7 @@ watch(
 .candidate-card,
 .gap-table,
 .dimension-table {
-  border-radius: 20px;
+  border-radius: var(--app-radius-md, 16px);
   overflow: hidden;
 }
 
@@ -371,13 +359,13 @@ watch(
 
 .metric-card span {
   font-size: 12px;
-  color: #72839c;
+  color: var(--app-muted);
 }
 
 .metric-card strong {
   margin-top: 8px;
   font-size: 22px;
-  color: #1e3761;
+  color: var(--app-text);
 }
 
 .metric-compact {
@@ -399,7 +387,7 @@ watch(
 .score-box {
   min-width: 100px;
   text-align: center;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
 }
 
 .top-score {
@@ -418,19 +406,6 @@ watch(
   color: rgba(255, 255, 255, 0.82);
 }
 
-.section-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.section-head span {
-  color: #7387a3;
-  font-size: 13px;
-}
-
 .gap-row,
 .dimension-row {
   display: grid;
@@ -447,14 +422,14 @@ watch(
 .gap-row span,
 .dimension-row span {
   padding: 11px 12px;
-  border-bottom: 1px solid rgba(219, 228, 241, 0.96);
+  border-bottom: 1px solid var(--app-line);
   background: rgba(255, 255, 255, 0.96);
 }
 
 .gap-head span,
 .dimension-head span {
   background: #edf4ff;
-  color: #1e3761;
+  color: var(--app-text);
   font-weight: 600;
 }
 
@@ -465,9 +440,9 @@ watch(
 
 .empty-tip {
   padding: 16px 18px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
   background: #f7faff;
-  color: #61758f;
+  color: var(--app-muted);
 }
 
 .candidate-list {
@@ -498,7 +473,7 @@ watch(
 .score-box {
   padding: 12px 14px;
   background: #eef4ff;
-  color: #1e3761;
+  color: var(--app-text);
 }
 
 .score-box strong {
@@ -538,26 +513,30 @@ watch(
 }
 
 .label {
-  color: #52677f;
+  color: var(--app-muted);
   font-size: 13px;
 }
 
 .foot-grid ul {
   margin: 8px 0 0;
   padding-left: 18px;
-  color: #556d7a;
+  color: var(--app-muted);
 }
 
 .muted {
-  color: #8ea0b5;
+  color: var(--app-muted);
 }
 
 .empty-shell {
   text-align: center;
 }
 
+.empty-shell h2 {
+  margin: 0 0 8px;
+}
+
 @media (max-width: 900px) {
-  .toolbar,
+  .page-header,
   .top-card,
   .candidate-head {
     flex-direction: column;

@@ -117,6 +117,59 @@ class UserInfo(BaseModel):
     role: Literal["candidate", "recruiter"] = CANDIDATE_ROLE
     is_admin: bool = False
     created_at: Optional[str] = None
+    # 求职者资料
+    avatar_url: str = ""
+    nickname: str = ""
+    phone: str = ""
+    bio: str = ""
+    # 求职意向
+    job_seeking_status: str = ""
+    expected_position: str = ""
+    expected_city: str = ""
+    expected_salary_min: int = 0
+    expected_salary_max: int = 0
+    expected_industry: str = ""
+    work_years: int = 0
+    education: str = ""
+    current_employer: str = ""
+    current_position: str = ""
+    skill_tags: list = []
+    social_links: dict = {}
+
+
+class UserProfileUpdateReq(BaseModel):
+    """用户个人资料更新请求"""
+    avatar_url: Optional[str] = Field(default=None, max_length=500)
+    nickname: Optional[str] = Field(default=None, max_length=50)
+    phone: Optional[str] = Field(default=None, max_length=20)
+    bio: Optional[str] = None
+    # 求职意向
+    job_seeking_status: Optional[str] = None
+    expected_position: Optional[str] = Field(default=None, max_length=200)
+    expected_city: Optional[str] = Field(default=None, max_length=200)
+    expected_salary_min: Optional[int] = Field(default=None, ge=0)
+    expected_salary_max: Optional[int] = Field(default=None, ge=0)
+    expected_industry: Optional[str] = Field(default=None, max_length=200)
+    work_years: Optional[int] = Field(default=None, ge=0)
+    education: Optional[str] = Field(default=None)
+    current_employer: Optional[str] = Field(default=None, max_length=200)
+    current_position: Optional[str] = Field(default=None, max_length=200)
+    skill_tags: Optional[list] = None
+    social_links: Optional[dict] = None
+
+    @field_validator("job_seeking_status")
+    @classmethod
+    def validate_job_seeking_status(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value not in {"active", "urgent", "observing", "not_looking", ""}:
+            raise ValueError("求职状态可选值: active/urgent/observing/not_looking")
+        return value
+
+    @field_validator("education")
+    @classmethod
+    def validate_education(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value not in {"", "high_school", "associate", "bachelor", "master", "phd"}:
+            raise ValueError("学历可选值: high_school/associate/bachelor/master/phd")
+        return value
 
 
 class AuthResp(BaseModel):

@@ -1,14 +1,14 @@
 <template>
-  <div class="about-page">
+  <div class="page-shell">
     <section class="hero-card">
       <p class="eyebrow">System Positioning</p>
-      <h1>智能招聘与职业规划平台</h1>
-      <p class="hero-desc">
+      <h2>智能招聘与职业规划平台</h2>
+	      <div class="page-header-sub">
         当前这一版系统的重点，已经从单点的简历处理工具，转成一套围绕“分析、规划、筛岗、面试准备”展开的求职工作台。
         它的价值不只是给一个分数，而是把后续动作也串起来。
-      </p>
+      </div>
 
-      <div class="hero-tags">
+	      <div class="hero-tags">
         <el-tag>Agentic RAG</el-tag>
         <el-tag type="success">多智能体协作</el-tag>
         <el-tag type="warning">职业规划</el-tag>
@@ -282,11 +282,7 @@ const boundaries = [
 </script>
 
 <style scoped>
-.about-page {
-  --paper: #f6fbfc;
-  --ink: #1f2b3d;
-  --muted: #708092;
-  --line: rgba(203, 221, 230, 0.9);
+.page-shell {
   max-width: 1360px;
   margin: 0 auto;
   display: flex;
@@ -297,18 +293,15 @@ const boundaries = [
 .hero-card,
 .panel-card,
 .workspace-card {
-  border: 1px solid var(--line);
+  border: 1px solid var(--app-line);
   background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 36px rgba(145, 176, 193, 0.12);
+  box-shadow: var(--app-shadow-soft);
 }
 
 .hero-card {
   padding: 28px;
-  border-radius: 28px;
-  background:
-    radial-gradient(circle at top center, rgba(114, 187, 143, 0.2), transparent 30%),
-    radial-gradient(circle at right top, rgba(198, 106, 61, 0.12), transparent 24%),
-    linear-gradient(180deg, rgba(246, 252, 247, 0.98) 0%, rgba(241, 248, 243, 0.92) 100%);
+  border-radius: var(--app-radius-md, 16px);
+  background: var(--app-bg);
 }
 
 .eyebrow {
@@ -316,24 +309,17 @@ const boundaries = [
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
-.hero-card h1,
+.hero-card h2,
 .section-head h2 {
   margin: 10px 0 0;
 }
 
-.hero-card h1 {
+.hero-card h2 {
   font-size: 38px;
   line-height: 1.08;
-}
-
-.hero-desc {
-  max-width: 860px;
-  margin: 16px 0 0;
-  color: var(--muted);
-  line-height: 1.85;
 }
 
 .hero-tags {
@@ -350,7 +336,7 @@ const boundaries = [
 }
 
 .panel-card {
-  border-radius: 24px;
+  border-radius: var(--app-radius-md, 16px);
 }
 
 .panel-title,
@@ -359,7 +345,7 @@ const boundaries = [
   align-items: center;
   gap: 10px;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--app-text);
 }
 
 .info-list,
@@ -374,16 +360,16 @@ const boundaries = [
 .stack-layer,
 .bullet-item {
   padding: 14px 16px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(250, 253, 254, 0.98), rgba(244, 250, 252, 0.96));
-  border: 1px solid rgba(219, 233, 238, 0.96);
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
 }
 
 .info-item strong,
 .pipeline-item strong,
 .stack-layer strong {
   display: block;
-  color: var(--ink);
+  color: var(--app-text);
 }
 
 .info-item p,
@@ -391,7 +377,7 @@ const boundaries = [
 .stack-layer p,
 .workspace-card p {
   margin: 6px 0 0;
-  color: var(--muted);
+  color: var(--app-muted);
   line-height: 1.75;
 }
 
@@ -400,9 +386,9 @@ const boundaries = [
   grid-template-columns: 50px 1fr;
   gap: 12px;
   padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid rgba(219, 233, 238, 0.96);
-  background: linear-gradient(180deg, rgba(250, 253, 254, 0.98), rgba(244, 250, 252, 0.96));
+  border-radius: var(--app-radius-sm, 12px);
+  border: 1px solid var(--app-line);
+  background: var(--app-bg);
 }
 
 .pipeline-no {
@@ -411,8 +397,8 @@ const boundaries = [
   justify-content: center;
   width: 50px;
   height: 50px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #1c8c5e, #c66a3d);
+  border-radius: var(--app-radius-sm, 12px);
+  background: linear-gradient(135deg, var(--app-primary), var(--app-warning));
   color: #fff;
   font-weight: 700;
 }
@@ -429,19 +415,17 @@ const boundaries = [
 
 .workspace-card {
   padding: 20px;
-  border-radius: 24px;
-  background:
-    radial-gradient(circle at top right, rgba(176, 232, 255, 0.18), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 252, 253, 0.95));
+  border-radius: var(--app-radius-md, 16px);
+  background: var(--app-bg);
 }
 
 .workspace-top span {
   padding: 6px 10px;
   border-radius: 999px;
-  background: #f3fbfc;
-  border: 1px solid rgba(214, 232, 238, 0.94);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
   font-size: 12px;
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
 .workspace-card h3 {
@@ -466,18 +450,18 @@ const boundaries = [
   justify-content: space-between;
   gap: 16px;
   padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(219, 233, 238, 0.96);
-  background: linear-gradient(180deg, rgba(250, 253, 254, 0.98), rgba(244, 250, 252, 0.96));
+  border-radius: var(--app-radius-sm, 12px);
+  border: 1px solid var(--app-line);
+  background: var(--app-bg);
 }
 
 .tech-item span {
-  color: var(--muted);
+  color: var(--app-muted);
 }
 
 .tech-item strong {
   text-align: right;
-  color: var(--ink);
+  color: var(--app-text);
 }
 
 @media (max-width: 1280px) {
@@ -498,7 +482,7 @@ const boundaries = [
     padding: 20px;
   }
 
-  .hero-card h1 {
+  .hero-card h2 {
     font-size: 30px;
   }
 

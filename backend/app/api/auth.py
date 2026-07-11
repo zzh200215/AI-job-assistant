@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
 from app.core.user_roles import CANDIDATE_ROLE, RECRUITER_ROLE, USER_ROLES
 from app.models.user import User
-from app.schemas.auth import AuthResp, LoginReq, PasswordResetReq, RegisterReq, UserInfo
+from app.schemas.auth import AuthResp, LoginReq, PasswordResetReq, RegisterReq, UserInfo, UserProfileUpdateReq
 from app.utils.response import ERR_PARAM, fail, ok
 
 router = APIRouter()
@@ -26,10 +26,26 @@ def _build_user_info(user: User) -> UserInfo:
     return UserInfo(
         id=user.id,
         username=user.username,
-        email=user.email,
+        email=user.email or "",
         role=_resolve_user_role(user),
         is_admin=user.username in settings.admin_usernames_list,
         created_at=user.created_at.isoformat() if user.created_at else None,
+        avatar_url=getattr(user, "avatar_url", "") or "",
+        nickname=getattr(user, "nickname", "") or "",
+        phone=getattr(user, "phone", "") or "",
+        bio=getattr(user, "bio", "") or "",
+        job_seeking_status=getattr(user, "job_seeking_status", "") or "",
+        expected_position=getattr(user, "expected_position", "") or "",
+        expected_city=getattr(user, "expected_city", "") or "",
+        expected_salary_min=getattr(user, "expected_salary_min", 0) or 0,
+        expected_salary_max=getattr(user, "expected_salary_max", 0) or 0,
+        expected_industry=getattr(user, "expected_industry", "") or "",
+        work_years=getattr(user, "work_years", 0) or 0,
+        education=getattr(user, "education", "") or "",
+        current_employer=getattr(user, "current_employer", "") or "",
+        current_position=getattr(user, "current_position", "") or "",
+        skill_tags=getattr(user, "skill_tags", None) or [],
+        social_links=getattr(user, "social_links", None) or {},
     )
 
 
@@ -138,3 +154,27 @@ def get_current_user(authorization: str = Header(None), db: Session = Depends(ge
 @router.get("/me", summary="获取当前登录用户信息")
 async def get_me(current_user: User = Depends(get_current_user)):
     return ok(_build_user_info(current_user).model_dump())
+
+
+@router.put("/me/profile", summary="更新用户个人资料")
+async def update_profile(
+    payload: UserProfileUpdateReq,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    data = payload.model_dump(exclude_unset=True)
+
+    # 薪资逻辑校验
+    if "expected_salary_min" in data and "expected_salary_max" in data:
+        if data["expected_salary_min"] and data["expected_salary_max"]:
+            if data["expected_salary_min"] > data["expected_salary_max"]:
+                return fail(message="期望最低薪资不能高于最高薪资", code=ERR_PARAM)
+
+    for field, value in data.items():
+        if hasattr(current_user, field):
+            setattr(current_user, field, value)
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+    return ok(_build_user_info(current_user).model_dump(), message="个人资料已更新")

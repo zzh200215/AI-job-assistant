@@ -1,10 +1,10 @@
 <template>
-  <div class="analysis-page">
+  <div class="page-shell">
     <section class="result-hero">
       <div class="hero-copy">
         <span class="hero-kicker">Analysis Workspace</span>
-        <h1>智能分析结果</h1>
-        <p>先看结论，再看依据，最后决定下一步动作。</p>
+        <h2>智能分析结果</h2>
+        <div class="page-header-sub">先看结论，再看依据，最后决定下一步动作。</div>
       </div>
       <div class="hero-actions">
         <el-button @click="fillLast">填充最近 ID</el-button>
@@ -15,228 +15,240 @@
       </div>
     </section>
 
-    <el-card shadow="never" class="control-card">
-      <el-form :inline="true" :model="form" class="control-form">
-        <el-form-item label="简历 ID">
-          <el-input-number v-model="form.resume_id" :min="1" placeholder="简历 ID" />
-        </el-form-item>
-        <el-form-item label="JD ID">
-          <el-input-number v-model="form.jd_id" :min="1" placeholder="JD ID" />
-        </el-form-item>
-      </el-form>
+    <div class="panel">
+      <div class="panel-body">
+        <el-form :inline="true" :model="form" class="control-form">
+          <el-form-item label="简历 ID">
+            <el-input-number v-model="form.resume_id" :min="1" placeholder="简历 ID" />
+          </el-form-item>
+          <el-form-item label="JD ID">
+            <el-input-number v-model="form.jd_id" :min="1" placeholder="JD ID" />
+          </el-form-item>
+        </el-form>
 
-      <el-alert
-        v-if="lastIdsTip"
-        type="info"
-        :closable="false"
-        show-icon
-        :title="`检测到最近使用：简历 ID=${lastIdsTip.rid}，JD ID=${lastIdsTip.jid}`"
-      />
-    </el-card>
+        <el-alert
+          v-if="lastIdsTip"
+          type="info"
+          :closable="false"
+          show-icon
+          :title="`检测到最近使用：简历 ID=${lastIdsTip.rid}，JD ID=${lastIdsTip.jid}`"
+        />
+      </div>
+    </div>
 
-    <el-card v-if="loading && agentSteps.length" shadow="never" class="panel-card">
-      <template #header>
-        <div class="panel-head">
-          <span><el-icon class="is-loading"><Loading /></el-icon> 分析进度</span>
+    <div class="panel" v-if="loading && agentSteps.length">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <h3><el-icon class="is-loading"><Loading /></el-icon> 分析进度</h3>
           <el-tag type="warning" effect="plain">{{ completedStepCount }} / {{ agentSteps.length }}</el-tag>
         </div>
-      </template>
-
-      <div class="progress-grid">
-        <div class="progress-stat">
-          <span>当前阶段</span>
-          <strong>{{ currentStepName }}</strong>
-        </div>
-        <div class="progress-stat">
-          <span>已完成</span>
-          <strong>{{ completedStepCount }}</strong>
-        </div>
-        <div class="progress-stat">
-          <span>总步骤</span>
-          <strong>{{ agentSteps.length }}</strong>
-        </div>
       </div>
+      <div class="panel-body">
+        <div class="progress-grid">
+          <div class="progress-stat">
+            <span>当前阶段</span>
+            <strong>{{ currentStepName }}</strong>
+          </div>
+          <div class="progress-stat">
+            <span>已完成</span>
+            <strong>{{ completedStepCount }}</strong>
+          </div>
+          <div class="progress-stat">
+            <span>总步骤</span>
+            <strong>{{ agentSteps.length }}</strong>
+          </div>
+        </div>
 
-      <el-timeline>
-        <el-timeline-item
-          v-for="(s, i) in agentSteps"
-          :key="i"
-          :type="stepType(s.status)"
-          :icon="stepIcon(s.status)"
-        >
-          <div class="step-title">{{ stepLabel(s.step_name) }}</div>
-          <div class="step-status">{{ statusText(s.status) }} {{ s.duration_ms ? `(${s.duration_ms}ms)` : '' }}</div>
-          <el-tag v-if="s.error_msg" size="small" type="danger">{{ s.error_msg }}</el-tag>
-        </el-timeline-item>
-      </el-timeline>
-    </el-card>
+        <el-timeline>
+          <el-timeline-item
+            v-for="(s, i) in agentSteps"
+            :key="i"
+            :type="stepType(s.status)"
+            :icon="stepIcon(s.status)"
+          >
+            <div class="step-title">{{ stepLabel(s.step_name) }}</div>
+            <div class="step-status">{{ statusText(s.status) }} {{ s.duration_ms ? `(${s.duration_ms}ms)` : '' }}</div>
+            <el-tag v-if="s.error_msg" size="small" type="danger">{{ s.error_msg }}</el-tag>
+          </el-timeline-item>
+        </el-timeline>
+      </div>
+    </div>
 
     <template v-if="result">
       <section class="overview-grid">
-        <el-card shadow="never" class="score-card">
-          <div class="score-shell">
-            <span class="score-label">匹配度</span>
-            <strong class="score-value">{{ result.match_score }}</strong>
-            <p class="score-rec">{{ localizedMatchRecommendation || '待评估' }}</p>
-            <p class="score-summary">{{ localizedMatchSummary || '暂无摘要' }}</p>
-            <div class="score-actions">
-              <el-button size="small" type="warning" :loading="regenOptimizeLoading" @click="onRegenOptimize">
-                重生成优化建议
-              </el-button>
-              <el-button size="small" type="success" :loading="regenIntervLoading" @click="onRegenInterview">
-                重生成面试题
-              </el-button>
+        <div class="panel score-card">
+          <div class="panel-body">
+            <div class="score-shell">
+              <span class="score-label">匹配度</span>
+              <strong class="score-value">{{ result.match_score }}</strong>
+              <p class="score-rec">{{ localizedMatchRecommendation || '待评估' }}</p>
+              <p class="score-summary">{{ localizedMatchSummary || '暂无摘要' }}</p>
+              <div class="score-actions">
+                <el-button size="small" type="warning" :loading="regenOptimizeLoading" @click="onRegenOptimize">
+                  重生成优化建议
+                </el-button>
+                <el-button size="small" type="success" :loading="regenIntervLoading" @click="onRegenInterview">
+                  重生成面试题
+                </el-button>
+              </div>
             </div>
           </div>
-        </el-card>
+        </div>
 
-        <el-card shadow="never" class="summary-card">
-          <template #header>
-            <div class="panel-head">
-              <span>这份结果告诉你什么</span>
+        <div class="panel summary-card">
+          <div class="panel-header">
+            <div class="panel-title-row">
+              <h3>这份结果告诉你什么</h3>
               <el-tag type="info" effect="plain">记录 {{ result.record_id || result.id }}</el-tag>
             </div>
-          </template>
+          </div>
+          <div class="panel-body">
+            <div class="metric-grid">
+              <div class="metric-item">
+                <span>技能</span>
+                <strong>{{ result.match_report?.dimension_scores?.skills?.score ?? 0 }}</strong>
+              </div>
+              <div class="metric-item">
+                <span>经验</span>
+                <strong>{{ result.match_report?.dimension_scores?.experience?.score ?? 0 }}</strong>
+              </div>
+              <div class="metric-item">
+                <span>学历</span>
+                <strong>{{ result.match_report?.dimension_scores?.education?.score ?? 0 }}</strong>
+              </div>
+              <div class="metric-item">
+                <span>行业</span>
+                <strong>{{ result.match_report?.dimension_scores?.industry?.score ?? 0 }}</strong>
+              </div>
+            </div>
 
-          <div class="metric-grid">
-            <div class="metric-item">
-              <span>技能</span>
-              <strong>{{ result.match_report?.dimension_scores?.skills?.score ?? 0 }}</strong>
-            </div>
-            <div class="metric-item">
-              <span>经验</span>
-              <strong>{{ result.match_report?.dimension_scores?.experience?.score ?? 0 }}</strong>
-            </div>
-            <div class="metric-item">
-              <span>学历</span>
-              <strong>{{ result.match_report?.dimension_scores?.education?.score ?? 0 }}</strong>
-            </div>
-            <div class="metric-item">
-              <span>行业</span>
-              <strong>{{ result.match_report?.dimension_scores?.industry?.score ?? 0 }}</strong>
+            <div class="next-actions">
+              <el-button type="primary" @click="goInterview">
+                <el-icon><ChatLineSquare /></el-icon> 去看面试题
+              </el-button>
+              <el-button @click="goCareer">职业规划</el-button>
+              <el-button @click="goJobMarket">岗位市场</el-button>
             </div>
           </div>
-
-          <div class="next-actions">
-            <el-button type="primary" @click="goInterview">
-              <el-icon><ChatLineSquare /></el-icon> 去看面试题
-            </el-button>
-            <el-button @click="goCareer">职业规划</el-button>
-            <el-button @click="goJobMarket">岗位市场</el-button>
-          </div>
-        </el-card>
+        </div>
       </section>
 
-      <el-card shadow="never" class="detail-card">
-        <el-tabs v-model="tab">
-          <el-tab-pane label="匹配报告" name="match">
-            <div class="detail-grid">
-              <section class="detail-block">
-                <h3>优势</h3>
-                <ul>
-                  <li v-for="(x, i) in localizedStrengths" :key="i">
-                    <b>{{ x.item || x }}</b>
-                    <span v-if="x.impact">：{{ x.impact }}</span>
-                    <span v-if="x.evidence" class="muted">（{{ x.evidence }}）</span>
-                  </li>
-                </ul>
-              </section>
+      <div class="panel detail-card">
+        <div class="panel-body">
+          <el-tabs v-model="tab">
+            <el-tab-pane label="匹配报告" name="match">
+              <div class="detail-grid">
+                <section class="detail-block">
+                  <h3>优势</h3>
+                  <ul>
+                    <li v-for="(x, i) in localizedStrengths" :key="i">
+                      <b>{{ x.item || x }}</b>
+                      <span v-if="x.impact">：{{ x.impact }}</span>
+                      <span v-if="x.evidence" class="muted">（{{ x.evidence }}）</span>
+                    </li>
+                  </ul>
+                </section>
 
-              <section class="detail-block">
-                <h3>差距</h3>
-                <ul>
-                  <li v-for="(x, i) in localizedGaps" :key="i">
-                    <b>{{ x.item || x }}</b>
-                    <span v-if="x.action">：{{ x.action }}</span>
-                    <span v-else-if="x.impact">：{{ x.impact }}</span>
-                  </li>
-                </ul>
-              </section>
+                <section class="detail-block">
+                  <h3>差距</h3>
+                  <ul>
+                    <li v-for="(x, i) in localizedGaps" :key="i">
+                      <b>{{ x.item || x }}</b>
+                      <span v-if="x.action">：{{ x.action }}</span>
+                      <span v-else-if="x.impact">：{{ x.impact }}</span>
+                    </li>
+                  </ul>
+                </section>
 
-              <section class="detail-block">
-                <h3>风险点</h3>
-                <ul>
-                  <li v-for="(x, i) in localizedRiskPoints" :key="i">{{ x }}</li>
-                </ul>
-              </section>
-            </div>
-          </el-tab-pane>
-
-          <el-tab-pane label="优化建议" name="optimize">
-            <el-alert :title="result.optimize_suggestions?.overall || '暂无优化摘要'" type="success" :closable="false" />
-            <el-collapse class="mt">
-              <el-collapse-item
-                v-for="(s, i) in result.optimize_suggestions?.sections || []"
-                :key="i"
-                :title="s.section"
-              >
-                <ul><li v-for="(x, j) in s.suggestions" :key="j">{{ x }}</li></ul>
-              </el-collapse-item>
-            </el-collapse>
-
-            <div class="keyword-grid">
-              <div class="detail-block">
-                <h3>建议补充</h3>
-                <div class="tag-row">
-                  <el-tag v-for="k in result.optimize_suggestions?.keywords_to_add || []" :key="k" type="success">{{ k }}</el-tag>
-                </div>
+                <section class="detail-block">
+                  <h3>风险点</h3>
+                  <ul>
+                    <li v-for="(x, i) in localizedRiskPoints" :key="i">{{ x }}</li>
+                  </ul>
+                </section>
               </div>
-              <div class="detail-block">
-                <h3>建议删减</h3>
-                <div class="tag-row">
-                  <el-tag v-for="k in result.optimize_suggestions?.keywords_to_remove || []" :key="k" type="danger">{{ k }}</el-tag>
-                </div>
-              </div>
-            </div>
+            </el-tab-pane>
 
-            <div class="generate-area">
-              <p class="generate-desc">如果你准备继续投递，可以直接生成一份优化后的简历版本。</p>
-              <el-button type="primary" size="large" :loading="genOptimizing" @click="onGenerateOptimized">
-                <el-icon><EditPen /></el-icon> 生成优化版简历
-              </el-button>
-            </div>
-          </el-tab-pane>
+            <el-tab-pane label="优化建议" name="optimize">
+              <el-alert :title="result.optimize_suggestions?.overall || '暂无优化摘要'" type="success" :closable="false" />
+              <el-collapse class="mt">
+                <el-collapse-item
+                  v-for="(s, i) in result.optimize_suggestions?.sections || []"
+                  :key="i"
+                  :title="s.section"
+                >
+                  <ul><li v-for="(x, j) in s.suggestions" :key="j">{{ x }}</li></ul>
+                </el-collapse-item>
+              </el-collapse>
 
-          <el-tab-pane label="面试题" name="interview">
-            <el-empty v-if="!hasInterview" description="暂无面试题" />
-            <template v-else>
-              <div v-for="(items, key) in interviewGroups" :key="key" class="question-group">
-                <h3>{{ groupTitle(key) }}</h3>
-                <el-card v-for="(q, i) in items" :key="i" shadow="never" class="q-card">
-                  <div class="q"><b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}</div>
-                  <div class="i">考察点：{{ q.focus || q.intent }}</div>
-                  <div class="a">参考答案：{{ q.suggested_answer || q.expected_answer || q.ref_answer }}</div>
-                  <div v-if="q.preparation_tips" class="tip">准备建议：{{ q.preparation_tips }}</div>
-                </el-card>
-              </div>
-            </template>
-          </el-tab-pane>
-
-          <el-tab-pane name="references" :disabled="!hasReferences">
-            <template #label>
-              <span><el-icon><Reading /></el-icon> 参考依据 <el-tag v-if="refCount" size="small" type="info">{{ refCount }}</el-tag></span>
-            </template>
-
-            <el-empty v-if="!hasReferences" description="本次分析没有附带参考依据" />
-            <template v-else>
-              <div v-for="(ref, ri) in result.references" :key="ri" class="ref-card">
-                <el-card shadow="never">
-                  <template #header>
-                    <div class="panel-head">
-                      <span>{{ ref.doc_title }}</span>
-                      <el-tag :type="refTypeTag(ref.doc_type)" size="small">{{ refTypeLabel(ref.doc_type) }}</el-tag>
-                    </div>
-                  </template>
-                  <div v-for="(chunk, ci) in ref.chunks" :key="ci" class="ref-chunk">
-                    <div class="ref-meta">片段 {{ ci + 1 }} · 相似度 {{ chunk.score }}</div>
-                    <div class="ref-text">{{ chunk.text }}{{ chunk.text?.length >= 200 ? '…' : '' }}</div>
+              <div class="keyword-grid">
+                <div class="detail-block">
+                  <h3>建议补充</h3>
+                  <div class="tag-row">
+                    <el-tag v-for="k in result.optimize_suggestions?.keywords_to_add || []" :key="k" type="success">{{ k }}</el-tag>
                   </div>
-                </el-card>
+                </div>
+                <div class="detail-block">
+                  <h3>建议删减</h3>
+                  <div class="tag-row">
+                    <el-tag v-for="k in result.optimize_suggestions?.keywords_to_remove || []" :key="k" type="danger">{{ k }}</el-tag>
+                  </div>
+                </div>
               </div>
-            </template>
-          </el-tab-pane>
-        </el-tabs>
-      </el-card>
+
+              <div class="generate-area">
+                <p class="generate-desc">如果你准备继续投递，可以直接生成一份优化后的简历版本。</p>
+                <el-button type="primary" size="large" :loading="genOptimizing" @click="onGenerateOptimized">
+                  <el-icon><EditPen /></el-icon> 生成优化版简历
+                </el-button>
+              </div>
+            </el-tab-pane>
+
+            <el-tab-pane label="面试题" name="interview">
+              <el-empty v-if="!hasInterview" description="暂无面试题" />
+              <template v-else>
+                <div v-for="(items, key) in interviewGroups" :key="key" class="question-group">
+                  <h3>{{ groupTitle(key) }}</h3>
+                  <div class="panel q-card" v-for="(q, i) in items" :key="i">
+                    <div class="panel-body">
+                      <div class="q"><b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}</div>
+                      <div class="i">考察点：{{ q.focus || q.intent }}</div>
+                      <div class="a">参考答案：{{ q.suggested_answer || q.expected_answer || q.ref_answer }}</div>
+                      <div v-if="q.preparation_tips" class="tip">准备建议：{{ q.preparation_tips }}</div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </el-tab-pane>
+
+            <el-tab-pane name="references" :disabled="!hasReferences">
+              <template #label>
+                <span><el-icon><Reading /></el-icon> 参考依据 <el-tag v-if="refCount" size="small" type="info">{{ refCount }}</el-tag></span>
+              </template>
+
+              <el-empty v-if="!hasReferences" description="本次分析没有附带参考依据" />
+              <template v-else>
+                <div v-for="(ref, ri) in result.references" :key="ri" class="ref-card">
+                  <div class="panel">
+                    <div class="panel-header">
+                      <div class="panel-title-row">
+                        <h3>{{ ref.doc_title }}</h3>
+                        <el-tag :type="refTypeTag(ref.doc_type)" size="small">{{ refTypeLabel(ref.doc_type) }}</el-tag>
+                      </div>
+                    </div>
+                    <div class="panel-body">
+                      <div v-for="(chunk, ci) in ref.chunks" :key="ci" class="ref-chunk">
+                        <div class="ref-meta">片段 {{ ci + 1 }} · 相似度 {{ chunk.score }}</div>
+                        <div class="ref-text">{{ chunk.text }}{{ chunk.text?.length >= 200 ? '...' : '' }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -300,7 +312,7 @@ async function loadAnalysisById(recordId) {
     const data = await getAnalysis(recordId)
     result.value = data
     localStorage.setItem('recruit.lastRecordId', String(data.record_id || data.id || recordId))
-    if (data?.record_id || data?.id) {
+    if (data?.record_id || data.id) {
       tab.value = 'match'
     }
   } catch {
@@ -485,23 +497,17 @@ const goJobMarket = () => router.push('/jobs/search')
 </script>
 
 <style scoped>
-.analysis-page {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
 .result-hero {
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: flex-end;
   padding: 24px 26px;
-  border-radius: 30px;
+  border-radius: var(--app-radius-md, 16px);
   background:
     radial-gradient(circle at top right, rgba(224, 178, 104, 0.18), transparent 28%),
     linear-gradient(135deg, rgba(255, 251, 245, 0.96), rgba(245, 251, 246, 0.98));
-  border: 1px solid rgba(210, 223, 214, 0.92);
+  border: 1px solid var(--app-line);
 }
 
 .hero-kicker {
@@ -512,16 +518,10 @@ const goJobMarket = () => router.push('/jobs/search')
   color: var(--app-muted);
 }
 
-.hero-copy h1 {
+.hero-copy h2 {
   margin: 8px 0 8px;
   font-size: 34px;
   color: var(--app-text);
-}
-
-.hero-copy p {
-  margin: 0;
-  color: var(--app-muted);
-  line-height: 1.7;
 }
 
 .hero-actions {
@@ -530,27 +530,12 @@ const goJobMarket = () => router.push('/jobs/search')
   flex-wrap: wrap;
 }
 
-.control-card,
-.panel-card,
-.score-card,
-.summary-card,
-.detail-card {
-  border-radius: 26px;
-}
-
 .control-form {
   margin-bottom: 14px;
 }
 
 .control-form :deep(.el-form-item) {
   margin-bottom: 0;
-}
-
-.panel-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
 }
 
 .progress-grid {
@@ -562,9 +547,9 @@ const goJobMarket = () => router.push('/jobs/search')
 
 .progress-stat {
   padding: 16px 18px;
-  border-radius: 20px;
+  border-radius: var(--app-radius-sm, 12px);
   background: linear-gradient(135deg, #fbfdfb, #f1f7f3);
-  border: 1px solid rgba(217, 231, 222, 0.92);
+  border: 1px solid var(--app-line);
 }
 
 .progress-stat span {
@@ -635,9 +620,9 @@ const goJobMarket = () => router.push('/jobs/search')
 
 .metric-item {
   padding: 16px 18px;
-  border-radius: 20px;
+  border-radius: var(--app-radius-sm, 12px);
   background: linear-gradient(135deg, #fbfdfb, #f2f7f3);
-  border: 1px solid rgba(217, 231, 222, 0.92);
+  border: 1px solid var(--app-line);
 }
 
 .metric-item span {
@@ -674,9 +659,9 @@ const goJobMarket = () => router.push('/jobs/search')
 
 .detail-block {
   padding: 18px;
-  border-radius: 20px;
+  border-radius: var(--app-radius-sm, 12px);
   background: linear-gradient(135deg, rgba(251, 253, 251, 0.96), rgba(242, 247, 243, 0.98));
-  border: 1px solid rgba(217, 231, 222, 0.92);
+  border: 1px solid var(--app-line);
 }
 
 .detail-block h3,
@@ -693,7 +678,7 @@ const goJobMarket = () => router.push('/jobs/search')
 
 .detail-block li {
   line-height: 1.8;
-  color: #44564d;
+  color: var(--app-muted);
 }
 
 .tag-row {
@@ -705,9 +690,9 @@ const goJobMarket = () => router.push('/jobs/search')
 .generate-area {
   margin-top: 18px;
   padding: 24px;
-  border-radius: 22px;
+  border-radius: var(--app-radius-md, 16px);
   background: linear-gradient(135deg, #fff8f1, #f7fbf6);
-  border: 1px solid rgba(226, 217, 197, 0.92);
+  border: 1px solid var(--app-line);
   text-align: center;
 }
 
@@ -722,7 +707,7 @@ const goJobMarket = () => router.push('/jobs/search')
 
 .q-card {
   margin-bottom: 10px;
-  border-radius: 18px;
+  border-radius: var(--app-radius-sm, 12px);
 }
 
 .q {
@@ -759,9 +744,9 @@ const goJobMarket = () => router.push('/jobs/search')
 .ref-text {
   margin-top: 6px;
   padding: 10px 12px;
-  border-radius: 14px;
-  background: #f4f8f5;
-  color: #46584f;
+  border-radius: var(--app-radius-xs, 8px);
+  background: var(--app-bg);
+  color: var(--app-muted);
   line-height: 1.7;
 }
 
@@ -790,7 +775,7 @@ const goJobMarket = () => router.push('/jobs/search')
     padding: 20px;
   }
 
-  .hero-copy h1 {
+  .hero-copy h2 {
     font-size: 28px;
   }
 

@@ -19,7 +19,7 @@ from app.api.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.history import JobDescription, Resume
-from app.models.job_recommend import JobRecommendationFeedback
+from app.models.job_recommend import JobBookmark, JobRecommendationFeedback
 from app.models.user import User
 from app.services.job_recommend_engine import JobRecommendationEngine
 from app.services.recommendation_tuning import (
@@ -1413,6 +1413,16 @@ async def get_jd_detail(
     if not jd or not _can_access_job(jd, current_user):
         return fail(message="job not found", code=ERR_PARAM)
 
+    # 附带收藏状态
+    bookmark = (
+        db.query(JobBookmark)
+        .filter(
+            JobBookmark.user_id == current_user.id,
+            JobBookmark.jd_id == jd_id,
+        )
+        .first()
+    )
+
     return ok(
         {
             "id": jd.id,
@@ -1424,6 +1434,138 @@ async def get_jd_detail(
             "raw_text": jd.raw_text,
             "parsed": jd.parsed_json or {},
             "source": jd.source,
+            "bookmark_action": bookmark.action if bookmark else None,
             "create_time": jd.create_time.isoformat() if jd.create_time else None,
         }
     )
+
+
+# ============================================================
+# 职位收藏 / 不感兴趣
+# ============================================================
+
+@router.post("/bookmarks", summary="收藏/不感兴趣职位")
+async def bookmark_job(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    jd_id = payload.get("jd_id")
+    action = payload.get("action")  # bookmark / dismiss
+    note = payload.get("note", "")
+
+    if not jd_id or not action:
+        return fail(message="jd_id 和 action 必填", code=ERR_PARAM)
+    if action not in ("bookmark", "dismiss"):
+        return fail(message="action 仅支持 bookmark 或 dismiss", code=ERR_PARAM)
+
+    jd = db.get(JobDescription, jd_id)
+    if not jd or not _can_access_job(jd, current_user):
+        return fail(message="职位不存在或无权限", code=ERR_PARAM)
+
+    existing = (
+        db.query(JobBookmark)
+        .filter(
+            JobBookmark.user_id == current_user.id,
+            JobBookmark.jd_id == jd_id,
+        )
+        .first()
+    )
+
+    if existing:
+        if action == "dismiss" and existing.action == "bookmark":
+            # 取消收藏 → 删除
+            db.delete(existing)
+            db.commit()
+            return ok(message="已取消收藏")
+        existing.action = action
+        existing.note = note or existing.note
+        db.add(existing)
+        db.commit()
+        return ok(existing.to_dict(), message="已更新")
+
+    bookmark = JobBookmark(
+        user_id=current_user.id,
+        jd_id=jd_id,
+        action=action,
+        note=note,
+    )
+    db.add(bookmark)
+    db.commit()
+    db.refresh(bookmark)
+    return ok(bookmark.to_dict(), message="收藏成功" if action == "bookmark" else "已标记不感兴趣")
+
+
+@router.delete("/bookmarks/{jd_id}", summary="取消收藏/移除不感兴趣")
+async def remove_bookmark(
+    jd_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    bookmark = (
+        db.query(JobBookmark)
+        .filter(
+            JobBookmark.user_id == current_user.id,
+            JobBookmark.jd_id == jd_id,
+        )
+        .first()
+    )
+    if not bookmark:
+        return fail(message="未找到收藏记录", code=ERR_PARAM)
+    db.delete(bookmark)
+    db.commit()
+    return ok(message="已移除")
+
+
+@router.get("/bookmarks/list", summary="获取收藏的职位列表")
+async def list_bookmarks(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    q = (
+        db.query(JobBookmark)
+        .filter(
+            JobBookmark.user_id == current_user.id,
+            JobBookmark.action == "bookmark",
+        )
+        .order_by(JobBookmark.created_at.desc())
+    )
+    total = q.count()
+    bookmarks = q.offset((page - 1) * page_size).limit(page_size).all()
+
+    # 附带 JD 信息
+    items = []
+    for bm in bookmarks:
+        jd = db.get(JobDescription, bm.jd_id)
+        items.append({
+            **bm.to_dict(),
+            "job": {
+                "id": jd.id,
+                "title": jd.title,
+                "company": jd.company,
+                "location": jd.location,
+                "salary_range": jd.salary_range,
+                "industry": jd.industry,
+            } if jd else None,
+        })
+
+    return ok({"total": total, "items": items})
+
+
+@router.get("/bookmarks/dismissed", summary="获取不感兴趣的职位ID列表")
+async def list_dismissed(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    jd_ids = [
+        row.jd_id
+        for row in db.query(JobBookmark.jd_id)
+        .filter(
+            JobBookmark.user_id == current_user.id,
+            JobBookmark.action == "dismiss",
+        )
+        .all()
+    ]
+    return ok({"dismissed_jd_ids": jd_ids})
