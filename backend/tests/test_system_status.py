@@ -36,7 +36,7 @@ def register_user(client):
         json={
             "username": "status_user",
             "email": "status@example.com",
-            "password": "abc12345",
+            "password": "StrongP@ssw0rd",
             "role": "candidate",
         },
     )
@@ -56,7 +56,12 @@ def create_user(db_session, *, username: str, email: str, role: str = "candidate
 
 
 def auth_headers(user: User) -> dict:
-    token = create_access_token({"sub": str(user.id), "email": user.email, "username": user.username, "role": user.role})
+    token = create_access_token({
+        "sub": str(user.id),
+        "email": user.email,
+        "username": user.username,
+        "role": user.role,
+    })
     return {"Authorization": f"Bearer {token}"}
 
 

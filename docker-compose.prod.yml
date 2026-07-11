@@ -189,6 +189,65 @@ services:
         labels: "service_name"
         env: "OS_ENVIRONMENT"
 
+  # ---- Prometheus (Monitoring) ----
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: recruit-prometheus
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - recruit-net
+    ports:
+      - "9090:9090"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---- Grafana (Visualization) ----
+  grafana:
+    image: grafana/grafana:latest
+    container_name: recruit-grafana
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    volumes:
+      - ./monitoring/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./monitoring/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required when monitoring profile is enabled}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - recruit-net
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 networks:
   recruit-net:
     driver: bridge
@@ -197,3 +256,5 @@ volumes:
   mysql_data:
   uploads:
   chroma_data:
+  prometheus_data:
+  grafana_data:

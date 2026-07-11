@@ -8,6 +8,7 @@ from typing import Literal, Optional
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
+from app.core.password_blacklist import is_blacklisted
 from app.core.user_roles import CANDIDATE_ROLE
 
 
@@ -22,11 +23,41 @@ def _normalize_account(value: str) -> str:
     return normalized
 
 
-def _validate_password_strength(value: str) -> str:
+def _validate_password_strength(
+    value: str,
+    username: str | None = None,
+    email: str | None = None,
+) -> str:
     if value != value.strip():
         raise ValueError("密码首尾不能包含空格")
-    if not re.search(r"[A-Za-z]", value) or not re.search(r"\d", value):
-        raise ValueError("密码需至少包含 1 个字母和 1 个数字")
+    if len(value) < 8:
+        raise ValueError("密码长度至少为 8 位")
+
+    has_lower = bool(re.search(r"[a-z]", value))
+    has_upper = bool(re.search(r"[A-Z]", value))
+    has_digit = bool(re.search(r"\d", value))
+    # Punctuation/special characters commonly accepted by systems
+    has_special = bool(re.search(r"[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]", value))
+    categories = sum([has_lower, has_upper, has_digit, has_special])
+
+    if len(value) >= 12:
+        if categories < 2:
+            raise ValueError("密码需至少包含字母、数字、特殊字符中的 2 种")
+    else:
+        if categories < 3:
+            raise ValueError("密码需至少包含大写字母、小写字母、数字、特殊字符中的 3 种")
+
+    if is_blacklisted(value):
+        raise ValueError("密码过于常见，请更换更复杂的密码")
+
+    if username and value.lower() == username.strip().lower():
+        raise ValueError("密码不能与用户名相同")
+
+    if email:
+        local = email.split("@")[0].strip().lower()
+        if local and value.lower() == local:
+            raise ValueError("密码不能与邮箱前缀相同")
+
     return value
 
 
@@ -51,10 +82,14 @@ class RegisterReq(BaseModel):
     def normalize_email(cls, value) -> str:
         return _normalize_email(value)
 
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, value: str) -> str:
-        return _validate_password_strength(value)
+    @model_validator(mode="after")
+    def validate_password(self):
+        _validate_password_strength(
+            self.password,
+            username=self.username,
+            email=self.email,
+        )
+        return self
 
 
 class LoginReq(BaseModel):
@@ -98,13 +133,13 @@ class PasswordResetReq(BaseModel):
     def normalize_email(cls, value) -> str:
         return _normalize_email(value)
 
-    @field_validator("new_password", "confirm_password")
-    @classmethod
-    def validate_password(cls, value: str) -> str:
-        return _validate_password_strength(value)
-
     @model_validator(mode="after")
-    def validate_password_match(self):
+    def validate_password(self):
+        _validate_password_strength(
+            self.new_password,
+            username=self.account,
+            email=self.email,
+        )
         if self.new_password != self.confirm_password:
             raise ValueError("两次输入的密码不一致")
         return self
@@ -114,7 +149,7 @@ class UserInfo(BaseModel):
     id: int
     username: str
     email: str
-    role: Literal["candidate", "recruiter"] = CANDIDATE_ROLE
+    role: Literal["candidate", "recruiter", "admin"] = CANDIDATE_ROLE
     is_admin: bool = False
     created_at: Optional[str] = None
     # 求职者资料

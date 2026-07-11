@@ -7,13 +7,20 @@
 - 新JD推送: 每天早上9点
 """
 import logging
+from datetime import datetime, timedelta, timezone
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 _scheduler: AsyncIOScheduler | None = None
+
+# 同步锁超时：超过此时间未释放视为死锁，可强制重新执行
+_SYNC_LOCK_TIMEOUT_MINUTES = 30
 
 
 def get_scheduler() -> AsyncIOScheduler:
@@ -25,6 +32,10 @@ def get_scheduler() -> AsyncIOScheduler:
 
 def start_scheduler() -> None:
     """启动调度器并注册定时任务"""
+    if not settings.RUN_SCHEDULER:
+        logger.info("RUN_SCHEDULER=false，跳过启动定时任务调度器")
+        return
+
     scheduler = get_scheduler()
 
     # ---- 提醒检查任务：每小时执行一次 ----
@@ -51,6 +62,15 @@ def start_scheduler() -> None:
         trigger=CronTrigger(hour=3, minute=0),
         id="target_stats_refresh",
         name="求职目标统计刷新",
+        replace_existing=True,
+    )
+
+    # ---- 岗位数据源同步：每小时执行一次 ----
+    scheduler.add_job(
+        _run_job_data_source_sync,
+        trigger=IntervalTrigger(hours=1),
+        id="job_data_source_sync",
+        name="岗位数据源自动同步",
         replace_existing=True,
     )
 
@@ -136,5 +156,87 @@ def _run_target_stats_refresh():
         logger.info("Target stats refresh completed: %d targets", len(targets))
     except Exception as e:
         logger.error("Target stats refresh job failed: %s", e)
+    finally:
+        db.close()
+
+
+def _calculate_backoff_minutes(fail_count: int, base_interval: int) -> int:
+    """计算指数退避延迟（分钟）
+
+    失败次数越多，下次同步延迟越长，避免频繁重试失败的数据源。
+    最大延迟不超过 24 小时（1440 分钟）。
+    """
+    if fail_count <= 0:
+        return base_interval
+
+    # 指数退避：base_interval * 2^(fail_count-1)，上限 1440 分钟
+    backoff = min(base_interval * (2 ** (fail_count - 1)), 1440)
+    return backoff
+
+
+def _run_job_data_source_sync():
+    """自动同步到期的岗位数据源。"""
+    from app.core.database import SessionLocal
+    from app.models.job_data_source import JobDataSource
+    from app.services.job_data_source.sync_service import SyncService
+
+    db = SessionLocal()
+    now = datetime.now(timezone.utc)
+    lock_timeout = now - timedelta(minutes=_SYNC_LOCK_TIMEOUT_MINUTES)
+    try:
+        sources = (
+            db.query(JobDataSource)
+            .filter(
+                JobDataSource.status == 1,
+                JobDataSource.sync_interval > 0,
+                (JobDataSource.next_sync_at <= now) | (JobDataSource.next_sync_at.is_(None)),
+                (JobDataSource.sync_lock_at <= lock_timeout) | (JobDataSource.sync_lock_at.is_(None)),
+            )
+            .all()
+        )
+
+        total = len(sources)
+        success = 0
+        failed = 0
+        for source in sources:
+            try:
+                source.sync_lock_at = datetime.now(timezone.utc)
+                db.commit()
+                service = SyncService(db, user_id=source.user_id)
+                log = service.sync(source)
+                if log.status in ("success", "partial"):
+                    success += 1
+                    # 成功后重置失败计数
+                    source.fail_count = 0
+                    # 按原始间隔计算下次同步时间
+                    if source.sync_interval and source.sync_interval > 0:
+                        source.next_sync_at = now + timedelta(minutes=source.sync_interval)
+                else:
+                    failed += 1
+                    # 失败后使用指数退避
+                    source.fail_count = (source.fail_count or 0) + 1
+                    backoff_minutes = _calculate_backoff_minutes(source.fail_count, source.sync_interval)
+                    source.next_sync_at = now + timedelta(minutes=backoff_minutes)
+                    logger.warning(
+                        "Sync failed for source %s (fail_count=%d), next sync in %d minutes",
+                        source.id, source.fail_count, backoff_minutes
+                    )
+            except Exception as e:
+                failed += 1
+                source.fail_count = (source.fail_count or 0) + 1
+                source.last_error_msg = str(e)[:500]
+                source.sync_lock_at = None
+                # 失败后使用指数退避
+                backoff_minutes = _calculate_backoff_minutes(source.fail_count, source.sync_interval)
+                source.next_sync_at = now + timedelta(minutes=backoff_minutes)
+                db.commit()
+                logger.error(
+                    "Job data source sync failed for source %s (fail_count=%d): %s, next sync in %d minutes",
+                    source.id, source.fail_count, e, backoff_minutes
+                )
+
+        logger.info("Job data source sync completed: %d sources, %d success, %d failed", total, success, failed)
+    except Exception as e:
+        logger.error("Job data source sync job failed: %s", e)
     finally:
         db.close()

@@ -29,7 +29,7 @@ def register_user(client, **overrides):
     payload = {
         "username": "test_user",
         "email": "test@example.com",
-        "password": "abc12345",
+        "password": "StrongP@ssw0rd",
         "role": "candidate",
     }
     payload.update(overrides)
@@ -87,7 +87,7 @@ class TestAuthApi:
         register_user(client, username="login_user", email="login@example.com")
         response = client.post(
             "/auth/login",
-            json={"account": "LOGIN_USER", "password": "abc12345"},
+            json={"account": "LOGIN_USER", "password": "StrongP@ssw0rd"},
         )
 
         assert response.status_code == 200
@@ -100,7 +100,7 @@ class TestAuthApi:
         register_user(client)
         response = client.post(
             "/auth/login",
-            json={"email": "test@example.com", "password": "abc12345"},
+            json={"email": "test@example.com", "password": "StrongP@ssw0rd"},
         )
 
         assert response.status_code == 200
@@ -114,8 +114,8 @@ class TestAuthApi:
             json={
                 "account": "reset_user",
                 "email": "reset@example.com",
-                "new_password": "newpass123",
-                "confirm_password": "newpass123",
+                "new_password": "Newpass123!",
+                "confirm_password": "Newpass123!",
             },
         )
 
@@ -124,14 +124,14 @@ class TestAuthApi:
 
         old_login = client.post(
             "/auth/login",
-            json={"account": "reset_user", "password": "abc12345"},
+            json={"account": "reset_user", "password": "StrongP@ssw0rd"},
         )
         assert old_login.status_code == 200
         assert old_login.json()["code"] != 0
 
         new_login = client.post(
             "/auth/login",
-            json={"account": "reset@example.com", "password": "newpass123"},
+            json={"account": "reset@example.com", "password": "Newpass123!"},
         )
         assert new_login.status_code == 200
         assert new_login.json()["code"] == 0
@@ -144,8 +144,8 @@ class TestAuthApi:
             json={
                 "account": "mismatch_user",
                 "email": "wrong@example.com",
-                "new_password": "newpass123",
-                "confirm_password": "newpass123",
+                "new_password": "Newpass123!",
+                "confirm_password": "Newpass123!",
             },
         )
 
@@ -178,7 +178,7 @@ class TestAuthApi:
         admin = User(
             username="admin",
             email="real_admin@example.com",
-            password=hash_password("abc12345"),
+            password=hash_password("StrongP@ssw0rd"),
             role="candidate",
         )
         db_session.add(admin)
@@ -187,7 +187,7 @@ class TestAuthApi:
 
         login = client.post(
             "/auth/login",
-            json={"account": "admin", "password": "abc12345"},
+            json={"account": "admin", "password": "StrongP@ssw0rd"},
         )
 
         assert login.status_code == 200

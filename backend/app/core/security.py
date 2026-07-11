@@ -13,7 +13,8 @@ from app.core.config import settings
 
 def hash_password(plain: str) -> str:
     """bcrypt 哈希明文密码"""
-    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    rounds = max(4, min(settings.BCRYPT_ROUNDS, 31))
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt(rounds=rounds)).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:

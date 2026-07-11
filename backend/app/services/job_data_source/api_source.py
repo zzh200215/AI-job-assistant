@@ -8,9 +8,14 @@ import time
 from copy import deepcopy
 from typing import Any, Dict, List, Tuple
 
+import requests
+
 from .adapter import JobDataSourceAdapter, SourceRow
 
 logger = logging.getLogger(__name__)
+
+
+_DEFAULT_USER_AGENT = "SmartRecruit-DataSync/1.0 (+https://github.com/smart-recruit/platform)"
 
 
 class ApiJobSource(JobDataSourceAdapter):
@@ -23,7 +28,11 @@ class ApiJobSource(JobDataSourceAdapter):
     - 嵌套 JSON 路径提取
     - Page 分页
     - 简单限流（请求间 sleep）
+    - 连接池、默认 User-Agent、可配置超时/重试/退避
     """
+
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
 
     def connect(self) -> bool:
         url = str(self.config.get("api_url") or "").strip()
@@ -98,8 +107,6 @@ class ApiJobSource(JobDataSourceAdapter):
         return int(self.config.get("max_pages") or 5)
 
     def _fetch_page(self, *, page: int, page_size: int) -> Tuple[List[Dict[str, Any]], bool]:
-        import requests
-
         url = str(self.config.get("api_url") or "").strip()
         method = str(self.config.get("api_method") or "GET").upper()
         headers = deepcopy(self.config.get("api_headers") or {})
@@ -113,8 +120,8 @@ class ApiJobSource(JobDataSourceAdapter):
             params[page_size_param] = page_size
 
         last_error: Exception | None = None
-        max_attempts = max(1, int(self.config.get("retry_max_attempts") or 1))
-        backoff_ms = max(0, int(self.config.get("retry_backoff_ms") or 0))
+        max_attempts = max(1, int(self.config.get("retry_max_attempts") or 3))
+        backoff_ms = max(0, int(self.config.get("retry_backoff_ms") or 500))
         refreshed = False
 
         for attempt in range(max_attempts):
@@ -122,9 +129,9 @@ class ApiJobSource(JobDataSourceAdapter):
             current_params = deepcopy(params)
             current_body = deepcopy(body)
             self._apply_auth(current_headers, current_params)
+            attempt_status_code: int | None = None
             try:
                 resp = self._send_request(
-                    requests,
                     method=method,
                     url=url,
                     headers=current_headers,
@@ -132,12 +139,15 @@ class ApiJobSource(JobDataSourceAdapter):
                     body=current_body,
                 )
                 status_code = getattr(resp, "status_code", None)
+                attempt_status_code = status_code if isinstance(status_code, int) else None
                 if status_code in {401, 403} and not refreshed:
                     if self._refresh_auth_token():
                         refreshed = True
                         continue
-                if status_code in {429} or (isinstance(status_code, int) and 500 <= status_code < 600):
-                    raise RuntimeError(f"HTTP {status_code}")
+                if status_code == 429:
+                    raise RuntimeError(f"API 数据源被限流(HTTP {status_code})")
+                if isinstance(status_code, int) and 500 <= status_code < 600:
+                    raise RuntimeError(f"API 数据源服务端错误(HTTP {status_code})")
                 resp.raise_for_status()
                 data = resp.json()
                 items = self._extract_items(data)
@@ -145,28 +155,27 @@ class ApiJobSource(JobDataSourceAdapter):
                 return items, has_more
             except Exception as exc:
                 last_error = exc
-                if attempt >= max_attempts - 1:
-                    break
                 status_code = getattr(getattr(exc, "response", None), "status_code", None)
                 if status_code is None:
-                    try:
-                        status_code = int(str(exc).split()[-1])
-                    except Exception:
-                        status_code = None
+                    status_code = attempt_status_code
+                if attempt >= max_attempts - 1:
+                    break
                 if status_code not in {401, 403, 429} and not (500 <= int(status_code or 0) < 600):
                     break
                 wait = (backoff_ms / 1000.0) * (2 ** attempt) if backoff_ms else 0.0
+                logger.warning("API 数据源请求失败，将在 %.1fs 后重试(%d/%d): %s", wait, attempt + 1, max_attempts - 1, exc)
                 if wait > 0:
                     time.sleep(wait)
 
         raise RuntimeError(f"API 数据源请求失败: {last_error}")
 
-    def _send_request(self, requests_module, *, method: str, url: str, headers: Dict[str, Any],
+    def _send_request(self, *, method: str, url: str, headers: Dict[str, Any],
                       params: Dict[str, Any], body: Dict[str, Any]):
-        timeout = 30
+        timeout = max(5, int(self.config.get("timeout_seconds") or 30))
+        headers.setdefault("User-Agent", _DEFAULT_USER_AGENT)
         if method == "GET":
-            return requests_module.get(url, headers=headers, params=params, timeout=timeout)
-        return requests_module.post(url, headers=headers, params=params, json=body, timeout=timeout)
+            return requests.get(url, headers=headers, params=params, timeout=timeout)
+        return requests.post(url, headers=headers, params=params, json=body, timeout=timeout)
 
     def _apply_auth(self, headers: Dict[str, str], params: Dict[str, Any]) -> None:
         auth_type = str(self.config.get("auth_type") or "none")
@@ -189,8 +198,6 @@ class ApiJobSource(JobDataSourceAdapter):
         if not refresh_url:
             return False
 
-        import requests
-
         headers = deepcopy(self.config.get("auth_refresh_headers") or {})
         params = deepcopy(self.config.get("auth_refresh_query") or {})
         body = deepcopy(self.config.get("auth_refresh_body") or {})
@@ -199,7 +206,6 @@ class ApiJobSource(JobDataSourceAdapter):
 
         try:
             resp = self._send_request(
-                requests,
                 method=method,
                 url=refresh_url,
                 headers=headers,

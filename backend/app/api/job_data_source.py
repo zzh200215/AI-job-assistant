@@ -3,6 +3,7 @@
 
 路径前缀: /api/datasource
 """
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -32,6 +33,13 @@ router = APIRouter()
 def _ensure_recruiter_access(user: User):
     if user.role != RECRUITER_ROLE:
         raise api_error(403, "仅招聘者可管理岗位数据源", ERR_AUTH)
+
+
+def _compute_next_sync_at(sync_interval: Optional[int]) -> Optional[datetime]:
+    if not sync_interval or sync_interval <= 0:
+        return None
+    now = datetime.now(timezone.utc)
+    return now.replace(minute=0, second=0, microsecond=0) + timedelta(minutes=sync_interval)
 
 
 # ==================== 数据源 CRUD ====================
@@ -65,6 +73,7 @@ async def create_data_source(
         source_type=body.source_type,
         config=body.config.model_dump(),
         sync_interval=body.sync_interval,
+        next_sync_at=_compute_next_sync_at(body.sync_interval),
     )
     db.add(ds)
     db.commit()
@@ -110,6 +119,7 @@ async def update_data_source(
         ds.status = body.status
     if body.sync_interval is not None:
         ds.sync_interval = body.sync_interval
+        ds.next_sync_at = _compute_next_sync_at(body.sync_interval)
     db.commit()
     db.refresh(ds)
     return ok(data=ds, message="更新成功")
@@ -190,6 +200,55 @@ async def trigger_sync(
         "duration_ms": log.duration_ms,
         "message": log.error_msg or f"同步完成: 成功 {log.success_count} 条",
     })
+
+
+@router.post("/sync-all", summary="手动触发所有到期数据源同步")
+async def trigger_sync_all(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _ensure_recruiter_access(current_user)
+    now = datetime.now(timezone.utc)
+    lock_timeout = now - timedelta(minutes=30)
+    sources = (
+        db.query(JobDataSource)
+        .filter(
+            JobDataSource.user_id == current_user.id,
+            JobDataSource.status == 1,
+            JobDataSource.sync_interval > 0,
+            (JobDataSource.next_sync_at <= now) | (JobDataSource.next_sync_at.is_(None)),
+            (JobDataSource.sync_lock_at <= lock_timeout) | (JobDataSource.sync_lock_at.is_(None)),
+        )
+        .all()
+    )
+
+    results = []
+    for ds in sources:
+        try:
+            ds.sync_lock_at = now
+            db.commit()
+            svc = SyncService(db, user_id=current_user.id)
+            log = svc.sync(ds)
+            results.append({
+                "source_id": ds.id,
+                "status": log.status,
+                "success_count": log.success_count,
+                "fail_count": log.fail_count,
+            })
+        except Exception as e:
+            ds.fail_count = (ds.fail_count or 0) + 1
+            ds.last_error_msg = str(e)[:500]
+            ds.sync_lock_at = None
+            db.commit()
+            results.append({
+                "source_id": ds.id,
+                "status": "failed",
+                "success_count": 0,
+                "fail_count": 0,
+                "error": str(e)[:200],
+            })
+
+    return ok(data={"triggered": len(results), "results": results})
 
 
 # ==================== 同步日志 ====================

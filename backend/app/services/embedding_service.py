@@ -13,12 +13,14 @@ import math
 import logging
 import hashlib
 import threading
+import time
 from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.core.prometheus_metrics import record_embedding_error, record_embedding_request
 from app.models.embedding_usage import EmbeddingUsageDaily
 from app.utils.retry import retry_call
 
@@ -27,6 +29,21 @@ logger = logging.getLogger(__name__)
 # 网络型 embedding 单次请求的最大文本条数
 # （dashscope text-embedding-v3 上限为 10；取 10 通用兼容）
 _EMBED_BATCH_SIZE = 10
+
+
+class EmbeddingProviderError(Exception):
+    """Embedding provider 错误基类"""
+    pass
+
+
+class EmbeddingTimeoutError(EmbeddingProviderError):
+    """Embedding 调用超时"""
+    pass
+
+
+class EmbeddingAuthError(EmbeddingProviderError):
+    """Embedding 鉴权失败"""
+    pass
 
 # ===================== Embedding 结果缓存 =====================
 # 相同文本（同一 provider+model）直接复用上次向量，避免重复调用 embedding API。
@@ -278,7 +295,7 @@ def _dashscope_embed(texts: List[str]) -> List[List[float]]:
     try:
         from dashscope import TextEmbedding
     except ImportError:
-        raise RuntimeError("请安装 dashscope: pip install dashscope")
+        raise EmbeddingProviderError("请安装 dashscope: pip install dashscope")
 
     model = settings.EMBEDDING_MODEL or "text-embedding-v3"
     resp = TextEmbedding.call(
@@ -287,7 +304,10 @@ def _dashscope_embed(texts: List[str]) -> List[List[float]]:
         api_key=settings.EMBEDDING_API_KEY or settings.LLM_API_KEY,
     )
     if resp.status_code != 200:
-        raise RuntimeError(f"Embedding API 调用失败: {resp.message}")
+        error_msg = str(resp.message)
+        if "InvalidApiKey" in error_msg or "401" in error_msg:
+            raise EmbeddingAuthError(f"Embedding API 鉴权失败: {error_msg}")
+        raise EmbeddingProviderError(f"Embedding API 调用失败: {error_msg}")
     # 按 input 顺序提取向量
     ordered = sorted(resp.output["embeddings"], key=lambda x: x["text_index"])
     return [item["embedding"] for item in ordered]
@@ -299,19 +319,30 @@ def _openai_embed(texts: List[str]) -> List[List[float]]:
 
     api_key = settings.EMBEDDING_API_KEY or settings.LLM_API_KEY
     if not api_key:
-        raise RuntimeError("EMBEDDING_API_KEY 或 LLM_API_KEY 未配置")
+        raise EmbeddingAuthError("EMBEDDING_API_KEY 或 LLM_API_KEY 未配置")
 
     base = settings.EMBEDDING_BASE_URL or settings.LLM_BASE_URL or "https://api.openai.com/v1"
     model = settings.EMBEDDING_MODEL or "text-embedding-v3"
     url = f"{base.rstrip('/')}/embeddings"
 
-    resp = requests.post(
-        url,
-        json={"input": texts, "model": model},
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        timeout=max(5, settings.EMBEDDING_TIMEOUT),
-    )
-    resp.raise_for_status()
+    try:
+        resp = requests.post(
+            url,
+            json={"input": texts, "model": model},
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            timeout=max(5, settings.EMBEDDING_TIMEOUT),
+        )
+        resp.raise_for_status()
+    except requests.Timeout as e:
+        raise EmbeddingTimeoutError(f"Embedding API 调用超时: {e}") from e
+    except requests.HTTPError as e:
+        status = e.response.status_code if e.response is not None else 0
+        if status in (401, 403):
+            raise EmbeddingAuthError(f"Embedding API 鉴权失败(HTTP {status}): {e}") from e
+        raise EmbeddingProviderError(f"Embedding API 调用失败(HTTP {status}): {e}") from e
+    except requests.RequestException as e:
+        raise EmbeddingProviderError(f"Embedding API 调用失败: {e}") from e
+
     data = resp.json()
     ordered = sorted(data["data"], key=lambda x: x["index"])
     return [item["embedding"] for item in ordered]
@@ -422,6 +453,10 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
     cache_hits = len(texts) - len(missing_texts)
     batch_count = 0
 
+    # 记录缓存命中
+    if cache_hits > 0:
+        record_embedding_request(provider=provider, model=model, text_count=cache_hits)
+
     if not missing_texts:
         # 全部命中缓存
         _log_embedding_stats(
@@ -443,10 +478,23 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
         raise ValueError(f"未知的 EMBEDDING_PROVIDER: {provider}")
 
     fetched: List[List[float]] = []
-    for i in range(0, len(missing_texts), _EMBED_BATCH_SIZE):
-        batch = missing_texts[i:i + _EMBED_BATCH_SIZE]
-        batch_count += 1
-        fetched.extend(_with_retry(fn, batch))
+    start_ts = time.time()
+    try:
+        for i in range(0, len(missing_texts), _EMBED_BATCH_SIZE):
+            batch = missing_texts[i:i + _EMBED_BATCH_SIZE]
+            batch_count += 1
+            fetched.extend(_with_retry(fn, batch))
+    except EmbeddingProviderError as e:
+        error_type = type(e).__name__
+        record_embedding_error(provider=provider, model=model, error_type=error_type)
+        raise
+    except Exception as e:
+        record_embedding_error(provider=provider, model=model, error_type=type(e).__name__)
+        raise EmbeddingProviderError(f"Embedding 调用失败: {e}") from e
+    finally:
+        # 记录网络调用指标
+        if missing_texts:
+            record_embedding_request(provider=provider, model=model, text_count=len(missing_texts))
 
     # ---- 3) 回填结果并写入缓存 ----
     with _EMBED_CACHE_LOCK:

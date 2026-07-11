@@ -20,6 +20,10 @@ class JobDataSource(Base):
     last_sync_at = Column(DateTime, nullable=True, comment="上次同步时间")
     last_sync_log_id = Column(BigInteger, nullable=True, comment="上次同步日志ID")
     sync_interval = Column(Integer, default=0, comment="自动同步间隔(分钟), 0=手动")
+    next_sync_at = Column(DateTime, nullable=True, index=True, comment="下次计划同步时间")
+    sync_lock_at = Column(DateTime, nullable=True, index=True, comment="同步锁时间，用于防止并发")
+    fail_count = Column(Integer, default=0, comment="连续失败次数")
+    last_error_msg = Column(Text, nullable=True, comment="上次错误信息")
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 

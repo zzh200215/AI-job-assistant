@@ -10,6 +10,7 @@ from __future__ import annotations
 import html
 import logging
 import re
+import time
 from typing import Any, Dict, List, Tuple
 
 import requests
@@ -18,11 +19,16 @@ from .adapter import JobDataSourceAdapter, SourceRow
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_USER_AGENT = "SmartRecruit-DataSync/1.0 (+https://github.com/smart-recruit/platform)"
+
 
 class ArbeitnowJobSource(JobDataSourceAdapter):
     """Arbeitnow free public job board API."""
 
     BASE_URL = "https://www.arbeitnow.com/api/job-board-api"
+
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
 
     def connect(self) -> bool:
         try:
@@ -88,15 +94,45 @@ class ArbeitnowJobSource(JobDataSourceAdapter):
         if search:
             params["search"] = search
 
-        resp = requests.get(self.BASE_URL, params=params, timeout=20)
-        resp.raise_for_status()
-        payload = resp.json() or {}
-        items = payload.get("data") or []
-        if not isinstance(items, list):
-            items = []
-        links = payload.get("links") or {}
-        has_more = bool(links.get("next"))
-        return [item for item in items if isinstance(item, dict)], has_more
+        last_error: Exception | None = None
+        max_attempts = max(1, int(self.config.get("retry_max_attempts") or 3))
+        backoff_ms = max(0, int(self.config.get("retry_backoff_ms") or 500))
+        timeout = max(5, int(self.config.get("timeout_seconds") or 20))
+
+        for attempt in range(max_attempts):
+            try:
+                resp = requests.get(
+                    self.BASE_URL,
+                    params=params,
+                    timeout=timeout,
+                    headers={"User-Agent": _DEFAULT_USER_AGENT},
+                )
+                status_code = getattr(resp, "status_code", None)
+                if status_code == 429:
+                    raise RuntimeError(f"Arbeitnow 数据源被限流(HTTP {status_code})")
+                if isinstance(status_code, int) and 500 <= status_code < 600:
+                    raise RuntimeError(f"Arbeitnow 数据源服务端错误(HTTP {status_code})")
+                resp.raise_for_status()
+                payload = resp.json() or {}
+                items = payload.get("data") or []
+                if not isinstance(items, list):
+                    items = []
+                links = payload.get("links") or {}
+                has_more = bool(links.get("next"))
+                return [item for item in items if isinstance(item, dict)], has_more
+            except Exception as exc:
+                last_error = exc
+                if attempt >= max_attempts - 1:
+                    break
+                status_code = getattr(getattr(exc, "response", None), "status_code", None)
+                if status_code not in {429} and not (isinstance(status_code, int) and 500 <= status_code < 600):
+                    break
+                wait = (backoff_ms / 1000.0) * (2 ** attempt) if backoff_ms else 0.0
+                logger.warning("Arbeitnow 请求失败，将在 %.1fs 后重试(%d/%d): %s", wait, attempt + 1, max_attempts - 1, exc)
+                if wait > 0:
+                    time.sleep(wait)
+
+        raise RuntimeError(f"Arbeitnow 数据源请求失败: {last_error}")
 
     def _build_external_id(self, raw: Dict[str, Any], page: int, index: int) -> str:
         slug = str(raw.get("slug") or "").strip()

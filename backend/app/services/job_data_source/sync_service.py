@@ -18,8 +18,15 @@ from sqlalchemy.orm import Session
 
 from app.utils.time_helper import utc_now
 
+from app.core.config import settings
 from app.core.chroma_client import get_chroma_client
-from app.services.embedding_service import embed_texts
+from app.core.prometheus_metrics import record_sync_error, record_sync_job
+from app.services.embedding_service import (
+    embed_texts,
+    get_expected_embedding_dimension,
+    set_expected_embedding_dimension,
+    validate_embedding_dimension,
+)
 from app.models.history import JobDescription
 from app.models.job_data_source import JobDataSource, JobSyncLog, JobImportBatch
 from .adapter import SourceRow
@@ -172,6 +179,14 @@ class SyncService:
             if not dry_run:
                 source.last_sync_at = utc_now()
                 source.last_sync_log_id = log.id
+                source.sync_lock_at = None
+                if log.status in ("success", "partial"):
+                    source.fail_count = 0
+                    source.last_error_msg = None
+                if source.sync_interval and source.sync_interval > 0:
+                    source.next_sync_at = utc_now().replace(minute=0, second=0, microsecond=0)
+                    from datetime import timedelta
+                    source.next_sync_at += timedelta(minutes=source.sync_interval)
                 self.db.commit()
 
             log.status = "success" if fail == 0 else ("partial" if success > 0 else "failed")
@@ -181,6 +196,11 @@ class SyncService:
             logger.exception("同步过程异常")
             log.status = "failed"
             log.error_msg = str(e)[:1000]
+            if not dry_run:
+                source.fail_count = (source.fail_count or 0) + 1
+                source.last_error_msg = log.error_msg
+                source.sync_lock_at = None
+                self.db.commit()
 
         finally:
             log.total_count = total
@@ -193,6 +213,18 @@ class SyncService:
             log.finished_at = utc_now()
             self.db.commit()
             self.db.refresh(log)
+
+            # 记录 Prometheus 指标
+            duration_seconds = (time.time() - started)
+            record_sync_job(
+                source_type=source.source_type,
+                status=log.status,
+                duration_seconds=duration_seconds,
+            )
+            if log.status == "failed":
+                record_sync_error(source_type=source.source_type, error_type="sync_failed")
+            elif fail > 0:
+                record_sync_error(source_type=source.source_type, error_type="partial_failure")
 
         return log
 
@@ -252,6 +284,20 @@ class SyncService:
         except Exception as e:
             logger.warning(f"[sync] 批量向量化失败: {e}")
             return 0
+
+        expected_dim = get_expected_embedding_dimension(self.collection)
+        ok, expected_dim, actual_dim = validate_embedding_dimension(vectors, expected_dim)
+        if not ok:
+            logger.error(
+                "[sync] Embedding 维度不匹配: expected=%s actual=%s model=%s",
+                expected_dim,
+                actual_dim,
+                settings.EMBEDDING_MODEL,
+            )
+            return 0
+
+        if expected_dim is None and vectors:
+            set_expected_embedding_dimension(self.collection, actual_dim)
 
         ok_count = 0
         ids, embeddings, documents, metadatas = [], [], [], []

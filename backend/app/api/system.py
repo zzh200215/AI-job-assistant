@@ -3,14 +3,18 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import get_db, engine
+from app.core.prometheus_metrics import get_metrics_response
 from app.core.runtime_metrics import get_runtime_metrics
-from app.core.user_roles import RECRUITER_ROLE
+from app.core.user_roles import ADMIN_ROLE, RECRUITER_ROLE
 from app.models.candidate_screening import CandidateScreeningSession
 from app.models.history import AnalysisRecord, JobDescription, Resume
 from app.models.interview_session import InterviewSession
@@ -31,7 +35,7 @@ def _is_mock(provider: str | None) -> bool:
 
 
 def _can_view_system_overview(user: User) -> bool:
-    return user.role == RECRUITER_ROLE or user.username in settings.admin_usernames_list
+    return user.role in (RECRUITER_ROLE, ADMIN_ROLE) or user.username in settings.admin_usernames_list
 
 
 @router.get("/status", summary="Get runtime system status")
@@ -60,8 +64,14 @@ async def get_system_status(_current_user: User = Depends(get_current_user)):
             "llm_mode": "demo" if _is_mock(llm_provider) else "live",
             "embedding_mode": "demo" if _is_mock(embedding_provider) else "live",
             "data_source_api_ready": True,
-            "data_source_api_note": "HTTP API data sources support auth refresh, pagination, rate limiting, and retry backoff.",
-            "orchestration_backend_note": f"current backend={settings.ORCHESTRATION_BACKEND}; redis_queue is available when REDIS_URL is configured.",
+            "data_source_api_note": (
+                "HTTP API data sources support auth refresh, pagination, "
+                "rate limiting, and retry backoff."
+            ),
+            "orchestration_backend_note": (
+                f"current backend={settings.ORCHESTRATION_BACKEND}; "
+                "redis_queue is available when REDIS_URL is configured."
+            ),
             "knowledge_seed_ready": True,
             "queue_health": get_queue_health(),
         },
@@ -77,6 +87,18 @@ async def get_system_overview(
     if not _can_view_system_overview(current_user):
         raise api_error(403, "仅招聘者或管理员可查看系统概览", ERR_AUTH)
 
+    today = datetime.now(timezone.utc).date()
+    today_sync_total = (
+        db.query(JobSyncLog)
+        .filter(JobSyncLog.started_at >= today)
+        .count()
+    )
+    today_sync_failed = (
+        db.query(JobSyncLog)
+        .filter(JobSyncLog.started_at >= today, JobSyncLog.status.in_(["failed", "partial"]))
+        .count()
+    )
+
     overview = {
         "users": db.query(User).count(),
         "resumes": db.query(Resume).count(),
@@ -87,6 +109,7 @@ async def get_system_overview(
         "knowledge_documents": db.query(KnowledgeDocument).count(),
         "data_sources": db.query(JobDataSource).count(),
         "sync_logs": db.query(JobSyncLog).count(),
+        "sync_today": {"total": today_sync_total, "failed": today_sync_failed},
         "runtime_metrics": get_runtime_metrics(),
         "embedding_metrics": {
             "current": get_embedding_stats(),
@@ -94,3 +117,40 @@ async def get_system_overview(
         },
     }
     return ok(overview)
+
+
+@router.get("/health", summary="Liveness probe")
+async def health_check():
+    return ok(data={"status": "ok", "service": "smart-recruitment-platform"})
+
+
+@router.get("/ready", summary="Readiness probe")
+async def readiness_check():
+    checks = {
+        "mysql": False,
+        "chroma": False,
+    }
+    try:
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+        checks["mysql"] = True
+    except Exception as exc:
+        checks["mysql_error"] = str(exc)
+
+    try:
+        from app.core.chroma_client import get_chroma_client
+        client = get_chroma_client()
+        client.heartbeat()
+        checks["chroma"] = True
+    except Exception as exc:
+        checks["chroma_error"] = str(exc)
+
+    all_ready = all(checks.values())
+    payload = ok(data={"ready": all_ready, "checks": checks})
+    return JSONResponse(content=payload, status_code=200 if all_ready else 503)
+
+
+@router.get("/metrics", summary="Prometheus metrics")
+async def metrics():
+    data, status_code, headers = get_metrics_response()
+    return Response(content=data, status_code=status_code, headers=headers)

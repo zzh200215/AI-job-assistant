@@ -1,0 +1,69 @@
+# -*- coding: utf-8 -*-
+"""Common weak password blacklist."""
+
+from __future__ import annotations
+
+# Set of commonly-used weak passwords. Stored in lowercase; checks are case-insensitive.
+_WEAK_PASSWORDS = {
+    "12345678",
+    "123456789",
+    "1234567890",
+    "password",
+    "password1",
+    "password123",
+    "qwerty",
+    "qwerty123",
+    "qwertyuiop",
+    "abc123",
+    "abc12345",
+    "abcd1234",
+    "admin",
+    "admin123",
+    "admin888",
+    "adminadmin",
+    "root",
+    "root123",
+    "letmein",
+    "welcome",
+    "welcome123",
+    "monkey",
+    "dragon",
+    "master",
+    "shadow",
+    "sunshine",
+    "princess",
+    "football",
+    "baseball",
+    "iloveyou",
+    "trustno1",
+    "123qwe",
+    "qwe123",
+    "1q2w3e4r",
+    "1qaz2wsx",
+    "zaq12wsx",
+    "password!",
+    "p@ssw0rd",
+    "p@ssword",
+    "passw0rd",
+    "hello123",
+    "test123",
+    "user123",
+    "login123",
+    "changeme",
+    "changeme123",
+    "default",
+    "guest",
+    "guest123",
+    "11111111",
+    "00000000",
+    "66666666",
+    "88888888",
+    "99999999",
+    "5201314",
+    "1314520",
+}
+
+
+def is_blacklisted(password: str) -> bool:
+    """Return True if the password is in the common weak-password list."""
+    return password.strip().lower() in _WEAK_PASSWORDS

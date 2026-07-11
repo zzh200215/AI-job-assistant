@@ -37,6 +37,7 @@ class DataSourceConfig(BaseModel):
     rate_limit_ms: Optional[int] = 0
     retry_max_attempts: Optional[int] = 3
     retry_backoff_ms: Optional[int] = 500
+    timeout_seconds: Optional[int] = 30
     field_mapping: Optional[Dict[str, str]] = Field(default_factory=lambda: {
         "title": "title",
         "company": "company",
@@ -80,6 +81,10 @@ class JobDataSourceOut(BaseModel):
     last_sync_at: Optional[datetime] = None
     last_sync_log_id: Optional[int] = None
     sync_interval: int
+    next_sync_at: Optional[datetime] = None
+    sync_lock_at: Optional[datetime] = None
+    fail_count: int = 0
+    last_error_msg: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

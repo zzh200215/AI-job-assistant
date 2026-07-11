@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, Optional, Type
 from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
+from app.core.prometheus_metrics import record_llm_error, record_llm_request
 from app.core.request_context import get_request_id
 from app.utils.json_utils import extract_json
 from app.utils.retry import retry_call
@@ -747,12 +748,26 @@ def chat_json(prompt: str, schema: Type[BaseModel] | None = None) -> Dict[str, A
             )
         else:
             raise ValueError(f"unknown LLM_PROVIDER: {provider}")
-    except LLMProviderError:
+    except LLMProviderError as e:
+        error_type = type(e).__name__
+        duration_seconds = time.time() - start_ts
+        record_llm_error(provider=provider, model=settings.LLM_MODEL, error_type=error_type)
+        record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
         raise  # 直接向上冒泡，保留类型化异常
     except RuntimeError as e:
+        duration_seconds = time.time() - start_ts
+        record_llm_error(provider=provider, model=settings.LLM_MODEL, error_type="RuntimeError")
+        record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
         raise LLMProviderError(f"AI 调用失败: {str(e)}") from e
     except Exception as e:
+        duration_seconds = time.time() - start_ts
+        record_llm_error(provider=provider, model=settings.LLM_MODEL, error_type=type(e).__name__)
+        record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
         raise LLMProviderError(f"AI 调用异常: {str(e)}") from e
+
+    # 成功时记录指标
+    duration_seconds = time.time() - start_ts
+    record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
 
     # ---- 2) 将 AI 返回文本解析为 JSON ----
     try:

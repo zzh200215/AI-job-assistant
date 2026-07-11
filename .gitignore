@@ -46,8 +46,11 @@ ports.log
 .pytest_cache/
 .coverage
 htmlcov/
+backend/backups/
+backups/
 backend/reports/
 reports/
+backups/
 
 # IDE
 .claude/

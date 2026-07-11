@@ -32,14 +32,14 @@ def _register_and_login(client, *, username, email, db_session=None):
         admin = User(
             username=username,
             email=email,
-            password=hash_password("abc12345"),
+            password=hash_password("StrongP@ssw0rd"),
             role="candidate",
         )
         db_session.add(admin)
         db_session.commit()
         response = client.post(
             "/auth/login",
-            json={"account": username, "password": "abc12345"},
+            json={"account": username, "password": "StrongP@ssw0rd"},
         )
     else:
         response = client.post(
@@ -47,7 +47,7 @@ def _register_and_login(client, *, username, email, db_session=None):
             json={
                 "username": username,
                 "email": email,
-                "password": "abc12345",
+                "password": "StrongP@ssw0rd",
             },
         )
     token = response.json()["data"]["access_token"]

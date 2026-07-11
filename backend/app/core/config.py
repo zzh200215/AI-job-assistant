@@ -72,6 +72,14 @@ class Settings(BaseSettings):
     STRUCTURED_LOGS: bool = False
     RUN_SCHEDULER: bool = True
 
+    # Rate limiting (slowapi). Empty/unset falls back to code defaults.
+    RATE_LIMIT_GENERAL: Optional[str] = None
+    RATE_LIMIT_AUTH: Optional[str] = None
+    RATE_LIMIT_LOGIN: Optional[str] = None
+
+    # Backup retention
+    BACKUP_KEEP_DAYS: int = 7
+
     RAG_TOP_K: int = 5
     RAG_CHUNK_SIZE: int = 500
     RAG_CHUNK_OVERLAP: int = 50
