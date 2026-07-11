@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "gpt-3.5-turbo"
     LLM_TIMEOUT: int = 60
     LLM_FALLBACK_MODEL: Optional[str] = None
+    LLM_ALLOW_MOCK_FALLBACK: bool = False
     LLM_INPUT_COST_PER_1K_CENTS: float = 0.0
     LLM_OUTPUT_COST_PER_1K_CENTS: float = 0.0
 
@@ -56,6 +57,8 @@ class Settings(BaseSettings):
     EMBEDDING_API_KEY: Optional[str] = None
     EMBEDDING_BASE_URL: Optional[str] = None
     EMBEDDING_MODEL: str = "text-embedding-v3"
+    EMBEDDING_TIMEOUT: int = 30
+    EMBEDDING_MAX_RETRIES: int = 2
 
     RERANKER_PROVIDER: str = "auto"
     RERANKER_MODEL_PATH: Optional[str] = None
@@ -63,6 +66,11 @@ class Settings(BaseSettings):
 
     JWT_SECRET: str = _DEFAULT_JWT_SECRET
     JWT_ACCESS_TOKEN_EXPIRE_DAYS: int = 7
+
+    BCRYPT_ROUNDS: int = 12
+
+    STRUCTURED_LOGS: bool = False
+    RUN_SCHEDULER: bool = True
 
     RAG_TOP_K: int = 5
     RAG_CHUNK_SIZE: int = 500
@@ -110,6 +118,21 @@ class Settings(BaseSettings):
 
         if self.is_production and (self.MYSQL_PASSWORD or "").strip() in _WEAK_DB_PASSWORDS:
             raise ValueError("Set a non-default MYSQL_PASSWORD before running in production.")
+
+        if self.is_production and str(self.LLM_PROVIDER or "").strip().lower() == "mock":
+            raise ValueError("LLM_PROVIDER cannot be 'mock' in production.")
+
+        if self.is_production and str(self.EMBEDDING_PROVIDER or "").strip().lower() == "mock":
+            raise ValueError("EMBEDDING_PROVIDER cannot be 'mock' in production.")
+
+        if self.is_production and str(self.LLM_FALLBACK_MODEL or "").strip().lower() == "mock":
+            raise ValueError("LLM_FALLBACK_MODEL cannot be 'mock' in production.")
+
+        if self.is_production and str(self.LLM_PROVIDER or "").strip().lower() in {"openai", "qwen", "local"} and not (self.LLM_API_KEY or "").strip():
+            raise ValueError("LLM_API_KEY is required for the configured LLM provider in production.")
+
+        if self.is_production and str(self.EMBEDDING_PROVIDER or "").strip().lower() in {"openai", "qwen", "dashscope"} and not (self.EMBEDDING_API_KEY or self.LLM_API_KEY or "").strip():
+            raise ValueError("EMBEDDING_API_KEY (or LLM_API_KEY) is required for the configured embedding provider in production.")
 
         return self
 
