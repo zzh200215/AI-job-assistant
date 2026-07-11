@@ -15,7 +15,7 @@ import hashlib
 import threading
 from collections import OrderedDict
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -24,7 +24,6 @@ from app.utils.retry import retry_call
 
 logger = logging.getLogger(__name__)
 
-_EMBED_MAX_RETRIES = 2
 # 网络型 embedding 单次请求的最大文本条数
 # （dashscope text-embedding-v3 上限为 10；取 10 通用兼容）
 _EMBED_BATCH_SIZE = 10
@@ -235,7 +234,7 @@ def _with_retry(fn, texts: List[str]) -> List[List[float]]:
     return retry_call(
         fn,
         args=(texts,),
-        max_retries=_EMBED_MAX_RETRIES,
+        max_retries=max(0, settings.EMBEDDING_MAX_RETRIES),
         log_prefix="Embedding",
     )
 
@@ -310,12 +309,63 @@ def _openai_embed(texts: List[str]) -> List[List[float]]:
         url,
         json={"input": texts, "model": model},
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        timeout=30,
+        timeout=max(5, settings.EMBEDDING_TIMEOUT),
     )
     resp.raise_for_status()
     data = resp.json()
     ordered = sorted(data["data"], key=lambda x: x["index"])
     return [item["embedding"] for item in ordered]
+
+
+def _known_embedding_dimension(model: str) -> Optional[int]:
+    """根据常见模型名返回默认维度，未知返回 None。"""
+    normalized = (model or "").strip().lower()
+    if normalized == "text-embedding-v3":
+        return 1024
+    if normalized in {"text-embedding-3-large"}:
+        return 3072
+    if normalized in {"text-embedding-3-small", "text-embedding-ada-002"}:
+        return 1536
+    return None
+
+
+def validate_embedding_dimension(
+    vectors: List[List[float]],
+    expected_dimension: Optional[int] = None,
+) -> Tuple[bool, Optional[int], Optional[int]]:
+    """校验向量维度是否一致并返回实际维度。
+
+    Returns:
+        (ok, expected, actual)
+    """
+    if not vectors:
+        return True, expected_dimension, expected_dimension
+
+    actual = len(vectors[0])
+    exp = expected_dimension or _known_embedding_dimension(settings.EMBEDDING_MODEL)
+    if exp is not None and actual != exp:
+        return False, exp, actual
+    return True, exp, actual
+
+
+def get_expected_embedding_dimension(collection) -> Optional[int]:
+    """从 Chroma collection metadata 读取期望维度。"""
+    try:
+        metadata = collection.metadata or {}
+        dim = metadata.get("embedding_dimension")
+        if dim is not None:
+            return int(dim)
+    except Exception:
+        logger.debug("Failed to read embedding_dimension from collection metadata")
+    return None
+
+
+def set_expected_embedding_dimension(collection, dimension: int) -> None:
+    """把期望维度写入 Chroma collection metadata。"""
+    try:
+        collection.modify(metadata={**(collection.metadata or {}), "embedding_dimension": dimension})
+    except Exception:
+        logger.warning("Failed to set embedding_dimension in collection metadata", exc_info=True)
 
 
 def embed_text(text: str) -> List[float]:

@@ -36,6 +36,32 @@ class _RetryableLLMError(Exception):
     """可重试的 LLM 网络/服务端错误，供 retry_call 识别"""
     pass
 
+
+class LLMProviderError(Exception):
+    """LLM provider 错误基类，供上层映射 HTTP 状态码"""
+    pass
+
+
+class LLMTimeoutError(LLMProviderError):
+    """LLM 调用超时"""
+    pass
+
+
+class LLMAuthError(LLMProviderError):
+    """LLM 鉴权失败"""
+    pass
+
+
+class LLMRateLimitError(LLMProviderError):
+    """LLM 限流"""
+    pass
+
+
+class LLMParseError(LLMProviderError):
+    """LLM 返回解析失败"""
+    pass
+
+
 # ===================== 结果缓存 =====================
 # 相同 prompt（同一 provider+model）直接复用上次解析结果，省去重复 LLM 调用。
 # temperature 较低、分析类 prompt 高度可复现，缓存命中可显著降时延与 token 成本。
@@ -568,14 +594,17 @@ def _openai_compatible_chat(prompt: str, base_url: str = None, *, json_mode: boo
         except requests.HTTPError as e:
             status = e.response.status_code if e.response is not None else 0
             # 仅对限流 / 5xx 这类可恢复错误重试；4xx（鉴权/参数）直接失败
-            if status == 429 or 500 <= status < 600:
-                raise _RetryableLLMError(f"AI 接口调用失败(HTTP {status})") from e
-            else:
-                raise RuntimeError(f"AI 接口调用失败: {str(e)}")
+            if status == 429:
+                raise _RetryableLLMError(f"AI 接口调用被限流(HTTP {status})") from e
+            if 500 <= status < 600:
+                raise _RetryableLLMError(f"AI 接口服务端错误(HTTP {status})") from e
+            if status in (401, 403):
+                raise LLMAuthError(f"AI 接口鉴权失败(HTTP {status}): {str(e)}") from e
+            raise RuntimeError(f"AI 接口调用失败: {str(e)}")
         except requests.RequestException as e:
             raise _RetryableLLMError(f"AI 接口调用失败: {str(e)}") from e
         except (KeyError, IndexError, json.JSONDecodeError) as e:
-            raise RuntimeError(f"AI 返回格式异常: {str(e)}")
+            raise LLMParseError(f"AI 返回格式异常: {str(e)}") from e
 
     try:
         return retry_call(
@@ -585,7 +614,12 @@ def _openai_compatible_chat(prompt: str, base_url: str = None, *, json_mode: boo
             log_prefix="LLM",
         )
     except RuntimeError as e:
-        raise RuntimeError(f"{e}，请稍后重试")
+        err_msg = str(e)
+        if "超时" in err_msg:
+            raise LLMTimeoutError(f"AI 调用超时，请稍后重试: {err_msg}") from e
+        if "限流" in err_msg:
+            raise LLMRateLimitError(f"AI 调用被限流，请稍后重试: {err_msg}") from e
+        raise LLMProviderError(f"AI 调用失败: {err_msg}") from e
 
 
 def _local_chat(prompt: str, *, json_mode: bool = True) -> str:
@@ -604,7 +638,7 @@ def _simplify_prompt(prompt: str) -> str:
 
 
 def _call_with_fallbacks(primary_call: Callable[[str, Optional[str]], str], prompt: str) -> str:
-    """LLM fallback chain: primary model -> fallback model -> simplified prompt -> mock."""
+    """LLM fallback chain: primary model -> fallback model -> simplified prompt -> mock (dev only)."""
     errors: list[str] = []
     attempts: list[tuple[str, str, Optional[str]]] = [("primary", prompt, None)]
     fallback_model = (settings.LLM_FALLBACK_MODEL or "").strip()
@@ -618,18 +652,21 @@ def _call_with_fallbacks(primary_call: Callable[[str, Optional[str]], str], prom
             if label != "primary":
                 logger.warning("LLM fallback attempt=%s model=%s", label, model or settings.LLM_MODEL)
             return primary_call(candidate_prompt, model)
-        except RuntimeError as exc:
+        except (RuntimeError, LLMProviderError) as exc:
             errors.append(f"{label}: {exc}")
 
     if provider_allows_mock_fallback():
         logger.warning("LLM fallback attempt=mock after failures: %s", " | ".join(errors)[-500:])
         return _mock_chat(prompt)
 
-    raise RuntimeError("AI 调用失败，fallback 链路均未成功: " + " | ".join(errors)[-800:])
+    raise LLMProviderError("AI 调用失败，fallback 链路均未成功: " + " | ".join(errors)[-800:])
 
 
 def provider_allows_mock_fallback() -> bool:
-    return str(settings.LLM_FALLBACK_MODEL or "").strip().lower() == "mock"
+    """生产环境默认禁止回退到 mock；开发环境可通过 LLM_ALLOW_MOCK_FALLBACK=true 显式开启。"""
+    if settings.is_production:
+        return bool(settings.LLM_ALLOW_MOCK_FALLBACK)
+    return str(settings.LLM_FALLBACK_MODEL or "").strip().lower() == "mock" or bool(settings.LLM_ALLOW_MOCK_FALLBACK)
 
 
 # ===================== 对外统一接口 =====================
@@ -710,10 +747,12 @@ def chat_json(prompt: str, schema: Type[BaseModel] | None = None) -> Dict[str, A
             )
         else:
             raise ValueError(f"unknown LLM_PROVIDER: {provider}")
-    except RuntimeError:
-        raise  # 直接向上冒泡
+    except LLMProviderError:
+        raise  # 直接向上冒泡，保留类型化异常
+    except RuntimeError as e:
+        raise LLMProviderError(f"AI 调用失败: {str(e)}") from e
     except Exception as e:
-        raise RuntimeError(f"AI 调用异常: {str(e)}")
+        raise LLMProviderError(f"AI 调用异常: {str(e)}") from e
 
     # ---- 2) 将 AI 返回文本解析为 JSON ----
     try:
