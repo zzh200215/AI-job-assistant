@@ -3,8 +3,8 @@
     <!-- 顶部欢迎栏 -->
     <section class="welcome-bar">
       <div class="welcome-left">
-        <h1>求职仪表盘</h1>
-        <p class="welcome-sub">{{ greeting }}，{{ username }}。{{ overviewLoaded ? `当前有 ${overview.active_applications} 个活跃投递` : '加载中...' }}</p>
+        <h1>求职助手</h1>
+        <p class="welcome-sub">{{ greeting }}，{{ username }}。{{ overviewLoaded ? `当前有 ${overview.active_applications || 0} 个活跃投递` : '加载中...' }}</p>
       </div>
       <div class="welcome-actions">
         <el-button type="primary" @click="go('/jobs/pipeline/kanban')">
@@ -13,6 +13,37 @@
         <el-button @click="go('/smart-analysis')">
           <el-icon><MagicStick /></el-icon> 智能分析
         </el-button>
+      </div>
+    </section>
+
+    <!-- 核心功能入口 -->
+    <section class="core-entrance-row">
+      <div class="core-card core-resume" @click="go('/resume-center')">
+        <div class="core-icon"><el-icon :size="32"><Document /></el-icon></div>
+        <div class="core-info">
+          <h3>简历中心</h3>
+          <p>管理、优化、诊断多份简历</p>
+          <span class="core-meta">{{ overviewLoaded ? (overview.resume_count || '--') + ' 份简历' : '加载中...' }}</span>
+        </div>
+        <el-icon class="core-arrow"><ArrowRight /></el-icon>
+      </div>
+      <div class="core-card core-job" @click="go('/jobs/recommend')">
+        <div class="core-icon"><el-icon :size="32"><Search /></el-icon></div>
+        <div class="core-info">
+          <h3>岗位推荐</h3>
+          <p>智能匹配每日高匹配岗位</p>
+          <span class="core-meta">{{ overviewLoaded ? (overview.recommend_count || '--') + ' 个推荐' : '加载中...' }}</span>
+        </div>
+        <el-icon class="core-arrow"><ArrowRight /></el-icon>
+      </div>
+      <div class="core-card core-interview" @click="go('/interview/setup')">
+        <div class="core-icon"><el-icon :size="32"><Microphone /></el-icon></div>
+        <div class="core-info">
+          <h3>AI 模拟面试</h3>
+          <p>针对性面试训练、能力评估</p>
+          <span class="core-meta">{{ overviewLoaded ? (overview.interview_count || '--') + ' 次面试' : '加载中...' }}</span>
+        </div>
+        <el-icon class="core-arrow"><ArrowRight /></el-icon>
       </div>
     </section>
 
@@ -182,9 +213,9 @@
             <div class="quick-icon amber"><el-icon><Search /></el-icon></div>
             <span>岗位推荐</span>
           </button>
-          <button class="quick-btn" @click="go('/resume')">
+          <button class="quick-btn" @click="go('/resume-center')">
             <div class="quick-icon violet"><el-icon><Document /></el-icon></div>
-            <span>简历管理</span>
+            <span>简历中心</span>
           </button>
           <button class="quick-btn" @click="go('/interview/setup')">
             <div class="quick-icon green"><el-icon><Microphone /></el-icon></div>
@@ -362,6 +393,88 @@ onMounted(async () => {
 
 .welcome-actions .el-button--default:hover {
   background: rgba(255, 255, 255, 0.25);
+}
+
+/* ===== Core Entrance Row ===== */
+.core-entrance-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.core-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
+  border-radius: 16px;
+  border: 1px solid var(--app-line);
+  background: #fff;
+  box-shadow: var(--app-shadow-soft);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.core-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--app-shadow-hover);
+}
+
+.core-resume:hover { border-color: var(--app-violet); }
+.core-job:hover { border-color: var(--app-warning); }
+.core-interview:hover { border-color: var(--app-success); }
+
+.core-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.core-resume .core-icon { background: var(--app-violet-light); color: var(--app-violet); }
+.core-job .core-icon { background: #fef5e7; color: var(--app-warning); }
+.core-interview .core-icon { background: #e8f8ee; color: var(--app-success); }
+
+.core-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.core-info h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--app-text);
+}
+
+.core-info p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--app-muted);
+}
+
+.core-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--app-muted);
+  opacity: 0.8;
+}
+
+.core-arrow {
+  color: var(--app-muted);
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+/* ===== Responsive for core entrance ===== */
+@media (max-width: 768px) {
+  .core-entrance-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ===== Panels ===== */

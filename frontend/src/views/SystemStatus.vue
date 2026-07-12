@@ -33,7 +33,7 @@
       </el-row>
       <el-alert v-else class="mt" type="info" :closable="false" show-icon>
         <template #title>
-          Global overview metrics are limited to recruiters and admins.
+          Global overview metrics are limited to admins.
         </template>
       </el-alert>
 
@@ -47,16 +47,10 @@
         <el-descriptions-item label="OCR Resume Parsing">
           {{ status.capabilities?.ocr_resume_parse ? 'Enabled' : 'Disabled' }}
         </el-descriptions-item>
-        <el-descriptions-item label="Data Source API">
-          {{ status.runtime_notes?.data_source_api_ready ? 'Ready' : 'Scaffolded' }}
+        <el-descriptions-item label="Knowledge Seeds">
+          {{ status.runtime_notes?.knowledge_seed_ready ? 'Ready' : 'Pending' }}
         </el-descriptions-item>
       </el-descriptions>
-
-      <el-alert class="mt" type="info" :closable="false" show-icon>
-        <template #title>
-          {{ status.runtime_notes?.data_source_api_note || 'Current runtime notes are unavailable.' }}
-        </template>
-      </el-alert>
     </el-card>
 
     <el-row v-if="canViewOverview" :gutter="16">
@@ -129,7 +123,7 @@ import { useAuthStore } from '@/stores/auth'
 const authStore = useAuthStore()
 const status = ref({})
 const overview = ref({})
-const canViewOverview = computed(() => authStore.isRecruiter || !!authStore.user?.is_admin)
+const canViewOverview = computed(() => !!authStore.user?.is_admin)
 
 const overviewMetrics = computed(() => {
   const data = overview.value || {}
@@ -139,9 +133,7 @@ const overviewMetrics = computed(() => {
     { label: 'Job Descriptions', value: data.jds ?? 0 },
     { label: 'Analysis Records', value: data.analysis_records ?? 0 },
     { label: 'Interviews', value: data.interviews ?? 0 },
-    { label: 'Screening Sessions', value: data.screening_sessions ?? 0 },
     { label: 'Knowledge Docs', value: data.knowledge_documents ?? 0 },
-    { label: 'Data Sources', value: data.data_sources ?? 0 },
   ]
 })
 

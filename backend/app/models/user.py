@@ -56,6 +56,7 @@ class User(Base):
     privacy_settings = Column(JSON, comment="隐私设置: {profile_visible, share_anonymized_stats}")
     language = Column(String(10), default="zh-CN", comment="界面语言")
     theme = Column(String(10), default="light", comment="主题: light/dark")
+    email_verified = Column(Integer, default=0, comment="邮箱是否已验证: 0=未验证, 1=已验证")
 
     created_at = Column(DateTime, default=utc_now)
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)

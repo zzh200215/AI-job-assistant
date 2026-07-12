@@ -9,6 +9,8 @@
       <div class="hero-badges">
         <span>{{ authStore.roleLabel }}</span>
         <span>{{ status.demo_mode ? 'Demo Mode' : 'Live Mode' }}</span>
+        <el-tag v-if="subTier === 'pro'" type="success" effect="dark">Pro 会员</el-tag>
+        <el-tag v-else-if="subTier === 'enterprise'" type="warning" effect="dark">企业版</el-tag>
       </div>
     </header>
 
@@ -107,6 +109,113 @@
       </div>
     </div>
 
+    <!-- 求职成就里程碑 -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <el-icon :size="18" color="var(--app-warning)"><Trophy /></el-icon>
+          <h3>求职成就里程碑</h3>
+        </div>
+        <span class="panel-tip">{{ achievements.filter(a => a.unlocked).length }}/{{ achievements.length }} 已解锁</span>
+      </div>
+      <div class="panel-body">
+        <div class="achievement-grid">
+          <div
+            v-for="badge in achievements"
+            :key="badge.id"
+            class="achievement-card"
+            :class="{ unlocked: badge.unlocked, locked: !badge.unlocked }"
+          >
+            <div class="ach-icon" :class="'ach-' + badge.color">
+              <el-icon :size="22"><component :is="badge.icon" /></el-icon>
+            </div>
+            <div class="ach-info">
+              <strong>{{ badge.name }}</strong>
+              <span>{{ badge.desc }}</span>
+            </div>
+            <el-tag v-if="badge.unlocked" size="small" type="success" effect="dark">已达成</el-tag>
+            <el-tag v-else size="small" type="info" effect="plain">未解锁</el-tag>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 个人数据看板 -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <el-icon :size="18" color="var(--app-primary)"><DataAnalysis /></el-icon>
+          <h3>个人求职数据</h3>
+        </div>
+        <span class="panel-tip">基于投递和面试记录统计</span>
+      </div>
+      <div class="panel-body">
+        <div v-if="statsLoading" class="empty-inline"><el-icon class="is-loading"><Loading /></el-icon> 加载中...</div>
+        <div v-else class="stats-dashboard">
+          <div class="stats-grid">
+            <div class="stat-card-v"><span class="stat-label">投递总数</span><strong class="stat-num">{{ userStats.total_applications }}</strong></div>
+            <div class="stat-card-v"><span class="stat-label">面试次数</span><strong class="stat-num stat-interview">{{ userStats.total_interviews }}</strong></div>
+            <div class="stat-card-v"><span class="stat-label">Offer数</span><strong class="stat-num stat-offer">{{ userStats.total_offers }}</strong></div>
+            <div class="stat-card-v"><span class="stat-label">面试转化率</span><strong class="stat-num">{{ userStats.interview_rate }}%</strong></div>
+            <div class="stat-card-v"><span class="stat-label">Offer率</span><strong class="stat-num stat-offer">{{ userStats.offer_rate }}%</strong></div>
+            <div class="stat-card-v"><span class="stat-label">简历数</span><strong class="stat-num">{{ userStats.resume_count }}</strong></div>
+          </div>
+          <div class="stats-footer">
+            <span>已使用 {{ userStats.days_active }} 天 · {{ userStats.total_sessions }} 次模拟面试</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 每日任务 -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <el-icon :size="18" color="var(--app-success)"><List /></el-icon>
+          <h3>今日求职任务</h3>
+        </div>
+        <el-tag size="small" :type="dailyTasks.filter(t => t.done).length === dailyTasks.length ? 'success' : 'warning'">
+          {{ dailyTasks.filter(t => t.done).length }}/{{ dailyTasks.length }}
+        </el-tag>
+      </div>
+      <div class="panel-body">
+        <div class="daily-task-list">
+          <div v-for="task in dailyTasks" :key="task.id" class="daily-task-item">
+            <el-checkbox v-model="task.done" @change="onTaskChange">
+              <span :class="{ 'task-done-text': task.done }">{{ task.text }}</span>
+            </el-checkbox>
+            <el-tag v-if="task.bonus" size="small" type="warning" effect="plain">+{{ task.bonus }} 积分</el-tag>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 邀请好友 -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title-row">
+          <el-icon :size="18" color="var(--app-warning)"><Share /></el-icon>
+          <h3>邀请好友</h3>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="invite-body">
+          <p class="invite-desc">邀请好友使用 Career Signal，双方均可获得额外权益</p>
+          <div class="invite-link-row">
+            <el-input v-model="inviteLink" readonly>
+              <template #append>
+                <el-button @click="copyInviteLink">复制邀请链接</el-button>
+              </template>
+            </el-input>
+          </div>
+          <div class="invite-stats">
+            <div class="invite-stat"><strong>{{ inviteCount }}</strong><span>已邀请</span></div>
+            <div class="invite-stat"><strong>+{{ inviteBonus }}</strong><span>累计奖励</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 账号安全与隐私 -->
     <div class="panel">
       <div class="panel-header">
@@ -181,18 +290,152 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { getSystemStatus } from '@/api/system'
+import { getDashboardOverview } from '@/api/dashboard'
+import { getMySubscription } from '@/api/subscription'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import { useAuthStore } from '@/stores/auth'
 import request from '@/api/request'
+import { DataAnalysis, List, Share, Trophy, UploadFilled, Aim, ChatDotRound, Coin, Grid, Star, Microphone } from '@element-plus/icons-vue'
 
 const authStore = useAuthStore()
 const loading = ref(false)
 const verifying = ref(false)
 const exporting = ref(false)
+// 邀请
+const inviteLink = ref('')
+const inviteCount = ref(0)
+const inviteBonus = ref(0)
+
+function generateInviteLink() {
+  const baseUrl = window.location.origin
+  const userId = authStore.user?.id || ''
+  inviteLink.value = baseUrl + '/register?ref=' + userId
+  inviteCount.value = Number(localStorage.getItem('recruit.inviteCount') || 0)
+  inviteBonus.value = inviteCount.value * 50
+}
+
+async function copyInviteLink() {
+  if (!inviteLink.value) generateInviteLink()
+  try {
+    await navigator.clipboard.writeText(inviteLink.value)
+    const count = inviteCount.value + 1
+    inviteCount.value = count
+    inviteBonus.value = count * 50
+    localStorage.setItem('recruit.inviteCount', String(count))
+    ElMessage.success('邀请链接已复制！')
+  } catch {
+    ElMessage.warning('复制失败，请手动复制')
+  }
+}
+
 const privacySettings = reactive({
   resumePublic: true,
   allowRecommend: true,
 })
+
+// 订阅状态
+const subTier = ref('free')
+const subQuota = ref([])
+const subEndAt = ref(null)
+
+async function loadSubscription() {
+  try {
+    const data = await getMySubscription()
+    if (data) {
+      subTier.value = data.tier || 'free'
+      subQuota.value = data.quota || []
+      subEndAt.value = data.end_at
+    }
+  } catch {}
+}
+
+// 成就系统
+const achievements = computed(() => {
+  const s = userStats.value
+  return [
+    { id: 'resume', name: '简历初成', desc: '上传第一份简历', icon: UploadFilled, color: 'blue', unlocked: s.resume_count >= 1 },
+    { id: 'apply', name: '初出茅庐', desc: '完成首次投递', icon: Aim, color: 'violet', unlocked: s.total_applications >= 1 },
+    { id: 'apply10', name: '积极求职', desc: '投递10个岗位', icon: Grid, color: 'amber', unlocked: s.total_applications >= 10 },
+    { id: 'interview', name: '面试首秀', desc: '完成首次面试', icon: Microphone, color: 'green', unlocked: s.total_interviews >= 1 },
+    { id: 'interview5', name: '面霸进阶', desc: '完成5场面试', icon: ChatDotRound, color: 'teal', unlocked: s.total_interviews >= 5 },
+    { id: 'offer', name: '首份Offer', desc: '获得首个Offer', icon: Coin, color: 'success', unlocked: s.total_offers >= 1 },
+    { id: 'offer3', name: 'Offer收割机', desc: '获得3个Offer', icon: Trophy, color: 'gold', unlocked: s.total_offers >= 3 },
+    { id: 'stars', name: '面试之星', desc: '综合评分超过80', icon: Star, color: 'red', unlocked: s.best_score >= 80 },
+  ]
+})
+
+// 用户统计数据
+const statsLoading = ref(false)
+const userStats = ref({
+  total_applications: 0,
+  total_interviews: 0,
+  total_offers: 0,
+  total_sessions: 0,
+  resume_count: 0,
+  best_score: 0,
+  days_active: 1,
+  interview_rate: 0,
+  offer_rate: 0,
+})
+
+async function loadUserStats() {
+  statsLoading.value = true
+  try {
+    const data = await getDashboardOverview()
+    const counts = data?.stage_counts || {}
+    const funnel = data?.funnel || {}
+    const totalApps = (funnel.todo || 0) + (funnel.applied || 0) + (funnel.written_test || 0) + (funnel.interview || 0) + (funnel.offer || 0)
+    const totalInt = (funnel.interview || 0) + (funnel.offer || 0)
+    const totalOff = (funnel.offer || 0)
+    userStats.value = {
+      total_applications: totalApps,
+      total_interviews: totalInt,
+      total_offers: totalOff,
+      total_sessions: data?.total_sessions || data?.sessions || 0,
+      resume_count: data?.resume_count || 0,
+      best_score: data?.best_score || data?.max_score || 0,
+      days_active: data?.days_active || Math.ceil((Date.now() - new Date(data?.created_at || Date.now()).getTime()) / 86400000) || 1,
+      interview_rate: totalApps > 0 ? Math.round(totalInt / totalApps * 100) : 0,
+      offer_rate: totalInt > 0 ? Math.round(totalOff / totalInt * 100) : 0,
+    }
+  } catch {} finally {
+    statsLoading.value = false
+  }
+}
+
+// 每日任务
+const dailyTasks = ref([
+  { id: 1, text: '浏览今日岗位推荐', done: false, bonus: 10, link: '/jobs/recommend' },
+  { id: 2, text: '检查投递看板跟进状态', done: false, bonus: 10, link: '/jobs/pipeline/kanban' },
+  { id: 3, text: '完成一道面试练习题', done: false, bonus: 20, link: '/interview' },
+  { id: 4, text: '查看求职周报数据', done: false, bonus: 5, link: '/weekly-report' },
+  { id: 5, text: '检查是否有新消息', done: false, bonus: 5 },
+])
+
+const LS_TASKS_KEY = 'recruit.dailyTasks'
+const LS_TASKS_DATE = 'recruit.dailyTasksDate'
+
+function loadDailyTasks() {
+  const saved = localStorage.getItem(LS_TASKS_KEY)
+  const savedDate = localStorage.getItem(LS_TASKS_DATE)
+  const today = new Date().toDateString()
+  if (saved && savedDate === today) {
+    try {
+      dailyTasks.value = JSON.parse(saved)
+      return
+    } catch {}
+  }
+  dailyTasks.value.forEach(t => { t.done = false })
+  localStorage.setItem(LS_TASKS_DATE, today)
+}
+
+function onTaskChange() {
+  localStorage.setItem(LS_TASKS_KEY, JSON.stringify(dailyTasks.value))
+  const done = dailyTasks.value.filter(t => t.done).length
+  if (done === dailyTasks.value.length) {
+    ElMessage.success('🎉 今日任务全部完成！')
+  }
+}
 const status = reactive({
   app_env: '',
   orchestration_strategy: '',
@@ -292,6 +535,9 @@ async function deleteAccount() {
 onMounted(async () => {
   try {
     await refreshAll()
+    await loadUserStats()
+    await loadSubscription()
+    loadDailyTasks()
   } catch {
     ElMessage.error('个人中心加载失败')
   }
@@ -475,6 +721,124 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+}
+
+/* 成就系统 */
+.achievement-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.achievement-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--app-radius-sm, 12px);
+  transition: all 0.2s;
+}
+
+.achievement-card.unlocked {
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
+}
+
+.achievement-card.locked {
+  background: #f9fafb;
+  border: 1px dashed #d1d5db;
+  opacity: 0.6;
+}
+
+.ach-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ach-blue { background: var(--app-primary-light); color: var(--app-primary); }
+.ach-violet { background: var(--app-violet-light); color: var(--app-violet); }
+.ach-amber { background: #fef5e7; color: var(--app-warning); }
+.ach-green { background: #e8f8ee; color: var(--app-success); }
+.ach-teal { background: #e6fffa; color: #0d9488; }
+.ach-success { background: #d1fae5; color: #059669; }
+.ach-gold { background: #fef3c7; color: #d97706; }
+.ach-red { background: #fce4ec; color: #e53935; }
+
+.ach-info { flex: 1; min-width: 0; }
+.ach-info strong { display: block; font-size: 14px; }
+.ach-info span { display: block; font-size: 12px; color: var(--app-muted); margin-top: 2px; }
+
+/* 数据看板 */
+.stats-dashboard { padding: 4px 0; }
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.stat-card-v {
+  text-align: center;
+  padding: 16px 12px;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
+}
+
+.stat-num {
+  display: block;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--app-primary);
+  margin-top: 6px;
+}
+
+.stat-interview { color: var(--app-violet) !important; }
+.stat-offer { color: var(--app-success) !important; }
+
+.stats-footer {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+
+
+/* 邀请 */
+.invite-body { padding: 8px 0; }
+.invite-desc { font-size: 14px; color: var(--app-muted); margin: 0 0 14px; }
+.invite-link-row { display: flex; gap: 8px; }
+.invite-stats { display: flex; gap: 24px; margin-top: 16px; }
+.invite-stat { text-align: center; }
+.invite-stat strong { display: block; font-size: 22px; font-weight: 800; color: var(--app-primary); }
+.invite-stat span { font-size: 12px; color: var(--app-muted); }/* 每日任务 */
+.daily-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.daily-task-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--app-line);
+  transition: background 0.15s;
+}
+
+.daily-task-item:hover {
+  background: var(--app-bg);
+}
+
+.task-done-text {
+  text-decoration: line-through;
+  color: var(--app-muted);
 }
 
 .capability-item {

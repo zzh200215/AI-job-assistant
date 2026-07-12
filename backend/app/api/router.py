@@ -4,8 +4,10 @@
 from fastapi import APIRouter
 
 from app.api import (
+    analytics,
     agent,
     analysis,
+    analytics,
     auth,
     career_path,
     dashboard,
@@ -13,7 +15,6 @@ from app.api import (
     history,
     interview_rest,
     jd,
-    job_data_source,
     job_journal,
     job_pipeline,
     job_recommend,
@@ -26,8 +27,10 @@ from app.api import (
     reminder,
     resume,
     salary_insight,
+    subscription,
     system,
     timeline,
+    tracking,
     user_preferences,
 )
 
@@ -43,6 +46,7 @@ api_router.include_router(jd.router, prefix="/jd", tags=["jd"])
 api_router.include_router(analysis.router, prefix="/analysis", tags=["analysis"])
 api_router.include_router(history.router, prefix="/history", tags=["history"])
 api_router.include_router(knowledge.router, prefix="/knowledge", tags=["knowledge"])
+api_router.include_router(analytics.router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(agent.router, prefix="/agent", tags=["agent"])
 api_router.include_router(multi_agent.router, prefix="/multi-agent", tags=["multi-agent"])
 api_router.include_router(interview_rest.router, prefix="/interview", tags=["interview"])
@@ -51,10 +55,10 @@ api_router.include_router(job_recommend.router, prefix="/jobs", tags=["job-recom
 api_router.include_router(job_pipeline.router, prefix="/jobs", tags=["job-pipeline"])
 api_router.include_router(job_target.router, prefix="/targets", tags=["job-target"])
 api_router.include_router(job_journal.router, prefix="/journals", tags=["job-journal"])
-api_router.include_router(job_data_source.router, prefix="/datasource", tags=["datasource"])
 api_router.include_router(career_path.router, prefix="/career-path", tags=["career-path"])
 api_router.include_router(salary_insight.router, prefix="/salary", tags=["salary-insight"])
 api_router.include_router(timeline.router, prefix="/timeline", tags=["timeline"])
 api_router.include_router(notification.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(prompt_trace.router, prefix="/prompt-traces", tags=["prompt-traces"])
 api_router.include_router(reminder.router, prefix="/reminders", tags=["reminders"])
+api_router.include_router(subscription.router, prefix="/subscription", tags=["subscription"])

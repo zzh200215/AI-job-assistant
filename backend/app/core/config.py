@@ -88,6 +88,15 @@ class Settings(BaseSettings):
     # 是否启用 LLM 检索路由（关闭则走启发式回退，对 mock provider 也安全）
     RAG_USE_PLANNER: bool = True
 
+    # SMTP 邮件服务
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    SMTP_FROM: str = "noreply@career-signal.ai"
+    FRONTEND_URL: str = "http://localhost:5173"
+
     @property
     def database_url(self) -> str:
         if self.DATABASE_URL:

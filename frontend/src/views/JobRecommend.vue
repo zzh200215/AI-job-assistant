@@ -1,5 +1,31 @@
 <template>
   <div class="page-shell">
+    <!-- 每日推荐头部 -->
+    <div class="panel daily-feed-header">
+      <div class="panel-body feed-header-body">
+        <div class="feed-header-left">
+          <div class="feed-header-icon">
+            <el-icon :size="28"><DataAnalysis /></el-icon>
+          </div>
+          <div>
+            <h3>每日岗位推荐</h3>
+            <p class="feed-header-sub">
+              {{ todayText }} · 基于简历智能匹配
+              <span v-if="recommendations.length">，已推荐 <strong>{{ recommendations.length }}</strong> 个岗位</span>
+            </p>
+          </div>
+        </div>
+        <div class="feed-header-right">
+          <el-button @click="loadRecommendations" :loading="loading.recommend" size="small">
+            <el-icon><Refresh /></el-icon> 刷新
+          </el-button>
+          <el-button type="primary" @click="$router.push('/jobs/pipeline/kanban')" size="small">
+            <el-icon><Grid /></el-icon> 查看投递看板
+          </el-button>
+        </div>
+      </div>
+    </div>
+
     <!-- 顶部：选择简历 + 操作 -->
     <div class="panel">
       <div class="panel-body">
@@ -52,7 +78,7 @@
           <template #description>
             <span>请先选择一份简历，系统将自动为您匹配推荐岗位</span>
           </template>
-          <el-button type="primary" @click="$router.push('/resume')">
+          <el-button type="primary" @click="$router.push('/resume-center')">
             去上传简历
           </el-button>
         </el-empty>
@@ -453,7 +479,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { getResumeList } from '@/api/resume'
 import {
   getJobRecommendations,
@@ -465,13 +491,12 @@ import {
   getJobPipelineList,
 } from '@/api/jobs'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
-import { DataAnalysis, Upload, Location, Money, Timer, TrendCharts, Grid, Microphone, Star } from '@element-plus/icons-vue'
+import { DataAnalysis, Upload, Location, Money, Timer, TrendCharts, Grid, Microphone, Star, Refresh } from '@element-plus/icons-vue'
 import { OfficeBuilding } from '@element-plus/icons-vue'
 import { createJobPipelineEntry } from '@/api/targets'
 
 const router = useRouter()
-
-// === 状态 ===
+const route = useRoute()
 const selectedResumeId = ref(null)
 const resumeList = ref([])
 const recommendations = ref([])
@@ -502,10 +527,27 @@ const hasAnomalySignals = computed(() => {
   return Boolean(signals?.high_score_dislikes?.length || signals?.low_score_likes?.length)
 })
 
+// === 每日推荐 ===
+const todayText = computed(() => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+  return `${y}.${m}.${day} ${weekdays[d.getDay()]}`
+})
+
 // === 生命周期 ===
-onMounted(() => {
-  fetchResumes()
+onMounted(async () => {
+  await fetchResumes()
   loadFeedbackStats()
+  if (route.query.resume_id) {
+    const rid = Number(route.query.resume_id)
+    if (!isNaN(rid)) {
+      selectedResumeId.value = rid
+      loadRecommendations()
+    }
+  }
 })
 
 // === 数据加载 ===
@@ -723,6 +765,56 @@ function formatShortDate(dateText) {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+/* 每日推荐头部 */
+.daily-feed-header {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e8f4fd 100%);
+  border-color: #b3d9f2;
+}
+
+.feed-header-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.feed-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.feed-header-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--app-primary-light);
+  color: var(--app-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.feed-header-body h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--app-text);
+}
+
+.feed-header-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--app-muted);
+}
+
+.feed-header-right {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 /* 顶部 */

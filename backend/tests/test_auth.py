@@ -30,7 +30,6 @@ def register_user(client, **overrides):
         "username": "test_user",
         "email": "test@example.com",
         "password": "StrongP@ssw0rd",
-        "role": "candidate",
     }
     payload.update(overrides)
     return client.post("/auth/register", json=payload)
@@ -51,19 +50,6 @@ class TestAuthApi:
         assert body["data"]["user"]["email"] == "test@example.com"
         assert body["data"]["user"]["role"] == "candidate"
         assert body["data"]["access_token"]
-
-    def test_register_rejects_public_recruiter_role(self, client):
-        response = register_user(
-            client,
-            username="recruiter_user",
-            email="recruiter@example.com",
-            role="recruiter",
-        )
-
-        assert response.status_code == 200
-        body = response.json()
-        assert body["code"] != 0
-        assert "求职者" in body["message"]
 
     def test_register_rejects_duplicate_email_case_insensitive(self, client):
         first = register_user(client, email="first@example.com")

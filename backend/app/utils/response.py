@@ -16,6 +16,7 @@ ERR_FILE: int = -3         # 文件处理失败
 ERR_AI: int = -4           # AI 调用失败
 ERR_DB: int = -5           # 数据库操作失败
 ERR_AUTH: int = -6         # 认证 / 授权失败
+ERR_QUOTA: int = -7        # 额度不足 / 套餐限制
 
 
 def _build_payload(code: int, message: str, data: Any) -> dict:

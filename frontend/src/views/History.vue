@@ -42,7 +42,7 @@
         <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="openDetail(row)">查看</el-button>
-            <el-button v-if="!authStore.isRecruiter" size="small" type="primary" @click="goInterview(row)">面试题</el-button>
+            <el-button size="small" type="primary" @click="goInterview(row)">面试题</el-button>
             <el-button size="small" type="danger" @click="onDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -186,7 +186,6 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import { listHistory, getHistoryDetail, deleteHistory } from '@/api/history'
-import { useAuthStore } from '@/stores/auth'
 import {
   getInterviewGroupTitle,
   hasInterviewQuestions as checkHasInterviewQuestions,
@@ -200,7 +199,6 @@ import {
 } from '@/utils/analysisLocalization'
 
 const router = useRouter()
-const authStore = useAuthStore()
 const loading = ref(false)
 const detailLoading = ref(false)
 const list = ref([])

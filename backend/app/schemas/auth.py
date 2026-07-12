@@ -65,7 +65,6 @@ class RegisterReq(BaseModel):
     username: str = Field(..., min_length=2, max_length=50, description="用户名")
     email: EmailStr = Field(..., description="邮箱")
     password: str = Field(..., min_length=8, max_length=100, description="密码")
-    role: Literal["candidate", "recruiter"] = Field(default=CANDIDATE_ROLE, description="用户身份")
 
     @field_validator("username")
     @classmethod
@@ -149,7 +148,7 @@ class UserInfo(BaseModel):
     id: int
     username: str
     email: str
-    role: Literal["candidate", "recruiter", "admin"] = CANDIDATE_ROLE
+    role: Literal["candidate", "admin"] = CANDIDATE_ROLE
     is_admin: bool = False
     created_at: Optional[str] = None
     # 求职者资料

@@ -21,6 +21,8 @@ from app.utils.file_access import resolve_upload_path
 from app.utils.job_access import get_accessible_job
 from app.utils.response import ERR_AI, ERR_COMMON, ERR_FILE, ERR_PARAM, fail, ok
 from app.utils.time_helper import utc_now
+from app.services.subscription_service import check_quota
+from app.utils.response import ERR_QUOTA
 
 
 router = APIRouter()
@@ -101,6 +103,11 @@ async def upload_resume(
             message=f"File is too large: {len(raw) / 1024 / 1024:.1f}MB (max 10MB).",
             code=ERR_FILE,
         )
+
+    # 权益校验：简历数量上限
+    allowed, msg, _ = check_quota(db, current_user.id, 'resume_count', consume=False)
+    if not allowed:
+        return fail(message=msg, code=ERR_QUOTA)
 
     try:
         meta = resume_service.save_upload_file(raw, file.filename)
@@ -715,3 +722,105 @@ async def analyze_resume_api(
     except Exception as exc:
         traceback.print_exc()
         return fail(message=f"分析失败: {exc}", code=ERR_AI)
+
+
+@router.post("/{resume_id}/diagnose", summary="简历诊断（快速评分+AI分析聚合）")
+async def diagnose_resume(
+    resume_id: int,
+    payload: dict = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    聚合诊断接口：合并快速评分与 AI 深度分析，返回结构化诊断报告。
+    用于简历中心页面的「AI诊断」弹窗。
+    返回：
+    - total_score: 综合评分
+    - structure_score: 结构评分
+    - expression_score: 表达评分
+    - keyword_score: 关键词覆盖评分
+    - highlight_score: 亮点评分
+    - structure_issues: 结构问题列表
+    - expression_issues: 表达问题列表
+    - missing_keywords: 缺失关键词列表
+    - highlights: 亮点列表
+    - match_analysis: 岗位匹配分析
+    - ats_score: ATS 友好度评分
+    - ats_issues: ATS 问题列表
+    """
+    resume = _get_owned_resume(db, resume_id, current_user.id)
+    if not resume:
+        return fail(message="简历不存在或无权限", code=ERR_PARAM)
+
+    target_position = ""
+    if payload:
+        target_position = payload.get("target_position", "")
+
+    try:
+        # 1. 快速评分（规则引擎）
+        quick_result = quick_score_resume(db, resume_id, user_id=current_user.id)
+
+        # 2. AI 深度分析
+        analysis_result = analyze_resume(
+            db, resume_id,
+            target_position=target_position,
+            user_id=current_user.id,
+        )
+
+        # 3. 聚合诊断报告
+        dimensions = analysis_result.get("dimensions", {})
+        issues = analysis_result.get("critical_issues", [])
+        strengths = analysis_result.get("strengths", [])
+        roadmap = analysis_result.get("improvement_roadmap", [])
+        target_match = analysis_result.get("target_position_match", "")
+
+        total_score = analysis_result.get("overall_score", quick_result.get("quick_score", 60))
+
+        # 提取结构问题
+        structure_issues = [
+            issue for issue in issues
+            if any(kw in issue.lower() for kw in ["结构", "格式", "布局", "顺序", "section", "缺少", "缺失"])
+        ] or ["简历结构基本完整，建议进一步优化模块顺序"]
+
+        # 提取表达问题
+        expression_issues = [
+            issue for issue in issues
+            if any(kw in issue.lower() for kw in ["表达", "描述", "语言", "措辞", "啰嗦", "模糊", "简略"])
+        ] or ["建议使用 STAR 法则量化工作成果", "建议增加具体数据指标"]
+
+        # 提取缺失关键词（从 improvement_roadmap 中）
+        missing_keywords = []
+        for item in roadmap:
+            if isinstance(item, dict):
+                kw = item.get("keyword") or item.get("title", "")
+                if kw and kw not in missing_keywords:
+                    missing_keywords.append(kw)
+
+        # 提取亮点
+        highlights = strengths[:5] if strengths else []
+
+        # ATS 评分
+        ats_score = dimensions.get("ats_friendly", 0)
+        ats_issues = quick_result.get("issues", []) if isinstance(quick_result.get("issues"), list) else []
+
+        result = {
+            "total_score": total_score,
+            "structure_score": dimensions.get("structure", 0),
+            "expression_score": dimensions.get("content_quality", 0),
+            "keyword_score": dimensions.get("keyword_density", 0),
+            "highlight_score": dimensions.get("differentiation", 0),
+            "ats_score": ats_score,
+            "structure_issues": structure_issues,
+            "expression_issues": expression_issues,
+            "missing_keywords": missing_keywords[:10],
+            "highlights": highlights,
+            "match_analysis": target_match,
+            "ats_issues": ats_issues,
+            "improvement_roadmap": roadmap if isinstance(roadmap, list) else [],
+        }
+        return ok(result, message="简历诊断完成")
+    except ValueError as exc:
+        return fail(message=str(exc), code=ERR_PARAM)
+    except Exception as exc:
+        traceback.print_exc()
+        return fail(message=f"诊断失败: {exc}", code=ERR_AI)

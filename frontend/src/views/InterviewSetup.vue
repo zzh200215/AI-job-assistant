@@ -128,6 +128,29 @@
             </div>
           </div>
 
+          <!-- 题库配置 -->
+          <div class="question-bank-config">
+            <div class="qb-header">
+              <span class="qb-title">题库配置</span>
+              <span class="qb-subtitle">{{ questionPlan.total }} · 覆盖 {{ questionCategories.length }} 类题型</span>
+            </div>
+            <div class="qb-grid">
+              <div
+                v-for="cat in questionCategories"
+                :key="cat.type"
+                class="qb-item"
+              >
+                <div class="qb-icon" :class="'qb-' + cat.color">
+                  <el-icon :size="16"><component :is="cat.icon" /></el-icon>
+                </div>
+                <div class="qb-info">
+                  <span class="qb-name">{{ cat.label }}</span>
+                  <span class="qb-count">{{ cat.count }} 题</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <el-button
             type="primary"
             size="large"
@@ -244,14 +267,16 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
 import { getInterviewList } from '@/api/interview'
 import { getJDList } from '@/api/jd'
 import { getResumeList } from '@/api/resume'
 import { useInterviewStore } from '@/stores/interview'
+import { Aim, ChatDotRound, Coin, DataAnalysis, Microphone, QuestionFilled } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const route = useRoute()
 const store = useInterviewStore()
 const formRef = ref(null)
 
@@ -282,6 +307,8 @@ const typeOptions = [
   { value: 'tech', label: '技术深挖' },
   { value: 'hr', label: 'HR / 行为面' },
   { value: 'comprehensive', label: '综合面试' },
+  { value: 'stress', label: '压力面试' },
+  { value: 'group', label: '群面模拟' },
 ]
 
 const typeConfigs = {
@@ -303,6 +330,18 @@ const typeConfigs = {
     description: '技术、项目、行为与场景题混合，更接近真实面试组合拳。',
     focus: ['技术基础', '项目贡献', '行为案例', '场景判断'],
   },
+  stress: {
+    label: '压力面试',
+    persona: '像一位会不断质疑和打断的面试官',
+    description: '持续追问、挑战你的回答，考察你在压力环境下的思维逻辑和情绪控制能力。',
+    focus: ['快速追问', '打断再问', '极限场景', '抗压能力'],
+  },
+  group: {
+    label: '群面模拟',
+    persona: '像一位观察多个候选人的面试官',
+    description: '模拟无领导小组讨论场景，评估你的团队角色、协作方式和影响力。',
+    focus: ['团队角色', '观点输出', '协调能力', '总结能力'],
+  },
 }
 
 const typeConfig = computed(() => typeConfigs[form.interview_type] || typeConfigs.tech)
@@ -315,8 +354,27 @@ const questionPlan = computed(() => {
     tech: { total: '10 题', duration: '12-18 分钟' },
     hr: { total: '10 题', duration: '10-15 分钟' },
     comprehensive: { total: '10 题', duration: '15-20 分钟' },
+    stress: { total: '12 题', duration: '15-22 分钟' },
+    group: { total: '8 题', duration: '20-30 分钟' },
   }
   return mapping[form.interview_type] || mapping.tech
+})
+
+const questionCategories = computed(() => {
+  const base = [
+    { type: 'base', label: '基础能力', icon: QuestionFilled, color: 'blue', count: 3 },
+    { type: 'project', label: '项目经验', icon: Aim, color: 'violet', count: 2 },
+    { type: 'behavior', label: '行为面试', icon: ChatDotRound, color: 'amber', count: 2 },
+    { type: 'tech', label: '技术深度', icon: DataAnalysis, color: 'green', count: 2 },
+  ]
+  if (form.interview_type === 'stress') {
+    base.push({ type: 'stress_q', label: '压力场景', icon: Microphone, color: 'red', count: 3 })
+  }
+  if (form.interview_type === 'group') {
+    base.push({ type: 'group_q', label: '小组讨论', icon: Coin, color: 'teal', count: 3 })
+    base.splice(2, 1) // 群面无单独行为面
+  }
+  return base
 })
 
 const stagePlan = computed(() => [
@@ -427,10 +485,17 @@ function openSession(item) {
   router.push(`/interview/room/${item.id}`)
 }
 
-onMounted(() => {
-  fetchResumes()
-  fetchJDs()
+onMounted(async () => {
+  await Promise.all([fetchResumes(), fetchJDs()])
   fetchHistory()
+  if (route.query.jd_id) {
+    const jid = Number(route.query.jd_id)
+    if (!isNaN(jid)) form.jd_id = jid
+  }
+  if (route.query.resume_id) {
+    const rid = Number(route.query.resume_id)
+    if (!isNaN(rid)) form.resume_id = rid
+  }
 })
 </script>
 
@@ -570,6 +635,62 @@ onMounted(() => {
   margin-top: 22px;
   border-radius: var(--app-radius-sm, 12px);
 }
+
+/* 题库配置 */
+.question-bank-config {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
+}
+.qb-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.qb-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--app-text);
+}
+.qb-subtitle {
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.qb-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.qb-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--app-line);
+}
+.qb-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.qb-blue { background: var(--app-primary-light); color: var(--app-primary); }
+.qb-violet { background: var(--app-violet-light); color: var(--app-violet); }
+.qb-amber { background: #fef5e7; color: var(--app-warning); }
+.qb-green { background: #e8f8ee; color: var(--app-success); }
+.qb-red { background: #fff3f0; color: var(--app-danger); }
+.qb-teal { background: #e6fffa; color: #0d9488; }
+.qb-info { display: flex; flex-direction: column; gap: 1px; }
+.qb-name { font-size: 12px; font-weight: 600; color: var(--app-text); }
+.qb-count { font-size: 11px; color: var(--app-muted); }
 
 /* ---- Preview column ---- */
 .preview-column {

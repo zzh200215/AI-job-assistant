@@ -70,3 +70,4 @@ backend/models/BAAI/bge-small-zh-v1.5/
 *.safetensors
 *.ckpt
 *.model
+.reasonix/

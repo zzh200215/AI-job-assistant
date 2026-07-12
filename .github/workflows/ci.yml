@@ -39,11 +39,9 @@ jobs:
 
       - name: Lint backend
         run: ruff check .
-        continue-on-error: true
 
       - name: Check backend formatting
         run: ruff format --check .
-        continue-on-error: true
 
       - name: Run backend tests
         run: python -m pytest
@@ -56,9 +54,14 @@ jobs:
           python -m alembic -c alembic.ini upgrade head
           python -m alembic -c alembic.ini current
 
+      - name: Run RAG eval (min recall >= 0.5)
+        run: python scripts/eval_rag.py --min-recall 0.5
+
+      - name: Run Recommend eval (min skill match >= 0.4)
+        run: python scripts/eval_recommend.py --min-skill-match-accuracy 0.4
+
       - name: Dependency vulnerability audit
         run: pip-audit --desc --requirement requirements.txt
-        continue-on-error: true
 
   frontend:
     runs-on: ubuntu-latest
@@ -84,18 +87,15 @@ jobs:
 
       - name: Lint frontend
         run: npm run lint
-        continue-on-error: true
 
       - name: Check frontend formatting
         run: npm run format:check
-        continue-on-error: true
 
       - name: Build frontend
         run: npm run build
 
       - name: npm audit
         run: npm audit --audit-level=moderate
-        continue-on-error: true
 
   docker-security:
     runs-on: ubuntu-latest

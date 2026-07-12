@@ -253,6 +253,21 @@
                   置信度 {{ analysisConfidence ? (analysisConfidence.score ?? 0) : '--' }}
                 </span>
               </div>
+              <div class="next-step-bar">
+                <el-button
+                  type="primary"
+                  size="small"
+                  @click="router.push({ path: '/jobs/recommend', query: { resume_id: String(result.resume_id || resumeInfo?.id || '') } })"
+                >
+                  <el-icon><Search /></el-icon> 去岗位推荐
+                </el-button>
+                <el-button
+                  size="small"
+                  @click="router.push({ path: '/interview/setup', query: { jd_id: String(jdInfo?.id || '') } })"
+                >
+                  <el-icon><Microphone /></el-icon> 去模拟面试
+                </el-button>
+              </div>
             </div>
           </div>
 
@@ -799,11 +814,12 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
 import {
-  UploadFilled, SuccessFilled, MagicStick, Promotion, Loading,
+  UploadFilled, SuccessFilled, MagicStick, Microphone, Promotion, Loading,
   SuccessFilled as SuccessIcon, WarningFilled, CircleCloseFilled, Document,
-  InfoFilled, EditPen, Folder
+  InfoFilled, EditPen, Folder, Search
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { uploadResume, parseResume } from '@/api/resume'
@@ -819,6 +835,8 @@ import {
   normalizeLocalizedTextList,
 } from '@/utils/analysisLocalization'
 
+const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const uid = computed(() => authStore.user?.id || 'guest')
 const storageKey = (k) => `recruit.${k}.${uid.value}`
@@ -1209,10 +1227,13 @@ const onGenerateOptimized = async () => {
 }
 
 onMounted(() => {
-  const rid = localStorage.getItem(storageKey('lastResumeId'))
-  const jid = localStorage.getItem(storageKey('lastJDId'))
-  if (rid) resumeInfo.value = { id: Number(rid), file_name: `简历 #${rid}` }
-  if (jid) jdInfo.value = { id: Number(jid), title: `JD #${jid}` }
+  // URL query params take priority (from PipelineKanban / other pages)
+  const qRid = route.query.resume_id ? Number(route.query.resume_id) : null
+  const qJid = route.query.jd_id ? Number(route.query.jd_id) : null
+  const rid = qRid || Number(localStorage.getItem(storageKey('lastResumeId')))
+  const jid = qJid || Number(localStorage.getItem(storageKey('lastJDId')))
+  if (rid && !isNaN(rid)) resumeInfo.value = { id: rid, file_name: `简历 #${rid}` }
+  if (jid && !isNaN(jid)) jdInfo.value = { id: jid, title: `JD #${jid}` }
 
   const pending = localStorage.getItem('recruit.pendingAnalysis')
   if (pending) {
@@ -1655,6 +1676,13 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
+}
+
+.next-step-bar {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
 }
 
 .chip {

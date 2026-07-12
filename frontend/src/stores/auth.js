@@ -37,7 +37,6 @@ export const useAuthStore = defineStore('auth', () => {
   const role = computed(() => normalizeRole(user.value?.role))
   const roleLabel = computed(() => getRoleLabel(role.value))
   const homeRoute = computed(() => getHomeRouteByRole(role.value))
-  const isRecruiter = computed(() => role.value === 'recruiter')
 
   function setAuth(accessToken, currentUser) {
     token.value = accessToken
@@ -66,12 +65,11 @@ export const useAuthStore = defineStore('auth', () => {
     return data
   }
 
-  async function register(username, email, password, roleValue) {
+  async function register(username, email, password) {
     const data = await request.post('/auth/register', {
       username: normalizeText(username),
       email: normalizeEmail(email),
       password,
-      role: normalizeRole(roleValue),
     })
     if (data?.access_token) {
       setAuth(data.access_token, data.user)
@@ -112,7 +110,6 @@ export const useAuthStore = defineStore('auth', () => {
     role,
     roleLabel,
     homeRoute,
-    isRecruiter,
     setAuth,
     clearAuth,
     login,

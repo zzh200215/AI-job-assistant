@@ -10,7 +10,8 @@ from app.core.database import get_db
 from app.core.prometheus_metrics import record_login_attempt
 from app.core.rate_limiter import auth_limit, get_limiter, login_limit
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
-from app.core.user_roles import ADMIN_ROLE, CANDIDATE_ROLE, RECRUITER_ROLE, USER_ROLES
+from datetime import timedelta
+from app.core.user_roles import ADMIN_ROLE, CANDIDATE_ROLE, USER_ROLES
 from app.models.user import User
 from app.schemas.auth import AuthResp, LoginReq, PasswordResetReq, RegisterReq, UserInfo, UserProfileUpdateReq
 from app.utils.response import ERR_PARAM, fail, ok
@@ -89,9 +90,6 @@ async def register(
     payload: RegisterReq,
     db: Session = Depends(get_db),
 ):
-    if payload.role == RECRUITER_ROLE:
-        return fail(message="公开注册仅支持求职者账号", code=ERR_PARAM)
-
     if payload.username in settings.admin_usernames_list:
         return fail(message="该用户名不可注册", code=ERR_PARAM)
 
@@ -114,7 +112,7 @@ async def register(
         username=payload.username,
         email=payload.email,
         password=hash_password(payload.password),
-        role=payload.role,
+        role=CANDIDATE_ROLE,
     )
     db.add(user)
     db.commit()
@@ -244,3 +242,171 @@ async def list_users(
         "page_size": page_size,
         "items": items,
     })
+
+
+@router.post("/send-verification-email", summary="发送邮箱验证邮件")
+@get_limiter().limit(login_limit())
+async def send_verification_email(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """生成验证 token 并发送验证邮件。当前为 stub，token 直接返回。"""
+    if current_user.email_verified:
+        return ok(message="邮箱已验证")
+
+    token = create_access_token(
+        data={"sub": str(current_user.id), "type": "email_verify"},
+        expires_delta=timedelta(hours=24),
+    )
+    from app.services.email_service import send_verification_email
+    from app.core.config import settings
+    send_verification_email(current_user.email, token)
+    # verify_url = f"{settings.frontend_url}/verify-email?token={token}"
+    # send_email(current_user.email, "验证邮箱", f"点击链接验证: {verify_url}")
+
+    return ok(data={'token': token} if not settings.SMTP_HOST else {}, message='验证邮件已发送')
+
+
+@router.post("/verify-email", summary="验证邮箱")
+async def verify_email(
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    """验证邮箱 token。"""
+    token = payload.get("token", "")
+    if not token:
+        return fail(message="token 必填", code=ERR_PARAM)
+
+    payload_data = decode_access_token(token)
+    if not payload_data or payload_data.get("type") != "email_verify":
+        return fail(message="验证链接无效或已过期", code=ERR_PARAM)
+
+    user_id = int(payload_data.get("sub", 0))
+    user = db.get(User, user_id)
+    if not user:
+        return fail(message="用户不存在", code=ERR_PARAM)
+
+    user.email_verified = 1
+    db.add(user)
+    db.commit()
+    return ok(message="邮箱验证成功")
+
+
+@router.post("/forgot-password", summary="忘记密码（发送重置链接）")
+@get_limiter().limit(login_limit())
+async def forgot_password(
+    request: Request,
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    """生成密码重置 token 并发送邮件。"""
+    email = (payload.get("email", "") or "").strip().lower()
+    if not email:
+        return fail(message="请输入注册时使用的邮箱", code=ERR_PARAM)
+
+    user = db.query(User).filter(func.lower(User.email) == email).first()
+    if not user:
+        # 不暴露邮箱是否存在，防止邮箱枚举
+        return ok(message="如果该邮箱已注册，重置链接已发送")
+
+    token = create_access_token(
+        data={"sub": str(user.id), "type": "password_reset"},
+        expires_delta=timedelta(hours=1),
+    )
+    # TODO: 接入真实邮件服务
+    # reset_url = f"{settings.frontend_url}/reset-password?token={token}"
+    # send_email(user.email, "重置密码", f"点击链接重置: {reset_url}")
+
+    return ok(data={"token": token}, message="如果该邮箱已注册，重置链接已发送")
+
+
+@router.post("/reset-password-with-token", summary="使用 Token 重置密码")
+async def reset_password_with_token(
+    payload: dict,
+    db: Session = Depends(get_db),
+):
+    """校验重置 token 并设置新密码。"""
+    token = payload.get("token", "")
+    new_password = payload.get("new_password", "")
+    if not token or not new_password:
+        return fail(message="token 和 new_password 必填", code=ERR_PARAM)
+    if len(new_password) < 6:
+        return fail(message="密码至少 6 位", code=ERR_PARAM)
+
+    payload_data = decode_access_token(token)
+    if not payload_data or payload_data.get("type") != "password_reset":
+        return fail(message="重置链接无效或已过期", code=ERR_PARAM)
+
+    user_id = int(payload_data.get("sub", 0))
+    user = db.get(User, user_id)
+    if not user:
+        return fail(message="用户不存在", code=ERR_PARAM)
+
+    user.password = hash******************************sword)
+    db.add(user)
+    db.commit()
+    return ok(message="密码已重置，请使用新密码登录")
+
+@router.get("/export-data", summary="导出用户全部数据")
+async def export_user_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.models.history import Resume, AnalysisRecord
+    from app.models.interview_session import InterviewSession
+    from app.models.subscription import SubscriptionOrder, UserSubscription
+    from app.services.audit_service import write_audit_log
+    from datetime import datetime
+
+    resumes = db.query(Resume).filter(Resume.user_id == current_user.id).all()
+    analyses = db.query(AnalysisRecord).filter(AnalysisRecord.user_id == current_user.id).all()
+    interviews = db.query(InterviewSession).filter(InterviewSession.user_id == current_user.id).all()
+    orders = db.query(SubscriptionOrder).filter(SubscriptionOrder.user_id == current_user.id).all()
+    sub = db.query(UserSubscription).filter(UserSubscription.user_id == current_user.id).first()
+
+    data = {
+        "user": {"id": current_user.id, "username": current_user.username, "email": current_user.email},
+        "resumes": [{"id": r.id, "file_name": r.file_name} for r in resumes],
+        "analyses": [{"id": a.id, "type": a.analysis_type} for a in analyses],
+        "interviews": [{"id": i.id, "status": i.status} for i in interviews],
+        "orders": [{"id": o.id, "plan_tier": o.plan_tier, "amount": float(o.amount), "status": o.status} for o in orders],
+        "subscription": {"plan_tier": sub.plan_tier, "status": sub.status} if sub else None,
+        "exported_at": datetime.utcnow().isoformat(),
+    }
+    write_audit_log(db, current_user, "data.export", resource_type="user")
+    return data
+
+
+@router.delete("/data/resumes", summary="删除用户所有简历")
+async def delete_user_resumes(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.models.history import Resume, ResumeVersion
+    from app.services.audit_service import write_audit_log
+    count = db.query(Resume).filter(Resume.user_id == current_user.id).count()
+    db.query(Resume).filter(Resume.user_id == current_user.id).delete()
+    db.query(ResumeVersion).filter(ResumeVersion.user_id == current_user.id).delete()
+    db.commit()
+    write_audit_log(db, current_user, "resume.delete", resource_type="resume", detail={"deleted_count": count})
+    return ok(message=f"已删除 {count} 份简历")
+
+
+@router.delete("/data/analyses", summary="删除用户所有分析记录")
+async def delete_user_analyses(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.models.history import AnalysisRecord
+    from app.services.audit_service import write_audit_log
+    count = db.query(AnalysisRecord).filter(AnalysisRecord.user_id == current_user.id).count()
+    db.query(AnalysisRecord).filter(AnalysisRecord.user_id == current_user.id).delete()
+    db.commit()
+    write_audit_log(db, current_user, "analysis.delete", resource_type="analysis", detail={"deleted_count": count})
+    return ok(message=f"已删除 {count} 条分析记录")
+
+
+@router.delete("/data/interviews", summary="删除用户所有面试记录")
+async def delete_user_interviews(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.models.interview_session import InterviewSession
+    from app.services.audit_service import write_audit_log
+    count = db.query(InterviewSession).filter(InterviewSession.user_id == current_user.id).count()
+    db.query(InterviewSession).filter(InterviewSession.user_id == current_user.id).delete()
+    db.commit()
+    write_audit_log(db, current_user, "interview.delete", resource_type="interview", detail={"deleted_count": count})
+    return ok(message=f"已删除 {count} 条面试记录")

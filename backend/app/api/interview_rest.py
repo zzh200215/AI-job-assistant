@@ -23,7 +23,8 @@ from app.schemas.interview_session import InterviewSessionCreate
 from app.services.llm_service import chat_json
 from app.services.rag_service import search_knowledge
 from app.utils.job_access import get_accessible_job
-from app.utils.response import ERR_COMMON, ERR_PARAM, fail, ok
+from app.utils.response import ERR_COMMON, ERR_PARAM, ERR_QUOTA, fail, ok
+from app.services.subscription_service import check_quota
 
 router = APIRouter()
 

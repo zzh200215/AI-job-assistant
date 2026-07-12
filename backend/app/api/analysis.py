@@ -2,36 +2,24 @@
 """Analysis APIs for smart matching, optimization, and references."""
 import json
 import traceback
-from fastapi.responses import Response
-from fastapi.responses import FileResponse
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
-from app.core.user_roles import RECRUITER_ROLE
 from app.models.agent import AgentStepLog, AgentTask
 from app.models.history import AnalysisRecord, JobDescription, Resume
 from app.models.user import User
 from app.orchestration.protocol import normalize_step_name
-from app.schemas.analysis import CandidateScreeningReq, CandidateScreeningSaveReq, ExplainMatchReq, FullAnalysisReq, MatchReq
-from app.services.candidate_screening_service import (
-    export_screening_session_csv,
-    get_screening_session,
-    list_screening_sessions,
-    save_screening_session,
-    screen_candidates,
-)
-from app.services.screening_report_export_service import export_screening_docx, export_screening_pdf
+from app.schemas.analysis import ExplainMatchReq, FullAnalysisReq, MatchReq
 from app.services.match_explainer_service import MatchExplainer
 from app.services import interview_service, match_service, optimize_service
 from app.services.analysis_service import run_smart_analysis
 from app.services.rag_service import get_knowledge_references
-from app.utils.file_access import resolve_upload_path
 from app.utils.http_errors import api_error
 from app.utils.job_access import get_accessible_job
-from app.utils.response import ERR_AI, ERR_COMMON, ERR_DB, ERR_FILE, ERR_PARAM, fail, ok
+from app.utils.response import ERR_AI, ERR_COMMON, ERR_DB, ERR_PARAM, ERR_QUOTA, fail, ok
 
 
 def _deep_parse_json(obj):
@@ -167,26 +155,6 @@ def _get_owned_resume(db: Session, user: User, resume_id: int | None) -> Resume 
     )
 
 
-def _get_owned_resumes(db: Session, user: User, resume_ids: list[int]) -> list[Resume]:
-    if not resume_ids:
-        return []
-    rows = (
-        db.query(Resume)
-        .filter(
-            Resume.id.in_(resume_ids),
-            Resume.user_id == user.id,
-            Resume.is_deleted == 0,
-        )
-        .all()
-    )
-    by_id = {row.id: row for row in rows}
-    return [by_id[rid] for rid in resume_ids if rid in by_id]
-
-
-def _ensure_recruiter_access(user: User):
-    if user.role != RECRUITER_ROLE:
-        raise api_error(403, "仅招聘者可使用企业筛选功能", ERR_PARAM)
-
 router = APIRouter()
 
 
@@ -264,146 +232,6 @@ async def full_match(
         },
         message="分析完成",
     )
-
-
-@router.post("/screen-candidates", summary="企业端候选人批量筛选")
-async def screen_candidates_api(
-    payload: CandidateScreeningReq,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    _ensure_recruiter_access(current_user)
-    jd = get_accessible_job(db, payload.jd_id, current_user)
-    if not jd:
-        raise api_error(404, "JD 不存在，或无权限访问", ERR_PARAM)
-
-    resumes = _get_owned_resumes(db, current_user, payload.resume_ids)
-    if not resumes:
-        raise api_error(404, "未找到可筛选的简历", ERR_PARAM)
-
-    if len(resumes) != len(set(payload.resume_ids)):
-        raise api_error(404, "部分简历不存在或无权限访问", ERR_PARAM)
-
-    try:
-        data = screen_candidates(
-            db,
-            user_id=current_user.id,
-            jd=jd,
-            resumes=resumes,
-            top_k=payload.top_k,
-        )
-        return ok(data, message="候选人筛选完成")
-    except Exception as exc:
-        traceback.print_exc()
-        raise api_error(500, f"候选人筛选失败: {exc}", ERR_COMMON)
-
-
-@router.post("/screen-candidates/save", summary="保存候选人筛选记录")
-async def save_screen_candidates_api(
-    payload: CandidateScreeningSaveReq,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    _ensure_recruiter_access(current_user)
-    jd = get_accessible_job(db, payload.jd_id, current_user)
-    if not jd:
-        raise api_error(404, "JD 不存在，或无权限访问", ERR_PARAM)
-
-    resumes = _get_owned_resumes(db, current_user, payload.resume_ids)
-    if not resumes:
-        raise api_error(404, "未找到可筛选的简历", ERR_PARAM)
-    if len(resumes) != len(set(payload.resume_ids)):
-        raise api_error(404, "部分简历不存在或无权限访问", ERR_PARAM)
-
-    try:
-        result_data = screen_candidates(
-            db,
-            user_id=current_user.id,
-            jd=jd,
-            resumes=resumes,
-            top_k=payload.top_k,
-        )
-        session = save_screening_session(
-            db,
-            user_id=current_user.id,
-            jd=jd,
-            request_payload=payload.model_dump(),
-            result_payload=result_data,
-            name=payload.name,
-        )
-        return ok(session.to_dict(), message="筛选记录已保存")
-    except Exception as exc:
-        traceback.print_exc()
-        raise api_error(500, f"保存筛选记录失败: {exc}", ERR_COMMON)
-
-
-@router.get("/screen-candidates/sessions", summary="获取筛选记录列表")
-async def list_screen_candidates_sessions_api(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    _ensure_recruiter_access(current_user)
-    try:
-        items = list_screening_sessions(db, user_id=current_user.id)
-        return ok({"total": len(items), "items": [item.to_dict() for item in items]})
-    except Exception as exc:
-        raise api_error(500, f"查询筛选记录失败: {exc}", ERR_DB)
-
-
-@router.get("/screen-candidates/sessions/{session_id}", summary="获取筛选记录详情")
-async def get_screen_candidates_session_api(
-    session_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    _ensure_recruiter_access(current_user)
-    session = get_screening_session(db, user_id=current_user.id, session_id=session_id)
-    if not session:
-        raise api_error(404, "筛选记录不存在或无权限访问", ERR_PARAM)
-    return ok(session.to_dict())
-
-
-@router.get("/screen-candidates/sessions/{session_id}/export", summary="导出筛选记录 CSV")
-async def export_screen_candidates_session_api(
-    session_id: int,
-    format: str = "csv",
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    _ensure_recruiter_access(current_user)
-    session = get_screening_session(db, user_id=current_user.id, session_id=session_id)
-    if not session:
-        raise api_error(404, "筛选记录不存在或无权限访问", ERR_PARAM)
-
-    if format == "csv":
-        content = export_screening_session_csv(session)
-        file_name = f"screening_session_{session.id}.csv"
-        return Response(
-            content=content,
-            media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": f'attachment; filename="{file_name}"'},
-        )
-
-    try:
-        if format == "docx":
-            rel_path = export_screening_docx(session)
-            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            file_name = f"screening_session_{session.id}.docx"
-        elif format == "pdf":
-            rel_path = export_screening_pdf(session)
-            media_type = "application/pdf"
-            file_name = f"screening_session_{session.id}.pdf"
-        else:
-            raise api_error(400, "不支持的导出格式", ERR_PARAM)
-
-        abs_path = resolve_upload_path(rel_path)
-        if not abs_path.exists() or not abs_path.is_file():
-            raise api_error(404, "导出文件不存在", ERR_FILE)
-        return FileResponse(path=abs_path, filename=file_name, media_type=media_type)
-    except RuntimeError as exc:
-        raise api_error(500, str(exc), ERR_COMMON)
-    except ValueError:
-        raise api_error(500, "导出路径无效", ERR_COMMON)
 
 
 @router.post("/{record_id}/optimize/regenerate", summary="重新生成简历优化建议")

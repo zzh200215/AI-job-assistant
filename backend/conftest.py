@@ -57,11 +57,9 @@ def db_session() -> Session:
     import app.models.history  # noqa: F401
     import app.models.agent  # noqa: F401
     import app.models.agent_run  # noqa: F401
-    import app.models.candidate_screening  # noqa: F401
     import app.models.embedding_usage  # noqa: F401
     import app.models.interview_session  # noqa: F401
     import app.models.knowledge  # noqa: F401
-    import app.models.job_data_source  # noqa: F401
     import app.models.job_pipeline  # noqa: F401
     import app.models.job_recommend  # noqa: F401
     import app.models.prompt_trace  # noqa: F401

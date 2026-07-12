@@ -19,6 +19,22 @@ export const getInterviewDetail = (sessionId) =>
 export const deleteInterview = (sessionId) =>
   request.delete(`/interview/sessions/${sessionId}`)
 
+// 获取题库浏览（支持分类/难度/关键词过滤）
+export const getQuestionBank = (params = {}) =>
+  request.get('/interview/question-bank', { params })
+
+// 获取题库分类统计
+export const getQuestionCategories = () =>
+  request.get('/interview/question-bank/categories')
+
+// 获取针对 JD 的面试准备建议
+export const getInterviewPrep = (jdId) =>
+  request.get(`/interview/preparation/${jdId}`)
+
+// 获取面试表现趋势分析
+export const getPerformanceTrend = () =>
+  request.get('/interview/performance')
+
 // === WebSocket 连接 ===
 
 let ws = null

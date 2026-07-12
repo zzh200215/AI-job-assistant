@@ -28,7 +28,8 @@ from app.services.recommendation_tuning import (
     reset_recommendation_tuning_config,
     save_recommendation_tuning_config,
 )
-from app.utils.response import ERR_COMMON, ERR_PARAM, fail, ok
+from app.utils.response import ERR_COMMON, ERR_PARAM, ERR_QUOTA, fail, ok
+from app.services.subscription_service import check_quota
 
 router = APIRouter()
 

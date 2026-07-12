@@ -47,7 +47,11 @@ class TestAdminAuth:
                 "role": "admin",
             },
         )
-        assert response.status_code == 422
+        # role 字段已从注册请求移除，多余字段被忽略，用户强制为 candidate
+        assert response.status_code == 200
+        body = response.json()
+        assert body["code"] == 0
+        assert body["data"]["user"]["role"] == "candidate"
 
     def test_normal_user_cannot_access_admin_users(self, auth_client, normal_user):
         token = create_access_token({"sub": str(normal_user.id)})

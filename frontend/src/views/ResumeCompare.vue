@@ -33,7 +33,12 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-card shadow="never" class="original-card">
-              <template #header><b>原简历</b></template>
+              <template #header>
+                <b>原简历</b>
+                <el-tag v-if="originalATSScore" size="small" :type="originalATSScore >= 70 ? 'success' : 'warning'" style="margin-left:8px;">
+                  ATS {{ originalATSScore }}分
+                </el-tag>
+              </template>
               <div class="md-preview original-bg">{{ originalContent || '暂无原始内容' }}</div>
             </el-card>
           </el-col>
@@ -41,7 +46,11 @@
             <el-card shadow="never" class="optimized-card">
               <template #header>
                 <b>优化版</b>
-                <el-tag size="small" type="success" style="margin-left:8px;">AI 优化</el-tag>
+                <el-tag v-if="optimizedATSScore" size="small" :type="optimizedATSScore >= 70 ? 'success' : 'warning'" style="margin-left:8px;">
+                  ATS {{ optimizedATSScore }}分
+                  <span v-if="atsImprovement" style="margin-left:4px;">(+{{ atsImprovement }})</span>
+                </el-tag>
+                <el-tag size="small" type="success" style="margin-left:4px;">AI 优化</el-tag>
               </template>
               <div class="md-preview optimized-bg">{{ optimizedContent || '暂无优化内容' }}</div>
             </el-card>
@@ -137,7 +146,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
 import { CopyDocument, Document } from '@element-plus/icons-vue'
@@ -161,6 +170,16 @@ const originalContent = ref('')
 const optimizedContent = ref('')
 const structuredData = ref(null)
 const changesLog = ref([])
+const originalATSScore = ref(null)
+const optimizedATSScore = ref(null)
+
+const atsImprovement = computed(() => {
+  if (originalATSScore.value !== null && optimizedATSScore.value !== null) {
+    const diff = optimizedATSScore.value - originalATSScore.value
+    return diff > 0 ? diff : 0
+  }
+  return null
+})
 
 onMounted(async () => {
   resumeId.value = Number(route.params.id)

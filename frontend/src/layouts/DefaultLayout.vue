@@ -26,7 +26,7 @@
           active-text-color="#196bdb"
         >
           <el-menu-item
-            v-for="item in visibleNav"
+            v-for="item in candidateNav"
             :key="item.path"
             :index="item.path"
             class="nav-item"
@@ -34,6 +34,23 @@
             <el-icon><component :is="item.icon" /></el-icon>
             <span>{{ item.label }}</span>
           </el-menu-item>
+
+          <!-- 管理员可见：内部工具 -->
+          <el-sub-menu v-if="adminNav.length" index="admin-tools" class="nav-submenu">
+            <template #title>
+              <el-icon><Tools /></el-icon>
+              <span>管理工具</span>
+            </template>
+            <el-menu-item
+              v-for="item in adminNav"
+              :key="item.path"
+              :index="item.path"
+              class="nav-item"
+            >
+              <el-icon><component :is="item.icon" /></el-icon>
+              <span>{{ item.label }}</span>
+            </el-menu-item>
+          </el-sub-menu>
         </el-menu>
       </nav>
 
@@ -60,10 +77,10 @@
           <div class="topbar-right">
             <div class="topbar-badges">
               <span class="badge">
-                <span class="badge-dot" :class="authStore.isRecruiter ? 'dot-violet' : 'dot-blue'" />
+                <span class="badge-dot dot-blue" />
                 {{ authStore.roleLabel }}
               </span>
-              <span class="badge badge-outline">Agentic RAG</span>
+              <span class="badge badge-outline">求职助手</span>
             </div>
             <el-dropdown v-if="authStore.isLoggedIn" @command="handleCommand">
               <span class="user-chip">
@@ -74,6 +91,7 @@
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                  <el-dropdown-item command="subscription">订阅方案</el-dropdown-item>
                   <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -100,16 +118,15 @@ import {
   ArrowDown,
   Aim,
   Clock,
-  Collection,
   Coin,
   DataAnalysis,
+  Document,
   Grid,
   HomeFilled,
-  InfoFilled,
   List,
   MagicStick,
   Microphone,
-  OfficeBuilding,
+  Tools,
   TrendCharts,
   Trophy,
 } from '@element-plus/icons-vue'
@@ -124,201 +141,57 @@ const router = useRouter()
 const authStore = useAuthStore()
 const runtime = reactive({ demoMode: false })
 
-const allNav = [
-  {
-    path: '/home',
-    icon: HomeFilled,
-    label: '仪表盘',
-    tag: 'Dashboard',
-    desc: '求职总览与AI建议。',
-    roles: [USER_ROLES.candidate, USER_ROLES.recruiter],
-    matches: ['/home'],
-  },
-  {
-    path: '/targets',
-    icon: Aim,
-    label: '求职目标',
-    tag: 'Targets',
-    desc: '设定求职方向，驱动推荐和优化。',
-    roles: [USER_ROLES.candidate],
-    matches: ['/targets'],
-  },
-  {
-    path: '/jobs/pipeline/kanban',
-    icon: Grid,
-    label: '投递看板',
-    tag: 'Kanban',
-    desc: '拖拽追踪每一步投递进展。',
-    roles: [USER_ROLES.candidate],
-    matches: ['/jobs/pipeline/kanban'],
-  },
-  {
-    path: '/jobs/search',
-    icon: DataAnalysis,
-    label: '岗位市场',
-    tag: 'Market',
-    desc: '搜索岗位、比较机会。',
-    roles: [USER_ROLES.candidate],
-    matches: ['/jobs/search', '/jobs/recommend', '/jobs/recommend/evaluation', '/jobs/recommend/config'],
-  },
-  {
-    path: '/smart-analysis',
-    icon: MagicStick,
-    label: '智能分析',
-    tag: 'Analysis',
-    desc: '简历与岗位匹配分析。',
-    roles: [USER_ROLES.candidate],
-    matches: ['/smart-analysis', '/analysis', '/resume', '/jd', '/agent', '/multi-agent', '/explain-match'],
-  },
-  {
-    path: '/interview/setup',
-    icon: Microphone,
-    label: 'AI 模拟面试',
-    tag: 'Interview',
-    desc: '基于简历和岗位进行面试演练。',
-    roles: [USER_ROLES.candidate],
-    matches: ['/interview', '/interview/setup', '/interview/room', '/interview/report'],
-  },
-  {
-    path: '/salary',
-    icon: Coin,
-    label: '薪资洞察',
-    tag: 'Salary',
-    desc: '薪资对比与Offer决策。',
-    roles: [USER_ROLES.candidate],
-    matches: ['/salary'],
-  },
-  {
-    path: '/offer',
-    icon: Trophy,
-    label: 'Offer决策',
-    tag: 'Offer',
-    desc: '对比Offer、评估薪资、AI辅助决策。',
-    roles: [USER_ROLES.candidate],
-    matches: ['/offer'],
-  },
-  {
-    path: '/weekly-report',
-    icon: TrendCharts,
-    label: '求职周报',
-    tag: 'Report',
-    desc: '每周求职数据复盘与建议。',
-    roles: [USER_ROLES.candidate],
-    matches: ['/weekly-report'],
-  },
-  {
-    path: '/tasks',
-    icon: List,
-    label: '任务中心',
-    tag: 'Tasks',
-    desc: '查看异步任务进度与结果。',
-    roles: [USER_ROLES.candidate, USER_ROLES.hr],
-    matches: ['/tasks'],
-  },
-  {
-    path: '/career-planning',
-    icon: TrendCharts,
-    label: '职业规划',
-    tag: 'Career',
-    desc: '阶段目标与能力提升路径。',
-    roles: [USER_ROLES.candidate],
-    matches: ['/career-planning'],
-  },
-  {
-    path: '/enterprise/screening',
-    icon: OfficeBuilding,
-    label: '企业筛选',
-    tag: 'Recruiting',
-    desc: '围绕 JD 批量筛选候选人。',
-    roles: [USER_ROLES.recruiter],
-    matches: ['/enterprise/screening'],
-  },
-  {
-    path: '/datasource',
-    icon: DataAnalysis,
-    label: '数据源管理',
-    tag: 'Data',
-    desc: '配置招聘数据源与同步。',
-    roles: [USER_ROLES.recruiter],
-    matches: ['/datasource'],
-  },
-  {
-    path: '/knowledge',
-    icon: Collection,
-    label: '知识库',
-    tag: 'Knowledge',
-    desc: '文档管理与检索调试。',
-    roles: [USER_ROLES.candidate, USER_ROLES.recruiter],
-    matches: ['/knowledge', '/query-rewrite-test'],
-  },
-  {
-    path: '/history',
-    icon: Clock,
-    label: '历史记录',
-    tag: 'History',
-    desc: '回看分析、筛选或面试记录。',
-    roles: [USER_ROLES.candidate, USER_ROLES.recruiter],
-    matches: ['/history'],
-  },
-  {
-    path: '/prompt-traces',
-    icon: DataAnalysis,
-    label: 'Prompt 追踪',
-    tag: 'LLMOps',
-    desc: '版本对比、实验分组和结果回放。',
-    roles: [USER_ROLES.candidate, USER_ROLES.recruiter],
-    matches: ['/prompt-traces'],
-  },
-  {
-    path: '/eval-reports',
-    icon: DataAnalysis,
-    label: '评测报表',
-    tag: 'Eval',
-    desc: '离线评测结果、历史快照与版本对比。',
-    roles: [USER_ROLES.candidate, USER_ROLES.recruiter],
-    matches: ['/eval-reports'],
-  },
-  {
-    path: '/about',
-    icon: InfoFilled,
-    label: '关于系统',
-    tag: 'About',
-    desc: '系统边界与产品定位。',
-    roles: [USER_ROLES.candidate, USER_ROLES.recruiter],
-    matches: ['/about'],
-  },
-  {
-    path: '/system-status',
-    icon: InfoFilled,
-    label: '系统状态',
-    tag: 'Status',
-    desc: '运行模式与能力开关。',
-    roles: [USER_ROLES.candidate, USER_ROLES.recruiter],
-    matches: ['/system-status'],
-  },
-  {
-    path: '/delivery-guide',
-    icon: InfoFilled,
-    label: '交付说明',
-    tag: 'Delivery',
-    desc: '交付范围与验收建议。',
-    roles: [USER_ROLES.candidate, USER_ROLES.recruiter],
-    matches: ['/delivery-guide'],
-  },
+// C 端核心导航 — 8 个一级入口
+const candidateNavItems = [
+  { path: '/home', icon: HomeFilled, label: '首页', tag: 'Home', desc: '求职助手首页。', matches: ['/home'] },
+  { path: '/resume-center', icon: Document, label: '简历中心', tag: 'Resume', desc: '多简历管理、AI优化与诊断。', matches: ['/resume-center', '/resume/compare'] },
+  { path: '/smart-analysis', icon: MagicStick, label: '智能分析', tag: 'Analysis', desc: '简历与岗位匹配分析。', matches: ['/smart-analysis', '/analysis'] },
+  { path: '/jobs/recommend', icon: DataAnalysis, label: '岗位推荐', tag: 'Recommend', desc: '每日推荐与智能匹配。', matches: ['/jobs/recommend', '/jobs/search'] },
+  { path: '/interview/setup', icon: Microphone, label: 'AI 模拟面试', tag: 'Interview', desc: '模拟面试与能力评估。', matches: ['/interview', '/interview/setup', '/interview/room', '/interview/report'] },
+  { path: '/jobs/pipeline/kanban', icon: Grid, label: '投递看板', tag: 'Kanban', desc: '投递进展追踪。', matches: ['/jobs/pipeline/kanban'] },
+  { path: '/career-planning', icon: TrendCharts, label: '职业规划', tag: 'Career', desc: '成长路线与能力差距。', matches: ['/career-planning'] },
+  { path: '/profile', icon: List, label: '个人中心', tag: 'Profile', desc: '账号信息、数据与邀请。', matches: ['/profile', '/subscription'] },
 ]
 
-const visibleNav = computed(() => allNav.filter(item => item.roles.includes(authStore.role)))
+// 管理员工具导航
+const adminNavItems = [
+  { path: '/admin', icon: Trophy, label: '管理后台', tag: 'Admin', desc: '运营数据总览。', matches: ['/admin'] },
+  { path: '/admin/users', icon: List, label: '用户管理', tag: 'Users', desc: '用户列表与状态。', matches: ['/admin/users'] },
+  { path: '/admin/orders', icon: Coin, label: '订单管理', tag: 'Orders', desc: '订阅订单与支付。', matches: ['/admin/orders'] },
+  { path: '/prompt-traces', icon: DataAnalysis, label: 'Prompt 追踪', tag: 'LLMOps', desc: '版本对比与结果回放。', matches: ['/prompt-traces'] },
+  { path: '/eval-reports', icon: DataAnalysis, label: '评测报表', tag: 'Eval', desc: '离线评测与历史快照。', matches: ['/eval-reports'] },
+  { path: '/system-status', icon: Trophy, label: '系统状态', tag: 'Status', desc: '运行模式与能力开关。', matches: ['/system-status'] },
+  { path: '/delivery-guide', icon: List, label: '交付说明', tag: 'Delivery', desc: '交付范围与验收建议。', matches: ['/delivery-guide'] },
+  { path: '/about', icon: Trophy, label: '关于系统', tag: 'About', desc: '系统边界与产品定位。', matches: ['/about'] },
+  { path: '/knowledge', icon: Clock, label: '知识库', tag: 'Knowledge', desc: '文档管理与RAG调试。', matches: ['/knowledge'] },
+  { path: '/agent', icon: MagicStick, label: 'Agent 分析', tag: 'Agent', desc: '单Agent分析。', matches: ['/agent'] },
+  { path: '/multi-agent', icon: DataAnalysis, label: '多智能体', tag: 'Multi', desc: '多智能体协作。', matches: ['/multi-agent'] },
+  { path: '/jobs/recommend/evaluation', icon: TrendCharts, label: '推荐评测', tag: 'Eval', desc: '推荐效果评测。', matches: ['/jobs/recommend/evaluation'] },
+  { path: '/jobs/recommend/config', icon: Coin, label: '推荐配置', tag: 'Config', desc: '推荐权重配置。', matches: ['/jobs/recommend/config'] },
+]
+
+// 根据角色过滤
+const isAdmin = computed(() => authStore.role === USER_ROLES.admin)
+const candidateNav = computed(() => isAdmin.value
+  ? candidateNavItems  // admin 也能看到 C 端导航
+  : candidateNavItems
+)
+const adminNav = computed(() => isAdmin.value ? adminNavItems : [])
 
 const currentNav = computed(() => {
-  if (route.path === '/profile') return { label: '个人中心', tag: 'Profile', desc: '账号信息与系统模式。' }
-  const active = visibleNav.value.find(item =>
+  if (route.path === '/profile') return { label: '个人中心', tag: 'Profile', desc: '账号信息与求职数据。' }
+  if (route.path === '/subscription') return { label: '订阅方案', tag: 'Pricing', desc: '套餐与权益对比。' }
+
+  const all = [...candidateNavItems, ...adminNavItems]
+  const active = all.find(item =>
     item.matches.some(prefix => route.path === prefix || route.path.startsWith(`${prefix}/`)),
   )
-  return active || visibleNav.value[0] || null
+  return active || all[0] || null
 })
 
 function handleCommand(cmd) {
   if (cmd === 'profile') { router.push('/profile'); return }
+  if (cmd === 'subscription') { router.push('/subscription'); return }
   if (cmd !== 'logout') return
   authStore.logout()
   ElMessage.success('已退出登录')

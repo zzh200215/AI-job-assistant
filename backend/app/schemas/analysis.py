@@ -34,16 +34,6 @@ class FullAnalysisReq(BaseModel):
     jd_id: int = Field(..., description="岗位 JD ID")
 
 
-class CandidateScreeningReq(BaseModel):
-    jd_id: int = Field(..., description="目标 JD ID")
-    resume_ids: List[int] = Field(..., min_length=1, description="待筛选简历 ID 列表")
-    top_k: int = Field(10, ge=1, le=100, description="返回前 N 名候选人")
-
-
-class CandidateScreeningSaveReq(CandidateScreeningReq):
-    name: str = Field("", max_length=200, description="筛选记录名称")
-
-
 # ===================== 编排器响应模型 =====================
 
 class AgentStepResult(BaseModel):

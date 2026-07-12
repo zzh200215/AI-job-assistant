@@ -296,6 +296,29 @@
             </div>
           </el-card>
 
+          <el-card v-if="learningResources.length" class="resource-card" shadow="never">
+            <template #header>
+              <div class="card-header">
+                <span>学习资源推荐</span>
+                <el-tag size="small" type="warning">{{ learningResources.length }} 项</el-tag>
+              </div>
+            </template>
+            <div class="resource-list">
+              <div v-for="item in learningResources" :key="item.skill" class="resource-item">
+                <div class="resource-top">
+                  <strong>{{ item.skill }}</strong>
+                  <el-tag size="small" :type="item.priority === '高' ? 'danger' : 'warning'">{{ item.priority }}</el-tag>
+                </div>
+                <div class="resource-links">
+                  <a v-for="res in item.resources" :key="res.name" :href="res.link" class="resource-link" target="_blank">
+                    <el-tag size="small" effect="plain" type="info">{{ res.type }}</el-tag>
+                    {{ res.name }}
+                  </a>
+                </div>
+              </div>
+            </div>
+          </el-card>
+
           <el-card v-if="roadmapPhases.length" class="roadmap-card" shadow="never">
             <template #header>
               <div class="card-header">
@@ -449,6 +472,37 @@
             </div>
           </el-card>
 
+          <el-card class="salary-card" shadow="never">
+            <template #header>
+              <div class="card-header">
+                <span>薪资成长预测</span>
+                <el-tag size="small" type="success">{{ salaryPrediction.growthRate }}% 年增长率</el-tag>
+              </div>
+            </template>
+            <div class="salary-body">
+              <div class="salary-current">
+                <span class="salary-label">当前预估</span>
+                <strong>{{ salaryPrediction.currentSalary }}K</strong>
+                <small>{{ salaryPrediction.benchmark }}</small>
+              </div>
+              <div class="salary-arrow">
+                <el-icon><ArrowRight /></el-icon>
+              </div>
+              <div class="salary-current">
+                <span class="salary-label">5年后预估</span>
+                <strong class="salary-future">{{ salaryPrediction.fiveYearSalary }}K</strong>
+                <small>{{ salaryPrediction.level }}</small>
+              </div>
+            </div>
+            <div class="salary-chart">
+              <div v-for="(p, i) in salaryPrediction.predictions" :key="p.year" class="salary-bar-col">
+                <div class="salary-bar" :style="{ height: (p.salary / salaryPrediction.fiveYearSalary) * 100 + '%' }" />
+                <span class="salary-bar-label">{{ p.year }}</span>
+                <span class="salary-bar-val">{{ p.salary }}K</span>
+              </div>
+            </div>
+          </el-card>
+
           <el-card class="next-card" shadow="never">
             <template #header>
               <div class="card-header">
@@ -518,7 +572,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
-import { CircleCloseFilled, Loading, SuccessFilled, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowRight, CircleCloseFilled, Loading, SuccessFilled, WarningFilled } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { getResumeList } from '@/api/resume'
 import { createJD, getJDList } from '@/api/jd'
@@ -662,6 +716,58 @@ const skillGapCount = computed(() => skillGaps.value.length)
 const localizedShortTermGoals = computed(() => normalizeLocalizedTextList(careerResult.value?.short_term_plan?.goals))
 const localizedMidTermGoals = computed(() => normalizeLocalizedTextList(careerResult.value?.mid_term_plan?.goals))
 const localizedLongTermGoals = computed(() => normalizeLocalizedTextList(careerResult.value?.long_term_plan?.goals))
+
+// 薪资成长预测
+const salaryPrediction = computed(() => {
+  const stage = currentStage.value
+  const score = latestMatchScore.value
+  const yearsExp = selectedResume.value?.years_exp || 3
+  const currentTitle = selectedResume.value?.parsed?.current_title || ''
+
+  const baseSalary = Math.max(10, yearsExp * 5 + 8)
+  const growthRate = score >= 80 ? 0.35 : score >= 60 ? 0.25 : 0.15
+  const stageMultiplier = stage === 'entry' ? 1.5 : stage === 'growth' ? 1.3 : stage === 'mature' ? 1.1 : 1.2
+
+  const predictions = []
+  for (let i = 0; i < 5; i++) {
+    const year = new Date().getFullYear() + i
+    const salary = Math.round(baseSalary * Math.pow(1 + growthRate, i) * (i === 0 ? 1 : stageMultiplier))
+    predictions.push({ year, salary, growth: i === 0 ? 0 : Math.round((salary / predictions[i - 1]?.salary - 1) * 100) })
+  }
+  return {
+    currentSalary: predictions[0]?.salary || baseSalary,
+    fiveYearSalary: predictions[4]?.salary || baseSalary * 2,
+    growthRate: Math.round(growthRate * 100),
+    predictions,
+    benchmark: yearsExp >= 5 ? '高级工程师/专家' : yearsExp >= 3 ? '中级工程师' : '初级工程师',
+    level: currentTitle ? '对标' + currentTitle.replace(/.*?(\w+)/, '$1') : '行业平均水平',
+  }
+})
+
+// 学习资源推荐
+const learningResources = computed(() => {
+  const gaps = skillGaps.value
+  if (!gaps.length) return []
+  return gaps.slice(0, 5).map(gap => {
+    const skill = gap.skill || ''
+    const resources = []
+    const priority = gap.priority || '中'
+    if (skill.includes('系统设计') || skill.includes('架构')) {
+      resources.push({ type: '书籍', name: '《系统设计面试》', link: 'https://book.douban.com/subject/35246717/' })
+      resources.push({ type: '课程', name: 'Grokking System Design', link: '#' })
+    } else if (skill.includes('算法') || skill.includes('数据结构')) {
+      resources.push({ type: '平台', name: 'LeetCode', link: 'https://leetcode.cn' })
+      resources.push({ type: '书籍', name: '《算法导论》', link: '#' })
+    } else if (skill.includes('项目') || skill.includes('管理')) {
+      resources.push({ type: '课程', name: '项目管理 PMP 认证', link: '#' })
+      resources.push({ type: '书籍', name: '《人人都是项目经理》', link: '#' })
+    } else {
+      resources.push({ type: '实践', name: `${skill} 专项项目`, link: '#' })
+      resources.push({ type: '课程', name: `${skill} 入门到精通`, link: '#' })
+    }
+    return { skill, priority, resources, gap: gap }
+  })
+})
 
 const strategySummary = computed(() => {
   const score = latestMatchScore.value
@@ -1122,11 +1228,146 @@ function stepIcon(status) {
 .strategy-card,
 .gap-card,
 .direction-card,
-.next-card {
+.next-card,
+.salary-card,
+.resource-card {
   border-radius: var(--app-radius-md, 16px);
   border: 1px solid var(--app-line);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--app-shadow-soft);
+}
+
+.salary-card :deep(.el-card__header),
+.resource-card :deep(.el-card__header) {
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid var(--app-line);
+  background: var(--app-bg);
+}
+
+.salary-card :deep(.el-card__body),
+.resource-card :deep(.el-card__body) {
+  padding: 24px;
+}
+
+/* 薪资预测 */
+.salary-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.salary-current {
+  text-align: center;
+}
+
+.salary-label {
+  display: block;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+
+.salary-current strong {
+  display: block;
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--app-primary);
+  margin: 8px 0;
+}
+
+.salary-future { color: var(--app-success) !important; }
+
+.salary-current small {
+  display: block;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+
+.salary-arrow {
+  color: var(--app-muted);
+  font-size: 24px;
+}
+
+.salary-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 80px;
+  padding: 0 8px;
+}
+
+.salary-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.salary-bar {
+  width: 100%;
+  max-width: 32px;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, var(--app-primary), #7db0ee);
+  transition: height 0.4s;
+}
+
+.salary-bar-label {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--app-muted);
+}
+
+.salary-bar-val {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--app-primary);
+}
+
+/* 学习资源 */
+.resource-list {
+  display: grid;
+  gap: 12px;
+}
+
+.resource-item {
+  padding: 14px;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
+}
+
+.resource-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.resource-top strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.resource-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.resource-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--app-primary);
+  cursor: pointer;
+}
+
+.resource-link:hover {
+  text-decoration: underline;
 }
 
 .control-card :deep(.el-card__header),

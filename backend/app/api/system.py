@@ -14,11 +14,9 @@ from app.core.config import settings
 from app.core.database import get_db, engine
 from app.core.prometheus_metrics import get_metrics_response
 from app.core.runtime_metrics import get_runtime_metrics
-from app.core.user_roles import ADMIN_ROLE, RECRUITER_ROLE
-from app.models.candidate_screening import CandidateScreeningSession
+from app.core.user_roles import ADMIN_ROLE
 from app.models.history import AnalysisRecord, JobDescription, Resume
 from app.models.interview_session import InterviewSession
-from app.models.job_data_source import JobDataSource, JobSyncLog
 from app.models.knowledge import KnowledgeDocument
 from app.models.user import User
 from app.services.embedding_service import get_embedding_daily_stats, get_embedding_stats
@@ -35,7 +33,7 @@ def _is_mock(provider: str | None) -> bool:
 
 
 def _can_view_system_overview(user: User) -> bool:
-    return user.role in (RECRUITER_ROLE, ADMIN_ROLE) or user.username in settings.admin_usernames_list
+    return user.role == ADMIN_ROLE or user.username in settings.admin_usernames_list
 
 
 @router.get("/status", summary="Get runtime system status")
@@ -63,11 +61,6 @@ async def get_system_status(_current_user: User = Depends(get_current_user)):
         "runtime_notes": {
             "llm_mode": "demo" if _is_mock(llm_provider) else "live",
             "embedding_mode": "demo" if _is_mock(embedding_provider) else "live",
-            "data_source_api_ready": True,
-            "data_source_api_note": (
-                "HTTP API data sources support auth refresh, pagination, "
-                "rate limiting, and retry backoff."
-            ),
             "orchestration_backend_note": (
                 f"current backend={settings.ORCHESTRATION_BACKEND}; "
                 "redis_queue is available when REDIS_URL is configured."
@@ -85,19 +78,7 @@ async def get_system_overview(
     current_user: User = Depends(get_current_user),
 ):
     if not _can_view_system_overview(current_user):
-        raise api_error(403, "仅招聘者或管理员可查看系统概览", ERR_AUTH)
-
-    today = datetime.now(timezone.utc).date()
-    today_sync_total = (
-        db.query(JobSyncLog)
-        .filter(JobSyncLog.started_at >= today)
-        .count()
-    )
-    today_sync_failed = (
-        db.query(JobSyncLog)
-        .filter(JobSyncLog.started_at >= today, JobSyncLog.status.in_(["failed", "partial"]))
-        .count()
-    )
+        raise api_error(403, "仅管理员可查看系统概览", ERR_AUTH)
 
     overview = {
         "users": db.query(User).count(),
@@ -105,11 +86,7 @@ async def get_system_overview(
         "jds": db.query(JobDescription).count(),
         "analysis_records": db.query(AnalysisRecord).count(),
         "interviews": db.query(InterviewSession).count(),
-        "screening_sessions": db.query(CandidateScreeningSession).count(),
         "knowledge_documents": db.query(KnowledgeDocument).count(),
-        "data_sources": db.query(JobDataSource).count(),
-        "sync_logs": db.query(JobSyncLog).count(),
-        "sync_today": {"total": today_sync_total, "failed": today_sync_failed},
         "runtime_metrics": get_runtime_metrics(),
         "embedding_metrics": {
             "current": get_embedding_stats(),

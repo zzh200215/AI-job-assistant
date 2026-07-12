@@ -37,7 +37,6 @@ def register_user(client):
             "username": "status_user",
             "email": "status@example.com",
             "password": "StrongP@ssw0rd",
-            "role": "candidate",
         },
     )
 
@@ -112,18 +111,18 @@ def test_system_overview_rejects_candidate_role(client):
     assert response.status_code == 403
     body = response.json()
     assert body["detail"]["code"] == -6
-    assert body["detail"]["message"] == "仅招聘者或管理员可查看系统概览"
+    assert body["detail"]["message"] == "仅管理员可查看系统概览"
 
 
-def test_system_overview_returns_counts_for_recruiter(client, db_session):
-    recruiter = create_user(
+def test_system_overview_returns_counts_for_admin(client, db_session):
+    admin = create_user(
         db_session,
-        username="status_recruiter",
-        email="status_recruiter@example.com",
-        role="recruiter",
+        username="status_admin",
+        email="status_admin@example.com",
+        role="admin",
     )
 
-    response = client.get("/system/overview", headers=auth_headers(recruiter))
+    response = client.get("/system/overview", headers=auth_headers(admin))
 
     assert response.status_code == 200
     body = response.json()

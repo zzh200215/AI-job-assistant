@@ -109,25 +109,6 @@ export const seedDemoJobs = () =>
 export const recommendCareerPaths = (resumeId) =>
   request.post('/career-path/recommend', null, { params: { resume_id: resumeId } })
 
-// 企业端候选人批量筛选
-export const screenCandidates = (payload) =>
-  request.post('/analysis/screen-candidates', payload)
-
-export const saveScreeningSession = (payload) =>
-  request.post('/analysis/screen-candidates/save', payload)
-
-export const getScreeningSessions = () =>
-  request.get('/analysis/screen-candidates/sessions')
-
-export const getScreeningSessionDetail = (sessionId) =>
-  request.get(`/analysis/screen-candidates/sessions/${sessionId}`)
-
-export const exportScreeningSession = (sessionId, format = 'csv') =>
-  request.get(`/analysis/screen-candidates/sessions/${sessionId}/export`, {
-    params: { format },
-    responseType: 'blob',
-  })
-
 // 获取岗位推荐 (合并了 JobRecommend 页面) - 注：原文件第5行已声明，此处删除重复
 // export const getJobRecommendations = (resumeId, params = {}) =>
 //   request.get('/jobs/recommend', { params: { resume_id: resumeId, ...params } })
