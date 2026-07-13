@@ -58,7 +58,7 @@ export const useAuthStore = defineStore('auth', () => {
     const data = await request.post('/auth/login', {
       account: normalizeText(account),
       password,
-    })
+    }, { notifyError: false })
     if (data?.access_token) {
       setAuth(data.access_token, data.user)
     }

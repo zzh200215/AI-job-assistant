@@ -20,26 +20,54 @@
         </div>
       </div>
       <div class="panel-body">
-        <div v-if="loading" class="empty-inline"><el-icon class="is-loading"><Loading /></el-icon> 加载中...</div>
+        <div v-if="loading" class="empty-inline">
+          <el-icon class="is-loading"><Loading /></el-icon> 加载中...
+        </div>
+        <div v-else-if="loadError" class="load-error">
+          <div>
+            <strong>Offer 列表加载失败</strong><span>{{ loadError }}</span>
+          </div>
+          <el-button @click="loadOffers">重新加载</el-button>
+        </div>
         <div v-else-if="!offers.length" class="empty-inline">
           <el-empty :image-size="100" description="暂无 Offer，继续投递加油">
-            <el-button type="primary" @click="router.push('/jobs/pipeline/kanban')">查看投递看板</el-button>
+            <el-button type="primary" @click="router.push('/jobs/pipeline/kanban')"
+              >查看投递看板</el-button
+            >
             <el-button @click="router.push('/jobs/recommend')">去岗位推荐</el-button>
           </el-empty>
         </div>
         <div v-else class="offer-list">
-          <div v-for="o in offers" :key="o.id" class="offer-row" :class="{ selected: selectedIds.includes(o.id) }" @click="toggleSelect(o.id)">
-            <el-checkbox :model-value="selectedIds.includes(o.id)" @click.stop @change="toggleSelect(o.id)" />
+          <div
+            v-for="o in offers"
+            :key="o.id"
+            class="offer-row"
+            :class="{ selected: selectedIds.includes(o.id) }"
+            @click="toggleSelect(o.id)"
+          >
+            <el-checkbox
+              :model-value="selectedIds.includes(o.id)"
+              @click.stop
+              @change="toggleSelect(o.id)"
+            />
             <div class="offer-info">
               <strong>{{ o.company || '未知公司' }} - {{ o.title || '未知岗位' }}</strong>
               <span>{{ o.salary_range || '薪资未定' }}</span>
             </div>
             <div class="offer-meta">
-              <span v-if="o.offer_deadline"><el-icon><Clock /></el-icon> {{ formatDate(o.offer_deadline) }} 到期</span>
-              <span v-if="o.match_score"><el-icon><Histogram /></el-icon> 匹配 {{ Math.round(o.match_score) }}分</span>
+              <span v-if="o.offer_deadline"
+                ><el-icon><Clock /></el-icon> {{ formatDate(o.offer_deadline) }} 到期</span
+              >
+              <span v-if="o.match_score"
+                ><el-icon><Histogram /></el-icon> 匹配 {{ Math.round(o.match_score) }}分</span
+              >
             </div>
-            <el-tag :type="deadlineUrgency(o.offer_deadline)" size="small">{{ deadlineLabel(o.offer_deadline) }}</el-tag>
-            <el-button size="small" text @click.stop="showEditOffer(o)"><el-icon><Edit /></el-icon></el-button>
+            <el-tag :type="deadlineUrgency(o.offer_deadline)" size="small">{{
+              deadlineLabel(o.offer_deadline)
+            }}</el-tag>
+            <el-button size="small" text @click.stop="showEditOffer(o)"
+              ><el-icon><Edit /></el-icon
+            ></el-button>
           </div>
         </div>
       </div>
@@ -57,8 +85,18 @@
       <div class="panel-body">
         <div class="weight-grid">
           <div v-for="w in weightKeys" :key="w.key" class="weight-item">
-            <div class="weight-label"><span class="weight-dot" :class="'dot-' + w.color" /> {{ w.label }}</div>
-            <el-slider v-model="weights[w.key]" :min="0" :max="100" :step="5" show-input size="small" style="width:160px" />
+            <div class="weight-label">
+              <span class="weight-dot" :class="'dot-' + w.color" /> {{ w.label }}
+            </div>
+            <el-slider
+              v-model="weights[w.key]"
+              :min="0"
+              :max="100"
+              :step="5"
+              show-input
+              size="small"
+              style="width: 160px"
+            />
           </div>
         </div>
       </div>
@@ -84,34 +122,101 @@
                 <th class="dim-col">维度</th>
                 <th v-for="o in selectedOffers" :key="o.id">
                   {{ o.company || '未知' }}
-                  <div class="offer-sub" v-if="o.offer_details?.total_package">{{ o.offer_details.total_package }}</div>
+                  <div class="offer-sub" v-if="o.offer_details?.total_package">
+                    {{ o.offer_details.total_package }}
+                  </div>
                 </th>
               </tr>
             </thead>
             <tbody>
-              <tr><td>岗位</td><td v-for="o in selectedOffers" :key="o.id">{{ o.title || '-' }}</td></tr>
-              <tr><td>公司</td><td v-for="o in selectedOffers" :key="o.id">{{ o.company || '-' }}</td></tr>
-              <tr><td>城市</td><td v-for="o in selectedOffers" :key="o.id">{{ o.city || o.location || '-' }}</td></tr>
-              <tr><td>底薪</td><td v-for="o in selectedOffers" :key="o.id"><strong>{{ o.salary_range || '-' }}</strong></td></tr>
-              <tr><td>总包</td><td v-for="o in selectedOffers" :key="o.id">{{ o.offer_details?.total_package || '-' }}</td></tr>
-              <tr><td>股票/期权</td><td v-for="o in selectedOffers" :key="o.id">{{ o.offer_details?.equity || '-' }}</td></tr>
-              <tr><td>签字费</td><td v-for="o in selectedOffers" :key="o.id">{{ o.offer_details?.signing_bonus || '-' }}</td></tr>
-              <tr><td>匹配分</td><td v-for="o in selectedOffers" :key="o.id">
-                <span :class="scoreClass(o.match_score)">{{ o.match_score ? Math.round(o.match_score) : '-' }}</span>
-              </td></tr>
-              <tr><td>通勤</td><td v-for="o in selectedOffers" :key="o.id"><el-rate v-model="o._scores.commute" :max="5" size="small" /></td></tr>
-              <tr><td>成长空间</td><td v-for="o in selectedOffers" :key="o.id"><el-rate v-model="o._scores.growth" :max="5" size="small" /></td></tr>
-              <tr><td>稳定性</td><td v-for="o in selectedOffers" :key="o.id"><el-rate v-model="o._scores.stability" :max="5" size="small" /></td></tr>
-              <tr><td>技术栈</td><td v-for="o in selectedOffers" :key="o.id"><el-rate v-model="o._scores.tech" :max="5" size="small" /></td></tr>
-              <tr><td>公司发展</td><td v-for="o in selectedOffers" :key="o.id"><el-rate v-model="o._scores.company_dev" :max="5" size="small" /></td></tr>
-              <tr><td>文化氛围</td><td v-for="o in selectedOffers" :key="o.id"><el-rate v-model="o._scores.culture" :max="5" size="small" /></td></tr>
+              <tr>
+                <td>岗位</td>
+                <td v-for="o in selectedOffers" :key="o.id">{{ o.title || '-' }}</td>
+              </tr>
+              <tr>
+                <td>公司</td>
+                <td v-for="o in selectedOffers" :key="o.id">{{ o.company || '-' }}</td>
+              </tr>
+              <tr>
+                <td>城市</td>
+                <td v-for="o in selectedOffers" :key="o.id">{{ o.city || o.location || '-' }}</td>
+              </tr>
+              <tr>
+                <td>底薪</td>
+                <td v-for="o in selectedOffers" :key="o.id">
+                  <strong>{{ o.salary_range || '-' }}</strong>
+                </td>
+              </tr>
+              <tr>
+                <td>总包</td>
+                <td v-for="o in selectedOffers" :key="o.id">
+                  {{ o.offer_details?.total_package || '-' }}
+                </td>
+              </tr>
+              <tr>
+                <td>股票/期权</td>
+                <td v-for="o in selectedOffers" :key="o.id">
+                  {{ o.offer_details?.equity || '-' }}
+                </td>
+              </tr>
+              <tr>
+                <td>签字费</td>
+                <td v-for="o in selectedOffers" :key="o.id">
+                  {{ o.offer_details?.signing_bonus || '-' }}
+                </td>
+              </tr>
+              <tr>
+                <td>匹配分</td>
+                <td v-for="o in selectedOffers" :key="o.id">
+                  <span :class="scoreClass(o.match_score)">{{
+                    o.match_score ? Math.round(o.match_score) : '-'
+                  }}</span>
+                </td>
+              </tr>
+              <tr>
+                <td>通勤</td>
+                <td v-for="o in selectedOffers" :key="o.id">
+                  <el-rate v-model="o._scores.commute" :max="5" size="small" />
+                </td>
+              </tr>
+              <tr>
+                <td>成长空间</td>
+                <td v-for="o in selectedOffers" :key="o.id">
+                  <el-rate v-model="o._scores.growth" :max="5" size="small" />
+                </td>
+              </tr>
+              <tr>
+                <td>稳定性</td>
+                <td v-for="o in selectedOffers" :key="o.id">
+                  <el-rate v-model="o._scores.stability" :max="5" size="small" />
+                </td>
+              </tr>
+              <tr>
+                <td>技术栈</td>
+                <td v-for="o in selectedOffers" :key="o.id">
+                  <el-rate v-model="o._scores.tech" :max="5" size="small" />
+                </td>
+              </tr>
+              <tr>
+                <td>公司发展</td>
+                <td v-for="o in selectedOffers" :key="o.id">
+                  <el-rate v-model="o._scores.company_dev" :max="5" size="small" />
+                </td>
+              </tr>
+              <tr>
+                <td>文化氛围</td>
+                <td v-for="o in selectedOffers" :key="o.id">
+                  <el-rate v-model="o._scores.culture" :max="5" size="small" />
+                </td>
+              </tr>
               <tr class="total-row">
                 <td><strong>加权综合评分</strong></td>
                 <td v-for="o in selectedOffers" :key="o.id">
                   <strong class="total-score" :class="totalClass(o)">{{ weightedScore(o) }}</strong>
                   <div class="score-breakdown" v-if="showBreakdown === o.id" @click.stop>
                     <div v-for="w in weightKeys" :key="w.key" class="br-item">
-                      <span>{{ w.label }}</span><span>{{ (o._scores[w.key] * weights[w.key]) }}%</span>
+                      <span>{{ w.label }}</span
+                      ><span>{{ o._scores[w.key] * weights[w.key] }}%</span>
                     </div>
                   </div>
                 </td>
@@ -123,7 +228,9 @@
           <el-button type="primary" size="small" @click="generateAdvice" :loading="adviceLoading">
             <el-icon><MagicStick /></el-icon> AI 决策建议
           </el-button>
-          <el-button size="small" @click="showAllDetails" v-if="selectedOffers.length > 1">展开明细</el-button>
+          <el-button size="small" @click="showAllDetails" v-if="selectedOffers.length > 1"
+            >展开明细</el-button
+          >
         </div>
       </div>
     </div>
@@ -135,18 +242,33 @@
           <el-icon :size="18" color="var(--app-success)"><Coin /></el-icon>
           <h3>薪资合理性评估</h3>
         </div>
-        <el-button size="small" @click="loadSalaryInsight" :loading="salaryLoading">查询市场薪资</el-button>
+        <el-button size="small" @click="loadSalaryInsight" :loading="salaryLoading"
+          >查询市场薪资</el-button
+        >
       </div>
       <div class="panel-body">
-        <div v-if="!salaryData" class="empty-inline">点击"查询市场薪资"查看该岗位的薪资分位数据</div>
+        <div v-if="!salaryData" class="empty-inline">
+          点击"查询市场薪资"查看该岗位的薪资分位数据
+        </div>
         <div v-else>
           <div class="salary-stats">
-            <div class="stat-card"><span class="stat-label">P25</span><strong>{{ formatK(salaryData.p25) }}</strong></div>
-            <div class="stat-card"><span class="stat-label">中位数</span><strong>{{ formatK(salaryData.median) }}</strong></div>
-            <div class="stat-card"><span class="stat-label">P75</span><strong>{{ formatK(salaryData.p75) }}</strong></div>
-            <div class="stat-card"><span class="stat-label">平均</span><strong>{{ formatK(salaryData.avg) }}</strong></div>
+            <div class="stat-card">
+              <span class="stat-label">P25</span><strong>{{ formatK(salaryData.p25) }}</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">中位数</span
+              ><strong>{{ formatK(salaryData.median) }}</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">P75</span><strong>{{ formatK(salaryData.p75) }}</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">平均</span><strong>{{ formatK(salaryData.avg) }}</strong>
+            </div>
           </div>
-          <p v-if="salaryData.sample_count" class="salary-note">基于 {{ salaryData.sample_count }} 条岗位数据</p>
+          <p v-if="salaryData.sample_count" class="salary-note">
+            基于 {{ salaryData.sample_count }} 条岗位数据
+          </p>
         </div>
       </div>
     </div>
@@ -170,11 +292,21 @@
     <!-- Offer 编辑弹窗 -->
     <el-dialog v-model="showEditDialog" title="编辑 Offer 详情" width="520px">
       <el-form label-position="top" v-if="editOffer">
-        <el-form-item label="底薪"><el-input v-model="editOffer.salary_range" placeholder="如 30K-50K" /></el-form-item>
-        <el-form-item label="总包预估"><el-input v-model="editForm.total_package" placeholder="如 60W" /></el-form-item>
-        <el-form-item label="股票/期权"><el-input v-model="editForm.equity" placeholder="如 1000 股 / 4年" /></el-form-item>
-        <el-form-item label="签字费"><el-input v-model="editForm.signing_bonus" placeholder="如 5W" /></el-form-item>
-        <el-form-item label="城市"><el-input v-model="editOffer.city" placeholder="如 北京" /></el-form-item>
+        <el-form-item label="底薪"
+          ><el-input v-model="editOffer.salary_range" placeholder="如 30K-50K"
+        /></el-form-item>
+        <el-form-item label="总包预估"
+          ><el-input v-model="editForm.total_package" placeholder="如 60W"
+        /></el-form-item>
+        <el-form-item label="股票/期权"
+          ><el-input v-model="editForm.equity" placeholder="如 1000 股 / 4年"
+        /></el-form-item>
+        <el-form-item label="签字费"
+          ><el-input v-model="editForm.signing_bonus" placeholder="如 5W"
+        /></el-form-item>
+        <el-form-item label="城市"
+          ><el-input v-model="editOffer.city" placeholder="如 北京"
+        /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showEditDialog = false">取消</el-button>
@@ -198,19 +330,30 @@
           <h4>🗣️ 常用话术</h4>
           <div class="script-card">
             <div class="script-label">探预算</div>
-            <p>"感谢 Offer！在深入讨论薪资之前，想请问一下这个岗位的预算范围大概是多少？这样我也能更好地评估。"</p>
+            <p>
+              "感谢
+              Offer！在深入讨论薪资之前，想请问一下这个岗位的预算范围大概是多少？这样我也能更好地评估。"
+            </p>
           </div>
           <div class="script-card">
             <div class="script-label">要加薪</div>
-            <p>"非常感谢 Offer。基于我的经验、技能和市场数据，期望薪资在 XXX 左右。我也在对比其他机会，希望能找到一个双方都满意的方案。"</p>
+            <p>
+              "非常感谢 Offer。基于我的经验、技能和市场数据，期望薪资在 XXX
+              左右。我也在对比其他机会，希望能找到一个双方都满意的方案。"
+            </p>
           </div>
           <div class="script-card">
             <div class="script-label">用 Offer 谈</div>
-            <p>"目前我收到了另一个 Offer，总包在 XXX 左右。贵公司是我非常心仪的平台，如果能在薪资上接近的话，我会非常倾向于选择贵公司。"</p>
+            <p>
+              "目前我收到了另一个 Offer，总包在 XXX
+              左右。贵公司是我非常心仪的平台，如果能在薪资上接近的话，我会非常倾向于选择贵公司。"
+            </p>
           </div>
           <div class="script-card">
             <div class="script-label">考虑期</div>
-            <p>"非常理解贵公司的预算限制。我可以考虑一段时间吗？同时也想了解一下除了薪资之外是否有其他成长和学习的机会。"</p>
+            <p>
+              "非常理解贵公司的预算限制。我可以考虑一段时间吗？同时也想了解一下除了薪资之外是否有其他成长和学习的机会。"
+            </p>
           </div>
         </div>
         <div class="negotiation-section">
@@ -243,7 +386,15 @@
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  Trophy, Clock, Histogram, DataLine, Coin, MagicStick, Loading, Setting, Edit,
+  Trophy,
+  Clock,
+  Histogram,
+  DataLine,
+  Coin,
+  MagicStick,
+  Loading,
+  Setting,
+  Edit,
 } from '@element-plus/icons-vue'
 import { ElMessage } from '@/plugins/element-services'
 import { getJobPipelineList } from '@/api/jobs'
@@ -252,6 +403,7 @@ import { getSalaryOverview } from '@/api/salary'
 const router = useRouter()
 const loading = ref(true)
 const offers = ref([])
+const loadError = ref('')
 const selectedIds = ref([])
 const salaryLoading = ref(false)
 const salaryData = ref(null)
@@ -265,8 +417,22 @@ const editOffer = ref(null)
 const editForm = reactive({ total_package: '', equity: '', signing_bonus: '' })
 
 // 权重配置
-const weights = reactive({ commute: 20, growth: 25, stability: 15, tech: 15, company_dev: 15, culture: 10 })
-const defaultWeights = { commute: 20, growth: 25, stability: 15, tech: 15, company_dev: 15, culture: 10 }
+const weights = reactive({
+  commute: 20,
+  growth: 25,
+  stability: 15,
+  tech: 15,
+  company_dev: 15,
+  culture: 10,
+})
+const defaultWeights = {
+  commute: 20,
+  growth: 25,
+  stability: 15,
+  tech: 15,
+  company_dev: 15,
+  culture: 10,
+}
 const weightKeys = [
   { key: 'commute', label: '通勤', color: 'blue' },
   { key: 'growth', label: '成长空间', color: 'violet' },
@@ -280,41 +446,57 @@ function resetWeights() {
   Object.assign(weights, defaultWeights)
 }
 
-const selectedOffers = computed(() => offers.value.filter(o => selectedIds.value.includes(o.id)))
+const selectedOffers = computed(() => offers.value.filter((o) => selectedIds.value.includes(o.id)))
 const adviceLines = computed(() => (adviceText.value || '').split('\n').filter(Boolean))
 
 // 入职清单
 const checklistSections = reactive([
-  { title: '文书准备', items: [
-    { text: '确认 Offer 并签署 offer letter', done: false },
-    { text: '准备身份证、学历学位证书复印件', done: false },
-    { text: '准备离职证明或应届生就业推荐表', done: false },
-    { text: '准备银行卡信息（工资卡）', done: false },
-  ]},
-  { title: '离职交接', items: [
-    { text: '提交离职申请（需提前30天）', done: false },
-    { text: '完成工作交接文档', done: false },
-    { text: '办理社保/公积金转移', done: false },
-    { text: '整理个人物品和工作文件', done: false },
-  ]},
-  { title: '入职准备', items: [
-    { text: '了解公司文化和团队架构', done: false },
-    { text: '准备 30-60-90 天工作计划', done: false },
-    { text: '了解技术栈和开发工具', done: false },
-    { text: '开通公司邮箱和系统账号', done: false },
-    { text: '了解考勤和报销制度', done: false },
-  ]},
-  { title: '个人安排', items: [
-    { text: '安排通勤路线/租房', done: false },
-    { text: '调整作息适应新工作时间', done: false },
-    { text: '关闭社交软件的求职状态', done: false },
-    { text: '通知猎头和招聘平台暂停推荐', done: false },
-  ]},
+  {
+    title: '文书准备',
+    items: [
+      { text: '确认 Offer 并签署 offer letter', done: false },
+      { text: '准备身份证、学历学位证书复印件', done: false },
+      { text: '准备离职证明或应届生就业推荐表', done: false },
+      { text: '准备银行卡信息（工资卡）', done: false },
+    ],
+  },
+  {
+    title: '离职交接',
+    items: [
+      { text: '提交离职申请（需提前30天）', done: false },
+      { text: '完成工作交接文档', done: false },
+      { text: '办理社保/公积金转移', done: false },
+      { text: '整理个人物品和工作文件', done: false },
+    ],
+  },
+  {
+    title: '入职准备',
+    items: [
+      { text: '了解公司文化和团队架构', done: false },
+      { text: '准备 30-60-90 天工作计划', done: false },
+      { text: '了解技术栈和开发工具', done: false },
+      { text: '开通公司邮箱和系统账号', done: false },
+      { text: '了解考勤和报销制度', done: false },
+    ],
+  },
+  {
+    title: '个人安排',
+    items: [
+      { text: '安排通勤路线/租房', done: false },
+      { text: '调整作息适应新工作时间', done: false },
+      { text: '关闭社交软件的求职状态', done: false },
+      { text: '通知猎头和招聘平台暂停推荐', done: false },
+    ],
+  },
 ])
 
 function formatDate(d) {
   if (!d) return ''
-  try { return new Date(d).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) } catch { return d }
+  try {
+    return new Date(d).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  } catch {
+    return d
+  }
 }
 
 function formatK(v) {
@@ -350,7 +532,7 @@ function weightedScore(o) {
   const s = o._scores
   let total = 0
   let maxPossible = 0
-  weightKeys.forEach(w => {
+  weightKeys.forEach((w) => {
     total += (s[w.key] || 0) * weights[w.key]
     maxPossible += 5 * weights[w.key]
   })
@@ -375,15 +557,19 @@ async function loadOffers() {
   try {
     const data = await getJobPipelineList({ stage: 'offer', limit: 50 })
     const items = data?.items || data || []
-    offers.value = items.map(o => ({
+    offers.value = items.map((o) => ({
       ...o,
       city: o.city || o.location || '',
       _scores: { commute: 3, growth: 3, stability: 3, tech: 3, company_dev: 3, culture: 3 },
     }))
     if (items.length <= 4 && items.length >= 2) {
-      selectedIds.value = items.map(o => o.id)
+      selectedIds.value = items.map((o) => o.id)
     }
-  } catch {} finally {
+    loadError.value = ''
+  } catch (error) {
+    offers.value = []
+    loadError.value = error?.userMessage || '暂时无法获取 Offer 列表，请检查网络后重试。'
+  } finally {
     loading.value = false
   }
 }
@@ -446,7 +632,7 @@ async function generateAdvice() {
       return `${i + 1}. ${o.company}(${o.title}) - 薪资${o.salary_range || '未知'}${detailStr}, 加权评分${weightedScore(o)}分`
     })
 
-    const dimBest = weightKeys.map(w => {
+    const dimBest = weightKeys.map((w) => {
       const bestDim = [...sorted].sort((a, b) => b._scores[w.key] - a._scores[w.key])[0]
       return { dim: w.label, company: bestDim.company, score: bestDim._scores[w.key] }
     })
@@ -459,7 +645,7 @@ async function generateAdvice() {
       `加权评分最高：${best.company} (${weightedScore(best)}分)`,
       '',
       `【各维度最佳】`,
-      ...dimBest.map(d => `- ${d.dim}：${d.company} (${d.score}分)`),
+      ...dimBest.map((d) => `- ${d.dim}：${d.company} (${d.score}分)`),
       '',
       '【决策参考】',
       '- 对比总包（底薪+年终+股票+签字费），而不仅是月薪',
@@ -481,84 +667,323 @@ async function generateAdvice() {
   }
 }
 
-onMounted(() => { loadOffers() })
+onMounted(() => {
+  loadOffers()
+})
 </script>
 
 <style scoped>
-.panel + .panel { margin-top: 16px; }
-.header-actions { display: flex; align-items: center; gap: 8px; }
-.empty-inline { text-align: center; padding: 16px 0; color: var(--app-muted); font-size: 14px; }
+.panel + .panel {
+  margin-top: 16px;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.empty-inline {
+  text-align: center;
+  padding: 16px 0;
+  color: var(--app-muted);
+  font-size: 14px;
+}
+.load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid #f2c5bf;
+  border-radius: 8px;
+  background: var(--app-accent-soft);
+}
+.load-error strong,
+.load-error span {
+  display: block;
+}
+.load-error strong {
+  color: var(--app-danger);
+  font-size: 14px;
+}
+.load-error span {
+  margin-top: 3px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
 
 /* Offer list */
-.offer-list { display: flex; flex-direction: column; gap: 8px; }
-.offer-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--app-radius-xs, 8px); cursor: pointer; transition: background 0.15s; border: 2px solid transparent; }
-.offer-row:hover { background: var(--el-fill-color-light); }
-.offer-row.selected { border-color: var(--app-primary); background: var(--app-primary-light); }
-.offer-info { flex: 1; }
-.offer-info strong { display: block; font-size: 14px; }
-.offer-info span { font-size: 12px; color: var(--app-muted); }
-.offer-meta { display: flex; gap: 12px; font-size: 12px; }
-.offer-meta span { display: flex; align-items: center; gap: 3px; }
-.offer-sub { font-size: 11px; color: var(--app-muted); font-weight: 400; }
+.offer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.offer-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--app-radius-xs, 8px);
+  cursor: pointer;
+  transition: background 0.15s;
+  border: 2px solid transparent;
+}
+.offer-row:hover {
+  background: var(--el-fill-color-light);
+}
+.offer-row.selected {
+  border-color: var(--app-primary);
+  background: var(--app-primary-light);
+}
+.offer-info {
+  flex: 1;
+}
+.offer-info strong {
+  display: block;
+  font-size: 14px;
+}
+.offer-info span {
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.offer-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+}
+.offer-meta span {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.offer-sub {
+  font-size: 11px;
+  color: var(--app-muted);
+  font-weight: 400;
+}
 
 /* Weight config */
-.weight-grid { display: flex; flex-wrap: wrap; gap: 12px; }
-.weight-item { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-radius: 8px; background: var(--app-bg); border: 1px solid var(--app-line); }
-.weight-label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; min-width: 80px; }
-.weight-dot { width: 8px; height: 8px; border-radius: 50%; }
-.dot-blue { background: var(--app-primary); }
-.dot-violet { background: var(--app-violet); }
-.dot-green { background: var(--app-success); }
-.dot-amber { background: var(--app-warning); }
-.dot-red { background: var(--app-danger); }
-.dot-teal { background: #0d9488; }
+.weight-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.weight-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
+}
+.weight-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 80px;
+}
+.weight-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.dot-blue {
+  background: var(--app-primary);
+}
+.dot-violet {
+  background: var(--app-violet);
+}
+.dot-green {
+  background: var(--app-success);
+}
+.dot-amber {
+  background: var(--app-warning);
+}
+.dot-red {
+  background: var(--app-danger);
+}
+.dot-teal {
+  background: #0d9488;
+}
 
 /* Compare table */
-.compare-table-wrap { overflow-x: auto; }
-.compare-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.compare-table th, .compare-table td { padding: 10px 16px; border-bottom: 1px solid var(--el-border-color-lighter); text-align: center; }
-.compare-table th { background: var(--el-fill-color-lighter); font-weight: 700; white-space: nowrap; }
-.compare-table .dim-col { text-align: left; font-weight: 600; background: var(--el-fill-color-lighter); min-width: 100px; }
-.compare-table td { min-width: 140px; }
-.total-row { background: var(--el-fill-color-lighter); }
-.total-score { font-size: 20px; }
-.score-breakdown { margin-top: 6px; font-size: 11px; text-align: left; }
-.br-item { display: flex; justify-content: space-between; padding: 2px 0; }
-.compare-actions { display: flex; gap: 8px; margin-top: 16px; }
-.score-high { color: var(--app-success); }
-.score-mid { color: var(--app-warning); }
-.score-low { color: var(--app-danger); }
+.compare-table-wrap {
+  overflow-x: auto;
+}
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table th,
+.compare-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  text-align: center;
+}
+.compare-table th {
+  background: var(--el-fill-color-lighter);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.compare-table .dim-col {
+  text-align: left;
+  font-weight: 600;
+  background: var(--el-fill-color-lighter);
+  min-width: 100px;
+}
+.compare-table td {
+  min-width: 140px;
+}
+.total-row {
+  background: var(--el-fill-color-lighter);
+}
+.total-score {
+  font-size: 20px;
+}
+.score-breakdown {
+  margin-top: 6px;
+  font-size: 11px;
+  text-align: left;
+}
+.br-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+.compare-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.score-high {
+  color: var(--app-success);
+}
+.score-mid {
+  color: var(--app-warning);
+}
+.score-low {
+  color: var(--app-danger);
+}
 
 /* Salary stats */
-.salary-stats { display: flex; gap: 16px; flex-wrap: wrap; }
-.stat-card { text-align: center; padding: 12px 20px; border-radius: var(--app-radius-sm, 12px); background: var(--el-fill-color-lighter); min-width: 80px; }
-.stat-label { display: block; font-size: 12px; color: var(--app-muted); }
-.stat-card strong { font-size: 20px; font-weight: 700; color: var(--app-primary); }
-.salary-note { margin-top: 10px; font-size: 12px; color: var(--app-muted); }
+.salary-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.stat-card {
+  text-align: center;
+  padding: 12px 20px;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--el-fill-color-lighter);
+  min-width: 80px;
+}
+.stat-label {
+  display: block;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.stat-card strong {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--app-primary);
+}
+.salary-note {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--app-muted);
+}
 
 /* Advice */
-.advice-content { line-height: 1.8; font-size: 14px; }
-.advice-section-title { font-weight: 700; font-size: 15px; margin: 0 0 4px; }
+.advice-content {
+  line-height: 1.8;
+  font-size: 14px;
+}
+.advice-section-title {
+  font-weight: 700;
+  font-size: 15px;
+  margin: 0 0 4px;
+}
 
 /* Negotiation */
-.negotiation-body { max-height: 60vh; overflow-y: auto; }
-.negotiation-section { margin-bottom: 20px; }
-.negotiation-section h4 { margin: 0 0 10px; font-size: 15px; font-weight: 700; }
-.negotiation-section ul { margin: 0; padding-left: 18px; }
-.negotiation-section li { margin-bottom: 6px; line-height: 1.6; font-size: 14px; }
-.script-card { padding: 12px; border-radius: 8px; background: var(--app-bg); border: 1px solid var(--app-line); margin-bottom: 8px; }
-.script-label { font-weight: 700; font-size: 12px; color: var(--app-primary); margin-bottom: 4px; }
-.script-card p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--app-muted); }
+.negotiation-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.negotiation-section {
+  margin-bottom: 20px;
+}
+.negotiation-section h4 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.negotiation-section ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.negotiation-section li {
+  margin-bottom: 6px;
+  line-height: 1.6;
+  font-size: 14px;
+}
+.script-card {
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
+  margin-bottom: 8px;
+}
+.script-label {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--app-primary);
+  margin-bottom: 4px;
+}
+.script-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--app-muted);
+}
 
 /* Checklist */
-.checklist-body { max-height: 60vh; overflow-y: auto; }
-.checklist-section { margin-bottom: 20px; }
-.checklist-section h4 { margin: 0 0 8px; font-size: 14px; font-weight: 700; }
-.checklist-item { padding: 6px 0; font-size: 14px; }
+.checklist-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.checklist-section {
+  margin-bottom: 20px;
+}
+.checklist-section h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.checklist-item {
+  padding: 6px 0;
+  font-size: 14px;
+}
 
 @media (max-width: 768px) {
-  .compare-table th, .compare-table td { padding: 8px 10px; font-size: 13px; }
-  .offer-meta { flex-direction: column; gap: 4px; }
-  .weight-grid { flex-direction: column; }
+  .load-error {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .compare-table th,
+  .compare-table td {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  .offer-meta {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .weight-grid {
+    flex-direction: column;
+  }
 }
 </style>

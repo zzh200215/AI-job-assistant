@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
-import { USER_ROLES, isRoleAllowed } from '@/constants/roles'
+import { USER_ROLES } from '@/constants/roles'
+import { getRouteRedirect } from './guard'
 import { useAuthStore } from '@/stores/auth'
 
 // 角色常量
@@ -145,19 +146,15 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
   const loggedIn = authStore.isLoggedIn
+  const redirect = getRouteRedirect({
+    to,
+    loggedIn,
+    role: authStore.role,
+    homeRoute: authStore.homeRoute,
+  })
 
-  if (loggedIn && (to.name === 'login' || to.name === 'register')) {
-    next(authStore.homeRoute)
-    return
-  }
-
-  if (!to.meta?.public && !loggedIn) {
-    next('/login')
-    return
-  }
-
-  if (loggedIn && !isRoleAllowed(authStore.role, to.meta?.roles)) {
-    next(authStore.homeRoute)
+  if (redirect) {
+    next(redirect)
     return
   }
 

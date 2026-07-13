@@ -18,7 +18,21 @@
       </div>
       <div class="panel-body">
 
-      <el-table :data="list" v-loading="loading" stripe>
+      <el-alert
+        v-if="listError"
+        class="load-error"
+        type="error"
+        :closable="false"
+        show-icon
+        title="历史记录加载失败"
+        description="暂时无法获取历史分析记录，请检查网络后重试。"
+      >
+        <template #default>
+          <el-button size="small" type="primary" plain @click="loadList">重新加载</el-button>
+        </template>
+      </el-alert>
+
+      <el-table v-else :data="list" v-loading="loading" stripe>
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column label="简历" min-width="180">
           <template #default="{ row }">
@@ -49,6 +63,7 @@
       </el-table>
 
       <el-pagination
+        v-if="!listError"
         v-model:current-page="page"
         v-model:page-size="pageSize"
         :total="total"
@@ -200,6 +215,7 @@ import {
 
 const router = useRouter()
 const loading = ref(false)
+const listError = ref(false)
 const detailLoading = ref(false)
 const list = ref([])
 const total = ref(0)
@@ -222,12 +238,13 @@ const localizedRiskPoints = computed(() => normalizeLocalizedTextList(detail.val
 
 const loadList = async () => {
   loading.value = true
+  listError.value = false
   try {
     const data = await listHistory({ page: page.value, page_size: pageSize.value })
     list.value = data.items
     total.value = data.total
-  } catch (e) {
-    // request.js 已提示
+  } catch {
+    listError.value = true
   } finally {
     loading.value = false
   }
@@ -243,7 +260,7 @@ const openDetail = async (row) => {
       ...detailData,
       interview_questions: normalizeInterviewQuestions(detailData?.interview_questions),
     }
-  } catch (e) {
+  } catch {
     // request.js 已提示
   } finally {
     detailLoading.value = false
@@ -260,7 +277,7 @@ const onDelete = async (row) => {
     await deleteHistory(row.id)
     ElMessage.success('已删除')
     loadList()
-  } catch (e) {
+  } catch {
     // request.js 已提示
   }
 }

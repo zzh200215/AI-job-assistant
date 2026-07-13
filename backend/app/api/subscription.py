@@ -22,7 +22,7 @@ from app.core.config import settings
 router = APIRouter()
 
 
-@router.get("/subscription/plans", summary="获取所有套餐定义")
+@router.get("/plans", summary="获取所有套餐定义")
 def list_plans():
     """返回套餐权益矩阵（前端定价页使用）。"""
     plans = []
@@ -39,7 +39,7 @@ def list_plans():
     return ok(plans)
 
 
-@router.get("/subscription/my", summary="获取当前用户订阅与权益状态")
+@router.get("/my", summary="获取当前用户订阅与权益状态")
 def my_subscription(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -49,7 +49,7 @@ def my_subscription(
     return ok(summary)
 
 
-@router.post("/subscription/check-quota", summary="检查某项资源额度")
+@router.post("/check-quota", summary="检查某项资源额度")
 def check_resource_quota(
     payload: dict,
     db: Session = Depends(get_db),
@@ -72,7 +72,7 @@ def check_resource_quota(
     return ok({"allowed": False, "message": msg, "quota": quota_info})
 
 
-@router.post("/subscription/create-order", summary="创建订阅订单")
+@router.post("/create-order", summary="创建订阅订单")
 def create_order(
     payload: dict,
     db: Session = Depends(get_db),
@@ -109,7 +109,7 @@ def create_order(
     return ok({"order_id": order.id, "amount": float(order.amount), "status": order.status})
 
 
-@router.get("/subscription/orders", summary="获取用户订单历史")
+@router.get("/orders", summary="获取用户订单历史")
 def list_orders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -128,7 +128,7 @@ def list_orders(
     } for o in orders])
 
 
-@router.post("/subscription/pay-callback", summary="支付回调（Webhook）")
+@router.post("/pay-callback", summary="支付回调（Webhook）")
 def payment_callback(
     payload: dict,
     db: Session = Depends(get_db),
@@ -178,7 +178,7 @@ def payment_callback(
     return fail(message=msg, code=ERR_PARAM)
 
 
-@router.post("/subscription/mock-pay", summary="模拟支付（测试用）")
+@router.post("/mock-pay", summary="模拟支付（测试用）")
 def mock_pay(
     payload: dict,
     db: Session = Depends(get_db),

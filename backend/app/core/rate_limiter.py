@@ -22,7 +22,11 @@ LOGIN_LIMIT = "5/minute"
 
 
 def _build_storage_uri() -> str:
-    """Return Redis URI if configured, otherwise in-memory storage."""
+    """Return the configured storage URI, isolating test runs from Redis."""
+    if settings.TESTING:
+        logger.info("Rate limiting using in-memory backend for tests")
+        return "memory://"
+
     redis_url = (settings.REDIS_URL or "").strip()
     if redis_url:
         logger.info("Rate limiting using Redis backend")

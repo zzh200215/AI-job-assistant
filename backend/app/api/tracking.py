@@ -14,7 +14,7 @@ from app.utils.response import ok
 router = APIRouter()
 
 
-@router.post("/tracking/events", summary="批量上报埋点事件")
+@router.post("/events", summary="批量上报埋点事件")
 def track_events(
     payload: dict,
     db: Session = Depends(get_db),

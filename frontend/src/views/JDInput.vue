@@ -2,23 +2,29 @@
   <div class="page">
     <el-card>
       <template #header>
-        <span><el-icon><Document /></el-icon> 输入岗位 JD</span>
+        <span
+          ><el-icon><Document /></el-icon> 输入岗位 JD</span
+        >
       </template>
 
-      <el-form :model="form" label-width="80px" style="max-width: 900px;">
-        <el-form-item label="岗位名称">
-          <el-input v-model="form.title" placeholder="如：Python 后端开发工程师" />
-        </el-form-item>
-        <el-form-item label="公司">
-          <el-input v-model="form.company" placeholder="可选，如：示例科技" />
-        </el-form-item>
-        <el-form-item label="JD 文本">
+      <el-form :model="form" label-position="top" class="jd-form">
+        <div class="form-grid">
+          <el-form-item label="岗位名称">
+            <el-input v-model="form.title" placeholder="如：Python 后端开发工程师" />
+          </el-form-item>
+          <el-form-item label="公司">
+            <el-input v-model="form.company" placeholder="可选，如：示例科技" />
+          </el-form-item>
+        </div>
+        <el-form-item label="JD 文本" class="wide-field">
           <el-input
-            v-model="form.raw_text" type="textarea" :rows="10"
+            v-model="form.raw_text"
+            type="textarea"
+            :rows="10"
             placeholder="粘贴岗位 JD 完整内容…"
           />
         </el-form-item>
-        <el-form-item>
+        <el-form-item class="wide-field">
           <el-button type="primary" :loading="loading" @click="onSubmit">
             <el-icon><Promotion /></el-icon> {{ loading ? '创建并解析中…' : '创建并解析' }}
           </el-button>
@@ -41,19 +47,29 @@
         <el-descriptions-item label="公司">{{ parsed.company || '-' }}</el-descriptions-item>
         <el-descriptions-item label="地点">{{ parsed.location || '-' }}</el-descriptions-item>
         <el-descriptions-item label="薪资">{{ parsed.salary_range || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="经验">{{ parsed.experience_requirement || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="学历">{{ parsed.education_requirement || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="经验">{{
+          parsed.experience_requirement || '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item label="学历">{{
+          parsed.education_requirement || '-'
+        }}</el-descriptions-item>
         <el-descriptions-item label="关键词" :span="2">
-          <el-tag v-for="k in parsed.keywords || []" :key="k" type="success" style="margin:2px;">{{ k }}</el-tag>
+          <el-tag v-for="k in parsed.keywords || []" :key="k" type="success" style="margin: 2px">{{
+            k
+          }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="必备技能" :span="2">
-          <el-tag v-for="s in parsed.required_skills || []" :key="s" style="margin:2px;">{{ s }}</el-tag>
+          <el-tag v-for="s in parsed.required_skills || []" :key="s" style="margin: 2px">{{
+            s
+          }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="加分项" :span="2">
-          <el-tag v-for="s in parsed.nice_to_have || []" :key="s" type="info" style="margin:2px;">{{ s }}</el-tag>
+          <el-tag v-for="s in parsed.nice_to_have || []" :key="s" type="info" style="margin: 2px">{{
+            s
+          }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="岗位职责" :span="2">
-          <ul style="padding-left: 18px; margin: 0;">
+          <ul style="padding-left: 18px; margin: 0">
             <li v-for="(r, i) in parsed.responsibilities || []" :key="i">{{ r }}</li>
           </ul>
         </el-descriptions-item>
@@ -76,7 +92,9 @@ const parsed = ref(null)
 const form = reactive({ title: '', company: '', raw_text: '' })
 
 const onClear = () => {
-  form.title = ''; form.company = ''; form.raw_text = ''
+  form.title = ''
+  form.company = ''
+  form.raw_text = ''
   parsed.value = null
   createdId.value = null
 }
@@ -96,7 +114,9 @@ const onSubmit = async () => {
   try {
     // 1) 创建 JD
     const jd = await createJD({
-      title: form.title, company: form.company || null, raw_text: form.raw_text
+      title: form.title,
+      company: form.company || null,
+      raw_text: form.raw_text,
     })
     // 2) 解析 JD
     const res = await parseJD(jd.id)
@@ -104,7 +124,7 @@ const onSubmit = async () => {
     parsed.value = res.parsed
     localStorage.setItem('recruit.lastJDId', jd.id)
     ElMessage.success('创建并解析成功')
-  } catch (e) {
+  } catch {
     // request.js 已显示错误信息
   } finally {
     loading.value = false
@@ -115,6 +135,29 @@ const goAnalysis = () => router.push('/analysis')
 </script>
 
 <style scoped>
-.page { display: flex; flex-direction: column; gap: 16px; }
-.fr   { float: right; }
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+.jd-form {
+  width: 100%;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.wide-field :deep(.el-textarea__inner) {
+  min-height: 320px !important;
+}
+.fr {
+  float: right;
+}
+@media (max-width: 680px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

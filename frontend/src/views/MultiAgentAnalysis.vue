@@ -213,14 +213,10 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
-import {
-  Connection, Monitor, SuccessFilled, WarningFilled, Loading, Clock, DocumentChecked, MagicStick
-} from '@element-plus/icons-vue'
+import { SuccessFilled, WarningFilled, Loading, Clock } from '@element-plus/icons-vue'
 import { startAutoAgent, getMultiAgentDetail } from '@/api/multi_agent'
 
-const router = useRouter()
 const starting = ref(false)
 const runId = ref(null)
 const run = ref(null)
@@ -312,7 +308,7 @@ const onStart = async () => {
     pollErrors = 0
     ElMessage.success('智能分析已启动')
     pollDetail()
-  } catch (e) { /* request.js */ }
+  } catch { /* request.js */ }
   finally { starting.value = false }
 }
 
@@ -332,7 +328,7 @@ const pollDetail = async () => {
     messages.value = data.messages || []
     results.value = data.results || []
     pollErrors = 0
-  } catch (e) {
+  } catch {
     pollErrors++
     if (pollErrors >= MAX_POLL_ERRORS) {
       ElMessage.error('获取分析进度多次失败，已停止刷新，请稍后重试')

@@ -317,7 +317,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
-import { Cpu, Promotion, List, DocumentChecked, Loading } from '@element-plus/icons-vue'
+import { Promotion, Loading } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAgentSteps, startAgentAnalysis } from '@/api/agent'
 import {

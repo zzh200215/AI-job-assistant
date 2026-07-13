@@ -9,7 +9,9 @@
             Agentic RAG
           </div>
           <h2>智能分析</h2>
-          <div class="page-header-sub">把简历、岗位 JD、知识召回与分析结论整合成一个更完整的决策工作台。</div>
+          <div class="page-header-sub">
+            把简历、岗位 JD、知识召回与分析结论整合成一个更完整的决策工作台。
+          </div>
           <div class="hero-tags">
             <span>多智能体协作</span>
             <span>匹配分析</span>
@@ -19,11 +21,39 @@
         <!-- Decorative pipeline node -->
         <div class="hero-node" aria-hidden="true">
           <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-            <circle cx="40" cy="40" r="38" stroke="var(--app-primary)" stroke-width="1" opacity="0.15" />
-            <circle cx="40" cy="40" r="28" stroke="var(--app-primary)" stroke-width="1" opacity="0.2" />
+            <circle
+              cx="40"
+              cy="40"
+              r="38"
+              stroke="var(--app-primary)"
+              stroke-width="1"
+              opacity="0.15"
+            />
+            <circle
+              cx="40"
+              cy="40"
+              r="28"
+              stroke="var(--app-primary)"
+              stroke-width="1"
+              opacity="0.2"
+            />
             <circle cx="40" cy="40" r="8" fill="var(--app-primary)" opacity="0.3" />
-            <path d="M4 40 Q 20 16 40 12 Q 60 8 76 40" stroke="var(--app-primary)" stroke-width="1" opacity="0.12" fill="none" stroke-dasharray="3 3" />
-            <path d="M4 40 Q 20 64 40 68 Q 60 72 76 40" stroke="var(--app-primary)" stroke-width="1" opacity="0.12" fill="none" stroke-dasharray="3 3" />
+            <path
+              d="M4 40 Q 20 16 40 12 Q 60 8 76 40"
+              stroke="var(--app-primary)"
+              stroke-width="1"
+              opacity="0.12"
+              fill="none"
+              stroke-dasharray="3 3"
+            />
+            <path
+              d="M4 40 Q 20 64 40 68 Q 60 72 76 40"
+              stroke="var(--app-primary)"
+              stroke-width="1"
+              opacity="0.12"
+              fill="none"
+              stroke-dasharray="3 3"
+            />
           </svg>
         </div>
       </div>
@@ -36,7 +66,9 @@
         </div>
         <div class="hm-item" :class="{ ready: !!(jdInfo || jdForm.title || jdForm.raw_text) }">
           <span class="hm-label">JD 状态</span>
-          <strong class="data-value">{{ jdInfo || jdForm.title || jdForm.raw_text ? '已就绪' : '待填写' }}</strong>
+          <strong class="data-value">{{
+            jdInfo || jdForm.title || jdForm.raw_text ? '已就绪' : '待填写'
+          }}</strong>
           <small>{{ jdInfo?.title || jdForm.title || '等待目标岗位 JD' }}</small>
         </div>
         <div class="hm-item" :class="{ ready: loading || !!result }">
@@ -88,7 +120,9 @@
                   <strong>{{ resumeInfo.file_name }}</strong>
                   <span>ID: {{ resumeInfo.id }}</span>
                 </div>
-                <el-button text type="danger" size="small" @click.stop="clearResume">移除</el-button>
+                <el-button text type="danger" size="small" @click.stop="clearResume"
+                  >移除</el-button
+                >
               </div>
             </el-upload>
           </div>
@@ -104,7 +138,12 @@
                 <el-input v-model="jdForm.company" placeholder="如：示例科技" />
               </el-form-item>
               <el-form-item label="JD 内容" required>
-                <el-input v-model="jdForm.raw_text" type="textarea" :rows="4" placeholder="粘贴岗位 JD 完整内容…" />
+                <el-input
+                  v-model="jdForm.raw_text"
+                  type="textarea"
+                  :rows="4"
+                  placeholder="粘贴岗位 JD 完整内容…"
+                />
               </el-form-item>
             </el-form>
             <div v-if="jdInfo" class="jd-ready">
@@ -141,7 +180,9 @@
           <el-icon class="is-loading"><Loading /></el-icon>
           <span>Agent Pipeline</span>
         </div>
-        <el-tag type="warning" size="small">{{ completedStepCount }} / {{ agentSteps.length }} 步</el-tag>
+        <el-tag type="warning" size="small"
+          >{{ completedStepCount }} / {{ agentSteps.length }} 步</el-tag
+        >
       </div>
 
       <div class="panel-body">
@@ -173,7 +214,9 @@
             <div class="pipeline-dot">
               <el-icon v-if="s.status === 'completed'" :size="14"><SuccessFilled /></el-icon>
               <el-icon v-else-if="s.status === 'failed'" :size="14"><CircleCloseFilled /></el-icon>
-              <el-icon v-else-if="s.status === 'running'" :size="14" class="is-loading"><Loading /></el-icon>
+              <el-icon v-else-if="s.status === 'running'" :size="14" class="is-loading"
+                ><Loading
+              /></el-icon>
               <span v-else class="dot-empty" />
             </div>
             <div class="pipeline-content">
@@ -257,13 +300,23 @@
                 <el-button
                   type="primary"
                   size="small"
-                  @click="router.push({ path: '/jobs/recommend', query: { resume_id: String(result.resume_id || resumeInfo?.id || '') } })"
+                  @click="
+                    router.push({
+                      path: '/jobs/recommend',
+                      query: { resume_id: String(result.resume_id || resumeInfo?.id || '') },
+                    })
+                  "
                 >
                   <el-icon><Search /></el-icon> 去岗位推荐
                 </el-button>
                 <el-button
                   size="small"
-                  @click="router.push({ path: '/interview/setup', query: { jd_id: String(jdInfo?.id || '') } })"
+                  @click="
+                    router.push({
+                      path: '/interview/setup',
+                      query: { jd_id: String(jdInfo?.id || '') },
+                    })
+                  "
                 >
                   <el-icon><Microphone /></el-icon> 去模拟面试
                 </el-button>
@@ -299,25 +352,35 @@
                     {{ analysisConfidence.label || '-' }}
                   </el-tag>
                 </div>
-                <div class="rag-confidence-summary">{{ analysisConfidence.summary || '暂无可信度说明' }}</div>
+                <div class="rag-confidence-summary">
+                  {{ analysisConfidence.summary || '暂无可信度说明' }}
+                </div>
               </div>
             </div>
             <div class="rag-confidence-metrics">
               <div class="rag-metric">
                 <span>召回片段</span>
-                <strong class="data-value">{{ analysisConfidence.signals?.total_chunks ?? 0 }}</strong>
+                <strong class="data-value">{{
+                  analysisConfidence.signals?.total_chunks ?? 0
+                }}</strong>
               </div>
               <div class="rag-metric">
                 <span>覆盖文档</span>
-                <strong class="data-value">{{ analysisConfidence.signals?.unique_docs ?? 0 }}</strong>
+                <strong class="data-value">{{
+                  analysisConfidence.signals?.unique_docs ?? 0
+                }}</strong>
               </div>
               <div class="rag-metric">
                 <span>平均相关度</span>
-                <strong class="data-value">{{ analysisConfidence.signals?.avg_similarity ?? 0 }}</strong>
+                <strong class="data-value">{{
+                  analysisConfidence.signals?.avg_similarity ?? 0
+                }}</strong>
               </div>
               <div class="rag-metric">
                 <span>命中能力模型</span>
-                <strong class="data-value">{{ analysisConfidence.signals?.has_skill_model ? '是' : '否' }}</strong>
+                <strong class="data-value">{{
+                  analysisConfidence.signals?.has_skill_model ? '是' : '否'
+                }}</strong>
               </div>
             </div>
           </div>
@@ -334,14 +397,22 @@
                 <el-col :span="12">
                   <div class="skill-group">
                     <h4>已匹配技能</h4>
-                    <el-tag v-for="s in matchedSkills" :key="s" type="success" style="margin:2px;">{{ s }}</el-tag>
+                    <el-tag
+                      v-for="s in matchedSkills"
+                      :key="s"
+                      type="success"
+                      style="margin: 2px"
+                      >{{ s }}</el-tag
+                    >
                     <el-empty v-if="!matchedSkills.length" description="暂无" :image-size="40" />
                   </div>
                 </el-col>
                 <el-col :span="12">
                   <div class="skill-group">
                     <h4>缺失技能</h4>
-                    <el-tag v-for="s in missingSkills" :key="s" type="danger" style="margin:2px;">{{ s }}</el-tag>
+                    <el-tag v-for="s in missingSkills" :key="s" type="danger" style="margin: 2px">{{
+                      s
+                    }}</el-tag>
                     <el-empty v-if="!missingSkills.length" description="暂无" :image-size="40" />
                   </div>
                 </el-col>
@@ -364,13 +435,23 @@
                       <b>{{ x.item || x }}</b>
                       <span v-if="x.action">：{{ x.action }}</span>
                       <span v-if="x.impact && !x.action">：{{ x.impact }}</span>
-                      <el-tag v-if="x.severity" size="small" :type="x.severity === '高' ? 'danger' : x.severity === '中' ? 'warning' : 'info'" style="margin-left:4px;">{{ x.severity }}</el-tag>
+                      <el-tag
+                        v-if="x.severity"
+                        size="small"
+                        :type="
+                          x.severity === '高' ? 'danger' : x.severity === '中' ? 'warning' : 'info'
+                        "
+                        style="margin-left: 4px"
+                        >{{ x.severity }}</el-tag
+                      >
                     </li>
                   </ul>
                 </el-col>
                 <el-col :span="8">
                   <h4>风险</h4>
-                  <ul><li v-for="(x, i) in localizedRiskPoints" :key="i">{{ x }}</li></ul>
+                  <ul>
+                    <li v-for="(x, i) in localizedRiskPoints" :key="i">{{ x }}</li>
+                  </ul>
                 </el-col>
               </el-row>
             </el-tab-pane>
@@ -384,7 +465,13 @@
               <template v-else-if="explainResult">
                 <div class="explain-hero">
                   <div class="explain-score-ring">
-                    <el-progress type="circle" :percentage="explainResult.overall_score" :stroke-width="8" :size="120" :color="explainScoreColor(explainResult.overall_score)">
+                    <el-progress
+                      type="circle"
+                      :percentage="explainResult.overall_score"
+                      :stroke-width="8"
+                      :size="120"
+                      :color="explainScoreColor(explainResult.overall_score)"
+                    >
                       <template #default>
                         <div class="big-score data-value">{{ explainResult.overall_score }}</div>
                         <div class="score-lbl">总分</div>
@@ -397,9 +484,15 @@
                     </el-tag>
                     <p class="explain-reason">{{ localizedExplainOverallReason }}</p>
                     <p class="explain-weights">
-                      权重: skill{{ explainResult.weights_used.skill }} / project{{ explainResult.weights_used.project }}
-                      / exp{{ explainResult.weights_used.experience }} / edu{{ explainResult.weights_used.education }}
-                      / keyword{{ explainResult.weights_used.keyword }} / bonus{{ explainResult.weights_used.bonus }}
+                      权重: skill{{ explainResult.weights_used.skill }} / project{{
+                        explainResult.weights_used.project
+                      }}
+                      / exp{{ explainResult.weights_used.experience }} / edu{{
+                        explainResult.weights_used.education
+                      }}
+                      / keyword{{ explainResult.weights_used.keyword }} / bonus{{
+                        explainResult.weights_used.bonus
+                      }}
                     </p>
                   </div>
                 </div>
@@ -409,25 +502,62 @@
                   <div class="dim-header">
                     <span class="dim-name">{{ dim.name }}</span>
                     <span class="dim-w">权重 {{ (dim.weight * 100).toFixed(0) }}%</span>
-                    <span class="dim-score data-value" :style="{ color: explainScoreColor(dim.score) }">{{ dim.score.toFixed(1) }}</span>
+                    <span
+                      class="dim-score data-value"
+                      :style="{ color: explainScoreColor(dim.score) }"
+                      >{{ dim.score.toFixed(1) }}</span
+                    >
                   </div>
-                  <div class="dim-bar"><div class="dim-fill" :style="{ width: `${dim.score}%`, background: explainScoreColor(dim.score) }" /></div>
+                  <div class="dim-bar">
+                    <div
+                      class="dim-fill"
+                      :style="{ width: `${dim.score}%`, background: explainScoreColor(dim.score) }"
+                    />
+                  </div>
                   <p class="dim-reason">{{ localizeSentence(dim.reason) }}</p>
                   <div v-if="dim.details?.length" class="dim-details">
-                    <el-tag v-for="detail in dim.details" :key="detail" size="small" type="info" effect="plain" style="margin:1px;">{{ localizeSentence(detail) }}</el-tag>
+                    <el-tag
+                      v-for="detail in dim.details"
+                      :key="detail"
+                      size="small"
+                      type="info"
+                      effect="plain"
+                      style="margin: 1px"
+                      >{{ localizeSentence(detail) }}</el-tag
+                    >
                   </div>
                 </div>
 
                 <el-row :gutter="16" class="mt">
                   <el-col :span="12">
                     <h4>已匹配技能</h4>
-                    <el-tag v-for="s in explainMatchedSkills" :key="s" type="success" style="margin:2px;">{{ s }}</el-tag>
-                    <el-empty v-if="!explainMatchedSkills.length" description="暂无" :image-size="40" />
+                    <el-tag
+                      v-for="s in explainMatchedSkills"
+                      :key="s"
+                      type="success"
+                      style="margin: 2px"
+                      >{{ s }}</el-tag
+                    >
+                    <el-empty
+                      v-if="!explainMatchedSkills.length"
+                      description="暂无"
+                      :image-size="40"
+                    />
                   </el-col>
                   <el-col :span="12">
                     <h4>缺失技能</h4>
-                    <el-tag v-for="s in explainMissingSkills" :key="s" type="danger" style="margin:2px;">{{ s }}</el-tag>
-                    <el-empty v-if="!explainMissingSkills.length" description="暂无" :image-size="40" />
+                    <el-tag
+                      v-for="s in explainMissingSkills"
+                      :key="s"
+                      type="danger"
+                      style="margin: 2px"
+                      >{{ s }}</el-tag
+                    >
+                    <el-empty
+                      v-if="!explainMissingSkills.length"
+                      description="暂无"
+                      :image-size="40"
+                    />
                   </el-col>
                 </el-row>
               </template>
@@ -441,30 +571,67 @@
                 <p>正在分析适合您的岗位方向...</p>
               </div>
               <template v-else-if="careerPaths.length > 0">
-                <el-alert :title="careerPathSummary || `根据您的技能和经验，推荐以下 ${careerPaths.length} 个岗位方向`" type="success" :closable="false" show-icon style="margin-bottom:16px;" />
+                <el-alert
+                  :title="
+                    careerPathSummary ||
+                    `根据您的技能和经验，推荐以下 ${careerPaths.length} 个岗位方向`
+                  "
+                  type="success"
+                  :closable="false"
+                  show-icon
+                  style="margin-bottom: 16px"
+                />
                 <div class="career-path-grid">
-                  <div v-for="(cp, i) in careerPaths" :key="i" class="panel cp-card" :class="'cp-' + (cp.category === '高度匹配' ? 'high' : 'trans')">
-	                    <div class="panel-body">
-	                      <div class="cp-header">
-	                        <span class="cp-score data-value" :class="scoreClass(cp.match_score)">{{ cp.match_score }}</span>
-	                        <div class="cp-info">
-	                          <h4 class="cp-title">{{ cp.title }}</h4>
-	                          <el-tag size="small" :type="cp.category === '高度匹配' ? 'success' : 'warning'" effect="dark">{{ cp.category }}</el-tag>
-	                          <span class="cp-seniority">{{ cp.seniority }}</span>
-	                        </div>
-	                      </div>
-	                      <p class="cp-reason">{{ cp.reason }}</p>
-	                      <div v-if="cp.matched_skills?.length" class="cp-skills">
-	                        <span class="cp-skill-label">已具备：</span>
-	                        <el-tag v-for="s in cp.matched_skills" :key="s" size="small" type="success" effect="plain" style="margin:1px;">{{ s }}</el-tag>
-	                      </div>
-	                      <div v-if="cp.gap_skills?.length" class="cp-skills">
-	                        <span class="cp-skill-label">需提升：</span>
-	                        <el-tag v-for="s in cp.gap_skills" :key="s" size="small" type="danger" effect="plain" style="margin:1px;">{{ s }}</el-tag>
-	                      </div>
-	                      <div v-if="cp.salary_range" class="cp-salary">💰 {{ cp.salary_range }}</div>
-	                    </div>
-	                  </div>
+                  <div
+                    v-for="(cp, i) in careerPaths"
+                    :key="i"
+                    class="panel cp-card"
+                    :class="'cp-' + (cp.category === '高度匹配' ? 'high' : 'trans')"
+                  >
+                    <div class="panel-body">
+                      <div class="cp-header">
+                        <span class="cp-score data-value" :class="scoreClass(cp.match_score)">{{
+                          cp.match_score
+                        }}</span>
+                        <div class="cp-info">
+                          <h4 class="cp-title">{{ cp.title }}</h4>
+                          <el-tag
+                            size="small"
+                            :type="cp.category === '高度匹配' ? 'success' : 'warning'"
+                            effect="dark"
+                            >{{ cp.category }}</el-tag
+                          >
+                          <span class="cp-seniority">{{ cp.seniority }}</span>
+                        </div>
+                      </div>
+                      <p class="cp-reason">{{ cp.reason }}</p>
+                      <div v-if="cp.matched_skills?.length" class="cp-skills">
+                        <span class="cp-skill-label">已具备：</span>
+                        <el-tag
+                          v-for="s in cp.matched_skills"
+                          :key="s"
+                          size="small"
+                          type="success"
+                          effect="plain"
+                          style="margin: 1px"
+                          >{{ s }}</el-tag
+                        >
+                      </div>
+                      <div v-if="cp.gap_skills?.length" class="cp-skills">
+                        <span class="cp-skill-label">需提升：</span>
+                        <el-tag
+                          v-for="s in cp.gap_skills"
+                          :key="s"
+                          size="small"
+                          type="danger"
+                          effect="plain"
+                          style="margin: 1px"
+                          >{{ s }}</el-tag
+                        >
+                      </div>
+                      <div v-if="cp.salary_range" class="cp-salary">💰 {{ cp.salary_range }}</div>
+                    </div>
+                  </div>
                 </div>
               </template>
               <el-empty v-else description="暂无职业方向推荐（请先完成一键智能分析）" />
@@ -472,29 +639,61 @@
 
             <!-- 简历优化 -->
             <el-tab-pane label="简历优化建议" name="optimize">
-              <el-alert :title="result.optimize_suggestions?.overall || ''" type="success" :closable="false" />
+              <el-alert
+                :title="result.optimize_suggestions?.overall || ''"
+                type="success"
+                :closable="false"
+              />
               <el-collapse class="mt">
-                <el-collapse-item v-for="(s, i) in result.optimize_suggestions?.sections || []" :key="i" :title="`【${s.section}】`">
-                  <ul><li v-for="(x, j) in s.suggestions" :key="j">{{ x }}</li></ul>
+                <el-collapse-item
+                  v-for="(s, i) in result.optimize_suggestions?.sections || []"
+                  :key="i"
+                  :title="`【${s.section}】`"
+                >
+                  <ul>
+                    <li v-for="(x, j) in s.suggestions" :key="j">{{ x }}</li>
+                  </ul>
                 </el-collapse-item>
               </el-collapse>
               <el-row :gutter="16" class="mt">
                 <el-col :span="12">
                   <h4>建议补充关键词</h4>
-                  <el-tag v-for="k in result.optimize_suggestions?.keywords_to_add || []" :key="k" type="success" style="margin:2px;">{{ k }}</el-tag>
+                  <el-tag
+                    v-for="k in result.optimize_suggestions?.keywords_to_add || []"
+                    :key="k"
+                    type="success"
+                    style="margin: 2px"
+                    >{{ k }}</el-tag
+                  >
                 </el-col>
                 <el-col :span="12">
                   <h4>建议删除</h4>
-                  <el-tag v-for="k in result.optimize_suggestions?.keywords_to_remove || []" :key="k" type="danger" style="margin:2px;">{{ k }}</el-tag>
+                  <el-tag
+                    v-for="k in result.optimize_suggestions?.keywords_to_remove || []"
+                    :key="k"
+                    type="danger"
+                    style="margin: 2px"
+                    >{{ k }}</el-tag
+                  >
                 </el-col>
               </el-row>
               <h4 class="mt">排版建议</h4>
-              <ul><li v-for="(x, i) in result.optimize_suggestions?.format_tips || []" :key="i">{{ x }}</li></ul>
+              <ul>
+                <li v-for="(x, i) in result.optimize_suggestions?.format_tips || []" :key="i">
+                  {{ x }}
+                </li>
+              </ul>
               <el-divider />
               <div class="generate-area">
                 <p class="generate-desc">基于以上优化建议，AI 可自动生成一份完整的优化版简历</p>
-                <el-button type="primary" size="large" :loading="genOptimizing" @click="onGenerateOptimized">
-                  <el-icon><EditPen /></el-icon> {{ genOptimizing ? '生成中…' : '🚀 生成优化版简历' }}
+                <el-button
+                  type="primary"
+                  size="large"
+                  :loading="genOptimizing"
+                  @click="onGenerateOptimized"
+                >
+                  <el-icon><EditPen /></el-icon>
+                  {{ genOptimizing ? '生成中…' : '🚀 生成优化版简历' }}
                 </el-button>
               </div>
             </el-tab-pane>
@@ -506,10 +705,16 @@
                 <div v-for="(items, key) in interviewGroups" :key="key">
                   <h4>{{ groupTitle(key) }}</h4>
                   <div v-for="(q, i) in items" :key="i" class="q-card">
-                    <div class="q"><b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}</div>
+                    <div class="q">
+                      <b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}
+                    </div>
                     <div class="q-intent">考察点：{{ q.focus || q.intent }}</div>
-                    <div class="q-answer">参考答案：{{ q.suggested_answer || q.expected_answer || q.ref_answer }}</div>
-                    <div v-if="q.preparation_tips" class="q-tip">备考建议：{{ q.preparation_tips }}</div>
+                    <div class="q-answer">
+                      参考答案：{{ q.suggested_answer || q.expected_answer || q.ref_answer }}
+                    </div>
+                    <div v-if="q.preparation_tips" class="q-tip">
+                      备考建议：{{ q.preparation_tips }}
+                    </div>
                   </div>
                 </div>
               </template>
@@ -521,19 +726,25 @@
                 <el-row :gutter="16" class="career-section">
                   <el-col :span="8">
                     <div class="status-card">
-                      <div class="status-value data-value">{{ careerData.current_status?.career_stage || '-' }}</div>
+                      <div class="status-value data-value">
+                        {{ careerData.current_status?.career_stage || '-' }}
+                      </div>
                       <div class="status-label">当前阶段</div>
                     </div>
                   </el-col>
                   <el-col :span="8">
                     <div class="status-card">
-                      <div class="status-value data-value">{{ careerData.current_status?.level || '-' }}</div>
+                      <div class="status-value data-value">
+                        {{ careerData.current_status?.level || '-' }}
+                      </div>
                       <div class="status-label">当前职级</div>
                     </div>
                   </el-col>
                   <el-col :span="8">
                     <div class="status-card">
-                      <div class="status-value data-value" style="color:var(--app-warning)">{{ (careerData.skill_gaps || []).length }}</div>
+                      <div class="status-value data-value" style="color: var(--app-warning)">
+                        {{ (careerData.skill_gaps || []).length }}
+                      </div>
                       <div class="status-label">技能缺口</div>
                     </div>
                   </el-col>
@@ -543,11 +754,28 @@
                   <div class="panel-header"><span>📊 技能雷达</span></div>
                   <div class="panel-body">
                     <div class="radar-chart">
-                      <div v-for="dim in careerData.skill_radar.dimensions" :key="dim.name" class="radar-row">
+                      <div
+                        v-for="dim in careerData.skill_radar.dimensions"
+                        :key="dim.name"
+                        class="radar-row"
+                      >
                         <span class="radar-label">{{ dim.name }}</span>
                         <div class="radar-track">
-                          <div class="radar-bar current" :style="{ width: dim.current_score + '%' }"><span class="radar-val">{{ dim.current_score }}</span></div>
-                          <div class="radar-bar target" :style="{ width: (dim.target_score - dim.current_score) + '%', left: dim.current_score + '%' }"><span class="radar-val-target">→{{ dim.target_score }}</span></div>
+                          <div
+                            class="radar-bar current"
+                            :style="{ width: dim.current_score + '%' }"
+                          >
+                            <span class="radar-val">{{ dim.current_score }}</span>
+                          </div>
+                          <div
+                            class="radar-bar target"
+                            :style="{
+                              width: dim.target_score - dim.current_score + '%',
+                              left: dim.current_score + '%',
+                            }"
+                          >
+                            <span class="radar-val-target">→{{ dim.target_score }}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -555,47 +783,100 @@
                 </div>
 
                 <div v-if="careerData.skill_gaps?.length" class="panel career-section">
-                  <div class="panel-header"><span>⚠️ 技能提升建议（{{ careerData.skill_gaps.length }} 项）</span></div>
+                  <div class="panel-header">
+                    <span>⚠️ 技能提升建议（{{ careerData.skill_gaps.length }} 项）</span>
+                  </div>
                   <div class="panel-body">
                     <template v-if="hasStructuredSkillGaps">
                       <el-collapse>
-                        <el-collapse-item v-for="(gap, i) in careerData.skill_gaps" :key="i" :name="i">
+                        <el-collapse-item
+                          v-for="(gap, i) in careerData.skill_gaps"
+                          :key="i"
+                          :name="i"
+                        >
                           <template #title>
                             <div class="gap-title">
-                              <el-tag :type="gap.priority === '高' ? 'danger' : gap.priority === '中' ? 'warning' : 'info'" size="small">{{ gap.priority }}</el-tag>
+                              <el-tag
+                                :type="
+                                  gap.priority === '高'
+                                    ? 'danger'
+                                    : gap.priority === '中'
+                                      ? 'warning'
+                                      : 'info'
+                                "
+                                size="small"
+                                >{{ gap.priority }}</el-tag
+                              >
                               <span class="gap-skill">{{ gap.skill }}</span>
-                              <span class="gap-level">{{ gap.current_level }} → {{ gap.target_level }}</span>
+                              <span class="gap-level"
+                                >{{ gap.current_level }} → {{ gap.target_level }}</span
+                              >
                             </div>
                           </template>
                           <div class="gap-detail">
                             <p v-if="gap.importance"><b>为什么重要：</b>{{ gap.importance }}</p>
-                            <p v-if="gap.acquisition_method"><b>获取途径：</b>{{ gap.acquisition_method }}</p>
+                            <p v-if="gap.acquisition_method">
+                              <b>获取途径：</b>{{ gap.acquisition_method }}
+                            </p>
                             <div v-if="gap.resources?.length" class="gap-resources">
                               <b>推荐资源：</b>
-                              <el-tag v-for="r in gap.resources" :key="r.name" size="small" type="info" effect="plain" style="margin:2px;">{{ r.name }}{{ r.estimated_hours ? ` (${r.estimated_hours}h)` : '' }}</el-tag>
+                              <el-tag
+                                v-for="r in gap.resources"
+                                :key="r.name"
+                                size="small"
+                                type="info"
+                                effect="plain"
+                                style="margin: 2px"
+                                >{{ r.name
+                                }}{{ r.estimated_hours ? ` (${r.estimated_hours}h)` : '' }}</el-tag
+                              >
                             </div>
                           </div>
                         </el-collapse-item>
                       </el-collapse>
                     </template>
-                    <template v-else><ul><li v-for="(g, i) in careerData.skill_gaps" :key="i">📌 {{ g }}</li></ul></template>
+                    <template v-else
+                      ><ul>
+                        <li v-for="(g, i) in careerData.skill_gaps" :key="i">📌 {{ g }}</li>
+                      </ul></template
+                    >
                   </div>
                 </div>
 
                 <div v-if="visualPhases.length" class="panel career-section">
-                  <div class="panel-header"><span>🛤️ 成长路线图（{{ careerData.visual_roadmap?.total_duration_months || '-' }}个月）</span></div>
+                  <div class="panel-header">
+                    <span
+                      >🛤️ 成长路线图（{{
+                        careerData.visual_roadmap?.total_duration_months || '-'
+                      }}个月）</span
+                    >
+                  </div>
                   <div class="panel-body">
                     <div class="roadmap">
-                      <div v-for="(phase, i) in visualPhases" :key="phase.id" class="roadmap-phase">
+                      <div v-for="phase in visualPhases" :key="phase.id" class="roadmap-phase">
                         <div class="phase-connector" :style="{ borderColor: phase.color }">
-                          <div class="phase-dot" :style="{ background: phase.color }">{{ phase.order }}</div>
+                          <div class="phase-dot" :style="{ background: phase.color }">
+                            {{ phase.order }}
+                          </div>
                         </div>
                         <div class="phase-card" :style="{ borderLeftColor: phase.color }">
                           <div class="phase-header">
                             <span class="phase-name">{{ phase.name }}</span>
-                            <el-tag size="small" effect="plain">{{ phase.duration_months }}个月</el-tag>
+                            <el-tag size="small" effect="plain"
+                              >{{ phase.duration_months }}个月</el-tag
+                            >
                           </div>
-                          <div class="phase-skills"><el-tag v-for="s in phase.skills" :key="s" size="small" type="success" effect="plain" style="margin:2px;">{{ s }}</el-tag></div>
+                          <div class="phase-skills">
+                            <el-tag
+                              v-for="s in phase.skills"
+                              :key="s"
+                              size="small"
+                              type="success"
+                              effect="plain"
+                              style="margin: 2px"
+                              >{{ s }}</el-tag
+                            >
+                          </div>
                           <div v-if="phase.milestones?.length" class="phase-milestones">
                             <div v-for="m in phase.milestones" :key="m.name" class="milestone-item">
                               <span class="ms-icon">{{ milestoneIcon(m.type) }}</span>
@@ -603,16 +884,29 @@
                             </div>
                           </div>
                           <div v-if="phase.projects?.length" class="phase-projects">
-                            <div v-for="p in phase.projects" :key="p.name" class="phase-project-item">
+                            <div
+                              v-for="p in phase.projects"
+                              :key="p.name"
+                              class="phase-project-item"
+                            >
                               <el-icon><Folder /></el-icon>
-                              <b>{{ p.name }}</b>：<span class="project-desc">{{ p.description }}</span>
-                              <el-tag v-for="t in p.tech_stack" :key="t" size="small" style="margin:1px;">{{ t }}</el-tag>
+                              <b>{{ p.name }}</b
+                              >：<span class="project-desc">{{ p.description }}</span>
+                              <el-tag
+                                v-for="t in p.tech_stack"
+                                :key="t"
+                                size="small"
+                                style="margin: 1px"
+                                >{{ t }}</el-tag
+                              >
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div class="roadmap-dir" v-if="careerData.visual_roadmap?.career_direction">🏁 最终方向：<strong>{{ careerData.visual_roadmap.career_direction }}</strong></div>
+                    <div class="roadmap-dir" v-if="careerData.visual_roadmap?.career_direction">
+                      🏁 最终方向：<strong>{{ careerData.visual_roadmap.career_direction }}</strong>
+                    </div>
                   </div>
                 </div>
 
@@ -620,21 +914,47 @@
                   <div class="panel-header"><span>🔨 推荐项目实践</span></div>
                   <div class="panel-body">
                     <el-row :gutter="16">
-                      <el-col :span="12" v-for="proj in careerData.project_recommendations" :key="proj.project" style="margin-bottom:16px;">
+                      <el-col
+                        :span="12"
+                        v-for="proj in careerData.project_recommendations"
+                        :key="proj.project"
+                        style="margin-bottom: 16px"
+                      >
                         <div class="panel proj-card">
                           <div class="panel-body">
                             <div class="proj-header">
                               <h4 class="proj-name">{{ proj.project }}</h4>
-                              <el-tag :type="complexityType(proj.complexity)" size="small" effect="dark">{{ proj.complexity }}</el-tag>
+                              <el-tag
+                                :type="complexityType(proj.complexity)"
+                                size="small"
+                                effect="dark"
+                                >{{ proj.complexity }}</el-tag
+                              >
                             </div>
                             <p class="proj-reason">{{ proj.reason }}</p>
                             <p v-if="proj.description" class="proj-desc">{{ proj.description }}</p>
-                            <div class="proj-techs"><el-tag v-for="t in proj.tech_stack" :key="t" size="small" type="info" effect="plain">{{ t }}</el-tag></div>
+                            <div class="proj-techs">
+                              <el-tag
+                                v-for="t in proj.tech_stack"
+                                :key="t"
+                                size="small"
+                                type="info"
+                                effect="plain"
+                                >{{ t }}</el-tag
+                              >
+                            </div>
                             <div v-if="proj.learning_outcomes?.length" class="proj-outcomes">
                               <span class="outcome-label">学到的技能：</span>
-                              <span v-for="o in proj.learning_outcomes" :key="o" class="outcome-item">{{ o }}</span>
+                              <span
+                                v-for="o in proj.learning_outcomes"
+                                :key="o"
+                                class="outcome-item"
+                                >{{ o }}</span
+                              >
                             </div>
-                            <div v-if="proj.estimated_time" class="proj-time">⏱ 预估：{{ proj.estimated_time }}</div>
+                            <div v-if="proj.estimated_time" class="proj-time">
+                              ⏱ 预估：{{ proj.estimated_time }}
+                            </div>
                           </div>
                         </div>
                       </el-col>
@@ -648,18 +968,39 @@
                     <el-row :gutter="16">
                       <el-col :span="12">
                         <h5>当前趋势</h5>
-                        <ul><li v-for="t in (careerData.industry_insight.current_trends || [])" :key="t">{{ t }}</li></ul>
+                        <ul>
+                          <li
+                            v-for="t in careerData.industry_insight.current_trends || []"
+                            :key="t"
+                          >
+                            {{ t }}
+                          </li>
+                        </ul>
                       </el-col>
                       <el-col :span="12">
                         <h5>热门技能</h5>
-                        <el-tag v-for="s in (careerData.industry_insight.demanded_skills || [])" :key="s" type="warning" style="margin:2px;">{{ s }}</el-tag>
+                        <el-tag
+                          v-for="s in careerData.industry_insight.demanded_skills || []"
+                          :key="s"
+                          type="warning"
+                          style="margin: 2px"
+                          >{{ s }}</el-tag
+                        >
                       </el-col>
                     </el-row>
                     <div v-if="careerData.industry_insight.career_alternatives?.length" class="mt">
                       <h5>可考虑的其他方向</h5>
-                      <el-tag v-for="alt in careerData.industry_insight.career_alternatives" :key="alt" type="info" style="margin:2px;">{{ alt }}</el-tag>
+                      <el-tag
+                        v-for="alt in careerData.industry_insight.career_alternatives"
+                        :key="alt"
+                        type="info"
+                        style="margin: 2px"
+                        >{{ alt }}</el-tag
+                      >
                     </div>
-                    <div v-if="careerData.industry_insight.salary_range" class="mt salary-ref">💰 薪资参考：<strong>{{ careerData.industry_insight.salary_range }}</strong></div>
+                    <div v-if="careerData.industry_insight.salary_range" class="mt salary-ref">
+                      💰 薪资参考：<strong>{{ careerData.industry_insight.salary_range }}</strong>
+                    </div>
                   </div>
                 </div>
 
@@ -670,31 +1011,65 @@
                       <el-col :span="8">
                         <div class="plan-card plan-short">
                           <h4>短期计划</h4>
-                          <div class="plan-tl">{{ careerData.short_term_plan?.timeline || '1-3月' }}</div>
-                          <ul><li v-for="g in (careerData.short_term_plan?.goals || [])" :key="g">{{ g }}</li></ul>
-                          <div v-if="careerData.short_term_plan?.daily_routine" class="plan-routine"><b>每日安排：</b>{{ careerData.short_term_plan.daily_routine }}</div>
+                          <div class="plan-tl">
+                            {{ careerData.short_term_plan?.timeline || '1-3月' }}
+                          </div>
+                          <ul>
+                            <li v-for="g in careerData.short_term_plan?.goals || []" :key="g">
+                              {{ g }}
+                            </li>
+                          </ul>
+                          <div
+                            v-if="careerData.short_term_plan?.daily_routine"
+                            class="plan-routine"
+                          >
+                            <b>每日安排：</b>{{ careerData.short_term_plan.daily_routine }}
+                          </div>
                         </div>
                       </el-col>
                       <el-col :span="8">
                         <div class="plan-card plan-mid">
                           <h4>中期计划</h4>
-                          <div class="plan-tl">{{ careerData.mid_term_plan?.timeline || '3-12月' }}</div>
-                          <ul><li v-for="g in (careerData.mid_term_plan?.goals || [])" :key="g">{{ g }}</li></ul>
+                          <div class="plan-tl">
+                            {{ careerData.mid_term_plan?.timeline || '3-12月' }}
+                          </div>
+                          <ul>
+                            <li v-for="g in careerData.mid_term_plan?.goals || []" :key="g">
+                              {{ g }}
+                            </li>
+                          </ul>
                         </div>
                       </el-col>
                       <el-col :span="8">
                         <div class="plan-card plan-long">
                           <h4>长期计划</h4>
-                          <div class="plan-tl">{{ careerData.long_term_plan?.timeline || '1-3年' }}</div>
-                          <ul><li v-for="g in (careerData.long_term_plan?.goals || [])" :key="g">{{ g }}</li></ul>
-                          <div v-if="careerData.long_term_plan?.target_companies" class="plan-targets">🏢 <span v-for="c in careerData.long_term_plan.target_companies" :key="c">{{ c }} </span></div>
+                          <div class="plan-tl">
+                            {{ careerData.long_term_plan?.timeline || '1-3年' }}
+                          </div>
+                          <ul>
+                            <li v-for="g in careerData.long_term_plan?.goals || []" :key="g">
+                              {{ g }}
+                            </li>
+                          </ul>
+                          <div
+                            v-if="careerData.long_term_plan?.target_companies"
+                            class="plan-targets"
+                          >
+                            🏢
+                            <span v-for="c in careerData.long_term_plan.target_companies" :key="c"
+                              >{{ c }}
+                            </span>
+                          </div>
                         </div>
                       </el-col>
                     </el-row>
                   </div>
                 </div>
 
-                <div v-if="careerData.recommended_certifications?.length" class="panel career-section">
+                <div
+                  v-if="careerData.recommended_certifications?.length"
+                  class="panel career-section"
+                >
                   <div class="panel-header"><span>🎓 推荐证书</span></div>
                   <div class="panel-body">
                     <el-table :data="careerData.recommended_certifications" size="small">
@@ -705,7 +1080,13 @@
                   </div>
                 </div>
 
-                <el-alert v-if="careerData.overall_advice" :title="careerData.overall_advice" type="success" :closable="false" show-icon />
+                <el-alert
+                  v-if="careerData.overall_advice"
+                  :title="careerData.overall_advice"
+                  type="success"
+                  :closable="false"
+                  show-icon
+                />
               </div>
               <el-empty v-else description="暂无职业规划数据" />
             </el-tab-pane>
@@ -714,16 +1095,34 @@
             <el-tab-pane label="综合评价" name="summary">
               <div v-if="finalReport">
                 <el-descriptions :column="2" border size="small">
-                  <el-descriptions-item label="候选人">{{ finalReport.summary?.candidate_name || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="目标岗位">{{ finalReport.summary?.target_position || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="推荐建议">{{ localizedSummaryRecommendation }}</el-descriptions-item>
-                  <el-descriptions-item label="综合评价" :span="2">{{ localizedOverallEvaluation }}</el-descriptions-item>
+                  <el-descriptions-item label="候选人">{{
+                    finalReport.summary?.candidate_name || '-'
+                  }}</el-descriptions-item>
+                  <el-descriptions-item label="目标岗位">{{
+                    finalReport.summary?.target_position || '-'
+                  }}</el-descriptions-item>
+                  <el-descriptions-item label="推荐建议">{{
+                    localizedSummaryRecommendation
+                  }}</el-descriptions-item>
+                  <el-descriptions-item label="综合评价" :span="2">{{
+                    localizedOverallEvaluation
+                  }}</el-descriptions-item>
                 </el-descriptions>
                 <h4 class="mt">投递建议</h4>
                 <el-table :data="finalReport.action_items || []" size="small" class="mt">
                   <el-table-column prop="priority" label="优先级" width="80">
                     <template #default="{ row }">
-                      <el-tag :type="row.priority === '高' ? 'danger' : row.priority === '中' ? 'warning' : 'info'" size="small">{{ row.priority }}</el-tag>
+                      <el-tag
+                        :type="
+                          row.priority === '高'
+                            ? 'danger'
+                            : row.priority === '中'
+                              ? 'warning'
+                              : 'info'
+                        "
+                        size="small"
+                        >{{ row.priority }}</el-tag
+                      >
                     </template>
                   </el-table-column>
                   <el-table-column prop="action" label="行动" />
@@ -734,13 +1133,27 @@
                   <el-col :span="12">
                     <div class="dev-card">
                       <h5>短期</h5>
-                      <ul><li v-for="(s, i) in finalReport.development_advice?.short_term || []" :key="i">{{ s }}</li></ul>
+                      <ul>
+                        <li
+                          v-for="(s, i) in finalReport.development_advice?.short_term || []"
+                          :key="i"
+                        >
+                          {{ s }}
+                        </li>
+                      </ul>
                     </div>
                   </el-col>
                   <el-col :span="12">
                     <div class="dev-card">
                       <h5>长期</h5>
-                      <ul><li v-for="(s, i) in finalReport.development_advice?.long_term || []" :key="i">{{ s }}</li></ul>
+                      <ul>
+                        <li
+                          v-for="(s, i) in finalReport.development_advice?.long_term || []"
+                          :key="i"
+                        >
+                          {{ s }}
+                        </li>
+                      </ul>
                     </div>
                   </el-col>
                 </el-row>
@@ -763,14 +1176,24 @@
                     <div class="rag-confidence-copy">
                       <div class="rag-confidence-title">
                         本次检索可信度
-                        <el-tag size="small" :type="confidenceTagType(analysisConfidence.level)">{{ analysisConfidence.label || '-' }}</el-tag>
+                        <el-tag size="small" :type="confidenceTagType(analysisConfidence.level)">{{
+                          analysisConfidence.label || '-'
+                        }}</el-tag>
                       </div>
-                      <div class="rag-confidence-summary">{{ analysisConfidence.summary || '暂无可信度说明' }}</div>
-                      <div v-if="referenceQuery" class="rag-confidence-query">检索查询：{{ referenceQuery }}</div>
+                      <div class="rag-confidence-summary">
+                        {{ analysisConfidence.summary || '暂无可信度说明' }}
+                      </div>
+                      <div v-if="referenceQuery" class="rag-confidence-query">
+                        检索查询：{{ referenceQuery }}
+                      </div>
                     </div>
                   </div>
                   <div v-if="analysisConfidence.breakdown?.length" class="rag-breakdown">
-                    <div v-for="item in analysisConfidence.breakdown" :key="item.name" class="rag-breakdown-item">
+                    <div
+                      v-for="item in analysisConfidence.breakdown"
+                      :key="item.name"
+                      class="rag-breakdown-item"
+                    >
                       <span>{{ item.name }}</span>
                       <strong class="data-value">{{ item.score }}</strong>
                       <em>{{ item.detail }}</em>
@@ -778,26 +1201,53 @@
                   </div>
                   <div v-if="analysisConfidence.risks?.length" class="rag-risk-list">
                     <span class="rag-risk-label">风险提示</span>
-                    <span v-for="risk in analysisConfidence.risks" :key="risk" class="rag-risk-item">{{ risk }}</span>
+                    <span
+                      v-for="risk in analysisConfidence.risks"
+                      :key="risk"
+                      class="rag-risk-item"
+                      >{{ risk }}</span
+                    >
                   </div>
                 </div>
-                <el-alert v-if="references.length > 0" title="本次分析参考了以下知识库文档" type="info" :closable="false" show-icon style="margin-bottom:16px;" />
+                <el-alert
+                  v-if="references.length > 0"
+                  title="本次分析参考了以下知识库文档"
+                  type="info"
+                  :closable="false"
+                  show-icon
+                  style="margin-bottom: 16px"
+                />
                 <el-collapse v-if="references.length > 0" v-model="refOpenDocs">
-                  <el-collapse-item v-for="(doc, i) in references" :key="i" :title="`${doc.doc_title}  (${typeLabel(doc.doc_type)})`" :name="i">
+                  <el-collapse-item
+                    v-for="(doc, i) in references"
+                    :key="i"
+                    :title="`${doc.doc_title}  (${typeLabel(doc.doc_type)})`"
+                    :name="i"
+                  >
                     <template #title>
                       <div class="ref-title">
                         <el-icon><Document /></el-icon>
                         <span class="ref-doc-title">{{ doc.doc_title }}</span>
-                        <el-tag size="small" type="info" effect="plain">{{ typeLabel(doc.doc_type) }}</el-tag>
+                        <el-tag size="small" type="info" effect="plain">{{
+                          typeLabel(doc.doc_type)
+                        }}</el-tag>
                       </div>
                     </template>
                     <div class="ref-chunks">
                       <div v-for="(chunk, j) in doc.chunks" :key="j" class="ref-chunk-item">
                         <div class="ref-chunk-header">
                           <span class="ref-chunk-num">片段 #{{ j + 1 }}</span>
-                          <el-tag size="small" :type="scoreTagType(chunk.score)" effect="plain">相似度 {{ (chunk.score * 100).toFixed(1) }}%</el-tag>
+                          <el-tag size="small" :type="scoreTagType(chunk.score)" effect="plain"
+                            >相似度 {{ (chunk.score * 100).toFixed(1) }}%</el-tag
+                          >
                         </div>
-                        <el-input :model-value="chunk.text" type="textarea" :rows="2" readonly class="ref-chunk-text" />
+                        <el-input
+                          :model-value="chunk.text"
+                          type="textarea"
+                          :rows="2"
+                          readonly
+                          class="ref-chunk-text"
+                        />
                       </div>
                     </div>
                   </el-collapse-item>
@@ -817,9 +1267,18 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
 import {
-  UploadFilled, SuccessFilled, MagicStick, Microphone, Promotion, Loading,
-  SuccessFilled as SuccessIcon, WarningFilled, CircleCloseFilled, Document,
-  InfoFilled, EditPen, Folder, Search
+  UploadFilled,
+  SuccessFilled,
+  MagicStick,
+  Microphone,
+  Promotion,
+  Loading,
+  CircleCloseFilled,
+  Document,
+  InfoFilled,
+  EditPen,
+  Folder,
+  Search,
 } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { uploadResume, parseResume } from '@/api/resume'
@@ -830,7 +1289,6 @@ import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
 import {
   localizeRecommendationText,
   localizeSentence,
-  localizeSeverity,
   normalizeLocalizedObjectList,
   normalizeLocalizedTextList,
 } from '@/utils/analysisLocalization'
@@ -867,8 +1325,8 @@ const canAnalyze = computed(() => {
   return resumeInfo.value && hasJD
 })
 
-const completedStepCount = computed(() =>
-  agentSteps.value.filter(s => s.status === 'completed').length
+const completedStepCount = computed(
+  () => agentSteps.value.filter((s) => s.status === 'completed').length
 )
 
 const analysisFlowLabel = computed(() => {
@@ -891,33 +1349,32 @@ const analysisFlowHint = computed(() => {
   return '尚未启动分析任务'
 })
 
-const taskOutcomeTag = computed(() => ({
-  partial: 'warning',
-  failed: 'danger',
-  cancelled: 'info',
-  timeout: 'warning',
-}[taskOutcome.value] || 'info'))
+const taskOutcomeTag = computed(
+  () =>
+    ({
+      partial: 'warning',
+      failed: 'danger',
+      cancelled: 'info',
+      timeout: 'warning',
+    })[taskOutcome.value] || 'info'
+)
 
 const terminalHint = computed(() => {
-  if (taskOutcome.value === 'partial') return '任务部分完成，但没有生成完整分析结果。可以稍后去历史记录查看，或直接重试。'
+  if (taskOutcome.value === 'partial')
+    return '任务部分完成，但没有生成完整分析结果。可以稍后去历史记录查看，或直接重试。'
   if (taskOutcome.value === 'failed') return '任务执行失败，当前没有可展示的分析结果。'
   if (taskOutcome.value === 'cancelled') return '任务已取消，当前没有可展示的分析结果。'
-  if (taskOutcome.value === 'timeout') return '前端轮询已超时，后台任务可能仍在继续。你可以稍后去历史记录查看结果。'
+  if (taskOutcome.value === 'timeout')
+    return '前端轮询已超时，后台任务可能仍在继续。你可以稍后去历史记录查看结果。'
   return '当前没有可展示的分析结果。'
 })
 
-const activeStep = computed(() => {
-  const idx = agentSteps.value.findIndex(s => s.status === 'running')
-  if (idx >= 0) return idx
-  return completedStepCount.value
-})
-
 const currentStepName = computed(() => {
-  const running = agentSteps.value.find(s => s.status === 'running')
+  const running = agentSteps.value.find((s) => s.status === 'running')
   if (running) return stepLabel(running.step_name)
-  const pending = agentSteps.value.find(s => s.status === 'pending')
+  const pending = agentSteps.value.find((s) => s.status === 'pending')
   if (pending) return stepLabel(pending.step_name)
-  const lastCompleted = [...agentSteps.value].reverse().find(s => s.status === 'completed')
+  const lastCompleted = [...agentSteps.value].reverse().find((s) => s.status === 'completed')
   if (lastCompleted) return stepLabel(lastCompleted.step_name)
   return '准备中'
 })
@@ -938,19 +1395,31 @@ const pickNonEmptyArray = (...candidates) => {
   return []
 }
 
-const matchedSkills = computed(() => pickNonEmptyArray(getDimension('skills').matched, result.value?.matched_skills))
-const missingSkills = computed(() => pickNonEmptyArray(getDimension('skills').missing, result.value?.missing_skills))
+const matchedSkills = computed(() =>
+  pickNonEmptyArray(getDimension('skills').matched, result.value?.matched_skills)
+)
+const missingSkills = computed(() =>
+  pickNonEmptyArray(getDimension('skills').missing, result.value?.missing_skills)
+)
 const finalReport = computed(() => result.value?.final_report || null)
 const rawMatchRecommendation = computed(() => result.value?.match_report?.recommendation || '')
 const rawMatchSummary = computed(() => result.value?.match_report?.summary || '')
-const localizedMatchRecommendation = computed(() => localizeRecommendationText(rawMatchRecommendation.value))
+const localizedMatchRecommendation = computed(() =>
+  localizeRecommendationText(rawMatchRecommendation.value)
+)
 const localizedMatchSummary = computed(() => localizeSentence(rawMatchSummary.value))
-const localizedStrengths = computed(() => normalizeLocalizedObjectList(result.value?.match_report?.strengths))
+const localizedStrengths = computed(() =>
+  normalizeLocalizedObjectList(result.value?.match_report?.strengths)
+)
 const localizedGaps = computed(() => normalizeLocalizedObjectList(result.value?.match_report?.gaps))
-const localizedRiskPoints = computed(() => normalizeLocalizedTextList(result.value?.match_report?.risk_points))
+const localizedRiskPoints = computed(() =>
+  normalizeLocalizedTextList(result.value?.match_report?.risk_points)
+)
 const rawSummaryRecommendation = computed(() => finalReport.value?.summary?.recommendation || '')
 const rawOverallEvaluation = computed(() => finalReport.value?.summary?.overall_evaluation || '')
-const localizedSummaryRecommendation = computed(() => localizeRecommendationText(rawSummaryRecommendation.value))
+const localizedSummaryRecommendation = computed(() =>
+  localizeRecommendationText(rawSummaryRecommendation.value)
+)
 const localizedOverallEvaluation = computed(() => localizeSentence(rawOverallEvaluation.value))
 
 const normalizeConfidence = (value) => {
@@ -960,28 +1429,34 @@ const normalizeConfidence = (value) => {
   return null
 }
 
-const analysisConfidence = computed(() => (
-  normalizeConfidence(result.value?.rag_confidence) || normalizeConfidence(referenceConfidence.value)
-))
+const analysisConfidence = computed(
+  () =>
+    normalizeConfidence(result.value?.rag_confidence) ||
+    normalizeConfidence(referenceConfidence.value)
+)
 
-const localizedExplainRecommendation = computed(() => localizeRecommendationText(explainResult.value?.recommendation || ''))
-const localizedExplainOverallReason = computed(() => localizeSentence(explainResult.value?.overall_reason || ''))
-const localizedExplainRiskPoints = computed(() => normalizeLocalizedTextList(explainResult.value?.risk_points))
-const localizedExplainSuggestions = computed(() => normalizeLocalizedTextList(explainResult.value?.optimization_suggestions))
-
-const explainRecTag = computed(() => ({
-  '强烈推荐': 'success',
-  '可以投递': 'primary',
-  '谨慎投递': 'warning',
-  '不建议投递': 'danger',
-}[localizedExplainRecommendation.value] || 'info'))
+const localizedExplainRecommendation = computed(() =>
+  localizeRecommendationText(explainResult.value?.recommendation || '')
+)
+const localizedExplainOverallReason = computed(() =>
+  localizeSentence(explainResult.value?.overall_reason || '')
+)
+const explainRecTag = computed(
+  () =>
+    ({
+      强烈推荐: 'success',
+      可以投递: 'primary',
+      谨慎投递: 'warning',
+      不建议投递: 'danger',
+    })[localizedExplainRecommendation.value] || 'info'
+)
 
 const explainMatchedSkills = computed(() => explainResult.value?.skill_match?.matched || [])
 const explainMissingSkills = computed(() => {
   const skillMatch = explainResult.value?.skill_match || {}
   const required = Array.isArray(skillMatch.missing_required) ? skillMatch.missing_required : []
   const nice = Array.isArray(skillMatch.missing_nice) ? skillMatch.missing_nice : []
-  return [...required, ...nice.filter(item => !required.includes(item))]
+  return [...required, ...nice.filter((item) => !required.includes(item))]
 })
 
 const careerData = computed(() => result.value?.career_planning || null)
@@ -991,9 +1466,11 @@ const hasStructuredSkillGaps = computed(() => {
   return gaps.length > 0 && typeof gaps[0] === 'object' && gaps[0] !== null
 })
 
-const milestoneIcon = (type) => ({ skill: '📚', cert: '🎓', project: '🔨', job: '💼' }[type] || '📍')
+const milestoneIcon = (type) =>
+  ({ skill: '📚', cert: '🎓', project: '🔨', job: '💼' })[type] || '📍'
 
-const complexityType = (level) => ({ '简单': 'success', '中等': 'warning', '困难': 'danger' }[level] || 'info')
+const complexityType = (level) =>
+  ({ 简单: 'success', 中等: 'warning', 困难: 'danger' })[level] || 'info'
 
 const INTERVIEW_GROUP_DEFS = [
   { key: 'hr_questions', legacy: 'basic', title: 'HR 题' },
@@ -1008,15 +1485,18 @@ const interviewGroups = computed(() => {
   const iq = result.value?.interview_questions || {}
   const groups = {}
   INTERVIEW_GROUP_DEFS.forEach(({ key, legacy }) => {
-    const items = Array.isArray(iq[key]) && iq[key].length
-      ? iq[key]
-      : (Array.isArray(iq[legacy]) ? iq[legacy] : [])
+    const items =
+      Array.isArray(iq[key]) && iq[key].length
+        ? iq[key]
+        : Array.isArray(iq[legacy])
+          ? iq[legacy]
+          : []
     if (items.length) groups[key] = items
   })
   return groups
 })
 
-const groupTitle = (k) => INTERVIEW_GROUP_DEFS.find(item => item.key === k)?.title || k
+const groupTitle = (k) => INTERVIEW_GROUP_DEFS.find((item) => item.key === k)?.title || k
 
 // ---- Resume upload ----
 const beforeUploadResume = (file) => {
@@ -1040,12 +1520,21 @@ const customUploadResume = async ({ file }) => {
     resumeInfo.value = { id: data.id, file_name: file.name, parsed: parsed.parsed }
     localStorage.setItem(storageKey('lastResumeId'), data.id)
     ElMessage.success('简历解析完成')
-  } catch (e) { /* request.js 已提示 */ }
+  } catch {
+    /* request.js 已提示 */
+  }
 }
 
-const clearResume = () => { resumeInfo.value = null; explainResult.value = null }
+const clearResume = () => {
+  resumeInfo.value = null
+  explainResult.value = null
+}
 const clearJD = () => {
-  jdInfo.value = null; jdForm.title = ''; jdForm.company = ''; jdForm.raw_text = ''; explainResult.value = null
+  jdInfo.value = null
+  jdForm.title = ''
+  jdForm.company = ''
+  jdForm.raw_text = ''
+  explainResult.value = null
 }
 
 // ---- Analysis ----
@@ -1053,14 +1542,21 @@ const onStartAnalysis = async () => {
   if (!canAnalyze.value) return
   if (!jdInfo.value) {
     if (!jdForm.title.trim() || !jdForm.raw_text.trim()) {
-      ElMessage.warning('请填写岗位名称和 JD 内容'); return
+      ElMessage.warning('请填写岗位名称和 JD 内容')
+      return
     }
     try {
-      const jd = await createJD({ title: jdForm.title, company: jdForm.company || '', raw_text: jdForm.raw_text })
+      const jd = await createJD({
+        title: jdForm.title,
+        company: jdForm.company || '',
+        raw_text: jdForm.raw_text,
+      })
       await parseJD(jd.id)
       jdInfo.value = { id: jd.id, title: jdForm.title }
       localStorage.setItem(storageKey('lastJDId'), jd.id)
-    } catch (e) { return }
+    } catch {
+      return
+    }
   }
 
   loading.value = true
@@ -1075,9 +1571,15 @@ const onStartAnalysis = async () => {
   careerPathSummary.value = ''
 
   try {
-    const startRes = await runFullAnalysis({ resume_id: resumeInfo.value.id, jd_id: jdInfo.value.id })
+    const startRes = await runFullAnalysis({
+      resume_id: resumeInfo.value.id,
+      jd_id: jdInfo.value.id,
+    })
     const taskId = startRes?.task_id
-    if (!taskId) { ElMessage.error('启动智能分析失败'); return }
+    if (!taskId) {
+      ElMessage.error('启动智能分析失败')
+      return
+    }
     await pollAgentTask(taskId, {
       onProgress(taskData, steps) {
         agentSteps.value = steps
@@ -1086,10 +1588,16 @@ const onStartAnalysis = async () => {
       async onCompleted(taskData) {
         taskOutcome.value = taskData?.status || 'completed'
         const recordId = taskData?.analysis_record_id
-        if (!recordId) { ElMessage.error('任务完成但未生成分析记录'); return }
+        if (!recordId) {
+          ElMessage.error('任务完成但未生成分析记录')
+          return
+        }
         const data = await getAnalysis(recordId)
         result.value = data
-        localStorage.setItem(storageKey('lastRecordId'), String(data.record_id || data.id || recordId))
+        localStorage.setItem(
+          storageKey('lastRecordId'),
+          String(data.record_id || data.id || recordId)
+        )
         await loadExplainMatch(true)
         await loadReferences(true)
         ElMessage.success(`智能分析完成，匹配度 ${data.match_score}`)
@@ -1108,8 +1616,11 @@ const onStartAnalysis = async () => {
         ElMessage.warning('分析超时，请稍后查看历史记录')
       },
     })
-  } catch (e) { /* request.js 已提示 */ }
-  finally { loading.value = false }
+  } catch {
+    /* request.js 已提示 */
+  } finally {
+    loading.value = false
+  }
 }
 
 const onTabClick = (tab) => {
@@ -1127,8 +1638,11 @@ const loadExplainMatch = async (force = false) => {
   try {
     const data = await explainMatch({ resume_id: resumeId, jd_id: jdId })
     explainResult.value = data
-  } catch (e) { console.error('加载匹配度解释失败:', e) }
-  finally { explainLoading.value = false }
+  } catch (e) {
+    console.error('加载匹配度解释失败:', e)
+  } finally {
+    explainLoading.value = false
+  }
 }
 
 const careerPaths = ref([])
@@ -1144,11 +1658,14 @@ const loadCareerPaths = async () => {
     const data = await recommendCareerPaths(rid)
     careerPaths.value = data?.career_paths || []
     careerPathSummary.value = data?.summary || ''
-  } catch (e) { console.error('加载职业方向失败:', e) }
-  finally { careerPathsLoading.value = false }
+  } catch (e) {
+    console.error('加载职业方向失败:', e)
+  } finally {
+    careerPathsLoading.value = false
+  }
 }
 
-const scoreClass = (s) => s >= 80 ? 'sc-high' : s >= 60 ? 'sc-mid' : 'sc-low'
+const scoreClass = (s) => (s >= 80 ? 'sc-high' : s >= 60 ? 'sc-mid' : 'sc-low')
 
 const loadReferences = async (force = false) => {
   if ((!force && references.value.length > 0) || !result.value?.id) return
@@ -1160,47 +1677,69 @@ const loadReferences = async (force = false) => {
     if (!result.value?.rag_confidence && data?.rag_confidence) {
       referenceConfidence.value = data.rag_confidence
     }
-  } catch (e) { console.error('加载引用来源失败:', e) }
-  finally { referencesLoading.value = false }
+  } catch (e) {
+    console.error('加载引用来源失败:', e)
+  } finally {
+    referencesLoading.value = false
+  }
 }
 
-const typeLabel = (t) => ({
-  resume_template: '简历模板', jd_lib: '岗位描述库', interview_q: '面试题库',
-  skill_model: '能力模型', industry_report: '行业报告', general: '通用',
-}[t] || t || '通用')
+const typeLabel = (t) =>
+  ({
+    resume_template: '简历模板',
+    jd_lib: '岗位描述库',
+    interview_q: '面试题库',
+    skill_model: '能力模型',
+    industry_report: '行业报告',
+    general: '通用',
+  })[t] ||
+  t ||
+  '通用'
 
-const scoreTagType = (score) => score >= 0.8 ? 'success' : score >= 0.6 ? 'warning' : 'info'
-const confidenceTagType = (level) => level === 'high' ? 'success' : level === 'medium' ? 'warning' : 'danger'
+const scoreTagType = (score) => (score >= 0.8 ? 'success' : score >= 0.6 ? 'warning' : 'info')
+const confidenceTagType = (level) =>
+  level === 'high' ? 'success' : level === 'medium' ? 'warning' : 'danger'
 
 const STEP_LABELS = {
-  IntentAgent: '意图识别', ResumeParseAgent: '简历解析', JDParseAgent: 'JD 解析',
-  MatchAnalysisAgent: '匹配分析', ResumeOptimizeAgent: '简历优化',
-  InterviewQuestionAgent: '面试题生成', SummaryAgent: '汇总报告',
-  intent_recognition: '意图识别', resume_parse: '简历解析', jd_parse: 'JD 解析',
-  knowledge_retrieval: '知识检索', matching_analysis: '匹配分析',
-  resume_optimization: '简历优化', interview_question_generation: '面试题生成',
-  self_check: '自我校验', final_report: '汇总报告',
+  IntentAgent: '意图识别',
+  ResumeParseAgent: '简历解析',
+  JDParseAgent: 'JD 解析',
+  MatchAnalysisAgent: '匹配分析',
+  ResumeOptimizeAgent: '简历优化',
+  InterviewQuestionAgent: '面试题生成',
+  SummaryAgent: '汇总报告',
+  intent_recognition: '意图识别',
+  resume_parse: '简历解析',
+  jd_parse: 'JD 解析',
+  knowledge_retrieval: '知识检索',
+  matching_analysis: '匹配分析',
+  resume_optimization: '简历优化',
+  interview_question_generation: '面试题生成',
+  self_check: '自我校验',
+  final_report: '汇总报告',
 }
 
 const CANONICAL_STEP_LABELS = {
-  intent_recognition: '意图识别', resume_parse: '简历解析', jd_parse: 'JD 解析',
-  knowledge_retrieval: '知识检索', match_analysis: '匹配分析',
-  resume_optimization: '简历优化', interview_questions: '面试题生成',
-  career_planning: '职业规划', self_check: '自我校验', summary_report: '汇总报告',
+  intent_recognition: '意图识别',
+  resume_parse: '简历解析',
+  jd_parse: 'JD 解析',
+  knowledge_retrieval: '知识检索',
+  match_analysis: '匹配分析',
+  resume_optimization: '简历优化',
+  interview_questions: '面试题生成',
+  career_planning: '职业规划',
+  self_check: '自我校验',
+  summary_report: '汇总报告',
 }
 
-function stepLabel(name) { return CANONICAL_STEP_LABELS[name] || STEP_LABELS[name] || name }
-function stepStatus(status) { return { completed: 'finish', running: 'process', failed: 'error', skipped: 'wait' }[status] || 'wait' }
-function stepType(status) { return { completed: 'success', running: 'primary', failed: 'danger', skipped: 'info' }[status] || 'info' }
-function stepIcon(status) { return { completed: SuccessIcon, failed: CircleCloseFilled, running: Loading }[status] || WarningFilled }
-function statusText(status) { return { pending: '等待中', running: '执行中', completed: '已完成', failed: '失败' }[status] || status }
-function stepDesc(s) {
-  if (s.status === 'completed') return `${s.duration_ms || 0}ms`
-  if (s.status === 'failed') return '失败'
-  if (s.status === 'running') return '执行中…'
-  return ''
+function stepLabel(name) {
+  return CANONICAL_STEP_LABELS[name] || STEP_LABELS[name] || name
 }
-
+function statusText(status) {
+  return (
+    { pending: '等待中', running: '执行中', completed: '已完成', failed: '失败' }[status] || status
+  )
+}
 function scoreColor(s) {
   if (s >= 80) return [{ color: '#1DB954', percentage: 100 }]
   if (s >= 60) return [{ color: '#F5A623', percentage: 100 }]
@@ -1216,14 +1755,21 @@ function explainScoreColor(s) {
 
 const onGenerateOptimized = async () => {
   const resumeId = resumeInfo.value?.id
-  if (!resumeId) { ElMessage.warning('请先上传简历'); return }
+  if (!resumeId) {
+    ElMessage.warning('请先上传简历')
+    return
+  }
   genOptimizing.value = true
   try {
     await generateOptimized(resumeId, jdInfo.value?.id || null)
     ElMessage.success('优化版简历生成成功')
     window.location.href = `/resume/compare/${resumeId}`
-  } catch (e) { /* request.js 已提示 */ }
-  finally { genOptimizing.value = false; genRedirecting.value = false }
+  } catch {
+    /* request.js 已提示 */
+  } finally {
+    genOptimizing.value = false
+    genRedirecting.value = false
+  }
 }
 
 onMounted(() => {
@@ -1246,16 +1792,18 @@ onMounted(() => {
         jdInfo.value = { id: Number(ctx.jdId), title: ctx.title || `JD #${ctx.jdId}` }
         localStorage.setItem(storageKey('lastJDId'), String(ctx.jdId))
       }
-    } catch (e) { console.warn('解析 pendingAnalysis 失败', e) }
-    finally { localStorage.removeItem('recruit.pendingAnalysis') }
+    } catch (e) {
+      console.warn('解析 pendingAnalysis 失败', e)
+    } finally {
+      localStorage.removeItem('recruit.pendingAnalysis')
+    }
   }
 })
 </script>
 
 <style scoped>
 .page-shell {
-  max-width: 1280px;
-  margin: 0 auto;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1334,7 +1882,9 @@ onMounted(() => {
 }
 
 @media (min-width: 1024px) {
-  .hero-node { display: block; }
+  .hero-node {
+    display: block;
+  }
 }
 
 /* Hero metrics */
@@ -1379,7 +1929,9 @@ onMounted(() => {
 }
 
 /* ===== Panel overrides ===== */
-.panel.score-section { overflow: hidden; }
+.panel.score-section {
+  overflow: hidden;
+}
 
 /* ===== Input split ===== */
 .input-split {
@@ -1406,7 +1958,9 @@ onMounted(() => {
   border-radius: var(--app-radius-xs, 8px);
   border: 1px dashed var(--app-line);
   background: var(--el-fill-color-light);
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
 }
 
 .resume-upload :deep(.el-upload-dragger:hover) {
@@ -1472,9 +2026,18 @@ onMounted(() => {
 }
 
 /* JD */
-.jd-form { width: 100%; }
-.jd-form :deep(.el-form-item) { margin-bottom: 14px; }
-.jd-ready { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.jd-form {
+  width: 100%;
+}
+.jd-form :deep(.el-form-item) {
+  margin-bottom: 14px;
+}
+.jd-ready {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
 
 /* Action bar */
 .action-bar {
@@ -1657,7 +2220,9 @@ onMounted(() => {
   color: var(--app-muted);
 }
 
-.score-meta { flex: 1; }
+.score-meta {
+  flex: 1;
+}
 
 .score-rec {
   font-size: 20px;
@@ -1711,8 +2276,12 @@ onMounted(() => {
   border-color: #c1d6f0;
 }
 
-.dim-table { margin-top: 0; }
-.dim-val { color: var(--app-primary); }
+.dim-table {
+  margin-top: 0;
+}
+.dim-val {
+  color: var(--app-primary);
+}
 
 /* RAG Confidence */
 .rag-confidence {
@@ -1742,11 +2311,20 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.badge-high { background: linear-gradient(135deg, #1DB954, #48c978); }
-.badge-medium { background: linear-gradient(135deg, #F5A623, #f7b94d); }
-.badge-low { background: linear-gradient(135deg, #D4442F, #dc6b5a); }
+.badge-high {
+  background: linear-gradient(135deg, #1db954, #48c978);
+}
+.badge-medium {
+  background: linear-gradient(135deg, #f5a623, #f7b94d);
+}
+.badge-low {
+  background: linear-gradient(135deg, #d4442f, #dc6b5a);
+}
 
-.rag-confidence-copy { flex: 1; min-width: 0; }
+.rag-confidence-copy {
+  flex: 1;
+  min-width: 0;
+}
 
 .rag-confidence-title {
   display: flex;
@@ -1866,12 +2444,28 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
-.big-score { font-size: 28px; }
-.score-lbl { font-size: 12px; color: var(--app-muted); }
+.big-score {
+  font-size: 28px;
+}
+.score-lbl {
+  font-size: 12px;
+  color: var(--app-muted);
+}
 
-.explain-score-info { flex: 1; }
-.explain-reason { margin: 8px 0 0; color: var(--app-muted); line-height: 1.7; }
-.explain-weights { margin: 8px 0 0; color: var(--app-muted); font-size: 12px; font-family: var(--app-font-mono); }
+.explain-score-info {
+  flex: 1;
+}
+.explain-reason {
+  margin: 8px 0 0;
+  color: var(--app-muted);
+  line-height: 1.7;
+}
+.explain-weights {
+  margin: 8px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-family: var(--app-font-mono);
+}
 
 /* Dimension bars */
 .dim-block {
@@ -1888,9 +2482,19 @@ onMounted(() => {
   margin-bottom: 6px;
 }
 
-.dim-name { font-weight: 600; font-size: 14px; flex: 1; }
-.dim-w { color: var(--app-muted); font-size: 12px; }
-.dim-score { font-size: 18px; font-weight: 700; }
+.dim-name {
+  font-weight: 600;
+  font-size: 14px;
+  flex: 1;
+}
+.dim-w {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+.dim-score {
+  font-size: 18px;
+  font-weight: 700;
+}
 
 .dim-bar {
   height: 6px;
@@ -1905,8 +2509,15 @@ onMounted(() => {
   transition: width 0.4s ease;
 }
 
-.dim-reason { margin: 6px 0 0; color: var(--app-muted); font-size: 13px; line-height: 1.6; }
-.dim-details { margin-top: 6px; }
+.dim-reason {
+  margin: 6px 0 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.dim-details {
+  margin-top: 6px;
+}
 
 /* Query card */
 .q-card {
@@ -1917,115 +2528,387 @@ onMounted(() => {
   background: var(--el-fill-color-light);
 }
 
-.q { font-size: 14px; }
-.q-intent { color: var(--app-muted); font-size: 12px; margin: 4px 0; }
-.q-answer { color: var(--app-success); font-size: 13px; }
-.q-tip { margin-top: 4px; font-size: 12px; color: var(--app-warning); }
+.q {
+  font-size: 14px;
+}
+.q-intent {
+  color: var(--app-muted);
+  font-size: 12px;
+  margin: 4px 0;
+}
+.q-answer {
+  color: var(--app-success);
+  font-size: 13px;
+}
+.q-tip {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--app-warning);
+}
 
 /* Career paths */
-.career-path-grid { display: flex; flex-direction: column; gap: 10px; }
-.cp-card { border-radius: var(--app-radius-sm, 12px); }
-.cp-high { border-left: 3px solid var(--app-success); }
-.cp-trans { border-left: 3px solid var(--app-warning); }
-.cp-header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
-.cp-score { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0; }
-.sc-high { background: linear-gradient(135deg, #1DB954, #48c978); }
-.sc-mid { background: linear-gradient(135deg, #F5A623, #f7b94d); }
-.sc-low { background: linear-gradient(135deg, #D4442F, #dc6b5a); }
-.cp-info { flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.cp-title { margin: 0; font-size: 15px; font-weight: 600; }
-.cp-seniority { font-size: 12px; color: var(--app-muted); }
-.cp-reason { font-size: 13px; color: var(--app-muted); margin: 4px 0; }
-.cp-skills { margin: 4px 0; }
-.cp-skill-label { font-size: 12px; color: var(--app-muted); margin-right: 4px; }
-.cp-salary { font-size: 13px; color: var(--app-warning); margin-top: 4px; font-weight: 600; }
+.career-path-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cp-card {
+  border-radius: var(--app-radius-sm, 12px);
+}
+.cp-high {
+  border-left: 3px solid var(--app-success);
+}
+.cp-trans {
+  border-left: 3px solid var(--app-warning);
+}
+.cp-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.cp-score {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+.sc-high {
+  background: linear-gradient(135deg, #1db954, #48c978);
+}
+.sc-mid {
+  background: linear-gradient(135deg, #f5a623, #f7b94d);
+}
+.sc-low {
+  background: linear-gradient(135deg, #d4442f, #dc6b5a);
+}
+.cp-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cp-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.cp-seniority {
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.cp-reason {
+  font-size: 13px;
+  color: var(--app-muted);
+  margin: 4px 0;
+}
+.cp-skills {
+  margin: 4px 0;
+}
+.cp-skill-label {
+  font-size: 12px;
+  color: var(--app-muted);
+  margin-right: 4px;
+}
+.cp-salary {
+  font-size: 13px;
+  color: var(--app-warning);
+  margin-top: 4px;
+  font-weight: 600;
+}
 
 /* Career content */
-.career-content { }
-.status-card { padding: 18px; border-radius: var(--app-radius-sm, 12px); background: var(--el-fill-color-light); text-align: center; }
-.status-value { font-size: 28px; line-height: 1.1; margin-bottom: 6px; }
-.status-label { font-size: 12px; color: var(--app-muted); }
-.career-section { margin-bottom: 16px; }
+.career-content {
+}
+.status-card {
+  padding: 18px;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--el-fill-color-light);
+  text-align: center;
+}
+.status-value {
+  font-size: 28px;
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+.status-label {
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.career-section {
+  margin-bottom: 16px;
+}
 
 /* Radar */
-.radar-chart { display: flex; flex-direction: column; gap: 10px; }
-.radar-row { display: flex; align-items: center; gap: 10px; }
-.radar-label { width: 80px; font-size: 13px; font-weight: 500; flex-shrink: 0; }
-.radar-track { flex: 1; height: 10px; border-radius: 999px; background: var(--el-border-color-light); position: relative; overflow: hidden; }
-.radar-bar { position: absolute; top: 0; left: 0; height: 100%; border-radius: 999px; display: flex; align-items: center; }
-.radar-bar.current { background: var(--app-primary); z-index: 1; }
-.radar-bar.target { background: rgba(25, 107, 219, 0.2); }
-.radar-val, .radar-val-target { font-size: 10px; font-weight: 600; padding: 0 6px; color: #fff; font-family: var(--app-font-mono); }
-.radar-val-target { color: var(--app-primary); }
+.radar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.radar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.radar-label {
+  width: 80px;
+  font-size: 13px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.radar-track {
+  flex: 1;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--el-border-color-light);
+  position: relative;
+  overflow: hidden;
+}
+.radar-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+}
+.radar-bar.current {
+  background: var(--app-primary);
+  z-index: 1;
+}
+.radar-bar.target {
+  background: rgba(25, 107, 219, 0.2);
+}
+.radar-val,
+.radar-val-target {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 6px;
+  color: #fff;
+  font-family: var(--app-font-mono);
+}
+.radar-val-target {
+  color: var(--app-primary);
+}
 
 /* Plan cards */
-.plan-card { padding: 16px; border-radius: var(--app-radius-sm, 12px); border: 1px solid var(--el-border-color); }
-.plan-short { border-left: 3px solid var(--app-primary); }
-.plan-mid { border-left: 3px solid var(--app-warning); }
-.plan-long { border-left: 3px solid var(--app-violet); }
-.plan-tl { font-size: 12px; color: var(--app-muted); font-family: var(--app-font-mono); margin-bottom: 8px; }
+.plan-card {
+  padding: 16px;
+  border-radius: var(--app-radius-sm, 12px);
+  border: 1px solid var(--el-border-color);
+}
+.plan-short {
+  border-left: 3px solid var(--app-primary);
+}
+.plan-mid {
+  border-left: 3px solid var(--app-warning);
+}
+.plan-long {
+  border-left: 3px solid var(--app-violet);
+}
+.plan-tl {
+  font-size: 12px;
+  color: var(--app-muted);
+  font-family: var(--app-font-mono);
+  margin-bottom: 8px;
+}
 
 /* Roadmap */
-.roadmap { display: flex; flex-direction: column; gap: 0; }
-.roadmap-phase { display: flex; gap: 14px; }
-.phase-connector { position: relative; width: 32px; display: flex; flex-direction: column; align-items: center; border-left: 2px solid; padding-bottom: 16px; }
-.phase-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 700; margin-left: -15px; }
-.phase-card { flex: 1; padding: 14px; border-radius: var(--app-radius-xs, 8px); border: 1px solid var(--el-border-color); border-left: 3px solid; margin-bottom: 12px; }
-.phase-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.phase-name { font-weight: 600; font-size: 14px; }
+.roadmap {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.roadmap-phase {
+  display: flex;
+  gap: 14px;
+}
+.phase-connector {
+  position: relative;
+  width: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-left: 2px solid;
+  padding-bottom: 16px;
+}
+.phase-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: -15px;
+}
+.phase-card {
+  flex: 1;
+  padding: 14px;
+  border-radius: var(--app-radius-xs, 8px);
+  border: 1px solid var(--el-border-color);
+  border-left: 3px solid;
+  margin-bottom: 12px;
+}
+.phase-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.phase-name {
+  font-weight: 600;
+  font-size: 14px;
+}
 
 /* Generate area */
-.generate-area { text-align: center; padding: 16px 0; }
-.generate-desc { color: var(--app-muted); font-size: 13px; margin-bottom: 12px; }
+.generate-area {
+  text-align: center;
+  padding: 16px 0;
+}
+.generate-desc {
+  color: var(--app-muted);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
 
 /* Dev card */
-.dev-card { padding: 14px; border-radius: var(--app-radius-xs, 8px); border: 1px solid var(--el-border-color); }
+.dev-card {
+  padding: 14px;
+  border-radius: var(--app-radius-xs, 8px);
+  border: 1px solid var(--el-border-color);
+}
 
 /* References */
-.ref-title { display: flex; align-items: center; gap: 8px; }
-.ref-doc-title { font-weight: 600; font-size: 13px; }
-.ref-chunks { display: flex; flex-direction: column; gap: 10px; }
-.ref-chunk-item { padding: 10px; border-radius: var(--app-radius-xs, 8px); background: var(--el-fill-color-light); }
-.ref-chunk-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-.ref-chunk-num { font-size: 12px; font-weight: 600; color: var(--app-muted); }
+.ref-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ref-doc-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+.ref-chunks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ref-chunk-item {
+  padding: 10px;
+  border-radius: var(--app-radius-xs, 8px);
+  background: var(--el-fill-color-light);
+}
+.ref-chunk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.ref-chunk-num {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-muted);
+}
 
 /* Loading state */
-.inline-loading { text-align: center; padding: 40px 0; color: var(--app-muted); }
-.inline-loading p { margin: 8px 0 0; }
+.inline-loading {
+  text-align: center;
+  padding: 40px 0;
+  color: var(--app-muted);
+}
+.inline-loading p {
+  margin: 8px 0 0;
+}
 
 /* Tab body */
-.tab-body { padding: 0; }
-.tab-body :deep(.el-tabs__header) { margin: 0 20px; }
-.tab-body :deep(.el-tabs__content) { padding: 16px 20px 20px; }
+.tab-body {
+  padding: 0;
+}
+.tab-body :deep(.el-tabs__header) {
+  margin: 0 20px;
+}
+.tab-body :deep(.el-tabs__content) {
+  padding: 16px 20px 20px;
+}
 
 /* List */
-ul { padding-left: 16px; margin: 4px 0; }
-h4 { margin: 12px 0 6px; }
-h5 { margin: 0 0 8px; }
+ul {
+  padding-left: 16px;
+  margin: 4px 0;
+}
+h4 {
+  margin: 12px 0 6px;
+}
+h5 {
+  margin: 0 0 8px;
+}
 
-.mt { margin-top: 16px; }
-.mb { margin-bottom: 8px; }
+.mt {
+  margin-top: 16px;
+}
+.mb {
+  margin-bottom: 8px;
+}
 
 /* ===== Responsive ===== */
 @media (max-width: 1024px) {
-  .hero-metrics { grid-template-columns: 1fr 1fr; }
-  .input-split { grid-template-columns: 1fr; }
-  .rag-confidence-metrics { grid-template-columns: 1fr 1fr; }
+  .hero-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+  .input-split {
+    grid-template-columns: 1fr;
+  }
+  .rag-confidence-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 768px) {
-  .analysis-hero { padding: 18px; }
-  .hero-metrics { grid-template-columns: 1fr; }
-  .score-center { flex-direction: column; text-align: center; }
-  .action-bar { flex-direction: column; align-items: flex-start; }
-  .pipeline-status { grid-template-columns: 1fr; }
-  .rag-confidence-metrics { grid-template-columns: 1fr; }
-  .rag-breakdown { grid-template-columns: 1fr; }
+  .analysis-hero {
+    padding: 18px;
+  }
+  .hero-metrics {
+    grid-template-columns: 1fr;
+  }
+  .score-center {
+    flex-direction: column;
+    text-align: center;
+  }
+  .action-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .pipeline-status {
+    grid-template-columns: 1fr;
+  }
+  .rag-confidence-metrics {
+    grid-template-columns: 1fr;
+  }
+  .rag-breakdown {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 560px) {
-  .panel-body { padding: 16px; }
-  .hero-metrics { grid-template-columns: 1fr; }
-  .hero-title-main h2 { font-size: 26px; }
+  .panel-body {
+    padding: 16px;
+  }
+  .hero-metrics {
+    grid-template-columns: 1fr;
+  }
+  .hero-title-main h2 {
+    font-size: 26px;
+  }
 }
 </style>

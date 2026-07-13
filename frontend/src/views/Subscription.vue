@@ -7,7 +7,12 @@
 
     <!-- 定价卡片 -->
     <div class="pricing-grid">
-      <div v-for="plan in plans" :key="plan.id" class="pricing-card" :class="{ popular: plan.popular }">
+      <div
+        v-for="plan in plans"
+        :key="plan.id"
+        class="pricing-card"
+        :class="{ popular: plan.popular }"
+      >
         <div v-if="plan.popular" class="popular-badge">最受欢迎</div>
         <div class="plan-header">
           <h3>{{ plan.name }}</h3>
@@ -21,7 +26,12 @@
         <div class="plan-features">
           <div v-for="(group, gIdx) in plan.features" :key="gIdx" class="feature-group">
             <div class="feature-group-title">{{ group.label }}</div>
-            <div v-for="f in group.items" :key="f.text" class="feature-item" :class="{ disabled: !f.available }">
+            <div
+              v-for="f in group.items"
+              :key="f.text"
+              class="feature-item"
+              :class="{ disabled: !f.available }"
+            >
               <el-icon v-if="f.available" class="feat-icon feat-yes"><CircleCheckFilled /></el-icon>
               <el-icon v-else class="feat-icon feat-no"><Close /></el-icon>
               <span>{{ f.text }}</span>
@@ -123,13 +133,16 @@ async function loadPlans() {
   try {
     const data = await getSubscriptionPlans()
     if (data?.items) {
-      plans.value = data.items.map((p, i) => ({
+      plans.value = data.items.map((p) => ({
         id: p.tier,
         name: p.name,
         price: p.tier === 'free' ? '¥0' : p.tier === 'pro' ? '¥99' : '定制',
-        desc: p.tier === 'free' ? '适合求职初期，体验核心功能'
-          : p.tier === 'pro' ? '适合求职冲刺，全面发挥 AI 能力'
-          : '适合招聘团队和企业 HR 部门',
+        desc:
+          p.tier === 'free'
+            ? '适合求职初期，体验核心功能'
+            : p.tier === 'pro'
+              ? '适合求职冲刺，全面发挥 AI 能力'
+              : '适合招聘团队和企业 HR 部门',
         popular: p.tier === 'pro',
         features: buildFeatureGroups(p.features),
       }))
@@ -144,7 +157,10 @@ function buildFeatureGroups(features) {
   const groups = []
   // 简历
   const resumeItems = [
-    { text: `${features.resume_limit === -1 ? '不限' : features.resume_limit} 份简历`, available: true },
+    {
+      text: `${features.resume_limit === -1 ? '不限' : features.resume_limit} 份简历`,
+      available: true,
+    },
     { text: '简历解析与评分', available: true },
     { text: 'AI 简历优化', available: features.can_use_deep_analysis },
     { text: 'ATS 友好度检测', available: features.can_use_ats_check },
@@ -152,7 +168,8 @@ function buildFeatureGroups(features) {
   groups.push({ label: '简历', items: resumeItems })
 
   // 面试
-  const interviewLimit = features.daily_interview_limit === -1 ? '不限' : `${features.daily_interview_limit} 次/日`
+  const interviewLimit =
+    features.daily_interview_limit === -1 ? '不限' : `${features.daily_interview_limit} 次/日`
   const interviewItems = [
     { text: `模拟面试 (${interviewLimit})`, available: true },
     { text: '面试报告与评估', available: true },
@@ -162,7 +179,10 @@ function buildFeatureGroups(features) {
   groups.push({ label: '面试', items: interviewItems })
 
   // 岗位
-  const recLimit = features.daily_recommendation_limit === -1 ? '不限' : `${features.daily_recommendation_limit} 次/日`
+  const recLimit =
+    features.daily_recommendation_limit === -1
+      ? '不限'
+      : `${features.daily_recommendation_limit} 次/日`
   const jobItems = [
     { text: `岗位推荐 (${recLimit})`, available: true },
     { text: '投递看板', available: true },
@@ -175,7 +195,10 @@ function buildFeatureGroups(features) {
   const otherItems = [
     { text: '职业规划', available: true },
     { text: '薪资洞察', available: true },
-    { text: `AI 深度分析 (${features.daily_analysis_limit === -1 ? '不限' : `${features.daily_analysis_limit} 次/日`})`, available: features.can_use_deep_analysis },
+    {
+      text: `AI 深度分析 (${features.daily_analysis_limit === -1 ? '不限' : `${features.daily_analysis_limit} 次/日`})`,
+      available: features.can_use_deep_analysis,
+    },
     { text: '完整报告导出', available: features.can_export_full_report },
   ]
   groups.push({ label: '其他', items: otherItems })
@@ -187,9 +210,10 @@ function buildComparisonRows(apiPlans) {
   return Object.entries(featuresDisplay).map(([key, meta]) => ({
     label: meta.label,
     values: {
-      free: !!meta.free || apiPlans.find(p => p.tier === 'free')?.features?.[key],
-      pro: !!meta.pro || apiPlans.find(p => p.tier === 'pro')?.features?.[key],
-      enterprise: !!meta.enterprise || apiPlans.find(p => p.tier === 'enterprise')?.features?.[key],
+      free: !!meta.free || apiPlans.find((p) => p.tier === 'free')?.features?.[key],
+      pro: !!meta.pro || apiPlans.find((p) => p.tier === 'pro')?.features?.[key],
+      enterprise:
+        !!meta.enterprise || apiPlans.find((p) => p.tier === 'enterprise')?.features?.[key],
     },
   }))
 }
@@ -198,11 +222,13 @@ async function loadUserSubscription() {
   try {
     const data = await getMySubscription()
     if (data) userSubscription.value = data
-  } catch {}
+  } catch {
+    // 订阅状态不可用时保持免费版默认展示。
+  }
 }
 
 const paying = ref(false)
-const payResult = ref(null)  // {success, order_id, message}
+const payResult = ref(null) // {success, order_id, message}
 
 async function selectPlan(plan) {
   if (plan.id === 'free') return
@@ -214,11 +240,11 @@ async function selectPlan(plan) {
 
   // Pro 版：确认 → 创建订单 → 模拟支付
   try {
-    await ElMessageBox.confirm(
-      `确认升级到 ${plan.name} (${plan.price}/月)？`,
-      '升级确认',
-      { confirmButtonText: '确认升级', cancelButtonText: '取消', type: 'info' }
-    )
+    await ElMessageBox.confirm(`确认升级到 ${plan.name} (${plan.price}/月)？`, '升级确认', {
+      confirmButtonText: '确认升级',
+      cancelButtonText: '取消',
+      type: 'info',
+    })
   } catch {
     return
   }
@@ -258,8 +284,7 @@ onMounted(() => {
 
 <style scoped>
 .page-shell {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -300,7 +325,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
 }
 
 .pricing-card:hover {
@@ -395,9 +422,16 @@ onMounted(() => {
   opacity: 0.6;
 }
 
-.feat-icon { font-size: 16px; flex-shrink: 0; }
-.feat-yes { color: var(--app-success); }
-.feat-no { color: var(--app-muted); }
+.feat-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.feat-yes {
+  color: var(--app-success);
+}
+.feat-no {
+  color: var(--app-muted);
+}
 
 .plan-action {
   padding: 16px 24px 24px;
@@ -484,8 +518,14 @@ onMounted(() => {
   min-width: 160px;
 }
 
-.cmp-yes { color: var(--app-success); font-size: 18px; }
-.cmp-no { color: #d1d5db; font-size: 18px; }
+.cmp-yes {
+  color: var(--app-success);
+  font-size: 18px;
+}
+.cmp-no {
+  color: #d1d5db;
+  font-size: 18px;
+}
 
 @media (max-width: 900px) {
   .pricing-grid {

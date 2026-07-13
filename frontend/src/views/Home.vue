@@ -4,7 +4,11 @@
     <section class="welcome-bar">
       <div class="welcome-left">
         <h1>求职助手</h1>
-        <p class="welcome-sub">{{ greeting }}，{{ username }}。{{ overviewLoaded ? `当前有 ${overview.active_applications || 0} 个活跃投递` : '加载中...' }}</p>
+        <p class="welcome-sub">
+          {{ greeting }}，{{ username }}。{{
+            overviewLoaded ? `当前有 ${overview.active_applications || 0} 个活跃投递` : '加载中...'
+          }}
+        </p>
       </div>
       <div class="welcome-actions">
         <el-button type="primary" @click="go('/jobs/pipeline/kanban')">
@@ -16,32 +20,58 @@
       </div>
     </section>
 
+    <el-alert
+      v-if="overviewError"
+      class="dashboard-error"
+      type="warning"
+      :closable="false"
+      show-icon
+      title="求职概览加载失败"
+      description="其他工作台功能仍可使用。请检查网络连接后重新加载概览数据。"
+    >
+      <template #default>
+        <el-button size="small" type="primary" plain @click="loadDashboard">重新加载</el-button>
+      </template>
+    </el-alert>
+
     <!-- 核心功能入口 -->
     <section class="core-entrance-row">
       <div class="core-card core-resume" @click="go('/resume-center')">
-        <div class="core-icon"><el-icon :size="32"><Document /></el-icon></div>
+        <div class="core-icon">
+          <el-icon :size="32"><Document /></el-icon>
+        </div>
         <div class="core-info">
           <h3>简历中心</h3>
           <p>管理、优化、诊断多份简历</p>
-          <span class="core-meta">{{ overviewLoaded ? (overview.resume_count || '--') + ' 份简历' : '加载中...' }}</span>
+          <span class="core-meta">{{
+            overviewLoaded ? (overview.resume_count || '--') + ' 份简历' : '加载中...'
+          }}</span>
         </div>
         <el-icon class="core-arrow"><ArrowRight /></el-icon>
       </div>
       <div class="core-card core-job" @click="go('/jobs/recommend')">
-        <div class="core-icon"><el-icon :size="32"><Search /></el-icon></div>
+        <div class="core-icon">
+          <el-icon :size="32"><Search /></el-icon>
+        </div>
         <div class="core-info">
           <h3>岗位推荐</h3>
           <p>智能匹配每日高匹配岗位</p>
-          <span class="core-meta">{{ overviewLoaded ? (overview.recommend_count || '--') + ' 个推荐' : '加载中...' }}</span>
+          <span class="core-meta">{{
+            overviewLoaded ? (overview.recommend_count || '--') + ' 个推荐' : '加载中...'
+          }}</span>
         </div>
         <el-icon class="core-arrow"><ArrowRight /></el-icon>
       </div>
       <div class="core-card core-interview" @click="go('/interview/setup')">
-        <div class="core-icon"><el-icon :size="32"><Microphone /></el-icon></div>
+        <div class="core-icon">
+          <el-icon :size="32"><Microphone /></el-icon>
+        </div>
         <div class="core-info">
           <h3>AI 模拟面试</h3>
           <p>针对性面试训练、能力评估</p>
-          <span class="core-meta">{{ overviewLoaded ? (overview.interview_count || '--') + ' 次面试' : '加载中...' }}</span>
+          <span class="core-meta">{{
+            overviewLoaded ? (overview.interview_count || '--') + ' 次面试' : '加载中...'
+          }}</span>
         </div>
         <el-icon class="core-arrow"><ArrowRight /></el-icon>
       </div>
@@ -61,9 +91,21 @@
           <div v-if="tasksLoading" class="loading-state">
             <el-icon class="is-loading"><Loading /></el-icon> 加载中...
           </div>
+          <div v-else-if="tasksError" class="error-state">
+            <p>今日待办加载失败</p>
+            <el-button size="small" type="primary" plain @click="loadDashboard">重新加载</el-button>
+          </div>
           <div v-else-if="!tasks.tasks?.length" class="empty-state">
             <p>今日暂无待办</p>
             <span>建议浏览推荐岗位或跟进已有投递</span>
+            <div class="empty-actions">
+              <el-button size="small" type="primary" @click="go('/jobs/recommend')">
+                查看推荐岗位
+              </el-button>
+              <el-button size="small" @click="go('/jobs/pipeline/kanban')">
+                查看投递看板
+              </el-button>
+            </div>
           </div>
           <div v-else class="task-list">
             <div
@@ -95,6 +137,10 @@
         <div class="panel-body">
           <div v-if="aiLoading" class="loading-state">
             <el-icon class="is-loading"><Loading /></el-icon> 分析中...
+          </div>
+          <div v-else-if="aiError" class="error-state">
+            <p>AI 建议暂时不可用</p>
+            <el-button size="small" type="primary" plain @click="loadDashboard">重新加载</el-button>
           </div>
           <div v-else class="suggestion-list">
             <div
@@ -145,31 +191,43 @@
 
       <div class="metrics-grid">
         <div class="metric-card">
-          <div class="metric-icon blue"><el-icon><Document /></el-icon></div>
+          <div class="metric-icon blue">
+            <el-icon><Document /></el-icon>
+          </div>
           <div class="metric-body">
             <span class="metric-label">本周投递</span>
             <strong class="data-value">{{ overviewLoaded ? overview.weekly_new : '-' }}</strong>
           </div>
         </div>
         <div class="metric-card">
-          <div class="metric-icon amber"><el-icon><ChatDotRound /></el-icon></div>
+          <div class="metric-icon amber">
+            <el-icon><ChatDotRound /></el-icon>
+          </div>
           <div class="metric-body">
             <span class="metric-label">面试率</span>
             <strong class="data-value">{{ interviewRate }}</strong>
           </div>
         </div>
         <div class="metric-card">
-          <div class="metric-icon violet"><el-icon><Histogram /></el-icon></div>
+          <div class="metric-icon violet">
+            <el-icon><Histogram /></el-icon>
+          </div>
           <div class="metric-body">
             <span class="metric-label">平均匹配</span>
-            <strong class="data-value">{{ overviewLoaded ? (overview.avg_match_score ?? '--') : '-' }}</strong>
+            <strong class="data-value">{{
+              overviewLoaded ? (overview.avg_match_score ?? '--') : '-'
+            }}</strong>
           </div>
         </div>
         <div class="metric-card">
-          <div class="metric-icon green"><el-icon><Trophy /></el-icon></div>
+          <div class="metric-icon green">
+            <el-icon><Trophy /></el-icon>
+          </div>
           <div class="metric-body">
             <span class="metric-label">Offer 数</span>
-            <strong class="data-value">{{ overviewLoaded ? (overview.pending_offers || 0) : '-' }}</strong>
+            <strong class="data-value">{{
+              overviewLoaded ? overview.pending_offers || 0 : '-'
+            }}</strong>
           </div>
         </div>
       </div>
@@ -186,11 +244,7 @@
         </div>
         <div class="panel-body">
           <div v-if="overviewLoaded" class="trend-chart">
-            <div
-              v-for="(day, idx) in overview.trend"
-              :key="idx"
-              class="trend-bar-col"
-            >
+            <div v-for="(day, idx) in overview.trend" :key="idx" class="trend-bar-col">
               <div class="trend-bar" :style="{ height: trendHeight(day.count) }" />
               <span class="trend-count">{{ day.count }}</span>
               <span class="trend-date">{{ day.date.slice(5) }}</span>
@@ -206,27 +260,39 @@
         <h3>快捷入口</h3>
         <div class="quick-grid">
           <button class="quick-btn" @click="go('/jobs/pipeline/kanban')">
-            <div class="quick-icon blue"><el-icon><Grid /></el-icon></div>
+            <div class="quick-icon blue">
+              <el-icon><Grid /></el-icon>
+            </div>
             <span>投递看板</span>
           </button>
           <button class="quick-btn" @click="go('/jobs/recommend')">
-            <div class="quick-icon amber"><el-icon><Search /></el-icon></div>
+            <div class="quick-icon amber">
+              <el-icon><Search /></el-icon>
+            </div>
             <span>岗位推荐</span>
           </button>
           <button class="quick-btn" @click="go('/resume-center')">
-            <div class="quick-icon violet"><el-icon><Document /></el-icon></div>
+            <div class="quick-icon violet">
+              <el-icon><Document /></el-icon>
+            </div>
             <span>简历中心</span>
           </button>
           <button class="quick-btn" @click="go('/interview/setup')">
-            <div class="quick-icon green"><el-icon><Microphone /></el-icon></div>
+            <div class="quick-icon green">
+              <el-icon><Microphone /></el-icon>
+            </div>
             <span>模拟面试</span>
           </button>
           <button class="quick-btn" @click="go('/targets')">
-            <div class="quick-icon teal"><el-icon><Aim /></el-icon></div>
+            <div class="quick-icon teal">
+              <el-icon><Aim /></el-icon>
+            </div>
             <span>求职目标</span>
           </button>
           <button class="quick-btn" @click="go('/salary')">
-            <div class="quick-icon red"><el-icon><Coin /></el-icon></div>
+            <div class="quick-icon red">
+              <el-icon><Coin /></el-icon>
+            </div>
             <span>薪资洞察</span>
           </button>
         </div>
@@ -276,19 +342,23 @@ const greeting = computed(() => {
 // ---- 数据 ----
 const overview = ref({})
 const overviewLoaded = ref(false)
+const overviewError = ref(false)
 const tasks = ref({ tasks: [], high_priority: 0 })
 const tasksLoading = ref(true)
+const tasksError = ref(false)
 const aiSuggestions = ref([])
 const aiLoading = ref(true)
+const aiError = ref(false)
 
 const interviewRate = computed(() => {
   if (!overviewLoaded.value) return '-'
-  const total = overview.value.total_applications || 0
+  const summary = overview.value.summary || overview.value
+  const total = summary.total_applications || 0
   const interviews = overview.value.stage_counts?.interview || 0
   const offers = overview.value.stage_counts?.offer || 0
   const accepted = overview.value.stage_counts?.accepted || 0
   const hit = interviews + offers + accepted
-  return total > 0 ? Math.round(hit / total * 100) + '%' : '--'
+  return total > 0 ? Math.round((hit / total) * 100) + '%' : '--'
 })
 
 const funnelStages = computed(() => {
@@ -304,12 +374,12 @@ const funnelStages = computed(() => {
 })
 
 const maxFunnel = computed(() => {
-  return Math.max(1, ...funnelStages.value.map(s => s.count))
+  return Math.max(1, ...funnelStages.value.map((s) => s.count))
 })
 
 const maxTrend = computed(() => {
   if (!overviewLoaded.value) return 1
-  return Math.max(1, ...(overview.value.trend || []).map(d => d.count))
+  return Math.max(1, ...(overview.value.trend || []).map((d) => d.count))
 })
 
 function funnelBarHeight(count) {
@@ -320,7 +390,12 @@ function trendHeight(count) {
   return Math.max(4, (count / maxTrend.value) * 100) + '%'
 }
 
-onMounted(async () => {
+async function loadDashboard() {
+  overviewError.value = false
+  tasksError.value = false
+  aiError.value = false
+  tasksLoading.value = true
+  aiLoading.value = true
   try {
     const [ov, tk, ai] = await Promise.allSettled([
       getDashboardOverview(),
@@ -330,24 +405,31 @@ onMounted(async () => {
     if (ov.status === 'fulfilled') {
       overview.value = ov.value
       overviewLoaded.value = true
+    } else {
+      overviewError.value = true
     }
     if (tk.status === 'fulfilled') {
       tasks.value = tk.value
+    } else {
+      tasksError.value = true
     }
     if (ai.status === 'fulfilled') {
       aiSuggestions.value = ai.value?.suggestions || []
+    } else {
+      aiError.value = true
     }
   } finally {
     tasksLoading.value = false
     aiLoading.value = false
   }
-})
+}
+
+onMounted(loadDashboard)
 </script>
 
 <style scoped>
 .dashboard-page {
-  max-width: 1280px;
-  margin: 0 auto;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -420,9 +502,15 @@ onMounted(async () => {
   box-shadow: var(--app-shadow-hover);
 }
 
-.core-resume:hover { border-color: var(--app-violet); }
-.core-job:hover { border-color: var(--app-warning); }
-.core-interview:hover { border-color: var(--app-success); }
+.core-resume:hover {
+  border-color: var(--app-violet);
+}
+.core-job:hover {
+  border-color: var(--app-warning);
+}
+.core-interview:hover {
+  border-color: var(--app-success);
+}
 
 .core-icon {
   width: 52px;
@@ -434,9 +522,18 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.core-resume .core-icon { background: var(--app-violet-light); color: var(--app-violet); }
-.core-job .core-icon { background: #fef5e7; color: var(--app-warning); }
-.core-interview .core-icon { background: #e8f8ee; color: var(--app-success); }
+.core-resume .core-icon {
+  background: var(--app-violet-light);
+  color: var(--app-violet);
+}
+.core-job .core-icon {
+  background: #fef5e7;
+  color: var(--app-warning);
+}
+.core-interview .core-icon {
+  background: #e8f8ee;
+  color: var(--app-success);
+}
 
 .core-info {
   flex: 1;
@@ -485,17 +582,34 @@ onMounted(async () => {
 }
 
 .loading-state,
-.empty-state {
+.empty-state,
+.error-state {
   text-align: center;
   padding: 20px 0;
   color: var(--app-muted);
   font-size: 14px;
 }
 
+.dashboard-error {
+  margin: 0;
+}
+
+.error-state p {
+  margin: 0 0 10px;
+}
+
 .empty-state span {
   display: block;
   margin-top: 4px;
   font-size: 12px;
+}
+
+.empty-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
 }
 
 /* ===== Top Row ===== */
@@ -533,9 +647,15 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.dot-high { background: var(--app-danger); }
-.dot-medium { background: var(--app-warning); }
-.dot-low { background: var(--app-success); }
+.dot-high {
+  background: var(--app-danger);
+}
+.dot-medium {
+  background: var(--app-warning);
+}
+.dot-low {
+  background: var(--app-success);
+}
 
 .task-info {
   flex: 1;
@@ -701,10 +821,22 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.metric-icon.blue { background: var(--app-primary-light); color: var(--app-primary); }
-.metric-icon.amber { background: #fef5e7; color: var(--app-warning); }
-.metric-icon.violet { background: var(--app-violet-light); color: var(--app-violet); }
-.metric-icon.green { background: #e8f8ee; color: var(--app-success); }
+.metric-icon.blue {
+  background: var(--app-primary-light);
+  color: var(--app-primary);
+}
+.metric-icon.amber {
+  background: #fef5e7;
+  color: var(--app-warning);
+}
+.metric-icon.violet {
+  background: var(--app-violet-light);
+  color: var(--app-violet);
+}
+.metric-icon.green {
+  background: #e8f8ee;
+  color: var(--app-success);
+}
 
 .metric-label {
   display: block;
@@ -819,18 +951,42 @@ onMounted(async () => {
   justify-content: center;
 }
 
-.quick-icon.blue { background: var(--app-primary-light); color: var(--app-primary); }
-.quick-icon.amber { background: #fef5e7; color: var(--app-warning); }
-.quick-icon.violet { background: var(--app-violet-light); color: var(--app-violet); }
-.quick-icon.green { background: #e8f8ee; color: var(--app-success); }
-.quick-icon.teal { background: #e6fffa; color: #0d9488; }
-.quick-icon.red { background: var(--app-accent-soft); color: var(--app-accent); }
+.quick-icon.blue {
+  background: var(--app-primary-light);
+  color: var(--app-primary);
+}
+.quick-icon.amber {
+  background: #fef5e7;
+  color: var(--app-warning);
+}
+.quick-icon.violet {
+  background: var(--app-violet-light);
+  color: var(--app-violet);
+}
+.quick-icon.green {
+  background: #e8f8ee;
+  color: var(--app-success);
+}
+.quick-icon.teal {
+  background: #e6fffa;
+  color: #0d9488;
+}
+.quick-icon.red {
+  background: var(--app-accent-soft);
+  color: var(--app-accent);
+}
 
 /* ===== Responsive ===== */
 @media (max-width: 1024px) {
-  .top-row { grid-template-columns: 1fr; }
-  .middle-row { grid-template-columns: 1fr; }
-  .bottom-row { grid-template-columns: 1fr; }
+  .top-row {
+    grid-template-columns: 1fr;
+  }
+  .middle-row {
+    grid-template-columns: 1fr;
+  }
+  .bottom-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
@@ -840,15 +996,27 @@ onMounted(async () => {
     gap: 14px;
   }
 
-  .welcome-bar h1 { font-size: 22px; }
+  .welcome-bar h1 {
+    font-size: 22px;
+  }
 
-  .metrics-grid { grid-template-columns: 1fr 1fr; }
-  .quick-grid { grid-template-columns: repeat(2, 1fr); }
+  .metrics-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .quick-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 560px) {
-  .metrics-grid { grid-template-columns: 1fr; }
-  .quick-grid { grid-template-columns: 1fr; }
-  .funnel-bar { gap: 6px; }
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  .quick-grid {
+    grid-template-columns: 1fr;
+  }
+  .funnel-bar {
+    gap: 6px;
+  }
 }
 </style>

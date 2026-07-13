@@ -116,7 +116,6 @@ import { computed, onMounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowDown,
-  Aim,
   Clock,
   Coin,
   DataAnalysis,
@@ -200,7 +199,7 @@ function handleCommand(cmd) {
 
 onMounted(async () => {
   try {
-    const data = await getSystemStatus()
+    const data = await getSystemStatus({ notifyError: false })
     runtime.demoMode = !!data?.demo_mode
   } catch {
     runtime.demoMode = false

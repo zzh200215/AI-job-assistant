@@ -69,6 +69,15 @@
             <p>输入邮箱或用户名继续</p>
           </div>
 
+          <el-alert
+            v-if="loginError"
+            class="login-error"
+            :title="loginError"
+            type="error"
+            :closable="false"
+            show-icon
+          />
+
           <el-form ref="formRef" :model="form" :rules="rules" label-width="0" @keyup.enter="handleLogin">
             <div class="field">
               <label for="account">邮箱或用户名</label>
@@ -168,6 +177,7 @@ const authStore = useAuthStore()
 const formRef = ref()
 const loading = ref(false)
 const rememberMe = ref(false)
+const loginError = ref('')
 
 const form = ref({ account: '', password: '' })
 
@@ -191,6 +201,7 @@ const handleSocialLogin = (provider) => {
 
 const handleLogin = async () => {
   if (loading.value) return
+  loginError.value = ''
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
 
@@ -199,6 +210,8 @@ const handleLogin = async () => {
     await authStore.login(form.value.account, form.value.password)
     ElMessage.success('登录成功')
     router.replace(authStore.homeRoute)
+  } catch (error) {
+    loginError.value = error?.userMessage || error?.message || '登录失败，请检查账号和密码'
   } finally {
     loading.value = false
   }
@@ -373,6 +386,10 @@ const handleLogin = async () => {
   margin: 8px 0 0;
   color: var(--app-muted);
   font-size: 14px;
+}
+
+.login-error {
+  margin: -10px 0 18px;
 }
 
 /* Fields */

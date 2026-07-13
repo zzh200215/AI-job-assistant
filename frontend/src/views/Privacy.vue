@@ -52,7 +52,10 @@
             <p>我们收集以下类型的信息以提供求职服务：</p>
             <ul>
               <li><b>账号信息：</b>用户名、邮箱地址（用于登录和通知）</li>
-              <li><b>简历内容：</b>您上传的简历文件及其解析结果（姓名、联系方式、教育经历、工作经历、技能等）</li>
+              <li>
+                <b>简历内容：</b
+                >您上传的简历文件及其解析结果（姓名、联系方式、教育经历、工作经历、技能等）
+              </li>
               <li><b>求职偏好：</b>期望岗位、薪资、城市、行业等偏好设置</li>
               <li><b>面试记录：</b>模拟面试中的问答对话、评分结果、AI 分析报告</li>
               <li><b>使用数据：</b>功能使用频率、页面访问路径、操作行为（用于优化产品）</li>
@@ -150,45 +153,134 @@ async function exportData() {
 
 async function deleteResumes() {
   try {
-    await ElMessageBox.confirm('将删除所有简历文件及其解析结果，此操作不可恢复。确定继续？', '删除简历', { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' })
+    await ElMessageBox.confirm(
+      '将删除所有简历文件及其解析结果，此操作不可恢复。确定继续？',
+      '删除简历',
+      { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
+    )
     await request.delete('/auth/data/resumes')
     ElMessage.success('简历已删除')
-  } catch {}
+  } catch (error) {
+    notifyDeleteFailure(error, '删除简历')
+  }
 }
 
 async function deleteAnalyses() {
   try {
-    await ElMessageBox.confirm('将删除所有分析记录和报告，此操作不可恢复。确定继续？', '删除分析记录', { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' })
+    await ElMessageBox.confirm(
+      '将删除所有分析记录和报告，此操作不可恢复。确定继续？',
+      '删除分析记录',
+      { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
+    )
     await request.delete('/auth/data/analyses')
     ElMessage.success('分析记录已删除')
-  } catch {}
+  } catch (error) {
+    notifyDeleteFailure(error, '删除分析记录')
+  }
 }
 
 async function deleteInterviews() {
   try {
-    await ElMessageBox.confirm('将删除所有面试记录和评分结果，此操作不可恢复。确定继续？', '删除面试记录', { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' })
+    await ElMessageBox.confirm(
+      '将删除所有面试记录和评分结果，此操作不可恢复。确定继续？',
+      '删除面试记录',
+      { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
+    )
     await request.delete('/auth/data/interviews')
     ElMessage.success('面试记录已删除')
-  } catch {}
+  } catch (error) {
+    notifyDeleteFailure(error, '删除面试记录')
+  }
+}
+
+function notifyDeleteFailure(error, action) {
+  if (error === 'cancel' || error === 'close') return
+  ElMessage.error(`${action}失败，请稍后重试`)
 }
 </script>
 
 <style scoped>
-.page-shell { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; padding: 18px 0; }
-.panel { border-radius: 16px; border: 1px solid var(--app-line); background: #fff; box-shadow: var(--app-shadow-soft); }
-.panel-header { padding: 16px 20px; border-bottom: 1px solid var(--app-line); }
-.panel-header h3 { margin: 0; font-size: 16px; font-weight: 700; }
-.panel-body { padding: 20px; }
+.page-shell {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px 0;
+}
+.panel {
+  border-radius: 16px;
+  border: 1px solid var(--app-line);
+  background: #fff;
+  box-shadow: var(--app-shadow-soft);
+}
+.panel-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--app-line);
+}
+.panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.panel-body {
+  padding: 20px;
+}
 
-.data-actions { display: flex; flex-direction: column; gap: 12px; }
-.data-action-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px; border-radius: 10px; background: var(--app-bg); border: 1px solid var(--app-line); }
-.data-action-row strong { display: block; font-size: 14px; font-weight: 600; }
-.data-action-row p { margin: 4px 0 0; font-size: 13px; color: var(--app-muted); }
+.data-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.data-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--app-bg);
+  border: 1px solid var(--app-line);
+}
+.data-action-row strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+.data-action-row p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--app-muted);
+}
 
-.privacy-content section { margin-bottom: 24px; }
-.privacy-content h4 { margin: 0 0 8px; font-size: 15px; font-weight: 700; color: var(--app-text); }
-.privacy-content p { margin: 0 0 8px; font-size: 14px; line-height: 1.7; color: var(--app-muted); }
-.privacy-content ul { margin: 0; padding-left: 18px; }
-.privacy-content li { margin-bottom: 6px; font-size: 14px; line-height: 1.6; color: var(--app-muted); }
-.privacy-date { margin-top: 16px; font-size: 12px; color: var(--app-muted); text-align: center; }
+.privacy-content section {
+  margin-bottom: 24px;
+}
+.privacy-content h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--app-text);
+}
+.privacy-content p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--app-muted);
+}
+.privacy-content ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.privacy-content li {
+  margin-bottom: 6px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--app-muted);
+}
+.privacy-date {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--app-muted);
+  text-align: center;
+}
 </style>

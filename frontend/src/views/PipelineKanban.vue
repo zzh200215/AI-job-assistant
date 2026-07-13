@@ -7,10 +7,18 @@
       </div>
       <div class="header-actions">
         <el-button-group class="view-toggle">
-          <el-button :type="viewMode === 'kanban' ? 'primary' : ''" size="small" @click="viewMode = 'kanban'">
+          <el-button
+            :type="viewMode === 'kanban' ? 'primary' : ''"
+            size="small"
+            @click="viewMode = 'kanban'"
+          >
             <el-icon><Grid /></el-icon> 看板
           </el-button>
-          <el-button :type="viewMode === 'list' ? 'primary' : ''" size="small" @click="viewMode = 'list'">
+          <el-button
+            :type="viewMode === 'list' ? 'primary' : ''"
+            size="small"
+            @click="viewMode = 'list'"
+          >
             <el-icon><List /></el-icon> 列表
           </el-button>
         </el-button-group>
@@ -59,11 +67,7 @@
           </div>
         </div>
         <div class="stats-funnel">
-          <div
-            v-for="(stage, idx) in funnelData"
-            :key="stage.key"
-            class="funnel-bar-wrapper"
-          >
+          <div v-for="(stage, idx) in funnelData" :key="stage.key" class="funnel-bar-wrapper">
             <div class="funnel-label-row">
               <span class="funnel-label">{{ stage.label }}</span>
               <span class="funnel-count">{{ stage.count }}</span>
@@ -77,7 +81,9 @@
             </div>
             <div v-if="idx < funnelData.length - 1" class="funnel-arrow">
               <el-icon><ArrowRight /></el-icon>
-              <span class="funnel-rate">{{ stageToRate(stage.key, funnelData[idx + 1]?.key) }}</span>
+              <span class="funnel-rate">{{
+                stageToRate(stage.key, funnelData[idx + 1]?.key)
+              }}</span>
             </div>
           </div>
         </div>
@@ -87,6 +93,14 @@
     <!-- 看板列 -->
     <div v-if="loading" class="loading-state">
       <el-icon class="is-loading"><Loading /></el-icon> 加载中...
+    </div>
+
+    <div v-else-if="loadError" class="load-error">
+      <div>
+        <strong>投递记录加载失败</strong>
+        <span>{{ loadError }}</span>
+      </div>
+      <el-button @click="loadKanban">重新加载</el-button>
     </div>
 
     <div v-else class="kanban-board">
@@ -101,76 +115,87 @@
       </el-empty>
 
       <template v-else>
-      <div
-        v-for="col in columns"
-        :key="col.key"
-        class="kanban-col"
-        :class="col.accent"
-        @dragover.prevent
-        @drop="onDrop($event, col.key)"
-      >
-        <div class="col-header">
-          <div class="col-dot" :class="'dot-' + col.accent" />
-          <h3>{{ col.label }}</h3>
-          <span class="col-count">{{ (kanban[col.key] || []).length }}</span>
-        </div>
+        <div
+          v-for="col in columns"
+          :key="col.key"
+          class="kanban-col"
+          :class="col.accent"
+          @dragover.prevent
+          @drop="onDrop($event, col.key)"
+        >
+          <div class="col-header">
+            <div class="col-dot" :class="'dot-' + col.accent" />
+            <h3>{{ col.label }}</h3>
+            <span class="col-count">{{ (kanban[col.key] || []).length }}</span>
+          </div>
 
-        <div class="col-body">
-          <div
-            v-for="card in (kanban[col.key] || [])"
-            :key="card.id"
-            class="kanban-card"
-            draggable="true"
-            @dragstart="onDragStart($event, card)"
-          >
-            <div class="card-top">
-              <strong class="card-title">{{ card.title || card.company || '未命名岗位' }}</strong>
-              <el-dropdown trigger="click" @command="cmd => handleCardCmd(cmd, card)">
-                <el-icon class="card-more"><MoreFilled /></el-icon>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="detail">查看详情</el-dropdown-item>
-                    <el-dropdown-item command="analyze">AI分析</el-dropdown-item>
-                    <el-dropdown-item v-if="col.key === 'interview'" command="interview">模拟面试</el-dropdown-item>
-                    <el-dropdown-item command="reject" divided style="color: var(--app-danger)">标记拒绝</el-dropdown-item>
-                    <el-dropdown-item command="abandon" style="color: var(--app-muted)">放弃</el-dropdown-item>
-                    <el-dropdown-item command="delete" style="color: var(--app-danger)">删除</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-            </div>
-
-            <div v-if="card.company" class="card-company">
-              <el-icon><OfficeBuilding /></el-icon> {{ card.company }}
-            </div>
-
-            <div class="card-meta">
-              <span v-if="card.salary_range"><el-icon><Coin /></el-icon> {{ card.salary_range }}</span>
-              <span v-if="card.match_score" class="card-score">
-                <el-icon><Histogram /></el-icon> {{ Math.round(card.match_score) }}分
-              </span>
-            </div>
-
-            <div v-if="card.interview_at && col.key === 'interview'" class="card-interview">
-              <el-icon><Clock /></el-icon>
-              {{ formatDate(card.interview_at) }}
-            </div>
-
-            <div class="card-footer">
-              <!-- 跟进提醒 -->
-              <div v-if="needsFollowUp(card)" :class="'card-follow follow-' + followUpLevel(card)">
-                <el-icon><WarningFilled /></el-icon> {{ followUpDays(card) }}天未回复
+          <div class="col-body">
+            <div
+              v-for="card in kanban[col.key] || []"
+              :key="card.id"
+              class="kanban-card"
+              draggable="true"
+              @dragstart="onDragStart($event, card)"
+            >
+              <div class="card-top">
+                <strong class="card-title">{{ card.title || card.company || '未命名岗位' }}</strong>
+                <el-dropdown trigger="click" @command="(cmd) => handleCardCmd(cmd, card)">
+                  <el-icon class="card-more"><MoreFilled /></el-icon>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="detail">查看详情</el-dropdown-item>
+                      <el-dropdown-item command="analyze">AI分析</el-dropdown-item>
+                      <el-dropdown-item v-if="col.key === 'interview'" command="interview"
+                        >模拟面试</el-dropdown-item
+                      >
+                      <el-dropdown-item command="reject" divided style="color: var(--app-danger)"
+                        >标记拒绝</el-dropdown-item
+                      >
+                      <el-dropdown-item command="abandon" style="color: var(--app-muted)"
+                        >放弃</el-dropdown-item
+                      >
+                      <el-dropdown-item command="delete" style="color: var(--app-danger)"
+                        >删除</el-dropdown-item
+                      >
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </div>
-              <span class="card-date">{{ formatDate(card.create_time) }}</span>
-              <el-tag v-if="card.source" size="small" type="info">{{ card.source }}</el-tag>
-            </div>
-          </div>
 
-          <div v-if="!(kanban[col.key] || []).length" class="col-empty">
-            暂无{{ col.label }}
+              <div v-if="card.company" class="card-company">
+                <el-icon><OfficeBuilding /></el-icon> {{ card.company }}
+              </div>
+
+              <div class="card-meta">
+                <span v-if="card.salary_range"
+                  ><el-icon><Coin /></el-icon> {{ card.salary_range }}</span
+                >
+                <span v-if="card.match_score" class="card-score">
+                  <el-icon><Histogram /></el-icon> {{ Math.round(card.match_score) }}分
+                </span>
+              </div>
+
+              <div v-if="card.interview_at && col.key === 'interview'" class="card-interview">
+                <el-icon><Clock /></el-icon>
+                {{ formatDate(card.interview_at) }}
+              </div>
+
+              <div class="card-footer">
+                <!-- 跟进提醒 -->
+                <div
+                  v-if="needsFollowUp(card)"
+                  :class="'card-follow follow-' + followUpLevel(card)"
+                >
+                  <el-icon><WarningFilled /></el-icon> {{ followUpDays(card) }}天未回复
+                </div>
+                <span class="card-date">{{ formatDate(card.create_time) }}</span>
+                <el-tag v-if="card.source" size="small" type="info">{{ card.source }}</el-tag>
+              </div>
+            </div>
+
+            <div v-if="!(kanban[col.key] || []).length" class="col-empty">暂无{{ col.label }}</div>
           </div>
         </div>
-      </div>
       </template>
     </div>
 
@@ -178,14 +203,25 @@
     <div v-if="viewMode === 'list' && totalCards > 0" class="list-view">
       <!-- 批量操作栏 -->
       <div v-if="selectedCards.size > 0" class="batch-bar">
-        <span class="batch-info">已选 <strong>{{ selectedCards.size }}</strong> 项</span>
+        <span class="batch-info"
+          >已选 <strong>{{ selectedCards.size }}</strong> 项</span
+        >
         <el-button size="small" @click="batchMove('interview')">批量移至面试</el-button>
         <el-button size="small" @click="batchMove('offer')">批量移至Offer</el-button>
-        <el-button size="small" @click="batchMove('rejected')" style="color:var(--app-danger)">批量标记拒绝</el-button>
+        <el-button size="small" @click="batchMove('rejected')" style="color: var(--app-danger)"
+          >批量标记拒绝</el-button
+        >
         <el-button size="small" text @click="clearSelection">取消选择</el-button>
       </div>
 
-      <el-table :data="allCards" style="width:100%" @selection-change="onSelectionChange" border stripe size="small">
+      <el-table
+        :data="allCards"
+        style="width: 100%"
+        @selection-change="onSelectionChange"
+        border
+        stripe
+        size="small"
+      >
         <el-table-column type="selection" width="40" />
         <el-table-column prop="title" label="岗位" min-width="160">
           <template #default="{ row }">
@@ -195,7 +231,9 @@
         <el-table-column prop="company" label="公司" width="120" />
         <el-table-column label="阶段" width="100">
           <template #default="{ row }">
-            <el-tag size="small" :type="stageTagType(row.stage)">{{ stageLabel(row.stage) }}</el-tag>
+            <el-tag size="small" :type="stageTagType(row.stage)">{{
+              stageLabel(row.stage)
+            }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="跟进" width="100">
@@ -209,13 +247,17 @@
         <el-table-column prop="salary_range" label="薪资" width="100" />
         <el-table-column label="匹配度" width="80" align="center">
           <template #default="{ row }">
-            <span v-if="row.match_score" :class="'score-level-' + scoreLevel(row.match_score)">{{ Math.round(row.match_score) }}分</span>
+            <span v-if="row.match_score" :class="'score-level-' + scoreLevel(row.match_score)"
+              >{{ Math.round(row.match_score) }}分</span
+            >
             <span v-else class="follow-ok">-</span>
           </template>
         </el-table-column>
         <el-table-column label="面试时间" width="110">
           <template #default="{ row }">
-            <span v-if="row.interview_at" class="follow-interview">{{ formatShortDate(row.interview_at) }}</span>
+            <span v-if="row.interview_at" class="follow-interview">{{
+              formatShortDate(row.interview_at)
+            }}</span>
             <span v-else class="follow-ok">-</span>
           </template>
         </el-table-column>
@@ -226,17 +268,26 @@
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
             <el-button text size="small" @click="showCardDetail(row)">详情</el-button>
-            <el-button text size="small" @click="router.push('/smart-analysis?jd_id=' + (row.jd_id || ''))">AI</el-button>
-            <el-dropdown trigger="click" @command="cmd => handleListCmd(cmd, row)">
+            <el-button
+              text
+              size="small"
+              @click="router.push('/smart-analysis?jd_id=' + (row.jd_id || ''))"
+              >AI</el-button
+            >
+            <el-dropdown trigger="click" @command="(cmd) => handleListCmd(cmd, row)">
               <el-button text size="small">
                 <el-icon><MoreFilled /></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item v-if="row.stage === 'interview'" command="interview">模拟面试</el-dropdown-item>
+                  <el-dropdown-item v-if="row.stage === 'interview'" command="interview"
+                    >模拟面试</el-dropdown-item
+                  >
                   <el-dropdown-item command="reject">标记拒绝</el-dropdown-item>
                   <el-dropdown-item command="abandon">放弃</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided style="color:var(--app-danger)">删除</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided style="color: var(--app-danger)"
+                    >删除</el-dropdown-item
+                  >
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -246,7 +297,12 @@
     </div>
 
     <!-- 新增投递对话框 -->
-    <el-dialog v-model="showAddDialog" title="新增投递记录" width="500px" :close-on-click-modal="false">
+    <el-dialog
+      v-model="showAddDialog"
+      title="新增投递记录"
+      width="500px"
+      :close-on-click-modal="false"
+    >
       <el-form ref="addFormRef" :model="addForm" :rules="addRules" label-position="top">
         <el-form-item label="岗位名称" prop="title">
           <el-input v-model="addForm.title" placeholder="如：高级前端工程师" />
@@ -273,29 +329,65 @@
     </el-dialog>
 
     <!-- 投递详情对话框 -->
-    <el-dialog v-model="showDetailDialog" title="投递详情" width="560px" :close-on-click-modal="false">
+    <el-dialog
+      v-model="showDetailDialog"
+      title="投递详情"
+      width="560px"
+      :close-on-click-modal="false"
+    >
       <div v-if="detailCard">
         <el-descriptions :column="2" border size="small">
-          <el-descriptions-item label="岗位" :span="2">{{ detailCard.title || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="岗位" :span="2">{{
+            detailCard.title || '-'
+          }}</el-descriptions-item>
           <el-descriptions-item label="公司">{{ detailCard.company || '-' }}</el-descriptions-item>
           <el-descriptions-item label="当前阶段">
             <el-tag size="small">{{ stageLabel(detailCard.stage) }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="薪资">{{ detailCard.salary_range || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="薪资">{{
+            detailCard.salary_range || '-'
+          }}</el-descriptions-item>
           <el-descriptions-item label="来源">{{ detailCard.source || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="匹配度">{{ detailCard.match_score ? Math.round(detailCard.match_score) + '分' : '-' }}</el-descriptions-item>
-          <el-descriptions-item label="创建时间" :span="2">{{ formatDateTime(detailCard.create_time) }}</el-descriptions-item>
-          <el-descriptions-item v-if="detailCard.notes" label="备注" :span="2">{{ detailCard.notes }}</el-descriptions-item>
-          <el-descriptions-item v-if="detailCard.interview_at" label="面试时间" :span="2">{{ formatDateTime(detailCard.interview_at) }}</el-descriptions-item>
+          <el-descriptions-item label="匹配度">{{
+            detailCard.match_score ? Math.round(detailCard.match_score) + '分' : '-'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="创建时间" :span="2">{{
+            formatDateTime(detailCard.create_time)
+          }}</el-descriptions-item>
+          <el-descriptions-item v-if="detailCard.notes" label="备注" :span="2">{{
+            detailCard.notes
+          }}</el-descriptions-item>
+          <el-descriptions-item v-if="detailCard.interview_at" label="面试时间" :span="2">{{
+            formatDateTime(detailCard.interview_at)
+          }}</el-descriptions-item>
           <el-descriptions-item v-if="detailCard.url" label="岗位链接" :span="2">
-            <el-link :href="detailCard.url" target="_blank" type="primary">{{ detailCard.url }}</el-link>
+            <el-link :href="detailCard.url" target="_blank" type="primary">{{
+              detailCard.url
+            }}</el-link>
           </el-descriptions-item>
         </el-descriptions>
         <div class="detail-actions">
-          <el-button size="small" @click="router.push({ path: '/smart-analysis', query: { jd_id: String(detailCard.jd_id || '') } })">
+          <el-button
+            size="small"
+            @click="
+              router.push({
+                path: '/smart-analysis',
+                query: { jd_id: String(detailCard.jd_id || '') },
+              })
+            "
+          >
             <el-icon><DataAnalysis /></el-icon> AI 分析
           </el-button>
-          <el-button size="small" type="primary" @click="router.push({ path: '/interview/setup', query: { jd_id: String(detailCard.jd_id || '') } })">
+          <el-button
+            size="small"
+            type="primary"
+            @click="
+              router.push({
+                path: '/interview/setup',
+                query: { jd_id: String(detailCard.jd_id || '') },
+              })
+            "
+          >
             <el-icon><Microphone /></el-icon> 模拟面试
           </el-button>
         </div>
@@ -326,7 +418,12 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
-import { getKanban, movePipelineStage, createJobPipelineEntry, deleteJobPipelineEntry } from '@/api/targets'
+import {
+  getKanban,
+  movePipelineStage,
+  createJobPipelineEntry,
+  deleteJobPipelineEntry,
+} from '@/api/targets'
 
 const router = useRouter()
 
@@ -346,13 +443,15 @@ const dragCard = ref(null)
 const viewMode = ref('kanban')
 const showStats = ref(false)
 const selectedCards = ref(new Set())
-const totalCards = computed(() => columns.reduce((sum, col) => sum + ((kanban.value[col.key] || []).length), 0))
+const totalCards = computed(() =>
+  columns.reduce((sum, col) => sum + (kanban.value[col.key] || []).length, 0)
+)
 
 // 所有卡片扁平列表
 const allCards = computed(() => {
   const all = []
-  columns.forEach(col => {
-    (kanban.value[col.key] || []).forEach(card => {
+  columns.forEach((col) => {
+    ;(kanban.value[col.key] || []).forEach((card) => {
       all.push(card)
     })
   })
@@ -362,15 +461,19 @@ const allCards = computed(() => {
 // 统计计算
 const counts = computed(() => {
   const map = {}
-  columns.forEach(col => { map[col.key] = (kanban.value[col.key] || []).length })
+  columns.forEach((col) => {
+    map[col.key] = (kanban.value[col.key] || []).length
+  })
   return map
 })
 
 const funnelData = computed(() =>
-  columns.filter(c => c.key !== 'abandoned').map(c => ({
-    ...c,
-    count: counts.value[c.key] || 0,
-  }))
+  columns
+    .filter((c) => c.key !== 'abandoned')
+    .map((c) => ({
+      ...c,
+      count: counts.value[c.key] || 0,
+    }))
 )
 
 function conversionRate(stage) {
@@ -379,32 +482,32 @@ function conversionRate(stage) {
   // stages before the target
   const stageOrder = ['todo', 'applied', 'written_test', 'interview', 'offer']
   const idx = stageOrder.indexOf(stage)
-  if (idx <= 0) return Math.round((counts.value[stage] || 0) / total * 100)
+  if (idx <= 0) return Math.round(((counts.value[stage] || 0) / total) * 100)
   const prevTotal = stageOrder.slice(0, idx).reduce((s, k) => s + (counts.value[k] || 0), 0)
   const current = counts.value[stage] || 0
   const base = prevTotal + current
-  return base > 0 ? Math.round(current / base * 100) : 0
+  return base > 0 ? Math.round((current / base) * 100) : 0
 }
 
 const rejectionRate = computed(() => {
   const total = totalCards.value
   if (!total) return 0
-  return Math.round(((counts.value.rejected || 0) + (counts.value.abandoned || 0)) / total * 100)
+  return Math.round((((counts.value.rejected || 0) + (counts.value.abandoned || 0)) / total) * 100)
 })
 
 const avgResponseDays = computed(() => {
   const now = Date.now()
   const applied = kanban.value.applied || []
   const days = applied
-    .filter(c => c.last_update_time)
-    .map(c => Math.round((now - new Date(c.last_update_time).getTime()) / 86400000))
+    .filter((c) => c.last_update_time)
+    .map((c) => Math.round((now - new Date(c.last_update_time).getTime()) / 86400000))
   if (!days.length) return '--'
   const avg = Math.round(days.reduce((s, d) => s + d, 0) / days.length)
   return avg + 'd'
 })
 
 function funnelPercent(count) {
-  const max = Math.max(1, ...funnelData.value.map(s => s.count))
+  const max = Math.max(1, ...funnelData.value.map((s) => s.count))
   return Math.max(2, (count / max) * 100)
 }
 
@@ -412,11 +515,19 @@ function stageToRate(from, to) {
   const fromCount = counts.value[from] || 0
   const toCount = counts.value[to] || 0
   if (!fromCount) return '0%'
-  return Math.round(toCount / fromCount * 100) + '%'
+  return Math.round((toCount / fromCount) * 100) + '%'
 }
 
 function stageTagType(stage) {
-  const map = { todo: 'info', applied: 'primary', written_test: 'warning', interview: 'success', offer: 'success', rejected: 'danger', abandoned: 'info' }
+  const map = {
+    todo: 'info',
+    applied: 'primary',
+    written_test: 'warning',
+    interview: 'success',
+    offer: 'success',
+    rejected: 'danger',
+    abandoned: 'info',
+  }
   return map[stage] || 'info'
 }
 
@@ -448,6 +559,7 @@ const addSubmitting = ref(false)
 const addFormRef = ref(null)
 const showDetailDialog = ref(false)
 const detailCard = ref(null)
+const loadError = ref('')
 
 const addForm = ref({
   title: '',
@@ -464,8 +576,14 @@ const addRules = {
 function formatShortDate(d) {
   if (!d) return ''
   try {
-    return new Date(d).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    return new Date(d).toLocaleString('zh-CN', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
   } catch {
+    // 保留服务端返回的原始时间。
     return d
   }
 }
@@ -482,14 +600,27 @@ function formatDate(d) {
 function formatDateTime(d) {
   if (!d) return ''
   try {
-    return new Date(d).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    return new Date(d).toLocaleString('zh-CN', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
   } catch {
     return d
   }
 }
 
 function stageLabel(stage) {
-  const map = { todo: '待投递', applied: '已投递', written_test: '笔试', interview: '面试', offer: 'Offer', rejected: '已拒绝', abandoned: '已放弃' }
+  const map = {
+    todo: '待投递',
+    applied: '已投递',
+    written_test: '笔试',
+    interview: '面试',
+    offer: 'Offer',
+    rejected: '已拒绝',
+    abandoned: '已放弃',
+  }
   return map[stage] || stage || '-'
 }
 
@@ -498,8 +629,10 @@ async function loadKanban() {
   try {
     const data = await getKanban()
     kanban.value = data || {}
-  } catch {
+    loadError.value = ''
+  } catch (error) {
     kanban.value = {}
+    loadError.value = error?.userMessage || '暂时无法获取投递记录，请检查网络后重试。'
   } finally {
     loading.value = false
   }
@@ -524,13 +657,13 @@ async function onDrop(e, targetStage) {
     // 乐观更新
     const fromList = kanban.value[oldStage] || []
     const toList = kanban.value[targetStage] || []
-    const idx = fromList.findIndex(c => c.id === card.id)
+    const idx = fromList.findIndex((c) => c.id === card.id)
     if (idx >= 0) {
       fromList.splice(idx, 1)
       card.stage = targetStage
       toList.unshift(card)
     }
-    ElMessage.success(`已移至「${columns.find(c => c.key === targetStage)?.label}」`)
+    ElMessage.success(`已移至「${columns.find((c) => c.key === targetStage)?.label}」`)
   } catch {
     loadKanban()
   }
@@ -553,7 +686,9 @@ async function handleAdd() {
     showAddDialog.value = false
     addForm.value = { title: '', company: '', salary_range: '', source: '', notes: '' }
     loadKanban()
-  } catch {} finally {
+  } catch {
+    // 失败消息由统一请求层提示。
+  } finally {
     addSubmitting.value = false
   }
 }
@@ -571,20 +706,26 @@ async function handleCardCmd(cmd, card) {
       await movePipelineStage(card.id, 'rejected')
       ElMessage.success('已标记为拒绝')
       loadKanban()
-    } catch {}
+    } catch {
+      // 失败消息由统一请求层提示。
+    }
   } else if (cmd === 'abandon') {
     try {
       await movePipelineStage(card.id, 'abandoned')
       ElMessage.success('已放弃')
       loadKanban()
-    } catch {}
+    } catch {
+      // 失败消息由统一请求层提示。
+    }
   } else if (cmd === 'delete') {
     try {
       await ElMessageBox.confirm('确定删除此投递记录？', '删除确认', { type: 'warning' })
       await deleteJobPipelineEntry(card.id)
       ElMessage.success('已删除')
       loadKanban()
-    } catch {}
+    } catch {
+      // 用户取消删除或请求失败时保持当前看板。
+    }
   }
 }
 
@@ -598,18 +739,35 @@ function handleListCmd(cmd, card) {
   if (cmd === 'interview') {
     router.push(`/interview/setup?jd_id=${card.jd_id || ''}`)
   } else if (cmd === 'reject') {
-    movePipelineStage(card.id, 'rejected').then(() => { ElMessage.success('已标记拒绝'); loadKanban() }).catch(() => {})
+    movePipelineStage(card.id, 'rejected')
+      .then(() => {
+        ElMessage.success('已标记拒绝')
+        loadKanban()
+      })
+      .catch(() => {})
   } else if (cmd === 'abandon') {
-    movePipelineStage(card.id, 'abandoned').then(() => { ElMessage.success('已放弃'); loadKanban() }).catch(() => {})
+    movePipelineStage(card.id, 'abandoned')
+      .then(() => {
+        ElMessage.success('已放弃')
+        loadKanban()
+      })
+      .catch(() => {})
   } else if (cmd === 'delete') {
-    ElMessageBox.confirm('确定删除此投递记录？', '删除确认', { type: 'warning' }).then(() => {
-      deleteJobPipelineEntry(card.id).then(() => { ElMessage.success('已删除'); loadKanban() }).catch(() => {})
-    }).catch(() => {})
+    ElMessageBox.confirm('确定删除此投递记录？', '删除确认', { type: 'warning' })
+      .then(() => {
+        deleteJobPipelineEntry(card.id)
+          .then(() => {
+            ElMessage.success('已删除')
+            loadKanban()
+          })
+          .catch(() => {})
+      })
+      .catch(() => {})
   }
 }
 
 function onSelectionChange(rows) {
-  selectedCards.value = new Set(rows.map(r => r.id))
+  selectedCards.value = new Set(rows.map((r) => r.id))
 }
 
 function clearSelection() {
@@ -624,9 +782,13 @@ async function batchMove(targetStage) {
     try {
       await movePipelineStage(id, targetStage)
       success++
-    } catch {}
+    } catch {
+      // 继续处理剩余投递，并在结束后汇总结果。
+    }
   }
-  ElMessage.success(`成功将 ${success}/${ids.length} 项移至「${stageLabel(targetStage)}」`)
+  const message = `成功将 ${success}/${ids.length} 项移至「${stageLabel(targetStage)}」`
+  if (success === ids.length) ElMessage.success(message)
+  else ElMessage.warning(message)
   selectedCards.value = new Set()
   loadKanban()
 }
@@ -637,6 +799,30 @@ onMounted(loadKanban)
 <style scoped>
 .page-shell {
   color: var(--app-text);
+}
+
+.load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid #f2c5bf;
+  border-radius: 8px;
+  background: var(--app-accent-soft);
+}
+.load-error strong,
+.load-error span {
+  display: block;
+}
+.load-error strong {
+  color: var(--app-danger);
+  font-size: 15px;
+}
+.load-error span {
+  margin-top: 4px;
+  color: var(--app-muted);
+  font-size: 13px;
 }
 
 .header-actions {
@@ -680,13 +866,27 @@ onMounted(loadKanban)
   flex-shrink: 0;
 }
 
-.dot-slate { background: #94a3b8; }
-.dot-blue { background: var(--app-primary); }
-.dot-amber { background: var(--app-warning); }
-.dot-violet { background: var(--app-violet); }
-.dot-green { background: var(--app-success); }
-.dot-red { background: var(--app-danger); }
-.dot-gray { background: #9ca3af; }
+.dot-slate {
+  background: #94a3b8;
+}
+.dot-blue {
+  background: var(--app-primary);
+}
+.dot-amber {
+  background: var(--app-warning);
+}
+.dot-violet {
+  background: var(--app-violet);
+}
+.dot-green {
+  background: var(--app-success);
+}
+.dot-red {
+  background: var(--app-danger);
+}
+.dot-gray {
+  background: #9ca3af;
+}
 
 .col-header h3 {
   margin: 0;
@@ -843,12 +1043,23 @@ onMounted(loadKanban)
   border-radius: 4px;
   margin-bottom: 4px;
 }
-.follow-danger { background: #fff3f0; color: #d46e6e; }
-.follow-warn { background: #fffaf1; color: #dc9c3f; }
-.follow-ok { background: #f0faf4; color: #67c23a; }
+.follow-danger {
+  background: #fff3f0;
+  color: #d46e6e;
+}
+.follow-warn {
+  background: #fffaf1;
+  color: #dc9c3f;
+}
+.follow-ok {
+  background: #f0faf4;
+  color: #67c23a;
+}
 
 /* View toggle */
-.view-toggle { margin-right: 4px; }
+.view-toggle {
+  margin-right: 4px;
+}
 
 /* 统计面板 */
 .stats-panel {
@@ -862,8 +1073,14 @@ onMounted(loadKanban)
   padding: 14px 20px;
   border-bottom: 1px solid var(--app-line);
 }
-.stats-header h3 { margin: 0; font-size: 15px; font-weight: 700; }
-.stats-body { padding: 16px 20px; }
+.stats-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+.stats-body {
+  padding: 16px 20px;
+}
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -904,8 +1121,13 @@ onMounted(loadKanban)
   justify-content: space-between;
   font-size: 12px;
 }
-.funnel-label { color: var(--app-muted); }
-.funnel-count { font-weight: 700; color: var(--app-text); }
+.funnel-label {
+  color: var(--app-muted);
+}
+.funnel-count {
+  font-weight: 700;
+  color: var(--app-text);
+}
 .funnel-track {
   height: 24px;
   background: var(--el-fill-color);
@@ -917,12 +1139,24 @@ onMounted(loadKanban)
   border-radius: 6px;
   transition: width 0.4s ease;
 }
-.fill-slate { background: #94a3b8; }
-.fill-blue { background: var(--app-primary); }
-.fill-amber { background: var(--app-warning); }
-.fill-violet { background: var(--app-violet); }
-.fill-green { background: var(--app-success); }
-.fill-red { background: var(--app-danger); }
+.fill-slate {
+  background: #94a3b8;
+}
+.fill-blue {
+  background: var(--app-primary);
+}
+.fill-amber {
+  background: var(--app-warning);
+}
+.fill-violet {
+  background: var(--app-violet);
+}
+.fill-green {
+  background: var(--app-success);
+}
+.fill-red {
+  background: var(--app-danger);
+}
 .funnel-arrow {
   display: flex;
   align-items: center;
@@ -931,15 +1165,38 @@ onMounted(loadKanban)
   color: var(--app-muted);
   margin-top: 2px;
 }
-.funnel-rate { color: var(--app-primary); font-weight: 600; }
+.funnel-rate {
+  color: var(--app-primary);
+  font-weight: 600;
+}
 
 /* 列表视图 */
-.list-view { background: #fff; border-radius: var(--app-radius-md, 16px); border: 1px solid var(--app-line); overflow: hidden; }
-.list-title { font-weight: 600; font-size: 14px; }
-.follow-interview { color: var(--app-violet); font-weight: 600; }
-.score-level-high { color: var(--app-success); font-weight: 600; }
-.score-level-mid { color: var(--app-warning); font-weight: 600; }
-.score-level-low { color: var(--app-danger); font-weight: 600; }
+.list-view {
+  background: #fff;
+  border-radius: var(--app-radius-md, 16px);
+  border: 1px solid var(--app-line);
+  overflow: hidden;
+}
+.list-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.follow-interview {
+  color: var(--app-violet);
+  font-weight: 600;
+}
+.score-level-high {
+  color: var(--app-success);
+  font-weight: 600;
+}
+.score-level-mid {
+  color: var(--app-warning);
+  font-weight: 600;
+}
+.score-level-low {
+  color: var(--app-danger);
+  font-weight: 600;
+}
 
 /* 批量操作栏 */
 .batch-bar {
@@ -955,7 +1212,9 @@ onMounted(loadKanban)
   color: var(--app-text);
   margin-right: 8px;
 }
-.batch-info strong { color: var(--app-primary); }
+.batch-info strong {
+  color: var(--app-primary);
+}
 
 @media (max-width: 1024px) {
   .kanban-board {
@@ -968,6 +1227,10 @@ onMounted(loadKanban)
 }
 
 @media (max-width: 768px) {
+  .load-error {
+    align-items: flex-start;
+    flex-direction: column;
+  }
   .page-shell .page-header {
     flex-direction: column;
     gap: 12px;

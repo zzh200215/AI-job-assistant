@@ -315,7 +315,8 @@ def process_payment_callback(
         _activate_subscription(db, order.user_id, order.plan_tier)
 
         db.commit()
-                write_audit_log(db, user=db.query(User).filter(User.id == order.user_id).first(), action="subscription.payment", resource_type="subscription", resource_id=str(order.id), status="success")`n        return True, "支付成功，订阅已开通"
+        write_audit_log(db, user=db.query(User).filter(User.id == order.user_id).first(), action="subscription.payment", resource_type="subscription", resource_id=str(order.id), status="success")
+        return True, "支付成功，订阅已开通"
     except Exception as e:
         db.rollback()
         return False, f"支付处理失败: {str(e)}"

@@ -4,7 +4,7 @@
       <div class="hero-copy">
         <div class="hero-kicker">Career Planning</div>
         <h2>职业规划工作台</h2>
-	        <div class="page-header-sub">
+        <div class="page-header-sub">
           用现有简历做职业现状判断，设定目标岗位，再生成能力差距、成长路线图和投递策略。
         </div>
         <div class="hero-pills">
@@ -46,6 +46,20 @@
           <el-tag type="info" size="small">复用 CareerAgent + Analysis Flow</el-tag>
         </div>
       </template>
+
+      <el-alert
+        v-if="baseOptionsError"
+        class="load-error"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="简历与岗位数据加载失败"
+        description="职业规划需要一份已解析简历。请检查网络后重新加载。"
+      >
+        <template #default>
+          <el-button size="small" type="primary" plain @click="refreshBaseOptions">重新加载</el-button>
+        </template>
+      </el-alert>
 
       <div class="control-grid">
         <div class="control-column">
@@ -155,7 +169,9 @@
       <template #header>
         <div class="card-header">
           <span>Agent 执行进度</span>
-          <el-tag type="warning" size="small">{{ completedSteps }} / {{ agentSteps.length }} 步</el-tag>
+          <el-tag type="warning" size="small"
+            >{{ completedSteps }} / {{ agentSteps.length }} 步</el-tag
+          >
         </div>
       </template>
 
@@ -205,18 +221,26 @@
             <div class="overview-grid">
               <div class="status-panel">
                 <span>当前阶段</span>
-                <strong>{{ careerResult.current_status?.career_stage || currentStageLabel }}</strong>
-                <small>{{ localizedCurrentStatusSummary || '已结合简历与目标岗位生成阶段判断。' }}</small>
+                <strong>{{
+                  careerResult.current_status?.career_stage || currentStageLabel
+                }}</strong>
+                <small>{{
+                  localizedCurrentStatusSummary || '已结合简历与目标岗位生成阶段判断。'
+                }}</small>
               </div>
               <div class="status-panel">
                 <span>当前职级</span>
                 <strong>{{ careerResult.current_status?.level || '-' }}</strong>
-                <small>{{ joinedText(careerResult.current_status?.strengths) || '等待职业优势总结' }}</small>
+                <small>{{
+                  joinedText(careerResult.current_status?.strengths) || '等待职业优势总结'
+                }}</small>
               </div>
               <div class="status-panel">
                 <span>能力缺口</span>
                 <strong>{{ skillGapCount }}</strong>
-                <small>{{ joinedText(careerResult.current_status?.development_areas) || '等待生成发展方向' }}</small>
+                <small>{{
+                  joinedText(careerResult.current_status?.development_areas) || '等待生成发展方向'
+                }}</small>
               </div>
             </div>
 
@@ -277,14 +301,23 @@
                 <div v-for="dim in radarDimensions" :key="dim.name" class="radar-row">
                   <div class="radar-copy">
                     <strong>{{ dim.name }}</strong>
-                    <span>{{ dim.gap || `${safeScore(dim.target_score) - safeScore(dim.current_score)} 分提升空间` }}</span>
+                    <span>{{
+                      dim.gap ||
+                      `${safeScore(dim.target_score) - safeScore(dim.current_score)} 分提升空间`
+                    }}</span>
                   </div>
                   <div class="radar-bars">
                     <div class="bar-track">
-                      <div class="bar-current" :style="{ width: `${safeScore(dim.current_score)}%` }"></div>
+                      <div
+                        class="bar-current"
+                        :style="{ width: `${safeScore(dim.current_score)}%` }"
+                      ></div>
                     </div>
                     <div class="bar-track target-track">
-                      <div class="bar-target" :style="{ width: `${safeScore(dim.target_score)}%` }"></div>
+                      <div
+                        class="bar-target"
+                        :style="{ width: `${safeScore(dim.target_score)}%` }"
+                      ></div>
                     </div>
                   </div>
                   <div class="radar-values">
@@ -307,10 +340,18 @@
               <div v-for="item in learningResources" :key="item.skill" class="resource-item">
                 <div class="resource-top">
                   <strong>{{ item.skill }}</strong>
-                  <el-tag size="small" :type="item.priority === '高' ? 'danger' : 'warning'">{{ item.priority }}</el-tag>
+                  <el-tag size="small" :type="item.priority === '高' ? 'danger' : 'warning'">{{
+                    item.priority
+                  }}</el-tag>
                 </div>
                 <div class="resource-links">
-                  <a v-for="res in item.resources" :key="res.name" :href="res.link" class="resource-link" target="_blank">
+                  <a
+                    v-for="res in item.resources"
+                    :key="res.name"
+                    :href="res.link"
+                    class="resource-link"
+                    target="_blank"
+                  >
                     <el-tag size="small" effect="plain" type="info">{{ res.type }}</el-tag>
                     {{ res.name }}
                   </a>
@@ -371,10 +412,16 @@
             </template>
 
             <div class="project-grid">
-              <article v-for="item in projectRecommendations" :key="item.project" class="project-card">
+              <article
+                v-for="item in projectRecommendations"
+                :key="item.project"
+                class="project-card"
+              >
                 <div class="project-top">
                   <strong>{{ item.project }}</strong>
-                  <el-tag size="small" :type="complexityTag(item.complexity)">{{ item.complexity || '中等' }}</el-tag>
+                  <el-tag size="small" :type="complexityTag(item.complexity)">{{
+                    item.complexity || '中等'
+                  }}</el-tag>
                 </div>
                 <p>{{ item.description || item.reason }}</p>
                 <div class="project-meta">预计周期：{{ item.estimated_time || '4-8 周' }}</div>
@@ -439,9 +486,15 @@
               <article v-for="gap in skillGaps" :key="gap.skill" class="gap-item">
                 <div class="gap-top">
                   <strong>{{ gap.skill }}</strong>
-                  <el-tag size="small" :type="priorityTag(gap.priority)">{{ gap.priority || '中' }}</el-tag>
+                  <el-tag size="small" :type="priorityTag(gap.priority)">{{
+                    gap.priority || '中'
+                  }}</el-tag>
                 </div>
-                <p>{{ gap.importance || gap.acquisition_method || '建议通过项目实践和定向训练补齐。' }}</p>
+                <p>
+                  {{
+                    gap.importance || gap.acquisition_method || '建议通过项目实践和定向训练补齐。'
+                  }}
+                </p>
                 <div class="gap-levels">
                   <span>{{ gap.current_level || '当前水平未知' }}</span>
                   <span>→</span>
@@ -462,7 +515,11 @@
             </template>
 
             <div class="direction-list">
-              <article v-for="item in careerPaths" :key="item.path || item.position" class="direction-item">
+              <article
+                v-for="item in careerPaths"
+                :key="item.path || item.position"
+                class="direction-item"
+              >
                 <div class="direction-top">
                   <strong>{{ item.path || item.position || item.title || '岗位方向' }}</strong>
                   <span>{{ item.match_score || item.score || '--' }}</span>
@@ -476,7 +533,9 @@
             <template #header>
               <div class="card-header">
                 <span>薪资成长预测</span>
-                <el-tag size="small" type="success">{{ salaryPrediction.growthRate }}% 年增长率</el-tag>
+                <el-tag size="small" type="success"
+                  >{{ salaryPrediction.growthRate }}% 年增长率</el-tag
+                >
               </div>
             </template>
             <div class="salary-body">
@@ -495,8 +554,11 @@
               </div>
             </div>
             <div class="salary-chart">
-              <div v-for="(p, i) in salaryPrediction.predictions" :key="p.year" class="salary-bar-col">
-                <div class="salary-bar" :style="{ height: (p.salary / salaryPrediction.fiveYearSalary) * 100 + '%' }" />
+              <div v-for="p in salaryPrediction.predictions" :key="p.year" class="salary-bar-col">
+                <div
+                  class="salary-bar"
+                  :style="{ height: (p.salary / salaryPrediction.fiveYearSalary) * 100 + '%' }"
+                />
                 <span class="salary-bar-label">{{ p.year }}</span>
                 <span class="salary-bar-val">{{ p.salary }}K</span>
               </div>
@@ -516,8 +578,12 @@
                   >
                     查看完整分析
                   </el-button>
-                  <el-button text size="small" @click="router.push('/jobs/search')">去岗位市场</el-button>
-                  <el-button text size="small" @click="router.push('/interview/setup')">去模拟面试</el-button>
+                  <el-button text size="small" @click="router.push('/jobs/search')"
+                    >去岗位市场</el-button
+                  >
+                  <el-button text size="small" @click="router.push('/interview/setup')"
+                    >去模拟面试</el-button
+                  >
                 </div>
               </div>
             </template>
@@ -561,7 +627,9 @@
       />
 
       <div class="next-actions inline-actions">
-        <el-button type="primary" @click="router.push(`/analysis/${analysisRecordId}`)">查看完整分析</el-button>
+        <el-button type="primary" @click="router.push(`/analysis/${analysisRecordId}`)"
+          >查看完整分析</el-button
+        >
         <el-button @click="startCareerPlanning">重新生成职业规划</el-button>
         <el-button @click="router.push('/jobs/search')">去岗位市场</el-button>
       </div>
@@ -572,17 +640,20 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
-import { ArrowRight, CircleCloseFilled, Loading, SuccessFilled, WarningFilled } from '@element-plus/icons-vue'
+import {
+  ArrowRight,
+  CircleCloseFilled,
+  Loading,
+  SuccessFilled,
+  WarningFilled,
+} from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { getResumeList } from '@/api/resume'
 import { createJD, getJDList } from '@/api/jd'
 import { runFullAnalysis, getAnalysis } from '@/api/analysis'
 import { recommendCareerPaths } from '@/api/jobs'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
-import {
-  localizeSentence,
-  normalizeLocalizedTextList,
-} from '@/utils/analysisLocalization'
+import { localizeSentence, normalizeLocalizedTextList } from '@/utils/analysisLocalization'
 
 const router = useRouter()
 
@@ -602,6 +673,7 @@ const targetRole = ref('')
 const focusNotes = ref('')
 const goalNotes = ref('')
 const optionsLoading = ref(false)
+const baseOptionsError = ref(false)
 
 const running = ref(false)
 const taskStatus = ref('pending')
@@ -616,12 +688,20 @@ const { pollTask } = useAgentTaskPolling()
 const centerPoint = 160
 const radarRadius = 116
 
-const selectedResume = computed(() => resumeOptions.value.find(item => item.id === selectedResumeId.value) || null)
-const selectedJD = computed(() => jdOptions.value.find(item => item.id === selectedJDId.value) || null)
+const selectedResume = computed(
+  () => resumeOptions.value.find((item) => item.id === selectedResumeId.value) || null
+)
+const selectedJD = computed(
+  () => jdOptions.value.find((item) => item.id === selectedJDId.value) || null
+)
 const careerResult = computed(() => analysisResult.value?.career_planning || null)
 const latestMatchScore = computed(() => Number(analysisResult.value?.match_score || 0))
-const localizedCurrentStatusSummary = computed(() => localizeSentence(careerResult.value?.current_status?.summary || ''))
-const localizedOverallAdvice = computed(() => localizeSentence(careerResult.value?.overall_advice || ''))
+const localizedCurrentStatusSummary = computed(() =>
+  localizeSentence(careerResult.value?.current_status?.summary || '')
+)
+const localizedOverallAdvice = computed(() =>
+  localizeSentence(careerResult.value?.overall_advice || '')
+)
 const analysisStatusLabel = computed(() => {
   if (running.value) return '分析中'
   if (careerResult.value) return '已生成'
@@ -640,31 +720,42 @@ const latestMatchLabel = computed(() => {
   return '等待生成职业规划'
 })
 
-const selectedResumeLabel = computed(() => selectedResume.value ? resumeOptionLabel(selectedResume.value) : '')
+const selectedResumeLabel = computed(() =>
+  selectedResume.value ? resumeOptionLabel(selectedResume.value) : ''
+)
 const selectedResumeHint = computed(() => {
   if (!selectedResume.value) return '请选择一份已解析简历'
-  return selectedResume.value.parsed?.current_title || `${selectedResume.value.years_exp || 0} 年经验`
+  return (
+    selectedResume.value.parsed?.current_title || `${selectedResume.value.years_exp || 0} 年经验`
+  )
 })
-const selectedJDLabel = computed(() => selectedJD.value ? jdOptionLabel(selectedJD.value) : '')
-const currentStageLabel = computed(() => stageOptions.find(item => item.value === currentStage.value)?.label || '成长期')
+const selectedJDLabel = computed(() => (selectedJD.value ? jdOptionLabel(selectedJD.value) : ''))
+const currentStageLabel = computed(
+  () => stageOptions.find((item) => item.value === currentStage.value)?.label || '成长期'
+)
 
-const completedSteps = computed(() => agentSteps.value.filter(item => item.status === 'completed').length)
+const completedSteps = computed(
+  () => agentSteps.value.filter((item) => item.status === 'completed').length
+)
 const currentStepName = computed(() => {
-  const runningStep = agentSteps.value.find(item => item.status === 'running')
+  const runningStep = agentSteps.value.find((item) => item.status === 'running')
   if (runningStep) return stepLabel(runningStep.step_name)
-  const pendingStep = agentSteps.value.find(item => item.status === 'pending')
+  const pendingStep = agentSteps.value.find((item) => item.status === 'pending')
   if (pendingStep) return stepLabel(pendingStep.step_name)
-  const lastStep = [...agentSteps.value].reverse().find(item => item.status === 'completed')
+  const lastStep = [...agentSteps.value].reverse().find((item) => item.status === 'completed')
   return lastStep ? stepLabel(lastStep.step_name) : '等待启动'
 })
-const taskStatusLabel = computed(() => ({
-  pending: '等待中',
-  running: '执行中',
-  completed: '已完成',
-  partial: '部分完成',
-  cancelled: '已取消',
-  failed: '失败',
-}[taskStatus.value] || taskStatus.value))
+const taskStatusLabel = computed(
+  () =>
+    ({
+      pending: '等待中',
+      running: '执行中',
+      completed: '已完成',
+      partial: '部分完成',
+      cancelled: '已取消',
+      failed: '失败',
+    })[taskStatus.value] || taskStatus.value
+)
 
 const radarDimensions = computed(() => {
   const dimensions = careerResult.value?.skill_radar?.dimensions || []
@@ -675,7 +766,7 @@ const radarAxes = computed(() => {
   const count = radarDimensions.value.length
   if (!count) return []
   return radarDimensions.value.map((item, index) => {
-    const angle = (-Math.PI / 2) + ((Math.PI * 2 * index) / count)
+    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / count
     const x = centerPoint + Math.cos(angle) * radarRadius
     const y = centerPoint + Math.sin(angle) * radarRadius
     const labelX = centerPoint + Math.cos(angle) * (radarRadius + 24)
@@ -690,15 +781,23 @@ const radarAxes = computed(() => {
   })
 })
 
-const radarRings = computed(() => [25, 50, 75, 100].map(value => makeRadarPolygon(radarDimensions.value.map(() => value))))
-const radarCurrentPoints = computed(() => makeRadarPolygon(radarDimensions.value.map(item => safeScore(item.current_score))))
-const radarTargetPoints = computed(() => makeRadarPolygon(radarDimensions.value.map(item => safeScore(item.target_score))))
+const radarRings = computed(() =>
+  [25, 50, 75, 100].map((value) => makeRadarPolygon(radarDimensions.value.map(() => value)))
+)
+const radarCurrentPoints = computed(() =>
+  makeRadarPolygon(radarDimensions.value.map((item) => safeScore(item.current_score)))
+)
+const radarTargetPoints = computed(() =>
+  makeRadarPolygon(radarDimensions.value.map((item) => safeScore(item.target_score)))
+)
 
 const roadmapPhases = computed(() => {
   const phases = careerResult.value?.visual_roadmap?.phases || []
   return Array.isArray(phases) ? [...phases].sort((a, b) => (a.order || 0) - (b.order || 0)) : []
 })
-const roadmapDuration = computed(() => roadmapPhases.value.reduce((sum, item) => sum + Number(item.duration_months || 0), 0))
+const roadmapDuration = computed(() =>
+  roadmapPhases.value.reduce((sum, item) => sum + Number(item.duration_months || 0), 0)
+)
 
 const projectRecommendations = computed(() => {
   const items = careerResult.value?.project_recommendations || []
@@ -709,13 +808,19 @@ const skillGaps = computed(() => {
   const items = careerResult.value?.skill_gaps || []
   if (!Array.isArray(items)) return []
   return items
-    .map(item => typeof item === 'string' ? { skill: item } : item)
-    .filter(item => item && item.skill)
+    .map((item) => (typeof item === 'string' ? { skill: item } : item))
+    .filter((item) => item && item.skill)
 })
 const skillGapCount = computed(() => skillGaps.value.length)
-const localizedShortTermGoals = computed(() => normalizeLocalizedTextList(careerResult.value?.short_term_plan?.goals))
-const localizedMidTermGoals = computed(() => normalizeLocalizedTextList(careerResult.value?.mid_term_plan?.goals))
-const localizedLongTermGoals = computed(() => normalizeLocalizedTextList(careerResult.value?.long_term_plan?.goals))
+const localizedShortTermGoals = computed(() =>
+  normalizeLocalizedTextList(careerResult.value?.short_term_plan?.goals)
+)
+const localizedMidTermGoals = computed(() =>
+  normalizeLocalizedTextList(careerResult.value?.mid_term_plan?.goals)
+)
+const localizedLongTermGoals = computed(() =>
+  normalizeLocalizedTextList(careerResult.value?.long_term_plan?.goals)
+)
 
 // 薪资成长预测
 const salaryPrediction = computed(() => {
@@ -726,13 +831,20 @@ const salaryPrediction = computed(() => {
 
   const baseSalary = Math.max(10, yearsExp * 5 + 8)
   const growthRate = score >= 80 ? 0.35 : score >= 60 ? 0.25 : 0.15
-  const stageMultiplier = stage === 'entry' ? 1.5 : stage === 'growth' ? 1.3 : stage === 'mature' ? 1.1 : 1.2
+  const stageMultiplier =
+    stage === 'entry' ? 1.5 : stage === 'growth' ? 1.3 : stage === 'mature' ? 1.1 : 1.2
 
   const predictions = []
   for (let i = 0; i < 5; i++) {
     const year = new Date().getFullYear() + i
-    const salary = Math.round(baseSalary * Math.pow(1 + growthRate, i) * (i === 0 ? 1 : stageMultiplier))
-    predictions.push({ year, salary, growth: i === 0 ? 0 : Math.round((salary / predictions[i - 1]?.salary - 1) * 100) })
+    const salary = Math.round(
+      baseSalary * Math.pow(1 + growthRate, i) * (i === 0 ? 1 : stageMultiplier)
+    )
+    predictions.push({
+      year,
+      salary,
+      growth: i === 0 ? 0 : Math.round((salary / predictions[i - 1]?.salary - 1) * 100),
+    })
   }
   return {
     currentSalary: predictions[0]?.salary || baseSalary,
@@ -748,12 +860,16 @@ const salaryPrediction = computed(() => {
 const learningResources = computed(() => {
   const gaps = skillGaps.value
   if (!gaps.length) return []
-  return gaps.slice(0, 5).map(gap => {
+  return gaps.slice(0, 5).map((gap) => {
     const skill = gap.skill || ''
     const resources = []
     const priority = gap.priority || '中'
     if (skill.includes('系统设计') || skill.includes('架构')) {
-      resources.push({ type: '书籍', name: '《系统设计面试》', link: 'https://book.douban.com/subject/35246717/' })
+      resources.push({
+        type: '书籍',
+        name: '《系统设计面试》',
+        link: 'https://book.douban.com/subject/35246717/',
+      })
       resources.push({ type: '课程', name: 'Grokking System Design', link: '#' })
     } else if (skill.includes('算法') || skill.includes('数据结构')) {
       resources.push({ type: '平台', name: 'LeetCode', link: 'https://leetcode.cn' })
@@ -827,11 +943,14 @@ const strategySummary = computed(() => {
   }
 })
 
-const strategyTagType = computed(() => ({
-  '精准投': 'success',
-  '海投': 'warning',
-  '保底投': 'info',
-}[strategySummary.value.mode] || 'info'))
+const strategyTagType = computed(
+  () =>
+    ({
+      精准投: 'success',
+      海投: 'warning',
+      保底投: 'info',
+    })[strategySummary.value.mode] || 'info'
+)
 
 watch(selectedResumeId, async (value) => {
   if (!value) {
@@ -878,24 +997,34 @@ function restoreSelections() {
 
 async function refreshBaseOptions() {
   optionsLoading.value = true
+  baseOptionsError.value = false
   try {
     const [resumeData, jdData] = await Promise.all([
       getResumeList({ page_size: 50 }),
       getJDList({ page_size: 50 }),
     ])
-    resumeOptions.value = (resumeData?.items || []).filter(item => item.parsed && Object.keys(item.parsed).length)
+    resumeOptions.value = (resumeData?.items || []).filter(
+      (item) => item.parsed && Object.keys(item.parsed).length
+    )
     jdOptions.value = jdData?.items || []
 
-    if (selectedResumeId.value && !resumeOptions.value.some(item => item.id === selectedResumeId.value)) {
+    if (
+      selectedResumeId.value &&
+      !resumeOptions.value.some((item) => item.id === selectedResumeId.value)
+    ) {
       selectedResumeId.value = null
     }
-    if (selectedJDId.value && !jdOptions.value.some(item => item.id === selectedJDId.value)) {
+    if (selectedJDId.value && !jdOptions.value.some((item) => item.id === selectedJDId.value)) {
       selectedJDId.value = null
     }
 
     if (!selectedResumeId.value && resumeOptions.value.length) {
       selectedResumeId.value = resumeOptions.value[0].id
     }
+  } catch {
+    resumeOptions.value = []
+    jdOptions.value = []
+    baseOptionsError.value = true
   } finally {
     optionsLoading.value = false
   }
@@ -931,7 +1060,7 @@ async function startCareerPlanning() {
   agentSteps.value = []
 
   try {
-    const effectiveJdId = selectedJD.value?.id || await createGoalJD()
+    const effectiveJdId = selectedJD.value?.id || (await createGoalJD())
     const startRes = await runFullAnalysis({
       resume_id: selectedResumeId.value,
       jd_id: effectiveJdId,
@@ -989,7 +1118,7 @@ async function createGoalJD() {
     throw new Error('目标 JD 创建失败')
   }
   selectedJDId.value = created.id
-  const exists = jdOptions.value.some(item => item.id === created.id)
+  const exists = jdOptions.value.some((item) => item.id === created.id)
   if (!exists) {
     jdOptions.value.unshift({
       id: created.id,
@@ -1027,7 +1156,7 @@ function makeRadarPolygon(scores) {
   if (!count) return ''
   return scores
     .map((score, index) => {
-      const angle = (-Math.PI / 2) + ((Math.PI * 2 * index) / count)
+      const angle = -Math.PI / 2 + (Math.PI * 2 * index) / count
       const radius = (safeScore(score) / 100) * radarRadius
       const x = centerPoint + Math.cos(angle) * radius
       const y = centerPoint + Math.sin(angle) * radius
@@ -1047,45 +1176,53 @@ function joinedText(value) {
 }
 
 function priorityTag(priority) {
-  return {
-    高: 'danger',
-    中: 'warning',
-    低: 'info',
-  }[priority] || 'info'
+  return (
+    {
+      高: 'danger',
+      中: 'warning',
+      低: 'info',
+    }[priority] || 'info'
+  )
 }
 
 function complexityTag(complexity) {
-  return {
-    困难: 'danger',
-    中等: 'warning',
-    简单: 'success',
-  }[complexity] || 'info'
+  return (
+    {
+      困难: 'danger',
+      中等: 'warning',
+      简单: 'success',
+    }[complexity] || 'info'
+  )
 }
 
 function stepLabel(name) {
-  return {
-    intent_recognition: '意图识别',
-    resume_parse: '简历解析',
-    jd_parse: 'JD 解析',
-    task_planning: '任务规划',
-    knowledge_retrieval: '知识检索',
-    matching_analysis: '匹配分析',
-    resume_optimization: '简历优化',
-    interview_question_generation: '面试题生成',
-    self_check: '自我校验',
-    final_report: '汇总报告',
-    career_planning: '职业规划',
-  }[name] || name
+  return (
+    {
+      intent_recognition: '意图识别',
+      resume_parse: '简历解析',
+      jd_parse: 'JD 解析',
+      task_planning: '任务规划',
+      knowledge_retrieval: '知识检索',
+      matching_analysis: '匹配分析',
+      resume_optimization: '简历优化',
+      interview_question_generation: '面试题生成',
+      self_check: '自我校验',
+      final_report: '汇总报告',
+      career_planning: '职业规划',
+    }[name] || name
+  )
 }
 
 function statusText(status) {
-  return {
-    pending: '等待中',
-    running: '执行中',
-    completed: '已完成',
-    failed: '失败',
-    skipped: '跳过',
-  }[status] || status
+  return (
+    {
+      pending: '等待中',
+      running: '执行中',
+      completed: '已完成',
+      failed: '失败',
+      skipped: '跳过',
+    }[status] || status
+  )
 }
 
 function stepType(status) {
@@ -1214,10 +1351,18 @@ function stepIcon(status) {
   color: var(--app-text);
 }
 
-.tone-blue::before { background: linear-gradient(135deg, #dff5e7, #c7ead4); }
-.tone-green::before { background: linear-gradient(135deg, #e8f7ea, #d5f0da); }
-.tone-amber::before { background: linear-gradient(135deg, #fff1e6, #f7dcc5); }
-.tone-dark::before { background: linear-gradient(135deg, #eef1ff, #dce3ff); }
+.tone-blue::before {
+  background: linear-gradient(135deg, #dff5e7, #c7ead4);
+}
+.tone-green::before {
+  background: linear-gradient(135deg, #e8f7ea, #d5f0da);
+}
+.tone-amber::before {
+  background: linear-gradient(135deg, #fff1e6, #f7dcc5);
+}
+.tone-dark::before {
+  background: linear-gradient(135deg, #eef1ff, #dce3ff);
+}
 
 .control-card,
 .progress-card,
@@ -1276,7 +1421,9 @@ function stepIcon(status) {
   margin: 8px 0;
 }
 
-.salary-future { color: var(--app-success) !important; }
+.salary-future {
+  color: var(--app-success) !important;
+}
 
 .salary-current small {
   display: block;

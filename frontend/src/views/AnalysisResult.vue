@@ -36,6 +36,20 @@
       </div>
     </div>
 
+    <el-alert
+      v-if="analysisLoadError"
+      class="load-error"
+      type="error"
+      :closable="false"
+      show-icon
+      title="分析结果加载失败"
+      description="请检查网络连接后重试，或返回智能分析页重新发起任务。"
+    >
+      <template #default>
+        <el-button size="small" type="primary" plain @click="retryLoadAnalysis">重试加载</el-button>
+      </template>
+    </el-alert>
+
     <div class="panel" v-if="loading && agentSteps.length">
       <div class="panel-header">
         <div class="panel-title-row">
@@ -257,7 +271,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
-import { Loading, Reading, SuccessFilled, WarningFilled, CircleCloseFilled, Promotion, DataAnalysis, ChatLineSquare } from '@element-plus/icons-vue'
+import { Loading, Reading, SuccessFilled, WarningFilled, CircleCloseFilled, Promotion, ChatLineSquare } from '@element-plus/icons-vue'
 import { getAnalysis, regenOptimize, regenInterview } from '@/api/analysis'
 import { startAgentAnalysis } from '@/api/agent'
 import { generateOptimized } from '@/api/resume'
@@ -274,6 +288,7 @@ import {
 const router = useRouter()
 const route = useRoute()
 const loading = ref(false)
+const analysisLoadError = ref(false)
 const regenOptimizeLoading = ref(false)
 const regenIntervLoading = ref(false)
 const tab = ref('match')
@@ -308,6 +323,7 @@ function fillLast() {
 }
 
 async function loadAnalysisById(recordId) {
+  analysisLoadError.value = false
   try {
     const data = await getAnalysis(recordId)
     result.value = data
@@ -316,8 +332,13 @@ async function loadAnalysisById(recordId) {
       tab.value = 'match'
     }
   } catch {
-    // request.js already handles feedback
+    analysisLoadError.value = true
   }
+}
+
+function retryLoadAnalysis() {
+  const recordId = Number(route.params.id)
+  if (!Number.isNaN(recordId)) loadAnalysisById(recordId)
 }
 
 const hasInterview = computed(() => checkHasInterviewQuestions(result.value?.interview_questions))

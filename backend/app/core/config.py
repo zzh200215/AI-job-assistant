@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
     APP_DEBUG: bool = False
+    TESTING: bool = False
     LOG_LEVEL: str = "INFO"
     AUTO_CREATE_TABLES: bool = True
 

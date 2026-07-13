@@ -40,7 +40,6 @@ export const getPerformanceTrend = () =>
 let ws = null
 let heartbeatTimer = null
 let reconnectTimer = null
-let sessionId = null
 let reconnectAttempts = 0
 
 const MAX_RECONNECT_ATTEMPTS = 3
@@ -66,7 +65,6 @@ const wsError = (...args) => {
  * @returns {WebSocket}
  */
 export function connectInterviewWS(sid, onMessage, onError, onClose) {
-  sessionId = sid
   const token = localStorage.getItem('token')
   if (!token) {
     if (onError) onError(new Error('未登录'))
@@ -173,7 +171,6 @@ export function disconnectInterviewWS() {
   stopHeartbeat()
   clearReconnect()
   reconnectAttempts = 0
-  sessionId = null
   if (ws) {
     ws.onclose = null // 防止触发重连
     ws.close(1000, '用户断开')

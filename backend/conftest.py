@@ -2,6 +2,7 @@
 """Pytest bootstrap for backend tests."""
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -12,6 +13,13 @@ from sqlalchemy import BigInteger, create_engine
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
+# Unit tests must not inherit external services configured in the developer's .env.
+os.environ["TESTING"] = "true"
+os.environ["LLM_PROVIDER"] = "mock"
+os.environ["EMBEDDING_PROVIDER"] = "mock"
+os.environ["ORCHESTRATION_BACKEND"] = "thread"
+os.environ["RUN_SCHEDULER"] = "false"
 
 from app.core.database import Base, SessionLocal
 

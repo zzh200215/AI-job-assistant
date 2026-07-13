@@ -82,15 +82,21 @@
           <div class="metrics-grid">
             <div class="metric-item">
               <span class="metric-label">面试率</span>
-              <strong class="metric-value">{{ report.interview_rate ? (report.interview_rate * 100).toFixed(1) + '%' : '-' }}</strong>
+              <strong class="metric-value">{{
+                report.interview_rate ? (report.interview_rate * 100).toFixed(1) + '%' : '-'
+              }}</strong>
             </div>
             <div class="metric-item">
               <span class="metric-label">平均匹配分</span>
-              <strong class="metric-value">{{ report.avg_match_score ? Math.round(report.avg_match_score) : '-' }}</strong>
+              <strong class="metric-value">{{
+                report.avg_match_score ? Math.round(report.avg_match_score) : '-'
+              }}</strong>
             </div>
             <div class="metric-item">
               <span class="metric-label">投递响应率</span>
-              <strong class="metric-value">{{ report.response_rate ? (report.response_rate * 100).toFixed(1) + '%' : '-' }}</strong>
+              <strong class="metric-value">{{
+                report.response_rate ? (report.response_rate * 100).toFixed(1) + '%' : '-'
+              }}</strong>
             </div>
             <div class="metric-item">
               <span class="metric-label">总投递数</span>
@@ -135,7 +141,10 @@
               <div class="app-dot" :class="stageColor(app.stage)" />
               <div class="app-info">
                 <strong>{{ app.company || '未知' }} - {{ app.title || '未知岗位' }}</strong>
-                <span>{{ stageLabel(app.stage) }} · {{ formatDate(app.update_time || app.create_time) }}</span>
+                <span
+                  >{{ stageLabel(app.stage) }} ·
+                  {{ formatDate(app.update_time || app.create_time) }}</span
+                >
               </div>
             </div>
           </div>
@@ -143,9 +152,19 @@
       </div>
     </template>
 
+    <div v-else-if="loadError" class="load-error">
+      <div>
+        <strong>周报加载失败</strong>
+        <span>{{ loadError }}</span>
+      </div>
+      <el-button @click="loadReport">重新加载</el-button>
+    </div>
+
     <div v-else class="empty-state">
       <el-empty :image-size="120" description="暂无周报数据，开始投递后自动生成">
-        <el-button type="primary" @click="$router.push('/jobs/pipeline/kanban')">去投递看板</el-button>
+        <el-button type="primary" @click="$router.push('/jobs/pipeline/kanban')"
+          >去投递看板</el-button
+        >
       </el-empty>
     </div>
   </div>
@@ -166,6 +185,7 @@ import { getWeeklyReport } from '@/api/dashboard'
 
 const loading = ref(false)
 const report = ref(null)
+const loadError = ref('')
 
 const funnelStages = [
   { key: 'todo', label: '待投递', accent: 'accent-blue' },
@@ -178,23 +198,41 @@ const funnelStages = [
 
 function funnelWidth(key) {
   const val = report.value?.pipeline_summary?.[key] || 0
-  const max = Math.max(...funnelStages.map(s => report.value?.pipeline_summary?.[s.key] || 0), 1)
+  const max = Math.max(...funnelStages.map((s) => report.value?.pipeline_summary?.[s.key] || 0), 1)
   return Math.max(4, (val / max) * 100) + '%'
 }
 
 function stageColor(stage) {
-  const map = { todo: 'dot-blue', applied: 'dot-violet', interview: 'dot-green', offer: 'dot-gold', rejected: 'dot-red' }
+  const map = {
+    todo: 'dot-blue',
+    applied: 'dot-violet',
+    interview: 'dot-green',
+    offer: 'dot-gold',
+    rejected: 'dot-red',
+  }
   return map[stage] || 'dot-blue'
 }
 
 function stageLabel(stage) {
-  const map = { todo: '待投递', applied: '已投递', written_test: '笔试', interview: '面试', offer: 'Offer', rejected: '已拒绝', abandoned: '已放弃' }
+  const map = {
+    todo: '待投递',
+    applied: '已投递',
+    written_test: '笔试',
+    interview: '面试',
+    offer: 'Offer',
+    rejected: '已拒绝',
+    abandoned: '已放弃',
+  }
   return map[stage] || stage
 }
 
 function formatDate(d) {
   if (!d) return ''
-  try { return new Date(d).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) } catch { return d }
+  try {
+    return new Date(d).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  } catch {
+    return d
+  }
 }
 
 async function loadReport() {
@@ -202,7 +240,11 @@ async function loadReport() {
   try {
     const data = await getWeeklyReport()
     report.value = data
-  } catch {} finally {
+    loadError.value = ''
+  } catch (error) {
+    report.value = null
+    loadError.value = error?.userMessage || '暂时无法生成本周周报，请检查网络后重试。'
+  } finally {
     loading.value = false
   }
 }
@@ -214,6 +256,29 @@ onMounted(() => {
 
 <style scoped>
 /* Stats row */
+.load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid #f2c5bf;
+  border-radius: 8px;
+  background: var(--app-accent-soft);
+}
+.load-error strong,
+.load-error span {
+  display: block;
+}
+.load-error strong {
+  color: var(--app-danger);
+  font-size: 15px;
+}
+.load-error span {
+  margin-top: 4px;
+  color: var(--app-muted);
+  font-size: 13px;
+}
 .stats-row {
   display: flex;
   gap: 16px;
@@ -242,10 +307,18 @@ onMounted(() => {
   margin-top: 4px;
 }
 
-.accent-blue strong { color: var(--app-primary); }
-.accent-violet strong { color: var(--app-violet); }
-.accent-green strong { color: var(--app-success); }
-.accent-amber strong { color: var(--app-warning); }
+.accent-blue strong {
+  color: var(--app-primary);
+}
+.accent-violet strong {
+  color: var(--app-violet);
+}
+.accent-green strong {
+  color: var(--app-success);
+}
+.accent-amber strong {
+  color: var(--app-warning);
+}
 
 /* Funnel */
 .funnel-chart {
@@ -281,12 +354,24 @@ onMounted(() => {
   transition: width 0.5s;
 }
 
-.funnel-bar.accent-blue { background: var(--app-primary); }
-.funnel-bar.accent-violet { background: var(--app-violet); }
-.funnel-bar.accent-amber { background: var(--app-warning); }
-.funnel-bar.accent-green { background: var(--app-success); }
-.funnel-bar.accent-gold { background: #e6a23c; }
-.funnel-bar.accent-red { background: var(--app-danger); }
+.funnel-bar.accent-blue {
+  background: var(--app-primary);
+}
+.funnel-bar.accent-violet {
+  background: var(--app-violet);
+}
+.funnel-bar.accent-amber {
+  background: var(--app-warning);
+}
+.funnel-bar.accent-green {
+  background: var(--app-success);
+}
+.funnel-bar.accent-gold {
+  background: #e6a23c;
+}
+.funnel-bar.accent-red {
+  background: var(--app-danger);
+}
 
 .funnel-count {
   width: 40px;
@@ -386,11 +471,21 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.dot-blue { background: var(--app-primary); }
-.dot-violet { background: var(--app-violet); }
-.dot-green { background: var(--app-success); }
-.dot-gold { background: #e6a23c; }
-.dot-red { background: var(--app-danger); }
+.dot-blue {
+  background: var(--app-primary);
+}
+.dot-violet {
+  background: var(--app-violet);
+}
+.dot-green {
+  background: var(--app-success);
+}
+.dot-gold {
+  background: #e6a23c;
+}
+.dot-red {
+  background: var(--app-danger);
+}
 
 .app-info strong {
   display: block;
@@ -403,6 +498,12 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .stats-row { flex-direction: column; }
+  .load-error {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .stats-row {
+    flex-direction: column;
+  }
 }
 </style>

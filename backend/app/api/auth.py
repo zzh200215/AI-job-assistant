@@ -343,7 +343,7 @@ async def reset_password_with_token(
     if not user:
         return fail(message="用户不存在", code=ERR_PARAM)
 
-    user.password = hash******************************sword)
+    user.password = hash_password(new_password)
     db.add(user)
     db.commit()
     return ok(message="密码已重置，请使用新密码登录")

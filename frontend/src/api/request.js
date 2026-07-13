@@ -34,20 +34,30 @@ request.interceptors.response.use(
       if (body.code === 0) return body.data
       const requestId = body.request_id || resp.headers['x-request-id']
       const msg = formatApiErrorMessage(body.message, requestId, '请求失败')
-      ElMessage.error(msg)
+      const method = String(resp.config?.method || '').toLowerCase()
+      if (resp.config?.notifyError !== false && method !== 'get') {
+        ElMessage.error(msg)
+      }
       const error = new Error(body.message || 'error')
       error.requestId = requestId
       error.payload = body
+      error.userMessage = body.message || '请求失败'
+      error.isApiError = true
       return Promise.reject(error)
     }
     return body
   },
   (err) => {
+    const method = String(err?.config?.method || '').toLowerCase()
+    const shouldNotify = err?.config?.notifyError !== false && method !== 'get'
+
     if (err?.response?.status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       window.dispatchEvent(new CustomEvent('auth:expired'))
-      ElMessage.error('登录已过期，请重新登录')
+      if (err?.config?.notifyError !== false) {
+        ElMessage.error('登录已过期，请重新登录')
+      }
       router.push('/login')
       return Promise.reject(err)
     }
@@ -57,10 +67,14 @@ request.interceptors.response.use(
       const detail = body?.data?.errors || body?.detail
       const requestId = body?.request_id || err?.response?.headers?.['x-request-id']
       const msg = normalizeValidationMessage(detail, body?.message || '请求参数错误')
-      ElMessage.error(formatApiErrorMessage(msg, requestId, '请求参数错误'))
+      if (shouldNotify) {
+        ElMessage.error(formatApiErrorMessage(msg, requestId, '请求参数错误'))
+      }
       const error = new Error(msg)
       error.requestId = requestId
       error.payload = body
+      error.userMessage = msg
+      error.isApiError = true
       return Promise.reject(error)
     }
 
@@ -69,7 +83,10 @@ request.interceptors.response.use(
       || err?.response?.data?.msg
       || err.message
       || '网络异常，请稍后重试'
-    ElMessage.error(formatApiErrorMessage(msg, requestId, '网络异常，请稍后重试'))
+    if (shouldNotify) {
+      ElMessage.error(formatApiErrorMessage(msg, requestId, '网络异常，请稍后重试'))
+    }
+    err.userMessage = msg
     return Promise.reject(err)
   },
 )

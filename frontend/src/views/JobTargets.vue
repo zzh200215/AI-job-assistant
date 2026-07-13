@@ -3,7 +3,9 @@
     <div class="page-header">
       <div>
         <h2>求职目标</h2>
-        <div class="page-header-sub">设定求职方向，AI将根据目标驱动岗位推荐、简历优化和面试题生成</div>
+        <div class="page-header-sub">
+          设定求职方向，AI将根据目标驱动岗位推荐、简历优化和面试题生成
+        </div>
       </div>
       <el-button type="primary" @click="openCreate">
         <el-icon><Plus /></el-icon> 新建目标
@@ -13,6 +15,14 @@
     <!-- 目标列表 -->
     <div v-if="loading" class="loading-state">
       <el-icon class="is-loading"><Loading /></el-icon> 加载中...
+    </div>
+
+    <div v-else-if="loadError" class="load-error">
+      <div>
+        <strong>求职目标加载失败</strong>
+        <span>{{ loadError }}</span>
+      </div>
+      <el-button @click="loadTargets">重新加载</el-button>
     </div>
 
     <div v-else-if="!targets.length" class="empty-state">
@@ -33,30 +43,46 @@
         <div class="target-header">
           <div class="target-name-row">
             <el-tag v-if="t.is_primary" type="danger" size="small" effect="dark">主目标</el-tag>
-            <el-tag v-else :type="priorityType(t.priority)" size="small">{{ priorityLabel(t.priority) }}</el-tag>
+            <el-tag v-else :type="priorityType(t.priority)" size="small">{{
+              priorityLabel(t.priority)
+            }}</el-tag>
             <h3>{{ t.name }}</h3>
           </div>
-          <el-dropdown trigger="click" @command="cmd => handleCommand(cmd, t)" @click.stop>
+          <el-dropdown trigger="click" @command="(cmd) => handleCommand(cmd, t)" @click.stop>
             <el-icon class="more-btn"><MoreFilled /></el-icon>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="edit">编辑</el-dropdown-item>
-                <el-dropdown-item v-if="!t.is_primary" command="primary">设为主目标</el-dropdown-item>
-                <el-dropdown-item command="delete" divided style="color: var(--app-danger)">删除</el-dropdown-item>
+                <el-dropdown-item v-if="!t.is_primary" command="primary"
+                  >设为主目标</el-dropdown-item
+                >
+                <el-dropdown-item command="delete" divided style="color: var(--app-danger)"
+                  >删除</el-dropdown-item
+                >
               </el-dropdown-menu>
             </template>
           </el-dropdown>
         </div>
 
         <div class="target-meta">
-          <span v-if="t.position"><el-icon><Briefcase /></el-icon> {{ t.position }}</span>
-          <span v-if="t.industry"><el-icon><OfficeBuilding /></el-icon> {{ t.industry }}</span>
-          <span v-if="t.cities?.length"><el-icon><Location /></el-icon> {{ t.cities.join(' / ') }}</span>
-          <span v-if="t.salary_min || t.salary_max"><el-icon><Coin /></el-icon> {{ formatSalary(t) }}</span>
+          <span v-if="t.position"
+            ><el-icon><Briefcase /></el-icon> {{ t.position }}</span
+          >
+          <span v-if="t.industry"
+            ><el-icon><OfficeBuilding /></el-icon> {{ t.industry }}</span
+          >
+          <span v-if="t.cities?.length"
+            ><el-icon><Location /></el-icon> {{ t.cities.join(' / ') }}</span
+          >
+          <span v-if="t.salary_min || t.salary_max"
+            ><el-icon><Coin /></el-icon> {{ formatSalary(t) }}</span
+          >
         </div>
 
         <div v-if="t.skills?.length" class="target-skills">
-          <el-tag v-for="sk in t.skills.slice(0, 5)" :key="sk" size="small" type="info">{{ sk }}</el-tag>
+          <el-tag v-for="sk in t.skills.slice(0, 5)" :key="sk" size="small" type="info">{{
+            sk
+          }}</el-tag>
           <span v-if="t.skills.length > 5" class="more-skills">+{{ t.skills.length - 5 }}</span>
         </div>
 
@@ -84,7 +110,13 @@
       width="560px"
       :close-on-click-modal="false"
     >
-      <el-form ref="formRef" :model="form" :rules="formRules" label-width="90px" label-position="top">
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="formRules"
+        label-width="90px"
+        label-position="top"
+      >
         <el-form-item label="目标名称" prop="name">
           <el-input v-model="form.name" placeholder="如：高级前端工程师" maxlength="100" />
         </el-form-item>
@@ -97,20 +129,46 @@
           </el-form-item>
         </div>
         <el-form-item label="目标城市">
-          <el-select v-model="form.cities" multiple filterable allow-create placeholder="添加城市" style="width:100%">
+          <el-select
+            v-model="form.cities"
+            multiple
+            filterable
+            allow-create
+            placeholder="添加城市"
+            style="width: 100%"
+          >
             <el-option v-for="c in commonCities" :key="c" :label="c" :value="c" />
           </el-select>
         </el-form-item>
         <div class="form-row">
           <el-form-item label="最低薪资(K/月)">
-            <el-input-number v-model="form.salary_min" :min="1" :step="1" placeholder="如：20" style="width:100%" />
+            <el-input-number
+              v-model="form.salary_min"
+              :min="1"
+              :step="1"
+              placeholder="如：20"
+              style="width: 100%"
+            />
           </el-form-item>
           <el-form-item label="最高薪资(K/月)">
-            <el-input-number v-model="form.salary_max" :min="1" :step="1" placeholder="如：40" style="width:100%" />
+            <el-input-number
+              v-model="form.salary_max"
+              :min="1"
+              :step="1"
+              placeholder="如：40"
+              style="width: 100%"
+            />
           </el-form-item>
         </div>
         <el-form-item label="核心技能">
-          <el-select v-model="form.skills" multiple filterable allow-create placeholder="添加技能关键词" style="width:100%">
+          <el-select
+            v-model="form.skills"
+            multiple
+            filterable
+            allow-create
+            placeholder="添加技能关键词"
+            style="width: 100%"
+          >
           </el-select>
         </el-form-item>
         <div class="form-row">
@@ -126,7 +184,13 @@
           </el-form-item>
         </div>
         <el-form-item label="备注">
-          <el-input v-model="form.notes" type="textarea" :rows="3" placeholder="关于这个目标的补充说明" maxlength="2000" />
+          <el-input
+            v-model="form.notes"
+            type="textarea"
+            :rows="3"
+            placeholder="关于这个目标的补充说明"
+            maxlength="2000"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -150,9 +214,26 @@ import {
   Plus,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
-import { getTargets, createTarget, updateTarget, deleteTarget, setPrimaryTarget } from '@/api/targets'
+import {
+  getTargets,
+  createTarget,
+  updateTarget,
+  deleteTarget,
+  setPrimaryTarget,
+} from '@/api/targets'
 
-const commonCities = ['北京', '上海', '深圳', '广州', '杭州', '成都', '南京', '武汉', '苏州', '西安']
+const commonCities = [
+  '北京',
+  '上海',
+  '深圳',
+  '广州',
+  '杭州',
+  '成都',
+  '南京',
+  '武汉',
+  '苏州',
+  '西安',
+]
 
 const loading = ref(true)
 const targets = ref([])
@@ -161,6 +242,7 @@ const isEdit = ref(false)
 const editId = ref(null)
 const submitting = ref(false)
 const formRef = ref(null)
+const loadError = ref('')
 
 const defaultForm = () => ({
   name: '',
@@ -201,8 +283,10 @@ async function loadTargets() {
   try {
     const data = await getTargets()
     targets.value = data?.targets || data || []
-  } catch {
+    loadError.value = ''
+  } catch (error) {
     targets.value = []
+    loadError.value = error?.userMessage || '暂时无法获取目标列表，请检查网络后重试。'
   } finally {
     loading.value = false
   }
@@ -250,7 +334,7 @@ async function handleSubmit() {
     }
     dialogVisible.value = false
     loadTargets()
-  } catch (e) {
+  } catch {
     // error handled by interceptor
   } finally {
     submitting.value = false
@@ -265,14 +349,18 @@ async function handleCommand(cmd, t) {
       await setPrimaryTarget(t.id)
       ElMessage.success('已设为主目标')
       loadTargets()
-    } catch {}
+    } catch {
+      // 请求失败由统一请求层提示。
+    }
   } else if (cmd === 'delete') {
     try {
       await ElMessageBox.confirm(`确定删除目标「${t.name}」？`, '删除确认', { type: 'warning' })
       await deleteTarget(t.id)
       ElMessage.success('已删除')
       loadTargets()
-    } catch {}
+    } catch {
+      // 用户取消删除或请求失败时保持当前列表。
+    }
   }
 }
 
@@ -281,9 +369,32 @@ onMounted(loadTargets)
 
 <style scoped>
 .page-shell {
-  max-width: 1280px;
-  margin: 0 auto;
+  width: 100%;
   color: var(--app-text);
+}
+
+.load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid #f2c5bf;
+  border-radius: 8px;
+  background: var(--app-accent-soft);
+}
+.load-error strong,
+.load-error span {
+  display: block;
+}
+.load-error strong {
+  color: var(--app-danger);
+  font-size: 15px;
+}
+.load-error span {
+  margin-top: 4px;
+  color: var(--app-muted);
+  font-size: 13px;
 }
 
 .targets-grid {
@@ -406,6 +517,11 @@ onMounted(loadTargets)
 }
 
 @media (max-width: 768px) {
+  .load-error {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .targets-grid {
     grid-template-columns: 1fr;
   }

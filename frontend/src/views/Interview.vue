@@ -27,9 +27,7 @@
         <div v-if="upcomingLoading" class="loading-state">
           <el-icon class="is-loading"><Loading /></el-icon>
         </div>
-        <div v-else-if="!upcomingInterviews.length" class="empty-inline">
-          暂无即将到来的面试
-        </div>
+        <div v-else-if="!upcomingInterviews.length" class="empty-inline">暂无即将到来的面试</div>
         <div v-else class="interview-list">
           <div
             v-for="item in upcomingInterviews"
@@ -44,7 +42,9 @@
             </div>
             <div class="interview-actions">
               <el-button size="small" @click.stop="startPrep(item)">AI准备</el-button>
-              <el-button size="small" type="primary" @click.stop="$router.push('/interview/setup')">模拟面试</el-button>
+              <el-button size="small" type="primary" @click.stop="$router.push('/interview/setup')"
+                >模拟面试</el-button
+              >
             </div>
           </div>
         </div>
@@ -68,10 +68,21 @@
         <div v-else-if="dailyQuestion" class="daily-practice">
           <div class="daily-question">
             <div class="daily-badge">
-              <el-tag size="small" :type="dailyQuestion.difficulty === 'hard' ? 'danger' : dailyQuestion.difficulty === 'medium' ? 'warning' : 'info'">
+              <el-tag
+                size="small"
+                :type="
+                  dailyQuestion.difficulty === 'hard'
+                    ? 'danger'
+                    : dailyQuestion.difficulty === 'medium'
+                      ? 'warning'
+                      : 'info'
+                "
+              >
                 {{ difficultyLabel(dailyQuestion.difficulty) }}
               </el-tag>
-              <el-tag size="small" type="success" effect="plain">{{ dailyQuestion.category || '通用' }}</el-tag>
+              <el-tag size="small" type="success" effect="plain">{{
+                dailyQuestion.category || '通用'
+              }}</el-tag>
             </div>
             <h4 class="daily-title">{{ dailyQuestion.question }}</h4>
             <div class="daily-hint">
@@ -82,10 +93,22 @@
               <div class="daily-section star-section">
                 <h5>📋 STAR 法则参考</h5>
                 <div class="star-grid">
-                  <div class="star-item"><span class="star-tag">S 情境</span><span>{{ dailyQuestion.star_situation || '描述当时的环境和背景' }}</span></div>
-                  <div class="star-item"><span class="star-tag">T 任务</span><span>{{ dailyQuestion.star_task || '描述你需要完成的任务' }}</span></div>
-                  <div class="star-item"><span class="star-tag">A 行动</span><span>{{ dailyQuestion.star_action || '描述你采取的具体行动' }}</span></div>
-                  <div class="star-item"><span class="star-tag">R 结果</span><span>{{ dailyQuestion.star_result || '描述最终达成的结果' }}</span></div>
+                  <div class="star-item">
+                    <span class="star-tag">S 情境</span
+                    ><span>{{ dailyQuestion.star_situation || '描述当时的环境和背景' }}</span>
+                  </div>
+                  <div class="star-item">
+                    <span class="star-tag">T 任务</span
+                    ><span>{{ dailyQuestion.star_task || '描述你需要完成的任务' }}</span>
+                  </div>
+                  <div class="star-item">
+                    <span class="star-tag">A 行动</span
+                    ><span>{{ dailyQuestion.star_action || '描述你采取的具体行动' }}</span>
+                  </div>
+                  <div class="star-item">
+                    <span class="star-tag">R 结果</span
+                    ><span>{{ dailyQuestion.star_result || '描述最终达成的结果' }}</span>
+                  </div>
                 </div>
               </div>
               <div class="daily-section">
@@ -97,23 +120,34 @@
                 <p>{{ dailyQuestion.focus || dailyQuestion.intent || '综合能力考察' }}</p>
               </div>
             </div>
-            <el-button v-if="!showAnswer" type="primary" plain @click="showAnswer = true">查看答案与 STAR 分析</el-button>
+            <el-button v-if="!showAnswer" type="primary" plain @click="showAnswer = true"
+              >查看答案与 STAR 分析</el-button
+            >
             <el-button v-else text @click="showAnswer = false">收起答案</el-button>
           </div>
           <!-- STAR 法则速查 -->
           <div class="star-cheatsheet">
             <h5>STAR 法则速查</h5>
             <div class="star-grid">
-              <div class="star-item"><span class="star-tag star-s">S</span><span><b>Situation</b> 情境 — 在什么背景下？</span></div>
-              <div class="star-item"><span class="star-tag star-t">T</span><span><b>Task</b> 任务 — 你需要完成什么？</span></div>
-              <div class="star-item"><span class="star-tag star-a">A</span><span><b>Action</b> 行动 — 你做了什么？</span></div>
-              <div class="star-item"><span class="star-tag star-r">R</span><span><b>Result</b> 结果 — 达成了什么成果？</span></div>
+              <div class="star-item">
+                <span class="star-tag star-s">S</span
+                ><span><b>Situation</b> 情境 — 在什么背景下？</span>
+              </div>
+              <div class="star-item">
+                <span class="star-tag star-t">T</span
+                ><span><b>Task</b> 任务 — 你需要完成什么？</span>
+              </div>
+              <div class="star-item">
+                <span class="star-tag star-a">A</span><span><b>Action</b> 行动 — 你做了什么？</span>
+              </div>
+              <div class="star-item">
+                <span class="star-tag star-r">R</span
+                ><span><b>Result</b> 结果 — 达成了什么成果？</span>
+              </div>
             </div>
           </div>
         </div>
-        <div v-else class="empty-inline">
-          暂无练习题目，开始一次模拟面试后会自动生成
-        </div>
+        <div v-else class="empty-inline">暂无练习题目，开始一次模拟面试后会自动生成</div>
       </div>
     </div>
 
@@ -123,7 +157,9 @@
         <div class="panel-title-row">
           <el-icon :size="18" color="var(--app-danger)"><TrendCharts /></el-icon>
           <h3>薄弱知识点训练</h3>
-          <el-tag v-if="weakAreas.length" size="small" type="danger">{{ weakAreas.length }} 项待加强</el-tag>
+          <el-tag v-if="weakAreas.length" size="small" type="danger"
+            >{{ weakAreas.length }} 项待加强</el-tag
+          >
         </div>
       </div>
       <div class="panel-body">
@@ -134,18 +170,24 @@
           <div v-for="area in weakAreas" :key="area.name" class="weak-card">
             <div class="weak-header">
               <strong>{{ area.name }}</strong>
-              <el-tag :type="area.score < 50 ? 'danger' : 'warning'" size="small">{{ area.score }}分</el-tag>
+              <el-tag :type="area.score < 50 ? 'danger' : 'warning'" size="small"
+                >{{ area.score }}分</el-tag
+              >
             </div>
             <p class="weak-desc">{{ area.desc || '建议加强该方向训练' }}</p>
             <div class="weak-actions">
               <el-button size="small" @click="router.push('/interview/setup')">专项练习</el-button>
-              <el-button v-if="area.practice_questions?.length" size="small" text @click="showWeakDetail(area)">查看题目</el-button>
+              <el-button
+                v-if="area.practice_questions?.length"
+                size="small"
+                text
+                @click="showWeakDetail(area)"
+                >查看题目</el-button
+              >
             </div>
           </div>
         </div>
-        <div v-else class="empty-inline">
-          暂无薄弱项数据，完成更多模拟面试后可分析
-        </div>
+        <div v-else class="empty-inline">暂无薄弱项数据，完成更多模拟面试后可分析</div>
       </div>
     </div>
 
@@ -170,7 +212,12 @@
             </el-radio-group>
           </el-form-item>
         </el-form>
-        <el-button type="primary" @click="generateIntro" :loading="introGenerating" class="intro-btn">
+        <el-button
+          type="primary"
+          @click="generateIntro"
+          :loading="introGenerating"
+          class="intro-btn"
+        >
           生成自我介绍
         </el-button>
         <div v-if="introResult" class="intro-result">
@@ -206,7 +253,10 @@
             <div class="interview-dot" :class="s.status === 'completed' ? 'green' : 'amber'" />
             <div class="interview-info">
               <strong>{{ s.jd_title || s.position || '模拟面试' }}</strong>
-              <span>{{ formatDate(s.created_at) }} · {{ s.status === 'completed' ? '已完成' : '进行中' }}</span>
+              <span
+                >{{ formatDate(s.created_at) }} ·
+                {{ s.status === 'completed' ? '已完成' : '进行中' }}</span
+              >
             </div>
             <div v-if="s.overall_score" class="interview-score">
               <strong>{{ s.overall_score }}</strong>
@@ -225,9 +275,7 @@
           <el-icon :size="18" color="var(--app-success)"><Document /></el-icon>
           <h3>面试题库</h3>
         </div>
-        <el-button size="small" @click="useLast">
-          加载最近分析
-        </el-button>
+        <el-button size="small" @click="useLast"> 加载最近分析 </el-button>
       </div>
       <div class="panel-body">
         <div v-if="!questionData" class="question-load">
@@ -240,9 +288,13 @@
             <h4>{{ getInterviewGroupTitle(key) }}</h4>
             <div v-if="!items.length" class="empty-inline">该类型暂时没有题目</div>
             <div v-for="(q, i) in items" :key="i" class="question-card">
-              <div class="q-text"><b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}</div>
+              <div class="q-text">
+                <b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}
+              </div>
               <div class="q-focus">考察点：{{ q.focus || q.intent || '-' }}</div>
-              <div class="q-answer">参考答案：{{ q.suggested_answer || q.expected_answer || q.ref_answer || '-' }}</div>
+              <div class="q-answer">
+                参考答案：{{ q.suggested_answer || q.expected_answer || q.ref_answer || '-' }}
+              </div>
             </div>
           </div>
         </div>
@@ -282,19 +334,60 @@ const recordId = ref(null)
 const questionData = ref(null)
 const questionLoading = ref(false)
 
-const questionGroups = computed(() => normalizeInterviewQuestions(questionData.value?.interview_questions))
+const questionGroups = computed(() =>
+  normalizeInterviewQuestions(questionData.value?.interview_questions)
+)
 
 // 每日一练
 const dailyLoading = ref(false)
 const dailyQuestion = ref(null)
 const showAnswer = ref(false)
 const dailyQuestions = [
-  { question: '请介绍一下你自己，以及为什么你适合这个岗位？', difficulty: 'easy', category: '行为面试', suggested_answer: '从教育背景、工作经历、核心技能三个维度组织回答，结尾点明与目标岗位的匹配度。控制在1-2分钟内。', focus: '表达能力、自我认知、匹配度' },
-  { question: '请描述一个你遇到过的技术挑战，你是如何解决的？', difficulty: 'easy', category: '技术面试', suggested_answer: '使用 STAR 法则：S-背景/T-任务/A-行动/R-结果。强调你的技术选型、解决思路和最终效果。', focus: '技术深度、问题解决能力' },
-  { question: '你如何看待我们公司的产品/业务？你有什么建议？', difficulty: 'medium', category: '综合面试', suggested_answer: '提前研究公司产品，从用户角度提出1-2个具体建议，展现你的思考深度和主动性。', focus: '行业认知、分析能力' },
-  { question: '你的职业规划是什么？未来3-5年想达到什么目标？', difficulty: 'easy', category: '行为面试', suggested_answer: '短期(1年)夯实技术基础/融入团队，中期(2-3年)成为团队核心 contributor，长期(3-5年)向技术专家或管理方向发展。', focus: '规划能力、自我驱动' },
-  { question: '请举例说明你在团队协作中遇到的分歧，你是如何处理的？', difficulty: 'medium', category: '行为面试', suggested_answer: '描述具体场景，强调你的沟通方式、换位思考能力和最终达成的共识。', focus: '团队协作、沟通能力' },
-  { question: '请描述一个你用创新方法解决问题的例子。', difficulty: 'hard', category: '综合面试', suggested_answer: '突出你的创新思维过程：发现问题→打破常规→设计方案→验证效果。', focus: '创新能力、主动性' },
+  {
+    question: '请介绍一下你自己，以及为什么你适合这个岗位？',
+    difficulty: 'easy',
+    category: '行为面试',
+    suggested_answer:
+      '从教育背景、工作经历、核心技能三个维度组织回答，结尾点明与目标岗位的匹配度。控制在1-2分钟内。',
+    focus: '表达能力、自我认知、匹配度',
+  },
+  {
+    question: '请描述一个你遇到过的技术挑战，你是如何解决的？',
+    difficulty: 'easy',
+    category: '技术面试',
+    suggested_answer:
+      '使用 STAR 法则：S-背景/T-任务/A-行动/R-结果。强调你的技术选型、解决思路和最终效果。',
+    focus: '技术深度、问题解决能力',
+  },
+  {
+    question: '你如何看待我们公司的产品/业务？你有什么建议？',
+    difficulty: 'medium',
+    category: '综合面试',
+    suggested_answer: '提前研究公司产品，从用户角度提出1-2个具体建议，展现你的思考深度和主动性。',
+    focus: '行业认知、分析能力',
+  },
+  {
+    question: '你的职业规划是什么？未来3-5年想达到什么目标？',
+    difficulty: 'easy',
+    category: '行为面试',
+    suggested_answer:
+      '短期(1年)夯实技术基础/融入团队，中期(2-3年)成为团队核心 contributor，长期(3-5年)向技术专家或管理方向发展。',
+    focus: '规划能力、自我驱动',
+  },
+  {
+    question: '请举例说明你在团队协作中遇到的分歧，你是如何处理的？',
+    difficulty: 'medium',
+    category: '行为面试',
+    suggested_answer: '描述具体场景，强调你的沟通方式、换位思考能力和最终达成的共识。',
+    focus: '团队协作、沟通能力',
+  },
+  {
+    question: '请描述一个你用创新方法解决问题的例子。',
+    difficulty: 'hard',
+    category: '综合面试',
+    suggested_answer: '突出你的创新思维过程：发现问题→打破常规→设计方案→验证效果。',
+    focus: '创新能力、主动性',
+  },
 ]
 
 function difficultyLabel(d) {
@@ -317,12 +410,17 @@ async function refreshDaily() {
         category: q.category || '通用',
         suggested_answer: q.suggested_answer || q.expected_answer || '',
         focus: q.focus || q.intent || '',
-        star_situation: '', star_task: '', star_action: '', star_result: '',
+        star_situation: '',
+        star_task: '',
+        star_action: '',
+        star_result: '',
       }
       dailyLoading.value = false
       return
     }
-  } catch {}
+  } catch {
+    // 远端题库不可用时使用本地题库。
+  }
   // fallback: 本地题库
   const q = dailyQuestions[Math.floor(Math.random() * dailyQuestions.length)]
   dailyQuestion.value = {
@@ -343,7 +441,9 @@ async function loadWeakAreas() {
   weakLoading.value = true
   try {
     // 从面试表现分析中提取薄弱项
-    const perf = await import('@/api/interview').then(m => m.getPerformanceTrend?.() || Promise.resolve(null))
+    const perf = await import('@/api/interview').then(
+      (m) => m.getPerformanceTrend?.() || Promise.resolve(null)
+    )
     if (perf?.dimensions) {
       weakAreas.value = Object.entries(perf.dimensions)
         .filter(([, v]) => v < 70)
@@ -351,20 +451,26 @@ async function loadWeakAreas() {
       weakLoading.value = false
       return
     }
-  } catch {}
+  } catch {
+    // 无法获取趋势时继续基于本地面试记录计算。
+  }
   // fallback: 根据面试记录分析
-  const completed = sessions.value.filter(s => s.overall_score)
+  const completed = sessions.value.filter((s) => s.overall_score)
   if (completed.length >= 2) {
     const dims = ['技术深度', '表达能力', '逻辑思维', '项目经验', '行为面试']
     weakAreas.value = dims
-      .map(d => ({ name: d, score: Math.floor(Math.random() * 40 + 30), desc: `建议加强${d}方向训练` }))
+      .map((d) => ({
+        name: d,
+        score: Math.floor(Math.random() * 40 + 30),
+        desc: `建议加强${d}方向训练`,
+      }))
       .sort((a, b) => a.score - b.score)
       .slice(0, 3)
   }
   weakLoading.value = false
 }
 
-function showWeakDetail(area) {
+function showWeakDetail(_area) {
   ElMessage.info('选择「专项练习」进入针对性模拟面试')
 }
 
@@ -381,15 +487,20 @@ function generateIntro() {
   }
   introGenerating.value = true
   const { position, years, skills, style } = introForm.value
-  const skillList = skills ? skills.split(/[,，]/).map(s => s.trim()).filter(Boolean) : []
+  const skillList = skills
+    ? skills
+        .split(/[,，]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : []
   const skillText = skillList.length ? skillList.slice(0, 4).join('、') : '相关技术'
-  
+
   const intros = {
     concise: `面试官好，我是应聘${position}的候选人。我有${years}年工作经验，熟练掌握${skillText}。在过往项目中，我注重代码质量和团队协作，有多个从0到1的项目交付经验。期待能加入贵团队，贡献我的技术能力。`,
     detailed: `面试官好，我叫XXX，应聘${position}岗位。我有${years}年工作经验，核心技能包括${skillText}。\n\n在上一家公司，我主导了多个核心模块的设计与开发，通过优化架构将系统性能提升了30%以上。我注重代码质量和工程规范，同时也乐于分享和指导新人。\n\n选择贵公司是因为认可贵产品的技术方向，希望能用我的经验为团队创造价值。`,
     story: `面试官好，我是一名${position}候选人，有${years}年工作经验。\n\n让我从一个小故事开始——在上一家公司，我接手了一个遗留系统重构项目。这个系统每次发布都需要2小时停机，用户投诉不断。我带领团队重新设计了架构，引入了微服务和自动化测试，最终将发布时间缩短到10分钟，系统可用性提升到99.9%。\n\n这个故事代表了我的工作方式：发现问题、设计方案、落地执行、量化结果。我的核心技能包括${skillText}，希望能将这些经验带到贵团队。`,
   }
-  
+
   setTimeout(() => {
     introResult.value = intros[style] || intros.concise
     introGenerating.value = false
@@ -408,14 +519,19 @@ async function copyIntro() {
 function formatDate(d) {
   if (!d) return ''
   try {
-    return new Date(d).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    return new Date(d).toLocaleDateString('zh-CN', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
   } catch {
     return d
   }
 }
 
 function goToPipeline(item) {
-  router.push(`/jobs/pipeline/${item.id}`)
+  router.push({ name: 'pipeline-kanban', query: { entry_id: String(item.id) } })
 }
 
 function startPrep(item) {
@@ -430,9 +546,11 @@ async function loadUpcoming() {
   try {
     const data = await getJobPipelineList({ stage: 'interview', limit: 10 })
     upcomingInterviews.value = (data?.items || data || []).filter(
-      p => p.interview_at && new Date(p.interview_at) >= new Date()
+      (p) => p.interview_at && new Date(p.interview_at) >= new Date()
     )
-  } catch {} finally {
+  } catch {
+    upcomingInterviews.value = []
+  } finally {
     upcomingLoading.value = false
   }
 }
@@ -441,8 +559,10 @@ async function loadSessions() {
   sessionsLoading.value = true
   try {
     const data = await getInterviewList()
-    sessions.value = Array.isArray(data) ? data : (data?.items || [])
-  } catch {} finally {
+    sessions.value = Array.isArray(data) ? data : data?.items || []
+  } catch {
+    sessions.value = []
+  } finally {
     sessionsLoading.value = false
   }
 }
@@ -456,7 +576,10 @@ async function loadById() {
   try {
     const rec = await getAnalysis(recordId.value)
     questionData.value = rec
-    localStorage.setItem('recruit.lastRecordId', String(rec?.record_id || rec?.id || recordId.value))
+    localStorage.setItem(
+      'recruit.lastRecordId',
+      String(rec?.record_id || rec?.id || recordId.value)
+    )
   } catch (e) {
     ElMessage.error(`加载失败：${e.message}`)
   } finally {
@@ -521,9 +644,15 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.interview-dot.violet { background: var(--app-violet); }
-.interview-dot.green { background: var(--app-success); }
-.interview-dot.amber { background: var(--app-warning); }
+.interview-dot.violet {
+  background: var(--app-violet);
+}
+.interview-dot.green {
+  background: var(--app-success);
+}
+.interview-dot.amber {
+  background: var(--app-warning);
+}
 
 .interview-info {
   flex: 1;
@@ -617,7 +746,6 @@ onMounted(() => {
   line-height: 1.6;
 }
 
-
 /* 每日一练 */
 .daily-practice {
   display: flex;
@@ -701,10 +829,22 @@ onMounted(() => {
   font-size: 12px;
 }
 
-.star-s { background: #e0f2fe; color: #0284c7; }
-.star-t { background: #fef3c7; color: #d97706; }
-.star-a { background: #dcfce7; color: #16a34a; }
-.star-r { background: #fce7f3; color: #db2777; }
+.star-s {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+.star-t {
+  background: #fef3c7;
+  color: #d97706;
+}
+.star-a {
+  background: #dcfce7;
+  color: #16a34a;
+}
+.star-r {
+  background: #fce7f3;
+  color: #db2777;
+}
 
 .star-cheatsheet {
   padding: 14px;

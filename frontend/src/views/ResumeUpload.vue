@@ -3,7 +3,9 @@
     <div class="page-header">
       <div>
         <h2>简历中心</h2>
-        <div class="page-header-sub">管理多份简历、AI 优化诊断、版本对比与分享 — 简历全生命周期管理</div>
+        <div class="page-header-sub">
+          管理多份简历、AI 优化诊断、版本对比与分享 — 简历全生命周期管理
+        </div>
       </div>
       <div class="header-actions">
         <el-button type="primary" @click="showUpload = true">
@@ -42,26 +44,43 @@
     <el-dialog v-model="showParsed" title="简历解析结果" width="720px">
       <div v-if="currentParsed">
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="姓名">{{ maskedText(currentParsed.name, desensitized) }}</el-descriptions-item>
-          <el-descriptions-item label="工作年限">{{ currentParsed.years_exp || 0 }} 年</el-descriptions-item>
-          <el-descriptions-item label="电话">{{ maskedText(currentParsed.phone, desensitized) }}</el-descriptions-item>
-          <el-descriptions-item label="邮箱">{{ maskedText(currentParsed.email, desensitized) }}</el-descriptions-item>
-          <el-descriptions-item label="学历">{{ currentParsed.education || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="姓名">{{
+            maskedText(currentParsed.name, desensitized)
+          }}</el-descriptions-item>
+          <el-descriptions-item label="工作年限"
+            >{{ currentParsed.years_exp || 0 }} 年</el-descriptions-item
+          >
+          <el-descriptions-item label="电话">{{
+            maskedText(currentParsed.phone, desensitized)
+          }}</el-descriptions-item>
+          <el-descriptions-item label="邮箱">{{
+            maskedText(currentParsed.email, desensitized)
+          }}</el-descriptions-item>
+          <el-descriptions-item label="学历">{{
+            currentParsed.education || '-'
+          }}</el-descriptions-item>
           <el-descriptions-item label="专业">{{ currentParsed.major || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="当前公司" :span="2">{{ currentParsed.current_company || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="当前职位" :span="2">{{ currentParsed.current_title || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="当前公司" :span="2">{{
+            currentParsed.current_company || '-'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="当前职位" :span="2">{{
+            currentParsed.current_title || '-'
+          }}</el-descriptions-item>
           <el-descriptions-item label="技能" :span="2">
-            <el-tag v-for="s in currentParsed.skills || []" :key="s" style="margin:2px;">{{ s }}</el-tag>
+            <el-tag v-for="s in currentParsed.skills || []" :key="s" style="margin: 2px">{{
+              s
+            }}</el-tag>
           </el-descriptions-item>
         </el-descriptions>
-        <h4 style="margin:16px 0 8px">工作经历</h4>
+        <h4 style="margin: 16px 0 8px">工作经历</h4>
         <el-timeline>
           <el-timeline-item
-            v-for="(w, i) in currentParsed.work_experience || []" :key="i"
+            v-for="(w, i) in currentParsed.work_experience || []"
+            :key="i"
             :timestamp="`${w.start || ''} ~ ${w.end || ''}`"
           >
             <b>{{ w.company }} · {{ w.title }}</b>
-            <div style="color:var(--app-muted);font-size:12px;">{{ w.desc }}</div>
+            <div style="color: var(--app-muted); font-size: 12px">{{ w.desc }}</div>
           </el-timeline-item>
         </el-timeline>
       </div>
@@ -92,11 +111,19 @@
         <div class="diag-score-row">
           <div class="diag-score-gauge">
             <div class="gauge-ring">
-              <svg viewBox="0 0 120 120" style="width:100px;height:100px;">
+              <svg viewBox="0 0 120 120" style="width: 100px; height: 100px">
                 <circle cx="60" cy="60" r="54" fill="none" stroke="#eee" stroke-width="8" />
-                <circle cx="60" cy="60" r="54" fill="none" :stroke="diagScoreColor" stroke-width="8"
-                  :stroke-dasharray="`${339.3 * (currentDiagnosis.total_score || 0) / 100} 339.3`"
-                  stroke-linecap="round" transform="rotate(-90 60 60)" />
+                <circle
+                  cx="60"
+                  cy="60"
+                  r="54"
+                  fill="none"
+                  :stroke="diagScoreColor"
+                  stroke-width="8"
+                  :stroke-dasharray="`${(339.3 * (currentDiagnosis.total_score || 0)) / 100} 339.3`"
+                  stroke-linecap="round"
+                  transform="rotate(-90 60 60)"
+                />
               </svg>
               <span class="gauge-text">{{ currentDiagnosis.total_score || 0 }}</span>
             </div>
@@ -125,7 +152,11 @@
           </el-collapse-item>
           <el-collapse-item title="✏️ 表达问题" name="expression">
             <div v-if="currentDiagnosis.expression_issues?.length">
-              <p v-for="(item, i) in currentDiagnosis.expression_issues" :key="i" class="diag-issue">
+              <p
+                v-for="(item, i) in currentDiagnosis.expression_issues"
+                :key="i"
+                class="diag-issue"
+              >
                 <el-icon><WarningFilled /></el-icon> {{ item }}
               </p>
             </div>
@@ -133,7 +164,12 @@
           </el-collapse-item>
           <el-collapse-item title="🔑 关键词缺失" name="keywords">
             <div v-if="currentDiagnosis.missing_keywords?.length">
-              <el-tag v-for="kw in currentDiagnosis.missing_keywords" :key="kw" type="warning" style="margin:4px;">
+              <el-tag
+                v-for="kw in currentDiagnosis.missing_keywords"
+                :key="kw"
+                type="warning"
+                style="margin: 4px"
+              >
                 {{ kw }}
               </el-tag>
             </div>
@@ -141,7 +177,11 @@
           </el-collapse-item>
           <el-collapse-item title="✨ 亮点分析" name="highlights">
             <div v-if="currentDiagnosis.highlights?.length">
-              <p v-for="(item, i) in currentDiagnosis.highlights" :key="i" class="diag-issue diag-good">
+              <p
+                v-for="(item, i) in currentDiagnosis.highlights"
+                :key="i"
+                class="diag-issue diag-good"
+              >
                 <el-icon><CircleCheckFilled /></el-icon> {{ item }}
               </p>
             </div>
@@ -150,7 +190,12 @@
           <el-collapse-item title="🎯 岗位匹配度" name="match">
             <div v-if="currentDiagnosis.match_analysis">
               <p>{{ currentDiagnosis.match_analysis }}</p>
-              <el-button v-if="currentDiagnosis.jd_id" text type="primary" @click="goAnalysisFromDiag">
+              <el-button
+                v-if="currentDiagnosis.jd_id"
+                text
+                type="primary"
+                @click="goAnalysisFromDiag"
+              >
                 查看完整匹配分析 →
               </el-button>
             </div>
@@ -163,15 +208,24 @@
               </p>
             </div>
             <div v-else-if="currentDiagnosis.ats_score">
-              <el-empty :image-size="60" :description="'ATS评分 ' + currentDiagnosis.ats_score + '，格式兼容性良好'" />
+              <el-empty
+                :image-size="60"
+                :description="'ATS评分 ' + currentDiagnosis.ats_score + '，格式兼容性良好'"
+              />
             </div>
             <el-empty v-else :image-size="60" description="暂无ATS数据" />
           </el-collapse-item>
           <el-collapse-item title="📈 改进路线图" name="roadmap">
             <div v-if="currentDiagnosis.improvement_roadmap?.length">
-              <p v-for="(item, i) in currentDiagnosis.improvement_roadmap" :key="i" class="diag-issue diag-good">
+              <p
+                v-for="(item, i) in currentDiagnosis.improvement_roadmap"
+                :key="i"
+                class="diag-issue diag-good"
+              >
                 <el-icon><CircleCheckFilled /></el-icon>
-                {{ typeof item === 'string' ? item : (item.title || item.keyword || item.action || '') }}
+                {{
+                  typeof item === 'string' ? item : item.title || item.keyword || item.action || ''
+                }}
               </p>
             </div>
             <el-empty v-else :image-size="60" description="暂无改进建议" />
@@ -186,6 +240,13 @@
     <!-- 简历列表 -->
     <div v-if="listLoading" class="loading-state">
       <el-icon class="is-loading"><Loading /></el-icon> 加载中...
+    </div>
+    <div v-else-if="listError" class="load-error">
+      <div>
+        <strong>简历列表加载失败</strong>
+        <span>{{ listError }}</span>
+      </div>
+      <el-button @click="loadList">重新加载</el-button>
     </div>
     <div v-else-if="!resumes.length" class="empty-state">
       <el-empty :image-size="120" description="还没有简历，上传一份开始吧">
@@ -202,21 +263,29 @@
         <div class="card-top">
           <div class="card-title-row">
             <h3>{{ r.name || r.file_name || '未命名简历' }}</h3>
-            <el-dropdown trigger="click" @command="cmd => handleCmd(cmd, r)">
+            <el-dropdown trigger="click" @command="(cmd) => handleCmd(cmd, r)">
               <el-icon class="more-btn"><MoreFilled /></el-icon>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="parse">{{ r.parsed?.name ? '重新解析' : '解析' }}</el-dropdown-item>
+                  <el-dropdown-item command="parse">{{
+                    r.parsed?.name ? '重新解析' : '解析'
+                  }}</el-dropdown-item>
                   <el-dropdown-item command="optimize">AI优化</el-dropdown-item>
                   <el-dropdown-item command="diagnose">AI诊断</el-dropdown-item>
                   <el-dropdown-item command="compare">版本对比</el-dropdown-item>
                   <el-dropdown-item command="analyze">深度分析</el-dropdown-item>
-                  <el-dropdown-item v-if="r.id !== defaultResumeId" command="setDefault">设为默认</el-dropdown-item>
+                  <el-dropdown-item v-if="r.id !== defaultResumeId" command="setDefault"
+                    >设为默认</el-dropdown-item
+                  >
                   <el-dropdown-item command="share" divided>分享链接</el-dropdown-item>
-                  <el-dropdown-item command="desensitize">{{ r._desensitized ? '取消脱敏' : '脱敏设置' }}</el-dropdown-item>
+                  <el-dropdown-item command="desensitize">{{
+                    r._desensitized ? '取消脱敏' : '脱敏设置'
+                  }}</el-dropdown-item>
                   <el-dropdown-item command="exportDocx">导出 Word</el-dropdown-item>
                   <el-dropdown-item command="exportPdf">导出 PDF</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided style="color:var(--app-danger)">删除</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided style="color: var(--app-danger)"
+                    >删除</el-dropdown-item
+                  >
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -227,9 +296,15 @@
         </div>
 
         <div class="card-meta">
-          <span v-if="r.parsed?.current_title"><el-icon><Briefcase /></el-icon> {{ r.parsed.current_title }}</span>
-          <span v-if="r.years_exp"><el-icon><Timer /></el-icon> {{ r.years_exp }}年经验</span>
-          <span><el-icon><Document /></el-icon> {{ r.file_type?.toUpperCase() }}</span>
+          <span v-if="r.parsed?.current_title"
+            ><el-icon><Briefcase /></el-icon> {{ r.parsed.current_title }}</span
+          >
+          <span v-if="r.years_exp"
+            ><el-icon><Timer /></el-icon> {{ r.years_exp }}年经验</span
+          >
+          <span
+            ><el-icon><Document /></el-icon> {{ r.file_type?.toUpperCase() }}</span
+          >
           <span>{{ formatSize(r.file_size) }}</span>
         </div>
 
@@ -238,21 +313,34 @@
           <el-tag v-if="r._versionCount > 0" size="small" type="info" effect="plain">
             版本历史 ({{ r._versionCount }})
           </el-tag>
-          <el-tag v-if="r._diagnosisScore" size="small" :type="r._diagnosisScore >= 70 ? 'success' : 'warning'" effect="plain">
+          <el-tag
+            v-if="r._diagnosisScore"
+            size="small"
+            :type="r._diagnosisScore >= 70 ? 'success' : 'warning'"
+            effect="plain"
+          >
             诊断 {{ r._diagnosisScore }}分
           </el-tag>
           <el-tag v-if="r._desensitized" size="small" type="danger" effect="plain">已脱敏</el-tag>
         </div>
 
         <div v-if="r.parsed?.skills?.length" class="card-skills">
-          <el-tag v-for="sk in r.parsed.skills.slice(0, 6)" :key="sk" size="small" type="info">{{ sk }}</el-tag>
-          <span v-if="r.parsed.skills.length > 6" class="more-skills">+{{ r.parsed.skills.length - 6 }}</span>
+          <el-tag v-for="sk in r.parsed.skills.slice(0, 6)" :key="sk" size="small" type="info">{{
+            sk
+          }}</el-tag>
+          <span v-if="r.parsed.skills.length > 6" class="more-skills"
+            >+{{ r.parsed.skills.length - 6 }}</span
+          >
         </div>
 
         <!-- ATS 评分 -->
         <div v-if="r._score" class="card-score">
           <div class="score-bar">
-            <div class="score-fill" :style="{ width: r._score.total + '%' }" :class="scoreLevel(r._score.total)" />
+            <div
+              class="score-fill"
+              :style="{ width: r._score.total + '%' }"
+              :class="scoreLevel(r._score.total)"
+            />
           </div>
           <div class="score-label">
             <span>ATS 评分</span>
@@ -281,8 +369,14 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  UploadFilled, MoreFilled, Briefcase, Timer, Document, Loading,
-  WarningFilled, CircleCheckFilled,
+  UploadFilled,
+  MoreFilled,
+  Briefcase,
+  Timer,
+  Document,
+  Loading,
+  WarningFilled,
+  CircleCheckFilled,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import {
@@ -290,6 +384,9 @@ import {
   parseResume,
   getResumeList,
   getResumeVersions,
+  getResumeQuickScore,
+  diagnoseResume,
+  deleteResume,
   generateOptimized,
   exportResume,
   downloadResumeExport,
@@ -304,6 +401,7 @@ const showDiagnosis = ref(false)
 const currentParsed = ref(null)
 const listLoading = ref(true)
 const resumes = ref([])
+const listError = ref('')
 const defaultResumeId = ref(null)
 
 const uploading = ref(false)
@@ -348,7 +446,12 @@ function formatSize(n) {
 
 function formatDate(d) {
   if (!d) return ''
-  try { return new Date(d).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) } catch { return d }
+  try {
+    return new Date(d).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  } catch {
+    // 保留后端返回的原始时间。
+    return d
+  }
 }
 
 function scoreLevel(v) {
@@ -378,7 +481,7 @@ async function loadList() {
     const data = await getResumeList({ page: 1, page_size: 50 })
     const items = data?.items || []
     // attach local state
-    items.forEach(r => {
+    items.forEach((r) => {
       r._score = null
       r._scoring = false
       r._desensitized = false
@@ -388,11 +491,14 @@ async function loadList() {
     resumes.value = items
 
     // auto load quick scores & version counts
-    items.forEach(r => {
+    items.forEach((r) => {
       quickScore(r)
       loadVersionCount(r)
     })
-  } catch {} finally {
+    listError.value = ''
+  } catch (error) {
+    listError.value = error?.userMessage || '暂时无法获取简历列表，请检查网络后重试。'
+  } finally {
     listLoading.value = false
   }
 }
@@ -410,13 +516,13 @@ async function quickScore(r) {
   if (r._score || r._scoring) return
   r._scoring = true
   try {
-    const res = await fetch(`/api/v1/resume/${r.id}/quick-score`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-    }).then(r => r.json())
-    if (res?.data?.total !== undefined) {
-      r._score = res.data
+    const score = await getResumeQuickScore(r.id, { notifyError: false })
+    if (score?.total !== undefined) {
+      r._score = score
     }
-  } catch {} finally {
+  } catch {
+    // 列表仍可使用，评分卡保留为空。
+  } finally {
     r._scoring = false
   }
 }
@@ -472,7 +578,7 @@ async function handleCmd(cmd, r) {
       currentParsed.value = parsed.parsed
       showParsed.value = true
       ElMessage.success('解析成功')
-    } catch (e) {
+    } catch {
       ElMessage.error('解析失败')
     }
   } else if (cmd === 'optimize') {
@@ -480,9 +586,9 @@ async function handleCmd(cmd, r) {
   } else if (cmd === 'diagnose') {
     showDiagnosisDialog(r)
   } else if (cmd === 'compare') {
-    router.push({ path: '/resume/compare', query: { resume_id: r.id } })
+    router.push(`/resume/compare/${r.id}`)
   } else if (cmd === 'analyze') {
-    router.push({ path: '/resume/analysis', query: { resume_id: r.id } })
+    goAnalysis(r)
   } else if (cmd === 'setDefault') {
     defaultResumeId.value = r.id
     localStorage.setItem(LS_DEFAULT_KEY, String(r.id))
@@ -499,13 +605,12 @@ async function handleCmd(cmd, r) {
   } else if (cmd === 'delete') {
     try {
       await ElMessageBox.confirm('确定删除该简历？', '删除确认', { type: 'warning' })
-      await fetch(`/api/v1/resume/${r.id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      })
+      await deleteResume(r.id)
       ElMessage.success('已删除')
       await loadList()
-    } catch {}
+    } catch {
+      // 用户取消删除时不显示错误；请求失败由统一请求层提示。
+    }
   }
 }
 
@@ -520,12 +625,16 @@ async function optimizeResume(r) {
       confirmButtonText: '开始优化',
       cancelButtonText: '取消',
       inputPlaceholder: '留空则通用优化',
-    }).then(async ({ value }) => {
-      const jdId = value ? Number(value) : null
-      await generateOptimized(r.id, jdId)
-      ElMessage.success('优化完成')
-    }).catch(() => {})
-  } catch {}
+    })
+      .then(async ({ value }) => {
+        const jdId = value ? Number(value) : null
+        await generateOptimized(r.id, jdId)
+        ElMessage.success('优化完成')
+      })
+      .catch(() => undefined)
+  } catch {
+    // 用户取消优化弹窗时不执行后续操作。
+  }
 }
 
 async function doExport(r, format) {
@@ -539,7 +648,7 @@ async function doExport(r, format) {
     a.click()
     window.URL.revokeObjectURL(url)
     ElMessage.success('导出成功')
-  } catch (e) {
+  } catch {
     ElMessage.error('导出失败')
   }
 }
@@ -570,18 +679,12 @@ async function showDiagnosisDialog(r) {
 
   // 优先从后端获取诊断数据
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/resume/' + r.id + '/diagnose', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + token,
-      },
-      body: JSON.stringify({ target_position: r.parsed?.current_title || '' }),
-    })
-    const apiData = await res.json()
-    if (apiData?.data) {
-      const d = apiData.data
+    const d = await diagnoseResume(
+      r.id,
+      { target_position: r.parsed?.current_title || '' },
+      { notifyError: false }
+    )
+    if (d) {
       currentDiagnosis.value = {
         total_score: d.total_score || 60,
         structure_score: d.structure_score || 0,
@@ -598,7 +701,7 @@ async function showDiagnosisDialog(r) {
         improvement_roadmap: d.improvement_roadmap || [],
         jd_id: null,
       }
-      diagnosisDims.forEach(dim => {
+      diagnosisDims.forEach((dim) => {
         dim.score = d[dim.key] || 0
       })
       r._diagnosisScore = d.total_score
@@ -639,7 +742,7 @@ async function showDiagnosisDialog(r) {
     if (!parsed.current_company) d.structure_issues.push('未标注当前公司')
     if (!parsed.current_title) d.structure_issues.push('未标注当前职位')
     if (parsed.work_experience) {
-      const weakDesc = parsed.work_experience.filter(w => !w.desc || w.desc.length < 20)
+      const weakDesc = parsed.work_experience.filter((w) => !w.desc || w.desc.length < 20)
       if (weakDesc.length > 0) d.expression_issues.push(weakDesc.length + ' 段工作经历描述过于简略')
     }
     d.expression_issues.push('建议使用 STAR 法则量化工作成果')
@@ -649,7 +752,9 @@ async function showDiagnosisDialog(r) {
     if (parsed.work_experience?.length > 2) d.highlights.push('工作经历丰富，稳定性好')
     if (parsed.years_exp >= 5) d.highlights.push('资深经验，具备中高级岗位竞争力')
 
-    diagnosisDims.forEach(dim => { dim.score = d[dim.key] || 0 })
+    diagnosisDims.forEach((dim) => {
+      dim.score = d[dim.key] || 0
+    })
     r._diagnosisScore = d.total_score
   } catch {
     ElMessage.error('诊断失败')
@@ -659,7 +764,10 @@ async function showDiagnosisDialog(r) {
 }
 function goAnalysisFromDiag() {
   if (currentDiagnosis.value?.jd_id) {
-    localStorage.setItem('recruit.lastResumeId', resumes.value.find(r => r.id === currentShareResume.value?.id)?.id || '')
+    localStorage.setItem(
+      'recruit.lastResumeId',
+      resumes.value.find((r) => r.id === currentShareResume.value?.id)?.id || ''
+    )
     router.push(`/analysis/${currentDiagnosis.value.jd_id}`)
   }
 }
@@ -667,9 +775,32 @@ function goAnalysisFromDiag() {
 
 <style scoped>
 .resume-center {
-  max-width: 1280px;
-  margin: 0 auto;
+  width: 100%;
   color: var(--app-text);
+}
+
+.load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid #f2c5bf;
+  border-radius: 8px;
+  background: var(--app-accent-soft);
+}
+.load-error strong,
+.load-error span {
+  display: block;
+}
+.load-error strong {
+  color: var(--app-danger);
+  font-size: 15px;
+}
+.load-error span {
+  margin-top: 4px;
+  color: var(--app-muted);
+  font-size: 13px;
 }
 
 /* Grid layout */
@@ -685,7 +816,9 @@ function goAnalysisFromDiag() {
   border: 1px solid var(--app-line);
   box-shadow: var(--app-shadow-soft);
   padding: 20px;
-  transition: box-shadow 0.2s, border-color 0.2s;
+  transition:
+    box-shadow 0.2s,
+    border-color 0.2s;
 }
 
 .resume-card:hover {
@@ -786,9 +919,15 @@ function goAnalysisFromDiag() {
   transition: width 0.5s;
 }
 
-.score-fill.score-high { background: var(--app-success); }
-.score-fill.score-mid { background: var(--app-warning); }
-.score-fill.score-low { background: var(--app-danger); }
+.score-fill.score-high {
+  background: var(--app-success);
+}
+.score-fill.score-mid {
+  background: var(--app-warning);
+}
+.score-fill.score-low {
+  background: var(--app-danger);
+}
 
 .score-label {
   display: flex;
@@ -797,11 +936,21 @@ function goAnalysisFromDiag() {
   font-size: 12px;
 }
 
-.score-label span { color: var(--app-muted); }
-.score-label strong { font-size: 16px; }
-.score-label strong.score-high { color: var(--app-success); }
-.score-label strong.score-mid { color: var(--app-warning); }
-.score-label strong.score-low { color: var(--app-danger); }
+.score-label span {
+  color: var(--app-muted);
+}
+.score-label strong {
+  font-size: 16px;
+}
+.score-label strong.score-high {
+  color: var(--app-success);
+}
+.score-label strong.score-mid {
+  color: var(--app-warning);
+}
+.score-label strong.score-low {
+  color: var(--app-danger);
+}
 
 /* Footer */
 .card-footer {
@@ -893,7 +1042,8 @@ function goAnalysisFromDiag() {
   gap: 12px;
 }
 
-.diag-dim-item {}
+.diag-dim-item {
+}
 
 .dim-label {
   display: flex;
@@ -921,11 +1071,18 @@ function goAnalysisFromDiag() {
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
-.diag-issue:last-child { border-bottom: none; }
+.diag-issue:last-child {
+  border-bottom: none;
+}
 
-.diag-issue .el-icon { flex-shrink: 0; margin-top: 2px; }
+.diag-issue .el-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
 
-.diag-good .el-icon { color: var(--app-success); }
+.diag-good .el-icon {
+  color: var(--app-success);
+}
 
 .loading-state {
   display: flex;
@@ -944,6 +1101,11 @@ function goAnalysisFromDiag() {
 }
 
 @media (max-width: 768px) {
+  .load-error {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .page-header {
     flex-direction: column;
     gap: 12px;

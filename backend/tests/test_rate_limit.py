@@ -11,7 +11,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.auth import router as auth_router
 from app.core.database import get_db
-from app.core.rate_limiter import get_limiter
+from app.core.rate_limiter import _build_storage_uri, get_limiter
 from app.main import rate_limit_handler
 
 
@@ -37,6 +37,9 @@ def rate_client(db_session):
 
 
 class TestRateLimit:
+    def test_testing_mode_uses_in_memory_storage(self):
+        assert _build_storage_uri() == "memory://"
+
     def test_normal_requests_not_limited(self, rate_client, normal_user):
         for _ in range(3):
             response = rate_client.post(

@@ -9,9 +9,34 @@
 
     <!-- 搜索栏 -->
     <div class="search-bar">
-      <el-input v-model="searchPosition" placeholder="输入岗位关键词，如：前端、Java、产品经理" clearable style="max-width:400px" @keyup.enter="doSearch" />
-      <el-input v-model="searchCity" placeholder="城市（可选）" clearable style="max-width:200px" @keyup.enter="doSearch" />
+      <el-input
+        v-model="searchPosition"
+        placeholder="输入岗位关键词，如：前端、Java、产品经理"
+        clearable
+        style="max-width: 400px"
+        @keyup.enter="doSearch"
+      />
+      <el-input
+        v-model="searchCity"
+        placeholder="城市（可选）"
+        clearable
+        style="max-width: 200px"
+        @keyup.enter="doSearch"
+      />
       <el-button type="primary" @click="doSearch">查询</el-button>
+    </div>
+
+    <div class="quick-searches">
+      <span>常用岗位</span>
+      <button
+        v-for="item in quickPositions"
+        :key="item"
+        type="button"
+        @click="applyQuickSearch(item)"
+      >
+        {{ item }}
+      </button>
+      <span class="quick-note">选择岗位后可按城市细化结果</span>
     </div>
 
     <!-- 薪资总览 -->
@@ -80,9 +105,27 @@
 
     <!-- 空状态 -->
     <div v-else-if="!loading" class="empty-state">
-      <el-icon :size="48" color="var(--app-muted)"><Coin /></el-icon>
-      <h3>输入岗位关键词查询薪资数据</h3>
-      <p>系统将基于岗位库分析薪资分布和城市对比</p>
+      <div class="empty-layout">
+        <div class="empty-copy">
+          <el-icon :size="42" color="var(--app-primary)"><Coin /></el-icon>
+          <h3>先定位你的市场薪资区间</h3>
+          <p>输入岗位和城市后，将看到样本数量、薪资分布、分位区间与城市对比。</p>
+        </div>
+        <div class="insight-checklist">
+          <div>
+            <span class="check-icon blue">01</span>
+            <p><strong>看中位数</strong><small>确认市场的常见薪资水平</small></p>
+          </div>
+          <div>
+            <span class="check-icon violet">02</span>
+            <p><strong>看 P25 - P75</strong><small>为谈薪预留合理区间</small></p>
+          </div>
+          <div>
+            <span class="check-icon amber">03</span>
+            <p><strong>评估期望薪资</strong><small>将个人期望和市场数据对照</small></p>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 期望薪资评估 -->
@@ -92,22 +135,46 @@
       </div>
       <div class="panel-body">
         <div class="expect-form">
-          <el-input v-model="expectPosition" placeholder="岗位关键词" style="max-width:200px" />
-          <el-input-number v-model="expectSalary" :min="1" placeholder="期望月薪(K)" style="max-width:180px" />
-          <el-input v-model="expectCity" placeholder="城市（可选）" style="max-width:140px" />
+          <el-input v-model="expectPosition" placeholder="岗位关键词" style="max-width: 200px" />
+          <el-input-number
+            v-model="expectSalary"
+            :min="1"
+            placeholder="期望月薪(K)"
+            style="max-width: 180px"
+          />
+          <el-input v-model="expectCity" placeholder="城市（可选）" style="max-width: 140px" />
           <el-button type="primary" @click="checkExpectation">评估</el-button>
         </div>
         <div v-if="expectResult" class="expect-result">
           <el-alert
-            :title="expectResult.level === 'reasonable' ? '薪资期望合理' : expectResult.level === 'high' ? '期望偏高' : '期望偏低'"
-            :type="expectResult.level === 'reasonable' ? 'success' : expectResult.level === 'high' ? 'warning' : 'info'"
+            :title="
+              expectResult.level === 'reasonable'
+                ? '薪资期望合理'
+                : expectResult.level === 'high'
+                  ? '期望偏高'
+                  : '期望偏低'
+            "
+            :type="
+              expectResult.level === 'reasonable'
+                ? 'success'
+                : expectResult.level === 'high'
+                  ? 'warning'
+                  : 'info'
+            "
             :description="expectResult.message || ''"
             show-icon
             :closable="false"
           />
           <div v-if="expectResult.market" class="expect-details">
-            <span>市场中位数：<strong>{{ formatK(expectResult.market.median) }}</strong></span>
-            <span>市场范围：<strong>{{ formatK(expectResult.market.p25) }} - {{ formatK(expectResult.market.p75) }}</strong></span>
+            <span
+              >市场中位数：<strong>{{ formatK(expectResult.market.median) }}</strong></span
+            >
+            <span
+              >市场范围：<strong
+                >{{ formatK(expectResult.market.p25) }} -
+                {{ formatK(expectResult.market.p75) }}</strong
+              ></span
+            >
           </div>
         </div>
       </div>
@@ -129,10 +196,11 @@ const expectPosition = ref('')
 const expectSalary = ref(null)
 const expectCity = ref('')
 const expectResult = ref(null)
+const quickPositions = ['前端开发', 'Java 开发', '产品经理', '数据分析师', '算法工程师']
 
 const maxDist = computed(() => {
   if (!overview.value?.distribution) return 1
-  return Math.max(1, ...overview.value.distribution.map(d => d.count))
+  return Math.max(1, ...overview.value.distribution.map((d) => d.count))
 })
 
 function formatK(val) {
@@ -151,9 +219,17 @@ async function doSearch() {
   try {
     const data = await getSalaryOverview({ position: searchPosition.value, city: searchCity.value })
     overview.value = data
-  } catch {} finally {
+  } catch {
+    // 请求层已反馈错误，保留上一次查询结果。
+  } finally {
     loading.value = false
   }
+}
+
+function applyQuickSearch(position) {
+  searchPosition.value = position
+  expectPosition.value = position
+  doSearch()
 }
 
 async function checkExpectation() {
@@ -165,7 +241,9 @@ async function checkExpectation() {
       city: expectCity.value,
     })
     expectResult.value = data
-  } catch {}
+  } catch {
+    // 请求层已反馈错误，保留上一次评估结果。
+  }
 }
 </script>
 
@@ -174,6 +252,36 @@ async function checkExpectation() {
   display: flex;
   gap: 10px;
   margin-bottom: 20px;
+}
+
+.quick-searches {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -8px 0 20px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+.quick-searches > span:first-child {
+  margin-right: 2px;
+}
+.quick-searches button {
+  padding: 4px 9px;
+  border: 1px solid var(--app-line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--app-text);
+  cursor: pointer;
+  font-size: 12px;
+}
+.quick-searches button:hover {
+  border-color: var(--app-primary);
+  color: var(--app-primary);
+}
+.quick-note {
+  margin-left: auto;
+  color: var(--app-muted);
 }
 
 .stats-row {
@@ -207,17 +315,88 @@ async function checkExpectation() {
 }
 
 .empty-state {
-  text-align: center;
-  padding: 60px 0;
+  padding: 10px 0 20px;
 }
 
-.empty-state h3 {
-  margin: 16px 0 8px;
-  font-size: 18px;
+.empty-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(300px, 1.1fr);
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--app-shadow-soft);
+  text-align: left;
 }
-
-.empty-state p {
+.empty-copy {
+  padding: 34px;
+  background: var(--app-primary-light);
+}
+.empty-copy h3 {
+  margin: 14px 0 7px;
+  color: var(--app-text);
+  font-size: 20px;
+}
+.empty-copy p {
+  max-width: 340px;
+  margin: 0;
   color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.75;
+}
+.insight-checklist {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 20px 28px;
+}
+.insight-checklist > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.insight-checklist > div:last-child {
+  border-bottom: 0;
+}
+.check-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.check-icon.blue {
+  background: var(--app-primary-light);
+  color: var(--app-primary);
+}
+.check-icon.violet {
+  background: var(--app-violet-light);
+  color: var(--app-violet);
+}
+.check-icon.amber {
+  background: #fff4d8;
+  color: #996000;
+}
+.insight-checklist p {
+  margin: 0;
+}
+.insight-checklist strong,
+.insight-checklist small {
+  display: block;
+}
+.insight-checklist strong {
+  color: var(--app-text);
+  font-size: 13px;
+}
+.insight-checklist small {
+  margin-top: 2px;
+  color: var(--app-muted);
+  font-size: 12px;
 }
 
 /* Distribution chart */
@@ -288,9 +467,30 @@ async function checkExpectation() {
 }
 
 @media (max-width: 768px) {
-  .stats-row { flex-wrap: wrap; }
-  .stat-card { flex: 1 1 calc(50% - 6px); }
-  .search-bar { flex-direction: column; }
-  .expect-form { flex-direction: column; }
+  .stats-row {
+    flex-wrap: wrap;
+  }
+  .stat-card {
+    flex: 1 1 calc(50% - 6px);
+  }
+  .search-bar {
+    flex-direction: column;
+  }
+  .expect-form {
+    flex-direction: column;
+  }
+  .quick-note {
+    width: 100%;
+    margin-left: 0;
+  }
+  .empty-layout {
+    grid-template-columns: 1fr;
+  }
+  .empty-copy {
+    padding: 26px 22px;
+  }
+  .insight-checklist {
+    padding: 14px 22px;
+  }
 }
 </style>

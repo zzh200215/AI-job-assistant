@@ -63,7 +63,9 @@
                 placeholder="搜索职位、方向或技术关键词，例如 Python、算法、前端架构"
                 @keydown.enter="runSearch"
               >
-                <template #prefix><el-icon><Search /></el-icon></template>
+                <template #prefix
+                  ><el-icon><Search /></el-icon
+                ></template>
               </el-input>
 
               <el-select
@@ -76,7 +78,12 @@
                 class="city-select"
                 placeholder="城市"
               >
-                <el-option v-for="item in cities" :key="item.code || item.name" :label="item.name" :value="item.name" />
+                <el-option
+                  v-for="item in cities"
+                  :key="item.code || item.name"
+                  :label="item.name"
+                  :value="item.name"
+                />
               </el-select>
 
               <el-select
@@ -191,7 +198,9 @@
             <div class="rewrite-head">
               <div>
                 <span class="history-label">AI 改写搜索词</span>
-                <p class="rewrite-note">结合当前简历和搜索意图，生成更贴近招聘平台检索习惯的词组。</p>
+                <p class="rewrite-note">
+                  结合当前简历和搜索意图，生成更贴近招聘平台检索习惯的词组。
+                </p>
               </div>
               <el-button size="small" :loading="rewriteLoading" @click="generateRewriteSuggestions">
                 生成建议
@@ -235,12 +244,21 @@
                   <span v-if="savedCount" class="toolbar-meta">其中 {{ savedCount }} 个已落库</span>
                 </div>
                 <div class="toolbar-actions">
-                  <el-button size="small" plain :disabled="compareSelection.length < 2" @click="openComparePanel">
+                  <el-button
+                    size="small"
+                    plain
+                    :disabled="compareSelection.length < 2"
+                    @click="openComparePanel"
+                  >
                     对比 {{ compareSelection.length }} 个岗位
                   </el-button>
-                  <el-tag v-if="resultMode && !isDemo" type="info" effect="plain">{{ searchStateText }}</el-tag>
+                  <el-tag v-if="resultMode && !isDemo" type="info" effect="plain">{{
+                    searchStateText
+                  }}</el-tag>
                   <el-tag v-if="isDemo" type="warning" effect="plain">当前为演示数据</el-tag>
-                  <el-tag v-if="searchError && !isDemo" type="danger" effect="plain">{{ searchError }}</el-tag>
+                  <el-tag v-if="searchError && !isDemo" type="danger" effect="plain">{{
+                    searchError
+                  }}</el-tag>
                 </div>
               </div>
 
@@ -288,7 +306,12 @@
                   </div>
 
                   <div class="job-tags" v-if="job.skillTags.length">
-                    <el-tag v-for="tag in job.skillTags.slice(0, 8)" :key="tag" size="small" effect="plain">
+                    <el-tag
+                      v-for="tag in job.skillTags.slice(0, 8)"
+                      :key="tag"
+                      size="small"
+                      effect="plain"
+                    >
                       {{ tag }}
                     </el-tag>
                   </div>
@@ -296,7 +319,9 @@
                   <p class="job-summary">{{ job.summary || '暂无职位摘要' }}</p>
 
                   <div class="job-actions">
-                    <el-button size="small" @click="openJobDetail(job, 'search')">查看详情</el-button>
+                    <el-button size="small" @click="openJobDetail(job, 'search')"
+                      >查看详情</el-button
+                    >
                     <el-button size="small" @click="handlePipelineAction(job)">
                       {{ pipelineStatusText(job) || '加入流程' }}
                     </el-button>
@@ -311,7 +336,10 @@
                 </article>
               </div>
 
-              <el-empty v-else-if="hasSearched" description="没有找到更贴近的岗位，换个关键词或城市试试。" />
+              <el-empty
+                v-else-if="hasSearched"
+                description="没有找到更贴近的岗位，换个关键词或城市试试。"
+              />
               <el-empty v-else description="先发起一次搜索，系统会把结果同步到你的岗位工作台。" />
             </el-tab-pane>
 
@@ -369,11 +397,15 @@
                         {{ job.priorityLabel }}
                       </el-tag>
                     </div>
-                    <p class="warehouse-meta">{{ job.company }} / {{ job.location || '地点待补充' }} / {{ job.salary }}</p>
+                    <p class="warehouse-meta">
+                      {{ job.company }} / {{ job.location || '地点待补充' }} / {{ job.salary }}
+                    </p>
                     <p class="warehouse-summary">{{ job.summary || '暂无摘要' }}</p>
                   </div>
                   <div class="warehouse-actions">
-                    <el-button size="small" @click="openJobDetail(job, 'warehouse')">详情</el-button>
+                    <el-button size="small" @click="openJobDetail(job, 'warehouse')"
+                      >详情</el-button
+                    >
                     <el-button size="small" @click="handlePipelineAction(job)">
                       {{ pipelineStatusText(job) || '加入流程' }}
                     </el-button>
@@ -381,7 +413,9 @@
                       {{ isCompared(job) ? '取消对比' : '加入对比' }}
                     </el-button>
                     <el-button size="small" @click="prefillAnalysis(job)">带入分析</el-button>
-                    <el-button size="small" type="primary" @click="startAnalysisForJob(job)">分析</el-button>
+                    <el-button size="small" type="primary" @click="startAnalysisForJob(job)"
+                      >分析</el-button
+                    >
                   </div>
                 </div>
               </div>
@@ -393,7 +427,9 @@
               <div class="recommend-toolbar">
                 <div class="recommend-left">
                   <span class="toolbar-title">以当前简历为中心的岗位匹配</span>
-                  <span class="toolbar-sub" v-if="selectedResumeName">{{ selectedResumeName }}</span>
+                  <span class="toolbar-sub" v-if="selectedResumeName">{{
+                    selectedResumeName
+                  }}</span>
                 </div>
                 <div class="recommend-actions">
                   <el-input
@@ -410,7 +446,12 @@
                     placeholder="行业偏好"
                     class="mini-input"
                   />
-                  <el-button size="small" type="primary" @click="loadRecommendations" :disabled="!selectedResumeId">
+                  <el-button
+                    size="small"
+                    type="primary"
+                    @click="loadRecommendations"
+                    :disabled="!selectedResumeId"
+                  >
                     更新推荐
                   </el-button>
                 </div>
@@ -422,7 +463,11 @@
               </div>
 
               <div v-else-if="normalizedRecommendations.length" class="recommend-grid">
-                <article v-for="job in normalizedRecommendations" :key="job.uid" class="recommend-card">
+                <article
+                  v-for="job in normalizedRecommendations"
+                  :key="job.uid"
+                  class="recommend-card"
+                >
                   <div class="recommend-score">
                     <strong>{{ job.matchScore }}</strong>
                     <span>匹配分</span>
@@ -430,7 +475,11 @@
                   <div class="recommend-body">
                     <div class="job-title-row">
                       <h3>{{ job.title }}</h3>
-                      <el-tag :type="recommendTagType(job.recommendationType)" effect="dark" size="small">
+                      <el-tag
+                        :type="recommendTagType(job.recommendationType)"
+                        effect="dark"
+                        size="small"
+                      >
                         {{ job.recommendationType }}
                       </el-tag>
                     </div>
@@ -457,26 +506,46 @@
                     <div class="recommend-tags">
                       <div v-if="job.skillOverlap.length" class="tag-group">
                         <span class="tag-label ok">重合</span>
-                        <el-tag v-for="tag in job.skillOverlap.slice(0, 6)" :key="tag" size="small" type="success" effect="plain">
+                        <el-tag
+                          v-for="tag in job.skillOverlap.slice(0, 6)"
+                          :key="tag"
+                          size="small"
+                          type="success"
+                          effect="plain"
+                        >
                           {{ tag }}
                         </el-tag>
                       </div>
                       <div v-if="job.skillGap.length" class="tag-group">
                         <span class="tag-label gap">缺口</span>
-                        <el-tag v-for="tag in job.skillGap.slice(0, 6)" :key="tag" size="small" type="danger" effect="plain">
+                        <el-tag
+                          v-for="tag in job.skillGap.slice(0, 6)"
+                          :key="tag"
+                          size="small"
+                          type="danger"
+                          effect="plain"
+                        >
                           {{ tag }}
                         </el-tag>
                       </div>
                     </div>
 
                     <div class="recommend-signals">
-                      <span :class="signalClass(job.salaryMatch)">薪资{{ job.salaryMatch ? '匹配' : '待评估' }}</span>
-                      <span :class="signalClass(job.locationMatch)">地点{{ job.locationMatch ? '匹配' : '待协商' }}</span>
-                      <span :class="signalClass(job.experienceMatch)">经验{{ job.experienceMatch ? '合适' : '有偏差' }}</span>
+                      <span :class="signalClass(job.salaryMatch)"
+                        >薪资{{ job.salaryMatch ? '匹配' : '待评估' }}</span
+                      >
+                      <span :class="signalClass(job.locationMatch)"
+                        >地点{{ job.locationMatch ? '匹配' : '待协商' }}</span
+                      >
+                      <span :class="signalClass(job.experienceMatch)"
+                        >经验{{ job.experienceMatch ? '合适' : '有偏差' }}</span
+                      >
                     </div>
 
                     <div class="job-actions">
-                      <el-button size="small" @click="openJobDetail(job, 'recommend')">查看详情</el-button>
+                      <el-button size="small" @click="openJobDetail(job, 'recommend')"
+                        >查看详情</el-button
+                      >
                       <el-button size="small" @click="handlePipelineAction(job)">
                         {{ pipelineStatusText(job) || '加入流程' }}
                       </el-button>
@@ -486,7 +555,9 @@
                       <el-button size="small" @click="toggleShortlist(job)">
                         {{ isShortlisted(job) ? '已在清单' : '加入清单' }}
                       </el-button>
-                      <el-button size="small" type="primary" @click="startAnalysisForJob(job)">直接分析</el-button>
+                      <el-button size="small" type="primary" @click="startAnalysisForJob(job)"
+                        >直接分析</el-button
+                      >
                     </div>
                   </div>
                 </article>
@@ -494,7 +565,11 @@
 
               <el-empty
                 v-else
-                :description="selectedResumeId ? '还没有足够贴合的推荐结果，可以先补充岗位池。' : '先选择一份简历，再获取推荐岗位。'"
+                :description="
+                  selectedResumeId
+                    ? '还没有足够贴合的推荐结果，可以先补充岗位池。'
+                    : '先选择一份简历，再获取推荐岗位。'
+                "
               />
             </el-tab-pane>
 
@@ -529,7 +604,11 @@
                       :value="stage.key"
                     />
                   </el-select>
-                  <el-button text :disabled="!pipelineStats.rejected" @click="clearRejectedPipeline">
+                  <el-button
+                    text
+                    :disabled="!pipelineStats.rejected"
+                    @click="clearRejectedPipeline"
+                  >
                     清理已淘汰
                   </el-button>
                 </div>
@@ -542,7 +621,9 @@
                   type="button"
                   class="pipeline-stage-pill"
                   :class="{ active: pipelineFilters.stage === stage.key }"
-                  @click="pipelineFilters.stage = pipelineFilters.stage === stage.key ? 'all' : stage.key"
+                  @click="
+                    pipelineFilters.stage = pipelineFilters.stage === stage.key ? 'all' : stage.key
+                  "
                 >
                   <strong>{{ pipelineStats[stage.key] || 0 }}</strong>
                   <span>{{ stage.label }}</span>
@@ -550,7 +631,11 @@
               </div>
 
               <div class="pipeline-board">
-                <section v-for="stage in visiblePipelineStages" :key="stage.key" class="pipeline-column">
+                <section
+                  v-for="stage in visiblePipelineStages"
+                  :key="stage.key"
+                  class="pipeline-column"
+                >
                   <div class="pipeline-column-head">
                     <div>
                       <strong>{{ stage.label }}</strong>
@@ -561,13 +646,21 @@
                   <p class="pipeline-column-note">{{ stage.description }}</p>
 
                   <div v-if="pipelineByStage[stage.key]?.length" class="pipeline-cards">
-                    <article v-for="entry in pipelineByStage[stage.key]" :key="entry.entryId" class="pipeline-card">
+                    <article
+                      v-for="entry in pipelineByStage[stage.key]"
+                      :key="entry.entryId"
+                      class="pipeline-card"
+                    >
                       <div class="pipeline-card-head">
                         <div>
                           <h3>{{ entry.title }}</h3>
                           <p>{{ entry.company }} 路 {{ entry.salary }}</p>
                         </div>
-                        <el-tag :type="priorityTagType(entry.priorityLabel)" effect="dark" size="small">
+                        <el-tag
+                          :type="priorityTagType(entry.priorityLabel)"
+                          effect="dark"
+                          size="small"
+                        >
                           {{ entry.priorityLabel || '跟进中' }}
                         </el-tag>
                       </div>
@@ -627,11 +720,19 @@
 
                       <div class="pipeline-actions">
                         <el-button size="small" @click="openPipelineJob(entry)">详情</el-button>
-                        <el-button size="small" @click="prefillAnalysis(pipelineEntryToJob(entry))">带入分析</el-button>
-                        <el-button size="small" type="primary" @click="startAnalysisForJob(pipelineEntryToJob(entry))">
+                        <el-button size="small" @click="prefillAnalysis(pipelineEntryToJob(entry))"
+                          >带入分析</el-button
+                        >
+                        <el-button
+                          size="small"
+                          type="primary"
+                          @click="startAnalysisForJob(pipelineEntryToJob(entry))"
+                        >
                           直接分析
                         </el-button>
-                        <el-button text type="danger" @click="removePipelineEntry(entry.entryId)">移除</el-button>
+                        <el-button text type="danger" @click="removePipelineEntry(entry.entryId)"
+                          >移除</el-button
+                        >
                       </div>
                     </article>
                   </div>
@@ -672,19 +773,19 @@
             <div class="insight-grid">
               <div class="insight-item">
                 <strong>{{ marketInsights.salaryBand }}</strong>
-                  <small>主要薪资带</small>
+                <small>主要薪资带</small>
               </div>
               <div class="insight-item">
                 <strong>{{ marketInsights.hotCity }}</strong>
-                  <small>最热城市</small>
+                <small>最热城市</small>
               </div>
               <div class="insight-item">
                 <strong>{{ marketInsights.skillFocus }}</strong>
-                  <small>高频技能</small>
+                <small>高频技能</small>
               </div>
               <div class="insight-item">
                 <strong>{{ marketInsights.highSalaryCount }}</strong>
-                  <small>高薪样本数</small>
+                <small>高薪样本数</small>
               </div>
             </div>
           </div>
@@ -692,7 +793,9 @@
           <div class="board-block">
             <div class="board-row">
               <span class="board-label">投递进度总览</span>
-              <button type="button" class="text-btn" @click="activeTab = 'pipeline'">打开看板</button>
+              <button type="button" class="text-btn" @click="activeTab = 'pipeline'">
+                打开看板
+              </button>
             </div>
             <div class="pipeline-summary-grid">
               <div v-for="stage in pipelineStages" :key="stage.key" class="pipeline-summary-item">
@@ -718,7 +821,14 @@
           <div class="board-block">
             <div class="board-row">
               <span class="board-label">待跟进清单</span>
-              <button type="button" class="text-btn" @click="clearShortlist" v-if="shortlist.length">清空</button>
+              <button
+                type="button"
+                class="text-btn"
+                @click="clearShortlist"
+                v-if="shortlist.length"
+              >
+                清空
+              </button>
             </div>
             <div v-if="shortlist.length" class="shortlist">
               <button
@@ -809,7 +919,9 @@
         </div>
 
         <div v-if="detailJob.skillTags.length" class="drawer-tags">
-          <el-tag v-for="tag in detailJob.skillTags" :key="tag" effect="plain" size="small">{{ tag }}</el-tag>
+          <el-tag v-for="tag in detailJob.skillTags" :key="tag" effect="plain" size="small">{{
+            tag
+          }}</el-tag>
         </div>
 
         <div class="drawer-section">
@@ -830,13 +942,17 @@
             <div v-if="explainResult.risk_points?.length" class="explain-list">
               <span>风险点</span>
               <ul>
-                <li v-for="item in explainResult.risk_points.slice(0, 3)" :key="item">{{ item }}</li>
+                <li v-for="item in explainResult.risk_points.slice(0, 3)" :key="item">
+                  {{ item }}
+                </li>
               </ul>
             </div>
             <div v-if="explainResult.optimization_suggestions?.length" class="explain-list">
               <span>寤鸿</span>
               <ul>
-                <li v-for="item in explainResult.optimization_suggestions.slice(0, 3)" :key="item">{{ item }}</li>
+                <li v-for="item in explainResult.optimization_suggestions.slice(0, 3)" :key="item">
+                  {{ item }}
+                </li>
               </ul>
             </div>
           </div>
@@ -844,7 +960,9 @@
 
         <div class="drawer-section">
           <h4>完整 JD</h4>
-          <pre class="drawer-content">{{ detailJob.rawText || detailJob.summary || '暂无完整内容' }}</pre>
+          <pre class="drawer-content">{{
+            detailJob.rawText || detailJob.summary || '暂无完整内容'
+          }}</pre>
         </div>
 
         <div v-if="detailJob.sourceUrl" class="drawer-section">
@@ -873,7 +991,13 @@
           </div>
           <p class="compare-reason">{{ job.priorityReason }}</p>
           <div class="compare-tags" v-if="job.skillTags?.length">
-            <el-tag v-for="tag in job.skillTags.slice(0, 8)" :key="tag" size="small" effect="plain">{{ tag }}</el-tag>
+            <el-tag
+              v-for="tag in job.skillTags.slice(0, 8)"
+              :key="tag"
+              size="small"
+              effect="plain"
+              >{{ tag }}</el-tag
+            >
           </div>
           <p class="compare-summary">{{ job.summary || '暂无摘要' }}</p>
           <div class="compare-actions">
@@ -882,7 +1006,9 @@
               {{ pipelineStatusText(job) || '加入流程' }}
             </el-button>
             <el-button size="small" @click="toggleCompare(job)">移出对比</el-button>
-            <el-button size="small" type="primary" @click="startAnalysisForJob(job)">分析</el-button>
+            <el-button size="small" type="primary" @click="startAnalysisForJob(job)"
+              >分析</el-button
+            >
           </div>
         </div>
       </div>
@@ -897,7 +1023,6 @@ import { ElMessage } from '@/plugins/element-services'
 import {
   ArrowRight,
   Loading,
-  Location,
   OfficeBuilding,
   Promotion,
   RefreshRight,
@@ -1035,18 +1160,25 @@ const selectedResumeName = computed(() => {
 const selectedResumeSummary = computed(() => {
   const parsed = selectedResumeDetail.value?.parsed_json || selectedResumeDetail.value?.parsed || {}
   const skills = Array.isArray(parsed.skills)
-    ? parsed.skills.map((item) => (typeof item === 'string' ? item : item?.skill)).filter(Boolean).slice(0, 8)
+    ? parsed.skills
+        .map((item) => (typeof item === 'string' ? item : item?.skill))
+        .filter(Boolean)
+        .slice(0, 8)
     : []
-  const currentTitle = parsed.current_title || parsed.target_position || selectedResumeDetail.value?.name || ''
+  const currentTitle =
+    parsed.current_title || parsed.target_position || selectedResumeDetail.value?.name || ''
   return [currentTitle, skills.join(' / ')].filter(Boolean).join('，')
 })
 
-const activeTabLabel = computed(() => ({
-  search: '实时搜索',
-  warehouse: '岗位仓库',
-  recommend: '智能推荐',
-  pipeline: '投递流程',
-}[activeTab.value] || '实时搜索'))
+const activeTabLabel = computed(
+  () =>
+    ({
+      search: '实时搜索',
+      warehouse: '岗位仓库',
+      recommend: '智能推荐',
+      pipeline: '投递流程',
+    })[activeTab.value] || '实时搜索'
+)
 
 const pipelineStats = computed(() =>
   pipelineStages.reduce((acc, stage) => {
@@ -1055,14 +1187,17 @@ const pipelineStats = computed(() =>
   }, {})
 )
 
-const pipelineActiveCount = computed(() =>
-  pipelineEntries.value.filter((item) => item.stage !== 'rejected').length
+const pipelineActiveCount = computed(
+  () => pipelineEntries.value.filter((item) => item.stage !== 'rejected').length
 )
 
 const filteredPipelineEntries = computed(() => {
   const keywordNeedle = pipelineFilters.value.keyword.trim().toLowerCase()
   return [...pipelineEntries.value]
-    .filter((entry) => pipelineFilters.value.stage === 'all' || entry.stage === pipelineFilters.value.stage)
+    .filter(
+      (entry) =>
+        pipelineFilters.value.stage === 'all' || entry.stage === pipelineFilters.value.stage
+    )
     .filter((entry) => {
       if (!keywordNeedle) return true
       const text = [
@@ -1123,8 +1258,10 @@ const sourceBannerTitle = computed(() => {
 const sourceBannerDesc = computed(() => {
   if (searching.value) return '系统会优先抓取外部岗位，失败时再回退到本地或演示数据。'
   if (!hasSearched.value) return '点击“搜索最新岗位”后，系统会优先使用外部搜索结果。'
-  if (resultMode.value === 'local_fallback') return '外部抓取未返回可用结果，已切换到本地职位库，适合继续做分析和筛选。'
-  if (resultMode.value === 'demo_fallback' || isDemo.value) return '当前结果主要用于演示流程，建议补充真实搜索或导入岗位后再做判断。'
+  if (resultMode.value === 'local_fallback')
+    return '外部抓取未返回可用结果，已切换到本地职位库，适合继续做分析和筛选。'
+  if (resultMode.value === 'demo_fallback' || isDemo.value)
+    return '当前结果主要用于演示流程，建议补充真实搜索或导入岗位后再做判断。'
   return '这些岗位来自当前搜索渠道，可直接加入流程、对比或带入分析。'
 })
 
@@ -1141,9 +1278,14 @@ const filteredExternalJobs = computed(() => {
     const exp = job.experience || ''
     const edu = job.education || ''
     const skillText = job.skillTags.join(' ').toLowerCase()
-    const expOk = !searchFilters.value.experience || exp.includes(searchFilters.value.experience.replace('+', ''))
+    const expOk =
+      !searchFilters.value.experience ||
+      exp.includes(searchFilters.value.experience.replace('+', ''))
     const eduOk = !searchFilters.value.education || edu.includes(searchFilters.value.education)
-    const skillOk = !skillNeedle || skillText.includes(skillNeedle) || (job.summary || '').toLowerCase().includes(skillNeedle)
+    const skillOk =
+      !skillNeedle ||
+      skillText.includes(skillNeedle) ||
+      (job.summary || '').toLowerCase().includes(skillNeedle)
     return expOk && eduOk && skillOk
   })
 
@@ -1163,7 +1305,9 @@ const filteredLocalJobs = computed(() => {
   return localJobs.value.filter((job) => {
     const text = `${job.title} ${job.company} ${job.location} ${job.summary}`.toLowerCase()
     const sourceOk = !warehouseFilters.value.source || job.source === warehouseFilters.value.source
-    const industryOk = !warehouseFilters.value.industry || (job.industry || '').includes(warehouseFilters.value.industry)
+    const industryOk =
+      !warehouseFilters.value.industry ||
+      (job.industry || '').includes(warehouseFilters.value.industry)
     const keywordOk = !keywordNeedle || text.includes(keywordNeedle)
     return sourceOk && industryOk && keywordOk
   })
@@ -1414,7 +1558,9 @@ async function runSearch() {
       source: source.value,
       page: 1,
     })
-    externalJobs.value = (data?.jobs || []).map((item, index) => normalizeJob(item, `search-${index}`))
+    externalJobs.value = (data?.jobs || []).map((item, index) =>
+      normalizeJob(item, `search-${index}`)
+    )
     savedCount.value = data?.saved_count || 0
     searchError.value = data?.error || ''
     isDemo.value = !!data?.is_demo
@@ -1485,7 +1631,8 @@ async function generateRewriteSuggestions() {
   rewriteMeta.value = ''
   try {
     const res = await queryRewriteTest({
-      original_query: keyword.value.trim() || `为我推荐适合 ${selectedResumeName.value || '当前简历'} 的岗位`,
+      original_query:
+        keyword.value.trim() || `为我推荐适合 ${selectedResumeName.value || '当前简历'} 的岗位`,
       resume_summary: selectedResumeSummary.value,
       jd_summary: '',
       doc_type: 'jd_lib',
@@ -1542,7 +1689,8 @@ function normalizeJob(item, seed) {
     rawText: item.raw_text || '',
     source: item.source || 'local',
     sourceUrl: item.source_url || '',
-    local: !!item._local_db || ['local', 'imported', 'api', 'manual', 'crawled'].includes(item.source),
+    local:
+      !!item._local_db || ['local', 'imported', 'api', 'manual', 'crawled'].includes(item.source),
   }
   return { ...normalized, ...calculateApplicationPriority(normalized) }
 }
@@ -1635,7 +1783,7 @@ async function startAnalysisForJob(job) {
     const data = await startFullAnalysis(selectedResumeId.value, job.id)
     if (data?.task_id) {
       ElMessage.success('分析任务已启动')
-      router.push(`/agent?task_id=${data.task_id}`)
+      router.push({ name: 'task-center', query: { task_id: String(data.task_id) } })
       return
     }
   } catch {
@@ -1660,7 +1808,9 @@ function persistAnalysisContext(job) {
 }
 
 function toggleShortlist(job) {
-  const existing = shortlist.value.findIndex((item) => item.uid === job.uid || (job.id && item.id === job.id))
+  const existing = shortlist.value.findIndex(
+    (item) => item.uid === job.uid || (job.id && item.id === job.id)
+  )
   if (existing >= 0) {
     shortlist.value.splice(existing, 1)
   } else {
@@ -1775,15 +1925,21 @@ function createPipelineEntryPayload(job, stage = 'todo') {
 
 function normalizePipelineEntry(item) {
   const stage = pipelineStageMap[item?.stage] ? item.stage : 'todo'
-  const createdAt = item?.createdAt || item?.create_time || item?.updatedAt || item?.update_time || new Date().toISOString()
+  const createdAt =
+    item?.createdAt ||
+    item?.create_time ||
+    item?.updatedAt ||
+    item?.update_time ||
+    new Date().toISOString()
   const updatedAt = item?.updatedAt || item?.update_time || createdAt
   const rawHistory = item?.stageHistory || item?.stage_history
-  const stageHistory = Array.isArray(rawHistory) && rawHistory.length
-    ? rawHistory.map((historyItem) => ({
-        stage: pipelineStageMap[historyItem?.stage] ? historyItem.stage : stage,
-        at: historyItem?.at || updatedAt,
-      }))
-    : [{ stage, at: updatedAt }]
+  const stageHistory =
+    Array.isArray(rawHistory) && rawHistory.length
+      ? rawHistory.map((historyItem) => ({
+          stage: pipelineStageMap[historyItem?.stage] ? historyItem.stage : stage,
+          at: historyItem?.at || updatedAt,
+        }))
+      : [{ stage, at: updatedAt }]
 
   return {
     entryId: item?.entryId || item?.id || `pipeline-${item?.jobId || item?.jd_id || createdAt}`,
@@ -1818,17 +1974,19 @@ function normalizePipelineEntry(item) {
 
 function findPipelineEntry(job) {
   if (!job) return null
-  return pipelineEntries.value.find((item) => {
-    if (
-      job.id &&
-      item.jobId &&
-      item.jobId === job.id &&
-      (!selectedResumeId.value || !item.resumeId || item.resumeId === selectedResumeId.value)
-    ) {
-      return true
-    }
-    return item.uid === job.uid
-  }) || null
+  return (
+    pipelineEntries.value.find((item) => {
+      if (
+        job.id &&
+        item.jobId &&
+        item.jobId === job.id &&
+        (!selectedResumeId.value || !item.resumeId || item.resumeId === selectedResumeId.value)
+      ) {
+        return true
+      }
+      return item.uid === job.uid
+    }) || null
+  )
 }
 
 function pipelineStatusText(job) {
@@ -1942,12 +2100,14 @@ async function clearRejectedPipeline() {
 }
 
 function defaultNextAction(stage) {
-  return {
-    todo: '补齐定制简历并确认投递渠道',
-    applied: '记录投递时间，并在 3-5 天后安排一次跟进',
-    interview: '整理面试重点和追问项，准备复盘记录',
-    rejected: '补充淘汰原因，复盘后调整投递策略',
-  }[stage] || '继续跟进'
+  return (
+    {
+      todo: '补齐定制简历并确认投递渠道',
+      applied: '记录投递时间，并在 3-5 天后安排一次跟进',
+      interview: '整理面试重点和追问项，准备复盘记录',
+      rejected: '补充淘汰原因，复盘后调整投递策略',
+    }[stage] || '继续跟进'
+  )
 }
 
 function comparePipelineEntries(a, b) {
@@ -2009,16 +2169,20 @@ function signalClass(flag) {
 }
 
 function sourceText(value) {
-  return {
-    boss: 'BOSS',
-    all: '全平台',
-    crawled: '爬取',
-    imported: '导入',
-    api: '接口',
-    manual: '手工',
-    local: '本地',
-    recommend: '推荐',
-  }[value] || value || '未知'
+  return (
+    {
+      boss: 'BOSS',
+      all: '全平台',
+      crawled: '爬取',
+      imported: '导入',
+      api: '接口',
+      manual: '手工',
+      local: '本地',
+      recommend: '推荐',
+    }[value] ||
+    value ||
+    '未知'
+  )
 }
 
 function calculateApplicationPriority(job) {
@@ -2090,13 +2254,15 @@ function rankMap(list) {
     if (!key) return
     map.set(key, (map.get(key) || 0) + 1)
   })
-  return [...map.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, count]) => ({ label, count }))
+  return [...map.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count }))
 }
 
 function uniqueList(list) {
-  return [...new Set((Array.isArray(list) ? list : []).map((item) => String(item).trim()).filter(Boolean))]
+  return [
+    ...new Set(
+      (Array.isArray(list) ? list : []).map((item) => String(item).trim()).filter(Boolean)
+    ),
+  ]
 }
 
 function loadLocalArray(key) {
@@ -2303,10 +2469,18 @@ function saveLocalArray(key, value) {
   opacity: 0.9;
 }
 
-.accent-orange { background: linear-gradient(135deg, var(--app-primary, #7c6cff), #9b8cff); }
-.accent-blue { background: linear-gradient(135deg, #3b82f6, #6aa6ff); }
-.accent-green { background: linear-gradient(135deg, #14b8a6, #39d2bf); }
-.accent-dark { background: linear-gradient(135deg, #15202b, #314456); }
+.accent-orange {
+  background: linear-gradient(135deg, var(--app-primary, #7c6cff), #9b8cff);
+}
+.accent-blue {
+  background: linear-gradient(135deg, #3b82f6, #6aa6ff);
+}
+.accent-green {
+  background: linear-gradient(135deg, #14b8a6, #39d2bf);
+}
+.accent-dark {
+  background: linear-gradient(135deg, #15202b, #314456);
+}
 
 .layout-grid {
   display: grid;
@@ -2950,7 +3124,10 @@ function saveLocalArray(key, value) {
 
 .pipeline-stage-pill {
   text-align: left;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .pipeline-stage-pill strong,
@@ -3160,4 +3337,3 @@ function saveLocalArray(key, value) {
   }
 }
 </style>
-

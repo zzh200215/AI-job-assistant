@@ -1,6 +1,5 @@
 // 岗位推荐 API
 import request from './request'
-import { ElMessage } from '@/plugins/element-services'
 
 // 获取岗位推荐
 export const getJobRecommendations = (params) =>

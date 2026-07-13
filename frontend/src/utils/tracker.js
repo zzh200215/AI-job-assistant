@@ -103,7 +103,6 @@ async function flush() {
 window.addEventListener('beforeunload', () => {
   const queue = getQueue()
   if (queue.length > 0) {
-    const token = localStorage.getItem('token')
     navigator.sendBeacon('/api/tracking/events', JSON.stringify({ events: queue }))
     localStorage.removeItem(STORAGE_KEY)
   }

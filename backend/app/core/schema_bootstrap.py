@@ -94,6 +94,7 @@ def ensure_user_profile_columns(engine: Engine) -> None:
         "privacy_settings": "JSON",
         "language": "VARCHAR(10) DEFAULT 'zh-CN'",
         "theme": "VARCHAR(10) DEFAULT 'light'",
+        "email_verified": "INTEGER NOT NULL DEFAULT 0",
     }
 
     statements = []

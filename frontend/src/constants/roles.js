@@ -13,7 +13,7 @@ export function getRoleLabel(role) {
   return '求职者端'
 }
 
-export function getHomeRouteByRole(role) {
+export function getHomeRouteByRole(_role) {
   return '/home'
 }
 
