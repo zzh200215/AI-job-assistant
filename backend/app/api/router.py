@@ -21,6 +21,7 @@ from app.api import (
     knowledge,
     multi_agent,
     notification,
+    organization,
     prompt_trace,
     reminder,
     resume,
@@ -56,6 +57,7 @@ api_router.include_router(career_path.router, prefix="/career-path", tags=["care
 api_router.include_router(salary_insight.router, prefix="/salary", tags=["salary-insight"])
 api_router.include_router(timeline.router, prefix="/timeline", tags=["timeline"])
 api_router.include_router(notification.router, prefix="/notifications", tags=["notifications"])
+api_router.include_router(organization.router, prefix="/organizations", tags=["organizations"])
 api_router.include_router(prompt_trace.router, prefix="/prompt-traces", tags=["prompt-traces"])
 api_router.include_router(reminder.router, prefix="/reminders", tags=["reminders"])
 api_router.include_router(subscription.router, prefix="/subscription", tags=["subscription"])

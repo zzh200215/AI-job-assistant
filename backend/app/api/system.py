@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import JSONResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
@@ -16,16 +17,22 @@ from app.core.database import engine, get_db
 from app.core.prometheus_metrics import get_metrics_response
 from app.core.runtime_metrics import get_runtime_metrics
 from app.core.user_roles import ADMIN_ROLE
+from app.models.ai_release import AIRelease
 from app.models.history import AnalysisRecord, JobDescription, Resume
 from app.models.interview_session import InterviewSession
 from app.models.job_pipeline import JobApplicationPipeline
 from app.models.knowledge import KnowledgeDocument
+from app.models.operational_alert import OperationalAlert
+from app.models.prompt_trace import PromptTrace
 from app.models.user import User
+from app.services.ai_release_service import evaluate_release_gate
+from app.services.audit_service import write_audit_log
 from app.services.embedding_service import get_embedding_daily_stats, get_embedding_stats
+from app.services.operational_alert_service import evaluate_operational_alerts
 from app.services.orchestration_runner import get_queue_health
 from app.utils.file_parser import is_ocr_available
 from app.utils.http_errors import api_error
-from app.utils.response import ERR_AUTH, ok
+from app.utils.response import ERR_AUTH, ERR_PARAM, ok
 
 router = APIRouter()
 
@@ -89,6 +96,34 @@ def _model_runtime_status() -> dict:
         "llm": {**llm, "model": settings.LLM_MODEL},
         "embedding": {**embedding, "model": settings.EMBEDDING_MODEL},
     }
+
+
+def build_operational_alert_snapshot() -> dict:
+    """Collect the non-persistent inputs used by the alert evaluator."""
+    return {
+        "model_runtime": _model_runtime_status(),
+        "queue_health": get_queue_health(),
+        "runtime_metrics": get_runtime_metrics(),
+    }
+
+
+def _load_release_reports(report_ids: list[str]) -> tuple[list[tuple[dict, dict]], list[str]]:
+    """Load selected immutable report inputs, without exposing arbitrary file paths."""
+    from app.api.evaluation import _load_report_detail
+
+    details: list[tuple[dict, dict]] = []
+    missing: list[str] = []
+    for report_id in report_ids:
+        summary, raw = _load_report_detail(report_id)
+        if not summary or not raw:
+            missing.append(report_id)
+        else:
+            details.append((summary, raw))
+    return details, missing
+
+
+def _release_report_ids(release: AIRelease) -> list[str]:
+    return [str(item.get("report_id")) for item in (release.evaluation_reports or []) if item.get("report_id")]
 
 
 def _probe_llm() -> dict:
@@ -212,8 +247,227 @@ async def get_system_overview(
             "current": get_embedding_stats(),
             "daily": get_embedding_daily_stats(days=7),
         },
+        "operational_alerts": {
+            "open": db.query(OperationalAlert).filter(OperationalAlert.status == "open").count(),
+            "acknowledged": db.query(OperationalAlert).filter(OperationalAlert.status == "acknowledged").count(),
+        },
     }
     return ok(overview)
+
+
+@router.get("/ai-costs", summary="Get AI cost attribution")
+async def get_ai_cost_attribution(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not _can_view_system_overview(current_user):
+        raise api_error(403, "仅管理员可查看 AI 成本归因", ERR_AUTH)
+
+    rows = (
+        db.query(
+            PromptTrace.provider,
+            PromptTrace.model,
+            PromptTrace.prompt_version,
+            func.count(PromptTrace.id),
+            func.coalesce(func.sum(PromptTrace.total_tokens), 0),
+            func.coalesce(func.sum(PromptTrace.cost_cents), 0.0),
+        )
+        .group_by(PromptTrace.provider, PromptTrace.model, PromptTrace.prompt_version)
+        .order_by(func.sum(PromptTrace.cost_cents).desc())
+        .limit(100)
+        .all()
+    )
+    items = [
+        {
+            "provider": provider or "unknown",
+            "model": model or "unknown",
+            "prompt_version": prompt_version or "unknown",
+            "calls": int(calls or 0),
+            "total_tokens": int(total_tokens or 0),
+            "cost_cents": round(float(cost_cents or 0.0), 6),
+        }
+        for provider, model, prompt_version, calls, total_tokens, cost_cents in rows
+    ]
+    return ok(
+        {
+            "items": items,
+            "total_calls": sum(item["calls"] for item in items),
+            "total_tokens": sum(item["total_tokens"] for item in items),
+            "total_cost_cents": round(sum(item["cost_cents"] for item in items), 6),
+        }
+    )
+
+
+@router.get("/ai-releases", summary="List AI release records")
+async def list_ai_releases(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not _can_view_system_overview(current_user):
+        raise api_error(403, "仅管理员可查看 AI 发布记录", ERR_AUTH)
+    releases = db.query(AIRelease).order_by(AIRelease.created_at.desc()).limit(100).all()
+    return ok({"items": [release.to_dict() for release in releases]})
+
+
+@router.post("/ai-releases", summary="Create an AI release candidate")
+async def create_ai_release(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not _can_view_system_overview(current_user):
+        raise api_error(403, "仅管理员可创建 AI 发布记录", ERR_AUTH)
+
+    release_key = str(payload.get("release_key") or "").strip()
+    prompt_versions = [str(item).strip() for item in payload.get("prompt_versions", []) if str(item).strip()]
+    report_ids = [str(item).strip() for item in payload.get("evaluation_report_ids", []) if str(item).strip()]
+    if not release_key or not prompt_versions or not report_ids:
+        raise api_error(400, "release_key、prompt_versions 和 evaluation_report_ids 均为必填", ERR_PARAM)
+    if len(release_key) > 100 or len(report_ids) > 10:
+        raise api_error(400, "发布标识或评测报告数量不合法", ERR_PARAM)
+    if db.query(AIRelease).filter(AIRelease.release_key == release_key).first():
+        raise api_error(409, "发布标识已存在", ERR_PARAM)
+
+    details, missing = _load_release_reports(report_ids)
+    if missing:
+        raise api_error(400, f"评测报告不存在: {', '.join(missing)}", ERR_PARAM)
+    gate_result, evidence = evaluate_release_gate(details)
+    release = AIRelease(
+        release_key=release_key,
+        provider=str(payload.get("provider") or settings.LLM_PROVIDER).strip(),
+        model=str(payload.get("model") or settings.LLM_MODEL).strip(),
+        prompt_versions=sorted(set(prompt_versions)),
+        evaluation_reports=evidence,
+        gate_result=gate_result,
+        status="ready" if gate_result["passed"] else "blocked",
+        notes=str(payload.get("notes") or "").strip()[:4000],
+        created_by=current_user.id,
+    )
+    db.add(release)
+    db.commit()
+    db.refresh(release)
+    write_audit_log(
+        db,
+        current_user,
+        "ai_release.create",
+        resource_type="ai_release",
+        resource_id=str(release.id),
+        detail={"release_key": release.release_key, "gate_passed": gate_result["passed"]},
+    )
+    return ok(release.to_dict(), message="AI 发布候选已创建")
+
+
+@router.post("/ai-releases/{release_id}/evaluate", summary="Re-evaluate an AI release gate")
+async def evaluate_ai_release(
+    release_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not _can_view_system_overview(current_user):
+        raise api_error(403, "仅管理员可评估 AI 发布门禁", ERR_AUTH)
+    release = db.get(AIRelease, release_id)
+    if release is None:
+        raise api_error(404, "AI 发布记录不存在", ERR_PARAM)
+    details, missing = _load_release_reports(_release_report_ids(release))
+    if missing:
+        raise api_error(400, f"评测报告不存在: {', '.join(missing)}", ERR_PARAM)
+    gate_result, evidence = evaluate_release_gate(details)
+    release.evaluation_reports = evidence
+    release.gate_result = gate_result
+    release.status = "ready" if gate_result["passed"] else "blocked"
+    release.approved_by = None
+    release.approved_at = None
+    db.commit()
+    db.refresh(release)
+    return ok(release.to_dict())
+
+
+@router.post("/ai-releases/{release_id}/approve", summary="Approve a gated AI release")
+async def approve_ai_release(
+    release_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not _can_view_system_overview(current_user):
+        raise api_error(403, "仅管理员可审批 AI 发布", ERR_AUTH)
+    release = db.get(AIRelease, release_id)
+    if release is None:
+        raise api_error(404, "AI 发布记录不存在", ERR_PARAM)
+    if not release.gate_result.get("passed"):
+        raise api_error(409, "发布门禁未通过，不能审批", ERR_PARAM)
+    release.status = "approved"
+    release.approved_by = current_user.id
+    release.approved_at = datetime.now(timezone.utc)
+    db.commit()
+    write_audit_log(
+        db,
+        current_user,
+        "ai_release.approve",
+        resource_type="ai_release",
+        resource_id=str(release.id),
+        detail={"release_key": release.release_key},
+    )
+    db.refresh(release)
+    return ok(release.to_dict())
+
+
+@router.post("/alerts/evaluate", summary="Evaluate operational alert thresholds")
+async def evaluate_system_alerts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not _can_view_system_overview(current_user):
+        raise api_error(403, "仅管理员可评估运维告警", ERR_AUTH)
+
+    alerts = evaluate_operational_alerts(db, **build_operational_alert_snapshot())
+    return ok({"alerts": [alert.to_dict() for alert in alerts], "evaluated_at": datetime.now(timezone.utc).isoformat()})
+
+
+@router.get("/alerts", summary="List operational alerts")
+async def list_system_alerts(
+    include_resolved: bool = False,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not _can_view_system_overview(current_user):
+        raise api_error(403, "仅管理员可查看运维告警", ERR_AUTH)
+
+    query = db.query(OperationalAlert)
+    if not include_resolved:
+        query = query.filter(OperationalAlert.resolved_at.is_(None))
+    alerts = query.order_by(OperationalAlert.last_seen_at.desc()).limit(100).all()
+    return ok({"alerts": [alert.to_dict() for alert in alerts]})
+
+
+@router.post("/alerts/{alert_id}/acknowledge", summary="Acknowledge an operational alert")
+async def acknowledge_system_alert(
+    alert_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not _can_view_system_overview(current_user):
+        raise api_error(403, "仅管理员可确认运维告警", ERR_AUTH)
+
+    alert = db.get(OperationalAlert, alert_id)
+    if alert is None:
+        raise api_error(404, "运维告警不存在", ERR_PARAM)
+    if alert.resolved_at is not None:
+        raise api_error(409, "已恢复的告警无需确认", ERR_PARAM)
+    if alert.status != "acknowledged":
+        alert.status = "acknowledged"
+        alert.acknowledged_at = datetime.now(timezone.utc)
+        alert.acknowledged_by = current_user.id
+        db.commit()
+        write_audit_log(
+            db,
+            current_user,
+            "operational_alert.acknowledge",
+            resource_type="operational_alert",
+            resource_id=str(alert.id),
+            detail={"alert_key": alert.alert_key, "severity": alert.severity},
+        )
+        db.refresh(alert)
+    return ok(alert.to_dict())
 
 
 @router.get("/health", summary="Liveness probe")

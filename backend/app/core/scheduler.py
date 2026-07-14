@@ -61,6 +61,15 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
+    # ---- 运维告警评估：每 5 分钟更新一次，供管理员跟进与审计 ----
+    scheduler.add_job(
+        _run_operational_alert_evaluation,
+        trigger=IntervalTrigger(minutes=5),
+        id="operational_alert_evaluation",
+        name="运维告警评估",
+        replace_existing=True,
+    )
+
     scheduler.start()
     logger.info("Scheduler started with %d jobs", len(scheduler.get_jobs()))
 
@@ -138,5 +147,22 @@ def _run_target_stats_refresh():
         logger.info("Target stats refresh completed: %d targets", len(targets))
     except Exception as e:
         logger.error("Target stats refresh job failed: %s", e)
+    finally:
+        db.close()
+
+
+def _run_operational_alert_evaluation():
+    """Persist current platform risks without making external provider calls."""
+    from app.api.system import build_operational_alert_snapshot
+    from app.core.database import SessionLocal
+    from app.services.operational_alert_service import evaluate_operational_alerts
+
+    db = SessionLocal()
+    try:
+        alerts = evaluate_operational_alerts(db, **build_operational_alert_snapshot())
+        logger.info("Operational alert evaluation completed: %d active alerts", len(alerts))
+    except Exception as exc:
+        logger.error("Operational alert evaluation failed: %s", exc)
+        db.rollback()
     finally:
         db.close()

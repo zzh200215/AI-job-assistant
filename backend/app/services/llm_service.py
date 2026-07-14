@@ -831,6 +831,66 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
             "prompt_metadata",
         }
     }
+    usage_before = get_llm_usage()
+
+    def persist_trace(
+        *,
+        status: str,
+        response_text: str | None = None,
+        response_json: dict[str, Any] | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        """Persist success and failure traces without affecting the LLM request result."""
+        if not trace_enabled:
+            return
+        usage_after = get_llm_usage()
+        call_usage = {
+            key: max(0.0, float(usage_after.get(key, 0.0)) - float(usage_before.get(key, 0.0)))
+            for key in ("prompt_tokens", "completion_tokens", "total_tokens", "cost_cents")
+        }
+        try:
+            from app.services.prompt_trace_service import build_trace_context, record_prompt_trace
+
+            record_prompt_trace(
+                prompt=prompt,
+                response_text=response_text,
+                response_json=response_json,
+                provider=provider,
+                model=settings.LLM_MODEL,
+                prompt_version=prompt_version,
+                source=source,
+                prompt_name=prompt_name,
+                prompt_family=prompt_family,
+                status=status,
+                cache_hit=False,
+                duration_ms=int((time.time() - start_ts) * 1000),
+                prompt_tokens=int(call_usage["prompt_tokens"]),
+                completion_tokens=int(call_usage["completion_tokens"]),
+                total_tokens=int(call_usage["total_tokens"]),
+                cost_cents=call_usage["cost_cents"],
+                error_message=error_message[:2000] if error_message else None,
+                user_id=trace_user_id,
+                resume_id=trace_resume_id,
+                jd_id=trace_jd_id,
+                task_id=trace_task_id,
+                analysis_record_id=trace_analysis_record_id,
+                trace_context=build_trace_context(
+                    source=source,
+                    prompt_name=prompt_name,
+                    prompt_family=prompt_family,
+                    request_id=request_id,
+                    user_id=trace_user_id,
+                    resume_id=trace_resume_id,
+                    jd_id=trace_jd_id,
+                    task_id=trace_task_id,
+                    analysis_record_id=trace_analysis_record_id,
+                    extra=trace_extra,
+                ),
+                prompt_metadata=prompt_metadata,
+                db=trace_db,
+            )
+        except Exception:
+            logger.exception("failed to persist prompt trace")
 
     # ---- 0) 查缓存（命中则返回深拷贝，避免调用方改动污染缓存）----
     key = _cache_key(provider, prompt)
@@ -868,16 +928,19 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
         duration_seconds = time.time() - start_ts
         record_llm_error(provider=provider, model=settings.LLM_MODEL, error_type=error_type)
         record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
+        persist_trace(status="failed", error_message=str(e))
         raise  # 直接向上冒泡，保留类型化异常
     except RuntimeError as e:
         duration_seconds = time.time() - start_ts
         record_llm_error(provider=provider, model=settings.LLM_MODEL, error_type="RuntimeError")
         record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
+        persist_trace(status="failed", error_message=str(e))
         raise LLMProviderError(f"AI 调用失败: {str(e)}") from e
     except Exception as e:
         duration_seconds = time.time() - start_ts
         record_llm_error(provider=provider, model=settings.LLM_MODEL, error_type=type(e).__name__)
         record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
+        persist_trace(status="failed", error_message=str(e))
         raise LLMProviderError(f"AI 调用异常: {str(e)}") from e
 
     # 成功时记录指标
@@ -888,54 +951,15 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
     try:
         result = extract_json(raw)
     except ValueError as exc:
+        persist_trace(status="failed", response_text=raw, error_message=str(exc))
         # 尝试兜底：AI 说了"抱歉"之类非 JSON 内容
         raise ValueError(f"AI 返回内容不是合法 JSON，无法解析。原始响应片段: {raw[:200]}...") from exc
-
-    result = _validate_schema(result, schema)
-
-    if trace_enabled:
-        try:
-            from app.services.prompt_trace_service import build_trace_context, record_prompt_trace
-
-            record_prompt_trace(
-                prompt=prompt,
-                response_text=raw,
-                response_json=result,
-                provider=provider,
-                model=settings.LLM_MODEL,
-                prompt_version=prompt_version,
-                source=source,
-                prompt_name=prompt_name,
-                prompt_family=prompt_family,
-                status="success",
-                cache_hit=False,
-                duration_ms=int((time.time() - start_ts) * 1000),
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_tokens=0,
-                cost_cents=0.0,
-                user_id=trace_user_id,
-                resume_id=trace_resume_id,
-                jd_id=trace_jd_id,
-                task_id=trace_task_id,
-                analysis_record_id=trace_analysis_record_id,
-                trace_context=build_trace_context(
-                    source=source,
-                    prompt_name=prompt_name,
-                    prompt_family=prompt_family,
-                    request_id=request_id,
-                    user_id=trace_user_id,
-                    resume_id=trace_resume_id,
-                    jd_id=trace_jd_id,
-                    task_id=trace_task_id,
-                    analysis_record_id=trace_analysis_record_id,
-                    extra=trace_extra,
-                ),
-                prompt_metadata=prompt_metadata,
-                db=trace_db,
-            )
-        except Exception:
-            logger.exception("failed to persist prompt trace")
+    try:
+        result = _validate_schema(result, schema)
+    except ValueError as exc:
+        persist_trace(status="failed", response_text=raw, error_message=str(exc))
+        raise
+    persist_trace(status="success", response_text=raw, response_json=result)
 
     # ---- 3) 写入缓存（带容量上限的 LRU 淘汰）----
     with _LLM_CACHE_LOCK:

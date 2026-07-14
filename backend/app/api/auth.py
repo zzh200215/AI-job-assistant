@@ -379,14 +379,38 @@ async def export_user_data(
     return data
 
 
+@router.get("/data-summary", summary="获取个人数据概览")
+async def get_user_data_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.models.history import AnalysisRecord, Resume, ResumeVersion
+    from app.models.interview_session import InterviewSession
+    from app.models.job_pipeline import JobApplicationPipeline
+
+    resume_ids = db.query(Resume.id).filter(Resume.user_id == current_user.id).subquery()
+    return ok(
+        {
+            "resumes": db.query(Resume).filter(Resume.user_id == current_user.id).count(),
+            "resume_versions": db.query(ResumeVersion).filter(ResumeVersion.resume_id.in_(resume_ids)).count(),
+            "analyses": db.query(AnalysisRecord).filter(AnalysisRecord.user_id == current_user.id).count(),
+            "interviews": db.query(InterviewSession).filter(InterviewSession.user_id == current_user.id).count(),
+            "applications": db.query(JobApplicationPipeline).filter(JobApplicationPipeline.user_id == current_user.id).count(),
+        }
+    )
+
+
 @router.delete("/data/resumes", summary="删除用户所有简历")
 async def delete_user_resumes(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from app.models.history import Resume, ResumeVersion
     from app.services.audit_service import write_audit_log
 
-    count = db.query(Resume).filter(Resume.user_id == current_user.id).count()
-    db.query(Resume).filter(Resume.user_id == current_user.id).delete()
-    db.query(ResumeVersion).filter(ResumeVersion.user_id == current_user.id).delete()
+    resumes = db.query(Resume).filter(Resume.user_id == current_user.id).all()
+    resume_ids = [resume.id for resume in resumes]
+    count = len(resume_ids)
+    if resume_ids:
+        db.query(ResumeVersion).filter(ResumeVersion.resume_id.in_(resume_ids)).delete(synchronize_session=False)
+        db.query(Resume).filter(Resume.id.in_(resume_ids)).delete(synchronize_session=False)
     db.commit()
     write_audit_log(db, current_user, "resume.delete", resource_type="resume", detail={"deleted_count": count})
     return ok(message=f"已删除 {count} 份简历")

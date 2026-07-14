@@ -5,7 +5,7 @@ from app.api.auth import router as auth_router
 from app.api.job_pipeline import router as pipeline_router
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password
-from app.models.history import JobDescription, Resume, ResumeVersion
+from app.models.history import Resume, ResumeVersion
 from app.models.job_pipeline import JobApplicationPipeline
 from app.models.user import User
 

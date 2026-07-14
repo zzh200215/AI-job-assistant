@@ -53,6 +53,22 @@ class Settings(BaseSettings):
     REDIS_URL: str | None = None
     INTERVIEW_EVALUATION_MAX_WORKERS: int = 2
 
+    # Operations alerting: thresholds are deliberately configurable per deployment.
+    OPERATIONS_ALERT_WINDOW_MINUTES: int = 60
+    OPERATIONS_ALERT_QUEUE_BACKLOG_THRESHOLD: int = 100
+    OPERATIONS_ALERT_TASK_FAILURE_THRESHOLD: int = 5
+    OPERATIONS_ALERT_LLM_FAILURE_THRESHOLD: int = 5
+    OPERATIONS_ALERT_MIN_REQUESTS: int = 20
+    OPERATIONS_ALERT_HTTP_ERROR_RATE_THRESHOLD: float = 0.15
+
+    # AI release governance. Every configured report type must have current, thresholded evidence.
+    AI_RELEASE_REQUIRED_EVALUATION_TYPES: str = "rag,agent,recommend"
+    AI_RELEASE_MAX_EVALUATION_AGE_DAYS: int = 30
+
+    FEISHU_APP_ID: str = ""
+    FEISHU_APP_SECRET: str = ""
+    FEISHU_REDIRECT_URI: str = ""
+
     EMBEDDING_PROVIDER: str = "mock"
     EMBEDDING_API_KEY: str | None = None
     EMBEDDING_BASE_URL: str | None = None
@@ -114,6 +130,10 @@ class Settings(BaseSettings):
     @property
     def admin_usernames_list(self) -> list[str]:
         return [item.strip() for item in self.ADMIN_USERNAMES.split(",") if item.strip()]
+
+    @property
+    def ai_release_required_evaluation_types(self) -> list[str]:
+        return [item.strip() for item in self.AI_RELEASE_REQUIRED_EVALUATION_TYPES.split(",") if item.strip()]
 
     @property
     def is_production(self) -> bool:

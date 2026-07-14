@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import pytest
 from pydantic import BaseModel, Field
 
-from app.services import llm_service
+from app.services import llm_service, prompt_trace_service
 
 
 class TinyResult(BaseModel):
@@ -95,3 +96,47 @@ def test_chat_json_falls_back_to_configured_model(monkeypatch):
 
     assert llm_service.chat_json("fallback-test") == {"fallback": True}
     assert calls == ["primary-model", "fallback-model"]
+
+
+def test_chat_json_records_failed_trace_when_provider_raises(monkeypatch):
+    recorded = {}
+    monkeypatch.setattr(llm_service.settings, "LLM_PROVIDER", "mock")
+    monkeypatch.setattr(llm_service, "_mock_chat", lambda prompt: (_ for _ in ()).throw(RuntimeError("provider offline")))
+    monkeypatch.setattr(prompt_trace_service, "record_prompt_trace", lambda **kwargs: recorded.update(kwargs))
+    llm_service.clear_llm_cache()
+
+    with pytest.raises(llm_service.LLMProviderError, match="provider offline"):
+        llm_service.chat_json("failing-trace-test")
+
+    assert recorded["status"] == "failed"
+    assert recorded["error_message"] == "provider offline"
+    assert recorded["response_text"] is None
+
+
+def test_chat_json_persists_per_call_usage_in_trace(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [{"message": {"content": '{"ok": true}'}}],
+                "usage": {"prompt_tokens": 1000, "completion_tokens": 500, "total_tokens": 1500},
+            }
+
+    recorded = {}
+    monkeypatch.setattr(llm_service.settings, "LLM_PROVIDER", "openai")
+    monkeypatch.setattr(llm_service.settings, "LLM_API_KEY", "test-key")
+    monkeypatch.setattr(llm_service.settings, "LLM_INPUT_COST_PER_1K_CENTS", 1.0)
+    monkeypatch.setattr(llm_service.settings, "LLM_OUTPUT_COST_PER_1K_CENTS", 2.0)
+    monkeypatch.setattr(llm_service.requests, "post", lambda *args, **kwargs: FakeResponse())
+    monkeypatch.setattr(prompt_trace_service, "record_prompt_trace", lambda **kwargs: recorded.update(kwargs))
+    llm_service.clear_llm_cache()
+    llm_service.reset_llm_usage()
+
+    assert llm_service.chat_json("trace-usage-test") == {"ok": True}
+
+    assert recorded["prompt_tokens"] == 1000
+    assert recorded["completion_tokens"] == 500
+    assert recorded["total_tokens"] == 1500
+    assert recorded["cost_cents"] == 2.0

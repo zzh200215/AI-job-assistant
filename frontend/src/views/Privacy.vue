@@ -7,6 +7,13 @@
       </div>
     </div>
 
+    <section v-if="dataSummary" class="data-summary" aria-label="个人数据概览">
+      <div v-for="item in summaryItems" :key="item.key" class="summary-item">
+        <strong>{{ item.value }}</strong>
+        <span>{{ item.label }}</span>
+      </div>
+    </section>
+
     <div class="panel">
       <div class="panel-header"><h3>数据管理</h3></div>
       <div class="panel-body">
@@ -127,11 +134,30 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import request from '@/api/request'
 
 const exporting = ref(false)
+const dataSummary = ref(null)
+
+const summaryItems = computed(() => [
+  { key: 'resumes', label: '简历', value: dataSummary.value?.resumes || 0 },
+  { key: 'versions', label: '版本', value: dataSummary.value?.resume_versions || 0 },
+  { key: 'analyses', label: '分析', value: dataSummary.value?.analyses || 0 },
+  { key: 'interviews', label: '面试', value: dataSummary.value?.interviews || 0 },
+  { key: 'applications', label: '投递', value: dataSummary.value?.applications || 0 },
+])
+
+onMounted(loadDataSummary)
+
+async function loadDataSummary() {
+  try {
+    dataSummary.value = await request.get('/auth/data-summary')
+  } catch {
+    dataSummary.value = null
+  }
+}
 
 async function exportData() {
   exporting.value = true
@@ -160,6 +186,7 @@ async function deleteResumes() {
     )
     await request.delete('/auth/data/resumes')
     ElMessage.success('简历已删除')
+    loadDataSummary()
   } catch (error) {
     notifyDeleteFailure(error, '删除简历')
   }
@@ -174,6 +201,7 @@ async function deleteAnalyses() {
     )
     await request.delete('/auth/data/analyses')
     ElMessage.success('分析记录已删除')
+    loadDataSummary()
   } catch (error) {
     notifyDeleteFailure(error, '删除分析记录')
   }
@@ -188,6 +216,7 @@ async function deleteInterviews() {
     )
     await request.delete('/auth/data/interviews')
     ElMessage.success('面试记录已删除')
+    loadDataSummary()
   } catch (error) {
     notifyDeleteFailure(error, '删除面试记录')
   }
@@ -212,6 +241,31 @@ function notifyDeleteFailure(error, action) {
   border: 1px solid var(--app-line);
   background: #fff;
   box-shadow: var(--app-shadow-soft);
+}
+.data-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  background: #fff;
+}
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-right: 1px solid var(--app-line);
+}
+.summary-item:last-child {
+  border-right: 0;
+}
+.summary-item strong {
+  color: var(--app-primary);
+  font-size: 22px;
+}
+.summary-item span {
+  color: var(--app-muted);
+  font-size: 12px;
 }
 .panel-header {
   padding: 16px 20px;
@@ -282,5 +336,13 @@ function notifyDeleteFailure(error, action) {
   font-size: 12px;
   color: var(--app-muted);
   text-align: center;
+}
+@media (max-width: 680px) {
+  .data-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .summary-item:nth-child(2n) {
+    border-right: 0;
+  }
 }
 </style>
