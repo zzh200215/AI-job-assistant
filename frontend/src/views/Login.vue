@@ -211,6 +211,12 @@
               </button>
             </div>
 
+            <div class="feishu-login">
+              <span>飞书组织登录</span>
+              <el-input v-model.trim="feishuSlug" placeholder="组织标识，例如 career-team" />
+              <el-button :disabled="!feishuSlug" @click="startFeishuLogin">继续</el-button>
+            </div>
+
             <p class="signup-link">
               还没有账号？
               <el-link type="primary" :underline="false" @click="goRegister">创建账号</el-link>
@@ -238,6 +244,7 @@ const rememberMe = ref(false)
 const loginError = ref('')
 
 const form = ref({ account: '', password: '' })
+const feishuSlug = ref('')
 
 const rules = {
   account: [
@@ -255,6 +262,13 @@ const goResetPassword = () => router.push('/reset-password')
 
 const handleSocialLogin = (provider) => {
   ElMessage.info(`${provider} 第三方登录暂未开放`)
+}
+
+const startFeishuLogin = () => {
+  const slug = feishuSlug.value.replace(/[^a-z0-9-]/gi, '').toLowerCase()
+  if (!slug) return
+  const base = import.meta.env.VITE_API_BASE || '/api'
+  window.location.assign(`${base}/organizations/sso/feishu/${slug}/start`)
 }
 
 const handleLogin = async () => {
@@ -552,6 +566,20 @@ const handleLogin = async () => {
 .social-btn:hover {
   background: var(--el-fill-color-light);
   border-color: var(--el-border-color);
+}
+
+.feishu-login {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.feishu-login :deep(.el-input__wrapper) {
+  min-height: 34px;
 }
 
 /* Signup link */

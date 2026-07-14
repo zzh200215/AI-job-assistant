@@ -41,6 +41,10 @@ def _is_mock(provider: str | None) -> bool:
     return str(provider or "").strip().lower() == "mock"
 
 
+def _feishu_sso_configured() -> bool:
+    return bool(settings.FEISHU_APP_ID and settings.FEISHU_APP_SECRET and settings.FEISHU_REDIRECT_URI)
+
+
 def _can_view_system_overview(user: User) -> bool:
     return user.role == ADMIN_ROLE or user.username in settings.admin_usernames_list
 
@@ -178,7 +182,8 @@ async def get_system_status(_current_user: User = Depends(get_current_user)):
         "model_runtime": model_runtime,
         "capabilities": {
             "tool_calling": not _is_mock(llm_provider),
-            "social_login": False,
+            "social_login": _feishu_sso_configured(),
+            "feishu_sso": _feishu_sso_configured(),
             "password_reset": True,
             "ocr_resume_parse": is_ocr_available(),
         },

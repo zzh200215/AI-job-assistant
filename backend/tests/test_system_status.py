@@ -94,6 +94,20 @@ def test_system_status_returns_runtime_flags(client):
     assert isinstance(data["capabilities"]["ocr_resume_parse"], bool)
 
 
+def test_system_status_reports_configured_feishu_sso(client, monkeypatch):
+    monkeypatch.setattr(system.settings, "FEISHU_APP_ID", "cli_test")
+    monkeypatch.setattr(system.settings, "FEISHU_APP_SECRET", "secret")
+    monkeypatch.setattr(system.settings, "FEISHU_REDIRECT_URI", "https://example.test/callback")
+    register_response = register_user(client)
+    token = register_response.json()["data"]["access_token"]
+
+    response = client.get("/system/status", headers={"Authorization": f"Bearer {token}"})
+
+    capabilities = response.json()["data"]["capabilities"]
+    assert capabilities["social_login"] is True
+    assert capabilities["feishu_sso"] is True
+
+
 def test_system_status_exposes_ocr_capability(client, monkeypatch):
     monkeypatch.setattr(system, "is_ocr_available", lambda: True)
     register_response = register_user(client)

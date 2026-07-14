@@ -95,6 +95,12 @@ const routes = [
         meta: { title: '隐私与数据', roles: CANDIDATE },
       },
       {
+        path: 'organizations',
+        name: 'organizations',
+        component: () => import('@/views/OrganizationWorkspace.vue'),
+        meta: { title: '团队工作区', roles: CANDIDATE },
+      },
+      {
         path: 'subscription',
         name: 'subscription',
         component: () => import('@/views/Subscription.vue'),

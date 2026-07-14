@@ -142,6 +142,7 @@ import {
   DataAnalysis,
   Document,
   Grid,
+  OfficeBuilding,
   HomeFilled,
   List,
   MagicStick,
@@ -226,6 +227,14 @@ const candidateNavItems = [
     tag: 'Profile',
     desc: '账号信息、数据与邀请。',
     matches: ['/profile', '/subscription'],
+  },
+  {
+    path: '/organizations',
+    icon: OfficeBuilding,
+    label: '团队工作区',
+    tag: 'Organization',
+    desc: '组织成员、共享知识与单点登录。',
+    matches: ['/organizations'],
   },
 ]
 
