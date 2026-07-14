@@ -66,9 +66,7 @@ def test_match_explainer_falls_back_to_jd_skill_tags(monkeypatch):
         },
     )
 
-    resume = SimpleNamespace(
-        parsed_json={"skills": ["Python", "FastAPI"], "years_exp": 3}
-    )
+    resume = SimpleNamespace(parsed_json={"skills": ["Python", "FastAPI"], "years_exp": 3})
     jd = SimpleNamespace(
         title="Python 后端",
         skill_tags=["Python", "Docker"],

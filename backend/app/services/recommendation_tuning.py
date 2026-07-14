@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Per-user recommendation tuning config storage and validation."""
 
 from __future__ import annotations
@@ -8,7 +7,6 @@ from copy import deepcopy
 from pathlib import Path
 from threading import Lock
 from typing import Any
-
 
 _CONFIG_LOCK = Lock()
 _CONFIG_PATH = Path(__file__).resolve().parents[2] / "reports" / "recommendation_tuning_configs.json"
@@ -237,8 +235,7 @@ def build_feedback_tuning_recommendation(
             for key in current["rule_components"]
         },
         "thresholds": {
-            key: int(suggested["thresholds"][key]) - int(current["thresholds"][key])
-            for key in current["thresholds"]
+            key: int(suggested["thresholds"][key]) - int(current["thresholds"][key]) for key in current["thresholds"]
         },
     }
 

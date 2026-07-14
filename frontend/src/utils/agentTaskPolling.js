@@ -91,7 +91,7 @@ export function createAgentTaskPoller(apiClient, runtimeOptions = {}) {
               createPollingError(cancelledMessage, 'task_cancelled', taskData),
               onCancelled || onFailed,
               taskData,
-              steps,
+              steps
             )
             return
           }
@@ -101,11 +101,11 @@ export function createAgentTaskPoller(apiClient, runtimeOptions = {}) {
               createPollingError(
                 taskData?.error_msg || failedMessage || 'Agent task failed',
                 'task_failed',
-                taskData,
+                taskData
               ),
               onFailed,
               taskData,
-              steps,
+              steps
             )
             return
           }
@@ -115,11 +115,11 @@ export function createAgentTaskPoller(apiClient, runtimeOptions = {}) {
               createPollingError(
                 timeoutMessage || 'Agent task polling timed out',
                 'task_timeout',
-                taskData,
+                taskData
               ),
               onTimeout,
               taskData,
-              steps,
+              steps
             )
             return
           }

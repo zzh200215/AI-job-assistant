@@ -8,17 +8,11 @@ import {
 } from '../src/utils/requestTracing.js'
 
 test('formatApiErrorMessage appends request id when present', () => {
-  assert.equal(
-    formatApiErrorMessage('Upload failed', 'req-123'),
-    'Upload failed [req-123]',
-  )
+  assert.equal(formatApiErrorMessage('Upload failed', 'req-123'), 'Upload failed [req-123]')
 })
 
 test('formatApiErrorMessage falls back when message missing', () => {
-  assert.equal(
-    formatApiErrorMessage('', '', 'Request failed'),
-    'Request failed',
-  )
+  assert.equal(formatApiErrorMessage('', '', 'Request failed'), 'Request failed')
 })
 
 test('normalizeValidationMessage joins validation details', () => {
@@ -27,10 +21,7 @@ test('normalizeValidationMessage joins validation details', () => {
     { loc: ['body', 'jd_id'], msg: 'Field required' },
   ])
 
-  assert.equal(
-    message,
-    'body.resume_id: Field required; body.jd_id: Field required',
-  )
+  assert.equal(message, 'body.resume_id: Field required; body.jd_id: Field required')
 })
 
 test('createRequestId uses fallback format when crypto.randomUUID is unavailable', () => {

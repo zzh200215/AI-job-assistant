@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
 """求职日记 API"""
-from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -13,7 +11,7 @@ from app.models.job_journal import JobJournal
 from app.models.job_pipeline import JobApplicationPipeline
 from app.models.user import User
 from app.schemas.c_end import JournalCreate, JournalUpdate
-from app.utils.response import ERR_PARAM, ok, fail
+from app.utils.response import ERR_PARAM, fail, ok
 
 router = APIRouter()
 
@@ -35,10 +33,14 @@ async def create_journal(
 
     # 验证关联记录归属
     if pipeline_id:
-        p = db.query(JobApplicationPipeline).filter(
-            JobApplicationPipeline.id == pipeline_id,
-            JobApplicationPipeline.user_id == current_user.id,
-        ).first()
+        p = (
+            db.query(JobApplicationPipeline)
+            .filter(
+                JobApplicationPipeline.id == pipeline_id,
+                JobApplicationPipeline.user_id == current_user.id,
+            )
+            .first()
+        )
         if not p:
             return fail(message="投递记录不存在或无权限", code=ERR_PARAM)
 
@@ -89,19 +91,18 @@ async def list_journals(
         q = q.filter(JobJournal.title.contains(keyword) | JobJournal.content.contains(keyword))
 
     total = q.count()
-    items = (
-        q.order_by(JobJournal.created_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
-    )
+    items = q.order_by(JobJournal.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
 
     # 附带 JD 信息
     jd_ids = {item.jd_id for item in items if item.jd_id}
-    jds = {
-        item.id: {"id": item.id, "title": item.title, "company": item.company}
-        for item in db.query(JobDescription).filter(JobDescription.id.in_(jd_ids)).all()
-    } if jd_ids else {}
+    jds = (
+        {
+            item.id: {"id": item.id, "title": item.title, "company": item.company}
+            for item in db.query(JobDescription).filter(JobDescription.id.in_(jd_ids)).all()
+        }
+        if jd_ids
+        else {}
+    )
 
     result_items = []
     for item in items:
@@ -118,10 +119,14 @@ async def get_journal(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    journal = db.query(JobJournal).filter(
-        JobJournal.id == journal_id,
-        JobJournal.user_id == current_user.id,
-    ).first()
+    journal = (
+        db.query(JobJournal)
+        .filter(
+            JobJournal.id == journal_id,
+            JobJournal.user_id == current_user.id,
+        )
+        .first()
+    )
     if not journal:
         return fail(message="日记不存在", code=ERR_PARAM)
     return ok(journal.to_dict())
@@ -134,10 +139,14 @@ async def update_journal(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    journal = db.query(JobJournal).filter(
-        JobJournal.id == journal_id,
-        JobJournal.user_id == current_user.id,
-    ).first()
+    journal = (
+        db.query(JobJournal)
+        .filter(
+            JobJournal.id == journal_id,
+            JobJournal.user_id == current_user.id,
+        )
+        .first()
+    )
     if not journal:
         return fail(message="日记不存在", code=ERR_PARAM)
 
@@ -157,10 +166,14 @@ async def delete_journal(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    journal = db.query(JobJournal).filter(
-        JobJournal.id == journal_id,
-        JobJournal.user_id == current_user.id,
-    ).first()
+    journal = (
+        db.query(JobJournal)
+        .filter(
+            JobJournal.id == journal_id,
+            JobJournal.user_id == current_user.id,
+        )
+        .first()
+    )
     if not journal:
         return fail(message="日记不存在", code=ERR_PARAM)
     db.delete(journal)
@@ -177,33 +190,43 @@ async def journal_stats(
     base = db.query(JobJournal).filter(JobJournal.user_id == current_user.id)
 
     # 按类型统计
-    type_rows = db.query(
-        JobJournal.entry_type, func.count(JobJournal.id)
-    ).filter(JobJournal.user_id == current_user.id).group_by(JobJournal.entry_type).all()
-    by_type = {t: c for t, c in type_rows}
+    type_rows = (
+        db.query(JobJournal.entry_type, func.count(JobJournal.id))
+        .filter(JobJournal.user_id == current_user.id)
+        .group_by(JobJournal.entry_type)
+        .all()
+    )
+    by_type = dict(type_rows)
 
     # 按心情统计
-    mood_rows = db.query(
-        JobJournal.mood, func.count(JobJournal.id)
-    ).filter(
-        JobJournal.user_id == current_user.id,
-        JobJournal.mood != "",
-    ).group_by(JobJournal.mood).all()
-    by_mood = {m: c for m, c in mood_rows}
+    mood_rows = (
+        db.query(JobJournal.mood, func.count(JobJournal.id))
+        .filter(
+            JobJournal.user_id == current_user.id,
+            JobJournal.mood != "",
+        )
+        .group_by(JobJournal.mood)
+        .all()
+    )
+    by_mood = dict(mood_rows)
 
     # 平均自评分
-    avg_rating = db.query(
-        func.avg(JobJournal.rating)
-    ).filter(
-        JobJournal.user_id == current_user.id,
-        JobJournal.rating > 0,
-    ).scalar()
+    avg_rating = (
+        db.query(func.avg(JobJournal.rating))
+        .filter(
+            JobJournal.user_id == current_user.id,
+            JobJournal.rating > 0,
+        )
+        .scalar()
+    )
 
     total = base.count()
 
-    return ok({
-        "total": total,
-        "by_type": by_type,
-        "by_mood": by_mood,
-        "avg_rating": round(float(avg_rating), 1) if avg_rating else None,
-    })
+    return ok(
+        {
+            "total": total,
+            "by_type": by_type,
+            "by_mood": by_mood,
+            "avg_rating": round(float(avg_rating), 1) if avg_rating else None,
+        }
+    )

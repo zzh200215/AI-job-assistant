@@ -1,23 +1,24 @@
-# -*- coding: utf-8 -*-
 """Agent tool registry."""
+
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
-ToolFn = Callable[..., Dict[str, Any]]
+ToolFn = Callable[..., dict[str, Any]]
 
 
 class Tool:
-    def __init__(self, name: str, description: str, parameters: Dict, fn: ToolFn):
+    def __init__(self, name: str, description: str, parameters: dict, fn: ToolFn):
         self.name = name
         self.description = description
         self.parameters = parameters
         self.fn = fn
 
-    def to_openai_tool(self) -> Dict:
+    def to_openai_tool(self) -> dict:
         return {
             "type": "function",
             "function": {
@@ -27,7 +28,7 @@ class Tool:
             },
         }
 
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def execute(self, **kwargs) -> dict[str, Any]:
         try:
             result = self.fn(**kwargs)
             return {"success": True, "result": result}
@@ -36,7 +37,7 @@ class Tool:
             return {"success": False, "error": f"tool '{self.name}' failed: {type(exc).__name__}: {exc}"}
 
 
-def _tool_search_knowledge(query: str, doc_type: str = None, top_k: int = 3) -> Dict:
+def _tool_search_knowledge(query: str, doc_type: str = None, top_k: int = 3) -> dict:
     from app.services.multi_recall import multi_recall
 
     results = multi_recall(query, doc_type=doc_type, top_k=top_k)
@@ -55,7 +56,7 @@ def _tool_search_knowledge(query: str, doc_type: str = None, top_k: int = 3) -> 
     }
 
 
-def _tool_calc_skill_coverage(resume_skills: List[str], jd_skills: List[str]) -> Dict:
+def _tool_calc_skill_coverage(resume_skills: list[str], jd_skills: list[str]) -> dict:
     if not jd_skills:
         return {"coverage": 0.0, "matched": [], "missing": [], "total_jd": 0}
 
@@ -73,7 +74,7 @@ def _tool_calc_skill_coverage(resume_skills: List[str], jd_skills: List[str]) ->
     }
 
 
-_BUILTIN_TOOLS: Dict[str, Tool] = {
+_BUILTIN_TOOLS: dict[str, Tool] = {
     "search_knowledge": Tool(
         name="search_knowledge",
         description="Search the knowledge base and return the most relevant chunks.",
@@ -110,11 +111,11 @@ _BUILTIN_TOOLS: Dict[str, Tool] = {
 }
 
 
-def get_tool(name: str) -> Optional[Tool]:
+def get_tool(name: str) -> Tool | None:
     return _BUILTIN_TOOLS.get(name)
 
 
-def list_tools(names: List[str] = None) -> List[Tool]:
+def list_tools(names: list[str] = None) -> list[Tool]:
     if names is None:
         return list(_BUILTIN_TOOLS.values())
 
@@ -128,7 +129,7 @@ def list_tools(names: List[str] = None) -> List[Tool]:
     return result
 
 
-def tool_names() -> List[str]:
+def tool_names() -> list[str]:
     return list(_BUILTIN_TOOLS.keys())
 
 

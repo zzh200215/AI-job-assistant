@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """JD 结构化解析 Prompt"""
+
 JD_PARSE_PROMPT = """你是一名资深招聘分析师，擅长把非结构化岗位 JD 解析为 JSON。
 
 【任务】从下面的 JD 文本中提取信息，按 JSON Schema 严格输出。

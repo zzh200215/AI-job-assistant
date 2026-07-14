@@ -4,36 +4,31 @@ import request from './request'
 // === REST 接口 ===
 
 // 创建面试会话
-export const createInterview = (data) =>
-  request.post('/interview/sessions', data)
+export const createInterview = (data) => request.post('/interview/sessions', data)
 
 // 获取面试列表
-export const getInterviewList = () =>
-  request.get('/interview/sessions')
+export const getInterviewList = () => request.get('/interview/sessions')
 
 // 获取面试详情（含报告）
-export const getInterviewDetail = (sessionId) =>
-  request.get(`/interview/sessions/${sessionId}`)
+export const getInterviewDetail = (sessionId) => request.get(`/interview/sessions/${sessionId}`)
+
+export const getInterviewEvaluations = (sessionId) =>
+  request.get(`/interview/sessions/${sessionId}/evaluations`)
 
 // 删除面试
-export const deleteInterview = (sessionId) =>
-  request.delete(`/interview/sessions/${sessionId}`)
+export const deleteInterview = (sessionId) => request.delete(`/interview/sessions/${sessionId}`)
 
 // 获取题库浏览（支持分类/难度/关键词过滤）
-export const getQuestionBank = (params = {}) =>
-  request.get('/interview/question-bank', { params })
+export const getQuestionBank = (params = {}) => request.get('/interview/question-bank', { params })
 
 // 获取题库分类统计
-export const getQuestionCategories = () =>
-  request.get('/interview/question-bank/categories')
+export const getQuestionCategories = () => request.get('/interview/question-bank/categories')
 
 // 获取针对 JD 的面试准备建议
-export const getInterviewPrep = (jdId) =>
-  request.get(`/interview/preparation/${jdId}`)
+export const getInterviewPrep = (jdId) => request.get(`/interview/preparation/${jdId}`)
 
 // 获取面试表现趋势分析
-export const getPerformanceTrend = () =>
-  request.get('/interview/performance')
+export const getPerformanceTrend = () => request.get('/interview/performance')
 
 // === WebSocket 连接 ===
 
@@ -82,9 +77,7 @@ export function connectInterviewWS(sid, onMessage, onError, onClose) {
     base = wsBase.replace(/\/$/, '')
   } else {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.hostname === 'localhost'
-      ? 'localhost:8000'
-      : window.location.host
+    const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host
     base = `${protocol}//${host}`
   }
 
@@ -200,7 +193,9 @@ function scheduleReconnect(sid, onMessage, onError, onClose) {
   clearReconnect()
   reconnectAttempts++
   const delay = 3000 * reconnectAttempts // 指数退避：3s / 6s / 9s
-  wsLog(`[Interview WS] 第 ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} 次重连将在 ${delay}ms 后开始...`)
+  wsLog(
+    `[Interview WS] 第 ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} 次重连将在 ${delay}ms 后开始...`
+  )
   reconnectTimer = setTimeout(() => {
     connectInterviewWS(sid, onMessage, onError, onClose)
   }, delay)

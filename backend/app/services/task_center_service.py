@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 """Helpers for deriving async task progress and task center summaries."""
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime, timezone
-from typing import Iterable
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -13,7 +12,6 @@ from app.models.agent import AgentStepLog, AgentTask
 from app.models.agent_run import AgentMessage, AgentRun
 from app.orchestration.protocol import get_step_label, normalize_step_name, normalize_step_status, normalize_task_status
 from app.utils.time_helper import utc_now
-
 
 _TERMINAL_STEP_STATUSES = {"completed", "failed", "skipped"}
 
@@ -97,7 +95,9 @@ def build_task_progress(task: AgentTask, steps: Iterable[AgentStepLog]) -> dict:
             "step_index": current_step.step_index,
             "started_at": _iso(current_step.started_at),
             "completed_at": _iso(current_step.completed_at),
-        } if current_step else None,
+        }
+        if current_step
+        else None,
         "duration_ms": _duration_ms(task),
         "started_at": _iso(task.start_time),
         "ended_at": _iso(task.end_time),
@@ -178,7 +178,8 @@ def list_user_tasks(
         .filter(AgentStepLog.task_id.in_(task_ids))
         .order_by(AgentStepLog.task_id.asc(), AgentStepLog.step_index.asc())
         .all()
-        if task_ids else []
+        if task_ids
+        else []
     )
 
     steps_by_task: dict[int, list[AgentStepLog]] = {}
@@ -201,20 +202,11 @@ def list_user_tasks(
 
 
 def get_task_with_progress(db: Session, *, task_id: int, user_id: int) -> tuple[AgentTask | None, dict | None]:
-    task = (
-        db.query(AgentTask)
-        .filter(AgentTask.id == task_id, AgentTask.user_id == user_id)
-        .first()
-    )
+    task = db.query(AgentTask).filter(AgentTask.id == task_id, AgentTask.user_id == user_id).first()
     if not task:
         return None, None
 
-    steps = (
-        db.query(AgentStepLog)
-        .filter(AgentStepLog.task_id == task_id)
-        .order_by(AgentStepLog.step_index.asc())
-        .all()
-    )
+    steps = db.query(AgentStepLog).filter(AgentStepLog.task_id == task_id).order_by(AgentStepLog.step_index.asc()).all()
     payload = serialize_task(task, steps)
     usage = _usage_by_task(db, [task]).get(task.id)
     if usage:

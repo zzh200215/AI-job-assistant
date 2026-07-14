@@ -1,28 +1,29 @@
-# -*- coding: utf-8 -*-
 """文档解析服务：支持 txt / md / pdf / docx 转纯文本"""
+
 import os
-from typing import Optional
 
 
 def _parse_txt(path: str) -> str:
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+    with open(path, encoding="utf-8", errors="ignore") as f:
         return f.read()
 
 
 def _parse_md(path: str) -> str:
     """Markdown: 保留文本结构，移除图片链接等"""
     import re
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+
+    with open(path, encoding="utf-8", errors="ignore") as f:
         text = f.read()
     # 移除图片 ![](url)
-    text = re.sub(r'!\[.*?\]\(.*?\)', '', text)
+    text = re.sub(r"!\[.*?\]\(.*?\)", "", text)
     # 移除行内链接 [text](url) 但保留 text
-    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
     return text
 
 
 def _parse_pdf(path: str) -> str:
     import pdfplumber
+
     text_parts = []
     with pdfplumber.open(path) as pdf:
         for page in pdf.pages:
@@ -34,6 +35,7 @@ def _parse_pdf(path: str) -> str:
 
 def _parse_docx(path: str) -> str:
     from docx import Document
+
     doc = Document(path)
     parts = []
     for p in doc.paragraphs:
@@ -47,7 +49,7 @@ def _parse_docx(path: str) -> str:
     return "\n".join(parts)
 
 
-def parse_document(path: str, file_type: Optional[str] = None) -> str:
+def parse_document(path: str, file_type: str | None = None) -> str:
     """
     根据文件类型解析为纯文本。
     支持: txt, md, pdf, docx

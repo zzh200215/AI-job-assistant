@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from app.models.knowledge import KnowledgeDocument
 from scripts.import_knowledge import exists
 

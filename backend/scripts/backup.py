@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Backup MySQL database, uploaded files, and Chroma vector data.
 
@@ -74,15 +73,18 @@ def _archive_directory(source: Path, archive_path: Path, dry_run: bool) -> None:
 
 def _mysql_dump(output_file: Path, dry_run: bool) -> None:
     password = (settings.MYSQL_PASSWORD or "").strip()
-    if not password:
+    if not password and not dry_run:
         raise ValueError("MYSQL_PASSWORD is required for database backup")
 
     cmd = [
         "mysqldump",
-        "--host", settings.MYSQL_HOST,
-        "--port", str(settings.MYSQL_PORT),
-        "--user", settings.MYSQL_USER,
-        "--password=" + password,
+        "--host",
+        settings.MYSQL_HOST,
+        "--port",
+        str(settings.MYSQL_PORT),
+        "--user",
+        settings.MYSQL_USER,
+        "--password=" + (password or "******"),
         "--single-transaction",
         "--routines",
         "--triggers",

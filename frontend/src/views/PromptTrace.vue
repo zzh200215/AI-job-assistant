@@ -114,7 +114,9 @@
           <div class="panel-title-row">
             <h3>版本对比</h3>
           </div>
-          <el-button type="primary" size="small" :loading="loading.compare" @click="runCompare">开始对比</el-button>
+          <el-button type="primary" size="small" :loading="loading.compare" @click="runCompare"
+            >开始对比</el-button
+          >
         </div>
         <div class="panel-body">
           <div class="compare-controls">
@@ -165,9 +167,13 @@
               <div class="compare-title">{{ compareResult.version_a.prompt_version }}</div>
               <div class="compare-metrics">
                 <div>调用数：{{ compareResult.version_a.metrics.total }}</div>
-                <div>成功率：{{ percentText(compareResult.version_a.metrics.success_rate || 0) }}</div>
+                <div>
+                  成功率：{{ percentText(compareResult.version_a.metrics.success_rate || 0) }}
+                </div>
                 <div>平均耗时：{{ compareResult.version_a.metrics.avg_duration_ms ?? '-' }}</div>
-                <div>平均 Tokens：{{ compareResult.version_a.metrics.avg_total_tokens ?? '-' }}</div>
+                <div>
+                  平均 Tokens：{{ compareResult.version_a.metrics.avg_total_tokens ?? '-' }}
+                </div>
                 <div>平均成本：{{ compareResult.version_a.metrics.avg_cost_cents ?? '-' }}</div>
               </div>
             </div>
@@ -175,9 +181,13 @@
               <div class="compare-title">{{ compareResult.version_b.prompt_version }}</div>
               <div class="compare-metrics">
                 <div>调用数：{{ compareResult.version_b.metrics.total }}</div>
-                <div>成功率：{{ percentText(compareResult.version_b.metrics.success_rate || 0) }}</div>
+                <div>
+                  成功率：{{ percentText(compareResult.version_b.metrics.success_rate || 0) }}
+                </div>
                 <div>平均耗时：{{ compareResult.version_b.metrics.avg_duration_ms ?? '-' }}</div>
-                <div>平均 Tokens：{{ compareResult.version_b.metrics.avg_total_tokens ?? '-' }}</div>
+                <div>
+                  平均 Tokens：{{ compareResult.version_b.metrics.avg_total_tokens ?? '-' }}
+                </div>
                 <div>平均成本：{{ compareResult.version_b.metrics.avg_cost_cents ?? '-' }}</div>
               </div>
             </div>
@@ -233,33 +243,28 @@
         <span class="muted">点击查看完整 Prompt 与输出回放</span>
       </div>
       <div class="panel-body">
-        <el-table
-          :data="traceList.items"
-          v-loading="loading.list"
-          stripe
-          class="trace-table"
-        >
-        <el-table-column prop="created_at" label="时间" min-width="168">
-          <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
-        </el-table-column>
-        <el-table-column prop="source" label="来源" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="prompt_version" label="版本" min-width="120" />
-        <el-table-column prop="model" label="模型" min-width="140" />
-        <el-table-column prop="status" label="状态" min-width="90">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 'success' ? 'success' : 'danger'" effect="plain">
-              {{ row.status }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="duration_ms" label="耗时" min-width="90" />
-        <el-table-column prop="total_tokens" label="Tokens" min-width="90" />
-        <el-table-column prop="cost_cents" label="成本" min-width="110" />
-        <el-table-column label="操作" fixed="right" min-width="100">
-          <template #default="{ row }">
-            <el-button text type="primary" @click="openDetail(row.id)">回放</el-button>
-          </template>
-        </el-table-column>
+        <el-table :data="traceList.items" v-loading="loading.list" stripe class="trace-table">
+          <el-table-column prop="created_at" label="时间" min-width="168">
+            <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+          </el-table-column>
+          <el-table-column prop="source" label="来源" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="prompt_version" label="版本" min-width="120" />
+          <el-table-column prop="model" label="模型" min-width="140" />
+          <el-table-column prop="status" label="状态" min-width="90">
+            <template #default="{ row }">
+              <el-tag :type="row.status === 'success' ? 'success' : 'danger'" effect="plain">
+                {{ row.status }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="duration_ms" label="耗时" min-width="90" />
+          <el-table-column prop="total_tokens" label="Tokens" min-width="90" />
+          <el-table-column prop="cost_cents" label="成本" min-width="110" />
+          <el-table-column label="操作" fixed="right" min-width="100">
+            <template #default="{ row }">
+              <el-button text type="primary" @click="openDetail(row.id)">回放</el-button>
+            </template>
+          </el-table-column>
         </el-table>
 
         <div class="pager-row">
@@ -275,18 +280,16 @@
       </div>
     </div>
 
-    <el-drawer
-      v-model="detailVisible"
-      size="58%"
-      title="Prompt 结果回放"
-    >
+    <el-drawer v-model="detailVisible" size="58%" title="Prompt 结果回放">
       <div v-if="detail" class="detail-wrap">
         <el-descriptions :column="2" border>
           <el-descriptions-item label="来源">{{ detail.source }}</el-descriptions-item>
           <el-descriptions-item label="版本">{{ detail.prompt_version }}</el-descriptions-item>
           <el-descriptions-item label="模型">{{ detail.model }}</el-descriptions-item>
           <el-descriptions-item label="状态">{{ detail.status }}</el-descriptions-item>
-          <el-descriptions-item label="Request ID">{{ detail.request_id || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="Request ID">{{
+            detail.request_id || '-'
+          }}</el-descriptions-item>
           <el-descriptions-item label="任务 ID">{{ detail.task_id ?? '-' }}</el-descriptions-item>
         </el-descriptions>
 
@@ -387,9 +390,9 @@ const scopeHint = computed(() => {
 const compareVersionOptions = computed(() => {
   const groups = summary.version_groups || []
   const filtered = compareForm.source
-    ? groups.filter(item => item.source === compareForm.source)
+    ? groups.filter((item) => item.source === compareForm.source)
     : groups
-  return [...new Set(filtered.map(item => item.prompt_version).filter(Boolean))]
+  return [...new Set(filtered.map((item) => item.prompt_version).filter(Boolean))]
 })
 
 const responseJsonText = computed(() => {

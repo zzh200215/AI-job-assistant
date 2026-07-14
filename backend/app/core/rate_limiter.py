@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Rate limiting configuration based on slowapi."""
 
 from __future__ import annotations

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Password policy validation tests."""
 
 from __future__ import annotations

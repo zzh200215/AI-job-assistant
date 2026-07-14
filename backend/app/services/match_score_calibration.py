@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
 """Deterministic score caps for obvious adjacent-role over-scoring cases."""
+
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 
-def infer_match_score_cap(resume_text: str, jd_text: str) -> Optional[int]:
+def infer_match_score_cap(resume_text: str, jd_text: str) -> int | None:
     """Infer a hard upper bound when core JD evidence is clearly missing."""
     resume = _norm(resume_text)
     jd = _norm(jd_text)
@@ -14,7 +14,9 @@ def infer_match_score_cap(resume_text: str, jd_text: str) -> Optional[int]:
 
     if "全栈" in jd:
         has_frontend = _has_any(resume, ["前端", "react", "vue", "typescript", "javascript"])
-        has_backend = _has_any(resume, ["后端", "node", "node.js", "fastapi", "django", "spring", "java", "go", "python"])
+        has_backend = _has_any(
+            resume, ["后端", "node", "node.js", "fastapi", "django", "spring", "java", "go", "python"]
+        )
         has_db = _has_any(resume, ["postgresql", "mysql", "数据库", "sql", "redis"])
         if has_frontend and (not has_backend or not has_db):
             caps.append(55 if not has_backend and not has_db else 60)
@@ -43,7 +45,7 @@ def infer_match_score_cap(resume_text: str, jd_text: str) -> Optional[int]:
     return min(caps) if caps else None
 
 
-def apply_match_score_cap(result: Dict[str, Any], resume_text: str, jd_text: str) -> Dict[str, Any]:
+def apply_match_score_cap(result: dict[str, Any], resume_text: str, jd_text: str) -> dict[str, Any]:
     """Clamp result['match_score'] when deterministic weak-fit caps apply."""
     score = max(0, min(100, int(result.get("match_score") or 0)))
     cap = infer_match_score_cap(resume_text, jd_text)
@@ -59,12 +61,12 @@ def _has_any(text: str, keywords: list[str]) -> bool:
     return any(keyword.lower().replace(" ", "") in text for keyword in keywords)
 
 
-def _first_years(text: str) -> Optional[int]:
+def _first_years(text: str) -> int | None:
     match = re.search(r"(\d+)\s*年", text)
     return int(match.group(1)) if match else None
 
 
-def _jd_min_years(text: str) -> Optional[int]:
+def _jd_min_years(text: str) -> int | None:
     range_match = re.search(r"(\d+)\s*[-~到至]\s*(\d+)\s*年", text)
     if range_match:
         return int(range_match.group(1))

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Incrementally import knowledge documents from a local folder."""
+
 from __future__ import annotations
 
 import argparse
@@ -21,10 +21,7 @@ ALLOWED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".doc"}
 
 def iter_files(folder: Path, recursive: bool) -> list[Path]:
     pattern = "**/*" if recursive else "*"
-    return sorted(
-        path for path in folder.glob(pattern)
-        if path.is_file() and path.suffix.lower() in ALLOWED_EXTENSIONS
-    )
+    return sorted(path for path in folder.glob(pattern) if path.is_file() and path.suffix.lower() in ALLOWED_EXTENSIONS)
 
 
 def default_title(path: Path) -> str:
@@ -32,12 +29,17 @@ def default_title(path: Path) -> str:
 
 
 def exists(db, *, title: str, file_name: str, doc_type: str) -> bool:
-    return db.query(KnowledgeDocument).filter(
-        KnowledgeDocument.title == title,
-        KnowledgeDocument.file_name == file_name,
-        KnowledgeDocument.doc_type == doc_type,
-        KnowledgeDocument.status == "ready",
-    ).first() is not None
+    return (
+        db.query(KnowledgeDocument)
+        .filter(
+            KnowledgeDocument.title == title,
+            KnowledgeDocument.file_name == file_name,
+            KnowledgeDocument.doc_type == doc_type,
+            KnowledgeDocument.status == "ready",
+        )
+        .first()
+        is not None
+    )
 
 
 def main() -> int:
@@ -93,10 +95,7 @@ def main() -> int:
     finally:
         db.close()
 
-    print(
-        f"[DONE] imported={imported} skipped={skipped} failed={failed} "
-        f"doc_type={args.doc_type} folder={folder}"
-    )
+    print(f"[DONE] imported={imported} skipped={skipped} failed={failed} doc_type={args.doc_type} folder={folder}")
     return 0 if failed == 0 else 2
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 """Import the bundled knowledge seed documents."""
+
 from __future__ import annotations
 
 import subprocess

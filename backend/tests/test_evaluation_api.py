@@ -1,12 +1,11 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from app.api.auth import router as auth_router
 from app.api.evaluation import router as evaluation_router

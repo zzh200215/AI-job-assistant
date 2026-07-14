@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 """投递流程 API — 看板视图、阶段流转、面试日程、Offer 管理"""
+
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
@@ -9,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
-from app.models.history import JobDescription, Resume
+from app.models.history import Resume, ResumeVersion
 from app.models.job_pipeline import (
     ACTIVE_STAGES,
     PIPELINE_STAGES,
@@ -20,35 +19,49 @@ from app.models.job_pipeline import (
 from app.models.user import User
 from app.schemas.job_pipeline import (
     PipelineCreateReq,
-    PipelineKanbanResp,
     PipelineUpdateReq,
     StageTransitionReq,
 )
 from app.utils.job_access import get_accessible_job
-from app.utils.response import ERR_PARAM, ok, fail
+from app.utils.response import ERR_PARAM, fail, ok
 from app.utils.time_helper import utc_now, utc_now_iso
 
 router = APIRouter()
+
+
+def _get_owned_resume_version(
+    db: Session, user_id: int, resume_id: int | None, version_id: int
+) -> ResumeVersion | None:
+    query = (
+        db.query(ResumeVersion)
+        .join(Resume, ResumeVersion.resume_id == Resume.id)
+        .filter(
+            ResumeVersion.id == version_id,
+            ResumeVersion.format == "md",
+            Resume.user_id == user_id,
+            Resume.is_deleted == 0,
+        )
+    )
+    if resume_id is not None:
+        query = query.filter(ResumeVersion.resume_id == resume_id)
+    return query.first()
 
 
 # ============================================================
 # 看板视图
 # ============================================================
 
+
 @router.get("/pipeline/kanban", summary="看板视图（按阶段分组）")
 async def kanban_view(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    items = (
-        db.query(JobApplicationPipeline)
-        .filter(JobApplicationPipeline.user_id == current_user.id)
-        .all()
-    )
+    items = db.query(JobApplicationPipeline).filter(JobApplicationPipeline.user_id == current_user.id).all()
 
-    stages: Dict[str, List[dict]] = {s: [] for s in ACTIVE_STAGES}
+    stages: dict[str, list[dict]] = {s: [] for s in ACTIVE_STAGES}
     stages.update({s: [] for s in TERMINAL_STAGES})
-    stage_counts: Dict[str, int] = {s: 0 for s in PIPELINE_STAGES}
+    stage_counts: dict[str, int] = dict.fromkeys(PIPELINE_STAGES, 0)
 
     for item in items:
         d = item.to_dict()
@@ -60,22 +73,27 @@ async def kanban_view(
 
     # 活跃阶段按 follow_up_at / update_time 排序
     for stage_key in stages:
-        stages[stage_key].sort(key=lambda x: (
-            x.get("follow_up_at") or "9999",
-            x.get("update_time") or "",
-        ))
+        stages[stage_key].sort(
+            key=lambda x: (
+                x.get("follow_up_at") or "9999",
+                x.get("update_time") or "",
+            )
+        )
 
-    return ok({
-        "stages": stages,
-        "stage_counts": stage_counts,
-        "active_stages": ACTIVE_STAGES,
-        "terminal_stages": TERMINAL_STAGES,
-    })
+    return ok(
+        {
+            "stages": stages,
+            "stage_counts": stage_counts,
+            "active_stages": ACTIVE_STAGES,
+            "terminal_stages": TERMINAL_STAGES,
+        }
+    )
 
 
 # ============================================================
 # 面试日程
 # ============================================================
+
 
 @router.get("/pipeline/interviews", summary="获取即将面试列表")
 async def upcoming_interviews(
@@ -96,6 +114,7 @@ async def upcoming_interviews(
     )
 
     from datetime import timedelta
+
     cutoff = now + timedelta(days=days)
     result = []
     for e in entries:
@@ -108,6 +127,7 @@ async def upcoming_interviews(
 # ============================================================
 # Offer 对比
 # ============================================================
+
 
 @router.get("/pipeline/offers", summary="获取所有 Offer 列表（用于对比）")
 async def list_offers(
@@ -123,22 +143,25 @@ async def list_offers(
         .order_by(JobApplicationPipeline.update_time.desc())
         .all()
     )
-    return ok({
-        "total": len(entries),
-        "items": [e.to_dict() for e in entries],
-    })
+    return ok(
+        {
+            "total": len(entries),
+            "items": [e.to_dict() for e in entries],
+        }
+    )
 
 
 # ============================================================
 # 投递记录 CRUD
 # ============================================================
 
+
 @router.get("/pipeline/list", summary="获取投递流程列表")
 async def list_pipeline_entries(
     stage: str = Query("", description="流程阶段过滤"),
     keyword: str = Query("", description="岗位/公司/备注关键词"),
-    resume_id: Optional[int] = Query(None, description="简历 ID 过滤"),
-    is_active: Optional[bool] = Query(None, description="是否活跃阶段"),
+    resume_id: int | None = Query(None, description="简历 ID 过滤"),
+    is_active: bool | None = Query(None, description="是否活跃阶段"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -159,22 +182,158 @@ async def list_pipeline_entries(
     keyword = keyword.strip().lower()
     if keyword:
         items = [
-            item for item in items
-            if keyword in " ".join([
-                item.title or "",
-                item.company or "",
-                item.location or "",
-                item.note or "",
-                item.next_action or "",
-                item.resume_name or "",
-            ]).lower()
+            item
+            for item in items
+            if keyword
+            in " ".join(
+                [
+                    item.title or "",
+                    item.company or "",
+                    item.location or "",
+                    item.note or "",
+                    item.next_action or "",
+                    item.resume_name or "",
+                ]
+            ).lower()
         ]
 
     items.sort(key=_sort_key)
-    return ok({
-        "total": len(items),
-        "items": [item.to_dict() for item in items],
-    })
+    return ok(
+        {
+            "total": len(items),
+            "items": [item.to_dict() for item in items],
+        }
+    )
+
+
+@router.get("/pipeline/resume-versions", summary="获取可用于投递追踪的简历版本")
+async def list_pipeline_resume_versions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    versions = (
+        db.query(ResumeVersion, Resume)
+        .join(Resume, ResumeVersion.resume_id == Resume.id)
+        .filter(
+            Resume.user_id == current_user.id,
+            Resume.is_deleted == 0,
+            ResumeVersion.format == "md",
+        )
+        .order_by(ResumeVersion.created_at.desc())
+        .all()
+    )
+    return ok(
+        {
+            "items": [
+                {
+                    "id": version.id,
+                    "resume_id": version.resume_id,
+                    "label": version.label or f"{version.version_type} 版本",
+                    "version_type": version.version_type,
+                    "target_jd_id": version.target_jd_id,
+                    "resume_name": resume.file_name or resume.name or "简历",
+                    "created_at": version.created_at.isoformat() if version.created_at else None,
+                }
+                for version, resume in versions
+            ]
+        }
+    )
+
+
+@router.get("/pipeline/resume-version-stats", summary="简历版本投递效果汇总")
+async def pipeline_resume_version_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    entries = (
+        db.query(JobApplicationPipeline)
+        .filter(
+            JobApplicationPipeline.user_id == current_user.id,
+            JobApplicationPipeline.resume_version_id.isnot(None),
+        )
+        .all()
+    )
+    grouped: dict[int, dict] = {}
+    for entry in entries:
+        version_id = entry.resume_version_id
+        row = grouped.setdefault(
+            version_id,
+            {
+                "resume_version_id": version_id,
+                "label": entry.resume_version_label or f"版本 #{version_id}",
+                "total": 0,
+                "submitted": 0,
+                "interviews": 0,
+                "offers": 0,
+                "accepted": 0,
+                "rejected": 0,
+                "latest_activity": None,
+            },
+        )
+        row["total"] += 1
+        if entry.stage != "todo":
+            row["submitted"] += 1
+        if entry.stage in {"interview", "offer", "accepted"}:
+            row["interviews"] += 1
+        if entry.stage in {"offer", "accepted"}:
+            row["offers"] += 1
+        if entry.stage == "accepted":
+            row["accepted"] += 1
+        if entry.stage == "rejected":
+            row["rejected"] += 1
+        timestamp = entry.update_time.isoformat() if entry.update_time else None
+        if timestamp and (not row["latest_activity"] or timestamp > row["latest_activity"]):
+            row["latest_activity"] = timestamp
+
+    items = []
+    for row in grouped.values():
+        submitted = row["submitted"]
+        row["interview_rate"] = round(row["interviews"] / submitted * 100, 1) if submitted else 0
+        row["offer_rate"] = round(row["offers"] / submitted * 100, 1) if submitted else 0
+        items.append(row)
+    items.sort(key=lambda item: (item["interviews"], item["submitted"], item["latest_activity"] or ""), reverse=True)
+    return ok({"total_versions": len(items), "items": items})
+
+
+@router.get("/pipeline/recommend-resume-version", summary="为目标岗位推荐简历版本")
+async def recommend_pipeline_resume_version(
+    jd_id: int = Query(..., description="目标岗位 ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    jd = get_accessible_job(db, jd_id, current_user)
+    if not jd:
+        return fail(message="岗位不存在或无权限", code=ERR_PARAM)
+    keywords = list((jd.parsed_json or {}).get("required_skills", []) or [])
+    keywords = list(dict.fromkeys(str(item).strip() for item in keywords if str(item).strip()))[:20]
+    versions = (
+        db.query(ResumeVersion)
+        .join(Resume, ResumeVersion.resume_id == Resume.id)
+        .filter(Resume.user_id == current_user.id, Resume.is_deleted == 0, ResumeVersion.format == "md")
+        .all()
+    )
+    entries = db.query(JobApplicationPipeline).filter(JobApplicationPipeline.user_id == current_user.id).all()
+    items = []
+    for version in versions:
+        matched = [keyword for keyword in keywords if keyword.lower() in (version.content or "").lower()]
+        coverage = len(matched) / len(keywords) if keywords else 0
+        samples = [entry for entry in entries if entry.resume_version_id == version.id and entry.stage != "todo"]
+        interviews = sum(entry.stage in {"interview", "offer", "accepted"} for entry in samples)
+        interview_rate = interviews / len(samples) if samples else 0
+        items.append(
+            {
+                "resume_version_id": version.id,
+                "resume_id": version.resume_id,
+                "label": version.label or f"{version.version_type} 版本",
+                "score": round(coverage * 70 + interview_rate * 30),
+                "matched_keywords": matched,
+                "keyword_coverage": round(coverage * 100),
+                "sample_size": len(samples),
+                "historical_interview_rate": round(interview_rate * 100, 1),
+            }
+        )
+    items.sort(key=lambda item: (item["score"], item["sample_size"]), reverse=True)
+    return ok({"jd_id": jd.id, "items": items[:5], "recommended": items[0] if items else None})
 
 
 @router.post("/pipeline", summary="创建投递流程记录")
@@ -187,13 +346,25 @@ async def create_pipeline_entry(
     jd = None
 
     if payload.resume_id is not None:
-        resume = db.query(Resume).filter(
-            Resume.id == payload.resume_id,
-            Resume.user_id == current_user.id,
-            Resume.is_deleted == 0,
-        ).first()
+        resume = (
+            db.query(Resume)
+            .filter(
+                Resume.id == payload.resume_id,
+                Resume.user_id == current_user.id,
+                Resume.is_deleted == 0,
+            )
+            .first()
+        )
         if not resume:
             return fail(message="简历不存在或无权限", code=ERR_PARAM)
+
+    resume_version = None
+    if payload.resume_version_id is not None:
+        resume_version = _get_owned_resume_version(db, current_user.id, payload.resume_id, payload.resume_version_id)
+        if not resume_version:
+            return fail(message="简历版本不存在、与简历不匹配或无权限", code=ERR_PARAM)
+        if resume is None:
+            resume = db.get(Resume, resume_version.resume_id)
 
     if payload.jd_id is not None:
         jd = get_accessible_job(db, payload.jd_id, current_user)
@@ -202,18 +373,27 @@ async def create_pipeline_entry(
 
     duplicate = None
     if payload.jd_id is not None:
-        duplicate = db.query(JobApplicationPipeline).filter(
-            JobApplicationPipeline.user_id == current_user.id,
-            JobApplicationPipeline.jd_id == payload.jd_id,
-            JobApplicationPipeline.resume_id == payload.resume_id,
-        ).first()
+        duplicate = (
+            db.query(JobApplicationPipeline)
+            .filter(
+                JobApplicationPipeline.user_id == current_user.id,
+                JobApplicationPipeline.jd_id == payload.jd_id,
+                JobApplicationPipeline.resume_id == payload.resume_id,
+                JobApplicationPipeline.resume_version_id == payload.resume_version_id,
+            )
+            .first()
+        )
     elif payload.source_url and payload.title:
-        duplicate = db.query(JobApplicationPipeline).filter(
-            JobApplicationPipeline.user_id == current_user.id,
-            JobApplicationPipeline.source_url == payload.source_url,
-            JobApplicationPipeline.title == payload.title,
-            JobApplicationPipeline.company == payload.company,
-        ).first()
+        duplicate = (
+            db.query(JobApplicationPipeline)
+            .filter(
+                JobApplicationPipeline.user_id == current_user.id,
+                JobApplicationPipeline.source_url == payload.source_url,
+                JobApplicationPipeline.title == payload.title,
+                JobApplicationPipeline.company == payload.company,
+            )
+            .first()
+        )
 
     if duplicate:
         return ok(duplicate.to_dict(), message="该岗位已在投递流程中")
@@ -232,6 +412,13 @@ async def create_pipeline_entry(
     entry = JobApplicationPipeline(
         user_id=current_user.id,
         resume_id=resume.id if resume else payload.resume_id,
+        resume_version_id=resume_version.id if resume_version else None,
+        resume_version_label=(resume_version.label or resume_version.version_type) if resume_version else "",
+        feedback_type=payload.feedback_type,
+        feedback_score=payload.feedback_score,
+        feedback_tags=_unique_skill_tags(payload.feedback_tags),
+        feedback_note=payload.feedback_note,
+        feedback_at=utc_now() if payload.feedback_type or payload.feedback_note else None,
         jd_id=jd.id if jd else payload.jd_id,
         title=payload.title or (jd.title if jd else ""),
         company=payload.company or (jd.company if jd else ""),
@@ -272,6 +459,7 @@ async def create_pipeline_entry(
 # 阶段流转（专用接口，校验合法流转）
 # ============================================================
 
+
 @router.post("/pipeline/{entry_id}/transition", summary="阶段流转")
 async def transition_stage(
     entry_id: int,
@@ -279,10 +467,14 @@ async def transition_stage(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    entry = db.query(JobApplicationPipeline).filter(
-        JobApplicationPipeline.id == entry_id,
-        JobApplicationPipeline.user_id == current_user.id,
-    ).first()
+    entry = (
+        db.query(JobApplicationPipeline)
+        .filter(
+            JobApplicationPipeline.id == entry_id,
+            JobApplicationPipeline.user_id == current_user.id,
+        )
+        .first()
+    )
     if not entry:
         return fail(message="投递记录不存在或无权限", code=ERR_PARAM)
 
@@ -301,12 +493,14 @@ async def transition_stage(
 
     # 更新阶段和历史
     history = entry.stage_history or []
-    history.append({
-        "stage": target_stage,
-        "at": utc_now_iso(),
-        "note": payload.note,
-        "from_stage": current_stage,
-    })
+    history.append(
+        {
+            "stage": target_stage,
+            "at": utc_now_iso(),
+            "note": payload.note,
+            "from_stage": current_stage,
+        }
+    )
     entry.stage = target_stage
     entry.stage_history = history
 
@@ -351,26 +545,48 @@ async def update_pipeline_entry(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    entry = db.query(JobApplicationPipeline).filter(
-        JobApplicationPipeline.id == entry_id,
-        JobApplicationPipeline.user_id == current_user.id,
-    ).first()
+    entry = (
+        db.query(JobApplicationPipeline)
+        .filter(
+            JobApplicationPipeline.id == entry_id,
+            JobApplicationPipeline.user_id == current_user.id,
+        )
+        .first()
+    )
     if not entry:
         return fail(message="投递记录不存在或无权限", code=ERR_PARAM)
 
     data = payload.model_dump(exclude_unset=True)
 
     if "resume_id" in data and data["resume_id"] is not None:
-        resume = db.query(Resume).filter(
-            Resume.id == data["resume_id"],
-            Resume.user_id == current_user.id,
-            Resume.is_deleted == 0,
-        ).first()
+        resume = (
+            db.query(Resume)
+            .filter(
+                Resume.id == data["resume_id"],
+                Resume.user_id == current_user.id,
+                Resume.is_deleted == 0,
+            )
+            .first()
+        )
         if not resume:
             return fail(message="简历不存在或无权限", code=ERR_PARAM)
         entry.resume_id = resume.id
         if "resume_name" not in data:
             entry.resume_name = resume.file_name or resume.name or ""
+
+    if "resume_version_id" in data:
+        version_id = data["resume_version_id"]
+        if version_id is None:
+            entry.resume_version_id = None
+            entry.resume_version_label = ""
+        else:
+            bound_resume_id = data.get("resume_id", entry.resume_id)
+            version = _get_owned_resume_version(db, current_user.id, bound_resume_id, version_id)
+            if not version:
+                return fail(message="简历版本不存在、与简历不匹配或无权限", code=ERR_PARAM)
+            entry.resume_id = version.resume_id
+            entry.resume_version_id = version.id
+            entry.resume_version_label = version.label or version.version_type
 
     if "jd_id" in data and data["jd_id"] is not None:
         jd = get_accessible_job(db, data["jd_id"], current_user)
@@ -380,12 +596,31 @@ async def update_pipeline_entry(
 
     # 通用字段
     _simple_fields = (
-        "title", "company", "location", "salary_range", "source",
-        "source_url", "summary", "raw_text", "experience_requirement",
-        "education_requirement", "industry", "priority_score",
-        "priority_label", "stage", "note", "next_action", "resume_name",
-        "interview_type", "interview_round", "interview_location",
-        "interview_contact", "offer_salary",
+        "title",
+        "company",
+        "location",
+        "salary_range",
+        "source",
+        "source_url",
+        "summary",
+        "raw_text",
+        "experience_requirement",
+        "education_requirement",
+        "industry",
+        "priority_score",
+        "priority_label",
+        "stage",
+        "note",
+        "next_action",
+        "resume_name",
+        "interview_type",
+        "interview_round",
+        "interview_location",
+        "interview_contact",
+            "offer_salary",
+            "feedback_type",
+            "feedback_score",
+            "feedback_note",
     )
     for field in _simple_fields:
         if field in data:
@@ -394,6 +629,10 @@ async def update_pipeline_entry(
     # 需要特殊处理的字段
     if "skill_tags" in data and data["skill_tags"] is not None:
         entry.skill_tags = _unique_skill_tags(data["skill_tags"])
+    if "feedback_tags" in data and data["feedback_tags"] is not None:
+        entry.feedback_tags = _unique_skill_tags(data["feedback_tags"])
+    if any(field in data for field in ("feedback_type", "feedback_score", "feedback_tags", "feedback_note")):
+        entry.feedback_at = utc_now()
 
     for dt_field in ("follow_up_at", "interview_at", "offer_deadline"):
         if dt_field in data:
@@ -404,8 +643,7 @@ async def update_pipeline_entry(
 
     if "stage_history" in data and data["stage_history"] is not None:
         entry.stage_history = [
-            item.model_dump() if hasattr(item, "model_dump") else item
-            for item in data["stage_history"]
+            item.model_dump() if hasattr(item, "model_dump") else item for item in data["stage_history"]
         ]
 
     if "offer_details" in data and data["offer_details"] is not None:
@@ -443,10 +681,14 @@ async def delete_pipeline_entry(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    entry = db.query(JobApplicationPipeline).filter(
-        JobApplicationPipeline.id == entry_id,
-        JobApplicationPipeline.user_id == current_user.id,
-    ).first()
+    entry = (
+        db.query(JobApplicationPipeline)
+        .filter(
+            JobApplicationPipeline.id == entry_id,
+            JobApplicationPipeline.user_id == current_user.id,
+        )
+        .first()
+    )
     if not entry:
         return fail(message="投递记录不存在或无权限", code=ERR_PARAM)
 
@@ -458,6 +700,7 @@ async def delete_pipeline_entry(
 # ============================================================
 # 投递统计摘要
 # ============================================================
+
 
 @router.get("/pipeline/stats", summary="投递数据统计")
 async def pipeline_stats(
@@ -473,10 +716,11 @@ async def pipeline_stats(
         .group_by(JobApplicationPipeline.stage)
         .all()
     )
-    stage_counts = {stage: count for stage, count in rows}
+    stage_counts = dict(rows)
 
     # 本周新增投递数
     from datetime import timedelta
+
     week_ago = utc_now() - timedelta(days=7)
     weekly_new = (
         db.query(func.count(JobApplicationPipeline.id))
@@ -512,22 +756,25 @@ async def pipeline_stats(
     total = sum(stage_counts.values())
     active_count = sum(stage_counts.get(s, 0) for s in ACTIVE_STAGES)
 
-    return ok({
-        "total": total,
-        "active": active_count,
-        "stage_counts": stage_counts,
-        "weekly_new": weekly_new,
-        "upcoming_interviews": upcoming_interviews_count,
-        "pending_offers": pending_offers,
-        "conversion_rate": round(active_count / total, 2) if total > 0 else 0,
-    })
+    return ok(
+        {
+            "total": total,
+            "active": active_count,
+            "stage_counts": stage_counts,
+            "weekly_new": weekly_new,
+            "upcoming_interviews": upcoming_interviews_count,
+            "pending_offers": pending_offers,
+            "conversion_rate": round(active_count / total, 2) if total > 0 else 0,
+        }
+    )
 
 
 # ============================================================
 # 工具函数
 # ============================================================
 
-def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
+
+def _parse_datetime(value: str | None) -> datetime | None:
     if not value:
         return None
 

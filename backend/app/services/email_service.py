@@ -1,11 +1,11 @@
-# -*- coding: utf-8 -*-
 """邮件发送服务。"""
+
 from __future__ import annotations
 
 import logging
 import smtplib
-from email.mime.text import MIMEText
 from email.header import Header
+from email.mime.text import MIMEText
 
 from app.core.config import settings
 

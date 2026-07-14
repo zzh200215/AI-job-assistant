@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 简历深度分析服务
 
@@ -8,8 +7,9 @@
 - 分析包含5个维度的评分和改进路线图
 - 分析可针对目标岗位做匹配差距分析
 """
+
 import json
-from typing import Any, Dict
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -25,7 +25,7 @@ def analyze_resume(
     resume_id: int,
     target_position: str = "",
     user_id: int | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     对简历进行深度分析。
 
@@ -66,7 +66,7 @@ def analyze_resume(
         target_position=target_position or "未指定",
     )
 
-    result: Dict[str, Any] = chat_json(prompt)
+    result: dict[str, Any] = chat_json(prompt)
 
     # 补充元数据
     result["resume_id"] = resume_id
@@ -80,7 +80,7 @@ def quick_score_resume(
     db: Session,
     resume_id: int,
     user_id: int | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     快速简历评分（不调用LLM，基于规则计算）。
     适用于列表页快速展示评分。
@@ -111,8 +111,7 @@ def quick_score_resume(
         exp_score = min(25, len(experiences) * 8)
         # 检查是否有量化成果
         has_metrics = any(
-            any(c in str(exp).lower() for c in ["%", "倍", "提升", "增长", "减少", "优化"])
-            for exp in experiences
+            any(c in str(exp).lower() for c in ["%", "倍", "提升", "增长", "减少", "优化"]) for exp in experiences
         )
         if has_metrics:
             exp_score = min(25, exp_score + 5)

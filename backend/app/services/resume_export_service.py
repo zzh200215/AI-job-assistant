@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 简历智能生成与导出服务
 
@@ -7,30 +6,30 @@
   2. export_docx() — 导出 Word
   3. export_pdf() — 导出 PDF
 """
-import os
+
 import json
-import uuid
+import os
 import re
+import uuid
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.utils.time_helper import utc_now
-from app.models.history import Resume, JobDescription, AnalysisRecord, ResumeVersion
+from app.models.history import AnalysisRecord, JobDescription, Resume, ResumeVersion
 from app.prompts.resume_generate import RESUME_GENERATE_PROMPT
 from app.services.llm_service import chat_json
 from app.utils.service_access import get_accessible_job_for_user, get_owned_resume
-from app.utils.response import ok, fail
+from app.utils.time_helper import utc_now
 
 
 def generate_optimized(
     db: Session,
     resume_id: int,
-    jd_id: Optional[int] = None,
+    jd_id: int | None = None,
     user_id: int | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     生成优化版简历。
     1. 读取原简历 parsed_json
@@ -87,7 +86,7 @@ def generate_optimized(
         optimize_suggestions=json.dumps(optimize_suggestions, ensure_ascii=False, indent=2),
         jd_info=jd_info,
     )
-    result: Dict[str, Any] = chat_json(prompt)
+    result: dict[str, Any] = chat_json(prompt)
 
     # 保存到 resume 表
     markdown = result.get("markdown_content", "")
@@ -101,6 +100,9 @@ def generate_optimized(
         version_type="optimized",
         content=markdown,
         format="md",
+        label="AI 优化版",
+        target_jd_id=jd_id,
+        change_log=result.get("changes_log", []),
     )
     db.add(md_version)
     # 保存结构化数据版本
@@ -111,6 +113,8 @@ def generate_optimized(
             version_type="optimized",
             content=json.dumps(structured, ensure_ascii=False),
             format="json",
+            label="AI 优化版数据",
+            target_jd_id=jd_id,
         )
         db.add(json_version)
     db.commit()
@@ -127,8 +131,8 @@ def generate_optimized(
 
 def _build_docx(doc, markdown_content: str, style_title: str):
     """将 Markdown 转换为 python-docx 格式"""
-    from docx.shared import Pt, RGBColor, Inches
     from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt, RGBColor
 
     lines = markdown_content.split("\n")
     i = 0
@@ -177,7 +181,7 @@ def _build_docx(doc, markdown_content: str, style_title: str):
             p = doc.add_paragraph(style="List Bullet")
             # 处理 **粗体**
             text = line[2:]
-            parts = re.split(r'(\*\*.*?\*\*)', text)
+            parts = re.split(r"(\*\*.*?\*\*)", text)
             for part in parts:
                 if part.startswith("**") and part.endswith("**"):
                     run = p.add_run(part[2:-2])
@@ -212,6 +216,7 @@ def export_docx(
     """
     if db is None:
         from app.core.database import SessionLocal
+
         db = SessionLocal()
         close = True
     else:
@@ -232,6 +237,7 @@ def export_docx(
         # 生成文件
         from docx import Document
         from docx.shared import Pt
+
         doc = Document()
 
         # 根据模板设置默认字体
@@ -282,6 +288,7 @@ def export_pdf(
     """
     if db is None:
         from app.core.database import SessionLocal
+
         db = SessionLocal()
         close = True
     else:
@@ -316,8 +323,8 @@ def export_pdf(
         rel_path = os.path.join(rel_dir, stored_name).replace("\\", "/")
         return rel_path
 
-    except ImportError:
-        raise RuntimeError("PDF导出需要安装 weasyprint: pip install weasyprint")
+    except ImportError as exc:
+        raise RuntimeError("PDF导出需要安装 weasyprint: pip install weasyprint") from exc
     finally:
         if close:
             db.close()
@@ -332,10 +339,14 @@ def _resolve_resume_content(
     """获取简历内容，支持从 ResumeVersion 获取定制版"""
     # 优先通过 version_id 获取特定版本
     if version_id and db:
-        rv = db.query(ResumeVersion).filter(
-            ResumeVersion.id == version_id,
-            ResumeVersion.resume_id == resume.id,
-        ).first()
+        rv = (
+            db.query(ResumeVersion)
+            .filter(
+                ResumeVersion.id == version_id,
+                ResumeVersion.resume_id == resume.id,
+            )
+            .first()
+        )
         if rv and rv.format == "md" and rv.content:
             return rv.content
 
@@ -344,11 +355,16 @@ def _resolve_resume_content(
         return resume.optimized_content
     elif version == "tailored" and db:
         # 获取最新的定制版本
-        rv = db.query(ResumeVersion).filter(
-            ResumeVersion.resume_id == resume.id,
-            ResumeVersion.version_type == "tailored",
-            ResumeVersion.format == "md",
-        ).order_by(ResumeVersion.created_at.desc()).first()
+        rv = (
+            db.query(ResumeVersion)
+            .filter(
+                ResumeVersion.resume_id == resume.id,
+                ResumeVersion.version_type == "tailored",
+                ResumeVersion.format == "md",
+            )
+            .order_by(ResumeVersion.created_at.desc())
+            .first()
+        )
         if rv and rv.content:
             return rv.content
 
@@ -431,21 +447,20 @@ def _md_to_html(md: str, template: str = "classic") -> str:
     """Markdown → HTML 转换，支持多模板风格"""
     styles = _TEMPLATE_STYLES.get(template, _TEMPLATE_STYLES["classic"])
     lines = md.split("\n")
-    html_parts = ['<!DOCTYPE html><html><head><meta charset="utf-8">',
-                  f'<style>{styles}</style></head><body>']
+    html_parts = ['<!DOCTYPE html><html><head><meta charset="utf-8">', f"<style>{styles}</style></head><body>"]
 
     for line in lines:
         line = line.strip()
         if line.startswith("# ") and not line.startswith("## "):
             text = line[2:]
             parts = text.split("|")
-            html_parts.append(f'<h1>{parts[0].strip()}</h1>')
+            html_parts.append(f"<h1>{parts[0].strip()}</h1>")
             if len(parts) > 1:
                 html_parts.append(f'<p class="contact">{" | ".join(p.strip() for p in parts[1:])}</p>')
         elif line.startswith("## "):
-            html_parts.append(f'<h2>{line[3:]}</h2>')
+            html_parts.append(f"<h2>{line[3:]}</h2>")
         elif line.startswith("### "):
-            html_parts.append(f'<h3>{line[4:]}</h3>')
+            html_parts.append(f"<h3>{line[4:]}</h3>")
         elif line.startswith("- "):
             text = line[2:]
             html_parts.append(f"<li>{text}</li>")

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Chroma 向量数据库客户端初始化
 
@@ -6,7 +5,10 @@ Chroma 向量数据库客户端初始化
 - 对外提供 get_collection() 单例
 - collection 名称: "knowledge_base"
 """
+
+import contextlib
 import os
+
 import chromadb
 from chromadb.config import Settings
 
@@ -53,9 +55,7 @@ def reset_collection():
     """重置 collection（用于测试）"""
     global _collection
     client = get_chroma_client()
-    try:
+    with contextlib.suppress(Exception):
         client.delete_collection("knowledge_base")
-    except Exception:
-        pass
     _collection = None
     return get_knowledge_collection()

@@ -4,12 +4,13 @@ Revision ID: 20260612_0001
 Revises:
 Create Date: 2026-06-12 00:00:00
 """
+
 from __future__ import annotations
 
 from alembic import op
 
-from app.core.database import Base
 import app.models  # noqa: F401
+from app.core.database import Base
 
 revision = "20260612_0001"
 down_revision = None

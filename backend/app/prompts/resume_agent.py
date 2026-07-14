@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Canonical prompt for ResumeAgent."""
 
 PROMPT_VERSION = "resume-agent-v1"

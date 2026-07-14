@@ -1,9 +1,6 @@
-# -*- coding: utf-8 -*-
 """Unified task and step protocol for analysis orchestration."""
-from typing import Dict
 
-
-TASK_STATUS_MAP: Dict[str, str] = {
+TASK_STATUS_MAP: dict[str, str] = {
     "pending": "pending",
     "running": "running",
     "completed": "completed",
@@ -12,7 +9,7 @@ TASK_STATUS_MAP: Dict[str, str] = {
     "cancelled": "cancelled",
 }
 
-STEP_STATUS_MAP: Dict[str, str] = {
+STEP_STATUS_MAP: dict[str, str] = {
     "pending": "pending",
     "running": "running",
     "completed": "completed",
@@ -21,7 +18,7 @@ STEP_STATUS_MAP: Dict[str, str] = {
     "success": "completed",
 }
 
-STEP_NAME_MAP: Dict[str, str] = {
+STEP_NAME_MAP: dict[str, str] = {
     "IntentAgent": "intent_recognition",
     "intent_recognition": "intent_recognition",
     "ResumeParseAgent": "resume_parse",
@@ -48,7 +45,7 @@ STEP_NAME_MAP: Dict[str, str] = {
     "summary_report": "summary_report",
 }
 
-STEP_LABELS: Dict[str, str] = {
+STEP_LABELS: dict[str, str] = {
     "intent_recognition": "意图识别",
     "resume_parse": "简历解析",
     "jd_parse": "JD 解析",
@@ -62,7 +59,7 @@ STEP_LABELS: Dict[str, str] = {
     "summary_report": "汇总报告",
 }
 
-STEP_OUTPUT_SCHEMAS: Dict[str, str] = {
+STEP_OUTPUT_SCHEMAS: dict[str, str] = {
     "intent_recognition": "intent_result",
     "resume_parse": "resume_profile",
     "jd_parse": "jd_profile",

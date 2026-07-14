@@ -53,8 +53,12 @@
     <div class="panel" v-if="loading && agentSteps.length">
       <div class="panel-header">
         <div class="panel-title-row">
-          <h3><el-icon class="is-loading"><Loading /></el-icon> 分析进度</h3>
-          <el-tag type="warning" effect="plain">{{ completedStepCount }} / {{ agentSteps.length }}</el-tag>
+          <h3>
+            <el-icon class="is-loading"><Loading /></el-icon> 分析进度
+          </h3>
+          <el-tag type="warning" effect="plain"
+            >{{ completedStepCount }} / {{ agentSteps.length }}</el-tag
+          >
         </div>
       </div>
       <div class="panel-body">
@@ -81,7 +85,9 @@
             :icon="stepIcon(s.status)"
           >
             <div class="step-title">{{ stepLabel(s.step_name) }}</div>
-            <div class="step-status">{{ statusText(s.status) }} {{ s.duration_ms ? `(${s.duration_ms}ms)` : '' }}</div>
+            <div class="step-status">
+              {{ statusText(s.status) }} {{ s.duration_ms ? `(${s.duration_ms}ms)` : '' }}
+            </div>
             <el-tag v-if="s.error_msg" size="small" type="danger">{{ s.error_msg }}</el-tag>
           </el-timeline-item>
         </el-timeline>
@@ -98,10 +104,20 @@
               <p class="score-rec">{{ localizedMatchRecommendation || '待评估' }}</p>
               <p class="score-summary">{{ localizedMatchSummary || '暂无摘要' }}</p>
               <div class="score-actions">
-                <el-button size="small" type="warning" :loading="regenOptimizeLoading" @click="onRegenOptimize">
+                <el-button
+                  size="small"
+                  type="warning"
+                  :loading="regenOptimizeLoading"
+                  @click="onRegenOptimize"
+                >
                   重生成优化建议
                 </el-button>
-                <el-button size="small" type="success" :loading="regenIntervLoading" @click="onRegenInterview">
+                <el-button
+                  size="small"
+                  type="success"
+                  :loading="regenIntervLoading"
+                  @click="onRegenInterview"
+                >
                   重生成面试题
                 </el-button>
               </div>
@@ -184,14 +200,20 @@
             </el-tab-pane>
 
             <el-tab-pane label="优化建议" name="optimize">
-              <el-alert :title="result.optimize_suggestions?.overall || '暂无优化摘要'" type="success" :closable="false" />
+              <el-alert
+                :title="result.optimize_suggestions?.overall || '暂无优化摘要'"
+                type="success"
+                :closable="false"
+              />
               <el-collapse class="mt">
                 <el-collapse-item
                   v-for="(s, i) in result.optimize_suggestions?.sections || []"
                   :key="i"
                   :title="s.section"
                 >
-                  <ul><li v-for="(x, j) in s.suggestions" :key="j">{{ x }}</li></ul>
+                  <ul>
+                    <li v-for="(x, j) in s.suggestions" :key="j">{{ x }}</li>
+                  </ul>
                 </el-collapse-item>
               </el-collapse>
 
@@ -199,20 +221,35 @@
                 <div class="detail-block">
                   <h3>建议补充</h3>
                   <div class="tag-row">
-                    <el-tag v-for="k in result.optimize_suggestions?.keywords_to_add || []" :key="k" type="success">{{ k }}</el-tag>
+                    <el-tag
+                      v-for="k in result.optimize_suggestions?.keywords_to_add || []"
+                      :key="k"
+                      type="success"
+                      >{{ k }}</el-tag
+                    >
                   </div>
                 </div>
                 <div class="detail-block">
                   <h3>建议删减</h3>
                   <div class="tag-row">
-                    <el-tag v-for="k in result.optimize_suggestions?.keywords_to_remove || []" :key="k" type="danger">{{ k }}</el-tag>
+                    <el-tag
+                      v-for="k in result.optimize_suggestions?.keywords_to_remove || []"
+                      :key="k"
+                      type="danger"
+                      >{{ k }}</el-tag
+                    >
                   </div>
                 </div>
               </div>
 
               <div class="generate-area">
                 <p class="generate-desc">如果你准备继续投递，可以直接生成一份优化后的简历版本。</p>
-                <el-button type="primary" size="large" :loading="genOptimizing" @click="onGenerateOptimized">
+                <el-button
+                  type="primary"
+                  size="large"
+                  :loading="genOptimizing"
+                  @click="onGenerateOptimized"
+                >
                   <el-icon><EditPen /></el-icon> 生成优化版简历
                 </el-button>
               </div>
@@ -225,10 +262,16 @@
                   <h3>{{ groupTitle(key) }}</h3>
                   <div class="panel q-card" v-for="(q, i) in items" :key="i">
                     <div class="panel-body">
-                      <div class="q"><b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}</div>
+                      <div class="q">
+                        <b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}
+                      </div>
                       <div class="i">考察点：{{ q.focus || q.intent }}</div>
-                      <div class="a">参考答案：{{ q.suggested_answer || q.expected_answer || q.ref_answer }}</div>
-                      <div v-if="q.preparation_tips" class="tip">准备建议：{{ q.preparation_tips }}</div>
+                      <div class="a">
+                        参考答案：{{ q.suggested_answer || q.expected_answer || q.ref_answer }}
+                      </div>
+                      <div v-if="q.preparation_tips" class="tip">
+                        准备建议：{{ q.preparation_tips }}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -237,23 +280,30 @@
 
             <el-tab-pane name="references" :disabled="!hasReferences">
               <template #label>
-                <span><el-icon><Reading /></el-icon> 参考依据 <el-tag v-if="refCount" size="small" type="info">{{ refCount }}</el-tag></span>
+                <span
+                  ><el-icon><Reading /></el-icon> 参考依据
+                  <el-tag v-if="refCount" size="small" type="info">{{ refCount }}</el-tag></span
+                >
               </template>
 
               <el-empty v-if="!hasReferences" description="本次分析没有附带参考依据" />
               <template v-else>
-                <div v-for="(ref, ri) in result.references" :key="ri" class="ref-card">
+                <div v-for="(reference, ri) in result.references" :key="ri" class="ref-card">
                   <div class="panel">
                     <div class="panel-header">
                       <div class="panel-title-row">
-                        <h3>{{ ref.doc_title }}</h3>
-                        <el-tag :type="refTypeTag(ref.doc_type)" size="small">{{ refTypeLabel(ref.doc_type) }}</el-tag>
+                        <h3>{{ reference.doc_title }}</h3>
+                        <el-tag :type="refTypeTag(reference.doc_type)" size="small">{{
+                          refTypeLabel(reference.doc_type)
+                        }}</el-tag>
                       </div>
                     </div>
                     <div class="panel-body">
-                      <div v-for="(chunk, ci) in ref.chunks" :key="ci" class="ref-chunk">
+                      <div v-for="(chunk, ci) in reference.chunks" :key="ci" class="ref-chunk">
                         <div class="ref-meta">片段 {{ ci + 1 }} · 相似度 {{ chunk.score }}</div>
-                        <div class="ref-text">{{ chunk.text }}{{ chunk.text?.length >= 200 ? '...' : '' }}</div>
+                        <div class="ref-text">
+                          {{ chunk.text }}{{ chunk.text?.length >= 200 ? '...' : '' }}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -271,13 +321,25 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
-import { Loading, Reading, SuccessFilled, WarningFilled, CircleCloseFilled, Promotion, ChatLineSquare } from '@element-plus/icons-vue'
+import {
+  Loading,
+  Reading,
+  SuccessFilled,
+  WarningFilled,
+  CircleCloseFilled,
+  Promotion,
+  ChatLineSquare,
+} from '@element-plus/icons-vue'
 import { getAnalysis, regenOptimize, regenInterview } from '@/api/analysis'
 import { startAgentAnalysis } from '@/api/agent'
 import { generateOptimized } from '@/api/resume'
 import { EditPen } from '@element-plus/icons-vue'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
-import { getInterviewGroupTitle, normalizeInterviewQuestions, hasInterviewQuestions as checkHasInterviewQuestions } from '@/utils/interviewQuestions'
+import {
+  getInterviewGroupTitle,
+  normalizeInterviewQuestions,
+  hasInterviewQuestions as checkHasInterviewQuestions,
+} from '@/utils/interviewQuestions'
 import {
   localizeRecommendationText,
   localizeSentence,
@@ -311,7 +373,7 @@ watch(
       }
     }
   },
-  { immediate: true },
+  { immediate: true }
 )
 
 function fillLast() {
@@ -342,39 +404,55 @@ function retryLoadAnalysis() {
 }
 
 const hasInterview = computed(() => checkHasInterviewQuestions(result.value?.interview_questions))
-const interviewGroups = computed(() => normalizeInterviewQuestions(result.value?.interview_questions))
+const interviewGroups = computed(() =>
+  normalizeInterviewQuestions(result.value?.interview_questions)
+)
 const groupTitle = getInterviewGroupTitle
 
 const hasReferences = computed(() => result.value?.references && result.value.references.length > 0)
 const refCount = computed(() => result.value?.references?.length || 0)
-const completedStepCount = computed(() => agentSteps.value.filter(item => item.status === 'completed').length)
+const completedStepCount = computed(
+  () => agentSteps.value.filter((item) => item.status === 'completed').length
+)
 const currentStepName = computed(() => {
-  const running = agentSteps.value.find(item => item.status === 'running')
+  const running = agentSteps.value.find((item) => item.status === 'running')
   return running ? stepLabel(running.step_name) : '等待中'
 })
-const localizedMatchRecommendation = computed(() => localizeRecommendationText(result.value?.match_report?.recommendation || ''))
-const localizedMatchSummary = computed(() => localizeSentence(result.value?.match_report?.summary || ''))
-const localizedStrengths = computed(() => normalizeLocalizedObjectList(result.value?.match_report?.strengths))
+const localizedMatchRecommendation = computed(() =>
+  localizeRecommendationText(result.value?.match_report?.recommendation || '')
+)
+const localizedMatchSummary = computed(() =>
+  localizeSentence(result.value?.match_report?.summary || '')
+)
+const localizedStrengths = computed(() =>
+  normalizeLocalizedObjectList(result.value?.match_report?.strengths)
+)
 const localizedGaps = computed(() => normalizeLocalizedObjectList(result.value?.match_report?.gaps))
-const localizedRiskPoints = computed(() => normalizeLocalizedTextList(result.value?.match_report?.risk_points))
+const localizedRiskPoints = computed(() =>
+  normalizeLocalizedTextList(result.value?.match_report?.risk_points)
+)
 
-const refTypeLabel = (t) => ({
-  resume_template: '简历模板',
-  jd_lib: '岗位描述',
-  interview_q: '面试题库',
-  skill_model: '能力模型',
-  industry_report: '行业报告',
-  general: '通用',
-}[t] || t || '通用')
+const refTypeLabel = (t) =>
+  ({
+    resume_template: '简历模板',
+    jd_lib: '岗位描述',
+    interview_q: '面试题库',
+    skill_model: '能力模型',
+    industry_report: '行业报告',
+    general: '通用',
+  })[t] ||
+  t ||
+  '通用'
 
-const refTypeTag = (t) => ({
-  resume_template: 'success',
-  jd_lib: 'primary',
-  interview_q: 'warning',
-  skill_model: 'danger',
-  industry_report: 'info',
-  general: '',
-}[t] || '')
+const refTypeTag = (t) =>
+  ({
+    resume_template: 'success',
+    jd_lib: 'primary',
+    interview_q: 'warning',
+    skill_model: 'danger',
+    industry_report: 'info',
+    general: '',
+  })[t] || ''
 
 const STEP_LABELS = {
   intent_recognition: '意图识别',
@@ -408,7 +486,9 @@ function stepIcon(status) {
 }
 
 function statusText(status) {
-  return { pending: '等待中', running: '执行中', completed: '已完成', failed: '失败' }[status] || status
+  return (
+    { pending: '等待中', running: '执行中', completed: '已完成', failed: '失败' }[status] || status
+  )
 }
 
 const onAnalyze = async () => {

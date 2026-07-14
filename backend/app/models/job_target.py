@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
 """求职目标 ORM 模型"""
-from sqlalchemy import Column, BigInteger, String, Integer, DateTime, JSON, Text
+
+from sqlalchemy import JSON, BigInteger, Column, DateTime, Integer, String, Text
 
 from app.core.database import Base
 from app.utils.time_helper import utc_now
@@ -8,6 +8,7 @@ from app.utils.time_helper import utc_now
 
 class JobTarget(Base):
     """求职目标表 — 用户可创建多个求职方向，每个方向独立管理"""
+
     __tablename__ = "job_target"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)

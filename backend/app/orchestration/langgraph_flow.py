@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
 """LangGraph-backed orchestration flows."""
+
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, List, Optional, TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from sqlalchemy.orm import Session
 
@@ -34,7 +34,7 @@ except ImportError:
 class LinearGraphState(TypedDict):
     task_id: int
     context: AgentContext
-    steps: List[Dict[str, Any]]
+    steps: list[dict[str, Any]]
     failed_critical: bool
     error: str
 
@@ -43,7 +43,7 @@ class LayeredGraphState(TypedDict):
     task_id: int
     run_id: int
     context: AgentContext
-    steps: List[Dict[str, Any]]
+    steps: list[dict[str, Any]]
     step_index: int
     failed: bool
     error: str
@@ -52,7 +52,7 @@ class LayeredGraphState(TypedDict):
 class StepGraphState(TypedDict):
     task_id: int
     context: AgentContext
-    steps: List[Dict[str, Any]]
+    steps: list[dict[str, Any]]
     failed_critical: bool
     error: str
 
@@ -63,13 +63,13 @@ def _is_task_cancelled(db: Session, task_id: int) -> bool:
 
 
 def run_linear_graph(
-    strategy: "LangGraphLinearStrategy",
+    strategy: LangGraphLinearStrategy,
     task_id: int,
     resume_id: int,
     jd_id: int,
-    user_id: Optional[int],
+    user_id: int | None,
     db: Session,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute the linear pipeline with a LangGraph state graph."""
     _ensure_langgraph_available("langgraph_linear")
 
@@ -93,13 +93,13 @@ def run_linear_graph(
 
 
 def run_layered_graph(
-    strategy: "LangGraphLayeredStrategy",
+    strategy: LangGraphLayeredStrategy,
     task_id: int,
     resume_id: int,
     jd_id: int,
-    user_id: Optional[int],
+    user_id: int | None,
     db: Session,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute the layered pipeline with sequential graph levels."""
     _ensure_langgraph_available("langgraph_layered")
 
@@ -136,13 +136,13 @@ def run_layered_graph(
 
 
 def run_step_by_step_graph(
-    strategy: "LangGraphStepByStepStrategy",
+    strategy: LangGraphStepByStepStrategy,
     task_id: int,
     resume_id: int,
     jd_id: int,
-    user_id: Optional[int],
+    user_id: int | None,
     db: Session,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute the step-by-step workflow with a LangGraph state graph."""
     _ensure_langgraph_available("langgraph_step_by_step")
 
@@ -165,7 +165,7 @@ def run_step_by_step_graph(
     return _finalize_step_run(strategy, db, task, resume_id, jd_id, user_id, final_state)
 
 
-def _build_linear_graph(strategy: "LangGraphLinearStrategy", db: Session) -> StateGraph:
+def _build_linear_graph(strategy: LangGraphLinearStrategy, db: Session) -> StateGraph:
     graph = StateGraph(LinearGraphState)
 
     for step_index, agent_name in enumerate(strategy.AGENT_ORDER, start=1):
@@ -174,9 +174,9 @@ def _build_linear_graph(strategy: "LangGraphLinearStrategy", db: Session) -> Sta
     return _wire_sequential_graph(graph, strategy.AGENT_ORDER, "failed_critical")
 
 
-def _build_layered_graph(strategy: "LangGraphLayeredStrategy", db: Session) -> StateGraph:
+def _build_layered_graph(strategy: LangGraphLayeredStrategy, db: Session) -> StateGraph:
     graph = StateGraph(LayeredGraphState)
-    node_names: List[str] = []
+    node_names: list[str] = []
 
     for level_index, agent_names in enumerate(strategy.EXECUTION_LEVELS):
         node_name = f"level_{level_index}"
@@ -186,9 +186,9 @@ def _build_layered_graph(strategy: "LangGraphLayeredStrategy", db: Session) -> S
     return _wire_sequential_graph(graph, node_names, "failed")
 
 
-def _build_step_graph(strategy: "LangGraphStepByStepStrategy", db: Session) -> StateGraph:
+def _build_step_graph(strategy: LangGraphStepByStepStrategy, db: Session) -> StateGraph:
     graph = StateGraph(StepGraphState)
-    node_names: List[str] = []
+    node_names: list[str] = []
 
     for step_index, (step_name, step_func_name, critical) in enumerate(strategy.STEP_REGISTRY, start=1):
         node_name = f"step_{step_name}"
@@ -201,7 +201,7 @@ def _build_step_graph(strategy: "LangGraphStepByStepStrategy", db: Session) -> S
     return _wire_sequential_graph(graph, node_names, "failed_critical")
 
 
-def _wire_sequential_graph(graph: StateGraph, node_names: List[str], failure_key: str) -> StateGraph:
+def _wire_sequential_graph(graph: StateGraph, node_names: list[str], failure_key: str) -> StateGraph:
     graph.add_edge(START, node_names[0])
 
     for index, node_name in enumerate(node_names):
@@ -223,7 +223,7 @@ def _wire_sequential_graph(graph: StateGraph, node_names: List[str], failure_key
 
 
 def _make_linear_agent_node(
-    strategy: "LangGraphLinearStrategy",
+    strategy: LangGraphLinearStrategy,
     db: Session,
     agent_name: str,
     step_index: int,
@@ -281,9 +281,9 @@ def _make_linear_agent_node(
 
 
 def _make_layer_node(
-    strategy: "LangGraphLayeredStrategy",
+    strategy: LangGraphLayeredStrategy,
     db: Session,
-    agent_names: List[str],
+    agent_names: list[str],
 ):
     def _run(state: LayeredGraphState) -> LayeredGraphState:
         context = state["context"]
@@ -315,7 +315,7 @@ def _make_layer_node(
             if result.get("status") == "success":
                 context.record_agent_output(agent_name, result.get("result", {}))
         else:
-            results_by_name: Dict[str, Dict[str, Any]] = {}
+            results_by_name: dict[str, dict[str, Any]] = {}
             with ThreadPoolExecutor(max_workers=len(planned_runs)) as executor:
                 futures = {
                     executor.submit(strategy._run_one_agent, agent_name, state["run_id"], prior.fork()): agent_name
@@ -354,7 +354,7 @@ def _make_layer_node(
 
 
 def _make_step_node(
-    strategy: "LangGraphStepByStepStrategy",
+    strategy: LangGraphStepByStepStrategy,
     db: Session,
     step_name: str,
     step_func_name: str,
@@ -417,21 +417,21 @@ def _make_step_node(
 
 
 def _make_next_edge(next_node: str, failure_key: str):
-    def _route(state: Dict[str, Any]) -> str:
+    def _route(state: dict[str, Any]) -> str:
         return END if state[failure_key] else next_node
 
     return _route
 
 
 def _finalize_linear_run(
-    strategy: "LangGraphLinearStrategy",
+    strategy: LangGraphLinearStrategy,
     db: Session,
     task: AgentTask,
     resume_id: int,
     jd_id: int,
-    user_id: Optional[int],
+    user_id: int | None,
     state: LinearGraphState,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     context = state["context"]
     step_results = state["steps"]
     failed_critical = state["failed_critical"]
@@ -471,15 +471,15 @@ def _finalize_linear_run(
 
 
 def _finalize_layered_run(
-    strategy: "LangGraphLayeredStrategy",
+    strategy: LangGraphLayeredStrategy,
     db: Session,
     task: AgentTask,
     run: AgentRun,
     resume_id: int,
     jd_id: int,
-    user_id: Optional[int],
+    user_id: int | None,
     state: LayeredGraphState,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     context = state["context"]
     step_results = state["steps"]
 
@@ -522,14 +522,14 @@ def _finalize_layered_run(
 
 
 def _finalize_step_run(
-    strategy: "LangGraphStepByStepStrategy",
+    strategy: LangGraphStepByStepStrategy,
     db: Session,
     task: AgentTask,
     resume_id: int,
     jd_id: int,
-    user_id: Optional[int],
+    user_id: int | None,
     state: StepGraphState,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     context = state["context"]
     step_results = state["steps"]
 
@@ -564,7 +564,7 @@ def _finalize_step_run(
     )
 
 
-def _task_not_found(task_id: int) -> Dict[str, Any]:
+def _task_not_found(task_id: int) -> dict[str, Any]:
     return _orchestrator_result(
         status="failed",
         task_id=task_id,

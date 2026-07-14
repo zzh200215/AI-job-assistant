@@ -1,18 +1,16 @@
-# -*- coding: utf-8 -*-
 """订阅与权益服务层：套餐定义、权益矩阵、额度校验/消耗/重置。"""
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import timedelta
 
-from sqlalchemy import text, update
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.subscription import (
-    SubscriptionPlan,
+    OrderStatus,
     SubscriptionOrder,
     UserSubscription,
-    OrderStatus,
 )
 from app.models.user import User
 from app.services.audit_service import write_audit_log
@@ -74,10 +72,15 @@ DAILY_QUOTA_KEYS = ["daily_analysis", "daily_interview", "daily_recommendation"]
 
 def get_user_plan_tier(db: Session, user_id: int) -> str:
     """获取用户当前套餐 tier，默认 free。"""
-    sub = db.query(UserSubscription).filter(
-        UserSubscription.user_id == user_id,
-        UserSubscription.status == "active",
-    ).order_by(UserSubscription.id.desc()).first()
+    sub = (
+        db.query(UserSubscription)
+        .filter(
+            UserSubscription.user_id == user_id,
+            UserSubscription.status == "active",
+        )
+        .order_by(UserSubscription.id.desc())
+        .first()
+    )
     if sub and sub.end_at and sub.end_at > utc_now():
         return sub.plan_tier
     return "free"
@@ -91,16 +94,21 @@ def get_user_features(db: Session, user_id: int) -> dict:
 
 def get_or_create_subscription(db: Session, user_id: int) -> UserSubscription:
     """获取或创建用户订阅记录。"""
-    sub = db.query(UserSubscription).filter(
-        UserSubscription.user_id == user_id,
-    ).order_by(UserSubscription.id.desc()).first()
+    sub = (
+        db.query(UserSubscription)
+        .filter(
+            UserSubscription.user_id == user_id,
+        )
+        .order_by(UserSubscription.id.desc())
+        .first()
+    )
     if not sub:
         sub = UserSubscription(
             user_id=user_id,
             plan_tier="free",
             status="active",
             start_at=utc_now(),
-            quota_usage={k: 0 for k in DAILY_QUOTA_KEYS},
+            quota_usage=dict.fromkeys(DAILY_QUOTA_KEYS, 0),
         )
         db.add(sub)
         db.commit()
@@ -113,12 +121,12 @@ def reset_daily_quota_if_needed(sub: UserSubscription) -> bool:
     now = utc_now()
     if sub.quota_reset_at is None:
         sub.quota_reset_at = now
-        sub.quota_usage = {k: 0 for k in DAILY_QUOTA_KEYS}
+        sub.quota_usage = dict.fromkeys(DAILY_QUOTA_KEYS, 0)
         return True
     last_reset = sub.quota_reset_at
     if last_reset.date() < now.date():
         sub.quota_reset_at = now
-        sub.quota_usage = {k: 0 for k in DAILY_QUOTA_KEYS}
+        sub.quota_usage = dict.fromkeys(DAILY_QUOTA_KEYS, 0)
         return True
     return False
 
@@ -126,6 +134,7 @@ def reset_daily_quota_if_needed(sub: UserSubscription) -> bool:
 # ============================================================
 # 公开校验函数 — 供各业务路由调用
 # ============================================================
+
 
 def check_quota(
     db: Session,
@@ -135,12 +144,12 @@ def check_quota(
 ) -> tuple[bool, str, dict]:
     """
     校验用户是否有权限使用指定资源。
-    
+
     参数:
         resource: 资源类型，对应 TIER_FEATURES 中的 key
                   'daily_analysis' / 'daily_interview' / 'daily_recommendation'
                   'resume_count' / 'deep_analysis' / 'ats_check' 等
-    
+
     返回:
         (allowed: bool, message: str, 剩余额度信息: dict)
     """
@@ -158,7 +167,7 @@ def check_quota(
     if resource in bool_features:
         allowed = features.get(bool_features[resource], False)
         if not allowed:
-            return (False, f"当前套餐不支持此功能，请升级 Pro 版", _quota_info(tier, features, resource))
+            return (False, "当前套餐不支持此功能，请升级 Pro 版", _quota_info(tier, features, resource))
         return (True, "", _quota_info(tier, features, resource))
 
     # 2. 数量限制类资源
@@ -191,7 +200,11 @@ def check_quota(
             if affected == 0:
                 # 没有行被更新 = 配额已满
                 used = sub.quota_usage.get(resource, 0)
-                return (False, f"今日 {resource} 额度已用完，请升级 Pro 版或明天再试", _quota_info(tier, features, resource, remaining=0))
+                return (
+                    False,
+                    f"今日 {resource} 额度已用完，请升级 Pro 版或明天再试",
+                    _quota_info(tier, features, resource, remaining=0),
+                )
 
             # 重新读取最新值
             db.refresh(sub)
@@ -209,10 +222,15 @@ def check_quota(
         if limit == -1:
             return (True, "", _quota_info(tier, features, resource, remaining=-1))
         from app.models.history import Resume
+
         current = db.query(Resume).filter(Resume.user_id == user_id).count()
         remaining = max(0, limit - current)
         if remaining <= 0:
-            return (False, f"免费版最多管理 {limit} 份简历，请升级 Pro 版以管理多份简历", _quota_info(tier, features, resource, remaining=0))
+            return (
+                False,
+                f"免费版最多管理 {limit} 份简历，请升级 Pro 版以管理多份简历",
+                _quota_info(tier, features, resource, remaining=0),
+            )
         return (True, "", _quota_info(tier, features, resource, remaining=remaining))
 
     # 未知资源，默认放行
@@ -244,12 +262,14 @@ def get_user_quota_summary(db: Session, user_id: int) -> dict:
         limit = features.get(k + "_limit", 0)
         used = sub.quota_usage.get(k, 0)
         remaining = max(0, limit - used) if limit > 0 else -1
-        quota_items.append({
-            "key": k,
-            "limit": limit,
-            "used": used,
-            "remaining": remaining,
-        })
+        quota_items.append(
+            {
+                "key": k,
+                "limit": limit,
+                "used": used,
+                "remaining": remaining,
+            }
+        )
 
     return {
         "tier": tier,
@@ -258,13 +278,14 @@ def get_user_quota_summary(db: Session, user_id: int) -> dict:
         "start_at": sub.start_at.isoformat() if sub.start_at else None,
         "end_at": sub.end_at.isoformat() if sub.end_at else None,
         "quota": quota_items,
-        "features": {k: v for k, v in features.items()},
+        "features": dict(features.items()),
     }
 
 
 # ============================================================
 # 支付处理
 # ============================================================
+
 
 def process_payment_callback(
     db: Session,
@@ -281,12 +302,9 @@ def process_payment_callback(
     - 状态流转：pending → paid
     - 成功后自动激活订阅
     """
-    from app.models.subscription import SubscriptionOrder
 
     # 使用行锁防止并发回调
-    order = db.query(SubscriptionOrder).filter(
-        SubscriptionOrder.id == order_id
-    ).with_for_update().first()
+    order = db.query(SubscriptionOrder).filter(SubscriptionOrder.id == order_id).with_for_update().first()
     if not order:
         return False, "订单不存在"
 
@@ -315,7 +333,14 @@ def process_payment_callback(
         _activate_subscription(db, order.user_id, order.plan_tier)
 
         db.commit()
-        write_audit_log(db, user=db.query(User).filter(User.id == order.user_id).first(), action="subscription.payment", resource_type="subscription", resource_id=str(order.id), status="success")
+        write_audit_log(
+            db,
+            user=db.query(User).filter(User.id == order.user_id).first(),
+            action="subscription.payment",
+            resource_type="subscription",
+            resource_id=str(order.id),
+            status="success",
+        )
         return True, "支付成功，订阅已开通"
     except Exception as e:
         db.rollback()
@@ -330,10 +355,15 @@ def _activate_subscription(db: Session, user_id: int, plan_tier: str) -> UserSub
     duration_days = {"pro": 30, "enterprise": 30}.get(plan_tier, 30)
 
     # 查找现有有效订阅
-    existing = db.query(UserSubscription).filter(
-        UserSubscription.user_id == user_id,
-        UserSubscription.status == "active",
-    ).order_by(UserSubscription.id.desc()).first()
+    existing = (
+        db.query(UserSubscription)
+        .filter(
+            UserSubscription.user_id == user_id,
+            UserSubscription.status == "active",
+        )
+        .order_by(UserSubscription.id.desc())
+        .first()
+    )
 
     if existing and existing.end_at and existing.end_at > now:
         # 延长现有订阅
@@ -341,7 +371,7 @@ def _activate_subscription(db: Session, user_id: int, plan_tier: str) -> UserSub
         existing.plan_tier = plan_tier
         existing.updated_at = now
         # 重置额度
-        existing.quota_usage = {k: 0 for k in DAILY_QUOTA_KEYS}
+        existing.quota_usage = dict.fromkeys(DAILY_QUOTA_KEYS, 0)
         existing.quota_reset_at = now
         db.flush()
         return existing
@@ -353,7 +383,7 @@ def _activate_subscription(db: Session, user_id: int, plan_tier: str) -> UserSub
             status="active",
             start_at=now,
             end_at=now + timedelta(days=duration_days),
-            quota_usage={k: 0 for k in DAILY_QUOTA_KEYS},
+            quota_usage=dict.fromkeys(DAILY_QUOTA_KEYS, 0),
             quota_reset_at=now,
         )
         db.add(new_sub)

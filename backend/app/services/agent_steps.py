@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Agent 工作流 — 具体步骤实现
 每个步骤都是一个可调用的异步函数，接收 context 并返回结果 dict。
@@ -15,39 +14,38 @@ Agent 工作流 — 具体步骤实现
   9. self_check                — 自我校验
   10. final_report             — 汇总报告
 """
+
 import json
-import time
-from typing import Dict, Any, Optional
+from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
-from app.models.history import Resume, JobDescription
+from app.models.history import JobDescription, Resume
 from app.orchestration.context import AgentContext
 from app.prompts.agent_intent import AGENT_INTENT_PROMPT
 from app.prompts.agent_planning import AGENT_PLANNING_PROMPT
-from app.prompts.agent_self_check import AGENT_SELF_CHECK_PROMPT
 from app.prompts.agent_report import AGENT_REPORT_PROMPT
+from app.prompts.agent_self_check import AGENT_SELF_CHECK_PROMPT
+from app.prompts.interview import INTERVIEW_PROMPT
 from app.prompts.match import MATCH_PROMPT
 from app.prompts.optimize import OPTIMIZE_PROMPT
-from app.prompts.interview import INTERVIEW_PROMPT
 from app.prompts.rendering import render_prompt
+from app.services.jd_service import parse_and_save as do_parse_jd
 from app.services.llm_service import chat_json
 from app.services.match_score_calibration import apply_match_score_cap
-from app.services.resume_service import parse_and_save as do_parse_resume
-from app.services.jd_service import parse_and_save as do_parse_jd
-from app.services.rag_service import search_knowledge
 from app.services.multi_recall import multi_recall
 from app.services.rag_confidence_service import evaluate_rag_confidence
+from app.services.resume_service import parse_and_save as do_parse_resume
 
 
-def _make_step_input(step_name: str, **kwargs) -> Dict[str, Any]:
+def _make_step_input(step_name: str, **kwargs) -> dict[str, Any]:
     return {"step": step_name, **kwargs}
 
 
 # ==================== 1) 意图识别 ====================
 
-def step_intent_recognition(ctx: AgentContext, db: Session) -> Dict[str, Any]:
+
+def step_intent_recognition(ctx: AgentContext, db: Session) -> dict[str, Any]:
     resume_id = ctx["resume_id"]
     jd_id = ctx["jd_id"]
 
@@ -64,22 +62,33 @@ def step_intent_recognition(ctx: AgentContext, db: Session) -> Dict[str, Any]:
         resume_summary=resume_summary,
         jd_summary=jd_summary,
     )
-    result: Dict[str, Any] = chat_json(prompt)
+    result: dict[str, Any] = chat_json(prompt)
 
     # 写入 ctx
     ctx["intent"] = result.get("intent", "full_analysis")
     ctx["intent_detail"] = result
-    ctx["required_steps"] = result.get("required_steps", [
-        "intent_recognition", "resume_parse", "jd_parse", "task_planning",
-        "knowledge_retrieval", "matching_analysis", "resume_optimization",
-        "interview_question_generation", "self_check", "final_report",
-    ])
+    ctx["required_steps"] = result.get(
+        "required_steps",
+        [
+            "intent_recognition",
+            "resume_parse",
+            "jd_parse",
+            "task_planning",
+            "knowledge_retrieval",
+            "matching_analysis",
+            "resume_optimization",
+            "interview_question_generation",
+            "self_check",
+            "final_report",
+        ],
+    )
     return result
 
 
 # ==================== 2) 简历解析 ====================
 
-def step_resume_parse(ctx: AgentContext, db: Session) -> Dict[str, Any]:
+
+def step_resume_parse(ctx: AgentContext, db: Session) -> dict[str, Any]:
     resume_id = ctx["resume_id"]
     resume: Resume = db.get(Resume, resume_id)
     if resume and resume.parsed_json:
@@ -91,7 +100,8 @@ def step_resume_parse(ctx: AgentContext, db: Session) -> Dict[str, Any]:
 
 # ==================== 3) JD 解析 ====================
 
-def step_jd_parse(ctx: AgentContext, db: Session) -> Dict[str, Any]:
+
+def step_jd_parse(ctx: AgentContext, db: Session) -> dict[str, Any]:
     jd_id = ctx["jd_id"]
     jd: JobDescription = db.get(JobDescription, jd_id)
     if jd and jd.parsed_json:
@@ -103,7 +113,8 @@ def step_jd_parse(ctx: AgentContext, db: Session) -> Dict[str, Any]:
 
 # ==================== 4) 任务拆解 ====================
 
-def step_task_planning(ctx: AgentContext, db: Session) -> Dict[str, Any]:
+
+def step_task_planning(ctx: AgentContext, db: Session) -> dict[str, Any]:
     resume_id = ctx["resume_id"]
     jd_id = ctx["jd_id"]
 
@@ -130,7 +141,8 @@ def step_task_planning(ctx: AgentContext, db: Session) -> Dict[str, Any]:
 
 # ==================== 5) 知识检索 ====================
 
-def step_knowledge_retrieval(ctx: AgentContext, db: Session) -> Dict[str, Any]:
+
+def step_knowledge_retrieval(ctx: AgentContext, db: Session) -> dict[str, Any]:
     jd_id = ctx["jd_id"]
     jd: JobDescription = db.get(JobDescription, jd_id)
     if not jd or not jd.parsed_json:
@@ -162,27 +174,33 @@ def step_knowledge_retrieval(ctx: AgentContext, db: Session) -> Dict[str, Any]:
         "transition_guide",
     ]:
         results = multi_recall(
-            query, db=db, user_id=ctx.get("user_id"), doc_type=dtype, top_k=3,
+            query,
+            db=db,
+            user_id=ctx.get("user_id"),
+            doc_type=dtype,
+            top_k=3,
             resume_summary=resume_summary,
             jd_summary=jd_summary,
         )
         # 去掉内部字段（rrf_score 等），保留原始格式兼容上游
         clean = []
         for r in results:
-            clean.append({
-                "chunk_id": r["chunk_id"],
-                "text": r.get("text", ""),
-                "doc_title": r.get("doc_title", ""),
-                "doc_type": r.get("doc_type", ""),
-                "chunk_index": r.get("chunk_index", 0),
-                "score": r.get("vector_score", r.get("score", 0)),
-                "vector_similarity": r.get("vector_similarity", 0),
-                "keyword_score": r.get("keyword_score", 0),
-                "rerank_score": r.get("rerank_score", 0),
-                "rerank_source": r.get("rerank_source", ""),
-                "final_score": r.get("final_score", 0),
-                "recalled_by": r.get("recalled_by", []),
-            })
+            clean.append(
+                {
+                    "chunk_id": r["chunk_id"],
+                    "text": r.get("text", ""),
+                    "doc_title": r.get("doc_title", ""),
+                    "doc_type": r.get("doc_type", ""),
+                    "chunk_index": r.get("chunk_index", 0),
+                    "score": r.get("vector_score", r.get("score", 0)),
+                    "vector_similarity": r.get("vector_similarity", 0),
+                    "keyword_score": r.get("keyword_score", 0),
+                    "rerank_score": r.get("rerank_score", 0),
+                    "rerank_source": r.get("rerank_source", ""),
+                    "final_score": r.get("final_score", 0),
+                    "recalled_by": r.get("recalled_by", []),
+                }
+            )
         retrievals[dtype] = clean
 
     rag_confidence = evaluate_rag_confidence(query, retrievals)
@@ -198,7 +216,8 @@ def step_knowledge_retrieval(ctx: AgentContext, db: Session) -> Dict[str, Any]:
 
 # ==================== 6) 匹配度分析 ====================
 
-def step_matching_analysis(ctx: AgentContext, db: Session) -> Dict[str, Any]:
+
+def step_matching_analysis(ctx: AgentContext, db: Session) -> dict[str, Any]:
     resume_id = ctx["resume_id"]
     jd_id = ctx["jd_id"]
 
@@ -214,7 +233,7 @@ def step_matching_analysis(ctx: AgentContext, db: Session) -> Dict[str, Any]:
         if results:
             rag_parts.append(f"===== {dtype} =====")
             for r in results:
-                rag_parts.append(f"【{r.get('doc_title','')}】{r.get('text','')[:300]}")
+                rag_parts.append(f"【{r.get('doc_title', '')}】{r.get('text', '')[:300]}")
     rag_context = "\n".join(rag_parts)
 
     prompt = render_prompt(
@@ -223,7 +242,7 @@ def step_matching_analysis(ctx: AgentContext, db: Session) -> Dict[str, Any]:
         resume_json=resume_json,
         jd_json=jd_json,
     )
-    result: Dict[str, Any] = chat_json(prompt)
+    result: dict[str, Any] = chat_json(prompt)
     apply_match_score_cap(result, resume_json, jd_json)
 
     ctx["match_result"] = result
@@ -232,7 +251,8 @@ def step_matching_analysis(ctx: AgentContext, db: Session) -> Dict[str, Any]:
 
 # ==================== 7) 简历优化 ====================
 
-def step_resume_optimization(ctx: AgentContext, db: Session) -> Dict[str, Any]:
+
+def step_resume_optimization(ctx: AgentContext, db: Session) -> dict[str, Any]:
     resume_id = ctx["resume_id"]
     jd_id = ctx["jd_id"]
 
@@ -249,7 +269,7 @@ def step_resume_optimization(ctx: AgentContext, db: Session) -> Dict[str, Any]:
         if results:
             rag_parts.append(f"===== {dtype} =====")
             for r in results:
-                rag_parts.append(f"【{r.get('doc_title','')}】{r.get('text','')[:300]}")
+                rag_parts.append(f"【{r.get('doc_title', '')}】{r.get('text', '')[:300]}")
     rag_context = "\n".join(rag_parts)
 
     prompt = render_prompt(
@@ -258,7 +278,7 @@ def step_resume_optimization(ctx: AgentContext, db: Session) -> Dict[str, Any]:
         resume_json=resume_json,
         jd_json=jd_json,
     )
-    result: Dict[str, Any] = chat_json(prompt)
+    result: dict[str, Any] = chat_json(prompt)
 
     ctx["optimize_result"] = result
     return result
@@ -266,7 +286,8 @@ def step_resume_optimization(ctx: AgentContext, db: Session) -> Dict[str, Any]:
 
 # ==================== 8) 面试题生成 ====================
 
-def step_interview_question_gen(ctx: AgentContext, db: Session) -> Dict[str, Any]:
+
+def step_interview_question_gen(ctx: AgentContext, db: Session) -> dict[str, Any]:
     resume_id = ctx["resume_id"]
     jd_id = ctx["jd_id"]
 
@@ -282,7 +303,7 @@ def step_interview_question_gen(ctx: AgentContext, db: Session) -> Dict[str, Any
         if results:
             rag_parts.append(f"===== {dtype} =====")
             for r in results:
-                rag_parts.append(f"【{r.get('doc_title','')}】{r.get('text','')[:300]}")
+                rag_parts.append(f"【{r.get('doc_title', '')}】{r.get('text', '')[:300]}")
     rag_context = "\n".join(rag_parts)
 
     prompt = render_prompt(
@@ -294,10 +315,13 @@ def step_interview_question_gen(ctx: AgentContext, db: Session) -> Dict[str, Any
 
     # 容错：chat_json 失败时返回空结构，不阻塞整个工作流
     try:
-        result: Dict[str, Any] = chat_json(prompt)
+        result: dict[str, Any] = chat_json(prompt)
     except Exception as e:
         result = {
-            "basic": [], "project": [], "tech": [], "scenario": [],
+            "basic": [],
+            "project": [],
+            "tech": [],
+            "scenario": [],
             "error": f"AI 生成面试题失败: {str(e)[:100]}",
             "total_questions": 0,
         }
@@ -308,7 +332,8 @@ def step_interview_question_gen(ctx: AgentContext, db: Session) -> Dict[str, Any
 
 # ==================== 8.5) 职业规划 ====================
 
-def step_career_planning(ctx: AgentContext, db: Session) -> Dict[str, Any]:
+
+def step_career_planning(ctx: AgentContext, db: Session) -> dict[str, Any]:
     """基于简历、JD、匹配度、行业数据生成个性化职业规划"""
     resume_id = ctx["resume_id"]
     jd_id = ctx["jd_id"]
@@ -357,10 +382,11 @@ def step_career_planning(ctx: AgentContext, db: Session) -> Dict[str, Any]:
         if results:
             rag_parts.append(f"===== {dtype} =====")
             for r in results:
-                rag_parts.append(f"【{r.get('doc_title','')}】{r.get('text','')[:400]}")
+                rag_parts.append(f"【{r.get('doc_title', '')}】{r.get('text', '')[:400]}")
     industry_context = "\n".join(rag_parts) if rag_parts else "暂无行业参考数据"
 
     from app.prompts.career_agent import CAREER_AGENT_PROMPT
+
     prompt = render_prompt(
         CAREER_AGENT_PROMPT,
         resume_report=json.dumps(resume_report, ensure_ascii=False),
@@ -369,7 +395,7 @@ def step_career_planning(ctx: AgentContext, db: Session) -> Dict[str, Any]:
         industry_context=industry_context,
     )
     try:
-        result: Dict[str, Any] = chat_json(prompt)
+        result: dict[str, Any] = chat_json(prompt)
     except Exception as e:
         result = {
             "current_status": {"level": "", "career_stage": "", "strengths": [], "development_areas": []},
@@ -390,7 +416,8 @@ def step_career_planning(ctx: AgentContext, db: Session) -> Dict[str, Any]:
 
 # ==================== 9) 自我校验 ====================
 
-def step_self_check(ctx: AgentContext, db: Session) -> Dict[str, Any]:
+
+def step_self_check(ctx: AgentContext, db: Session) -> dict[str, Any]:
     check_targets = {
         "matching_analysis": ctx.get("match_result"),
         "resume_optimization": ctx.get("optimize_result"),
@@ -404,13 +431,15 @@ def step_self_check(ctx: AgentContext, db: Session) -> Dict[str, Any]:
         if content is None:
             continue
         if not content:
-            checks.append({
-                "check_target": target,
-                "passed": False,
-                "score": 0,
-                "issues": [{"severity": "high", "description": "内容为空", "suggestion": "需要重新生成"}],
-                "retry_needed": True,
-            })
+            checks.append(
+                {
+                    "check_target": target,
+                    "passed": False,
+                    "score": 0,
+                    "issues": [{"severity": "high", "description": "内容为空", "suggestion": "需要重新生成"}],
+                    "retry_needed": True,
+                }
+            )
             all_passed = False
             continue
 
@@ -420,19 +449,25 @@ def step_self_check(ctx: AgentContext, db: Session) -> Dict[str, Any]:
             content=json.dumps(content, ensure_ascii=False, indent=2)[:3000],
         )
         try:
-            result: Dict[str, Any] = chat_json(prompt)
+            result: dict[str, Any] = chat_json(prompt)
         except Exception:
-            result = {"passed": False, "score": 0, "issues": [{"severity": "high", "description": "校验AI调用失败"}],
-                      "retry_needed": True}
+            result = {
+                "passed": False,
+                "score": 0,
+                "issues": [{"severity": "high", "description": "校验AI调用失败"}],
+                "retry_needed": True,
+            }
 
-        checks.append({
-            "check_target": target,
-            "passed": result.get("passed", False),
-            "score": result.get("score", 0),
-            "issues": result.get("issues", []),
-            "improvement": result.get("improvement", {}),
-            "retry_needed": result.get("retry_needed", False),
-        })
+        checks.append(
+            {
+                "check_target": target,
+                "passed": result.get("passed", False),
+                "score": result.get("score", 0),
+                "issues": result.get("issues", []),
+                "improvement": result.get("improvement", {}),
+                "retry_needed": result.get("retry_needed", False),
+            }
+        )
         if result.get("retry_needed"):
             all_passed = False
 
@@ -442,7 +477,8 @@ def step_self_check(ctx: AgentContext, db: Session) -> Dict[str, Any]:
 
 # ==================== 10) 最终报告 ====================
 
-def step_final_report(ctx: AgentContext, db: Session) -> Dict[str, Any]:
+
+def step_final_report(ctx: AgentContext, db: Session) -> dict[str, Any]:
     resume_id = ctx["resume_id"]
     jd_id = ctx["jd_id"]
 
@@ -459,7 +495,7 @@ def step_final_report(ctx: AgentContext, db: Session) -> Dict[str, Any]:
         career_result=json.dumps(ctx.get("career_result", {}), ensure_ascii=False, indent=2),
         self_check_result=json.dumps(ctx.get("self_checks", []), ensure_ascii=False, indent=2),
     )
-    result: Dict[str, Any] = chat_json(prompt)
+    result: dict[str, Any] = chat_json(prompt)
 
     ctx["final_report"] = result
     return result
@@ -467,7 +503,8 @@ def step_final_report(ctx: AgentContext, db: Session) -> Dict[str, Any]:
 
 # ==================== 辅助函数 ====================
 
-def _build_resume_summary(resume: Optional[Resume]) -> str:
+
+def _build_resume_summary(resume: Resume | None) -> str:
     if not resume:
         return "无简历信息"
     parsed = resume.parsed_json or {}
@@ -481,7 +518,7 @@ def _build_resume_summary(resume: Optional[Resume]) -> str:
     return "\n".join(parts)
 
 
-def _build_jd_summary(jd: Optional[JobDescription]) -> str:
+def _build_jd_summary(jd: JobDescription | None) -> str:
     if not jd:
         return "无JD信息"
     parsed = jd.parsed_json or {}

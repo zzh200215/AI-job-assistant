@@ -45,7 +45,7 @@ test('route guard redirects unauthenticated and unauthorized users', () => {
       role: USER_ROLES.candidate,
       homeRoute: '/home',
     }),
-    '/login',
+    '/login'
   )
 
   assert.equal(
@@ -55,7 +55,7 @@ test('route guard redirects unauthenticated and unauthorized users', () => {
       role: USER_ROLES.candidate,
       homeRoute: '/home',
     }),
-    '/home',
+    '/home'
   )
 })
 
@@ -67,7 +67,7 @@ test('route guard keeps authorized routes and redirects signed-in users from aut
       role: USER_ROLES.admin,
       homeRoute: '/home',
     }),
-    null,
+    null
   )
 
   assert.equal(
@@ -77,6 +77,6 @@ test('route guard keeps authorized routes and redirects signed-in users from aut
       role: USER_ROLES.candidate,
       homeRoute: '/home',
     }),
-    '/home',
+    '/home'
   )
 })

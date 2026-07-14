@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 JobRecommendationEngine — 岗位推荐引擎
 
@@ -11,6 +10,7 @@ JobRecommendationEngine — 岗位推荐引擎
     engine = JobRecommendationEngine(db)
     results = engine.recommend(resume_id=1, limit=5, filters={"location": "北京"})
 """
+
 import copy
 import hashlib
 import json
@@ -19,33 +19,31 @@ import re
 import threading
 import time
 from collections import OrderedDict
-from typing import List, Dict, Optional, Any, Tuple
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.chroma_client import get_knowledge_collection
-from app.models.history import Resume, JobDescription
+from app.models.history import JobDescription, Resume
 from app.services.embedding_service import embed_texts
 from app.services.recommendation_tuning import DEFAULT_RECOMMENDATION_TUNING_CONFIG
 
-
-_RECOMMEND_CACHE: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+_RECOMMEND_CACHE: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
 _RECOMMEND_CACHE_MAX = 128
 _RECOMMEND_CACHE_LOCK = threading.Lock()
 _CACHE_TTL = 86400  # 24 灏忔椂
 
 
-def _visible_job_filter(owner_id: Optional[int]):
+def _visible_job_filter(owner_id: int | None):
     if owner_id is None:
         return JobDescription.user_id.is_(None)
     return or_(JobDescription.user_id == owner_id, JobDescription.user_id.is_(None))
 
 
-def _normalize_filters(filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    normalized: Dict[str, Any] = {}
+def _normalize_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
+    normalized: dict[str, Any] = {}
     for key, value in (filters or {}).items():
         if value is None:
             continue
@@ -61,7 +59,7 @@ def _normalize_filters(filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return normalized
 
 
-def _recommend_cache_key(resume_id: int, resume_version: str, filters: Dict[str, Any]) -> str:
+def _recommend_cache_key(resume_id: int, resume_version: str, filters: dict[str, Any]) -> str:
     payload = json.dumps(filters, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     raw = f"{resume_id}|{resume_version}|{payload}"
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
@@ -76,7 +74,7 @@ def _prune_recommend_cache_locked(now: float, ttl: int) -> None:
         _RECOMMEND_CACHE.popitem(last=False)
 
 
-def _get_cached_recommendations(cache_key: str, now: float, ttl: int) -> Optional[List[Dict[str, Any]]]:
+def _get_cached_recommendations(cache_key: str, now: float, ttl: int) -> list[dict[str, Any]] | None:
     with _RECOMMEND_CACHE_LOCK:
         entry = _RECOMMEND_CACHE.get(cache_key)
         if entry is None:
@@ -88,16 +86,18 @@ def _get_cached_recommendations(cache_key: str, now: float, ttl: int) -> Optiona
         return copy.deepcopy(entry["data"])
 
 
-def _set_cached_recommendations(cache_key: str, now: float, ttl: int, data: List[Dict[str, Any]]) -> None:
+def _set_cached_recommendations(cache_key: str, now: float, ttl: int, data: list[dict[str, Any]]) -> None:
     with _RECOMMEND_CACHE_LOCK:
         _RECOMMEND_CACHE[cache_key] = {"ts": now, "data": copy.deepcopy(data)}
         _RECOMMEND_CACHE.move_to_end(cache_key)
         _prune_recommend_cache_locked(now, ttl)
 
+
 # ==================== 缓存 ====================
 
 
 # ==================== 数据结构 ====================
+
 
 @dataclass
 class RecommendResult:
@@ -107,21 +107,21 @@ class RecommendResult:
     location: str
     salary_range: str
     industry: str
-    match_score: float           # 0-100 综合分
-    vector_score: float          # 0-100 向量相似度分
-    rule_score: float            # 0-100 规则匹配分
-    skill_overlap: List[str]     # 重合技能
-    skill_gap: List[str]         # 缺失技能
-    salary_match: bool           # 薪资是否匹配
-    location_match: bool         # 地点是否匹配
-    experience_match: bool       # 经验层级是否匹配
-    match_reason: str            # 一句话匹配原因
-    recommendation_type: str     # 高度推荐 / 值得一试 / 谨慎考虑
+    match_score: float  # 0-100 综合分
+    vector_score: float  # 0-100 向量相似度分
+    rule_score: float  # 0-100 规则匹配分
+    skill_overlap: list[str]  # 重合技能
+    skill_gap: list[str]  # 缺失技能
+    salary_match: bool  # 薪资是否匹配
+    location_match: bool  # 地点是否匹配
+    experience_match: bool  # 经验层级是否匹配
+    match_reason: str  # 一句话匹配原因
+    recommendation_type: str  # 高度推荐 / 值得一试 / 谨慎考虑
     source: str = ""
 
     experience_requirement: str = ""
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "jd_id": self.jd_id,
             "job_title": self.job_title,
@@ -145,17 +145,13 @@ class RecommendResult:
 
 # ==================== 引擎 ====================
 
+
 class JobRecommendationEngine:
     """岗位推荐引擎（一次实例化可多次调用 recommend）"""
 
     # 权重
     WEIGHT_VECTOR = 0.6
     WEIGHT_RULE = 0.4
-
-    # 推荐类型阈值
-    THRESHOLD_HIGH = 80     # 高度推荐
-    THRESHOLD_MEDIUM = 60   # 值得一试
-    # < 60 = 谨慎考虑
 
     # 经验层级映射
     EXP_LEVELS = {
@@ -167,7 +163,7 @@ class JobRecommendationEngine:
         "专家": (15, 99),
     }
 
-    def __init__(self, db: Session, tuning_config: Optional[Dict[str, Any]] = None):
+    def __init__(self, db: Session, tuning_config: dict[str, Any] | None = None):
         self.db = db
         self._collection = get_knowledge_collection()
         self.tuning_config = copy.deepcopy(tuning_config or DEFAULT_RECOMMENDATION_TUNING_CONFIG)
@@ -178,9 +174,9 @@ class JobRecommendationEngine:
         self,
         resume_id: int,
         limit: int = 5,
-        filters: Optional[Dict] = None,
+        filters: dict | None = None,
         bypass_cache: bool = False,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         主入口：为指定简历推荐岗位
 
@@ -199,9 +195,11 @@ class JobRecommendationEngine:
 
         # --- 缓存键 ---
         normalized_filters = _normalize_filters(filters)
-        resume_version = (resume.update_time or resume.create_time or "").isoformat() if (
-            resume.update_time or resume.create_time
-        ) else "unknown"
+        resume_version = (
+            (resume.update_time or resume.create_time or "").isoformat()
+            if (resume.update_time or resume.create_time)
+            else "unknown"
+        )
         cache_key = _recommend_cache_key(resume_id, resume_version, normalized_filters)
         now = time.time()
         if not bypass_cache:
@@ -210,17 +208,21 @@ class JobRecommendationEngine:
                 return cached[:limit]
 
         # --- 1) 取所有活跃 JD ---
-        jd_query = self.db.query(JobDescription).filter(
-            JobDescription.is_active == 1,
-            _visible_job_filter(resume.user_id),
-        ).all()
+        jd_query = (
+            self.db.query(JobDescription)
+            .filter(
+                JobDescription.is_active == 1,
+                _visible_job_filter(resume.user_id),
+            )
+            .all()
+        )
 
         if not jd_query:
             return []
 
         # --- 2) 向量 + 规则 双通道评分 ---
         resume_data = resume.parsed_json
-        results: List[RecommendResult] = []
+        results: list[RecommendResult] = []
 
         # 简历文本在整个循环中是固定的，只需 embedding 一次；
         # 所有 JD 文本一次性批量 embedding（内部按 10 条/批自动分批），
@@ -274,11 +276,7 @@ class JobRecommendationEngine:
                 match_reason=self._generate_reason(combined, overlap, gap, salary_ok, location_ok),
                 recommendation_type=self._recommend_type(combined),
                 source=jd.source or "",
-                experience_requirement=(
-                    jd_data.get("experience_requirement")
-                    or jd.experience_requirement
-                    or ""
-                ),
+                experience_requirement=(jd_data.get("experience_requirement") or jd.experience_requirement or ""),
             )
             results.append(result)
 
@@ -295,7 +293,7 @@ class JobRecommendationEngine:
 
     # ==================== 向量相似度（通道1）====================
 
-    def _vector_score(self, resume_emb: Optional[List[float]], jd_emb: Optional[List[float]]) -> float:
+    def _vector_score(self, resume_emb: list[float] | None, jd_emb: list[float] | None) -> float:
         """基于预计算好的简历 / JD 向量算余弦相似度 → 0-100。
 
         向量在 recommend() 中已对简历（1 次）和全部 JD（批量）统一算好，
@@ -309,7 +307,7 @@ class JobRecommendationEngine:
 
     # ==================== 规则评分（通道2）====================
 
-    def _rule_score(self, resume_data: Dict, jd: JobDescription, jd_data: Dict) -> float:
+    def _rule_score(self, resume_data: dict, jd: JobDescription, jd_data: dict) -> float:
         """多维度规则匹配 → 0-100"""
         scores = []
         weights = []
@@ -349,11 +347,11 @@ class JobRecommendationEngine:
         if not scores:
             return 50
 
-        return sum(s * w for s, w in zip(scores, weights)) / sum(weights)
+        return sum(s * w for s, w in zip(scores, weights, strict=False)) / sum(weights)
 
     # ==================== 技能提取 ====================
 
-    def _extract_skills(self, data: Dict) -> List[str]:
+    def _extract_skills(self, data: dict) -> list[str]:
         """从 parsed_json 中提取技能列表"""
         skills = []
         raw = data.get("skills", data.get("required_skills", data.get("nice_to_have", [])))
@@ -365,7 +363,7 @@ class JobRecommendationEngine:
                     skills.append(s.get("skill", "").strip().lower())
         return [s for s in skills if s]
 
-    def _build_vector_text(self, data: Dict) -> str:
+    def _build_vector_text(self, data: dict) -> str:
         """构建用于向量化的文本"""
         parts = []
         # 标题+公司
@@ -392,7 +390,7 @@ class JobRecommendationEngine:
 
     # ==================== 薪资/地点/经验 工具 ====================
 
-    def _parse_salary(self, salary_str: str) -> Tuple[Optional[float], Optional[float]]:
+    def _parse_salary(self, salary_str: str) -> tuple[float | None, float | None]:
         """解析薪资字符串 → (min, max) 单位:万/年"""
         if not salary_str:
             return None, None
@@ -416,7 +414,7 @@ class JobRecommendationEngine:
                 return round(min(a, b), 1), round(max(a, b), 1)
         return None, None
 
-    def _salary_match(self, resume_sal: Tuple, jd_sal: Tuple) -> bool:
+    def _salary_match(self, resume_sal: tuple, jd_sal: tuple) -> bool:
         """薪资是否重合"""
         r_min, r_max = resume_sal
         j_min, j_max = jd_sal
@@ -427,7 +425,7 @@ class JobRecommendationEngine:
         # 中间有重合 → 匹配
         return not (r_max < j_min * 0.8 or r_min > j_max * 1.2)
 
-    def _salary_score(self, resume_sal: Tuple, jd_sal: Tuple) -> float:
+    def _salary_score(self, resume_sal: tuple, jd_sal: tuple) -> float:
         """薪资匹配分数 0-100"""
         if not self._salary_match(resume_sal, jd_sal):
             return 20
@@ -456,11 +454,11 @@ class JobRecommendationEngine:
             return True
         return r in j or j in r or r[:2] == j[:2]  # 前两个字（城市名）
 
-    def _experience_match(self, resume_years: int, jd_data: Dict) -> bool:
+    def _experience_match(self, resume_years: int, jd_data: dict) -> bool:
         """经验层级是否匹配"""
         return self._experience_score(resume_years, jd_data) >= 50
 
-    def _experience_score(self, resume_years: int, jd_data: Dict) -> float:
+    def _experience_score(self, resume_years: int, jd_data: dict) -> float:
         """经验匹配分数 0-100"""
         if resume_years is None:
             return 80
@@ -498,19 +496,20 @@ class JobRecommendationEngine:
 
     # ==================== 工具 ====================
 
-    def _cosine_similarity(self, a: List[float], b: List[float]) -> float:
+    def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
         """余弦相似度"""
         if not a or not b or len(a) != len(b):
             return 0
-        dot = sum(x * y for x, y in zip(a, b))
+        dot = sum(x * y for x, y in zip(a, b, strict=False))
         na = math.sqrt(sum(x * x for x in a))
         nb = math.sqrt(sum(y * y for y in b))
         if na * nb == 0:
             return 0
         return dot / (na * nb)
 
-    def _generate_reason(self, score: float, overlap: List[str], gap: List[str],
-                         salary_ok: bool, location_ok: bool) -> str:
+    def _generate_reason(
+        self, score: float, overlap: list[str], gap: list[str], salary_ok: bool, location_ok: bool
+    ) -> str:
         """生成一句话匹配原因"""
         parts = []
         if overlap:
@@ -543,7 +542,7 @@ class JobRecommendationEngine:
         return float(self.tuning_config.get("rule_weight", self.WEIGHT_RULE))
 
     @property
-    def _rule_component_weights(self) -> Dict[str, float]:
+    def _rule_component_weights(self) -> dict[str, float]:
         raw = self.tuning_config.get("rule_components") or {}
         return {
             "skill": float(raw.get("skill", 0.5)),
@@ -564,7 +563,7 @@ class JobRecommendationEngine:
 
     # ==================== 筛选 ====================
 
-    def _apply_filters(self, results: List[RecommendResult], filters: Dict) -> List[RecommendResult]:
+    def _apply_filters(self, results: list[RecommendResult], filters: dict) -> list[RecommendResult]:
         """应用筛选条件"""
         location = (filters.get("location") or "").strip().lower()
         industry = (filters.get("industry") or "").strip().lower()
@@ -593,7 +592,7 @@ class JobRecommendationEngine:
                     continue
             # 经验（"初级" → exp_level=2）
             if experience:
-                exp_years = self._parse_experience_years(experience)
+                self._parse_experience_years(experience)
                 # 不精确过滤，仅关键词
                 pass
             if expected_years is not None:
@@ -607,7 +606,7 @@ class JobRecommendationEngine:
 
     # ==================== 缓存控制 ====================
 
-    def _parse_experience_filter(self, experience: str) -> Optional[int]:
+    def _parse_experience_filter(self, experience: str) -> int | None:
         """将经验筛选条件统一转换为目标年限。"""
         if not experience:
             return None
@@ -632,7 +631,8 @@ class JobRecommendationEngine:
 
 # ==================== 独立工具函数 ====================
 
-def batch_import_jobs(db: Session, jobs: List[Dict], source: str = "imported") -> List[int]:
+
+def batch_import_jobs(db: Session, jobs: list[dict], source: str = "imported") -> list[int]:
     """
     批量导入岗位
 
@@ -665,8 +665,9 @@ def batch_import_jobs(db: Session, jobs: List[Dict], source: str = "imported") -
     return ids
 
 
-def record_feedback(db: Session, user_id: int, resume_id: int, jd_id: int,
-                    feedback_type: str, match_score: float = None) -> Dict:
+def record_feedback(
+    db: Session, user_id: int, resume_id: int, jd_id: int, feedback_type: str, match_score: float = None
+) -> dict:
     """记录用户反馈"""
     from app.models.job_recommend import JobRecommendationFeedback
 
@@ -695,7 +696,8 @@ MOCK_JOBS = [
         "raw_text": "负责抖音电商前台核心场景开发，参与前端基础设施建设，推动前端工程化落地。要求精通Vue3/React、TypeScript、Webpack/Vite性能优化。",
         "parsed_json": {
             "required_skills": ["Vue3", "React", "TypeScript", "Webpack", "Vite", "Node.js"],
-            "experience_requirement": "3-5年", "education_requirement": "本科及以上",
+            "experience_requirement": "3-5年",
+            "education_requirement": "本科及以上",
             "responsibilities": ["电商前台开发", "前端基建", "工程化落地"],
         },
     },
@@ -708,7 +710,8 @@ MOCK_JOBS = [
         "raw_text": "负责电商中台服务设计与开发，高性能API开发，数据库优化。要求精通Python、FastAPI/Django、MySQL、Redis、Kafka。",
         "parsed_json": {
             "required_skills": ["Python", "FastAPI", "Django", "MySQL", "Redis", "Kafka", "Docker"],
-            "experience_requirement": "3-5年", "education_requirement": "本科及以上",
+            "experience_requirement": "3-5年",
+            "education_requirement": "本科及以上",
             "responsibilities": ["中台服务开发", "高性能API", "数据库优化"],
         },
     },
@@ -721,7 +724,8 @@ MOCK_JOBS = [
         "raw_text": "从事大模型/NLP应用研究，负责文本理解、对话系统、RAG系统开发。要求精通Transformer、LangChain、PyTorch。",
         "parsed_json": {
             "required_skills": ["Python", "PyTorch", "LangChain", "Transformer", "RAG", "NLP"],
-            "experience_requirement": "3-5年", "education_requirement": "硕士及以上",
+            "experience_requirement": "3-5年",
+            "education_requirement": "硕士及以上",
             "responsibilities": ["NLP应用研究", "对话系统开发", "RAG系统构建"],
         },
     },
@@ -734,7 +738,8 @@ MOCK_JOBS = [
         "raw_text": "负责交易核心链路服务开发，高并发系统设计与优化。要求精通Java、Spring Boot、MySQL、Redis、微服务架构。",
         "parsed_json": {
             "required_skills": ["Java", "Spring Boot", "MySQL", "Redis", "微服务", "Kafka"],
-            "experience_requirement": "3-5年", "education_requirement": "本科及以上",
+            "experience_requirement": "3-5年",
+            "education_requirement": "本科及以上",
             "responsibilities": ["交易链路开发", "高并发优化", "微服务设计"],
         },
     },
@@ -747,7 +752,8 @@ MOCK_JOBS = [
         "raw_text": "负责社区产品全栈开发，从原型到交付全流程。要求精通Vue3/React、Python/Go、PostgreSQL，有全栈项目经验。",
         "parsed_json": {
             "required_skills": ["Vue3", "React", "Python", "Go", "PostgreSQL", "Redis"],
-            "experience_requirement": "3-5年", "education_requirement": "本科及以上",
+            "experience_requirement": "3-5年",
+            "education_requirement": "本科及以上",
             "responsibilities": ["全栈开发", "产品迭代", "技术方案设计"],
         },
     },
@@ -760,7 +766,8 @@ MOCK_JOBS = [
         "raw_text": "负责云原生基础设施运维，CI/CD流水线建设，K8s集群管理。要求精通Docker、Kubernetes、Terraform、CI/CD工具链。",
         "parsed_json": {
             "required_skills": ["Docker", "Kubernetes", "Terraform", "Jenkins", "Ansible", "Linux"],
-            "experience_requirement": "3-5年", "education_requirement": "本科及以上",
+            "experience_requirement": "3-5年",
+            "education_requirement": "本科及以上",
             "responsibilities": ["基础设施运维", "CI/CD建设", "K8s管理"],
         },
     },
@@ -773,7 +780,8 @@ MOCK_JOBS = [
         "raw_text": "负责官网和运营活动页面开发。要求熟悉HTML/CSS/JavaScript，了解Vue或React框架，有良好的学习能力。",
         "parsed_json": {
             "required_skills": ["HTML", "CSS", "JavaScript", "Vue", "React"],
-            "experience_requirement": "1-3年", "education_requirement": "本科及以上",
+            "experience_requirement": "1-3年",
+            "education_requirement": "本科及以上",
             "responsibilities": ["前端页面开发", "运营活动开发"],
         },
     },
@@ -786,7 +794,8 @@ MOCK_JOBS = [
         "raw_text": "负责大数据平台建设，离线/实时数仓开发，数据治理。要求精通Spark/Flink、Hadoop、SQL、数据建模。",
         "parsed_json": {
             "required_skills": ["Spark", "Flink", "Hadoop", "SQL", "Hive", "Kafka", "Python"],
-            "experience_requirement": "5-10年", "education_requirement": "本科及以上",
+            "experience_requirement": "5-10年",
+            "education_requirement": "本科及以上",
             "responsibilities": ["大数据平台建设", "数仓开发", "数据治理"],
         },
     },
@@ -799,7 +808,8 @@ MOCK_JOBS = [
         "raw_text": "负责AI产品规划和落地，需求分析，跨团队协作。要求2年以上AI产品经验，了解机器学习基础，有ToB产品经验优先。",
         "parsed_json": {
             "required_skills": ["产品规划", "需求分析", "项目管理", "AI", "数据分析"],
-            "experience_requirement": "3-5年", "education_requirement": "本科及以上",
+            "experience_requirement": "3-5年",
+            "education_requirement": "本科及以上",
             "responsibilities": ["AI产品规划", "需求分析", "跨团队协作"],
         },
     },
@@ -812,7 +822,8 @@ MOCK_JOBS = [
         "raw_text": "负责质量保障体系建设，自动化测试框架开发，性能测试。要求精通Python/Java、测试框架、CI/CD集成。",
         "parsed_json": {
             "required_skills": ["Python", "Java", "Selenium", "pytest", "JMeter", "CI/CD"],
-            "experience_requirement": "3-5年", "education_requirement": "本科及以上",
+            "experience_requirement": "3-5年",
+            "education_requirement": "本科及以上",
             "responsibilities": ["质量保障", "自动化测试", "性能测试"],
         },
     },

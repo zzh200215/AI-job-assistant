@@ -1,19 +1,20 @@
-# -*- coding: utf-8 -*-
 """BaseAgent：所有智能体的基类"""
-import time
+
+import contextlib
 import json
+import time
 import traceback
-from typing import Dict, Any, Optional, List
 from abc import ABC, abstractmethod
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
-from app.models.agent_run import AgentRun, AgentMessage, AgentResult
+from app.models.agent_run import AgentMessage, AgentResult
 from app.orchestration.context import AgentContext
 from app.services.llm_service import get_llm_usage, reset_llm_usage
-from app.utils.time_helper import utc_now
 from app.utils.retry import retry_call
+from app.utils.time_helper import utc_now
 
 MAX_RETRIES = 2
 
@@ -31,18 +32,18 @@ class BaseAgent(ABC):
 
     name: str = ""
     description: str = ""
-    depends_on: List[str] = []
+    depends_on: list[str] = []
     result_type: str = ""
 
     def __init__(self, db: Session = None):
         self._db = db
 
     @abstractmethod
-    def run_impl(self, context: AgentContext) -> Dict[str, Any]:
+    def run_impl(self, context: AgentContext) -> dict[str, Any]:
         """子类实现具体的智能体逻辑"""
         raise NotImplementedError
 
-    def execute(self, run_id: int, context: AgentContext) -> Dict[str, Any]:
+    def execute(self, run_id: int, context: AgentContext) -> dict[str, Any]:
         """执行智能体，带重试和日志记录"""
         close_db = False
         context = context.with_db(self._db) if self._db is not None else context
@@ -84,10 +85,8 @@ class BaseAgent(ABC):
                 last_error = str(exc)
                 traceback.print_exc()
                 # 回滚失败的事务，避免共享 session 进入 PendingRollbackError 连环失败
-                try:
+                with contextlib.suppress(Exception):
                     self._db.rollback()
-                except Exception:
-                    pass
 
             try:
                 result, elapsed_ms, usage = retry_call(
@@ -131,10 +130,10 @@ class BaseAgent(ABC):
             if close_db:
                 self._db.close()
 
-    def _make_summary(self, result: Dict[str, Any]) -> str:
+    def _make_summary(self, result: dict[str, Any]) -> str:
         """生成结果摘要，子类可覆盖"""
         return json.dumps(result, ensure_ascii=False)[:100]
 
-    def get_prompt_context(self, context: AgentContext) -> Dict[str, Any]:
+    def get_prompt_context(self, context: AgentContext) -> dict[str, Any]:
         """从输入中提取上下文，子类可覆盖"""
         return context.to_log_dict()

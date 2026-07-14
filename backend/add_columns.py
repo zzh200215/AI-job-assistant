@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """添加 tb_resume 缺失列"""
+
 from sqlalchemy import text
+
 from app.core.database import engine
 
 with engine.connect() as conn:

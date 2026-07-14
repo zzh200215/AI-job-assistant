@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
 """站内消息 ORM 模型"""
-from sqlalchemy import Column, BigInteger, String, DateTime, Text, Integer, JSON
+
+from sqlalchemy import JSON, BigInteger, Column, DateTime, Integer, String, Text
 
 from app.core.database import Base
 from app.utils.time_helper import utc_now
@@ -8,11 +8,17 @@ from app.utils.time_helper import utc_now
 
 class Notification(Base):
     """站内消息表"""
+
     __tablename__ = "notification"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, nullable=False, index=True, comment="接收用户 ID")
-    type = Column(String(30), nullable=False, index=True, comment="消息类型: interview_reminder/offer_reminder/system/recommendation/application_update")
+    type = Column(
+        String(30),
+        nullable=False,
+        index=True,
+        comment="消息类型: interview_reminder/offer_reminder/system/recommendation/application_update",
+    )
     title = Column(String(200), nullable=False, comment="消息标题")
     content = Column(Text, default="", comment="消息正文")
     link = Column(String(500), default="", comment="跳转链接")

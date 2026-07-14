@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """执行策略抽象与三种具体实现
 
 - LinearStrategy:          线性流水线（smart_orchestrator 主线）
@@ -8,29 +7,31 @@
 三种策略共用 orchestration.registry.UnifiedRegistry 中的 Agent 注册表，
 并继承 ExecutionStrategy 提供的通用辅助方法（日志、重试、保存记录等）。
 """
+
 import time
 import traceback
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, Any, List, Optional
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
-from app.orchestration.context import AgentContext
-from app.services.llm_service import get_llm_usage, reset_llm_usage
-from app.utils.time_helper import utc_now
-from app.utils.retry import retry_call
-from app.models.agent import AgentTask, AgentStepLog
+from app.models.agent import AgentStepLog, AgentTask
 from app.models.history import AnalysisRecord
+from app.orchestration.context import AgentContext
 from app.orchestration.registry import DEFAULT_REGISTRY, UnifiedRegistry
+from app.services.llm_service import get_llm_usage, reset_llm_usage
+from app.utils.retry import retry_call
+from app.utils.time_helper import utc_now
 
 MAX_RETRIES = 2
 
 
 # ===================== 通用辅助 =====================
 
-def _agent_result(agent_name: str, status: str, result: Any = None, error: str = "") -> Dict[str, Any]:
+
+def _agent_result(agent_name: str, status: str, result: Any = None, error: str = "") -> dict[str, Any]:
     return {
         "agent_name": agent_name,
         "status": status,
@@ -42,11 +43,11 @@ def _agent_result(agent_name: str, status: str, result: Any = None, error: str =
 def _orchestrator_result(
     status: str,
     task_id: int,
-    record_id: Optional[int] = None,
-    steps: List[Dict] = None,
-    final_report: Dict = None,
+    record_id: int | None = None,
+    steps: list[dict] = None,
+    final_report: dict = None,
     error: str = "",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return {
         "status": status,
         "task_id": task_id,
@@ -74,13 +75,13 @@ class ExecutionStrategy(ABC):
         pass
 
     @abstractmethod
-    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> Dict[str, Any]:
+    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> dict[str, Any]:
         """执行完整编排流程，返回统一格式结果"""
         pass
 
     # -------------------- 通用 Agent 执行 --------------------
 
-    def _execute_agent(self, agent_name: str, context: AgentContext, db: Session) -> Dict[str, Any]:
+    def _execute_agent(self, agent_name: str, context: AgentContext, db: Session) -> dict[str, Any]:
         """从注册表取 Agent 并执行，返回统一格式"""
         try:
             spec = self.registry.get(agent_name)
@@ -103,7 +104,7 @@ class ExecutionStrategy(ABC):
         agent_name: str,
         context: AgentContext,
         critical: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """执行单个 Agent（带重试 + 日志），返回统一格式"""
         last_error = ""
 
@@ -253,12 +254,14 @@ class ExecutionStrategy(ABC):
 
         # SummaryAgent 在有其他结果时始终执行
         if agent_name == "SummaryAgent":
-            return any((
-                context.match_result,
-                context.optimize_result,
-                context.interview_result,
-                context.career_result,
-            ))
+            return any(
+                (
+                    context.match_result,
+                    context.optimize_result,
+                    context.interview_result,
+                    context.career_result,
+                )
+            )
 
         return False
 
@@ -276,10 +279,10 @@ class ExecutionStrategy(ABC):
     def _cancelled_result(
         self,
         task_id: int,
-        step_results: List[Dict[str, Any]],
-        context: Optional[AgentContext] = None,
-        record_id: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        step_results: list[dict[str, Any]],
+        context: AgentContext | None = None,
+        record_id: int | None = None,
+    ) -> dict[str, Any]:
         return _orchestrator_result(
             status="cancelled",
             task_id=task_id,
@@ -292,6 +295,7 @@ class ExecutionStrategy(ABC):
 
 # ===================== 1) 线性策略 =====================
 
+
 class LinearStrategy(ExecutionStrategy):
     """线性流水线策略
 
@@ -299,7 +303,7 @@ class LinearStrategy(ExecutionStrategy):
     对应原 smart_orchestrator 的实现。
     """
 
-    AGENT_ORDER: List[str] = [
+    AGENT_ORDER: list[str] = [
         "IntentAgent",
         "ResumeParseAgent",
         "JDParseAgent",
@@ -313,13 +317,13 @@ class LinearStrategy(ExecutionStrategy):
     def name(self) -> str:
         return "linear"
 
-    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> Dict[str, Any]:
+    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> dict[str, Any]:
         task = db.get(AgentTask, task_id)
         if not task:
             return _orchestrator_result("failed", task_id, error="任务不存在")
 
         context = AgentContext.for_analysis(resume_id, jd_id, user_id=user_id, db=db)
-        step_results: List[Dict[str, Any]] = []
+        step_results: list[dict[str, Any]] = []
         failed_critical = False
 
         for step_index, agent_name in enumerate(self.AGENT_ORDER, start=1):
@@ -386,13 +390,14 @@ class LangGraphLinearStrategy(LinearStrategy):
     def name(self) -> str:
         return "langgraph_linear"
 
-    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> Dict[str, Any]:
+    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> dict[str, Any]:
         from app.orchestration.langgraph_flow import run_linear_graph
 
         return run_linear_graph(self, task_id, resume_id, jd_id, user_id, db)
 
 
 # ===================== 2) 分层并行策略 =====================
+
 
 class LayeredParallelStrategy(ExecutionStrategy):
     """分层并行策略
@@ -402,18 +407,18 @@ class LayeredParallelStrategy(ExecutionStrategy):
     """
 
     # 执行层级 — 同一层可并行，不同层串行
-    EXECUTION_LEVELS: List[List[str]] = [
-        ["ResumeAgent", "JobAgent"],          # Level 0: 简历诊断 + 岗位分析
-        ["MatchAgent"],                        # Level 1: 匹配度评估
-        ["InterviewAgent", "CareerAgent"],     # Level 2: 面试辅导 + 职业规划（并行）
-        ["SummaryAgent"],                      # Level 3: 结果汇总
+    EXECUTION_LEVELS: list[list[str]] = [
+        ["ResumeAgent", "JobAgent"],  # Level 0: 简历诊断 + 岗位分析
+        ["MatchAgent"],  # Level 1: 匹配度评估
+        ["InterviewAgent", "CareerAgent"],  # Level 2: 面试辅导 + 职业规划（并行）
+        ["SummaryAgent"],  # Level 3: 结果汇总
     ]
 
     @property
     def name(self) -> str:
         return "layered"
 
-    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> Dict[str, Any]:
+    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> dict[str, Any]:
         # 使用 AgentRun 模型（与 agent_orchestrator 保持一致）
         from app.models.agent_run import AgentRun
 
@@ -430,7 +435,7 @@ class LayeredParallelStrategy(ExecutionStrategy):
         run_id = run.id
 
         context = AgentContext.for_analysis(resume_id, jd_id, user_id=user_id, db=db)
-        step_results: List[Dict[str, Any]] = []
+        step_results: list[dict[str, Any]] = []
         step_index = 0
 
         for agent_names in self.EXECUTION_LEVELS:
@@ -456,10 +461,7 @@ class LayeredParallelStrategy(ExecutionStrategy):
                     context.record_agent_output(name, result.get("result", {}))
             else:
                 with ThreadPoolExecutor(max_workers=len(agent_names)) as ex:
-                    futures = {
-                        ex.submit(self._run_one_agent, name, run_id, prior): name
-                        for name in agent_names
-                    }
+                    futures = {ex.submit(self._run_one_agent, name, run_id, prior): name for name in agent_names}
                     for fut in as_completed(futures):
                         name = futures[fut]
                         step_index += 1
@@ -480,7 +482,8 @@ class LayeredParallelStrategy(ExecutionStrategy):
                     db.add(run)
                     db.commit()
                     return _orchestrator_result(
-                        "failed", task_id,
+                        "failed",
+                        task_id,
                         steps=step_results,
                         error=run.error_msg,
                     )
@@ -513,13 +516,14 @@ class LayeredParallelStrategy(ExecutionStrategy):
             db.commit()
 
         return _orchestrator_result(
-            "completed", task_id,
+            "completed",
+            task_id,
             record_id=record_id,
             steps=step_results,
             final_report=context.final_report or {},
         )
 
-    def _run_one_agent(self, agent_name: str, run_id: int, context: AgentContext) -> Dict[str, Any]:
+    def _run_one_agent(self, agent_name: str, run_id: int, context: AgentContext) -> dict[str, Any]:
         """在独立 DB Session 中执行单个 Agent（线程安全）"""
         db = SessionLocal()
         try:
@@ -528,7 +532,7 @@ class LayeredParallelStrategy(ExecutionStrategy):
         finally:
             db.close()
 
-    def _update_log_from_result(self, db: Session, log: AgentStepLog, result: Dict[str, Any]):
+    def _update_log_from_result(self, db: Session, log: AgentStepLog, result: dict[str, Any]):
         """根据 Agent 执行结果更新步骤日志"""
         if result.get("status") == "success":
             log.status = "completed"
@@ -548,13 +552,14 @@ class LangGraphLayeredStrategy(LayeredParallelStrategy):
     def name(self) -> str:
         return "langgraph_layered"
 
-    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> Dict[str, Any]:
+    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> dict[str, Any]:
         from app.orchestration.langgraph_flow import run_layered_graph
 
         return run_layered_graph(self, task_id, resume_id, jd_id, user_id, db)
 
 
 # ===================== 3) 细粒度步骤策略 =====================
+
 
 class StepByStepStrategy(ExecutionStrategy):
     """细粒度步骤策略
@@ -565,32 +570,32 @@ class StepByStepStrategy(ExecutionStrategy):
     """
 
     # (step_name, step_func_name, critical)
-    STEP_REGISTRY: List[tuple] = [
-        ("intent_recognition",          "step_intent_recognition",          True),
-        ("resume_parse",                "step_resume_parse",                True),
-        ("jd_parse",                    "step_jd_parse",                    True),
-        ("task_planning",               "step_task_planning",              True),
-        ("knowledge_retrieval",         "step_knowledge_retrieval",        True),
-        ("matching_analysis",           "step_matching_analysis",          True),
-        ("resume_optimization",         "step_resume_optimization",        True),
-        ("interview_question_generation", "step_interview_question_gen",   False),
-        ("career_planning",             "step_career_planning",            True),
-        ("self_check",                  "step_self_check",                 True),
-        ("final_report",                "step_final_report",               True),
+    STEP_REGISTRY: list[tuple] = [
+        ("intent_recognition", "step_intent_recognition", True),
+        ("resume_parse", "step_resume_parse", True),
+        ("jd_parse", "step_jd_parse", True),
+        ("task_planning", "step_task_planning", True),
+        ("knowledge_retrieval", "step_knowledge_retrieval", True),
+        ("matching_analysis", "step_matching_analysis", True),
+        ("resume_optimization", "step_resume_optimization", True),
+        ("interview_question_generation", "step_interview_question_gen", False),
+        ("career_planning", "step_career_planning", True),
+        ("self_check", "step_self_check", True),
+        ("final_report", "step_final_report", True),
     ]
 
     @property
     def name(self) -> str:
         return "step_by_step"
 
-    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> Dict[str, Any]:
+    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> dict[str, Any]:
         task = db.get(AgentTask, task_id)
         if not task:
             return _orchestrator_result("failed", task_id, error="任务不存在")
 
         ctx = AgentContext.for_analysis(resume_id, jd_id, user_id=user_id, db=db)
 
-        step_results: List[Dict[str, Any]] = []
+        step_results: list[dict[str, Any]] = []
 
         for step_index, (step_name, step_func_name, critical) in enumerate(self.STEP_REGISTRY, start=1):
             if self._is_task_cancelled(db, task_id):
@@ -619,7 +624,8 @@ class StepByStepStrategy(ExecutionStrategy):
                     db.add(task)
                     db.commit()
                     return _orchestrator_result(
-                        "failed", task_id,
+                        "failed",
+                        task_id,
                         steps=step_results,
                         error=task.error_msg,
                     )
@@ -637,7 +643,8 @@ class StepByStepStrategy(ExecutionStrategy):
         db.commit()
 
         return _orchestrator_result(
-            "completed", task_id,
+            "completed",
+            task_id,
             record_id=record_id,
             steps=step_results,
             final_report=ctx.final_report or {},
@@ -655,8 +662,14 @@ class StepByStepStrategy(ExecutionStrategy):
             return True
         if intent == "interview_only" and step_name in ("interview_question_generation", "knowledge_retrieval"):
             return True
-        return step_name in ("intent_recognition", "resume_parse", "jd_parse",
-                             "task_planning", "self_check", "final_report")
+        return step_name in (
+            "intent_recognition",
+            "resume_parse",
+            "jd_parse",
+            "task_planning",
+            "self_check",
+            "final_report",
+        )
 
     def _ctx_key(self, step_name: str) -> str:
         mapping = {
@@ -676,9 +689,13 @@ class StepByStepStrategy(ExecutionStrategy):
 
     def _execute_step_with_retry(
         self,
-        db: Session, task_id: int, log: AgentStepLog,
-        step_func_name: str, ctx: AgentContext,
-        step_name: str, critical: bool,
+        db: Session,
+        task_id: int,
+        log: AgentStepLog,
+        step_func_name: str,
+        ctx: AgentContext,
+        step_name: str,
+        critical: bool,
     ) -> bool:
         """执行单个步骤（带重试），成功返回 True"""
         # 延迟导入 agent_steps，避免循环依赖
@@ -750,7 +767,7 @@ class StepByStepStrategy(ExecutionStrategy):
                     db.commit()
                     return False
 
-    def _complete_step_log(self, db: Session, log: AgentStepLog, output_data: Dict, elapsed_ms: int):
+    def _complete_step_log(self, db: Session, log: AgentStepLog, output_data: dict, elapsed_ms: int):
         log.status = "completed"
         log.output_data = output_data
         log.completed_at = utc_now()
@@ -776,7 +793,7 @@ class LangGraphStepByStepStrategy(StepByStepStrategy):
     def name(self) -> str:
         return "langgraph_step_by_step"
 
-    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> Dict[str, Any]:
+    def run(self, task_id: int, resume_id: int, jd_id: int, user_id: int, db: Session) -> dict[str, Any]:
         from app.orchestration.langgraph_flow import run_step_by_step_graph
 
         return run_step_by_step_graph(self, task_id, resume_id, jd_id, user_id, db)
@@ -784,10 +801,11 @@ class LangGraphStepByStepStrategy(StepByStepStrategy):
 
 # ===================== 策略工厂 =====================
 
+
 class StrategyFactory:
     """策略工厂 — 根据配置名返回对应策略实例"""
 
-    _STRATEGIES: Dict[str, type] = {
+    _STRATEGIES: dict[str, type] = {
         "linear": LinearStrategy,
         "langgraph_linear": LangGraphLinearStrategy,
         "layered": LayeredParallelStrategy,
@@ -804,5 +822,5 @@ class StrategyFactory:
         return cls._STRATEGIES[name](registry)
 
     @classmethod
-    def list_strategies(cls) -> List[str]:
+    def list_strategies(cls) -> list[str]:
         return list(cls._STRATEGIES.keys())

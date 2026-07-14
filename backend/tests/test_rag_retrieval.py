@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 RAG 检索测试
 
@@ -11,12 +10,14 @@ RAG 检索测试
   6. evaluate_rag_confidence — RAG 置信度评估
   7. multi_recall            — 多路召回（集成测试级别）
 """
-import json
-from typing import Any, Dict, List
-from unittest.mock import ANY, MagicMock, patch
+
+from unittest.mock import patch
 
 import pytest
 
+from app.services.multi_recall import _tokenize, multi_recall
+from app.services.query_rewrite_service import RewrittenQuery
+from app.services.rag_confidence_service import evaluate_rag_confidence
 from app.services.rag_service import (
     build_rag_context,
     build_rag_context_multi,
@@ -26,10 +27,6 @@ from app.services.rag_service import (
     search_knowledge,
     search_knowledge_multi_queries,
 )
-from app.services.multi_recall import multi_recall, _rrf_fuse, _tokenize
-from app.services.rag_confidence_service import evaluate_rag_confidence
-from app.services.query_rewrite_service import RewrittenQuery
-
 
 # ===================== Fixtures =====================
 
@@ -46,11 +43,13 @@ def sample_chunks():
     return {
         "ids": [["chunk_1", "chunk_2", "chunk_3"]],
         "documents": [["Python FastAPI 开发经验", "RAG 系统架构设计", "深度学习基础"]],
-        "metadatas": [[
-            {"doc_title": "后端技能清单", "doc_type": "skill_model", "chunk_index": 0},
-            {"doc_title": "RAG 实践指南", "doc_type": "jd_lib", "chunk_index": 1},
-            {"doc_title": "深度学习入门", "doc_type": "interview_q", "chunk_index": 2},
-        ]],
+        "metadatas": [
+            [
+                {"doc_title": "后端技能清单", "doc_type": "skill_model", "chunk_index": 0},
+                {"doc_title": "RAG 实践指南", "doc_type": "jd_lib", "chunk_index": 1},
+                {"doc_title": "深度学习入门", "doc_type": "interview_q", "chunk_index": 2},
+            ]
+        ],
         "distances": [[0.15, 0.30, 0.50]],
     }
 
@@ -149,11 +148,13 @@ class TestSearchKnowledge:
         mock_chroma_collection.query.return_value = {
             "ids": [["c3", "c1", "c2"]],
             "documents": [["text3", "text1", "text2"]],
-            "metadatas": [[
-                {"doc_title": "C", "doc_type": "t", "chunk_index": 2},
-                {"doc_title": "A", "doc_type": "t", "chunk_index": 0},
-                {"doc_title": "B", "doc_type": "t", "chunk_index": 1},
-            ]],
+            "metadatas": [
+                [
+                    {"doc_title": "C", "doc_type": "t", "chunk_index": 2},
+                    {"doc_title": "A", "doc_type": "t", "chunk_index": 0},
+                    {"doc_title": "B", "doc_type": "t", "chunk_index": 1},
+                ]
+            ],
             "distances": [[0.1, 0.3, 0.5]],
         }
 
@@ -181,10 +182,12 @@ class TestSearchKnowledgeMultiQueries:
             return {
                 "ids": [[f"chunk_{idx}_1", f"chunk_{idx}_2"]],
                 "documents": [[f"result_{idx}_a", f"result_{idx}_b"]],
-                "metadatas": [[
-                    {"doc_title": f"Doc{idx}", "doc_type": "skill_model", "chunk_index": 0},
-                    {"doc_title": f"Doc{idx}", "doc_type": "skill_model", "chunk_index": 1},
-                ]],
+                "metadatas": [
+                    [
+                        {"doc_title": f"Doc{idx}", "doc_type": "skill_model", "chunk_index": 0},
+                        {"doc_title": f"Doc{idx}", "doc_type": "skill_model", "chunk_index": 1},
+                    ]
+                ],
                 "distances": [[0.1, 0.2]],
             }
 
@@ -211,9 +214,11 @@ class TestSearchKnowledgeMultiQueries:
 
     def test_multi_query_empty_text(self, mock_chroma_collection):
         """query_text 为空的条目应跳过。"""
-        results = search_knowledge_multi_queries([
-            RewrittenQuery(query_text="", query_type="original", purpose="", priority=1),
-        ])
+        results = search_knowledge_multi_queries(
+            [
+                RewrittenQuery(query_text="", query_type="original", purpose="", priority=1),
+            ]
+        )
         assert results == []
 
 
@@ -226,12 +231,33 @@ class TestMergeAndDedup:
     def test_dedup_same_chunk_keeps_best_score(self):
         """相同 chunk_id 应保留 score 最小的（cosine distance）。"""
         results = [
-            {"chunk_id": "c1", "score": 0.5, "text": "text1", "query_used": "q1", "query_type": "skill",
-             "doc_title": "A", "doc_type": "t"},
-            {"chunk_id": "c1", "score": 0.2, "text": "text1", "query_used": "q2", "query_type": "interview",
-             "doc_title": "A", "doc_type": "t"},
-            {"chunk_id": "c2", "score": 0.3, "text": "text2", "query_used": "q1", "query_type": "skill",
-             "doc_title": "B", "doc_type": "t"},
+            {
+                "chunk_id": "c1",
+                "score": 0.5,
+                "text": "text1",
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "A",
+                "doc_type": "t",
+            },
+            {
+                "chunk_id": "c1",
+                "score": 0.2,
+                "text": "text1",
+                "query_used": "q2",
+                "query_type": "interview",
+                "doc_title": "A",
+                "doc_type": "t",
+            },
+            {
+                "chunk_id": "c2",
+                "score": 0.3,
+                "text": "text2",
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "B",
+                "doc_type": "t",
+            },
         ]
         merged = merge_and_dedup_results(results)
 
@@ -243,10 +269,24 @@ class TestMergeAndDedup:
     def test_dedup_queries_list_deduped(self):
         """queries 列表本身应去重。"""
         results = [
-            {"chunk_id": "c1", "score": 0.5, "text": "text1", "query_used": "q1", "query_type": "skill",
-             "doc_title": "A", "doc_type": "t"},
-            {"chunk_id": "c1", "score": 0.3, "text": "text1", "query_used": "q1", "query_type": "skill",
-             "doc_title": "A", "doc_type": "t"},
+            {
+                "chunk_id": "c1",
+                "score": 0.5,
+                "text": "text1",
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "A",
+                "doc_type": "t",
+            },
+            {
+                "chunk_id": "c1",
+                "score": 0.3,
+                "text": "text1",
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "A",
+                "doc_type": "t",
+            },
         ]
         merged = merge_and_dedup_results(results)
 
@@ -257,12 +297,33 @@ class TestMergeAndDedup:
     def test_sort_by_score_ascending(self):
         """最终结果应按 score 升序排列。"""
         results = [
-            {"chunk_id": "c3", "score": 0.8, "text": "t3", "query_used": "q1", "query_type": "skill",
-             "doc_title": "A", "doc_type": "t"},
-            {"chunk_id": "c1", "score": 0.1, "text": "t1", "query_used": "q1", "query_type": "skill",
-             "doc_title": "B", "doc_type": "t"},
-            {"chunk_id": "c2", "score": 0.5, "text": "t2", "query_used": "q1", "query_type": "skill",
-             "doc_title": "C", "doc_type": "t"},
+            {
+                "chunk_id": "c3",
+                "score": 0.8,
+                "text": "t3",
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "A",
+                "doc_type": "t",
+            },
+            {
+                "chunk_id": "c1",
+                "score": 0.1,
+                "text": "t1",
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "B",
+                "doc_type": "t",
+            },
+            {
+                "chunk_id": "c2",
+                "score": 0.5,
+                "text": "t2",
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "C",
+                "doc_type": "t",
+            },
         ]
         merged = merge_and_dedup_results(results)
         scores = [m["score"] for m in merged]
@@ -274,10 +335,24 @@ class TestMergeAndDedup:
     def test_scores_with_equal_values(self):
         """score 相等时保留第一个。"""
         results = [
-            {"chunk_id": "c1", "score": 0.5, "text": "original", "query_used": "q1", "query_type": "skill",
-             "doc_title": "A", "doc_type": "t"},
-            {"chunk_id": "c1", "score": 0.5, "text": "later", "query_used": "q2", "query_type": "interview",
-             "doc_title": "A", "doc_type": "t"},
+            {
+                "chunk_id": "c1",
+                "score": 0.5,
+                "text": "original",
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "A",
+                "doc_type": "t",
+            },
+            {
+                "chunk_id": "c1",
+                "score": 0.5,
+                "text": "later",
+                "query_used": "q2",
+                "query_type": "interview",
+                "doc_title": "A",
+                "doc_type": "t",
+            },
         ]
         merged = merge_and_dedup_results(results)
         assert len(merged) == 1
@@ -364,10 +439,12 @@ class TestGetKnowledgeReferences:
         mock_chroma_collection.query.return_value = {
             "ids": [["c1", "c2"]],
             "documents": [["Python开发经验", "FastAPI项目"]],
-            "metadatas": [[
-                {"doc_title": "技能清单", "doc_type": "skill_model", "chunk_index": 0},
-                {"doc_title": "技能清单", "doc_type": "skill_model", "chunk_index": 1},
-            ]],
+            "metadatas": [
+                [
+                    {"doc_title": "技能清单", "doc_type": "skill_model", "chunk_index": 0},
+                    {"doc_title": "技能清单", "doc_type": "skill_model", "chunk_index": 1},
+                ]
+            ],
             "distances": [[0.15, 0.30]],
         }
 
@@ -487,10 +564,12 @@ class TestMultiRecall:
         mock_chroma_collection.query.return_value = {
             "ids": [["c1", "c2"]],
             "documents": [["Python开发", "FastAPI"]],
-            "metadatas": [[
-                {"doc_title": "技能清单", "doc_type": "skill_model", "chunk_index": 0, "doc_id": "1"},
-                {"doc_title": "技能清单", "doc_type": "skill_model", "chunk_index": 1, "doc_id": "1"},
-            ]],
+            "metadatas": [
+                [
+                    {"doc_title": "技能清单", "doc_type": "skill_model", "chunk_index": 0, "doc_id": "1"},
+                    {"doc_title": "技能清单", "doc_type": "skill_model", "chunk_index": 1, "doc_id": "1"},
+                ]
+            ],
             "distances": [[0.15, 0.30]],
         }
         mock_chroma_collection.get.return_value = {
@@ -568,9 +647,11 @@ class TestBuildRagContext:
         mock_chroma_collection.query.return_value = {
             "ids": [["c1"]],
             "documents": [["Python开发经验"]],
-            "metadatas": [[
-                {"doc_title": "技能清单", "doc_type": "skill_model", "chunk_index": 0},
-            ]],
+            "metadatas": [
+                [
+                    {"doc_title": "技能清单", "doc_type": "skill_model", "chunk_index": 0},
+                ]
+            ],
             "distances": [[0.15]],
         }
 
@@ -598,9 +679,11 @@ class TestGetKnowledgeReferencesWithRewrite:
         mock_chroma_collection.query.return_value = {
             "ids": [["c1"]],
             "documents": [["Python开发经验"]],
-            "metadatas": [[
-                {"doc_title": "技能清单", "doc_type": "skill_model", "chunk_index": 0},
-            ]],
+            "metadatas": [
+                [
+                    {"doc_title": "技能清单", "doc_type": "skill_model", "chunk_index": 0},
+                ]
+            ],
             "distances": [[0.15]],
         }
 

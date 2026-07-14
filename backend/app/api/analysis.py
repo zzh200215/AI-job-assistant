@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Analysis APIs for smart matching, optimization, and references."""
+
 import json
 import traceback
 
@@ -9,17 +9,17 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.agent import AgentStepLog, AgentTask
-from app.models.history import AnalysisRecord, JobDescription, Resume
+from app.models.history import AnalysisRecord, Resume
 from app.models.user import User
 from app.orchestration.protocol import normalize_step_name
 from app.schemas.analysis import ExplainMatchReq, FullAnalysisReq, MatchReq
-from app.services.match_explainer_service import MatchExplainer
 from app.services import interview_service, match_service, optimize_service
 from app.services.analysis_service import run_smart_analysis
+from app.services.match_explainer_service import MatchExplainer
 from app.services.rag_service import get_knowledge_references
 from app.utils.http_errors import api_error
 from app.utils.job_access import get_accessible_job
-from app.utils.response import ERR_AI, ERR_COMMON, ERR_DB, ERR_PARAM, ERR_QUOTA, fail, ok
+from app.utils.response import ERR_AI, ERR_COMMON, ERR_DB, ERR_PARAM, fail, ok
 
 
 def _deep_parse_json(obj):
@@ -123,10 +123,7 @@ def _load_task_outputs(db: Session, user_id: int, record_id: int):
     career_planning = {}
     rag_confidence = {}
     steps = (
-        db.query(AgentStepLog)
-        .filter(AgentStepLog.task_id == task.id)
-        .order_by(AgentStepLog.step_index.desc())
-        .all()
+        db.query(AgentStepLog).filter(AgentStepLog.task_id == task.id).order_by(AgentStepLog.step_index.desc()).all()
     )
     for step in steps:
         step_norm = normalize_step_name(step.step_name)
@@ -148,11 +145,7 @@ def _load_task_outputs(db: Session, user_id: int, record_id: int):
 def _get_owned_resume(db: Session, user: User, resume_id: int | None) -> Resume | None:
     if not resume_id:
         return None
-    return (
-        db.query(Resume)
-        .filter(Resume.id == resume_id, Resume.user_id == user.id)
-        .first()
-    )
+    return db.query(Resume).filter(Resume.id == resume_id, Resume.user_id == user.id).first()
 
 
 router = APIRouter()
@@ -186,7 +179,7 @@ async def full_smart_analysis(
         return ok(data={"task_id": task_id}, message="智能分析已启动")
     except Exception as exc:
         traceback.print_exc()
-        raise api_error(500, f"启动分析失败: {exc}", ERR_COMMON)
+        raise api_error(500, f"启动分析失败: {exc}", ERR_COMMON) from exc
 
 
 @router.post("/match", summary="一键分析：匹配度 + 优化 + 面试题")
@@ -195,11 +188,7 @@ async def full_match(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    resume = (
-        db.query(Resume)
-        .filter(Resume.id == payload.resume_id, Resume.user_id == current_user.id)
-        .first()
-    )
+    resume = db.query(Resume).filter(Resume.id == payload.resume_id, Resume.user_id == current_user.id).first()
     jd = get_accessible_job(db, payload.jd_id, current_user)
     if not resume or not jd:
         raise api_error(404, "简历或 JD 不存在，或无权限访问", ERR_PARAM)
@@ -213,12 +202,12 @@ async def full_match(
             user_id=current_user.id,
         )
     except ValueError as exc:
-        raise api_error(400, str(exc), ERR_PARAM)
+        raise api_error(400, str(exc), ERR_PARAM) from exc
     except RuntimeError as exc:
-        raise api_error(502, f"AI 服务出错: {exc}", ERR_AI)
+        raise api_error(502, f"AI 服务出错: {exc}", ERR_AI) from exc
     except Exception as exc:
         traceback.print_exc()
-        raise api_error(500, f"分析失败: {exc}", ERR_COMMON)
+        raise api_error(500, f"分析失败: {exc}", ERR_COMMON) from exc
 
     references = getattr(record, "_references", [])
     return ok(
@@ -251,10 +240,10 @@ async def regen_optimize(
     try:
         record = optimize_service.regenerate_optimize(db, record_id, user_id=current_user.id)
     except ValueError as exc:
-        raise api_error(400, str(exc), ERR_PARAM)
+        raise api_error(400, str(exc), ERR_PARAM) from exc
     except Exception as exc:
         traceback.print_exc()
-        raise api_error(502, f"重新生成失败: {exc}", ERR_AI)
+        raise api_error(502, f"重新生成失败: {exc}", ERR_AI) from exc
 
     return ok(
         {
@@ -282,10 +271,10 @@ async def regen_interview(
     try:
         record = interview_service.regenerate_interview(db, record_id, user_id=current_user.id)
     except ValueError as exc:
-        raise api_error(400, str(exc), ERR_PARAM)
+        raise api_error(400, str(exc), ERR_PARAM) from exc
     except Exception as exc:
         traceback.print_exc()
-        raise api_error(502, f"重新生成失败: {exc}", ERR_AI)
+        raise api_error(502, f"重新生成失败: {exc}", ERR_AI) from exc
 
     return ok(
         {
@@ -309,7 +298,7 @@ async def get_record(
             .first()
         )
     except Exception as exc:
-        raise api_error(500, f"查询失败: {exc}", ERR_DB)
+        raise api_error(500, f"查询失败: {exc}", ERR_DB) from exc
 
     if not rec:
         raise api_error(404, "记录不存在，或无权限访问", ERR_PARAM)
@@ -416,11 +405,15 @@ async def explain_match(
       3. LLM 生成自然语言解释
       4. 返回完整解释结果
     """
-    resume = db.query(Resume).filter(
-        Resume.id == payload.resume_id,
-        Resume.user_id == current_user.id,
-        Resume.is_deleted == 0,
-    ).first()
+    resume = (
+        db.query(Resume)
+        .filter(
+            Resume.id == payload.resume_id,
+            Resume.user_id == current_user.id,
+            Resume.is_deleted == 0,
+        )
+        .first()
+    )
     jd = get_accessible_job(db, payload.jd_id, current_user)
     if not resume:
         return fail(message="简历不存在或无权限", code=ERR_PARAM)

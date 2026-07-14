@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Resume APIs."""
+
 from __future__ import annotations
 
 import os
@@ -11,19 +11,18 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
-from app.models.history import JobDescription, Resume, ResumeVersion
+from app.models.history import Resume, ResumeVersion
 from app.models.user import User
 from app.schemas.resume import ResumeParseResp, ResumeUploadResp
 from app.services import resume_export_service, resume_service
-from app.services.resume_tailor_service import tailor_resume_for_jd
 from app.services.resume_analysis_service import analyze_resume, quick_score_resume
+from app.services.resume_tailor_service import tailor_resume_for_jd
+from app.services.resume_workspace_service import build_ats_snapshot, build_markdown_diff
+from app.services.subscription_service import check_quota
 from app.utils.file_access import resolve_upload_path
 from app.utils.job_access import get_accessible_job
-from app.utils.response import ERR_AI, ERR_COMMON, ERR_FILE, ERR_PARAM, fail, ok
+from app.utils.response import ERR_AI, ERR_COMMON, ERR_FILE, ERR_PARAM, ERR_QUOTA, fail, ok
 from app.utils.time_helper import utc_now
-from app.services.subscription_service import check_quota
-from app.utils.response import ERR_QUOTA
-
 
 router = APIRouter()
 
@@ -63,13 +62,25 @@ def _get_owned_resume(db: Session, resume_id: int, user_id: int) -> Resume | Non
 def _validate_export_request(resume: Resume | None, fmt: str, version: str):
     if fmt not in ("pdf", "docx"):
         return fail(message="不支持的导出格式，仅支持 pdf / docx", code=ERR_PARAM)
-    if version not in ("original", "optimized"):
-        return fail(message="不支持的版本类型，仅支持 original / optimized", code=ERR_PARAM)
+    if version not in ("original", "optimized", "tailored", "manual"):
+        return fail(message="不支持的版本类型", code=ERR_PARAM)
     if not resume:
         return fail(message="简历不存在或无权限", code=ERR_PARAM)
     if version == "optimized" and not resume.optimized_content:
         return fail(message="暂无优化版简历，请先生成", code=ERR_PARAM)
     return None
+
+
+def _get_resume_version(db: Session, resume_id: int, version_id: int) -> ResumeVersion | None:
+    return (
+        db.query(ResumeVersion)
+        .filter(
+            ResumeVersion.id == version_id,
+            ResumeVersion.resume_id == resume_id,
+            ResumeVersion.format == "md",
+        )
+        .first()
+    )
 
 
 @router.post("/upload", summary="Upload resume")
@@ -105,7 +116,7 @@ async def upload_resume(
         )
 
     # 权益校验：简历数量上限
-    allowed, msg, _ = check_quota(db, current_user.id, 'resume_count', consume=False)
+    allowed, msg, _ = check_quota(db, current_user.id, "resume_count", consume=False)
     if not allowed:
         return fail(message=msg, code=ERR_QUOTA)
 
@@ -212,6 +223,7 @@ async def list_resume(
 # ---------- 企业筛选用：获取所有可见简历 ----------
 # 注：此路由必须在 /{resume_id} 之前注册，否则 "accessible-list" 会被动态路由捕获
 
+
 @router.get("/accessible-list", summary="获取所有可筛选的简历（企业端使用）")
 async def accessible_resume_list(
     page: int = Query(1, ge=1),
@@ -272,13 +284,25 @@ SEED_CANDIDATES = [
             "current_title": "Java后端开发工程师",
             "skills": ["Java", "Spring Boot", "MySQL", "Redis", "RabbitMQ", "MyBatis", "Docker"],
             "work_experience": [
-                {"company": "某互联网公司", "title": "Java后端开发", "desc": "负责订单系统的设计与开发，使用Spring Cloud微服务架构处理日均百万级请求。"},
-                {"company": "某科技公司", "title": "Java开发实习生", "desc": "参与内部管理系统的后端开发，独立完成权限管理模块。"}
+                {
+                    "company": "某互联网公司",
+                    "title": "Java后端开发",
+                    "desc": "负责订单系统的设计与开发，使用Spring Cloud微服务架构处理日均百万级请求。",
+                },
+                {
+                    "company": "某科技公司",
+                    "title": "Java开发实习生",
+                    "desc": "参与内部管理系统的后端开发，独立完成权限管理模块。",
+                },
             ],
             "project_experience": [
-                {"name": "电商订单系统", "desc": "基于Spring Cloud实现订单创建、支付回调、库存扣减等核心流程。", "tech": ["Spring Cloud", "MySQL", "Redis"]}
-            ]
-        }
+                {
+                    "name": "电商订单系统",
+                    "desc": "基于Spring Cloud实现订单创建、支付回调、库存扣减等核心流程。",
+                    "tech": ["Spring Cloud", "MySQL", "Redis"],
+                }
+            ],
+        },
     },
     {
         "name": "李婷",
@@ -296,12 +320,20 @@ SEED_CANDIDATES = [
             "current_title": "前端开发工程师",
             "skills": ["Vue.js", "React", "TypeScript", "JavaScript", "CSS", "Element Plus", "Webpack", "Node.js"],
             "work_experience": [
-                {"company": "某科技公司", "title": "前端开发", "desc": "负责管理后台前端架构设计与开发，基于Vue3 + Element Plus实现20+业务页面。"}
+                {
+                    "company": "某科技公司",
+                    "title": "前端开发",
+                    "desc": "负责管理后台前端架构设计与开发，基于Vue3 + Element Plus实现20+业务页面。",
+                }
             ],
             "project_experience": [
-                {"name": "智能数据分析平台", "desc": "基于React + TypeScript开发数据可视化看板，集成ECharts实现多维度图表展示。", "tech": ["React", "TypeScript", "ECharts"]}
-            ]
-        }
+                {
+                    "name": "智能数据分析平台",
+                    "desc": "基于React + TypeScript开发数据可视化看板，集成ECharts实现多维度图表展示。",
+                    "tech": ["React", "TypeScript", "ECharts"],
+                }
+            ],
+        },
     },
     {
         "name": "王强",
@@ -319,13 +351,25 @@ SEED_CANDIDATES = [
             "current_title": "全栈开发工程师",
             "skills": ["Python", "FastAPI", "Django", "Vue.js", "PostgreSQL", "Redis", "Docker", "Linux", "Nginx"],
             "work_experience": [
-                {"company": "某大数据公司", "title": "全栈开发", "desc": "负责数据采集平台的架构设计与开发，使用FastAPI + Vue3实现完整前后端分离。"},
-                {"company": "某软件公司", "title": "后端开发", "desc": "使用Django开发SaaS平台API，负责用户认证、权限管理模块。"}
+                {
+                    "company": "某大数据公司",
+                    "title": "全栈开发",
+                    "desc": "负责数据采集平台的架构设计与开发，使用FastAPI + Vue3实现完整前后端分离。",
+                },
+                {
+                    "company": "某软件公司",
+                    "title": "后端开发",
+                    "desc": "使用Django开发SaaS平台API，负责用户认证、权限管理模块。",
+                },
             ],
             "project_experience": [
-                {"name": "实时数据采集平台", "desc": "基于FastAPI + WebSocket实现数据实时采集与推送，日处理百万级数据点。", "tech": ["FastAPI", "WebSocket", "PostgreSQL"]}
-            ]
-        }
+                {
+                    "name": "实时数据采集平台",
+                    "desc": "基于FastAPI + WebSocket实现数据实时采集与推送，日处理百万级数据点。",
+                    "tech": ["FastAPI", "WebSocket", "PostgreSQL"],
+                }
+            ],
+        },
     },
     {
         "name": "陈雪",
@@ -343,12 +387,20 @@ SEED_CANDIDATES = [
             "current_title": "数据分析师",
             "skills": ["Python", "SQL", "Excel", "Tableau", "Pandas", "NumPy", "统计学"],
             "work_experience": [
-                {"company": "某咨询公司", "title": "数据分析助理", "desc": "负责客户业务数据的清洗、分析和可视化，使用Python完成自动化报表。"}
+                {
+                    "company": "某咨询公司",
+                    "title": "数据分析助理",
+                    "desc": "负责客户业务数据的清洗、分析和可视化，使用Python完成自动化报表。",
+                }
             ],
             "project_experience": [
-                {"name": "用户增长分析项目", "desc": "基于Pandas和Tableau分析用户留存与转化数据，输出增长策略建议。", "tech": ["Pandas", "Tableau"]}
-            ]
-        }
+                {
+                    "name": "用户增长分析项目",
+                    "desc": "基于Pandas和Tableau分析用户留存与转化数据，输出增长策略建议。",
+                    "tech": ["Pandas", "Tableau"],
+                }
+            ],
+        },
     },
     {
         "name": "赵磊",
@@ -366,13 +418,21 @@ SEED_CANDIDATES = [
             "current_title": "算法工程师",
             "skills": ["Python", "PyTorch", "TensorFlow", "NLP", "LLM", "C++", "Linux", "分布式训练"],
             "work_experience": [
-                {"company": "某AI公司", "title": "算法工程师", "desc": "负责NLP模型训练与部署，参与基于LLM的智能客服系统开发。"},
-                {"company": "某科技公司", "title": "算法实习生", "desc": "参与文本分类和实体识别模型的研发与优化。"}
+                {
+                    "company": "某AI公司",
+                    "title": "算法工程师",
+                    "desc": "负责NLP模型训练与部署，参与基于LLM的智能客服系统开发。",
+                },
+                {"company": "某科技公司", "title": "算法实习生", "desc": "参与文本分类和实体识别模型的研发与优化。"},
             ],
             "project_experience": [
-                {"name": "智能客服意图识别系统", "desc": "基于BERT微调实现多分类意图识别，准确率达96%，上线QPS 200+。", "tech": ["PyTorch", "BERT", "FastAPI"]}
-            ]
-        }
+                {
+                    "name": "智能客服意图识别系统",
+                    "desc": "基于BERT微调实现多分类意图识别，准确率达96%，上线QPS 200+。",
+                    "tech": ["PyTorch", "BERT", "FastAPI"],
+                }
+            ],
+        },
     },
     {
         "name": "刘洋",
@@ -390,13 +450,25 @@ SEED_CANDIDATES = [
             "current_title": "DevOps工程师",
             "skills": ["Docker", "Kubernetes", "Jenkins", "GitLab CI", "Ansible", "Terraform", "Linux", "Shell"],
             "work_experience": [
-                {"company": "某云计算公司", "title": "DevOps工程师", "desc": "负责K8s集群管理与CI/CD流水线建设，管理200+微服务的自动化部署。"},
-                {"company": "某互联网公司", "title": "运维开发", "desc": "基于Ansible和Shell实现服务器自动化配置与监控。"}
+                {
+                    "company": "某云计算公司",
+                    "title": "DevOps工程师",
+                    "desc": "负责K8s集群管理与CI/CD流水线建设，管理200+微服务的自动化部署。",
+                },
+                {
+                    "company": "某互联网公司",
+                    "title": "运维开发",
+                    "desc": "基于Ansible和Shell实现服务器自动化配置与监控。",
+                },
             ],
             "project_experience": [
-                {"name": "微服务CI/CD平台", "desc": "基于GitLab CI + ArgoCD构建自动化部署流水线，支撑每日50+次发布。", "tech": ["Kubernetes", "GitLab CI", "ArgoCD"]}
-            ]
-        }
+                {
+                    "name": "微服务CI/CD平台",
+                    "desc": "基于GitLab CI + ArgoCD构建自动化部署流水线，支撑每日50+次发布。",
+                    "tech": ["Kubernetes", "GitLab CI", "ArgoCD"],
+                }
+            ],
+        },
     },
 ]
 
@@ -424,6 +496,7 @@ async def seed_demo_resumes(
             continue
 
         import json
+
         obj = Resume(
             user_id=current_user.id,
             file_name=f"{cand['name']}_简历.pdf",
@@ -448,6 +521,7 @@ async def seed_demo_resumes(
 
 
 # ========== 以下为动态路由 /{resume_id} 及其子路由 ==========
+
 
 @router.get("/{resume_id}", summary="Get resume detail")
 async def get_resume(
@@ -538,9 +612,7 @@ async def get_resume_versions(
         .all()
     )
     original_md = (
-        resume_export_service._build_original_md(resume)
-        if hasattr(resume_export_service, "_build_original_md")
-        else ""
+        resume_export_service._build_original_md(resume) if hasattr(resume_export_service, "_build_original_md") else ""
     )
 
     return ok(
@@ -552,6 +624,179 @@ async def get_resume_versions(
             "versions": [version.to_dict() for version in versions],
         }
     )
+
+
+@router.post("/{resume_id}/versions", summary="Create editable resume version")
+async def create_resume_version(
+    resume_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    resume = _get_owned_resume(db, resume_id, current_user.id)
+    if not resume:
+        return fail(message="简历不存在或无权限", code=ERR_PARAM)
+
+    content = str((payload or {}).get("content") or "").strip()
+    if not content:
+        return fail(message="版本内容不能为空", code=ERR_PARAM)
+    version_type = str((payload or {}).get("version_type") or "manual")
+    if version_type not in {"manual", "optimized", "tailored"}:
+        return fail(message="不支持的版本类型", code=ERR_PARAM)
+
+    target_jd_id = (payload or {}).get("target_jd_id")
+    if target_jd_id:
+        jd = get_accessible_job(db, int(target_jd_id), current_user)
+        if not jd:
+            return fail(message="目标岗位不存在或无权限", code=ERR_PARAM)
+    parent_version_id = (payload or {}).get("parent_version_id")
+    if parent_version_id and not _get_resume_version(db, resume_id, int(parent_version_id)):
+        return fail(message="来源版本不存在或无权限", code=ERR_PARAM)
+
+    version = ResumeVersion(
+        resume_id=resume_id,
+        version_type=version_type,
+        content=content,
+        format="md",
+        label=str((payload or {}).get("label") or "").strip()[:120] or "手动编辑版",
+        target_jd_id=int(target_jd_id) if target_jd_id else None,
+        parent_version_id=int(parent_version_id) if parent_version_id else None,
+    )
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    return ok(data=version.to_dict(), message="版本已保存")
+
+
+@router.get("/{resume_id}/versions/diff", summary="Compare editable resume versions")
+async def compare_resume_versions(
+    resume_id: int,
+    compare_version_id: int = Query(...),
+    base_version_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    resume = _get_owned_resume(db, resume_id, current_user.id)
+    if not resume:
+        return fail(message="简历不存在或无权限", code=ERR_PARAM)
+    compare_version = _get_resume_version(db, resume_id, compare_version_id)
+    if not compare_version:
+        return fail(message="对比版本不存在或无权限", code=ERR_PARAM)
+
+    if base_version_id:
+        base_version = _get_resume_version(db, resume_id, base_version_id)
+        if not base_version:
+            return fail(message="基准版本不存在或无权限", code=ERR_PARAM)
+        base_content = base_version.content
+        base = base_version.to_dict()
+    else:
+        base_content = resume_export_service._build_original_md(resume)
+        base = {"id": None, "label": "原始简历", "version_type": "original"}
+
+    return ok(
+        data={
+            "base": base,
+            "compare": compare_version.to_dict(),
+            **build_markdown_diff(base_content, compare_version.content),
+        }
+    )
+
+
+@router.patch("/{resume_id}/versions/{version_id}", summary="Update editable resume version")
+async def update_resume_version(
+    resume_id: int,
+    version_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not _get_owned_resume(db, resume_id, current_user.id):
+        return fail(message="简历不存在或无权限", code=ERR_PARAM)
+    version = _get_resume_version(db, resume_id, version_id)
+    if not version:
+        return fail(message="版本不存在或无权限", code=ERR_PARAM)
+
+    if "content" in (payload or {}):
+        content = str(payload.get("content") or "").strip()
+        if not content:
+            return fail(message="版本内容不能为空", code=ERR_PARAM)
+        version.content = content
+        version.ats_snapshot = None
+    if "label" in (payload or {}):
+        version.label = str(payload.get("label") or "").strip()[:120] or version.label
+    if "target_jd_id" in (payload or {}):
+        target_jd_id = payload.get("target_jd_id")
+        if target_jd_id:
+            jd = get_accessible_job(db, int(target_jd_id), current_user)
+            if not jd:
+                return fail(message="目标岗位不存在或无权限", code=ERR_PARAM)
+            version.target_jd_id = int(target_jd_id)
+        else:
+            version.target_jd_id = None
+        version.ats_snapshot = None
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    return ok(data=version.to_dict(), message="版本已更新")
+
+
+@router.post("/{resume_id}/versions/{version_id}/suggestions", summary="Persist resume suggestion decision")
+async def save_suggestion_decision(
+    resume_id: int,
+    version_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not _get_owned_resume(db, resume_id, current_user.id):
+        return fail(message="简历不存在或无权限", code=ERR_PARAM)
+    version = _get_resume_version(db, resume_id, version_id)
+    if not version:
+        return fail(message="版本不存在或无权限", code=ERR_PARAM)
+
+    suggestion_id = str((payload or {}).get("suggestion_id") or "").strip()
+    decision = str((payload or {}).get("decision") or "").strip()
+    if not suggestion_id or decision not in {"accepted", "ignored", "pending"}:
+        return fail(message="建议状态参数无效", code=ERR_PARAM)
+    decisions = dict(version.suggestion_decisions or {})
+    decisions[suggestion_id] = decision
+    version.suggestion_decisions = decisions
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    return ok(data=version.to_dict(), message="建议状态已保存")
+
+
+@router.post("/{resume_id}/ats-preview", summary="Preview ATS quality for current resume content")
+async def preview_resume_ats(
+    resume_id: int,
+    payload: dict | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    resume = _get_owned_resume(db, resume_id, current_user.id)
+    if not resume:
+        return fail(message="简历不存在或无权限", code=ERR_PARAM)
+    version_id = (payload or {}).get("version_id")
+    version = _get_resume_version(db, resume_id, int(version_id)) if version_id else None
+    if version_id and not version:
+        return fail(message="版本不存在或无权限", code=ERR_PARAM)
+    jd_id = (payload or {}).get("jd_id") or (version.target_jd_id if version else None)
+    jd = None
+    if jd_id:
+        jd = get_accessible_job(db, int(jd_id), current_user)
+        if not jd:
+            return fail(message="目标岗位不存在或无权限", code=ERR_PARAM)
+
+    content = version.content if version else resume_export_service._build_original_md(resume)
+    snapshot = build_ats_snapshot(content, jd)
+    snapshot["version_id"] = version.id if version else None
+    snapshot["jd_id"] = jd.id if jd else None
+    if version:
+        version.ats_snapshot = snapshot
+        db.add(version)
+        db.commit()
+    return ok(data=snapshot)
 
 
 @router.post("/{resume_id}/export", summary="Prepare resume export")
@@ -570,6 +815,8 @@ async def export_resume(
     error = _validate_export_request(resume, fmt, version)
     if error:
         return error
+    if version_id and not _get_resume_version(db, resume_id, int(version_id)):
+        return fail(message="导出版本不存在或无权限", code=ERR_PARAM)
 
     # 构建下载URL参数
     params = f"format={fmt}&version={version}&template={template}"
@@ -602,18 +849,28 @@ async def download_resume_export(
     error = _validate_export_request(resume, format, version)
     if error:
         return error
+    if version_id and not _get_resume_version(db, resume_id, int(version_id)):
+        return fail(message="导出版本不存在或无权限", code=ERR_PARAM)
 
     try:
         if format == "docx":
             rel_path = resume_export_service.export_docx(
-                resume_id, version, db, user_id=current_user.id,
-                template=template, version_id=version_id,
+                resume_id,
+                version,
+                db,
+                user_id=current_user.id,
+                template=template,
+                version_id=version_id,
             )
             media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         else:
             rel_path = resume_export_service.export_pdf(
-                resume_id, version, db, user_id=current_user.id,
-                template=template, version_id=version_id,
+                resume_id,
+                version,
+                db,
+                user_id=current_user.id,
+                template=template,
+                version_id=version_id,
             )
             media_type = "application/pdf"
 
@@ -673,6 +930,7 @@ async def tailor_resume(
 # ============================================================
 # 简历深度分析
 # ============================================================
+
 
 @router.get("/{resume_id}/quick-score", summary="简历快速评分（基于规则）")
 async def get_resume_quick_score(
@@ -762,7 +1020,8 @@ async def diagnose_resume(
 
         # 2. AI 深度分析
         analysis_result = analyze_resume(
-            db, resume_id,
+            db,
+            resume_id,
             target_position=target_position,
             user_id=current_user.id,
         )
@@ -778,13 +1037,15 @@ async def diagnose_resume(
 
         # 提取结构问题
         structure_issues = [
-            issue for issue in issues
+            issue
+            for issue in issues
             if any(kw in issue.lower() for kw in ["结构", "格式", "布局", "顺序", "section", "缺少", "缺失"])
         ] or ["简历结构基本完整，建议进一步优化模块顺序"]
 
         # 提取表达问题
         expression_issues = [
-            issue for issue in issues
+            issue
+            for issue in issues
             if any(kw in issue.lower() for kw in ["表达", "描述", "语言", "措辞", "啰嗦", "模糊", "简略"])
         ] or ["建议使用 STAR 法则量化工作成果", "建议增加具体数据指标"]
 

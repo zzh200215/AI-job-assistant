@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Shared job visibility helpers."""
 
 from __future__ import annotations

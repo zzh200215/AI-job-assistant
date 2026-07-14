@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
 """站内消息 API"""
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
@@ -10,20 +8,23 @@ from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.notification import Notification
 from app.models.user import User
-from app.utils.response import ERR_PARAM, ok, fail
+from app.utils.response import ERR_PARAM, fail, ok
 
 router = APIRouter()
 
 VALID_TYPES = {
-    "interview_reminder", "offer_reminder", "system",
-    "recommendation", "application_update",
+    "interview_reminder",
+    "offer_reminder",
+    "system",
+    "recommendation",
+    "application_update",
 }
 
 
 @router.get("/list", summary="获取消息列表")
 async def list_notifications(
     type: str = Query("", description="消息类型过滤"),
-    is_read: Optional[int] = Query(None, description="已读状态: 0-未读 1-已读"),
+    is_read: int | None = Query(None, description="已读状态: 0-未读 1-已读"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -36,16 +37,13 @@ async def list_notifications(
         q = q.filter(Notification.is_read == is_read)
 
     total = q.count()
-    items = (
-        q.order_by(Notification.created_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
+    items = q.order_by(Notification.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return ok(
+        {
+            "total": total,
+            "items": [item.to_dict() for item in items],
+        }
     )
-    return ok({
-        "total": total,
-        "items": [item.to_dict() for item in items],
-    })
 
 
 @router.get("/unread-count", summary="获取未读消息数")
@@ -94,6 +92,7 @@ async def mark_read(
     if notification.is_read == 0:
         notification.is_read = 1
         from app.utils.time_helper import utc_now
+
         notification.read_at = utc_now()
         db.add(notification)
         db.commit()

@@ -1,7 +1,8 @@
-# -*- coding: utf-8 -*-
 """Tests for Prometheus metrics recording."""
 
 from __future__ import annotations
+
+import contextlib
 
 import pytest
 
@@ -26,14 +27,14 @@ def reset_metrics():
     # Clear all metrics by recreating the registry
     collectors = list(REGISTRY._collector_to_names.keys())
     for collector in collectors:
-        try:
+        with contextlib.suppress(Exception):
             REGISTRY.unregister(collector)
-        except Exception:
-            pass
 
     # Re-import to re-register
     import importlib
+
     import app.core.prometheus_metrics as metrics_module
+
     importlib.reload(metrics_module)
 
     yield
@@ -41,7 +42,7 @@ def reset_metrics():
 
 def test_record_http_request():
     """Verify HTTP request metrics are recorded."""
-    from app.core.prometheus_metrics import http_requests_total, http_request_duration_seconds
+    from app.core.prometheus_metrics import http_request_duration_seconds, http_requests_total
 
     record_http_request(method="GET", status_code=200, path="/api/test", duration_seconds=0.123)
 
@@ -56,7 +57,7 @@ def test_record_http_request():
 
 def test_record_llm_request_and_error():
     """Verify LLM request and error metrics are recorded."""
-    from app.core.prometheus_metrics import llm_requests_total, llm_errors_total
+    from app.core.prometheus_metrics import llm_errors_total, llm_requests_total
 
     record_llm_request(provider="openai", model="gpt-4", duration_seconds=1.5)
     record_llm_error(provider="openai", model="gpt-4", error_type="TimeoutError")
@@ -70,7 +71,7 @@ def test_record_llm_request_and_error():
 
 def test_record_embedding_request_and_error():
     """Verify embedding request and error metrics are recorded."""
-    from app.core.prometheus_metrics import embedding_requests_total, embedding_texts_total, embedding_errors_total
+    from app.core.prometheus_metrics import embedding_errors_total, embedding_requests_total, embedding_texts_total
 
     record_embedding_request(provider="openai", model="text-embedding-3-small", text_count=10)
     record_embedding_error(provider="openai", model="text-embedding-3-small", error_type="AuthError")
@@ -89,7 +90,7 @@ def test_record_embedding_request_and_error():
 
 def test_record_sync_job_and_error():
     """Verify sync job and error metrics are recorded."""
-    from app.core.prometheus_metrics import sync_jobs_total, sync_job_duration_seconds, sync_errors_total
+    from app.core.prometheus_metrics import sync_errors_total, sync_job_duration_seconds, sync_jobs_total
 
     record_sync_job(source_type="api", status="success", duration_seconds=5.0)
     record_sync_error(source_type="api", error_type="timeout")

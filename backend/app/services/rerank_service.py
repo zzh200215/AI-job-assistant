@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 """Document-level rerank service with graceful fallback."""
+
 import logging
 import math
 import os
 import threading
-from typing import Dict, List, Optional
 
 from app.core.config import settings
 
@@ -12,20 +11,21 @@ logger = logging.getLogger(__name__)
 
 _RERANK_MODEL = None
 _RERANK_TOKENIZER = None
-_RERANK_LOAD_ERROR: Optional[str] = None
+_RERANK_LOAD_ERROR: str | None = None
 _RERANK_LOCK = threading.Lock()
 
 
-def _tokenize(text: str) -> List[str]:
+def _tokenize(text: str) -> list[str]:
     try:
         import jieba
+
         return [item.strip().lower() for item in jieba.cut(text or "") if item.strip()]
     except ImportError:
         text = (text or "").strip().lower()
-        return [text[i:i + 2] for i in range(max(0, len(text) - 1))] if text else []
+        return [text[i : i + 2] for i in range(max(0, len(text) - 1))] if text else []
 
 
-def _vector_distance_to_similarity(value: Optional[float]) -> float:
+def _vector_distance_to_similarity(value: float | None) -> float:
     if value is None:
         return 0.0
     try:
@@ -35,7 +35,7 @@ def _vector_distance_to_similarity(value: Optional[float]) -> float:
     return 1.0 / (1.0 + max(value, 0.0))
 
 
-def _normalize(values: List[float]) -> List[float]:
+def _normalize(values: list[float]) -> list[float]:
     if not values:
         return []
     low = min(values)
@@ -45,7 +45,7 @@ def _normalize(values: List[float]) -> List[float]:
     return [(value - low) / (high - low) for value in values]
 
 
-def _heuristic_relevance(query: str, item: Dict) -> float:
+def _heuristic_relevance(query: str, item: dict) -> float:
     query_tokens = set(_tokenize(query))
     if not query_tokens:
         return 0.0
@@ -88,7 +88,7 @@ def _get_local_reranker():
     return _RERANK_TOKENIZER, _RERANK_MODEL
 
 
-def _local_rerank_scores(query: str, items: List[Dict]) -> Optional[List[float]]:
+def _local_rerank_scores(query: str, items: list[dict]) -> list[float] | None:
     if not items:
         return []
 
@@ -102,12 +102,12 @@ def _local_rerank_scores(query: str, items: List[Dict]) -> Optional[List[float]]
         logger.warning("Torch unavailable for local reranker: %s", exc)
         return None
 
-    scores: List[float] = []
+    scores: list[float] = []
     batch_size = max(1, settings.RERANKER_BATCH_SIZE)
     pairs = [[query, item.get("text", "")] for item in items]
 
     for i in range(0, len(pairs), batch_size):
-        batch_pairs = pairs[i:i + batch_size]
+        batch_pairs = pairs[i : i + batch_size]
         inputs = tokenizer(
             batch_pairs,
             padding=True,
@@ -122,7 +122,7 @@ def _local_rerank_scores(query: str, items: List[Dict]) -> Optional[List[float]]
     return scores
 
 
-def rerank_results(query: str, results: List[Dict], top_k: Optional[int] = None) -> List[Dict]:
+def rerank_results(query: str, results: list[dict], top_k: int | None = None) -> list[dict]:
     """Rerank fused candidates. Uses local cross-encoder if available, else heuristic fallback."""
     if not results:
         return []
@@ -142,7 +142,7 @@ def rerank_results(query: str, results: List[Dict], top_k: Optional[int] = None)
     rerank_scores = local_scores if local_scores is not None else lexical_scores
     rerank_source = "local_cross_encoder" if local_scores is not None else "heuristic"
 
-    ranked: List[Dict] = []
+    ranked: list[dict] = []
     for idx, item in enumerate(results):
         final_score = vector_norm[idx] * 0.5 + bm25_norm[idx] * 0.3 + rerank_scores[idx] * 0.2
         enriched = dict(item)

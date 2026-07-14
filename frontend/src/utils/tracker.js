@@ -1,10 +1,10 @@
 /**
  * 前端埋点 SDK
- * 
+ *
  * 用法：
  *   import { track } from '@/utils/tracker'
  *   track('upload_resume', { file_type: 'pdf', file_size: 1234 })
- * 
+ *
  * 特性：
  * - localStorage 离线队列，断网不丢事件
  * - 定时上报（每 30s 或队列满 20 条）
@@ -12,8 +12,8 @@
  */
 
 const STORAGE_KEY = 'recruit.track_events'
-const FLUSH_INTERVAL = 30000       // 30s 上报一次
-const MAX_BATCH_SIZE = 20          // 队列满 20 条立即上报
+const FLUSH_INTERVAL = 30000 // 30s 上报一次
+const MAX_BATCH_SIZE = 20 // 队列满 20 条立即上报
 let flushTimer = null
 let isFlushing = false
 

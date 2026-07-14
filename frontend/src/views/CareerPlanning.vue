@@ -57,7 +57,9 @@
         description="职业规划需要一份已解析简历。请检查网络后重新加载。"
       >
         <template #default>
-          <el-button size="small" type="primary" plain @click="refreshBaseOptions">重新加载</el-button>
+          <el-button size="small" type="primary" plain @click="refreshBaseOptions"
+            >重新加载</el-button
+          >
         </template>
       </el-alert>
 

@@ -4,10 +4,29 @@
     <el-aside width="220px" class="aside-shell">
       <div class="brand" @click="router.push(authStore.homeRoute)">
         <div class="brand-mark">
-          <svg width="22" height="22" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="1" y="1" width="30" height="30" rx="8" stroke="currentColor" stroke-width="1.8" />
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 32 32"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect
+              x="1"
+              y="1"
+              width="30"
+              height="30"
+              rx="8"
+              stroke="currentColor"
+              stroke-width="1.8"
+            />
             <path d="M9 22V12l7-5 7 5v10H9z" fill="currentColor" opacity="0.88" />
-            <path d="M13 22v-4a3 3 0 0 1 6 0v4" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />
+            <path
+              d="M13 22v-4a3 3 0 0 1 6 0v4"
+              stroke="#fff"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
           </svg>
         </div>
         <div class="brand-copy">
@@ -84,7 +103,9 @@
             </div>
             <el-dropdown v-if="authStore.isLoggedIn" @command="handleCommand">
               <span class="user-chip">
-                <span class="user-avatar">{{ (authStore.user?.username || 'U')[0].toUpperCase() }}</span>
+                <span class="user-avatar">{{
+                  (authStore.user?.username || 'U')[0].toUpperCase()
+                }}</span>
                 <span class="user-name">{{ authStore.user?.username || '用户' }}</span>
                 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
               </span>
@@ -142,55 +163,211 @@ const runtime = reactive({ demoMode: false })
 
 // C 端核心导航 — 8 个一级入口
 const candidateNavItems = [
-  { path: '/home', icon: HomeFilled, label: '首页', tag: 'Home', desc: '求职助手首页。', matches: ['/home'] },
-  { path: '/resume-center', icon: Document, label: '简历中心', tag: 'Resume', desc: '多简历管理、AI优化与诊断。', matches: ['/resume-center', '/resume/compare'] },
-  { path: '/smart-analysis', icon: MagicStick, label: '智能分析', tag: 'Analysis', desc: '简历与岗位匹配分析。', matches: ['/smart-analysis', '/analysis'] },
-  { path: '/jobs/recommend', icon: DataAnalysis, label: '岗位推荐', tag: 'Recommend', desc: '每日推荐与智能匹配。', matches: ['/jobs/recommend', '/jobs/search'] },
-  { path: '/interview/setup', icon: Microphone, label: 'AI 模拟面试', tag: 'Interview', desc: '模拟面试与能力评估。', matches: ['/interview', '/interview/setup', '/interview/room', '/interview/report'] },
-  { path: '/jobs/pipeline/kanban', icon: Grid, label: '投递看板', tag: 'Kanban', desc: '投递进展追踪。', matches: ['/jobs/pipeline/kanban'] },
-  { path: '/career-planning', icon: TrendCharts, label: '职业规划', tag: 'Career', desc: '成长路线与能力差距。', matches: ['/career-planning'] },
-  { path: '/profile', icon: List, label: '个人中心', tag: 'Profile', desc: '账号信息、数据与邀请。', matches: ['/profile', '/subscription'] },
+  {
+    path: '/home',
+    icon: HomeFilled,
+    label: '首页',
+    tag: 'Home',
+    desc: '求职助手首页。',
+    matches: ['/home'],
+  },
+  {
+    path: '/resume-center',
+    icon: Document,
+    label: '简历中心',
+    tag: 'Resume',
+    desc: '多简历管理、AI优化与诊断。',
+    matches: ['/resume-center', '/resume/compare'],
+  },
+  {
+    path: '/smart-analysis',
+    icon: MagicStick,
+    label: '智能分析',
+    tag: 'Analysis',
+    desc: '简历与岗位匹配分析。',
+    matches: ['/smart-analysis', '/analysis'],
+  },
+  {
+    path: '/jobs/recommend',
+    icon: DataAnalysis,
+    label: '岗位推荐',
+    tag: 'Recommend',
+    desc: '每日推荐与智能匹配。',
+    matches: ['/jobs/recommend', '/jobs/search'],
+  },
+  {
+    path: '/interview/setup',
+    icon: Microphone,
+    label: 'AI 模拟面试',
+    tag: 'Interview',
+    desc: '模拟面试与能力评估。',
+    matches: ['/interview', '/interview/setup', '/interview/room', '/interview/report'],
+  },
+  {
+    path: '/jobs/pipeline/kanban',
+    icon: Grid,
+    label: '投递看板',
+    tag: 'Kanban',
+    desc: '投递进展追踪。',
+    matches: ['/jobs/pipeline/kanban'],
+  },
+  {
+    path: '/career-planning',
+    icon: TrendCharts,
+    label: '职业规划',
+    tag: 'Career',
+    desc: '成长路线与能力差距。',
+    matches: ['/career-planning'],
+  },
+  {
+    path: '/profile',
+    icon: List,
+    label: '个人中心',
+    tag: 'Profile',
+    desc: '账号信息、数据与邀请。',
+    matches: ['/profile', '/subscription'],
+  },
 ]
 
 // 管理员工具导航
 const adminNavItems = [
-  { path: '/admin', icon: Trophy, label: '管理后台', tag: 'Admin', desc: '运营数据总览。', matches: ['/admin'] },
-  { path: '/admin/users', icon: List, label: '用户管理', tag: 'Users', desc: '用户列表与状态。', matches: ['/admin/users'] },
-  { path: '/admin/orders', icon: Coin, label: '订单管理', tag: 'Orders', desc: '订阅订单与支付。', matches: ['/admin/orders'] },
-  { path: '/prompt-traces', icon: DataAnalysis, label: 'Prompt 追踪', tag: 'LLMOps', desc: '版本对比与结果回放。', matches: ['/prompt-traces'] },
-  { path: '/eval-reports', icon: DataAnalysis, label: '评测报表', tag: 'Eval', desc: '离线评测与历史快照。', matches: ['/eval-reports'] },
-  { path: '/system-status', icon: Trophy, label: '系统状态', tag: 'Status', desc: '运行模式与能力开关。', matches: ['/system-status'] },
-  { path: '/delivery-guide', icon: List, label: '交付说明', tag: 'Delivery', desc: '交付范围与验收建议。', matches: ['/delivery-guide'] },
-  { path: '/about', icon: Trophy, label: '关于系统', tag: 'About', desc: '系统边界与产品定位。', matches: ['/about'] },
-  { path: '/knowledge', icon: Clock, label: '知识库', tag: 'Knowledge', desc: '文档管理与RAG调试。', matches: ['/knowledge'] },
-  { path: '/agent', icon: MagicStick, label: 'Agent 分析', tag: 'Agent', desc: '单Agent分析。', matches: ['/agent'] },
-  { path: '/multi-agent', icon: DataAnalysis, label: '多智能体', tag: 'Multi', desc: '多智能体协作。', matches: ['/multi-agent'] },
-  { path: '/jobs/recommend/evaluation', icon: TrendCharts, label: '推荐评测', tag: 'Eval', desc: '推荐效果评测。', matches: ['/jobs/recommend/evaluation'] },
-  { path: '/jobs/recommend/config', icon: Coin, label: '推荐配置', tag: 'Config', desc: '推荐权重配置。', matches: ['/jobs/recommend/config'] },
+  {
+    path: '/admin',
+    icon: Trophy,
+    label: '管理后台',
+    tag: 'Admin',
+    desc: '运营数据总览。',
+    matches: ['/admin'],
+  },
+  {
+    path: '/admin/users',
+    icon: List,
+    label: '用户管理',
+    tag: 'Users',
+    desc: '用户列表与状态。',
+    matches: ['/admin/users'],
+  },
+  {
+    path: '/admin/orders',
+    icon: Coin,
+    label: '订单管理',
+    tag: 'Orders',
+    desc: '订阅订单与支付。',
+    matches: ['/admin/orders'],
+  },
+  {
+    path: '/prompt-traces',
+    icon: DataAnalysis,
+    label: 'Prompt 追踪',
+    tag: 'LLMOps',
+    desc: '版本对比与结果回放。',
+    matches: ['/prompt-traces'],
+  },
+  {
+    path: '/eval-reports',
+    icon: DataAnalysis,
+    label: '评测报表',
+    tag: 'Eval',
+    desc: '离线评测与历史快照。',
+    matches: ['/eval-reports'],
+  },
+  {
+    path: '/system-status',
+    icon: Trophy,
+    label: '系统状态',
+    tag: 'Status',
+    desc: '运行模式与能力开关。',
+    matches: ['/system-status'],
+  },
+  {
+    path: '/delivery-guide',
+    icon: List,
+    label: '交付说明',
+    tag: 'Delivery',
+    desc: '交付范围与验收建议。',
+    matches: ['/delivery-guide'],
+  },
+  {
+    path: '/about',
+    icon: Trophy,
+    label: '关于系统',
+    tag: 'About',
+    desc: '系统边界与产品定位。',
+    matches: ['/about'],
+  },
+  {
+    path: '/knowledge',
+    icon: Clock,
+    label: '知识库',
+    tag: 'Knowledge',
+    desc: '文档管理与RAG调试。',
+    matches: ['/knowledge'],
+  },
+  {
+    path: '/agent',
+    icon: MagicStick,
+    label: 'Agent 分析',
+    tag: 'Agent',
+    desc: '单Agent分析。',
+    matches: ['/agent'],
+  },
+  {
+    path: '/multi-agent',
+    icon: DataAnalysis,
+    label: '多智能体',
+    tag: 'Multi',
+    desc: '多智能体协作。',
+    matches: ['/multi-agent'],
+  },
+  {
+    path: '/jobs/recommend/evaluation',
+    icon: TrendCharts,
+    label: '推荐评测',
+    tag: 'Eval',
+    desc: '推荐效果评测。',
+    matches: ['/jobs/recommend/evaluation'],
+  },
+  {
+    path: '/jobs/recommend/config',
+    icon: Coin,
+    label: '推荐配置',
+    tag: 'Config',
+    desc: '推荐权重配置。',
+    matches: ['/jobs/recommend/config'],
+  },
 ]
 
 // 根据角色过滤
 const isAdmin = computed(() => authStore.role === USER_ROLES.admin)
-const candidateNav = computed(() => isAdmin.value
-  ? candidateNavItems  // admin 也能看到 C 端导航
-  : candidateNavItems
+const candidateNav = computed(() =>
+  isAdmin.value
+    ? candidateNavItems // admin 也能看到 C 端导航
+    : candidateNavItems
 )
-const adminNav = computed(() => isAdmin.value ? adminNavItems : [])
+const adminNav = computed(() => (isAdmin.value ? adminNavItems : []))
 
 const currentNav = computed(() => {
-  if (route.path === '/profile') return { label: '个人中心', tag: 'Profile', desc: '账号信息与求职数据。' }
-  if (route.path === '/subscription') return { label: '订阅方案', tag: 'Pricing', desc: '套餐与权益对比。' }
+  if (route.path === '/profile')
+    return { label: '个人中心', tag: 'Profile', desc: '账号信息与求职数据。' }
+  if (route.path === '/subscription')
+    return { label: '订阅方案', tag: 'Pricing', desc: '套餐与权益对比。' }
 
   const all = [...candidateNavItems, ...adminNavItems]
-  const active = all.find(item =>
-    item.matches.some(prefix => route.path === prefix || route.path.startsWith(`${prefix}/`)),
+  const active = all.find((item) =>
+    item.matches.some((prefix) => route.path === prefix || route.path.startsWith(`${prefix}/`))
   )
   return active || all[0] || null
 })
 
 function handleCommand(cmd) {
-  if (cmd === 'profile') { router.push('/profile'); return }
-  if (cmd === 'subscription') { router.push('/subscription'); return }
+  if (cmd === 'profile') {
+    router.push('/profile')
+    return
+  }
+  if (cmd === 'subscription') {
+    router.push('/subscription')
+    return
+  }
   if (cmd !== 'logout') return
   authStore.logout()
   ElMessage.success('已退出登录')
@@ -236,7 +413,9 @@ onMounted(async () => {
   margin-bottom: 8px;
 }
 
-.brand:hover { opacity: 0.8; }
+.brand:hover {
+  opacity: 0.8;
+}
 
 .brand-mark {
   width: 36px;
@@ -266,7 +445,9 @@ onMounted(async () => {
 }
 
 /* Navigation */
-.nav-section { flex: 1; }
+.nav-section {
+  flex: 1;
+}
 
 .nav-menu,
 .nav-menu :deep(.el-menu) {
@@ -317,8 +498,12 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.dot-green { background: var(--app-success); }
-.dot-amber { background: var(--app-warning); }
+.dot-green {
+  background: var(--app-success);
+}
+.dot-amber {
+  background: var(--app-warning);
+}
 
 .aside-chip-copy strong,
 .aside-chip-copy span {
@@ -359,7 +544,9 @@ onMounted(async () => {
   padding: 14px 24px;
 }
 
-.topbar-left { min-width: 0; }
+.topbar-left {
+  min-width: 0;
+}
 
 .topbar-kicker {
   font-size: 11px;
@@ -414,8 +601,12 @@ onMounted(async () => {
   border-radius: 50%;
 }
 
-.dot-blue { background: var(--app-primary); }
-.dot-violet { background: var(--app-violet); }
+.dot-blue {
+  background: var(--app-primary);
+}
+.dot-violet {
+  background: var(--app-violet);
+}
 
 /* User chip */
 .user-chip {
@@ -429,7 +620,9 @@ onMounted(async () => {
   transition: background 0.15s ease;
 }
 
-.user-chip:hover { background: var(--el-border-color-lighter); }
+.user-chip:hover {
+  background: var(--el-border-color-lighter);
+}
 
 .user-avatar {
   width: 28px;
@@ -497,7 +690,9 @@ onMounted(async () => {
     margin-left: 12px;
   }
 
-  .aside-shell .aside-footer { display: none; }
+  .aside-shell .aside-footer {
+    display: none;
+  }
 
   .nav-menu :deep(.el-menu-item) {
     height: 36px;
@@ -525,6 +720,8 @@ onMounted(async () => {
     font-size: 18px;
   }
 
-  .topbar-badges .badge:nth-child(2) { display: none; }
+  .topbar-badges .badge:nth-child(2) {
+    display: none;
+  }
 }
 </style>

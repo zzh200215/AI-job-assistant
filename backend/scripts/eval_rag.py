@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """RAG 检索质量评估脚本
 
 用法（在 backend/ 目录下运行）：
@@ -13,6 +12,7 @@
   - keyword_hit: 期望关键词在检索结果文本中命中的比例
   - per_doc_type_recall : 每个 doc_type 的独立召回率
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,7 +21,6 @@ import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
 
 # 确保项目根目录在 sys.path
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -34,10 +33,11 @@ logger = logging.getLogger("eval_rag")
 
 # ===================== 加载评估集 =====================
 
-def load_eval_set(path: str) -> List[Dict]:
+
+def load_eval_set(path: str) -> list[dict]:
     """加载 JSONL 格式的评估集。"""
     items = []
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         for line_no, line in enumerate(f, 1):
             line = line.strip()
             if not line or line.startswith("#"):
@@ -51,7 +51,8 @@ def load_eval_set(path: str) -> List[Dict]:
 
 # ===================== 指标计算 =====================
 
-def recall_at_k(retrieved_types: List[str], expected_types: List[str]) -> float:
+
+def recall_at_k(retrieved_types: list[str], expected_types: list[str]) -> float:
     """期望 doc_type 在检索结果中出现的比例。"""
     if not expected_types:
         return 1.0
@@ -59,7 +60,7 @@ def recall_at_k(retrieved_types: List[str], expected_types: List[str]) -> float:
     return hit / len(expected_types)
 
 
-def reciprocal_rank(retrieved_types: List[str], expected_types: List[str]) -> float:
+def reciprocal_rank(retrieved_types: list[str], expected_types: list[str]) -> float:
     """期望 doc_type 在检索结果中首次出现的倒数排名。"""
     for i, t in enumerate(retrieved_types):
         if t in expected_types:
@@ -67,7 +68,7 @@ def reciprocal_rank(retrieved_types: List[str], expected_types: List[str]) -> fl
     return 0.0
 
 
-def keyword_hit_rate(texts: List[str], expected_keywords: List[str]) -> float:
+def keyword_hit_rate(texts: list[str], expected_keywords: list[str]) -> float:
     """期望关键词在检索结果文本中命中的比例。"""
     if not expected_keywords:
         return 1.0
@@ -78,7 +79,8 @@ def keyword_hit_rate(texts: List[str], expected_keywords: List[str]) -> float:
 
 # ===================== 主评估循环 =====================
 
-def run_eval(eval_set: List[Dict], top_k: int = 5) -> Dict:
+
+def run_eval(eval_set: list[dict], top_k: int = 5) -> dict:
     """逐条评估并汇总指标。
 
     返回:
@@ -92,13 +94,13 @@ def run_eval(eval_set: List[Dict], top_k: int = 5) -> Dict:
         }
     """
     # 延迟 import，避免在无 DB/Chroma 环境崩溃
-    from app.services.rag_service import search_knowledge
+    from app.services.multi_recall import multi_recall
 
     recalls = []
     rrs = []
     khits = []
-    type_hit_counts: Dict[str, int] = {}
-    type_total_counts: Dict[str, int] = {}
+    type_hit_counts: dict[str, int] = {}
+    type_total_counts: dict[str, int] = {}
     details = []
 
     for idx, item in enumerate(eval_set):
@@ -107,7 +109,7 @@ def run_eval(eval_set: List[Dict], top_k: int = 5) -> Dict:
         expected_keywords = item.get("expected_keywords", [])
 
         try:
-            results = search_knowledge(query, top_k=top_k)
+            results = multi_recall(query, top_k=top_k)
         except Exception as exc:
             logger.warning("query=%r 检索失败: %s", query, exc)
             results = []
@@ -128,14 +130,16 @@ def run_eval(eval_set: List[Dict], top_k: int = 5) -> Dict:
             if t in retrieved_types:
                 type_hit_counts[t] = type_hit_counts.get(t, 0) + 1
 
-        details.append({
-            "query": query,
-            "recall": round(r, 3),
-            "rr": round(rr, 3),
-            "keyword_hit": round(kh, 3),
-            "retrieved_types": retrieved_types,
-            "expected_types": expected_types,
-        })
+        details.append(
+            {
+                "query": query,
+                "recall": round(r, 3),
+                "rr": round(rr, 3),
+                "keyword_hit": round(kh, 3),
+                "retrieved_types": retrieved_types,
+                "expected_types": expected_types,
+            }
+        )
 
         if (idx + 1) % 10 == 0:
             logger.info("已评估 %d/%d ...", idx + 1, len(eval_set))
@@ -157,13 +161,13 @@ def run_eval(eval_set: List[Dict], top_k: int = 5) -> Dict:
 
 
 def check_thresholds(
-    report: Dict,
+    report: dict,
     *,
     top_k: int,
-    min_recall: Optional[float] = None,
-    min_mrr: Optional[float] = None,
-    min_keyword_hit: Optional[float] = None,
-) -> List[str]:
+    min_recall: float | None = None,
+    min_mrr: float | None = None,
+    min_keyword_hit: float | None = None,
+) -> list[str]:
     """Return human-readable threshold failures for a completed RAG report."""
     failed = []
     recall_key = f"recall@{top_k}"
@@ -179,23 +183,27 @@ def check_thresholds(
 
 # ===================== CLI =====================
 
+
 def main():
     parser = argparse.ArgumentParser(description="RAG 检索质量评估")
-    parser.add_argument("--eval-set", default=str(_PROJECT_ROOT / "tests" / "eval" / "rag_eval.jsonl"),
-                        help="评估集 JSONL 路径")
+    parser.add_argument(
+        "--eval-set", default=str(_PROJECT_ROOT / "tests" / "eval" / "rag_eval.jsonl"), help="评估集 JSONL 路径"
+    )
     parser.add_argument("--top-k", type=int, default=5, help="recall@K 的 K 值")
     parser.add_argument("--sample", type=int, default=None, help="只跑前 N 条")
     parser.add_argument("--output", default=None, help="输出 JSON 报告路径")
     parser.add_argument("--min-recall", type=float, default=None, help="Fail if recall@K is below this threshold")
     parser.add_argument("--min-mrr", type=float, default=None, help="Fail if MRR is below this threshold")
-    parser.add_argument("--min-keyword-hit", type=float, default=None, help="Fail if keyword hit rate is below this threshold")
+    parser.add_argument(
+        "--min-keyword-hit", type=float, default=None, help="Fail if keyword hit rate is below this threshold"
+    )
     args = parser.parse_args()
 
     eval_set = load_eval_set(args.eval_set)
     logger.info("加载评估集 %d 条 from %s", len(eval_set), args.eval_set)
 
     if args.sample:
-        eval_set = eval_set[:args.sample]
+        eval_set = eval_set[: args.sample]
         logger.info("截取前 %d 条", args.sample)
 
     report = run_eval(eval_set, top_k=args.top_k)

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Unified job spider with explicit real-data and demo fallback separation."""
 
 from __future__ import annotations
@@ -8,7 +7,6 @@ import random
 import re
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
 
 import requests
 
@@ -33,13 +31,13 @@ class JobItem:
     education: str = ""
     raw_text: str = ""
     jd_summary: str = ""
-    skill_tags: List[str] = field(default_factory=list)
+    skill_tags: list[str] = field(default_factory=list)
     industry: str = ""
     source: str = "boss"
     source_url: str = ""
     external_id: str = ""
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "title": self.title,
             "company": self.company,
@@ -75,7 +73,7 @@ def _rate_limit(min_interval: float = 1.0) -> None:
     _LAST_REQUEST_TIME = time.time()
 
 
-def _build_headers(referer: str = "") -> Dict[str, str]:
+def _build_headers(referer: str = "") -> dict[str, str]:
     safe_referer = referer.encode("ascii", "ignore").decode("ascii") if referer else ""
     return {
         "User-Agent": random.choice(_UA_POOL),
@@ -173,7 +171,7 @@ _KEYWORD_MAP = {
 }
 
 
-def _smart_mock(keyword: str, city: str) -> List[JobItem]:
+def _smart_mock(keyword: str, city: str) -> list[JobItem]:
     keyword_lower = (keyword or "").strip().lower()
     matched_key = "default"
     if keyword_lower in _MOCK_JOBS:
@@ -226,7 +224,7 @@ class BossSpider:
         "重庆": "101040100",
     }
 
-    def search(self, keyword: str, city: str = "", page: int = 1) -> Tuple[List[JobItem], str]:
+    def search(self, keyword: str, city: str = "", page: int = 1) -> tuple[list[JobItem], str]:
         city_code = self.CITY_CODES.get(city, "101010100")
         params = {"query": keyword, "city": city_code, "page": page}
         url = f"{self.SEARCH_URL}?query={keyword}&city={city_code}&page={page}"
@@ -246,7 +244,7 @@ class BossSpider:
             logger.warning("BOSS search failed: %s", exc)
             return [], f"boss search failed: {exc}"
 
-    def fetch_detail(self, url: str) -> Optional[JobItem]:
+    def fetch_detail(self, url: str) -> JobItem | None:
         if not HAS_BS4:
             return None
 
@@ -290,14 +288,14 @@ class BossSpider:
             source_url=url,
         )
 
-    def _do_request(self, url: str, params: Dict, headers: Dict) -> Optional[Dict]:
+    def _do_request(self, url: str, params: dict, headers: dict) -> dict | None:
         response = requests.get(url, params=params, headers=headers, timeout=15)
         if response.status_code == 200:
             return response.json()
         return None
 
-    def _parse_api(self, job_list: List[Dict]) -> List[JobItem]:
-        jobs: List[JobItem] = []
+    def _parse_api(self, job_list: list[dict]) -> list[JobItem]:
+        jobs: list[JobItem] = []
         for item in job_list[:20]:
             try:
                 job_id = item.get("jobId", "")
@@ -322,7 +320,7 @@ class BossSpider:
                 continue
         return jobs
 
-    def _parse_html(self, url: str, headers: Dict) -> List[JobItem]:
+    def _parse_html(self, url: str, headers: dict) -> list[JobItem]:
         if not HAS_BS4:
             return []
 
@@ -331,7 +329,7 @@ class BossSpider:
             return []
 
         soup = BeautifulSoup(response.text, "html.parser")
-        jobs: List[JobItem] = []
+        jobs: list[JobItem] = []
         cards = soup.select(".job-card-wrapper") or soup.select(".job-list li")
         for card in cards[:20]:
             try:
@@ -360,19 +358,16 @@ class BossSpider:
         return re.sub(r"\s+", " ", text).strip() if text else ""
 
     @staticmethod
-    def _extract_skills(labels: List) -> List[str]:
-        skills: List[str] = []
+    def _extract_skills(labels: list) -> list[str]:
+        skills: list[str] = []
         for label in labels or []:
-            if isinstance(label, dict):
-                text = label.get("name", label.get("label", ""))
-            else:
-                text = str(label)
+            text = label.get("name", label.get("label", "")) if isinstance(label, dict) else str(label)
             if text:
                 skills.append(text)
         return skills[:8]
 
     @staticmethod
-    def _build_raw_text(item: Dict, description: str = "") -> str:
+    def _build_raw_text(item: dict, description: str = "") -> str:
         parts = [
             f"岗位: {item.get('jobName', '')}",
             f"公司: {item.get('brandName', '')}",
@@ -393,11 +388,11 @@ class JobSpider:
         "boss": BossSpider(),
     }
 
-    def search(self, keyword: str, city: str, source: str, page: int = 1) -> Tuple[List[JobItem], Optional[str]]:
+    def search(self, keyword: str, city: str, source: str, page: int = 1) -> tuple[list[JobItem], str | None]:
         source = (source or "boss").strip().lower()
         if source == "all":
-            jobs: List[JobItem] = []
-            errors: List[str] = []
+            jobs: list[JobItem] = []
+            errors: list[str] = []
             for name, spider in self.SPIDERS.items():
                 try:
                     sub_jobs, sub_error = spider.search(keyword, city, page)
@@ -413,10 +408,10 @@ class JobSpider:
             return [], f"unsupported source: {source}"
         return spider.search(keyword, city, page)
 
-    def demo(self, keyword: str, city: str) -> Tuple[List[JobItem], str]:
+    def demo(self, keyword: str, city: str) -> tuple[list[JobItem], str]:
         return _smart_mock(keyword, city), "演示数据"
 
-    def fetch_detail(self, source: str, url: str) -> Optional[JobItem]:
+    def fetch_detail(self, source: str, url: str) -> JobItem | None:
         source = (source or "boss").strip().lower()
         spider = self.SPIDERS.get(source)
         if spider is None:

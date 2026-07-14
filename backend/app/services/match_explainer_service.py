@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 匹配度解释器 — 规则计算 + LLM 自然语言解释
 
@@ -10,45 +9,49 @@
 
 不依赖 LLM 做评分计算，LLM 只负责生成自然语言解释。
 """
-import json
-import re
-import logging
-from typing import List, Dict, Optional, Tuple, Any
-from dataclasses import dataclass, field, asdict
 
-from app.models.history import Resume, JobDescription
-from app.services.scoring_config import ScoringWeights, get_weights_for_job
+import json
+import logging
+import re
+from dataclasses import dataclass, field
+from typing import Any
+
+from app.models.history import JobDescription, Resume
 from app.services.llm_service import chat_json
+from app.services.scoring_config import ScoringWeights, get_weights_for_job
 
 logger = logging.getLogger(__name__)
 
 
 # ==================== 数据结构 ====================
 
+
 @dataclass
 class DimensionScore:
     """单维度评分"""
+
     name: str
-    score: float          # 0-100
-    weight: float         # 权重
-    weighted_score: float # score * weight
-    reason: str           # LLM 生成的自然语言解释
-    details: List[str] = field(default_factory=list)  # 明细项
+    score: float  # 0-100
+    weight: float  # 权重
+    weighted_score: float  # score * weight
+    reason: str  # LLM 生成的自然语言解释
+    details: list[str] = field(default_factory=list)  # 明细项
 
 
 @dataclass
 class ExplainResult:
     """完整解释结果"""
+
     overall_score: float
     overall_reason: str
-    dimensions: List[DimensionScore]
-    skill_match: Dict  = field(default_factory=dict)  # 技能命中详情
-    risk_points: List[str] = field(default_factory=list)
-    optimization_suggestions: List[str] = field(default_factory=list)
+    dimensions: list[DimensionScore]
+    skill_match: dict = field(default_factory=dict)  # 技能命中详情
+    risk_points: list[str] = field(default_factory=list)
+    optimization_suggestions: list[str] = field(default_factory=list)
     recommendation: str = ""  # 强烈推荐 / 可以投递 / 谨慎投递 / 不建议投递
-    weights_used: Dict = field(default_factory=dict)
+    weights_used: dict = field(default_factory=dict)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "overall_score": round(self.overall_score, 1),
             "overall_reason": self.overall_reason,
@@ -73,10 +76,11 @@ class ExplainResult:
 
 # ==================== 规则引擎 ====================
 
+
 class MatchExplainer:
     """匹配度解释器"""
 
-    def __init__(self, weights: Optional[ScoringWeights] = None):
+    def __init__(self, weights: ScoringWeights | None = None):
         self.weights = weights or ScoringWeights()
         self.weights.validate()
 
@@ -148,8 +152,14 @@ class MatchExplainer:
 
         # 合并 LLM 结果到 dims
         for d in dims:
-            d_key = {"技能匹配": "skill", "项目经历": "project", "工作经验": "experience",
-                     "学历要求": "education", "关键词覆盖": "keyword", "加分项": "bonus"}.get(d.name, "")
+            d_key = {
+                "技能匹配": "skill",
+                "项目经历": "project",
+                "工作经验": "experience",
+                "学历要求": "education",
+                "关键词覆盖": "keyword",
+                "加分项": "bonus",
+            }.get(d.name, "")
             d.reason = llm_explain.get("reasons", {}).get(d_key, "")
 
         # 推荐等级
@@ -168,7 +178,7 @@ class MatchExplainer:
 
     # ==================== 规则评分（6 维）====================
 
-    def _calc_skill(self, resume: Dict, jd: Dict) -> Tuple[float, List[str], Dict]:
+    def _calc_skill(self, resume: dict, jd: dict) -> tuple[float, list[str], dict]:
         """技能匹配：Jaccard 相似度 + 等级匹配"""
         r_skills = set(self._extract_str_list(resume, "skills"))
         jd_req = set(self._extract_str_list(jd, "required_skills"))
@@ -197,19 +207,25 @@ class MatchExplainer:
         if matched:
             details.append(f"命中 {len(matched)} 项技能: {', '.join(list(matched)[:6])}")
         if missing_req:
-            details.append(f"缺失 {len(missing_req)} 项核心技能: {', '.join(list(missing_req)[:5])}（-{self.weights.penalty_missing_required}分）")
+            details.append(
+                f"缺失 {len(missing_req)} 项核心技能: {', '.join(list(missing_req)[:5])}（-{self.weights.penalty_missing_required}分）"
+            )
         if not matched and missing_req:
             details.append("技能栈与岗位要求差距较大")
 
-        return score, details, {
-            "matched": list(matched),
-            "missing_required": list(missing_req),
-            "missing_nice": list(missing_nice),
-            "total_required": len(jd_req),
-            "total_nice": len(jd_nice),
-        }
+        return (
+            score,
+            details,
+            {
+                "matched": list(matched),
+                "missing_required": list(missing_req),
+                "missing_nice": list(missing_nice),
+                "total_required": len(jd_req),
+                "total_nice": len(jd_nice),
+            },
+        )
 
-    def _calc_project(self, resume: Dict, jd: Dict) -> Tuple[float, List[str]]:
+    def _calc_project(self, resume: dict, jd: dict) -> tuple[float, list[str]]:
         """项目经历匹配"""
         projects = resume.get("project_experience", []) or resume.get("projects", [])
         if not projects:
@@ -242,7 +258,7 @@ class MatchExplainer:
             details.append(f"项目技能与 JD 重合 {hit_count} 项")
         return score, details
 
-    def _calc_experience(self, resume: Dict, jd: Dict) -> Tuple[float, List[str]]:
+    def _calc_experience(self, resume: dict, jd: dict) -> tuple[float, list[str]]:
         """工作经验匹配"""
         resume_years = resume.get("years_exp", 0)
         exp_req = jd.get("experience_requirement", "")
@@ -279,7 +295,7 @@ class MatchExplainer:
 
         return score, [detail]
 
-    def _calc_education(self, resume: Dict, jd: Dict) -> Tuple[float, List[str]]:
+    def _calc_education(self, resume: dict, jd: dict) -> tuple[float, list[str]]:
         """学历匹配"""
         resume_edu = (resume.get("education", "") or "").strip()
         jd_edu = jd.get("education_requirement", "") or ""
@@ -298,7 +314,7 @@ class MatchExplainer:
         else:
             return 20, [f"{resume_edu}与{jd_edu}要求不匹配"]
 
-    def _calc_keyword(self, resume: Dict, jd: Dict) -> Tuple[float, List[str]]:
+    def _calc_keyword(self, resume: dict, jd: dict) -> tuple[float, list[str]]:
         """关键词覆盖：JD 中的隐性关键词在简历中出现的比例"""
         jd_raw = jd.get("keywords", []) or jd.get("hidden_requirements", [])
         if not jd_raw:
@@ -329,7 +345,7 @@ class MatchExplainer:
             details.append(f"命中: {', '.join(hit[:4])}")
         return score, details
 
-    def _calc_bonus(self, resume: Dict, jd: Dict) -> Tuple[float, List[str]]:
+    def _calc_bonus(self, resume: dict, jd: dict) -> tuple[float, list[str]]:
         """加分项匹配"""
         jd_nice = set(self._extract_str_list(jd, "nice_to_have"))
         if not jd_nice:
@@ -377,17 +393,23 @@ class MatchExplainer:
 }}
 """
 
-    def _llm_explain(self, dims: List[DimensionScore], skill_match: Dict,
-                     overall: float, resume: Dict, jd: Dict) -> Dict:
-        dims_text = "\n".join([
-            f"- {d.name}: {d.score:.0f}分 (权重{d.weight:.2f})"
-            + (f" {'; '.join(d.details[:2])}" if d.details else "")
-            for d in dims
-        ])
-        skill_text = json.dumps({
-            "matched": skill_match.get("matched", [])[:8],
-            "missing_required": skill_match.get("missing_required", [])[:5],
-        }, ensure_ascii=False)
+    def _llm_explain(
+        self, dims: list[DimensionScore], skill_match: dict, overall: float, resume: dict, jd: dict
+    ) -> dict:
+        dims_text = "\n".join(
+            [
+                f"- {d.name}: {d.score:.0f}分 (权重{d.weight:.2f})"
+                + (f" {'; '.join(d.details[:2])}" if d.details else "")
+                for d in dims
+            ]
+        )
+        skill_text = json.dumps(
+            {
+                "matched": skill_match.get("matched", [])[:8],
+                "missing_required": skill_match.get("missing_required", [])[:5],
+            },
+            ensure_ascii=False,
+        )
 
         prompt = self._EXPLAIN_PROMPT.format(
             overall_score=f"{overall:.0f}/100",
@@ -396,19 +418,43 @@ class MatchExplainer:
         )
         return chat_json(prompt)
 
-    def _fallback_explain(self, dims: List[DimensionScore], overall: float) -> Dict:
+    def _fallback_explain(self, dims: list[DimensionScore], overall: float) -> dict:
         """LLM 失败时的纯规则兜底"""
         reasons = {}
         for d in dims:
             if d.score >= 80:
-                reasons[{"技能匹配": "skill", "项目经历": "project", "工作经验": "experience",
-                         "学历要求": "education", "关键词覆盖": "keyword", "加分项": "bonus"}.get(d.name, "")] = f"{d.name}表现良好"
+                reasons[
+                    {
+                        "技能匹配": "skill",
+                        "项目经历": "project",
+                        "工作经验": "experience",
+                        "学历要求": "education",
+                        "关键词覆盖": "keyword",
+                        "加分项": "bonus",
+                    }.get(d.name, "")
+                ] = f"{d.name}表现良好"
             elif d.score >= 60:
-                reasons[{"技能匹配": "skill", "项目经历": "project", "工作经验": "experience",
-                         "学历要求": "education", "关键词覆盖": "keyword", "加分项": "bonus"}.get(d.name, "")] = f"{d.name}基本达标"
+                reasons[
+                    {
+                        "技能匹配": "skill",
+                        "项目经历": "project",
+                        "工作经验": "experience",
+                        "学历要求": "education",
+                        "关键词覆盖": "keyword",
+                        "加分项": "bonus",
+                    }.get(d.name, "")
+                ] = f"{d.name}基本达标"
             else:
-                reasons[{"技能匹配": "skill", "项目经历": "project", "工作经验": "experience",
-                         "学历要求": "education", "关键词覆盖": "keyword", "加分项": "bonus"}.get(d.name, "")] = f"{d.name}需提升"
+                reasons[
+                    {
+                        "技能匹配": "skill",
+                        "项目经历": "project",
+                        "工作经验": "experience",
+                        "学历要求": "education",
+                        "关键词覆盖": "keyword",
+                        "加分项": "bonus",
+                    }.get(d.name, "")
+                ] = f"{d.name}需提升"
 
         return {
             "overall": f"综合匹配度 {overall:.0f}分",
@@ -419,7 +465,7 @@ class MatchExplainer:
 
     # ==================== 推荐等级 ====================
 
-    def _recommendation(self, score: float, missing_req: List) -> str:
+    def _recommendation(self, score: float, missing_req: list) -> str:
         if score >= 85 and not missing_req:
             return "强烈推荐"
         elif score >= 70:
@@ -439,7 +485,7 @@ class MatchExplainer:
         return text
 
     @staticmethod
-    def _extract_str_list(data: Dict, key: str) -> List[str]:
+    def _extract_str_list(data: dict, key: str) -> list[str]:
         """从 dict 中提取字符串列表（兼容字符串列表和对象列表）"""
         items = data.get(key, [])
         if not isinstance(items, list):

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Tests for structured logging configuration."""
 
 from __future__ import annotations

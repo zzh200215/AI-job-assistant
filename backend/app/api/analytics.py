@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """数据分析 API：转化漏斗、留存、关键指标。"""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query

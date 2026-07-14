@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
 """SQLAlchemy ORM 模型：对应 3 张表"""
-from sqlalchemy import (
-    Column, BigInteger, String, Integer, DateTime, ForeignKey, Text, JSON
-)
+
+from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -83,6 +81,7 @@ class AnalysisRecord(Base):
 
 class ResumeVersion(Base):
     """简历版本表"""
+
     __tablename__ = "resume_version"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -90,6 +89,12 @@ class ResumeVersion(Base):
     version_type = Column(String(20), nullable=False, comment="版本类型: original/optimized")
     content = Column(Text, nullable=False, comment="简历内容(Markdown)")
     format = Column(String(10), default="md", comment="格式: md/json/txt")
+    label = Column(String(120), nullable=True, comment="用户可见的版本名称")
+    target_jd_id = Column(BigInteger, nullable=True, index=True, comment="目标岗位ID")
+    parent_version_id = Column(BigInteger, nullable=True, index=True, comment="来源版本ID")
+    change_log = Column(JSON, nullable=True, comment="改写建议与变更记录")
+    suggestion_decisions = Column(JSON, nullable=True, comment="建议采纳状态")
+    ats_snapshot = Column(JSON, nullable=True, comment="最近一次ATS预览结果")
     created_at = Column(DateTime, default=utc_now, comment="创建时间")
 
     resume = relationship("Resume")
@@ -101,5 +106,11 @@ class ResumeVersion(Base):
             "version_type": self.version_type,
             "content": self.content,
             "format": self.format,
+            "label": self.label,
+            "target_jd_id": self.target_jd_id,
+            "parent_version_id": self.parent_version_id,
+            "change_log": self.change_log or [],
+            "suggestion_decisions": self.suggestion_decisions or {},
+            "ats_snapshot": self.ats_snapshot,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

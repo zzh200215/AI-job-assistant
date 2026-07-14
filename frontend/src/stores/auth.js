@@ -14,7 +14,9 @@ function loadStoredUser() {
 }
 
 function normalizeEmail(email) {
-  return String(email || '').trim().toLowerCase()
+  return String(email || '')
+    .trim()
+    .toLowerCase()
 }
 
 function normalizeText(value) {
@@ -55,10 +57,14 @@ export const useAuthStore = defineStore('auth', () => {
   window.addEventListener('auth:expired', clearAuth)
 
   async function login(account, password) {
-    const data = await request.post('/auth/login', {
-      account: normalizeText(account),
-      password,
-    }, { notifyError: false })
+    const data = await request.post(
+      '/auth/login',
+      {
+        account: normalizeText(account),
+        password,
+      },
+      { notifyError: false }
+    )
     if (data?.access_token) {
       setAuth(data.access_token, data.user)
     }

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 一次调用 = 一次完整分析（带 RAG 知识检索）：
 - 匹配度报告
@@ -12,15 +11,16 @@
   3. 注入三个 prompt 的 {rag_context} 占位符
   4. 返回 references 供前端展示
 """
+
 import json
-from typing import Dict, Any, Optional
+from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.history import Resume, JobDescription, AnalysisRecord
+from app.models.history import AnalysisRecord, JobDescription, Resume
+from app.prompts.interview import INTERVIEW_PROMPT
 from app.prompts.match import MATCH_PROMPT
 from app.prompts.optimize import OPTIMIZE_PROMPT
-from app.prompts.interview import INTERVIEW_PROMPT
 from app.prompts.rendering import render_prompt
 from app.services.llm_service import chat_json, set_llm_trace_context
 from app.services.rag_service import build_rag_context_multi, get_knowledge_references
@@ -33,9 +33,7 @@ def run_full_analysis(db: Session, resume_id: int, jd_id: int, remark: str = "",
     """
     resume: Resume = get_owned_resume(db, resume_id, user_id) if user_id is not None else db.get(Resume, resume_id)
     jd: JobDescription = (
-        get_accessible_job_for_user(db, jd_id, user_id)
-        if user_id is not None
-        else db.get(JobDescription, jd_id)
+        get_accessible_job_for_user(db, jd_id, user_id) if user_id is not None else db.get(JobDescription, jd_id)
     )
     if not resume or not jd:
         raise ValueError("简历或 JD 不存在，请检查 ID")
@@ -59,7 +57,9 @@ def run_full_analysis(db: Session, resume_id: int, jd_id: int, remark: str = "",
     intent = "full_analysis"
 
     rag_ctx = build_rag_context_multi(
-        query, db, user_id=user_id,
+        query,
+        db,
+        user_id=user_id,
         intent=intent,
         resume_summary=resume_self_eval,
         jd_summary=jd_context,
@@ -91,10 +91,10 @@ def run_full_analysis(db: Session, resume_id: int, jd_id: int, remark: str = "",
                 },
             }
         )
-        match: Dict[str, Any] = chat_json(match_prompt)
+        match: dict[str, Any] = chat_json(match_prompt)
         match["match_score"] = max(0, min(100, int(match.get("match_score") or 0)))
     except (RuntimeError, ValueError) as e:
-        raise RuntimeError(f"匹配度分析失败: {e}")
+        raise RuntimeError(f"匹配度分析失败: {e}") from e
 
     # ---- 2) 优化建议 ----
     try:
@@ -121,9 +121,9 @@ def run_full_analysis(db: Session, resume_id: int, jd_id: int, remark: str = "",
                 },
             }
         )
-        optimize: Dict[str, Any] = chat_json(optimize_prompt)
+        optimize: dict[str, Any] = chat_json(optimize_prompt)
     except (RuntimeError, ValueError) as e:
-        raise RuntimeError(f"简历优化建议生成失败: {e}")
+        raise RuntimeError(f"简历优化建议生成失败: {e}") from e
 
     # ---- 3) 面试题 ----
     try:
@@ -150,9 +150,9 @@ def run_full_analysis(db: Session, resume_id: int, jd_id: int, remark: str = "",
                 },
             }
         )
-        interview: Dict[str, Any] = chat_json(interview_prompt)
+        interview: dict[str, Any] = chat_json(interview_prompt)
     except (RuntimeError, ValueError) as e:
-        raise RuntimeError(f"面试题生成失败: {e}")
+        raise RuntimeError(f"面试题生成失败: {e}") from e
 
     # ---- 4) 写库 ----
     try:
@@ -175,4 +175,4 @@ def run_full_analysis(db: Session, resume_id: int, jd_id: int, remark: str = "",
         return record
     except Exception as e:
         db.rollback()
-        raise RuntimeError(f"分析结果保存到数据库失败: {str(e)}")
+        raise RuntimeError(f"分析结果保存到数据库失败: {str(e)}") from e

@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 """API router aggregation."""
 
 from fastapi import APIRouter
 
 from app.api import (
-    analytics,
     agent,
     analysis,
     analytics,
@@ -30,7 +28,6 @@ from app.api import (
     subscription,
     system,
     timeline,
-    tracking,
     user_preferences,
 )
 

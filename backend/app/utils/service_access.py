@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Service-layer access helpers."""
 
 from __future__ import annotations

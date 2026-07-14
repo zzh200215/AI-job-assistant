@@ -1,7 +1,5 @@
-# -*- coding: utf-8 -*-
 """面试会话 Pydantic Schemas"""
-from datetime import datetime
-from typing import Optional, Any
+
 from pydantic import BaseModel, Field
 
 
@@ -13,15 +11,15 @@ class InterviewSessionCreate(BaseModel):
 
 class InterviewSessionResp(BaseModel):
     id: int
-    resume_id: Optional[int]
-    jd_id: Optional[int]
+    resume_id: int | None
+    jd_id: int | None
     interview_type: str
     status: str
     total_questions: int
     answered_count: int
     timeout_count: int
-    created_at: Optional[str]
-    completed_at: Optional[str]
+    created_at: str | None
+    completed_at: str | None
 
     questions: list = []
     messages: list = []
@@ -52,6 +50,7 @@ class QuestionEvaluation(BaseModel):
 
 class InterviewReport(BaseModel):
     """完整面试报告"""
+
     overall_score: int
     dimension_scores: dict
     radar: dict  # completeness/accuracy/depth/expression

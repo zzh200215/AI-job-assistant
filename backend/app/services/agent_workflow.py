@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """Deprecated compatibility wrapper for the old step-by-step workflow API."""
+
 import warnings
 
-from app.orchestration.strategies import MAX_RETRIES, StepByStepStrategy
+from app.orchestration.strategies import StepByStepStrategy
 from app.services.orchestration_runner import run_strategy_async
 
 # Backward-compatible exports for legacy imports.

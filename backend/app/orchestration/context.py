@@ -1,13 +1,12 @@
-# -*- coding: utf-8 -*-
 """Structured agent context shared across orchestration strategies."""
+
 from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field, fields
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from sqlalchemy.orm import Session
-
 
 _AGENT_RESULT_FIELD_MAP = {
     "IntentAgent": "intent_detail",
@@ -43,39 +42,39 @@ class AgentContext:
 
     resume_id: int = 0
     jd_id: int = 0
-    user_id: Optional[int] = None
+    user_id: int | None = None
     user_request: str = ""
-    db: Optional[Session] = field(default=None, repr=False, compare=False)
+    db: Session | None = field(default=None, repr=False, compare=False)
 
-    intent: Optional[str] = None
-    intent_detail: Optional[Dict[str, Any]] = None
-    required_steps: List[str] = field(default_factory=list)
-    plan: List[Dict[str, Any]] = field(default_factory=list)
+    intent: str | None = None
+    intent_detail: dict[str, Any] | None = None
+    required_steps: list[str] = field(default_factory=list)
+    plan: list[dict[str, Any]] = field(default_factory=list)
 
-    resume_parsed: Optional[Dict[str, Any]] = None
-    jd_parsed: Optional[Dict[str, Any]] = None
-    retrieval_results: Dict[str, Any] = field(default_factory=dict)
-    rag_confidence: Optional[Dict[str, Any]] = None
+    resume_parsed: dict[str, Any] | None = None
+    jd_parsed: dict[str, Any] | None = None
+    retrieval_results: dict[str, Any] = field(default_factory=dict)
+    rag_confidence: dict[str, Any] | None = None
 
-    match_result: Optional[Dict[str, Any]] = None
-    optimize_result: Optional[Dict[str, Any]] = None
-    interview_result: Optional[Dict[str, Any]] = None
-    career_result: Optional[Dict[str, Any]] = None
-    self_checks: List[Dict[str, Any]] = field(default_factory=list)
-    final_report: Optional[Dict[str, Any]] = None
+    match_result: dict[str, Any] | None = None
+    optimize_result: dict[str, Any] | None = None
+    interview_result: dict[str, Any] | None = None
+    career_result: dict[str, Any] | None = None
+    self_checks: list[dict[str, Any]] = field(default_factory=list)
+    final_report: dict[str, Any] | None = None
 
-    agent_outputs: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    extras: Dict[str, Any] = field(default_factory=dict)
+    agent_outputs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    extras: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def for_analysis(
         cls,
         resume_id: int,
         jd_id: int,
-        user_id: Optional[int] = None,
-        db: Optional[Session] = None,
+        user_id: int | None = None,
+        db: Session | None = None,
         user_request: str = "",
-    ) -> "AgentContext":
+    ) -> AgentContext:
         return cls(
             resume_id=resume_id,
             jd_id=jd_id,
@@ -84,12 +83,12 @@ class AgentContext:
             user_request=user_request,
         )
 
-    def with_db(self, db: Optional[Session]) -> "AgentContext":
+    def with_db(self, db: Session | None) -> AgentContext:
         copied = self.fork()
         copied.db = db
         return copied
 
-    def fork(self) -> "AgentContext":
+    def fork(self) -> AgentContext:
         copied = AgentContext(
             resume_id=self.resume_id,
             jd_id=self.jd_id,
@@ -115,7 +114,7 @@ class AgentContext:
         )
         return copied
 
-    def record_agent_output(self, agent_name: str, result: Dict[str, Any]):
+    def record_agent_output(self, agent_name: str, result: dict[str, Any]):
         self.agent_outputs[agent_name] = result
 
         field_name = _AGENT_RESULT_FIELD_MAP.get(agent_name)
@@ -130,7 +129,7 @@ class AgentContext:
         elif field_name:
             setattr(self, field_name, result)
 
-    def record_step_output(self, step_name: str, result: Dict[str, Any]):
+    def record_step_output(self, step_name: str, result: dict[str, Any]):
         field_name = _STEP_RESULT_FIELD_MAP.get(step_name)
         if field_name == "intent_detail":
             self.intent_detail = result
@@ -183,8 +182,8 @@ class AgentContext:
         else:
             self.extras[key] = value
 
-    def to_log_dict(self) -> Dict[str, Any]:
-        data: Dict[str, Any] = {}
+    def to_log_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {}
         for item in fields(self):
             if item.name == "db":
                 continue

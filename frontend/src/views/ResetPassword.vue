@@ -140,12 +140,7 @@ async function handleSubmit() {
 
   loading.value = true
   try {
-    await authStore.resetPassword(
-      form.account,
-      form.email,
-      form.newPassword,
-      form.confirmPassword,
-    )
+    await authStore.resetPassword(form.account, form.email, form.newPassword, form.confirmPassword)
     ElMessage.success('密码已重置，请使用新密码登录')
     router.push('/login')
   } finally {

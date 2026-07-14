@@ -3,10 +3,10 @@
     <el-card shadow="never" class="hero-card">
       <p class="eyebrow">Delivery Guide</p>
       <h2>交付与验收说明</h2>
-	      <div class="page-header-sub">
+      <div class="page-header-sub">
         这一页把项目当前可演示范围、生产边界、知识库维护方式和验收建议集中展示，避免信息分散在文档和代码里。
       </div>
-	      <div class="hero-actions">
+      <div class="hero-actions">
         <el-button type="primary" @click="router.push('/system-status')">查看系统状态</el-button>
         <el-button @click="router.push('/knowledge')">进入知识库</el-button>
       </div>

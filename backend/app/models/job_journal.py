@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
 """求职日记 ORM 模型"""
-from sqlalchemy import Column, BigInteger, String, Integer, DateTime, Text, JSON
+
+from sqlalchemy import JSON, BigInteger, Column, DateTime, Integer, String, Text
 
 from app.core.database import Base
 from app.utils.time_helper import utc_now
@@ -8,6 +8,7 @@ from app.utils.time_helper import utc_now
 
 class JobJournal(Base):
     """求职日记/笔记表"""
+
     __tablename__ = "job_journal"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -15,7 +16,9 @@ class JobJournal(Base):
     pipeline_id = Column(BigInteger, nullable=True, index=True, comment="关联投递记录ID")
     jd_id = Column(BigInteger, nullable=True, index=True, comment="关联JD ID")
 
-    entry_type = Column(String(20), nullable=False, index=True, comment="类型: note/interview_log/offer_review/reflection")
+    entry_type = Column(
+        String(20), nullable=False, index=True, comment="类型: note/interview_log/offer_review/reflection"
+    )
     title = Column(String(200), nullable=False, comment="标题")
     content = Column(Text, default="", comment="正文内容")
     tags = Column(JSON, comment="标签列表")

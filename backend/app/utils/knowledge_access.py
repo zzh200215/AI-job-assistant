@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
 """Knowledge document visibility helpers."""
-from __future__ import annotations
 
-from typing import Optional
+from __future__ import annotations
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session

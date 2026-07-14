@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Embedding usage daily aggregate model."""
+
 from sqlalchemy import BigInteger, Column, Date, DateTime, Integer, String, UniqueConstraint
 
 from app.core.database import Base
@@ -8,9 +8,7 @@ from app.utils.time_helper import utc_now
 
 class EmbeddingUsageDaily(Base):
     __tablename__ = "embedding_usage_daily"
-    __table_args__ = (
-        UniqueConstraint("stat_date", "provider", "model", name="uq_embedding_usage_daily"),
-    )
+    __table_args__ = (UniqueConstraint("stat_date", "provider", "model", name="uq_embedding_usage_daily"),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     stat_date = Column(Date, nullable=False, index=True)

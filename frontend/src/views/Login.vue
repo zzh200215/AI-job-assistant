@@ -5,10 +5,29 @@
       <section class="brand-pane" aria-label="产品信息">
         <div class="brand-head">
           <span class="brand-mark">
-            <svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="1" y="1" width="30" height="30" rx="8" stroke="currentColor" stroke-width="1.8" />
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 32 32"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect
+                x="1"
+                y="1"
+                width="30"
+                height="30"
+                rx="8"
+                stroke="currentColor"
+                stroke-width="1.8"
+              />
               <path d="M9 22V12l7-5 7 5v10H9z" fill="currentColor" opacity="0.88" />
-              <path d="M13 22v-4a3 3 0 0 1 6 0v4" stroke="#fff" stroke-width="1.5" stroke-linecap="round" />
+              <path
+                d="M13 22v-4a3 3 0 0 1 6 0v4"
+                stroke="#fff"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
             </svg>
           </span>
           <span class="brand-name">Career Signal</span>
@@ -45,12 +64,30 @@
 
         <!-- Decorative pipeline lines -->
         <div class="pipeline-deco" aria-hidden="true">
-          <svg width="320" height="320" viewBox="0 0 320 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg
+            width="320"
+            height="320"
+            viewBox="0 0 320 320"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
             <circle cx="160" cy="160" r="140" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
             <circle cx="160" cy="160" r="100" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
             <circle cx="160" cy="160" r="60" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
-            <path d="M30 160 Q 80 80 160 60 Q 240 40 290 160" stroke="rgba(255,255,255,0.08)" stroke-width="1" fill="none" stroke-dasharray="4 4" />
-            <path d="M30 160 Q 80 240 160 260 Q 240 280 290 160" stroke="rgba(255,255,255,0.08)" stroke-width="1" fill="none" stroke-dasharray="4 4" />
+            <path
+              d="M30 160 Q 80 80 160 60 Q 240 40 290 160"
+              stroke="rgba(255,255,255,0.08)"
+              stroke-width="1"
+              fill="none"
+              stroke-dasharray="4 4"
+            />
+            <path
+              d="M30 160 Q 80 240 160 260 Q 240 280 290 160"
+              stroke="rgba(255,255,255,0.08)"
+              stroke-width="1"
+              fill="none"
+              stroke-dasharray="4 4"
+            />
             <circle cx="80" cy="80" r="3" fill="rgba(255,255,255,0.15)" />
             <circle cx="240" cy="80" r="3" fill="rgba(255,255,255,0.15)" />
             <circle cx="80" cy="240" r="3" fill="rgba(255,255,255,0.15)" />
@@ -78,7 +115,13 @@
             show-icon
           />
 
-          <el-form ref="formRef" :model="form" :rules="rules" label-width="0" @keyup.enter="handleLogin">
+          <el-form
+            ref="formRef"
+            :model="form"
+            :rules="rules"
+            label-width="0"
+            @keyup.enter="handleLogin"
+          >
             <div class="field">
               <label for="account">邮箱或用户名</label>
               <el-form-item prop="account">
@@ -138,16 +181,31 @@
             <div class="social-row">
               <button class="social-btn" type="button" @click="handleSocialLogin('Google')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M20.5 12.2c0-.7-.1-1.2-.2-1.8h-8v3.3h4.6c-.2 1.1-.8 2-1.7 2.6v2.2h2.8c1.6-1.5 2.5-3.6 2.5-6.3Z" fill="#4285F4" />
-                  <path d="M12.3 20.5c2.3 0 4.2-.8 5.6-2.1l-2.8-2.2c-.8.5-1.7.9-2.9.9-2.2 0-4-1.5-4.7-3.4H4.7V16c1.4 2.7 4.2 4.5 7.6 4.5Z" fill="#34A853" />
-                  <path d="M7.6 13.7c-.2-.5-.3-1.1-.3-1.7s.1-1.2.3-1.7V8H4.7c-.6 1.2-1 2.5-1 4s.4 2.8 1 4l2.9-2.3Z" fill="#FBBC05" />
-                  <path d="M12.3 6.9c1.3 0 2.4.4 3.3 1.3l2.4-2.4c-1.5-1.4-3.4-2.2-5.7-2.2-3.4 0-6.2 1.9-7.6 4.5l2.9 2.3c.7-2 2.5-3.5 4.7-3.5Z" fill="#EA4335" />
+                  <path
+                    d="M20.5 12.2c0-.7-.1-1.2-.2-1.8h-8v3.3h4.6c-.2 1.1-.8 2-1.7 2.6v2.2h2.8c1.6-1.5 2.5-3.6 2.5-6.3Z"
+                    fill="#4285F4"
+                  />
+                  <path
+                    d="M12.3 20.5c2.3 0 4.2-.8 5.6-2.1l-2.8-2.2c-.8.5-1.7.9-2.9.9-2.2 0-4-1.5-4.7-3.4H4.7V16c1.4 2.7 4.2 4.5 7.6 4.5Z"
+                    fill="#34A853"
+                  />
+                  <path
+                    d="M7.6 13.7c-.2-.5-.3-1.1-.3-1.7s.1-1.2.3-1.7V8H4.7c-.6 1.2-1 2.5-1 4s.4 2.8 1 4l2.9-2.3Z"
+                    fill="#FBBC05"
+                  />
+                  <path
+                    d="M12.3 6.9c1.3 0 2.4.4 3.3 1.3l2.4-2.4c-1.5-1.4-3.4-2.2-5.7-2.2-3.4 0-6.2 1.9-7.6 4.5l2.9 2.3c.7-2 2.5-3.5 4.7-3.5Z"
+                    fill="#EA4335"
+                  />
                 </svg>
                 Google
               </button>
               <button class="social-btn" type="button" @click="handleSocialLogin('GitHub')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.49.5.09.68-.22.68-.48 0-.24-.01-.87-.01-1.71-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02.8-.22 1.65-.33 2.5-.33.85 0 1.7.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86 0 1.34-.01 2.42-.01 2.75 0 .27.18.58.69.48A10.01 10.01 0 0 0 22 12c0-5.52-4.48-10-10-10Z" fill="#24292f" />
+                  <path
+                    d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.49.5.09.68-.22.68-.48 0-.24-.01-.87-.01-1.71-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02.8-.22 1.65-.33 2.5-.33.85 0 1.7.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86 0 1.34-.01 2.42-.01 2.75 0 .27.18.58.69.48A10.01 10.01 0 0 0 22 12c0-5.52-4.48-10-10-10Z"
+                    fill="#24292f"
+                  />
                 </svg>
                 GitHub
               </button>
@@ -295,7 +353,9 @@ const handleLogin = async () => {
 }
 
 /* Brand body */
-.brand-body { flex: 1; }
+.brand-body {
+  flex: 1;
+}
 
 .brand-body h1 {
   margin: 0;
@@ -393,7 +453,9 @@ const handleLogin = async () => {
 }
 
 /* Fields */
-.field { margin-bottom: 16px; }
+.field {
+  margin-bottom: 16px;
+}
 
 .field label {
   display: block;
@@ -482,7 +544,9 @@ const handleLogin = async () => {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .social-btn:hover {
@@ -500,7 +564,9 @@ const handleLogin = async () => {
 
 /* ===== Responsive ===== */
 @media (max-width: 860px) {
-  .login-page { padding: 16px; }
+  .login-page {
+    padding: 16px;
+  }
 
   .login-shell {
     grid-template-columns: 1fr;
@@ -515,7 +581,9 @@ const handleLogin = async () => {
     font-size: 28px;
   }
 
-  .pipeline-deco { display: none; }
+  .pipeline-deco {
+    display: none;
+  }
 
   .cap-grid {
     grid-template-columns: 1fr;

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """检索路由 prompt — Agentic RAG 的关键一步：让 LLM 先判断该查哪些知识源、各取多少。
 
 输出 JSON 格式：

@@ -4,7 +4,9 @@
       <div>
         <p class="eyebrow">Recommendation Evaluation</p>
         <h2>推荐评测看板</h2>
-        <div class="page-header-sub">基于用户 `like / dislike` 反馈评估推荐排序质量、分数校准和调优优先级。</div>
+        <div class="page-header-sub">
+          基于用户 `like / dislike` 反馈评估推荐排序质量、分数校准和调优优先级。
+        </div>
       </div>
       <div class="hero-actions">
         <el-switch
@@ -16,13 +18,25 @@
         />
         <el-button @click="router.push('/jobs/recommend/config')">调整权重</el-button>
         <el-button @click="router.push('/jobs/recommend')">返回岗位推荐</el-button>
-        <el-button :loading="exporting === 'json'" @click="downloadSamples('json')">导出 JSON</el-button>
-        <el-button :loading="exporting === 'csv'" type="primary" plain @click="downloadSamples('csv')">导出 CSV</el-button>
+        <el-button :loading="exporting === 'json'" @click="downloadSamples('json')"
+          >导出 JSON</el-button
+        >
+        <el-button
+          :loading="exporting === 'csv'"
+          type="primary"
+          plain
+          @click="downloadSamples('csv')"
+          >导出 CSV</el-button
+        >
         <el-button type="primary" :loading="loading" @click="loadEvaluation">刷新</el-button>
       </div>
     </header>
 
-    <el-empty v-if="!loading && !evaluationData?.total" :image-size="120" description="暂无推荐反馈，先去岗位推荐页积累点赞/点踩样本">
+    <el-empty
+      v-if="!loading && !evaluationData?.total"
+      :image-size="120"
+      description="暂无推荐反馈，先去岗位推荐页积累点赞/点踩样本"
+    >
       <el-button type="primary" @click="router.push('/jobs/recommend')">去岗位推荐</el-button>
     </el-empty>
 
@@ -65,8 +79,19 @@
           <div class="panel-header">
             <div class="panel-title-row">
               <h3>样本覆盖</h3>
-              <el-tag :type="evaluationData.evaluation?.sample_health?.enough_for_tuning ? 'success' : 'warning'" effect="plain">
-                {{ evaluationData.evaluation?.sample_health?.enough_for_tuning ? '可用于调优' : '样本仍偏少' }}
+              <el-tag
+                :type="
+                  evaluationData.evaluation?.sample_health?.enough_for_tuning
+                    ? 'success'
+                    : 'warning'
+                "
+                effect="plain"
+              >
+                {{
+                  evaluationData.evaluation?.sample_health?.enough_for_tuning
+                    ? '可用于调优'
+                    : '样本仍偏少'
+                }}
               </el-tag>
             </div>
           </div>
@@ -82,7 +107,9 @@
               </div>
               <div class="coverage-item">
                 <span>行业数</span>
-                <strong>{{ evaluationData.evaluation?.coverage?.unique_industry_count ?? 0 }}</strong>
+                <strong>{{
+                  evaluationData.evaluation?.coverage?.unique_industry_count ?? 0
+                }}</strong>
               </div>
               <div class="coverage-item">
                 <span>近 7 天反馈</span>
@@ -131,7 +158,9 @@
                 </div>
                 <div class="bucket-meta">
                   点赞率 {{ percentText(item.like_rate || 0) }}
-                  <span v-if="item.avg_match_score !== null">· 均分 {{ item.avg_match_score }}</span>
+                  <span v-if="item.avg_match_score !== null"
+                    >· 均分 {{ item.avg_match_score }}</span
+                  >
                 </div>
               </div>
             </div>
@@ -146,18 +175,25 @@
           <div class="panel-body">
             <div class="anomaly-grid">
               <div class="anomaly-card">
-                <div class="anomaly-value">{{ evaluationData.evaluation?.calibration?.high_score_dislike_count ?? 0 }}</div>
+                <div class="anomaly-value">
+                  {{ evaluationData.evaluation?.calibration?.high_score_dislike_count ?? 0 }}
+                </div>
                 <div class="anomaly-label">高分点踩</div>
               </div>
               <div class="anomaly-card">
-                <div class="anomaly-value">{{ evaluationData.evaluation?.calibration?.low_score_like_count ?? 0 }}</div>
+                <div class="anomaly-value">
+                  {{ evaluationData.evaluation?.calibration?.low_score_like_count ?? 0 }}
+                </div>
                 <div class="anomaly-label">低分点赞</div>
               </div>
             </div>
             <div class="signal-columns">
               <div>
                 <div class="signal-title">高分点踩样本</div>
-                <div v-if="evaluationData.tuning_signals?.high_score_dislikes?.length" class="signal-list">
+                <div
+                  v-if="evaluationData.tuning_signals?.high_score_dislikes?.length"
+                  class="signal-list"
+                >
                   <div
                     v-for="item in evaluationData.tuning_signals.high_score_dislikes"
                     :key="`high-${item.resume_id}-${item.jd_id}-${item.created_at}`"
@@ -171,7 +207,10 @@
               </div>
               <div>
                 <div class="signal-title">低分点赞样本</div>
-                <div v-if="evaluationData.tuning_signals?.low_score_likes?.length" class="signal-list">
+                <div
+                  v-if="evaluationData.tuning_signals?.low_score_likes?.length"
+                  class="signal-list"
+                >
                   <div
                     v-for="item in evaluationData.tuning_signals.low_score_likes"
                     :key="`low-${item.resume_id}-${item.jd_id}-${item.created_at}`"
@@ -197,20 +236,40 @@
             <div class="focus-section">
               <div>
                 <div class="section-title">岗位侧</div>
-                <div v-if="evaluationData.evaluation?.mismatch_focus?.jobs?.length" class="focus-list">
-                  <div v-for="item in evaluationData.evaluation.mismatch_focus.jobs" :key="`job-${item.jd_id}`" class="focus-item">
+                <div
+                  v-if="evaluationData.evaluation?.mismatch_focus?.jobs?.length"
+                  class="focus-list"
+                >
+                  <div
+                    v-for="item in evaluationData.evaluation.mismatch_focus.jobs"
+                    :key="`job-${item.jd_id}`"
+                    class="focus-item"
+                  >
                     <strong>{{ item.jd_title || '未命名岗位' }}</strong>
-                    <span>{{ item.total }} 条反馈 · 点踩率 {{ percentText(item.dislike_rate || 0) }}</span>
+                    <span
+                      >{{ item.total }} 条反馈 · 点踩率
+                      {{ percentText(item.dislike_rate || 0) }}</span
+                    >
                   </div>
                 </div>
                 <el-empty v-else :image-size="60" description="暂无明显问题岗位" />
               </div>
               <div>
                 <div class="section-title">简历侧</div>
-                <div v-if="evaluationData.evaluation?.mismatch_focus?.resumes?.length" class="focus-list">
-                  <div v-for="item in evaluationData.evaluation.mismatch_focus.resumes" :key="`resume-${item.resume_id}`" class="focus-item">
+                <div
+                  v-if="evaluationData.evaluation?.mismatch_focus?.resumes?.length"
+                  class="focus-list"
+                >
+                  <div
+                    v-for="item in evaluationData.evaluation.mismatch_focus.resumes"
+                    :key="`resume-${item.resume_id}`"
+                    class="focus-item"
+                  >
                     <strong>{{ item.resume_title }}</strong>
-                    <span>{{ item.total }} 条反馈 · 点踩率 {{ percentText(item.dislike_rate || 0) }}</span>
+                    <span
+                      >{{ item.total }} 条反馈 · 点踩率
+                      {{ percentText(item.dislike_rate || 0) }}</span
+                    >
                   </div>
                 </div>
                 <el-empty v-else :image-size="60" description="暂无明显问题简历" />
@@ -227,10 +286,20 @@
             <div class="focus-section">
               <div>
                 <div class="section-title">行业偏差</div>
-                <div v-if="evaluationData.evaluation?.mismatch_focus?.industries?.length" class="focus-list">
-                  <div v-for="item in evaluationData.evaluation.mismatch_focus.industries" :key="item.industry" class="focus-item">
+                <div
+                  v-if="evaluationData.evaluation?.mismatch_focus?.industries?.length"
+                  class="focus-list"
+                >
+                  <div
+                    v-for="item in evaluationData.evaluation.mismatch_focus.industries"
+                    :key="item.industry"
+                    class="focus-item"
+                  >
                     <strong>{{ item.industry }}</strong>
-                    <span>{{ item.total }} 条反馈 · 点踩率 {{ percentText(item.dislike_rate || 0) }}</span>
+                    <span
+                      >{{ item.total }} 条反馈 · 点踩率
+                      {{ percentText(item.dislike_rate || 0) }}</span
+                    >
                   </div>
                 </div>
                 <el-empty v-else :image-size="60" description="暂无明显行业偏差" />
@@ -238,7 +307,11 @@
               <div>
                 <div class="section-title">最近反馈</div>
                 <div v-if="evaluationData.recent_feedback?.length" class="focus-list">
-                  <div v-for="item in evaluationData.recent_feedback.slice(0, 6)" :key="`recent-${item.id}`" class="focus-item">
+                  <div
+                    v-for="item in evaluationData.recent_feedback.slice(0, 6)"
+                    :key="`recent-${item.id}`"
+                    class="focus-item"
+                  >
                     <strong>{{ item.jd_title || '未命名岗位' }}</strong>
                     <span>{{ item.feedback_type }} · {{ item.resume_title }}</span>
                   </div>
@@ -267,7 +340,12 @@
               </template>
             </el-table-column>
             <el-table-column prop="jd_title" label="岗位" min-width="180" show-overflow-tooltip />
-            <el-table-column prop="resume_title" label="简历" min-width="140" show-overflow-tooltip />
+            <el-table-column
+              prop="resume_title"
+              label="简历"
+              min-width="140"
+              show-overflow-tooltip
+            />
             <el-table-column prop="match_score" label="分数" min-width="80" />
             <el-table-column label="规则拆解" min-width="180">
               <template #default="{ row }">
@@ -308,9 +386,11 @@ const anomalyOnly = ref(true)
 const evaluationData = ref(null)
 const tuningSamplePayload = ref({ items: [] })
 
-const calibrationBuckets = computed(() => evaluationData.value?.evaluation?.calibration?.buckets || [])
+const calibrationBuckets = computed(
+  () => evaluationData.value?.evaluation?.calibration?.buckets || []
+)
 const recentTrendTotal = computed(() =>
-  (evaluationData.value?.trend || []).reduce((sum, item) => sum + Number(item.total || 0), 0),
+  (evaluationData.value?.trend || []).reduce((sum, item) => sum + Number(item.total || 0), 0)
 )
 const tuningSamples = computed(() => tuningSamplePayload.value?.items || [])
 
@@ -359,7 +439,7 @@ function percentText(value) {
 
 function segmentStyle(value, total) {
   const safeTotal = Number(total) || 0
-  const width = safeTotal > 0 ? Math.max((Number(value) || 0) / safeTotal * 100, 0) : 0
+  const width = safeTotal > 0 ? Math.max(((Number(value) || 0) / safeTotal) * 100, 0) : 0
   return { width: `${width}%` }
 }
 </script>

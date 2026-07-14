@@ -30,6 +30,7 @@ export default [
     rules: {
       'vue/multi-word-component-names': 'off',
       'vue/no-v-html': 'warn',
+      'vue/attributes-order': 'off',
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
     },
   },

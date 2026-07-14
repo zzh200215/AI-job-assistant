@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 from datetime import datetime
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from app.api.auth import router as auth_router
 from app.api.job_recommend import router as job_router
@@ -215,10 +214,7 @@ def test_job_feedback_stats_only_counts_current_user(job_client, db_session):
     assert {item["industry"] for item in body["data"]["by_industry"]} == {"AI", "Cloud"}
     assert len(body["data"]["tuning_signals"]["high_score_dislikes"]) == 1
     assert body["data"]["tuning_signals"]["high_score_dislikes"][0]["match_score"] == 91
-    assert any(
-        item["type"] == "score_calibration"
-        for item in body["data"]["tuning_signals"]["action_items"]
-    )
+    assert any(item["type"] == "score_calibration" for item in body["data"]["tuning_signals"]["action_items"])
 
 
 def test_job_feedback_evaluation_exposes_calibration_and_coverage(job_client, db_session):

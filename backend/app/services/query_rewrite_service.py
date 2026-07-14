@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """RAG Query Rewrite 服务
 
 根据用户原始问题、简历摘要、JD 摘要，调用 LLM 生成多个更适合向量检索的 query。
 如果 LLM 失败，回退到原始 query。
 """
+
 import logging
-from typing import List, Optional
 from dataclasses import dataclass
 
 from app.services.llm_service import chat_json
@@ -16,10 +15,11 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RewrittenQuery:
     """改写后的检索 query"""
-    query_text: str          # 实际用于向量检索的文本
-    query_type: str          # 类型: skill / responsibility / interview / competency / original
-    purpose: str             # 用途说明（给前端展示）
-    priority: int = 1        # 优先级，数字越小越优先
+
+    query_text: str  # 实际用于向量检索的文本
+    query_type: str  # 类型: skill / responsibility / interview / competency / original
+    purpose: str  # 用途说明（给前端展示）
+    priority: int = 1  # 优先级，数字越小越优先
 
 
 # ===================== Prompt 模板 =====================
@@ -77,10 +77,10 @@ def _build_prompt(original_query: str, resume_summary: str, jd_summary: str) -> 
 
 def rewrite_queries(
     original_query: str,
-    resume_summary: Optional[str] = None,
-    jd_summary: Optional[str] = None,
+    resume_summary: str | None = None,
+    jd_summary: str | None = None,
     max_queries: int = 5,
-) -> List[RewrittenQuery]:
+) -> list[RewrittenQuery]:
     """
     调用 LLM 生成改写后的检索 query 列表。
 
@@ -103,7 +103,7 @@ def rewrite_queries(
         # 兼容 LLM 返回 { "queries": [...] } 或直接返回 [...]
         items = result if isinstance(result, list) else result.get("queries", [])
 
-        queries: List[RewrittenQuery] = []
+        queries: list[RewrittenQuery] = []
         seen = set()
 
         for item in items[:max_queries]:
@@ -111,21 +111,25 @@ def rewrite_queries(
             if not text or text in seen:
                 continue
             seen.add(text)
-            queries.append(RewrittenQuery(
-                query_text=text,
-                query_type=str(item.get("query_type", "unknown")),
-                purpose=str(item.get("purpose", "")),
-                priority=int(item.get("priority", 99)),
-            ))
+            queries.append(
+                RewrittenQuery(
+                    query_text=text,
+                    query_type=str(item.get("query_type", "unknown")),
+                    purpose=str(item.get("purpose", "")),
+                    priority=int(item.get("priority", 99)),
+                )
+            )
 
         # 确保至少保留原始 query
         if not any(q.query_type == "original" for q in queries):
-            queries.append(RewrittenQuery(
-                query_text=original_query,
-                query_type="original",
-                purpose="用户原始问题，作为兜底检索",
-                priority=99,
-            ))
+            queries.append(
+                RewrittenQuery(
+                    query_text=original_query,
+                    query_type="original",
+                    purpose="用户原始问题，作为兜底检索",
+                    priority=99,
+                )
+            )
 
         # 按 priority 排序
         queries.sort(key=lambda x: x.priority)

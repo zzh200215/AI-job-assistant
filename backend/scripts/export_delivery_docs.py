@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Export delivery-facing docs from the current FastAPI app.
 
 Outputs:
@@ -17,14 +16,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = ROOT.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.main import app  # noqa: E402
 from app.core.config import settings  # noqa: E402
+from app.main import app  # noqa: E402
 
 
 def _normalize_methods(path_item: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
@@ -66,7 +64,7 @@ def _build_api_reference(schema: dict[str, Any], generated_at: str) -> str:
         "# 接口参考",
         "",
         f"- 生成时间: {generated_at}",
-        f"- API 文档: `docs/generated/openapi.json`",
+        "- API 文档: `docs/generated/openapi.json`",
         f"- 路由数量: {sum(counts.values())}",
         "",
         "## 方法统计",

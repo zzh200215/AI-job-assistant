@@ -34,13 +34,25 @@
         </div>
         <div class="task-head-actions">
           <el-button size="small" @click="openTaskCenter">任务中心</el-button>
-          <el-button size="small" type="primary" plain @click="openPromptTrace">Prompt 追踪</el-button>
+          <el-button size="small" type="primary" plain @click="openPromptTrace"
+            >Prompt 追踪</el-button
+          >
         </div>
       </div>
       <div class="panel-body">
-        <el-descriptions v-if="taskUsage.tokens_used || taskUsage.cost_cents" :column="2" border size="small" class="usage-summary">
-          <el-descriptions-item label="Token 用量">{{ formatTokens(taskUsage.tokens_used) }}</el-descriptions-item>
-          <el-descriptions-item label="预估成本">{{ formatCost(taskUsage.cost_cents) }}</el-descriptions-item>
+        <el-descriptions
+          v-if="taskUsage.tokens_used || taskUsage.cost_cents"
+          :column="2"
+          border
+          size="small"
+          class="usage-summary"
+        >
+          <el-descriptions-item label="Token 用量">{{
+            formatTokens(taskUsage.tokens_used)
+          }}</el-descriptions-item>
+          <el-descriptions-item label="预估成本">{{
+            formatCost(taskUsage.cost_cents)
+          }}</el-descriptions-item>
         </el-descriptions>
 
         <el-timeline>
@@ -123,7 +135,9 @@
                     <div class="trace-card-tags">
                       <el-tag size="small" type="info">Top {{ item.top_k }}</el-tag>
                       <el-tag size="small">{{ item.result_count }} 条</el-tag>
-                      <el-tag v-if="item.duration_ms" size="small" type="success">{{ item.duration_ms }}ms</el-tag>
+                      <el-tag v-if="item.duration_ms" size="small" type="success"
+                        >{{ item.duration_ms }}ms</el-tag
+                      >
                     </div>
                   </div>
                   <div class="trace-meta">
@@ -137,13 +151,40 @@
                       class="trace-result-item"
                     >
                       <div class="trace-result-title">
-                        {{ resultItem.title || resultItem.doc_title || resultItem.metadata?.title || `结果 ${idx + 1}` }}
+                        {{
+                          resultItem.title ||
+                          resultItem.doc_title ||
+                          resultItem.metadata?.title ||
+                          `结果 ${idx + 1}`
+                        }}
                       </div>
                       <div class="trace-meta">
-                        <span>分数：{{ firstDefined(resultItem.final_score, resultItem.score, resultItem.similarity, '-') }}</span>
-                        <span>来源：{{ resultItem.doc_type || resultItem.metadata?.doc_type || 'unknown' }}</span>
+                        <span
+                          >分数：{{
+                            firstDefined(
+                              resultItem.final_score,
+                              resultItem.score,
+                              resultItem.similarity,
+                              '-'
+                            )
+                          }}</span
+                        >
+                        <span
+                          >来源：{{
+                            resultItem.doc_type || resultItem.metadata?.doc_type || 'unknown'
+                          }}</span
+                        >
                       </div>
-                      <div class="trace-snippet">{{ snippetOf(resultItem.text || resultItem.content || resultItem.chunk || resultItem.metadata?.text) }}</div>
+                      <div class="trace-snippet">
+                        {{
+                          snippetOf(
+                            resultItem.text ||
+                              resultItem.content ||
+                              resultItem.chunk ||
+                              resultItem.metadata?.text
+                          )
+                        }}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -160,7 +201,11 @@
                       <el-tag :type="item.passed ? 'success' : 'warning'" size="small">
                         {{ item.passed ? '通过' : '待修正' }}
                       </el-tag>
-                      <el-tag v-if="item.score !== null && item.score !== undefined" size="small" type="info">
+                      <el-tag
+                        v-if="item.score !== null && item.score !== undefined"
+                        size="small"
+                        type="info"
+                      >
                         {{ item.score }}
                       </el-tag>
                       <el-tag v-if="item.retry_needed" size="small" type="danger">建议重试</el-tag>
@@ -170,7 +215,12 @@
                     <div>
                       <div class="trace-block-title">问题</div>
                       <ul class="trace-bullet-list">
-                        <li v-for="(issue, idx) in normalizeList(item.issues)" :key="`issue-${item.id}-${idx}`">{{ issue }}</li>
+                        <li
+                          v-for="(issue, idx) in normalizeList(item.issues)"
+                          :key="`issue-${item.id}-${idx}`"
+                        >
+                          {{ issue }}
+                        </li>
                       </ul>
                     </div>
                     <div>
@@ -185,11 +235,7 @@
             <el-tab-pane :label="`步骤 I/O (${steps.length})`">
               <el-empty v-if="!steps.length" description="暂无步骤明细" />
               <el-collapse v-else class="step-io-list">
-                <el-collapse-item
-                  v-for="step in steps"
-                  :key="step.id"
-                  :name="String(step.id)"
-                >
+                <el-collapse-item v-for="step in steps" :key="step.id" :name="String(step.id)">
                   <template #title>
                     <div class="step-io-title">
                       <strong>{{ stepLabel(step.step_name) }}</strong>
@@ -226,14 +272,20 @@
       </div>
       <div class="panel-body">
         <el-descriptions :column="2" border size="small">
-          <el-descriptions-item label="候选人">{{ finalReport.summary?.candidate_name || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="目标岗位">{{ finalReport.summary?.target_position || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="候选人">{{
+            finalReport.summary?.candidate_name || '-'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="目标岗位">{{
+            finalReport.summary?.target_position || '-'
+          }}</el-descriptions-item>
           <el-descriptions-item label="匹配度">
             <el-tag :type="scoreTag(finalReport.summary?.match_score)">
               {{ finalReport.summary?.match_score ?? '-' }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="推荐建议">{{ localizedSummaryRecommendation }}</el-descriptions-item>
+          <el-descriptions-item label="推荐建议">{{
+            localizedSummaryRecommendation
+          }}</el-descriptions-item>
           <el-descriptions-item label="综合评价" :span="2">
             {{ localizedOverallEvaluation }}
           </el-descriptions-item>
@@ -254,9 +306,13 @@
               </el-col>
             </el-row>
             <h4>优势</h4>
-            <ul><li v-for="(item, idx) in localizedAgentStrengths" :key="idx">{{ item }}</li></ul>
+            <ul>
+              <li v-for="(item, idx) in localizedAgentStrengths" :key="idx">{{ item }}</li>
+            </ul>
             <h4>短板</h4>
-            <ul><li v-for="(item, idx) in localizedAgentGaps" :key="idx">{{ item }}</li></ul>
+            <ul>
+              <li v-for="(item, idx) in localizedAgentGaps" :key="idx">{{ item }}</li>
+            </ul>
           </el-tab-pane>
 
           <el-tab-pane label="优化建议">
@@ -266,7 +322,9 @@
               </li>
             </ul>
             <h4>快速可执行</h4>
-            <ul><li v-for="(item, idx) in localizedQuickWins" :key="idx">{{ item }}</li></ul>
+            <ul>
+              <li v-for="(item, idx) in localizedQuickWins" :key="idx">{{ item }}</li>
+            </ul>
           </el-tab-pane>
 
           <el-tab-pane label="面试指南">
@@ -274,7 +332,7 @@
             <el-tag
               v-for="item in finalReport.interview_guide?.focus_areas || []"
               :key="item"
-              style="margin: 2px;"
+              style="margin: 2px"
             >
               {{ localizeSentence(item) }}
             </el-tag>
@@ -284,15 +342,21 @@
 
           <el-tab-pane label="发展建议">
             <h4>短期</h4>
-            <ul><li v-for="(item, idx) in localizedShortTermAdvice" :key="idx">{{ item }}</li></ul>
+            <ul>
+              <li v-for="(item, idx) in localizedShortTermAdvice" :key="idx">{{ item }}</li>
+            </ul>
             <h4>长期</h4>
-            <ul><li v-for="(item, idx) in localizedLongTermAdvice" :key="idx">{{ item }}</li></ul>
+            <ul>
+              <li v-for="(item, idx) in localizedLongTermAdvice" :key="idx">{{ item }}</li>
+            </ul>
           </el-tab-pane>
 
           <el-tab-pane label="质量保障">
             <el-alert
               :title="`自我校验评分: ${finalReport.quality_assurance?.self_check_score || 0}`"
-              :type="(finalReport.quality_assurance?.self_check_score || 0) >= 70 ? 'success' : 'warning'"
+              :type="
+                (finalReport.quality_assurance?.self_check_score || 0) >= 70 ? 'success' : 'warning'
+              "
               :closable="false"
               show-icon
             />
@@ -366,23 +430,49 @@ const STEP_STATUS_TEXTS = {
   cancelled: '任务已取消',
 }
 
-const taskStatusLabel = computed(() => TASK_STATUS_LABELS[task.value?.status] || task.value?.status || '')
+const taskStatusLabel = computed(
+  () => TASK_STATUS_LABELS[task.value?.status] || task.value?.status || ''
+)
 const taskStatusTag = computed(() => TASK_STATUS_TAGS[task.value?.status] || 'info')
-const isTerminalTask = computed(() => ['completed', 'partial', 'failed', 'cancelled'].includes(task.value?.status))
-const completedCount = computed(() => steps.value.filter(step => step.status === 'completed').length)
-const retrievalResultCount = computed(() => retrievals.value.reduce((sum, item) => sum + Number(item.result_count || 0), 0))
-const passedChecks = computed(() => checks.value.filter(item => Boolean(item.passed)).length)
+const isTerminalTask = computed(() =>
+  ['completed', 'partial', 'failed', 'cancelled'].includes(task.value?.status)
+)
+const completedCount = computed(
+  () => steps.value.filter((step) => step.status === 'completed').length
+)
+const retrievalResultCount = computed(() =>
+  retrievals.value.reduce((sum, item) => sum + Number(item.result_count || 0), 0)
+)
+const passedChecks = computed(() => checks.value.filter((item) => Boolean(item.passed)).length)
 const finalReport = computed(() => task.value?.final_report || null)
 const taskUsage = computed(() => task.value?.usage || { tokens_used: 0, cost_cents: 0 })
-const localizedSummaryRecommendation = computed(() => localizeRecommendationText(finalReport.value?.summary?.recommendation || ''))
-const localizedOverallEvaluation = computed(() => localizeSentence(finalReport.value?.summary?.overall_evaluation || ''))
-const localizedAgentStrengths = computed(() => normalizeLocalizedTextList(finalReport.value?.match_analysis?.strengths))
-const localizedAgentGaps = computed(() => normalizeLocalizedTextList(finalReport.value?.match_analysis?.gaps))
-const localizedOptimizationKeyPoints = computed(() => normalizeLocalizedTextList(finalReport.value?.optimization_suggestions?.key_points))
-const localizedQuickWins = computed(() => normalizeLocalizedTextList(finalReport.value?.optimization_suggestions?.quick_wins))
-const localizedWeaknessPreparation = computed(() => localizeSentence(finalReport.value?.interview_guide?.weakness_preparation || ''))
-const localizedShortTermAdvice = computed(() => normalizeLocalizedTextList(finalReport.value?.development_advice?.short_term))
-const localizedLongTermAdvice = computed(() => normalizeLocalizedTextList(finalReport.value?.development_advice?.long_term))
+const localizedSummaryRecommendation = computed(() =>
+  localizeRecommendationText(finalReport.value?.summary?.recommendation || '')
+)
+const localizedOverallEvaluation = computed(() =>
+  localizeSentence(finalReport.value?.summary?.overall_evaluation || '')
+)
+const localizedAgentStrengths = computed(() =>
+  normalizeLocalizedTextList(finalReport.value?.match_analysis?.strengths)
+)
+const localizedAgentGaps = computed(() =>
+  normalizeLocalizedTextList(finalReport.value?.match_analysis?.gaps)
+)
+const localizedOptimizationKeyPoints = computed(() =>
+  normalizeLocalizedTextList(finalReport.value?.optimization_suggestions?.key_points)
+)
+const localizedQuickWins = computed(() =>
+  normalizeLocalizedTextList(finalReport.value?.optimization_suggestions?.quick_wins)
+)
+const localizedWeaknessPreparation = computed(() =>
+  localizeSentence(finalReport.value?.interview_guide?.weakness_preparation || '')
+)
+const localizedShortTermAdvice = computed(() =>
+  normalizeLocalizedTextList(finalReport.value?.development_advice?.short_term)
+)
+const localizedLongTermAdvice = computed(() =>
+  normalizeLocalizedTextList(finalReport.value?.development_advice?.long_term)
+)
 
 function fillLast() {
   const rid = localStorage.getItem('recruit.lastResumeId')
@@ -443,18 +533,22 @@ const CANONICAL_AGENT_STEP_LABELS = {
 }
 
 function stepLabel(name) {
-  return ({
-    intent_recognition: '意图识别',
-    resume_parse: '简历解析',
-    jd_parse: 'JD 解析',
-    task_planning: '任务规划',
-    knowledge_retrieval: '知识检索',
-    matching_analysis: '匹配度分析',
-    resume_optimization: '简历优化',
-    interview_question_generation: '面试题生成',
-    self_check: '自我校验',
-    final_report: '汇总报告',
-  }[name] || CANONICAL_AGENT_STEP_LABELS[name] || name)
+  return (
+    {
+      intent_recognition: '意图识别',
+      resume_parse: '简历解析',
+      jd_parse: 'JD 解析',
+      task_planning: '任务规划',
+      knowledge_retrieval: '知识检索',
+      matching_analysis: '匹配度分析',
+      resume_optimization: '简历优化',
+      interview_question_generation: '面试题生成',
+      self_check: '自我校验',
+      final_report: '汇总报告',
+    }[name] ||
+    CANONICAL_AGENT_STEP_LABELS[name] ||
+    name
+  )
 }
 
 function stepStatusType(step) {
@@ -497,7 +591,9 @@ function openPromptTrace() {
     name: 'prompt-traces',
     query: {
       task_id: String(taskId.value),
-      analysis_record_id: task.value?.analysis_record_id ? String(task.value.analysis_record_id) : undefined,
+      analysis_record_id: task.value?.analysis_record_id
+        ? String(task.value.analysis_record_id)
+        : undefined,
     },
   })
 }
@@ -517,14 +613,16 @@ function formatJson(value) {
 }
 
 function snippetOf(value) {
-  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  const text = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
   if (!text) return '暂无片段'
   if (text.length <= 180) return text
   return `${text.slice(0, 177)}...`
 }
 
 function firstDefined(...values) {
-  const found = values.find(value => value !== null && value !== undefined && value !== '')
+  const found = values.find((value) => value !== null && value !== undefined && value !== '')
   return found ?? '-'
 }
 
@@ -598,17 +696,54 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.step-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.step-badge { font-size: 13px; }
-.step-duration { color: var(--app-muted); font-size: 11px; }
-.step-status-text { color: var(--app-text); font-size: 13px; margin-bottom: 4px; }
-.step-output { background: var(--app-bg); padding: 6px 10px; border-radius: var(--app-radius-xs, 8px); font-size: 12px; color: var(--app-text); }
-.step-error { color: var(--app-danger); font-size: 12px; margin-top: 4px; }
-.running-indicator { color: var(--app-warning); }
-.usage-summary { margin-bottom: 16px; }
-.output-preview { color: var(--app-primary); }
-.trace-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--el-border-color-lighter); }
-.trace-stats { margin-bottom: 16px; flex-wrap: wrap; }
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.step-badge {
+  font-size: 13px;
+}
+.step-duration {
+  color: var(--app-muted);
+  font-size: 11px;
+}
+.step-status-text {
+  color: var(--app-text);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.step-output {
+  background: var(--app-bg);
+  padding: 6px 10px;
+  border-radius: var(--app-radius-xs, 8px);
+  font-size: 12px;
+  color: var(--app-text);
+}
+.step-error {
+  color: var(--app-danger);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.running-indicator {
+  color: var(--app-warning);
+}
+.usage-summary {
+  margin-bottom: 16px;
+}
+.output-preview {
+  color: var(--app-primary);
+}
+.trace-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+.trace-stats {
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
 .trace-stat-card {
   min-width: 120px;
   padding: 12px 14px;
@@ -616,10 +751,25 @@ onUnmounted(() => {
   background: var(--app-bg);
   border: 1px solid var(--app-line);
 }
-.trace-stat-card span { display: block; font-size: 12px; color: var(--app-muted); }
-.trace-stat-card strong { display: block; margin-top: 6px; font-size: 22px; color: var(--app-text); }
-.trace-tabs { margin-top: 8px; }
-.trace-list { display: flex; flex-direction: column; gap: 12px; }
+.trace-stat-card span {
+  display: block;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.trace-stat-card strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 22px;
+  color: var(--app-text);
+}
+.trace-tabs {
+  margin-top: 8px;
+}
+.trace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .trace-card {
   padding: 14px;
   border-radius: var(--app-radius-xs, 8px);
@@ -646,7 +796,10 @@ onUnmounted(() => {
   background: #fff;
   border: 1px solid var(--el-border-color-lighter);
 }
-.trace-result-title { font-weight: 600; color: var(--app-text); }
+.trace-result-title {
+  font-weight: 600;
+  color: var(--app-text);
+}
 .trace-snippet {
   margin-top: 6px;
   color: var(--app-muted);
@@ -672,8 +825,14 @@ onUnmounted(() => {
   padding-left: 18px;
   color: var(--app-muted);
 }
-.step-io-list { margin-top: 4px; }
-.step-io-title { width: 100%; justify-content: space-between; padding-right: 12px; }
+.step-io-list {
+  margin-top: 4px;
+}
+.step-io-title {
+  width: 100%;
+  justify-content: space-between;
+  padding-right: 12px;
+}
 .code-block {
   margin: 0;
   padding: 12px;
@@ -687,11 +846,28 @@ onUnmounted(() => {
   max-height: 320px;
   overflow: auto;
 }
-.dim-card { text-align: center; padding: 8px; background: var(--app-bg); border-radius: var(--app-radius-xs, 8px); }
-.dim-label { font-size: 12px; color: var(--app-muted); }
-.dim-score { font-size: 24px; font-weight: 700; color: var(--app-primary); }
-h4 { margin: 12px 0 6px; }
-ul { padding-left: 18px; margin: 4px 0; }
+.dim-card {
+  text-align: center;
+  padding: 8px;
+  background: var(--app-bg);
+  border-radius: var(--app-radius-xs, 8px);
+}
+.dim-label {
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.dim-score {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--app-primary);
+}
+h4 {
+  margin: 12px 0 6px;
+}
+ul {
+  padding-left: 18px;
+  margin: 4px 0;
+}
 
 @media (max-width: 768px) {
   .task-card-head,

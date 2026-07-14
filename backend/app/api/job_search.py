@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 """Job search APIs: external crawl, local fallback, and demo seeds."""
 
 from __future__ import annotations
 
 import traceback
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import String, cast, or_
@@ -16,7 +14,7 @@ from app.models.history import JobDescription
 from app.models.user import User
 from app.services.job_spider import JobItem, JobSpider
 from app.utils.job_access import visible_job_filter
-from app.utils.response import ERR_COMMON, ERR_PARAM, fail, ok
+from app.utils.response import ERR_COMMON, fail, ok
 
 router = APIRouter()
 spider = JobSpider()
@@ -269,7 +267,9 @@ async def search_external_jobs(
         external_jobs, external_error = [], f"外部抓取异常: {str(exc)[:80]}"
 
     has_real_external = any(not _is_demo_source(job.source) for job in external_jobs)
-    external_results, saved_count = _save_external_jobs(db, external_jobs, current_user, save) if external_jobs else ([], 0)
+    external_results, saved_count = (
+        _save_external_jobs(db, external_jobs, current_user, save) if external_jobs else ([], 0)
+    )
 
     local_results: list[dict] = []
     result_mode = "external"

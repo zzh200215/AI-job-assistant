@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Create or promote an admin user.
 
@@ -105,10 +104,7 @@ def main() -> int:
     try:
         existing = (
             db.query(User)
-            .filter(
-                (func.lower(User.username) == username.lower())
-                | (func.lower(User.email) == email.lower())
-            )
+            .filter((func.lower(User.username) == username.lower()) | (func.lower(User.email) == email.lower()))
             .first()
         )
 

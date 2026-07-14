@@ -1,23 +1,23 @@
-# -*- coding: utf-8 -*-
 """订阅与权益 API。"""
+
 from __future__ import annotations
+
+import hashlib
+import os
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user, require_admin
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 from app.services.subscription_service import (
-    get_user_quota_summary,
-    check_quota,
     TIER_FEATURES,
+    check_quota,
+    get_user_quota_summary,
 )
-from app.utils.response import ok, fail, ERR_PARAM
-
-import hashlib
-import os
-from app.core.config import settings
+from app.utils.response import ERR_PARAM, fail, ok
 
 router = APIRouter()
 
@@ -29,13 +29,15 @@ def list_plans():
     for tier, features in TIER_FEATURES.items():
         prices = {"free": (0, 0), "pro": (9900, 99900), "enterprise": (0, 0)}
         monthly, yearly = prices.get(tier, (0, 0))
-        plans.append({
-            "tier": tier,
-            "name": {"free": "免费版", "pro": "Pro 版", "enterprise": "企业版"}[tier],
-            "price_monthly": monthly,
-            "price_yearly": yearly,
-            "features": features,
-        })
+        plans.append(
+            {
+                "tier": tier,
+                "name": {"free": "免费版", "pro": "Pro 版", "enterprise": "企业版"}[tier],
+                "price_monthly": monthly,
+                "price_yearly": yearly,
+                "features": features,
+            }
+        )
     return ok(plans)
 
 
@@ -56,7 +58,7 @@ def check_resource_quota(
     current_user: User = Depends(get_current_user),
 ):
     """检查指定资源是否可用，可选是否消耗额度。
-    
+
     请求体: {"resource": "daily_analysis", "consume": false}
     资源类型: daily_analysis / daily_interview / daily_recommendation
               / deep_analysis / ats_check / offer_decision / resume_count
@@ -79,7 +81,7 @@ def create_order(
     current_user: User = Depends(get_current_user),
 ):
     """创建订阅订单（支付接入后使用）。
-    
+
     请求体: {"plan_tier": "pro", "period": "monthly"}
     """
     from app.models.subscription import SubscriptionOrder
@@ -94,6 +96,7 @@ def create_order(
     price = prices.get(plan_tier, (0, 0))[0 if period == "monthly" else 1]
 
     import uuid
+
     order = SubscriptionOrder(
         user_id=current_user.id,
         plan_tier=plan_tier,
@@ -115,17 +118,29 @@ def list_orders(
     current_user: User = Depends(get_current_user),
 ):
     from app.models.subscription import SubscriptionOrder
-    orders = db.query(SubscriptionOrder).filter(
-        SubscriptionOrder.user_id == current_user.id,
-    ).order_by(SubscriptionOrder.created_at.desc()).limit(20).all()
-    return ok([{
-        "id": o.id,
-        "plan_tier": o.plan_tier,
-        "amount": float(o.amount),
-        "status": o.status,
-        "created_at": o.created_at.isoformat() if o.created_at else None,
-        "paid_at": o.paid_at.isoformat() if o.paid_at else None,
-    } for o in orders])
+
+    orders = (
+        db.query(SubscriptionOrder)
+        .filter(
+            SubscriptionOrder.user_id == current_user.id,
+        )
+        .order_by(SubscriptionOrder.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    return ok(
+        [
+            {
+                "id": o.id,
+                "plan_tier": o.plan_tier,
+                "amount": float(o.amount),
+                "status": o.status,
+                "created_at": o.created_at.isoformat() if o.created_at else None,
+                "paid_at": o.paid_at.isoformat() if o.paid_at else None,
+            }
+            for o in orders
+        ]
+    )
 
 
 @router.post("/pay-callback", summary="支付回调（Webhook）")
@@ -135,17 +150,17 @@ def payment_callback(
 ):
     """
     支付渠道回调端点。
-    
+
     请求体: {"order_id": 1, "transaction_id": "tx_xxx", "payment_method": "alipay", "amount": 9900, "sign": "..."}
-    
+
     安全措施：
     - 签名校验：使用渠道密钥验证回调真实性
     - 行锁：SELECT FOR UPDATE 防止并发
     - 金额校验：回调金额 >= 订单金额
     - 幂等：同一 order_id 多次调用不重复开通
     """
-    from app.services.subscription_service import process_payment_callback
     from app.models.subscription import SubscriptionOrder
+    from app.services.subscription_service import process_payment_callback
 
     order_id = payload.get("order_id")
     transaction_id = payload.get("transaction_id", "")
@@ -170,7 +185,10 @@ def payment_callback(
         return fail(message="订单不存在", code=ERR_PARAM)
 
     success, msg = process_payment_callback(
-        db, order_id, transaction_id, payment_method,
+        db,
+        order_id,
+        transaction_id,
+        payment_method,
         paid_amount=paid_amount,
     )
     if success:
@@ -188,8 +206,8 @@ def mock_pay(
     模拟支付成功（仅测试环境可用）。
     校验订单归属当前用户，防止越权操作。
     """
-    from app.services.subscription_service import process_payment_callback
     from app.models.subscription import SubscriptionOrder
+    from app.services.subscription_service import process_payment_callback
 
     # 生产环境禁用
     if settings.APP_ENV == "production":
@@ -207,8 +225,10 @@ def mock_pay(
         return fail(message="无权操作他人的订单", code=ERR_PARAM)
 
     import uuid
+
     success, msg = process_payment_callback(
-        db, order_id,
+        db,
+        order_id,
         transaction_id=str(uuid.uuid4()),
         payment_method="mock",
     )
@@ -225,22 +245,28 @@ def admin_list_orders(
     _admin: User = Depends(require_admin),
 ):
     from app.models.subscription import SubscriptionOrder
+
     query = db.query(SubscriptionOrder).order_by(SubscriptionOrder.created_at.desc())
     total = query.count()
     orders = query.offset((page - 1) * page_size).limit(page_size).all()
-    return ok(data={
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "items": [{
-            "id": o.id,
-            "user_id": o.user_id,
-            "plan_tier": o.plan_tier,
-            "amount": float(o.amount),
-            "status": o.status,
-            "payment_method": o.payment_method,
-            "transaction_id": o.transaction_id,
-            "created_at": o.created_at.isoformat() if o.created_at else None,
-            "paid_at": o.paid_at.isoformat() if o.paid_at else None,
-        } for o in orders],
-    })
+    return ok(
+        data={
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "items": [
+                {
+                    "id": o.id,
+                    "user_id": o.user_id,
+                    "plan_tier": o.plan_tier,
+                    "amount": float(o.amount),
+                    "status": o.status,
+                    "payment_method": o.payment_method,
+                    "transaction_id": o.transaction_id,
+                    "created_at": o.created_at.isoformat() if o.created_at else None,
+                    "paid_at": o.paid_at.isoformat() if o.paid_at else None,
+                }
+                for o in orders
+            ],
+        }
+    )

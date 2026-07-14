@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """简历 vs JD 匹配度分析 Prompt（支持 RAG 上下文注入）"""
+
 MATCH_PROMPT = """你是一名资深求职教练，请基于下面的简历 JSON 和岗位 JD JSON，输出岗位匹配度分析。
 
 {rag_context}

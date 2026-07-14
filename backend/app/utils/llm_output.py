@@ -2,10 +2,11 @@
 LLM 输出解析与降级工具。
 提供安全的 JSON 解析、空结果处理和结构化数据提取。
 """
+
 import json
 import logging
 import re
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +17,10 @@ def safe_parse_json(
     raw: str,
     default: Any = None,
     log_error: bool = True,
-) -> Optional[dict]:
+) -> dict | None:
     """
     安全解析 LLM 返回的 JSON。
-    
+
     降级策略：
     1. 直接 json.loads
     2. 尝试提取 ```json ... ``` 代码块
@@ -61,7 +62,7 @@ def safe_parse_json(
 
 def safe_extract_list(
     raw: Any,
-    default: Optional[list] = None,
+    default: list | None = None,
 ) -> list:
     """
     安全提取列表数据。

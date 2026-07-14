@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
 """用户偏好设置 API"""
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.c_end import NotificationPrefsUpdate, PrivacyUpdate, DefaultsUpdate
-from app.utils.response import ERR_PARAM, ok, fail
+from app.schemas.c_end import DefaultsUpdate, NotificationPrefsUpdate, PrivacyUpdate
+from app.utils.response import ERR_PARAM, fail, ok
 
 router = APIRouter()
 
@@ -20,14 +20,16 @@ async def get_preferences(
     """获取当前用户的所有偏好设置。"""
     db.refresh(current_user)
 
-    return ok({
-        "default_resume_id": current_user.default_resume_id,
-        "default_target_id": current_user.default_target_id,
-        "notification": current_user.get_notification_preferences(),
-        "privacy": current_user.get_privacy_settings(),
-        "language": current_user.language or "zh-CN",
-        "theme": current_user.theme or "light",
-    })
+    return ok(
+        {
+            "default_resume_id": current_user.default_resume_id,
+            "default_target_id": current_user.default_target_id,
+            "notification": current_user.get_notification_preferences(),
+            "privacy": current_user.get_privacy_settings(),
+            "language": current_user.language or "zh-CN",
+            "theme": current_user.theme or "light",
+        }
+    )
 
 
 @router.put("/preferences/notification", summary="更新通知偏好")
@@ -78,11 +80,16 @@ async def update_defaults(
     if payload.default_resume_id is not None:
         rid = payload.default_resume_id
         from app.models.history import Resume
-        resume = db.query(Resume).filter(
-            Resume.id == rid,
-            Resume.user_id == current_user.id,
-            Resume.is_deleted == 0,
-        ).first()
+
+        resume = (
+            db.query(Resume)
+            .filter(
+                Resume.id == rid,
+                Resume.user_id == current_user.id,
+                Resume.is_deleted == 0,
+            )
+            .first()
+        )
         if not resume:
             return fail(message="简历不存在或无权限", code=ERR_PARAM)
         current_user.default_resume_id = rid
@@ -90,10 +97,15 @@ async def update_defaults(
     if payload.default_target_id is not None:
         tid = payload.default_target_id
         from app.models.job_target import JobTarget
-        target = db.query(JobTarget).filter(
-            JobTarget.id == tid,
-            JobTarget.user_id == current_user.id,
-        ).first()
+
+        target = (
+            db.query(JobTarget)
+            .filter(
+                JobTarget.id == tid,
+                JobTarget.user_id == current_user.id,
+            )
+            .first()
+        )
         if not target:
             return fail(message="求职目标不存在或无权限", code=ERR_PARAM)
         current_user.default_target_id = tid
@@ -107,9 +119,12 @@ async def update_defaults(
     db.add(current_user)
     db.commit()
 
-    return ok({
-        "default_resume_id": current_user.default_resume_id,
-        "default_target_id": current_user.default_target_id,
-        "language": current_user.language,
-        "theme": current_user.theme,
-    }, message="默认设置已更新")
+    return ok(
+        {
+            "default_resume_id": current_user.default_resume_id,
+            "default_target_id": current_user.default_target_id,
+            "language": current_user.language,
+            "theme": current_user.theme,
+        },
+        message="默认设置已更新",
+    )

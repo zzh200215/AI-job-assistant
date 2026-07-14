@@ -1,26 +1,24 @@
-# -*- coding: utf-8 -*-
 """Shared runners for orchestration strategies and legacy wrappers."""
 
 from __future__ import annotations
 
-from datetime import timedelta
 import logging
 import traceback
-from typing import Optional
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
-from app.core.database import SessionLocal
 from app.core.config import settings
+from app.core.database import SessionLocal
 from app.models.agent import AgentTask
 from app.models.agent_run import AgentRun
 from app.orchestration.registry import DEFAULT_REGISTRY
 from app.orchestration.strategies import StrategyFactory
 from app.services.orchestration_backend import (
-    TaskPayload,
     RedisQueueOrchestrationBackend,
-    health_snapshot,
+    TaskPayload,
     get_orchestration_backend,
+    health_snapshot,
 )
 from app.utils.time_helper import utc_now
 
@@ -81,7 +79,7 @@ def get_queue_health() -> dict:
 def create_task(
     resume_id: int,
     jd_id: int,
-    user_id: Optional[int] = None,
+    user_id: int | None = None,
     *,
     strategy_name: str | None = None,
     retry_of_task_id: int | None = None,
@@ -113,7 +111,7 @@ def run_strategy_async(
     strategy_name: str,
     resume_id: int,
     jd_id: int,
-    user_id: Optional[int] = None,
+    user_id: int | None = None,
     *,
     retry_of_task_id: int | None = None,
 ) -> int:
@@ -125,7 +123,7 @@ def run_strategy_async(
         strategy_name=strategy_name,
         retry_of_task_id=retry_of_task_id,
     )
-    payload = TaskPayload(
+    TaskPayload(
         strategy_name=strategy_name,
         task_id=task_id,
         resume_id=resume_id,
@@ -141,7 +139,7 @@ def start_strategy_thread(
     task_id: int,
     resume_id: int,
     jd_id: int,
-    user_id: Optional[int] = None,
+    user_id: int | None = None,
 ):
     """Run a strategy in the configured backend for an existing task."""
     payload = TaskPayload(
@@ -182,7 +180,7 @@ def start_legacy_layered_thread(
     task_id: int,
     resume_id: int,
     jd_id: int,
-    user_id: Optional[int] = None,
+    user_id: int | None = None,
 ):
     """Execute the layered strategy for a legacy AgentRun in background."""
     payload = TaskPayload(
@@ -246,11 +244,7 @@ def mark_stale_running_tasks_failed(
     session = db or SessionLocal()
     owns_session = db is None
     try:
-        tasks = (
-            session.query(AgentTask)
-            .filter(AgentTask.status == "running", AgentTask.start_time < cutoff)
-            .all()
-        )
+        tasks = session.query(AgentTask).filter(AgentTask.status == "running", AgentTask.start_time < cutoff).all()
         for task in tasks:
             task.status = "failed"
             task.error_msg = "Marked failed on startup because the previous worker stopped before completion"
@@ -320,7 +314,7 @@ def retry_task(
             retry_of_task_id=task.id,
             db=session,
         )
-        payload = TaskPayload(
+        TaskPayload(
             strategy_name=strategy_name,
             task_id=new_task_id,
             resume_id=task.resume_id,

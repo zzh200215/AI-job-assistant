@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """System status API tests."""
 
 from __future__ import annotations
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from app.api import system
 from app.api.auth import router as auth_router
@@ -55,12 +54,14 @@ def create_user(db_session, *, username: str, email: str, role: str = "candidate
 
 
 def auth_headers(user: User) -> dict:
-    token = create_access_token({
-        "sub": str(user.id),
-        "email": user.email,
-        "username": user.username,
-        "role": user.role,
-    })
+    token = create_access_token(
+        {
+            "sub": str(user.id),
+            "email": user.email,
+            "username": user.username,
+            "role": user.role,
+        }
+    )
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -84,6 +85,10 @@ def test_system_status_returns_runtime_flags(client):
     assert "embedding_provider" in data
     assert "reranker_provider" in data
     assert "demo_mode" in data
+    assert "model_runtime" in data
+    assert "ready" in data["model_runtime"]
+    assert "configured" in data["model_runtime"]["llm"]
+    assert "configured" in data["model_runtime"]["embedding"]
     assert data["capabilities"]["social_login"] is False
     assert data["capabilities"]["password_reset"] is True
     assert isinstance(data["capabilities"]["ocr_resume_parse"], bool)
@@ -136,3 +141,36 @@ def test_system_overview_returns_counts_for_admin(client, db_session):
     assert "embedding_metrics" in data
     assert "current" in data["embedding_metrics"]
     assert "daily" in data["embedding_metrics"]
+
+
+def test_model_probe_rejects_candidate_role(client):
+    register_response = register_user(client)
+    token = register_response.json()["data"]["access_token"]
+
+    response = client.post("/system/model-probe", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 403
+
+
+def test_model_probe_returns_minimal_provider_checks(client, db_session, monkeypatch):
+    admin = create_user(
+        db_session,
+        username="probe_admin",
+        email="probe_admin@example.com",
+        role="admin",
+    )
+    monkeypatch.setattr(
+        system,
+        "_model_runtime_status",
+        lambda: {"ready": True, "live_ready": True, "llm": {"mode": "live"}, "embedding": {"mode": "live"}},
+    )
+    monkeypatch.setattr(system, "_probe_llm", lambda: {"ok": True, "latency_ms": 12})
+    monkeypatch.setattr(system, "_probe_embedding", lambda: {"ok": True, "latency_ms": 8, "dimension": 1024})
+
+    response = client.post("/system/model-probe", headers=auth_headers(admin))
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["runtime"]["live_ready"] is True
+    assert data["checks"]["llm"]["ok"] is True
+    assert data["checks"]["embedding"]["dimension"] == 1024

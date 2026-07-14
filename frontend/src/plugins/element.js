@@ -5,13 +5,25 @@ import { ElCard } from 'element-plus/es/components/card/index.mjs'
 import { ElCheckbox } from 'element-plus/es/components/checkbox/index.mjs'
 import { ElCol } from 'element-plus/es/components/col/index.mjs'
 import { ElCollapse, ElCollapseItem } from 'element-plus/es/components/collapse/index.mjs'
-import { ElAside, ElContainer, ElHeader, ElMain } from 'element-plus/es/components/container/index.mjs'
+import {
+  ElAside,
+  ElContainer,
+  ElHeader,
+  ElMain,
+} from 'element-plus/es/components/container/index.mjs'
 import { ElDatePicker } from 'element-plus/es/components/date-picker/index.mjs'
-import { ElDescriptions, ElDescriptionsItem } from 'element-plus/es/components/descriptions/index.mjs'
+import {
+  ElDescriptions,
+  ElDescriptionsItem,
+} from 'element-plus/es/components/descriptions/index.mjs'
 import { ElDialog } from 'element-plus/es/components/dialog/index.mjs'
 import { ElDivider } from 'element-plus/es/components/divider/index.mjs'
 import { ElDrawer } from 'element-plus/es/components/drawer/index.mjs'
-import { ElDropdown, ElDropdownItem, ElDropdownMenu } from 'element-plus/es/components/dropdown/index.mjs'
+import {
+  ElDropdown,
+  ElDropdownItem,
+  ElDropdownMenu,
+} from 'element-plus/es/components/dropdown/index.mjs'
 import { ElEmpty } from 'element-plus/es/components/empty/index.mjs'
 import { ElForm, ElFormItem } from 'element-plus/es/components/form/index.mjs'
 import { ElIcon } from 'element-plus/es/components/icon/index.mjs'
@@ -92,7 +104,7 @@ const components = [
 ]
 
 export function installElement(app) {
-  components.forEach(component => {
+  components.forEach((component) => {
     app.use(component)
   })
   app.directive('loading', vLoading)

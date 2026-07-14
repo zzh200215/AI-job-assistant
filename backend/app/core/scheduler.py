@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 定时任务调度器
 
@@ -6,10 +5,12 @@
 - 提醒检查（面试/Offer/投递跟进）: 每小时
 - 新JD推送: 每天早上9点
 """
+
 import logging
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.config import settings
 
@@ -76,6 +77,7 @@ def shutdown_scheduler() -> None:
 # 定时任务实现
 # ============================================================
 
+
 def _run_reminder_check():
     """执行提醒检查（面试/Offer/投递跟进）"""
     from app.core.database import SessionLocal
@@ -95,19 +97,12 @@ def _run_new_jd_push():
     """为所有活跃用户推送新JD"""
     from app.core.database import SessionLocal
     from app.models.job_target import JobTarget
-    from app.models.user import User
     from app.services.reminder_service import send_new_jd_notifications
 
     db = SessionLocal()
     try:
         # 获取有活跃目标的用户
-        user_ids = {
-            row[0] for row in
-            db.query(JobTarget.user_id)
-            .filter(JobTarget.status == "active")
-            .distinct()
-            .all()
-        }
+        user_ids = {row[0] for row in db.query(JobTarget.user_id).filter(JobTarget.status == "active").distinct().all()}
 
         total_notifications = 0
         for uid in user_ids:
@@ -133,6 +128,7 @@ def _run_target_stats_refresh():
     try:
         targets = db.query(JobTarget).filter(JobTarget.status == "active").all()
         from app.api.job_target import _refresh_target_stats
+
         for target in targets:
             try:
                 _refresh_target_stats(target, db)

@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
 """岗位推荐相关 ORM 模型"""
-from sqlalchemy import Column, BigInteger, String, Integer, DateTime, Text, JSON, Float, ForeignKey
+
+from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, String
 
 from app.core.database import Base
 from app.utils.time_helper import utc_now
@@ -8,6 +8,7 @@ from app.utils.time_helper import utc_now
 
 class JobRecommendationFeedback(Base):
     """用户推荐反馈表"""
+
     __tablename__ = "job_recommend_feedback"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -32,6 +33,7 @@ class JobRecommendationFeedback(Base):
 
 class JobBookmark(Base):
     """职位收藏/不感兴趣表"""
+
     __tablename__ = "job_bookmark"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)

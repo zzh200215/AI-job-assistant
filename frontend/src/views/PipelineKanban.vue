@@ -90,6 +90,37 @@
       </div>
     </div>
 
+    <div v-if="showStats && versionPerformance.length" class="version-performance">
+      <div class="version-performance-title">
+        <div>
+          <span class="section-kicker">Resume attribution</span>
+          <h3>简历版本表现</h3>
+        </div>
+        <span>按已投递记录计算</span>
+      </div>
+      <div class="version-performance-list">
+        <div
+          v-for="item in versionPerformance"
+          :key="item.resume_version_id"
+          class="version-performance-row"
+        >
+          <div class="version-name">
+            <strong>{{ item.label }}</strong>
+            <span>{{ item.submitted }} 次投递</span>
+          </div>
+          <div class="version-metric">
+            <strong>{{ item.interview_rate }}%</strong><span>面试率</span>
+          </div>
+          <div class="version-metric">
+            <strong>{{ item.offer_rate }}%</strong><span>Offer 率</span>
+          </div>
+          <div class="version-outcomes">
+            <span>{{ item.interviews }} 面试</span><span>{{ item.offers }} Offer</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 看板列 -->
     <div v-if="loading" class="loading-state">
       <el-icon class="is-loading"><Loading /></el-icon> 加载中...
@@ -174,6 +205,14 @@
                   <el-icon><Histogram /></el-icon> {{ Math.round(card.match_score) }}分
                 </span>
               </div>
+              <el-tag
+                v-if="card.resume_version_label"
+                class="resume-version-tag"
+                size="small"
+                effect="plain"
+              >
+                {{ card.resume_version_label }}
+              </el-tag>
 
               <div v-if="card.interview_at && col.key === 'interview'" class="card-interview">
                 <el-icon><Clock /></el-icon>
@@ -229,6 +268,14 @@
           </template>
         </el-table-column>
         <el-table-column prop="company" label="公司" width="120" />
+        <el-table-column label="简历版本" min-width="130">
+          <template #default="{ row }">
+            <span v-if="row.resume_version_label" class="version-cell">{{
+              row.resume_version_label
+            }}</span>
+            <span v-else class="follow-ok">未记录</span>
+          </template>
+        </el-table-column>
         <el-table-column label="阶段" width="100">
           <template #default="{ row }">
             <el-tag size="small" :type="stageTagType(row.stage)">{{
@@ -319,7 +366,22 @@
           </el-form-item>
         </div>
         <el-form-item label="备注">
-          <el-input v-model="addForm.notes" type="textarea" :rows="2" />
+          <el-input v-model="addForm.note" type="textarea" :rows="2" />
+        </el-form-item>
+        <el-form-item label="本次投递使用的简历版本">
+          <el-select
+            v-model="addForm.resume_version_id"
+            clearable
+            placeholder="选择已保存的简历版本"
+            class="full-width"
+          >
+            <el-option
+              v-for="version in resumeVersions"
+              :key="version.id"
+              :label="`${version.label} · ${version.resume_name}`"
+              :value="version.id"
+            />
+          </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -351,21 +413,45 @@
           <el-descriptions-item label="匹配度">{{
             detailCard.match_score ? Math.round(detailCard.match_score) + '分' : '-'
           }}</el-descriptions-item>
+          <el-descriptions-item label="简历版本" :span="2">{{
+            detailCard.resume_version_label || '未记录'
+          }}</el-descriptions-item>
           <el-descriptions-item label="创建时间" :span="2">{{
             formatDateTime(detailCard.create_time)
           }}</el-descriptions-item>
-          <el-descriptions-item v-if="detailCard.notes" label="备注" :span="2">{{
-            detailCard.notes
+          <el-descriptions-item v-if="detailCard.note" label="备注" :span="2">{{
+            detailCard.note
           }}</el-descriptions-item>
           <el-descriptions-item v-if="detailCard.interview_at" label="面试时间" :span="2">{{
             formatDateTime(detailCard.interview_at)
           }}</el-descriptions-item>
-          <el-descriptions-item v-if="detailCard.url" label="岗位链接" :span="2">
-            <el-link :href="detailCard.url" target="_blank" type="primary">{{
-              detailCard.url
+          <el-descriptions-item v-if="detailCard.source_url" label="岗位链接" :span="2">
+            <el-link :href="detailCard.source_url" target="_blank" type="primary">{{
+              detailCard.source_url
             }}</el-link>
           </el-descriptions-item>
         </el-descriptions>
+        <div class="feedback-entry">
+          <strong>投递反馈</strong>
+          <div class="feedback-controls">
+            <el-select v-model="feedbackForm.feedback_type" placeholder="反馈类型" size="small">
+              <el-option label="HR 回复" value="hr_reply" />
+              <el-option label="面试反馈" value="interview" />
+              <el-option label="拒绝原因" value="rejection" />
+              <el-option label="Offer 反馈" value="offer" />
+            </el-select>
+            <el-rate v-model="feedbackForm.feedback_score" :max="5" />
+          </div>
+          <el-input
+            v-model="feedbackForm.feedback_note"
+            type="textarea"
+            :rows="2"
+            placeholder="记录关键信息、建议或拒绝原因"
+          />
+          <el-button size="small" type="primary" :loading="feedbackSaving" @click="saveFeedback"
+            >保存反馈</el-button
+          >
+        </div>
         <div class="detail-actions">
           <el-button
             size="small"
@@ -423,6 +509,9 @@ import {
   movePipelineStage,
   createJobPipelineEntry,
   deleteJobPipelineEntry,
+  getPipelineResumeVersions,
+  getPipelineResumeVersionStats,
+  updateJobPipelineEntry,
 } from '@/api/targets'
 
 const router = useRouter()
@@ -433,8 +522,9 @@ const columns = [
   { key: 'written_test', label: '笔试', accent: 'amber' },
   { key: 'interview', label: '面试', accent: 'violet' },
   { key: 'offer', label: 'Offer', accent: 'green' },
+  { key: 'accepted', label: '已入职', accent: 'green' },
   { key: 'rejected', label: '已拒绝', accent: 'red' },
-  { key: 'abandoned', label: '已放弃', accent: 'gray' },
+  { key: 'withdrawn', label: '已放弃', accent: 'gray' },
 ]
 
 const loading = ref(true)
@@ -443,6 +533,8 @@ const dragCard = ref(null)
 const viewMode = ref('kanban')
 const showStats = ref(false)
 const selectedCards = ref(new Set())
+const resumeVersions = ref([])
+const versionPerformance = ref([])
 const totalCards = computed(() =>
   columns.reduce((sum, col) => sum + (kanban.value[col.key] || []).length, 0)
 )
@@ -469,7 +561,7 @@ const counts = computed(() => {
 
 const funnelData = computed(() =>
   columns
-    .filter((c) => c.key !== 'abandoned')
+    .filter((c) => ['todo', 'applied', 'written_test', 'interview', 'offer'].includes(c.key))
     .map((c) => ({
       ...c,
       count: counts.value[c.key] || 0,
@@ -492,15 +584,15 @@ function conversionRate(stage) {
 const rejectionRate = computed(() => {
   const total = totalCards.value
   if (!total) return 0
-  return Math.round((((counts.value.rejected || 0) + (counts.value.abandoned || 0)) / total) * 100)
+  return Math.round((((counts.value.rejected || 0) + (counts.value.withdrawn || 0)) / total) * 100)
 })
 
 const avgResponseDays = computed(() => {
   const now = Date.now()
   const applied = kanban.value.applied || []
   const days = applied
-    .filter((c) => c.last_update_time)
-    .map((c) => Math.round((now - new Date(c.last_update_time).getTime()) / 86400000))
+    .filter((c) => c.update_time)
+    .map((c) => Math.round((now - new Date(c.update_time).getTime()) / 86400000))
   if (!days.length) return '--'
   const avg = Math.round(days.reduce((s, d) => s + d, 0) / days.length)
   return avg + 'd'
@@ -526,7 +618,7 @@ function stageTagType(stage) {
     interview: 'success',
     offer: 'success',
     rejected: 'danger',
-    abandoned: 'info',
+    withdrawn: 'info',
   }
   return map[stage] || 'info'
 }
@@ -539,12 +631,12 @@ function scoreLevel(score) {
 
 // 跟进提醒
 function needsFollowUp(card) {
-  return (card.stage === 'applied' || card.stage === 'written_test') && card.last_update_time
+  return (card.stage === 'applied' || card.stage === 'written_test') && card.update_time
 }
 
 function followUpDays(card) {
-  if (!card.last_update_time) return 0
-  return Math.round((Date.now() - new Date(card.last_update_time).getTime()) / 86400000)
+  if (!card.update_time) return 0
+  return Math.round((Date.now() - new Date(card.update_time).getTime()) / 86400000)
 }
 
 function followUpLevel(card) {
@@ -559,6 +651,8 @@ const addSubmitting = ref(false)
 const addFormRef = ref(null)
 const showDetailDialog = ref(false)
 const detailCard = ref(null)
+const feedbackSaving = ref(false)
+const feedbackForm = ref({ feedback_type: '', feedback_score: 0, feedback_note: '' })
 const loadError = ref('')
 
 const addForm = ref({
@@ -566,7 +660,8 @@ const addForm = ref({
   company: '',
   salary_range: '',
   source: '',
-  notes: '',
+  note: '',
+  resume_version_id: null,
 })
 
 const addRules = {
@@ -618,8 +713,9 @@ function stageLabel(stage) {
     written_test: '笔试',
     interview: '面试',
     offer: 'Offer',
+    accepted: '已入职',
     rejected: '已拒绝',
-    abandoned: '已放弃',
+    withdrawn: '已放弃',
   }
   return map[stage] || stage || '-'
 }
@@ -627,14 +723,24 @@ function stageLabel(stage) {
 async function loadKanban() {
   loading.value = true
   try {
-    const data = await getKanban()
-    kanban.value = data || {}
+    const [data, stats] = await Promise.all([getKanban(), getPipelineResumeVersionStats()])
+    kanban.value = data?.stages || data || {}
+    versionPerformance.value = stats?.items || []
     loadError.value = ''
   } catch (error) {
     kanban.value = {}
     loadError.value = error?.userMessage || '暂时无法获取投递记录，请检查网络后重试。'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadResumeVersions() {
+  try {
+    const data = await getPipelineResumeVersions()
+    resumeVersions.value = data?.items || []
+  } catch {
+    resumeVersions.value = []
   }
 }
 
@@ -681,10 +787,20 @@ async function handleAdd() {
     await createJobPipelineEntry({
       ...addForm.value,
       stage: 'todo',
+      resume_id:
+        resumeVersions.value.find((version) => version.id === addForm.value.resume_version_id)
+          ?.resume_id || null,
     })
     ElMessage.success('投递记录已添加')
     showAddDialog.value = false
-    addForm.value = { title: '', company: '', salary_range: '', source: '', notes: '' }
+    addForm.value = {
+      title: '',
+      company: '',
+      salary_range: '',
+      source: '',
+      note: '',
+      resume_version_id: null,
+    }
     loadKanban()
   } catch {
     // 失败消息由统一请求层提示。
@@ -696,6 +812,11 @@ async function handleAdd() {
 async function handleCardCmd(cmd, card) {
   if (cmd === 'detail') {
     detailCard.value = card
+    feedbackForm.value = {
+      feedback_type: card.feedback_type || '',
+      feedback_score: card.feedback_score || 0,
+      feedback_note: card.feedback_note || '',
+    }
     showDetailDialog.value = true
   } else if (cmd === 'analyze') {
     router.push(`/smart-analysis?jd_id=${card.jd_id || ''}`)
@@ -711,7 +832,7 @@ async function handleCardCmd(cmd, card) {
     }
   } else if (cmd === 'abandon') {
     try {
-      await movePipelineStage(card.id, 'abandoned')
+      await movePipelineStage(card.id, 'withdrawn')
       ElMessage.success('已放弃')
       loadKanban()
     } catch {
@@ -732,7 +853,25 @@ async function handleCardCmd(cmd, card) {
 // === 列表视图方法 ===
 function showCardDetail(card) {
   detailCard.value = card
+  feedbackForm.value = {
+    feedback_type: card.feedback_type || '',
+    feedback_score: card.feedback_score || 0,
+    feedback_note: card.feedback_note || '',
+  }
   showDetailDialog.value = true
+}
+
+async function saveFeedback() {
+  if (!detailCard.value || (!feedbackForm.value.feedback_type && !feedbackForm.value.feedback_note))
+    return
+  feedbackSaving.value = true
+  try {
+    await updateJobPipelineEntry(detailCard.value.id, feedbackForm.value)
+    ElMessage.success('反馈已保存')
+    await loadKanban()
+  } finally {
+    feedbackSaving.value = false
+  }
 }
 
 function handleListCmd(cmd, card) {
@@ -746,7 +885,7 @@ function handleListCmd(cmd, card) {
       })
       .catch(() => {})
   } else if (cmd === 'abandon') {
-    movePipelineStage(card.id, 'abandoned')
+    movePipelineStage(card.id, 'withdrawn')
       .then(() => {
         ElMessage.success('已放弃')
         loadKanban()
@@ -793,7 +932,10 @@ async function batchMove(targetStage) {
   loadKanban()
 }
 
-onMounted(loadKanban)
+onMounted(() => {
+  loadKanban()
+  loadResumeVersions()
+})
 </script>
 
 <style scoped>
@@ -828,6 +970,89 @@ onMounted(loadKanban)
 .header-actions {
   display: flex;
   gap: 8px;
+}
+
+.version-performance {
+  margin-bottom: 16px;
+  border: 1px solid var(--app-line);
+  border-top: 3px solid var(--app-primary);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.version-performance-title {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.version-performance-title h3 {
+  margin: 2px 0 0;
+  font-size: 15px;
+}
+
+.version-performance-title > span,
+.version-name span,
+.version-metric span,
+.version-outcomes {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.section-kicker {
+  color: var(--app-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.version-performance-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.version-performance-row {
+  display: grid;
+  grid-template-columns: minmax(105px, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  border-right: 1px solid var(--app-line);
+  border-bottom: 1px solid var(--app-line);
+}
+
+.version-name,
+.version-metric {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.version-name strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-metric {
+  align-items: flex-end;
+}
+
+.version-metric strong {
+  color: var(--app-primary);
+  font-size: 17px;
+}
+
+.version-outcomes {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
 }
 
 /* Board */
@@ -991,6 +1216,22 @@ onMounted(loadKanban)
   font-weight: 600;
 }
 
+.resume-version-tag {
+  max-width: 100%;
+  margin-top: 8px;
+  color: #365c8d;
+}
+
+.version-cell {
+  display: inline-block;
+  max-width: 120px;
+  overflow: hidden;
+  color: #365c8d;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
 .card-interview {
   display: flex;
   align-items: center;
@@ -1025,11 +1266,31 @@ onMounted(loadKanban)
   gap: 16px;
 }
 
+.full-width {
+  width: 100%;
+}
+
 .detail-actions {
   display: flex;
   gap: 8px;
   margin-top: 20px;
   justify-content: center;
+}
+
+.feedback-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--app-line);
+  font-size: 13px;
+}
+
+.feedback-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 /* 跟进提醒 */

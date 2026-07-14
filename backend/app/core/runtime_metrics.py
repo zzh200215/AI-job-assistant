@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """In-memory runtime metrics for lightweight observability."""
 
 from __future__ import annotations
@@ -51,9 +50,7 @@ def record_request(*, method: str, status_code: int, duration_ms: float) -> None
 def get_runtime_metrics() -> dict:
     with _LOCK:
         total_requests = _METRICS["total_requests"]
-        avg_duration_ms = (
-            _METRICS["total_duration_ms"] / total_requests if total_requests else 0.0
-        )
+        avg_duration_ms = _METRICS["total_duration_ms"] / total_requests if total_requests else 0.0
         return {
             "total_requests": total_requests,
             "error_requests": _METRICS["error_requests"],

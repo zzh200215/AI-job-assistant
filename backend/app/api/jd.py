@@ -1,24 +1,26 @@
-# -*- coding: utf-8 -*-
 """JD 相关路由"""
+
 import traceback
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.history import JobDescription
 from app.models.user import User
-from app.api.auth import get_current_user
 from app.schemas.jd import JDCreateReq, JDCreateResp, JDParseResp
 from app.services import jd_service
 from app.utils.job_access import get_accessible_job
-from app.utils.response import ok, fail, ERR_PARAM, ERR_AI
-
+from app.utils.response import ERR_AI, ERR_PARAM, fail, ok
 
 router = APIRouter()
 
 
 @router.post("", summary="创建岗位 JD（同时可选解析）")
-async def create_jd(payload: JDCreateReq, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_jd(
+    payload: JDCreateReq, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     # ---- JD 文本非空校验 ----
     if not payload.raw_text or not payload.raw_text.strip():
         return fail(message="JD 内容不能为空", code=ERR_PARAM)
@@ -28,13 +30,16 @@ async def create_jd(payload: JDCreateReq, db: Session = Depends(get_db), current
     except Exception as e:
         return fail(message=f"JD 保存失败: {str(e)}", code=ERR_PARAM)
 
-    return ok(JDCreateResp(
-        id=jd.id,
-        title=jd.title,
-        company=jd.company,
-        raw_text=jd.raw_text,
-        parsed=jd.parsed_json or {},
-    ).model_dump(), message="JD 创建成功")
+    return ok(
+        JDCreateResp(
+            id=jd.id,
+            title=jd.title,
+            company=jd.company,
+            raw_text=jd.raw_text,
+            parsed=jd.parsed_json or {},
+        ).model_dump(),
+        message="JD 创建成功",
+    )
 
 
 @router.post("/parse", summary="解析 JD（调用 LLM）")
@@ -44,7 +49,11 @@ async def parse_jd(payload: dict, db: Session = Depends(get_db), current_user: U
         return fail(message="jd_id 必填", code=ERR_PARAM)
 
     # 权限校验
-    jd = db.query(JobDescription).filter(JobDescription.id == int(jd_id), JobDescription.user_id == current_user.id).first()
+    jd = (
+        db.query(JobDescription)
+        .filter(JobDescription.id == int(jd_id), JobDescription.user_id == current_user.id)
+        .first()
+    )
     if not jd:
         return fail(message="JD 不存在或无权限", code=ERR_PARAM)
 
@@ -56,13 +65,16 @@ async def parse_jd(payload: dict, db: Session = Depends(get_db), current_user: U
         traceback.print_exc()
         return fail(message=f"AI 解析失败: {str(e)}", code=ERR_AI)
 
-    return ok(JDParseResp(
-        id=jd.id,
-        title=jd.title,
-        parsed=jd.parsed_json or {},
-        salary_range=jd.salary_range,
-        location=jd.location,
-    ).model_dump(), message="JD 解析成功")
+    return ok(
+        JDParseResp(
+            id=jd.id,
+            title=jd.title,
+            parsed=jd.parsed_json or {},
+            salary_range=jd.salary_range,
+            location=jd.location,
+        ).model_dump(),
+        message="JD 解析成功",
+    )
 
 
 @router.get("/list", summary="JD 列表")
@@ -79,22 +91,24 @@ async def list_jd(
     total = q.count()
     items = q.offset((page - 1) * page_size).limit(page_size).all()
 
-    return ok({
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "items": [
-            {
-                "id": j.id,
-                "title": j.title,
-                "company": j.company,
-                "location": j.location,
-                "salary_range": j.salary_range,
-                "create_time": j.create_time.isoformat() if j.create_time else None,
-            }
-            for j in items
-        ],
-    })
+    return ok(
+        {
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "items": [
+                {
+                    "id": j.id,
+                    "title": j.title,
+                    "company": j.company,
+                    "location": j.location,
+                    "salary_range": j.salary_range,
+                    "create_time": j.create_time.isoformat() if j.create_time else None,
+                }
+                for j in items
+            ],
+        }
+    )
 
 
 @router.get("/{jd_id}", summary="获取 JD 详情")
@@ -102,21 +116,24 @@ async def get_jd(jd_id: int, db: Session = Depends(get_db), current_user: User =
     jd = get_accessible_job(db, jd_id, current_user)
     if not jd:
         return fail(message="JD 不存在或无权限", code=ERR_PARAM)
-    return ok({
-        "id": jd.id,
-        "title": jd.title,
-        "company": jd.company,
-        "location": jd.location,
-        "salary_range": jd.salary_range,
-        "raw_text": jd.raw_text,
-        "parsed": jd.parsed_json or {},
-        "create_time": jd.create_time.isoformat() if jd.create_time else None,
-    })
+    return ok(
+        {
+            "id": jd.id,
+            "title": jd.title,
+            "company": jd.company,
+            "location": jd.location,
+            "salary_range": jd.salary_range,
+            "raw_text": jd.raw_text,
+            "parsed": jd.parsed_json or {},
+            "create_time": jd.create_time.isoformat() if jd.create_time else None,
+        }
+    )
 
 
 # ============================================================
 # JD 智能导入增强
 # ============================================================
+
 
 @router.post("/import-url", summary="从URL粘贴导入JD")
 async def import_jd_from_url(
@@ -156,15 +173,18 @@ async def import_jd_from_url(
     except Exception as e:
         return fail(message=f"JD 导入失败: {str(e)}", code=ERR_AI)
 
-    return ok({
-        "id": jd.id,
-        "title": jd.title,
-        "company": jd.company,
-        "parsed": jd.parsed_json or {},
-        "salary_range": jd.salary_range,
-        "location": jd.location,
-        "source_url": url,
-    }, message="JD 从URL导入成功")
+    return ok(
+        {
+            "id": jd.id,
+            "title": jd.title,
+            "company": jd.company,
+            "parsed": jd.parsed_json or {},
+            "salary_range": jd.salary_range,
+            "location": jd.location,
+            "source_url": url,
+        },
+        message="JD 从URL导入成功",
+    )
 
 
 @router.post("/batch-import", summary="批量导入JD")
@@ -185,7 +205,8 @@ async def batch_import_jds(
     if raw_text and not items:
         # 按 --- 或连续两个以上空行分割
         import re
-        chunks = re.split(r'\n\s*---\s*\n|\n{3,}', raw_text)
+
+        chunks = re.split(r"\n\s*---\s*\n|\n{3,}", raw_text)
         items = [{"raw_text": chunk.strip()} for chunk in chunks if chunk.strip()]
 
     if not items:
@@ -211,22 +232,27 @@ async def batch_import_jds(
             if auto_parse:
                 jd = jd_service.parse_and_save(db, jd.id)
 
-            results.append({
-                "index": idx,
-                "id": jd.id,
-                "title": jd.title,
-                "company": jd.company,
-                "parsed": jd.parsed_json or {},
-            })
+            results.append(
+                {
+                    "index": idx,
+                    "id": jd.id,
+                    "title": jd.title,
+                    "company": jd.company,
+                    "parsed": jd.parsed_json or {},
+                }
+            )
         except Exception as e:
             errors.append({"index": idx, "error": str(e)})
 
-    return ok({
-        "imported": len(results),
-        "failed": len(errors),
-        "results": results,
-        "errors": errors,
-    }, message=f"批量导入完成: 成功 {len(results)} 个, 失败 {len(errors)} 个")
+    return ok(
+        {
+            "imported": len(results),
+            "failed": len(errors),
+            "results": results,
+            "errors": errors,
+        },
+        message=f"批量导入完成: 成功 {len(results)} 个, 失败 {len(errors)} 个",
+    )
 
 
 def _fetch_jd_from_url(url: str) -> str:
@@ -236,7 +262,7 @@ def _fetch_jd_from_url(url: str) -> str:
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     }
 
     with httpx.Client(headers=headers, follow_redirects=True, timeout=15) as client:
@@ -251,7 +277,13 @@ def _fetch_jd_from_url(url: str) -> str:
 
     # 尝试找到职位描述区域
     jd_selectors = [
-        {"class_": lambda c: c and any(k in str(c).lower() for k in ["job-desc", "job-desc", "detail-content", "job_detail", "position-content"])},
+        {
+            "class_": lambda c: c
+            and any(
+                k in str(c).lower()
+                for k in ["job-desc", "job-desc", "detail-content", "job_detail", "position-content"]
+            )
+        },
         {"class_": lambda c: c and any(k in str(c).lower() for k in ["description", "detail", "content-body"])},
     ]
 

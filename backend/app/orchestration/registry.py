@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
 """Unified agent registry shared by all orchestration strategies."""
+
 from dataclasses import dataclass, field
-from typing import Dict, List, Type
 
 
 @dataclass
@@ -9,18 +8,18 @@ class AgentSpec:
     """Metadata for a registered agent."""
 
     name: str
-    agent_class: Type
+    agent_class: type
     critical: bool = True
-    aliases: List[str] = field(default_factory=list)
-    strategies: List[str] = field(default_factory=list)
+    aliases: list[str] = field(default_factory=list)
+    strategies: list[str] = field(default_factory=list)
 
 
 class UnifiedRegistry:
     """Primary-name registry with a separate alias index."""
 
     def __init__(self):
-        self._agents: Dict[str, AgentSpec] = {}
-        self._aliases: Dict[str, AgentSpec] = {}
+        self._agents: dict[str, AgentSpec] = {}
+        self._aliases: dict[str, AgentSpec] = {}
 
     def register(self, spec: AgentSpec) -> "UnifiedRegistry":
         self._agents[spec.name] = spec
@@ -35,20 +34,20 @@ class UnifiedRegistry:
             return self._aliases[name]
         raise KeyError(f"Agent '{name}' is not registered")
 
-    def get_class(self, name: str) -> Type:
+    def get_class(self, name: str) -> type:
         return self.get(name).agent_class
 
     def is_critical(self, name: str) -> bool:
         return self.get(name).critical
 
-    def list_names(self, strategy: str = None) -> List[str]:
+    def list_names(self, strategy: str = None) -> list[str]:
         result = []
         for spec in self._agents.values():
             if strategy is None or strategy in spec.strategies:
                 result.append(spec.name)
         return result
 
-    def filter_by_strategy(self, strategy: str) -> List[AgentSpec]:
+    def filter_by_strategy(self, strategy: str) -> list[AgentSpec]:
         result = []
         for spec in self._agents.values():
             if strategy in spec.strategies:
@@ -64,11 +63,11 @@ def _build_default_registry() -> UnifiedRegistry:
     reg = UnifiedRegistry()
 
     from app.agents.intent_agent import IntentAgent
-    from app.agents.resume_parse_agent import ResumeParseAgent
+    from app.agents.interview_question_agent import InterviewQuestionAgent
     from app.agents.jd_parse_agent import JDParseAgent
     from app.agents.match_analysis_agent import MatchAnalysisAgent
     from app.agents.resume_optimize_agent import ResumeOptimizeAgent
-    from app.agents.interview_question_agent import InterviewQuestionAgent
+    from app.agents.resume_parse_agent import ResumeParseAgent
     from app.agents.summary_agent import SummaryAgent
 
     linear_strategies = ["linear", "langgraph_linear"]
@@ -77,7 +76,9 @@ def _build_default_registry() -> UnifiedRegistry:
     reg.register(AgentSpec("JDParseAgent", JDParseAgent, critical=True, strategies=linear_strategies))
     reg.register(AgentSpec("MatchAnalysisAgent", MatchAnalysisAgent, critical=True, strategies=linear_strategies))
     reg.register(AgentSpec("ResumeOptimizeAgent", ResumeOptimizeAgent, critical=True, strategies=linear_strategies))
-    reg.register(AgentSpec("InterviewQuestionAgent", InterviewQuestionAgent, critical=True, strategies=linear_strategies))
+    reg.register(
+        AgentSpec("InterviewQuestionAgent", InterviewQuestionAgent, critical=True, strategies=linear_strategies)
+    )
     reg.register(
         AgentSpec(
             "SummaryAgent",
@@ -87,11 +88,11 @@ def _build_default_registry() -> UnifiedRegistry:
         )
     )
 
-    from app.agents.resume_agent import ResumeAgent
-    from app.agents.job_agent import JobAgent
     from app.agents.career_agent import CareerAgent
     from app.agents.interview_agent import InterviewAgent
+    from app.agents.job_agent import JobAgent
     from app.agents.match_agent import MatchAgent
+    from app.agents.resume_agent import ResumeAgent
 
     reg.register(
         AgentSpec(

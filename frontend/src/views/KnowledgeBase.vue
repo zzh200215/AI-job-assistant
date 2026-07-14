@@ -5,8 +5,9 @@
         <div>
           <p class="eyebrow">Knowledge Workspace</p>
           <h2>知识库管理</h2>
-	          <div class="page-header-sub">
-            支持增量上传、批量维护、检索验证和 Query Rewrite 调试，覆盖岗位、能力模型、职业路径与薪资资料。
+          <div class="page-header-sub">
+            支持增量上传、批量维护、检索验证和 Query Rewrite
+            调试，覆盖岗位、能力模型、职业路径与薪资资料。
           </div>
         </div>
         <div class="hero-actions">
@@ -171,12 +172,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="范围">
-          <el-switch
-            v-model="myOnly"
-            inline-prompt
-            active-text="我的"
-            inactive-text="全部"
-          />
+          <el-switch v-model="myOnly" inline-prompt active-text="我的" inactive-text="全部" />
         </el-form-item>
       </el-form>
 
@@ -185,14 +181,18 @@
         <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
         <el-table-column label="类型" width="160">
           <template #default="{ row }">
-            <el-tag :type="typeTag(row.doc_type)" size="small">{{ typeLabel(row.doc_type) }}</el-tag>
+            <el-tag :type="typeTag(row.doc_type)" size="small">{{
+              typeLabel(row.doc_type)
+            }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="file_name" label="文件名" min-width="180" show-overflow-tooltip />
         <el-table-column prop="chunk_count" label="切片数" width="90" align="center" />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="statusTag(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+            <el-tag :type="statusTag(row.status)" size="small">{{
+              statusLabel(row.status)
+            }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="error_msg" label="错误信息" min-width="180" show-overflow-tooltip>
@@ -247,7 +247,11 @@
 
       <el-form :inline="true" class="search-form">
         <el-form-item label="关键词">
-          <el-input v-model="searchQuery" placeholder="例如：Python 后端 / AI 工程 / 转行路线" style="width: 320px" />
+          <el-input
+            v-model="searchQuery"
+            placeholder="例如：Python 后端 / AI 工程 / 转行路线"
+            style="width: 320px"
+          />
         </el-form-item>
         <el-form-item label="类型">
           <el-select
@@ -383,7 +387,10 @@
         </template>
         <div class="confidence-grid">
           <div class="confidence-main">
-            <div class="confidence-score" :class="`confidence-${rewriteResult.rag_confidence.level || 'low'}`">
+            <div
+              class="confidence-score"
+              :class="`confidence-${rewriteResult.rag_confidence.level || 'low'}`"
+            >
               {{ rewriteResult.rag_confidence.score ?? 0 }}
             </div>
             <div>
@@ -406,7 +413,9 @@
             </div>
             <div class="signal-item">
               <span>命中能力模型</span>
-              <strong>{{ rewriteResult.rag_confidence.signals?.has_skill_model ? '是' : '否' }}</strong>
+              <strong>{{
+                rewriteResult.rag_confidence.signals?.has_skill_model ? '是' : '否'
+              }}</strong>
             </div>
           </div>
         </div>
@@ -531,13 +540,25 @@
         <el-descriptions :column="2" border>
           <el-descriptions-item label="文档 ID">{{ detailDoc.id }}</el-descriptions-item>
           <el-descriptions-item label="状态">
-            <el-tag :type="statusTag(detailDoc.status)" size="small">{{ statusLabel(detailDoc.status) }}</el-tag>
+            <el-tag :type="statusTag(detailDoc.status)" size="small">{{
+              statusLabel(detailDoc.status)
+            }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="类型">{{ typeLabel(detailDoc.doc_type) }}</el-descriptions-item>
-          <el-descriptions-item label="切片数">{{ detailDoc.chunk_count || 0 }}</el-descriptions-item>
-          <el-descriptions-item label="文件名" :span="2">{{ detailDoc.file_name }}</el-descriptions-item>
-          <el-descriptions-item label="文件大小">{{ formatSize(detailDoc.file_size) }}</el-descriptions-item>
-          <el-descriptions-item label="更新时间">{{ detailDoc.update_time || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="类型">{{
+            typeLabel(detailDoc.doc_type)
+          }}</el-descriptions-item>
+          <el-descriptions-item label="切片数">{{
+            detailDoc.chunk_count || 0
+          }}</el-descriptions-item>
+          <el-descriptions-item label="文件名" :span="2">{{
+            detailDoc.file_name
+          }}</el-descriptions-item>
+          <el-descriptions-item label="文件大小">{{
+            formatSize(detailDoc.file_size)
+          }}</el-descriptions-item>
+          <el-descriptions-item label="更新时间">{{
+            detailDoc.update_time || '-'
+          }}</el-descriptions-item>
           <el-descriptions-item v-if="detailDoc.error_msg" label="错误信息" :span="2">
             <span class="err">{{ detailDoc.error_msg }}</span>
           </el-descriptions-item>
@@ -560,7 +581,10 @@
             <span>切片预览（{{ detailChunks.length }}）</span>
           </template>
 
-          <el-empty v-if="!detailChunks.length && !detailLoading" description="当前文档暂无切片，或尚未完成向量化" />
+          <el-empty
+            v-if="!detailChunks.length && !detailLoading"
+            description="当前文档暂无切片，或尚未完成向量化"
+          />
           <div v-else class="chunk-list">
             <article v-for="chunk in detailChunks" :key="chunk.chunk_id" class="chunk-card">
               <div class="chunk-head">
@@ -640,7 +664,7 @@ const searchResults = ref([])
 const searchLoading = ref(false)
 const searched = ref(false)
 
-const normalizeTab = (value) => ['docs', 'search', 'debug'].includes(value) ? value : 'docs'
+const normalizeTab = (value) => (['docs', 'search', 'debug'].includes(value) ? value : 'docs')
 const activeTab = ref(normalizeTab(route.query.tab))
 const rewriteLoading = ref(false)
 const rewriteForm = reactive({
@@ -680,9 +704,9 @@ const embeddingStats = reactive({
 
 const stats = computed(() => [
   { label: '文档总数', count: total.value },
-  { label: '就绪', count: list.value.filter(item => item.status === 'ready').length },
-  { label: '处理中', count: list.value.filter(item => item.status === 'processing').length },
-  { label: '失败', count: list.value.filter(item => item.status === 'failed').length },
+  { label: '就绪', count: list.value.filter((item) => item.status === 'ready').length },
+  { label: '处理中', count: list.value.filter((item) => item.status === 'processing').length },
+  { label: '失败', count: list.value.filter((item) => item.status === 'failed').length },
 ])
 const isAdmin = computed(() => !!authStore.user?.is_admin)
 const providerStats = computed(() =>
@@ -850,7 +874,9 @@ async function onReprocess(row) {
 
 async function onRebuild() {
   try {
-    await ElMessageBox.confirm('重建会重新处理全部知识库文档，确认继续吗？', '提示', { type: 'warning' })
+    await ElMessageBox.confirm('重建会重新处理全部知识库文档，确认继续吗？', '提示', {
+      type: 'warning',
+    })
   } catch {
     return
   }
@@ -919,37 +945,43 @@ async function runRewriteDebug() {
 }
 
 function typeLabel(value) {
-  return DOC_TYPE_OPTIONS.find(item => item.value === value)?.label || value
+  return DOC_TYPE_OPTIONS.find((item) => item.value === value)?.label || value
 }
 
 function typeTag(value) {
-  return {
-    jd_lib: 'primary',
-    skill_model: 'success',
-    resume_template: 'info',
-    interview_q: 'warning',
-    career_path: 'success',
-    salary_market: 'danger',
-    transition_guide: 'warning',
-    industry_report: 'info',
-    general: '',
-  }[value] || ''
+  return (
+    {
+      jd_lib: 'primary',
+      skill_model: 'success',
+      resume_template: 'info',
+      interview_q: 'warning',
+      career_path: 'success',
+      salary_market: 'danger',
+      transition_guide: 'warning',
+      industry_report: 'info',
+      general: '',
+    }[value] || ''
+  )
 }
 
 function statusLabel(value) {
-  return {
-    processing: '处理中',
-    ready: '就绪',
-    failed: '失败',
-  }[value] || value
+  return (
+    {
+      processing: '处理中',
+      ready: '就绪',
+      failed: '失败',
+    }[value] || value
+  )
 }
 
 function statusTag(value) {
-  return {
-    processing: 'warning',
-    ready: 'success',
-    failed: 'danger',
-  }[value] || ''
+  return (
+    {
+      processing: 'warning',
+      ready: 'success',
+      failed: 'danger',
+    }[value] || ''
+  )
 }
 
 function formatSize(size) {
@@ -978,10 +1010,13 @@ watch(activeTab, (value) => {
   router.replace({ query: { ...route.query, tab: value } })
 })
 
-watch(() => route.query.tab, (value) => {
-  const next = normalizeTab(value)
-  if (next !== activeTab.value) activeTab.value = next
-})
+watch(
+  () => route.query.tab,
+  (value) => {
+    const next = normalizeTab(value)
+    if (next !== activeTab.value) activeTab.value = next
+  }
+)
 
 onMounted(() => {
   loadList()
@@ -1372,4 +1407,3 @@ onMounted(() => {
   }
 }
 </style>
-

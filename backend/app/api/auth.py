@@ -1,5 +1,6 @@
-# -*- coding: utf-8 -*-
 """Authentication endpoints: register, login, reset password, current user."""
+
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy import func, or_
@@ -10,7 +11,6 @@ from app.core.database import get_db
 from app.core.prometheus_metrics import record_login_attempt
 from app.core.rate_limiter import auth_limit, get_limiter, login_limit
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
-from datetime import timedelta
 from app.core.user_roles import ADMIN_ROLE, CANDIDATE_ROLE, USER_ROLES
 from app.models.user import User
 from app.schemas.auth import AuthResp, LoginReq, PasswordResetReq, RegisterReq, UserInfo, UserProfileUpdateReq
@@ -218,13 +218,7 @@ async def list_users(
     _admin: User = Depends(require_admin),
 ):
     total = db.query(User).count()
-    users = (
-        db.query(User)
-        .order_by(User.created_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
-    )
+    users = db.query(User).order_by(User.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
     items = [
         {
             "id": u.id,
@@ -236,12 +230,14 @@ async def list_users(
         }
         for u in users
     ]
-    return ok(data={
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "items": items,
-    })
+    return ok(
+        data={
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "items": items,
+        }
+    )
 
 
 @router.post("/send-verification-email", summary="发送邮箱验证邮件")
@@ -259,13 +255,14 @@ async def send_verification_email(
         data={"sub": str(current_user.id), "type": "email_verify"},
         expires_delta=timedelta(hours=24),
     )
-    from app.services.email_service import send_verification_email
     from app.core.config import settings
+    from app.services.email_service import send_verification_email
+
     send_verification_email(current_user.email, token)
     # verify_url = f"{settings.frontend_url}/verify-email?token={token}"
     # send_email(current_user.email, "验证邮箱", f"点击链接验证: {verify_url}")
 
-    return ok(data={'token': token} if not settings.SMTP_HOST else {}, message='验证邮件已发送')
+    return ok(data={"token": token} if not settings.SMTP_HOST else {}, message="验证邮件已发送")
 
 
 @router.post("/verify-email", summary="验证邮箱")
@@ -348,16 +345,18 @@ async def reset_password_with_token(
     db.commit()
     return ok(message="密码已重置，请使用新密码登录")
 
+
 @router.get("/export-data", summary="导出用户全部数据")
 async def export_user_data(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from app.models.history import Resume, AnalysisRecord
+    from datetime import datetime
+
+    from app.models.history import AnalysisRecord, Resume
     from app.models.interview_session import InterviewSession
     from app.models.subscription import SubscriptionOrder, UserSubscription
     from app.services.audit_service import write_audit_log
-    from datetime import datetime
 
     resumes = db.query(Resume).filter(Resume.user_id == current_user.id).all()
     analyses = db.query(AnalysisRecord).filter(AnalysisRecord.user_id == current_user.id).all()
@@ -370,7 +369,9 @@ async def export_user_data(
         "resumes": [{"id": r.id, "file_name": r.file_name} for r in resumes],
         "analyses": [{"id": a.id, "type": a.analysis_type} for a in analyses],
         "interviews": [{"id": i.id, "status": i.status} for i in interviews],
-        "orders": [{"id": o.id, "plan_tier": o.plan_tier, "amount": float(o.amount), "status": o.status} for o in orders],
+        "orders": [
+            {"id": o.id, "plan_tier": o.plan_tier, "amount": float(o.amount), "status": o.status} for o in orders
+        ],
         "subscription": {"plan_tier": sub.plan_tier, "status": sub.status} if sub else None,
         "exported_at": datetime.utcnow().isoformat(),
     }
@@ -382,6 +383,7 @@ async def export_user_data(
 async def delete_user_resumes(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from app.models.history import Resume, ResumeVersion
     from app.services.audit_service import write_audit_log
+
     count = db.query(Resume).filter(Resume.user_id == current_user.id).count()
     db.query(Resume).filter(Resume.user_id == current_user.id).delete()
     db.query(ResumeVersion).filter(ResumeVersion.user_id == current_user.id).delete()
@@ -394,6 +396,7 @@ async def delete_user_resumes(db: Session = Depends(get_db), current_user: User 
 async def delete_user_analyses(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from app.models.history import AnalysisRecord
     from app.services.audit_service import write_audit_log
+
     count = db.query(AnalysisRecord).filter(AnalysisRecord.user_id == current_user.id).count()
     db.query(AnalysisRecord).filter(AnalysisRecord.user_id == current_user.id).delete()
     db.commit()
@@ -405,6 +408,7 @@ async def delete_user_analyses(db: Session = Depends(get_db), current_user: User
 async def delete_user_interviews(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from app.models.interview_session import InterviewSession
     from app.services.audit_service import write_audit_log
+
     count = db.query(InterviewSession).filter(InterviewSession.user_id == current_user.id).count()
     db.query(InterviewSession).filter(InterviewSession.user_id == current_user.id).delete()
     db.commit()

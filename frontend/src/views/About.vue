@@ -3,12 +3,12 @@
     <section class="hero-card">
       <p class="eyebrow">System Positioning</p>
       <h2>智能招聘与职业规划平台</h2>
-	      <div class="page-header-sub">
+      <div class="page-header-sub">
         当前这一版系统的重点，已经从单点的简历处理工具，转成一套围绕“分析、规划、筛岗、面试准备”展开的求职工作台。
         它的价值不只是给一个分数，而是把后续动作也串起来。
       </div>
 
-	      <div class="hero-tags">
+      <div class="hero-tags">
         <el-tag>Agentic RAG</el-tag>
         <el-tag type="success">多智能体协作</el-tag>
         <el-tag type="warning">职业规划</el-tag>

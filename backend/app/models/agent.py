@@ -1,9 +1,6 @@
-# -*- coding: utf-8 -*-
 """Agentic RAG 工作流 ORM 模型"""
-from sqlalchemy import (
-    Column, BigInteger, String, Integer, DateTime, Text, JSON, Float, SmallInteger
-)
-from sqlalchemy import ForeignKey
+
+from sqlalchemy import JSON, BigInteger, Column, DateTime, Float, ForeignKey, Integer, SmallInteger, String, Text
 
 from app.core.database import Base
 from app.orchestration.protocol import (
@@ -18,6 +15,7 @@ from app.utils.time_helper import utc_now
 
 class AgentTask(Base):
     """Agent 任务表"""
+
     __tablename__ = "agent_task"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -31,8 +29,7 @@ class AgentTask(Base):
     intent_detail = Column(JSON, comment="意图识别详情")
     plan = Column(JSON, comment="任务规划")
     final_report = Column(JSON, comment="最终报告")
-    status = Column(String(20), nullable=False, default="pending",
-                    comment="状态: pending/running/completed/failed")
+    status = Column(String(20), nullable=False, default="pending", comment="状态: pending/running/completed/failed")
     error_msg = Column(Text, comment="失败原因")
     start_time = Column(DateTime, comment="开始时间")
     end_time = Column(DateTime, comment="结束时间")
@@ -63,14 +60,14 @@ class AgentTask(Base):
 
 class AgentStepLog(Base):
     """Agent 步骤日志表"""
+
     __tablename__ = "agent_step_log"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     task_id = Column(BigInteger, ForeignKey("agent_task.id", ondelete="CASCADE"), nullable=False)
     step_name = Column(String(100), nullable=False, comment="步骤名称")
     step_index = Column(Integer, nullable=False, comment="步骤序号")
-    status = Column(String(20), nullable=False, default="pending",
-                    comment="状态: pending/running/completed/failed")
+    status = Column(String(20), nullable=False, default="pending", comment="状态: pending/running/completed/failed")
     input_data = Column(JSON, comment="步骤输入")
     output_data = Column(JSON, comment="步骤输出")
     started_at = Column(DateTime, comment="步骤开始时间")
@@ -105,6 +102,7 @@ class AgentStepLog(Base):
 
 class RetrievalLog(Base):
     """知识检索日志表"""
+
     __tablename__ = "retrieval_log"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -135,6 +133,7 @@ class RetrievalLog(Base):
 
 class SelfCheckLog(Base):
     """自我校验日志表"""
+
     __tablename__ = "self_check_log"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Job recommendation APIs."""
 
 import csv
@@ -8,7 +7,6 @@ import traceback
 from copy import deepcopy
 from datetime import timedelta
 from types import SimpleNamespace
-from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, File, Form, Query, UploadFile
 from fastapi.responses import StreamingResponse
@@ -28,8 +26,7 @@ from app.services.recommendation_tuning import (
     reset_recommendation_tuning_config,
     save_recommendation_tuning_config,
 )
-from app.utils.response import ERR_COMMON, ERR_PARAM, ERR_QUOTA, fail, ok
-from app.services.subscription_service import check_quota
+from app.utils.response import ERR_COMMON, ERR_PARAM, fail, ok
 
 router = APIRouter()
 
@@ -168,30 +165,38 @@ def _build_feedback_analysis(db: Session, *, user_id: int) -> dict:
 
     resume_ids = sorted({row.resume_id for row in rows})
     jd_ids = sorted({row.jd_id for row in rows})
-    resume_map = {
-        item.id: {
-            "id": item.id,
-            "name": item.name,
-            "file_name": item.file_name,
-            "parsed_json": item.parsed_json or {},
+    resume_map = (
+        {
+            item.id: {
+                "id": item.id,
+                "name": item.name,
+                "file_name": item.file_name,
+                "parsed_json": item.parsed_json or {},
+            }
+            for item in db.query(Resume).filter(Resume.id.in_(resume_ids)).all()
         }
-        for item in db.query(Resume).filter(Resume.id.in_(resume_ids)).all()
-    } if resume_ids else {}
-    jd_map = {
-        item.id: {
-            "id": item.id,
-            "title": item.title,
-            "company": item.company,
-            "location": item.location,
-            "salary_range": item.salary_range,
-            "industry": item.industry,
-            "raw_text": item.raw_text,
-            "parsed_json": item.parsed_json or {},
-            "source": item.source,
-            "experience_requirement": item.experience_requirement,
+        if resume_ids
+        else {}
+    )
+    jd_map = (
+        {
+            item.id: {
+                "id": item.id,
+                "title": item.title,
+                "company": item.company,
+                "location": item.location,
+                "salary_range": item.salary_range,
+                "industry": item.industry,
+                "raw_text": item.raw_text,
+                "parsed_json": item.parsed_json or {},
+                "source": item.source,
+                "experience_requirement": item.experience_requirement,
+            }
+            for item in db.query(JobDescription).filter(JobDescription.id.in_(jd_ids)).all()
         }
-        for item in db.query(JobDescription).filter(JobDescription.id.in_(jd_ids)).all()
-    } if jd_ids else {}
+        if jd_ids
+        else {}
+    )
 
     recent = []
     for row in rows[:12]:
@@ -416,13 +421,17 @@ def _build_feedback_analysis(db: Session, *, user_id: int) -> dict:
     )
 
     anomaly_count = len(high_score_dislikes) + len(low_score_likes)
-    alignment_score = max(
-        min(
-            round((like_rate * 100) - (anomaly_count * 6) - (len(weak_industries) * 4) + 35),
-            100,
-        ),
-        0,
-    ) if total else 0
+    alignment_score = (
+        max(
+            min(
+                round((like_rate * 100) - (anomaly_count * 6) - (len(weak_industries) * 4) + 35),
+                100,
+            ),
+            0,
+        )
+        if total
+        else 0
+    )
 
     return {
         "total": total,
@@ -598,10 +607,10 @@ def _build_tuning_samples(db: Session, *, user_id: int, anomaly_only: bool = Tru
             "created_at": row.created_at,
         }
         for row in (
-        db.query(JobRecommendationFeedback)
-        .filter(JobRecommendationFeedback.user_id == user_id)
-        .order_by(JobRecommendationFeedback.created_at.desc(), JobRecommendationFeedback.id.desc())
-        .all()
+            db.query(JobRecommendationFeedback)
+            .filter(JobRecommendationFeedback.user_id == user_id)
+            .order_by(JobRecommendationFeedback.created_at.desc(), JobRecommendationFeedback.id.desc())
+            .all()
         )
     ]
     if not rows:
@@ -616,30 +625,38 @@ def _build_tuning_samples(db: Session, *, user_id: int, anomaly_only: bool = Tru
 
     resume_ids = sorted({row["resume_id"] for row in rows})
     jd_ids = sorted({row["jd_id"] for row in rows})
-    resume_map = {
-        item.id: {
-            "id": item.id,
-            "name": item.name,
-            "file_name": item.file_name,
-            "parsed_json": item.parsed_json or {},
+    resume_map = (
+        {
+            item.id: {
+                "id": item.id,
+                "name": item.name,
+                "file_name": item.file_name,
+                "parsed_json": item.parsed_json or {},
+            }
+            for item in db.query(Resume).filter(Resume.id.in_(resume_ids)).all()
         }
-        for item in db.query(Resume).filter(Resume.id.in_(resume_ids)).all()
-    } if resume_ids else {}
-    jd_map = {
-        item.id: {
-            "id": item.id,
-            "title": item.title,
-            "company": item.company,
-            "location": item.location,
-            "salary_range": item.salary_range,
-            "industry": item.industry,
-            "raw_text": item.raw_text,
-            "parsed_json": item.parsed_json or {},
-            "source": item.source,
-            "experience_requirement": item.experience_requirement,
+        if resume_ids
+        else {}
+    )
+    jd_map = (
+        {
+            item.id: {
+                "id": item.id,
+                "title": item.title,
+                "company": item.company,
+                "location": item.location,
+                "salary_range": item.salary_range,
+                "industry": item.industry,
+                "raw_text": item.raw_text,
+                "parsed_json": item.parsed_json or {},
+                "source": item.source,
+                "experience_requirement": item.experience_requirement,
+            }
+            for item in db.query(JobDescription).filter(JobDescription.id.in_(jd_ids)).all()
         }
-        for item in db.query(JobDescription).filter(JobDescription.id.in_(jd_ids)).all()
-    } if jd_ids else {}
+        if jd_ids
+        else {}
+    )
 
     tuning_config = get_recommendation_tuning_config(user_id)
     engine = JobRecommendationEngine(db, tuning_config=tuning_config)
@@ -660,12 +677,12 @@ def _build_tuning_samples(db: Session, *, user_id: int, anomaly_only: bool = Tru
         text_map[key] = text
         jd_text_by_id[jd["id"]] = text
 
-    embedding_by_key: dict[str, list[float] | None] = {key: None for key in text_keys}
+    embedding_by_key: dict[str, list[float] | None] = dict.fromkeys(text_keys)
     try:
         from app.services.embedding_service import embed_texts
 
         emb_values = embed_texts([text_map[key] for key in text_keys])
-        for key, emb in zip(text_keys, emb_values):
+        for key, emb in zip(text_keys, emb_values, strict=False):
             embedding_by_key[key] = emb
     except Exception:
         pass
@@ -702,7 +719,9 @@ def _build_tuning_samples(db: Session, *, user_id: int, anomaly_only: bool = Tru
             embedding_by_key.get(f"jd:{jd['id']}"),
         )
         rule_score = engine._rule_score(resume_json, jd_stub, jd_json)
-        recommendation_type = engine._recommend_type(row["match_score"] or (vector_score * engine.WEIGHT_VECTOR + rule_score * engine.WEIGHT_RULE))
+        recommendation_type = engine._recommend_type(
+            row["match_score"] or (vector_score * engine.WEIGHT_VECTOR + rule_score * engine.WEIGHT_RULE)
+        )
         sample = {
             "feedback_id": row["id"],
             "feedback_type": row["feedback_type"],
@@ -741,7 +760,9 @@ def _build_tuning_samples(db: Session, *, user_id: int, anomaly_only: bool = Tru
     return samples
 
 
-def _build_compare_sample_context(db: Session, *, user_id: int) -> tuple[list[dict], dict[int, dict], dict[int, dict], dict[str, list[float] | None]]:
+def _build_compare_sample_context(
+    db: Session, *, user_id: int
+) -> tuple[list[dict], dict[int, dict], dict[int, dict], dict[str, list[float] | None]]:
     rows = [
         {
             "id": row.id,
@@ -760,29 +781,37 @@ def _build_compare_sample_context(db: Session, *, user_id: int) -> tuple[list[di
     ]
     resume_ids = sorted({row["resume_id"] for row in rows})
     jd_ids = sorted({row["jd_id"] for row in rows})
-    resume_map = {
-        item.id: {
-            "id": item.id,
-            "name": item.name,
-            "file_name": item.file_name,
-            "parsed_json": item.parsed_json or {},
+    resume_map = (
+        {
+            item.id: {
+                "id": item.id,
+                "name": item.name,
+                "file_name": item.file_name,
+                "parsed_json": item.parsed_json or {},
+            }
+            for item in db.query(Resume).filter(Resume.id.in_(resume_ids)).all()
         }
-        for item in db.query(Resume).filter(Resume.id.in_(resume_ids)).all()
-    } if resume_ids else {}
-    jd_map = {
-        item.id: {
-            "id": item.id,
-            "title": item.title,
-            "company": item.company,
-            "location": item.location,
-            "salary_range": item.salary_range,
-            "industry": item.industry,
-            "raw_text": item.raw_text,
-            "parsed_json": item.parsed_json or {},
-            "experience_requirement": item.experience_requirement,
+        if resume_ids
+        else {}
+    )
+    jd_map = (
+        {
+            item.id: {
+                "id": item.id,
+                "title": item.title,
+                "company": item.company,
+                "location": item.location,
+                "salary_range": item.salary_range,
+                "industry": item.industry,
+                "raw_text": item.raw_text,
+                "parsed_json": item.parsed_json or {},
+                "experience_requirement": item.experience_requirement,
+            }
+            for item in db.query(JobDescription).filter(JobDescription.id.in_(jd_ids)).all()
         }
-        for item in db.query(JobDescription).filter(JobDescription.id.in_(jd_ids)).all()
-    } if jd_ids else {}
+        if jd_ids
+        else {}
+    )
 
     base_engine = JobRecommendationEngine(db)
     text_keys: list[str] = []
@@ -796,12 +825,12 @@ def _build_compare_sample_context(db: Session, *, user_id: int) -> tuple[list[di
         text_keys.append(key)
         text_map[key] = jd["raw_text"] or base_engine._build_vector_text(jd["parsed_json"] or {})
 
-    embedding_by_key: dict[str, list[float] | None] = {key: None for key in text_keys}
+    embedding_by_key: dict[str, list[float] | None] = dict.fromkeys(text_keys)
     try:
         from app.services.embedding_service import embed_texts
 
         emb_values = embed_texts([text_map[key] for key in text_keys])
-        for key, emb in zip(text_keys, emb_values):
+        for key, emb in zip(text_keys, emb_values, strict=False):
             embedding_by_key[key] = emb
     except Exception:
         pass
@@ -846,9 +875,7 @@ def _score_feedback_rows(
         combined_score = round(vector_score * engine._vector_weight + rule_score * engine._rule_weight, 2)
         recommendation_type = engine._recommend_type(combined_score)
         predicted_positive = combined_score >= engine.THRESHOLD_MEDIUM
-        agreed = (
-            row["feedback_type"] == "like" and predicted_positive
-        ) or (
+        agreed = (row["feedback_type"] == "like" and predicted_positive) or (
             row["feedback_type"] == "dislike" and not predicted_positive
         )
         if agreed:
@@ -926,7 +953,8 @@ def _compare_scored_variants(left: dict, right: dict) -> dict:
             float(right["summary"]["avg_combined_score"] or 0) - float(left["summary"]["avg_combined_score"] or 0),
             2,
         ),
-        "high_score_dislike_count": right["summary"]["high_score_dislike_count"] - left["summary"]["high_score_dislike_count"],
+        "high_score_dislike_count": right["summary"]["high_score_dislike_count"]
+        - left["summary"]["high_score_dislike_count"],
         "low_score_like_count": right["summary"]["low_score_like_count"] - left["summary"]["low_score_like_count"],
         "top_movers": movers[:12],
     }
@@ -936,10 +964,10 @@ def _compare_scored_variants(left: dict, right: dict) -> dict:
 async def recommend_jobs(
     resume_id: int = Query(..., description="Resume ID"),
     limit: int = Query(5, ge=1, le=20, description="Result size"),
-    location: Optional[str] = Query(None, description="Location filter"),
-    salary_min: Optional[int] = Query(None, description="Minimum salary"),
-    industry: Optional[str] = Query(None, description="Industry filter"),
-    exp_level: Optional[str] = Query(None, description="Experience level filter"),
+    location: str | None = Query(None, description="Location filter"),
+    salary_min: int | None = Query(None, description="Minimum salary"),
+    industry: str | None = Query(None, description="Industry filter"),
+    exp_level: str | None = Query(None, description="Experience level filter"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -996,11 +1024,7 @@ async def batch_import(
                 title = (row.get("title") or row.get("职位名称") or "").strip()
                 company = (row.get("company") or row.get("公司") or "").strip()
                 raw_text = (
-                    row.get("raw_text")
-                    or row.get("rawText")
-                    or row.get("JD文本")
-                    or row.get("jd_text")
-                    or ""
+                    row.get("raw_text") or row.get("rawText") or row.get("JD文本") or row.get("jd_text") or ""
                 ).strip()
                 if not title or not raw_text:
                     continue
@@ -1024,11 +1048,7 @@ async def batch_import(
             for item in items:
                 title = (item.get("title") or item.get("职位名称") or "").strip()
                 raw_text = (
-                    item.get("raw_text")
-                    or item.get("rawText")
-                    or item.get("jd_text")
-                    or item.get("description")
-                    or ""
+                    item.get("raw_text") or item.get("rawText") or item.get("jd_text") or item.get("description") or ""
                 ).strip()
                 if not title or not raw_text:
                     continue
@@ -1183,7 +1203,7 @@ async def submit_feedback(
     resume_id: int = Query(...),
     jd_id: int = Query(...),
     feedback_type: str = Query(..., pattern="^(like|dislike)$"),
-    match_score: Optional[float] = Query(None),
+    match_score: float | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1270,53 +1290,57 @@ async def export_feedback_tuning_samples(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "feedback_id",
-        "feedback_type",
-        "match_score",
-        "score_bucket",
-        "resume_id",
-        "resume_title",
-        "jd_id",
-        "jd_title",
-        "jd_company",
-        "industry",
-        "vector_score",
-        "rule_score",
-        "recommendation_type",
-        "salary_match",
-        "location_match",
-        "experience_match",
-        "skill_overlap",
-        "skill_gap",
-        "tuning_tags",
-        "match_reason",
-        "feedback_created_at",
-    ])
+    writer.writerow(
+        [
+            "feedback_id",
+            "feedback_type",
+            "match_score",
+            "score_bucket",
+            "resume_id",
+            "resume_title",
+            "jd_id",
+            "jd_title",
+            "jd_company",
+            "industry",
+            "vector_score",
+            "rule_score",
+            "recommendation_type",
+            "salary_match",
+            "location_match",
+            "experience_match",
+            "skill_overlap",
+            "skill_gap",
+            "tuning_tags",
+            "match_reason",
+            "feedback_created_at",
+        ]
+    )
     for item in samples:
-        writer.writerow([
-            item["feedback_id"],
-            item["feedback_type"],
-            item["match_score"],
-            item["score_bucket"],
-            item["resume_id"],
-            item["resume_title"],
-            item["jd_id"],
-            item["jd_title"],
-            item["jd_company"],
-            item["industry"],
-            item["vector_score"],
-            item["rule_score"],
-            item["recommendation_type"],
-            item["salary_match"],
-            item["location_match"],
-            item["experience_match"],
-            " | ".join(item["skill_overlap"]),
-            " | ".join(item["skill_gap"]),
-            " | ".join(item["tuning_tags"]),
-            item["match_reason"],
-            item["feedback_created_at"],
-        ])
+        writer.writerow(
+            [
+                item["feedback_id"],
+                item["feedback_type"],
+                item["match_score"],
+                item["score_bucket"],
+                item["resume_id"],
+                item["resume_title"],
+                item["jd_id"],
+                item["jd_title"],
+                item["jd_company"],
+                item["industry"],
+                item["vector_score"],
+                item["rule_score"],
+                item["recommendation_type"],
+                item["salary_match"],
+                item["location_match"],
+                item["experience_match"],
+                " | ".join(item["skill_overlap"]),
+                " | ".join(item["skill_gap"]),
+                " | ".join(item["tuning_tags"]),
+                item["match_reason"],
+                item["feedback_created_at"],
+            ]
+        )
     return StreamingResponse(
         iter([output.getvalue().encode("utf-8-sig")]),
         media_type="text/csv; charset=utf-8",
@@ -1365,8 +1389,8 @@ async def apply_feedback_tuning(
 async def list_jobs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    source: Optional[str] = Query(None, description="manual/imported/api"),
-    industry: Optional[str] = Query(None),
+    source: str | None = Query(None, description="manual/imported/api"),
+    industry: str | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1444,6 +1468,7 @@ async def get_jd_detail(
 # ============================================================
 # 职位收藏 / 不感兴趣
 # ============================================================
+
 
 @router.post("/bookmarks", summary="收藏/不感兴趣职位")
 async def bookmark_job(
@@ -1540,17 +1565,21 @@ async def list_bookmarks(
     items = []
     for bm in bookmarks:
         jd = db.get(JobDescription, bm.jd_id)
-        items.append({
-            **bm.to_dict(),
-            "job": {
-                "id": jd.id,
-                "title": jd.title,
-                "company": jd.company,
-                "location": jd.location,
-                "salary_range": jd.salary_range,
-                "industry": jd.industry,
-            } if jd else None,
-        })
+        items.append(
+            {
+                **bm.to_dict(),
+                "job": {
+                    "id": jd.id,
+                    "title": jd.title,
+                    "company": jd.company,
+                    "location": jd.location,
+                    "salary_range": jd.salary_range,
+                    "industry": jd.industry,
+                }
+                if jd
+                else None,
+            }
+        )
 
     return ok({"total": total, "items": items})
 

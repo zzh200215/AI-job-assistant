@@ -17,62 +17,61 @@
         <el-tag type="info" effect="plain">{{ total }} 条</el-tag>
       </div>
       <div class="panel-body">
+        <el-alert
+          v-if="listError"
+          class="load-error"
+          type="error"
+          :closable="false"
+          show-icon
+          title="历史记录加载失败"
+          description="暂时无法获取历史分析记录，请检查网络后重试。"
+        >
+          <template #default>
+            <el-button size="small" type="primary" plain @click="loadList">重新加载</el-button>
+          </template>
+        </el-alert>
 
-      <el-alert
-        v-if="listError"
-        class="load-error"
-        type="error"
-        :closable="false"
-        show-icon
-        title="历史记录加载失败"
-        description="暂时无法获取历史分析记录，请检查网络后重试。"
-      >
-        <template #default>
-          <el-button size="small" type="primary" plain @click="loadList">重新加载</el-button>
-        </template>
-      </el-alert>
+        <el-table v-else :data="list" v-loading="loading" stripe>
+          <el-table-column prop="id" label="ID" width="80" />
+          <el-table-column label="简历" min-width="180">
+            <template #default="{ row }">
+              <div>{{ row.resume_name || '-' }}</div>
+              <div class="muted">{{ row.resume_file }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="岗位" min-width="180">
+            <template #default="{ row }">
+              <div>{{ row.jd_title || '-' }}</div>
+              <div class="muted">{{ row.jd_company }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="匹配度" width="120">
+            <template #default="{ row }">
+              <el-tag :type="scoreType(row.match_score)">{{ row.match_score ?? '-' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="remark" label="备注" min-width="120" />
+          <el-table-column prop="create_time" label="时间" width="180" />
+          <el-table-column label="操作" width="280" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" @click="openDetail(row)">查看</el-button>
+              <el-button size="small" type="primary" @click="goInterview(row)">面试题</el-button>
+              <el-button size="small" type="danger" @click="onDelete(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
 
-      <el-table v-else :data="list" v-loading="loading" stripe>
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column label="简历" min-width="180">
-          <template #default="{ row }">
-            <div>{{ row.resume_name || '-' }}</div>
-            <div class="muted">{{ row.resume_file }}</div>
-          </template>
-        </el-table-column>
-        <el-table-column label="岗位" min-width="180">
-          <template #default="{ row }">
-            <div>{{ row.jd_title || '-' }}</div>
-            <div class="muted">{{ row.jd_company }}</div>
-          </template>
-        </el-table-column>
-        <el-table-column label="匹配度" width="120">
-          <template #default="{ row }">
-            <el-tag :type="scoreType(row.match_score)">{{ row.match_score ?? '-' }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="remark" label="备注" min-width="120" />
-        <el-table-column prop="create_time" label="时间" width="180" />
-        <el-table-column label="操作" width="280" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" @click="openDetail(row)">查看</el-button>
-            <el-button size="small" type="primary" @click="goInterview(row)">面试题</el-button>
-            <el-button size="small" type="danger" @click="onDelete(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <el-pagination
-        v-if="!listError"
-        v-model:current-page="page"
-        v-model:page-size="pageSize"
-        :total="total"
-        :page-sizes="[10, 20, 50]"
-        layout="total, sizes, prev, pager, next"
-        class="pagination"
-        @current-change="loadList"
-        @size-change="loadList"
-      />
+        <el-pagination
+          v-if="!listError"
+          v-model:current-page="page"
+          v-model:page-size="pageSize"
+          :total="total"
+          :page-sizes="[10, 20, 50]"
+          layout="total, sizes, prev, pager, next"
+          class="pagination"
+          @current-change="loadList"
+          @size-change="loadList"
+        />
       </div>
     </div>
 
@@ -83,7 +82,9 @@
         <el-descriptions :column="3" border size="small">
           <el-descriptions-item label="记录 ID">{{ detail.id }}</el-descriptions-item>
           <el-descriptions-item label="匹配度">
-            <el-tag :type="scoreType(detail.match_score)" size="small">{{ detail.match_score }}</el-tag>
+            <el-tag :type="scoreType(detail.match_score)" size="small">{{
+              detail.match_score
+            }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="分析时间">{{ detail.create_time }}</el-descriptions-item>
           <el-descriptions-item label="简历">
@@ -138,9 +139,19 @@
                       <b>{{ x.item || x }}</b>
                       <span v-if="x.action">：{{ x.action }}</span>
                       <span v-if="x.impact && !x.action">：{{ x.impact }}</span>
-                      <el-tag v-if="x.severity" size="small" :type="x.severity === '高' ? 'danger' : x.severity === '中' ? 'warning' : 'info'" style="margin-left:4px;">{{ x.severity }}</el-tag>
+                      <el-tag
+                        v-if="x.severity"
+                        size="small"
+                        :type="
+                          x.severity === '高' ? 'danger' : x.severity === '中' ? 'warning' : 'info'
+                        "
+                        style="margin-left: 4px"
+                        >{{ x.severity }}</el-tag
+                      >
                     </li>
-                    <li v-for="(x, i) in localizedRiskPoints" :key="'r'+i" class="risk">{{ x }}</li>
+                    <li v-for="(x, i) in localizedRiskPoints" :key="'r' + i" class="risk">
+                      {{ x }}
+                    </li>
                   </ul>
                 </el-col>
               </el-row>
@@ -152,23 +163,42 @@
             <template v-if="detail.optimize_suggestions">
               <el-alert
                 :title="detail.optimize_suggestions.overall || ''"
-                type="success" :closable="false" show-icon
+                type="success"
+                :closable="false"
+                show-icon
               />
               <el-collapse class="mt">
                 <el-collapse-item
-                  v-for="(s, i) in detail.optimize_suggestions.sections || []" :key="i"
+                  v-for="(s, i) in detail.optimize_suggestions.sections || []"
+                  :key="i"
                   :title="`【${s.section}】`"
                 >
-                  <ul><li v-for="(x, j) in s.suggestions" :key="j">{{ x }}</li></ul>
+                  <ul>
+                    <li v-for="(x, j) in s.suggestions" :key="j">{{ x }}</li>
+                  </ul>
                 </el-collapse-item>
               </el-collapse>
               <div class="mt">
                 <span>➕ 补充关键词：</span>
-                <el-tag v-for="k in detail.optimize_suggestions.keywords_to_add || []" :key="k" type="success" size="small" style="margin:2px;">{{ k }}</el-tag>
+                <el-tag
+                  v-for="k in detail.optimize_suggestions.keywords_to_add || []"
+                  :key="k"
+                  type="success"
+                  size="small"
+                  style="margin: 2px"
+                  >{{ k }}</el-tag
+                >
               </div>
               <div class="mt">
                 <span>➖ 删除关键词：</span>
-                <el-tag v-for="k in detail.optimize_suggestions.keywords_to_remove || []" :key="k" type="danger" size="small" style="margin:2px;">{{ k }}</el-tag>
+                <el-tag
+                  v-for="k in detail.optimize_suggestions.keywords_to_remove || []"
+                  :key="k"
+                  type="danger"
+                  size="small"
+                  style="margin: 2px"
+                  >{{ k }}</el-tag
+                >
               </div>
             </template>
             <el-empty v-else description="暂无优化建议" />
@@ -179,10 +209,19 @@
               <div v-for="key in interviewKeys" :key="key">
                 <template v-if="detail.interview_questions[key]?.length">
                   <h4>{{ groupTitle(key) }}（{{ detail.interview_questions[key].length }} 题）</h4>
-                  <el-card v-for="(q, i) in detail.interview_questions[key]" :key="i" shadow="never" class="q-card">
-                    <div class="q"><b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}</div>
+                  <el-card
+                    v-for="(q, i) in detail.interview_questions[key]"
+                    :key="i"
+                    shadow="never"
+                    class="q-card"
+                  >
+                    <div class="q">
+                      <b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}
+                    </div>
                     <div class="i">🎯 {{ q.focus || q.intent }}</div>
-                    <div class="a">💡 {{ q.suggested_answer || q.expected_answer || q.ref_answer }}</div>
+                    <div class="a">
+                      💡 {{ q.suggested_answer || q.expected_answer || q.ref_answer }}
+                    </div>
                     <div v-if="q.preparation_tips" class="tip">📝 {{ q.preparation_tips }}</div>
                   </el-card>
                 </template>
@@ -230,11 +269,17 @@ const interviewKeys = ['hr_questions', 'tech_questions', 'project_questions', 's
 const hasInterviewQuestions = computed(() => {
   return checkHasInterviewQuestions(detail.value?.interview_questions)
 })
-const localizedRecommendation = computed(() => localizeRecommendationText(detail.value?.match_report?.recommendation || ''))
+const localizedRecommendation = computed(() =>
+  localizeRecommendationText(detail.value?.match_report?.recommendation || '')
+)
 const localizedSummary = computed(() => localizeSentence(detail.value?.match_report?.summary || ''))
-const localizedStrengths = computed(() => normalizeLocalizedObjectList(detail.value?.match_report?.strengths))
+const localizedStrengths = computed(() =>
+  normalizeLocalizedObjectList(detail.value?.match_report?.strengths)
+)
 const localizedGaps = computed(() => normalizeLocalizedObjectList(detail.value?.match_report?.gaps))
-const localizedRiskPoints = computed(() => normalizeLocalizedTextList(detail.value?.match_report?.risk_points))
+const localizedRiskPoints = computed(() =>
+  normalizeLocalizedTextList(detail.value?.match_report?.risk_points)
+)
 
 const loadList = async () => {
   loading.value = true
@@ -269,7 +314,9 @@ const openDetail = async (row) => {
 
 const onDelete = async (row) => {
   try {
-    await ElMessageBox.confirm(`确认删除记录 #${row.id} ？删除后可在列表中隐藏。`, '提示', { type: 'warning' })
+    await ElMessageBox.confirm(`确认删除记录 #${row.id} ？删除后可在列表中隐藏。`, '提示', {
+      type: 'warning',
+    })
   } catch {
     return // 用户取消
   }
@@ -284,21 +331,47 @@ const onDelete = async (row) => {
 
 const goInterview = (row) => router.push(`/interview?record_id=${row.id}`)
 
-const scoreType = (s) => s >= 80 ? 'success' : s >= 60 ? 'warning' : 'danger'
-const recommendType = (r) => r === '推荐' ? 'success' : r === '备选' ? 'warning' : 'info'
+const scoreType = (s) => (s >= 80 ? 'success' : s >= 60 ? 'warning' : 'danger')
+const recommendType = (r) => (r === '推荐' ? 'success' : r === '备选' ? 'warning' : 'info')
 const groupTitle = getInterviewGroupTitle
 
 onMounted(loadList)
 </script>
 
 <style scoped>
-.muted { color: var(--app-muted); font-size: 12px; }
-.pagination { margin-top: 16px; justify-content: flex-end; display: flex; }
-.q-card { margin: 8px 0; }
-.q { font-size: 14px; }
-.i { color: var(--app-muted); font-size: 12px; margin: 4px 0; }
-.a { color: var(--app-primary-dark); font-size: 13px; }
-.risk { color: #c96b6b; }
-h4 { margin: 12px 0 6px; color: var(--app-text); }
-ul { padding-left: 18px; margin: 4px 0; }
+.muted {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+.pagination {
+  margin-top: 16px;
+  justify-content: flex-end;
+  display: flex;
+}
+.q-card {
+  margin: 8px 0;
+}
+.q {
+  font-size: 14px;
+}
+.i {
+  color: var(--app-muted);
+  font-size: 12px;
+  margin: 4px 0;
+}
+.a {
+  color: var(--app-primary-dark);
+  font-size: 13px;
+}
+.risk {
+  color: #c96b6b;
+}
+h4 {
+  margin: 12px 0 6px;
+  color: var(--app-text);
+}
+ul {
+  padding-left: 18px;
+  margin: 4px 0;
+}
 </style>

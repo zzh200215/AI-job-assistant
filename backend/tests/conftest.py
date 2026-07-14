@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Shared pytest fixtures."""
 
 from __future__ import annotations
@@ -14,7 +13,8 @@ from sqlalchemy.orm import Session, sessionmaker
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["REDIS_URL"] = ""
 
-from app.core.config import settings
+import contextlib
+
 from app.core.database import Base
 from app.core.database import SessionLocal as AppSessionLocal
 from app.core.rate_limiter import get_limiter
@@ -66,6 +66,7 @@ def db_session(db_engine) -> Generator[Session, None, None]:
 @pytest.fixture
 def override_db(db_session):
     """Override FastAPI's get_db dependency with the test session."""
+
     def _get_db():
         yield db_session
 
@@ -104,12 +105,8 @@ def admin_user(db_session: Session):
 def reset_rate_limiter():
     """Keep slowapi's in-memory counters isolated between tests."""
     limiter = get_limiter()
-    try:
+    with contextlib.suppress(Exception):
         limiter.reset()
-    except Exception:
-        pass
     yield
-    try:
+    with contextlib.suppress(Exception):
         limiter.reset()
-    except Exception:
-        pass

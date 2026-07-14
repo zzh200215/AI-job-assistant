@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Resume file parsing utilities with optional OCR support."""
 
 from __future__ import annotations
@@ -7,7 +6,6 @@ import os
 import re
 import shutil
 from importlib import import_module
-from typing import Optional
 
 
 def _load_optional_module(module_name: str):
@@ -35,7 +33,9 @@ def is_ocr_available() -> bool:
     if not _configure_tesseract(pytesseract_module):
         return False
 
-    image_backend_ready = _load_optional_module("pypdfium2") is not None or _load_optional_module("pdf2image") is not None
+    image_backend_ready = (
+        _load_optional_module("pypdfium2") is not None or _load_optional_module("pdf2image") is not None
+    )
     return image_backend_ready
 
 
@@ -58,8 +58,7 @@ def _render_pdf_images(path: str):
     if pdf2image_module is None:
         raise ValueError("当前环境未安装 PDF OCR 渲染依赖")
 
-    for image in pdf2image_module.convert_from_path(path, dpi=200):
-        yield image
+    yield from pdf2image_module.convert_from_path(path, dpi=200)
 
 
 def _ocr_pdf(path: str) -> str:
@@ -192,7 +191,7 @@ def _parse_docx(path: str) -> str:
 
 def _parse_txt(path: str) -> str:
     try:
-        with open(path, "r", encoding="utf-8", errors="ignore") as file:
+        with open(path, encoding="utf-8", errors="ignore") as file:
             text = file.read()
     except Exception as exc:
         raise ValueError(f"TXT 文件解析失败: {exc}") from exc
@@ -204,7 +203,7 @@ def _parse_txt(path: str) -> str:
 
 def _parse_md(path: str) -> str:
     try:
-        with open(path, "r", encoding="utf-8", errors="ignore") as file:
+        with open(path, encoding="utf-8", errors="ignore") as file:
             text = file.read()
     except Exception as exc:
         raise ValueError(f"Markdown 文件解析失败: {exc}") from exc
@@ -216,7 +215,7 @@ def _parse_md(path: str) -> str:
     return text
 
 
-def parse_resume(path: str, file_type: Optional[str] = None) -> str:
+def parse_resume(path: str, file_type: str | None = None) -> str:
     """Parse supported resume file types into plain text."""
     if not os.path.exists(path):
         raise FileNotFoundError(f"文件不存在: {path}")

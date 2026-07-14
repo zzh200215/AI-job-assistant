@@ -1,65 +1,72 @@
-# -*- coding: utf-8 -*-
 """
 统一 LLM 调用封装
 - 通过 LLM_PROVIDER 切换：mock / openai / qwen / local
 - 对外只暴露 chat_json(prompt) -> dict
 - 真实模型走 OpenAI 兼容协议（OpenAI 官方、Qwen 兼容模式都可用）
 """
-import json
-import time
-import logging
+
 import copy
 import hashlib
+import json
+import logging
 import threading
-import requests
+import time
 from collections import OrderedDict
+from collections.abc import Callable
 from contextvars import ContextVar
-from typing import Any, Callable, Dict, Optional, Type
+from typing import Any
 
+import requests
 from pydantic import BaseModel, ValidationError
 
+from app.agents.tools import Tool, get_tool
 from app.core.config import settings
 from app.core.prometheus_metrics import record_llm_error, record_llm_request
 from app.core.request_context import get_request_id
 from app.utils.json_utils import extract_json
 from app.utils.retry import retry_call
-from app.agents.tools import Tool, get_tool
 
 logger = logging.getLogger(__name__)
 
 # 网络类故障的重试次数与退避
 _LLM_MAX_RETRIES = 2
-_LLM_USAGE_CONTEXT: ContextVar[Dict[str, float]] = ContextVar("llm_usage_context", default=None)
+_LLM_USAGE_CONTEXT: ContextVar[dict[str, float]] = ContextVar("llm_usage_context", default=None)
 _SIMPLIFIED_PROMPT_MAX_CHARS = 3000
 
 
 class _RetryableLLMError(Exception):
     """可重试的 LLM 网络/服务端错误，供 retry_call 识别"""
+
     pass
 
 
 class LLMProviderError(Exception):
     """LLM provider 错误基类，供上层映射 HTTP 状态码"""
+
     pass
 
 
 class LLMTimeoutError(LLMProviderError):
     """LLM 调用超时"""
+
     pass
 
 
 class LLMAuthError(LLMProviderError):
     """LLM 鉴权失败"""
+
     pass
 
 
 class LLMRateLimitError(LLMProviderError):
     """LLM 限流"""
+
     pass
 
 
 class LLMParseError(LLMProviderError):
     """LLM 返回解析失败"""
+
     pass
 
 
@@ -67,11 +74,11 @@ class LLMParseError(LLMProviderError):
 # 相同 prompt（同一 provider+model）直接复用上次解析结果，省去重复 LLM 调用。
 # temperature 较低、分析类 prompt 高度可复现，缓存命中可显著降时延与 token 成本。
 # 进程内 LRU；如需跨进程共享可替换为 Redis。
-_LLM_CACHE: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+_LLM_CACHE: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
 _LLM_CACHE_MAX = 256
 # 多智能体并行执行时 chat_json 会被多线程并发调用，缓存读写需加锁
 _LLM_CACHE_LOCK = threading.Lock()
-_LLM_TRACE_CONTEXT: ContextVar[Dict[str, Any]] = ContextVar("llm_trace_context", default={})
+_LLM_TRACE_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar("llm_trace_context", default=None)
 
 
 def _cache_key(provider: str, prompt: str) -> str:
@@ -85,16 +92,16 @@ def clear_llm_cache() -> None:
         _LLM_CACHE.clear()
 
 
-def set_llm_trace_context(context: Optional[Dict[str, Any]] = None) -> None:
+def set_llm_trace_context(context: dict[str, Any] | None = None) -> None:
     """Set current trace context for the next LLM call."""
     _LLM_TRACE_CONTEXT.set(dict(context or {}))
 
 
-def get_llm_trace_context() -> Dict[str, Any]:
+def get_llm_trace_context() -> dict[str, Any]:
     return dict(_LLM_TRACE_CONTEXT.get() or {})
 
 
-def _consume_llm_trace_context() -> Dict[str, Any]:
+def _consume_llm_trace_context() -> dict[str, Any]:
     context = get_llm_trace_context()
     _LLM_TRACE_CONTEXT.set({})
     return context
@@ -105,7 +112,7 @@ def reset_llm_usage() -> None:
     _LLM_USAGE_CONTEXT.set({"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "cost_cents": 0.0})
 
 
-def get_llm_usage() -> Dict[str, float]:
+def get_llm_usage() -> dict[str, float]:
     """Return current per-context LLM usage counters."""
     usage = _LLM_USAGE_CONTEXT.get()
     if usage is None:
@@ -113,17 +120,16 @@ def get_llm_usage() -> Dict[str, float]:
     return dict(usage)
 
 
-def _record_usage(usage: Optional[dict], model: Optional[str] = None) -> None:
+def _record_usage(usage: dict | None, model: str | None = None) -> None:
     if not usage:
         return
 
     prompt_tokens = int(usage.get("prompt_tokens") or 0)
     completion_tokens = int(usage.get("completion_tokens") or 0)
     total_tokens = int(usage.get("total_tokens") or (prompt_tokens + completion_tokens))
-    cost_cents = (
-        (prompt_tokens / 1000.0) * float(settings.LLM_INPUT_COST_PER_1K_CENTS or 0.0)
-        + (completion_tokens / 1000.0) * float(settings.LLM_OUTPUT_COST_PER_1K_CENTS or 0.0)
-    )
+    cost_cents = (prompt_tokens / 1000.0) * float(settings.LLM_INPUT_COST_PER_1K_CENTS or 0.0) + (
+        completion_tokens / 1000.0
+    ) * float(settings.LLM_OUTPUT_COST_PER_1K_CENTS or 0.0)
 
     current = _LLM_USAGE_CONTEXT.get()
     if current is None:
@@ -144,7 +150,7 @@ def _record_usage(usage: Optional[dict], model: Optional[str] = None) -> None:
     )
 
 
-def _validate_schema(result: Dict[str, Any], schema: Type[BaseModel] | None) -> Dict[str, Any]:
+def _validate_schema(result: dict[str, Any], schema: type[BaseModel] | None) -> dict[str, Any]:
     if schema is None:
         return result
     try:
@@ -168,13 +174,21 @@ _MOCK_RESUME = {
     "current_title": "Python 后端开发工程师",
     "skills": ["Python", "FastAPI", "MySQL", "Docker", "LangChain"],
     "work_experience": [
-        {"company": "示例科技A", "title": "后端开发", "start": "2021-03",
-         "end": "至今", "desc": "负责招聘平台后端开发与维护"}
+        {
+            "company": "示例科技A",
+            "title": "后端开发",
+            "start": "2021-03",
+            "end": "至今",
+            "desc": "负责招聘平台后端开发与维护",
+        }
     ],
     "project_experience": [
-        {"name": "智能简历解析服务", "role": "主程",
-         "desc": "基于 LLM 的简历结构化解析，支撑日均 1w+ 解析",
-         "tech": ["FastAPI", "LangChain", "MySQL"]}
+        {
+            "name": "智能简历解析服务",
+            "role": "主程",
+            "desc": "基于 LLM 的简历结构化解析，支撑日均 1w+ 解析",
+            "tech": ["FastAPI", "LangChain", "MySQL"],
+        }
     ],
     "self_evaluation": "5 年后端开发经验，专注 Python / AI 应用落地",
 }
@@ -205,12 +219,9 @@ _MOCK_MATCH = {
 _MOCK_OPTIMIZE = {
     "overall": "突出 AI / RAG 相关经验，量化项目成果，对齐岗位关键词",
     "sections": [
-        {"section": "技能",
-         "suggestions": ["补充 LangChain / RAG / Agent 关键词", "删除'精通 Office'等无效项"]},
-        {"section": "项目",
-         "suggestions": ["增加数据指标量化：QPS、准确率", "突出与 JD 相关的责任"]},
-        {"section": "工作经历",
-         "suggestions": ["统一时间格式 YYYY-MM", "按 STAR 法则改写"]},
+        {"section": "技能", "suggestions": ["补充 LangChain / RAG / Agent 关键词", "删除'精通 Office'等无效项"]},
+        {"section": "项目", "suggestions": ["增加数据指标量化：QPS、准确率", "突出与 JD 相关的责任"]},
+        {"section": "工作经历", "suggestions": ["统一时间格式 YYYY-MM", "按 STAR 法则改写"]},
     ],
     "keywords_to_add": ["RAG", "Agent", "向量检索", "Prompt 工程"],
     "keywords_to_remove": ["精通 Office", "良好的沟通能力"],
@@ -219,30 +230,38 @@ _MOCK_OPTIMIZE = {
 
 _MOCK_INTERVIEW = {
     "basic": [
-        {"q": "请做一段 2 分钟的自我介绍",
-         "intent": "表达与逻辑",
-         "ref_answer": "突出 Python 后端 + AI 应用落地经验，按时间倒序讲项目"},
-        {"q": "为什么看这个机会？",
-         "intent": "动机",
-         "ref_answer": "结合 AI 方向兴趣 + 公司业务理解"},
+        {
+            "q": "请做一段 2 分钟的自我介绍",
+            "intent": "表达与逻辑",
+            "ref_answer": "突出 Python 后端 + AI 应用落地经验，按时间倒序讲项目",
+        },
+        {"q": "为什么看这个机会？", "intent": "动机", "ref_answer": "结合 AI 方向兴趣 + 公司业务理解"},
     ],
     "project": [
-        {"q": "挑一个最有挑战的项目，讲讲你做了什么？",
-         "intent": "问题解决 / 影响力",
-         "ref_answer": "智能简历解析服务：拆解准确率/性能/成本，给出量化数据"},
+        {
+            "q": "挑一个最有挑战的项目，讲讲你做了什么？",
+            "intent": "问题解决 / 影响力",
+            "ref_answer": "智能简历解析服务：拆解准确率/性能/成本，给出量化数据",
+        },
     ],
     "tech": [
-        {"q": "FastAPI 的依赖注入是怎么实现的？",
-         "intent": "框架理解",
-         "ref_answer": "Depends + 嵌套子依赖，结合 yield 处理资源"},
-        {"q": "RAG 的核心链路是什么？召回效果差怎么排查？",
-         "intent": "RAG 实战",
-         "ref_answer": "解析 -> 分块 -> 嵌入 -> 召回 -> 重排 -> 生成；从分块/嵌入/召回分段排查"},
+        {
+            "q": "FastAPI 的依赖注入是怎么实现的？",
+            "intent": "框架理解",
+            "ref_answer": "Depends + 嵌套子依赖，结合 yield 处理资源",
+        },
+        {
+            "q": "RAG 的核心链路是什么？召回效果差怎么排查？",
+            "intent": "RAG 实战",
+            "ref_answer": "解析 -> 分块 -> 嵌入 -> 召回 -> 重排 -> 生成；从分块/嵌入/召回分段排查",
+        },
     ],
     "scenario": [
-        {"q": "让你从 0 设计简历解析服务，如何兼顾准确率与成本？",
-         "intent": "系统设计",
-         "ref_answer": "小模型兜底 + LLM 精修；异步队列 + 缓存；Prompt 模板化"},
+        {
+            "q": "让你从 0 设计简历解析服务，如何兼顾准确率与成本？",
+            "intent": "系统设计",
+            "ref_answer": "小模型兜底 + LLM 精修；异步队列 + 缓存；Prompt 模板化",
+        },
     ],
 }
 
@@ -253,25 +272,51 @@ _MOCK_INTENT = {
     "analysis_type": "full_analysis",
     "reason": "用户上传了简历和JD，需要全链路分析",
     "required_steps": [
-        "intent_recognition", "resume_parse", "jd_parse", "task_planning",
-        "knowledge_retrieval", "matching_analysis", "resume_optimization",
-        "interview_question_generation", "self_check", "final_report",
+        "intent_recognition",
+        "resume_parse",
+        "jd_parse",
+        "task_planning",
+        "knowledge_retrieval",
+        "matching_analysis",
+        "resume_optimization",
+        "interview_question_generation",
+        "self_check",
+        "final_report",
     ],
     "focus_points": ["技能匹配", "项目经验", "学历要求", "职业发展"],
 }
 
 _MOCK_PLAN = [
-    {"step_name": "knowledge_retrieval", "description": "检索岗位能力模型和面试题库",
-     "depends_on": [], "expected_output": "知识切片列表"},
-    {"step_name": "matching_analysis", "description": "分析简历与JD匹配度",
-     "depends_on": ["knowledge_retrieval"], "expected_output": "匹配度评分和维度分析"},
-    {"step_name": "resume_optimization", "description": "生成简历优化建议",
-     "depends_on": ["matching_analysis"], "expected_output": "具体优化建议"},
-    {"step_name": "interview_question_generation", "description": "生成面试题",
-     "depends_on": ["matching_analysis"], "expected_output": "四类面试题"},
-    {"step_name": "self_check", "description": "自我校验分析质量",
-     "depends_on": ["matching_analysis", "resume_optimization", "interview_question_generation"],
-     "expected_output": "校验报告"},
+    {
+        "step_name": "knowledge_retrieval",
+        "description": "检索岗位能力模型和面试题库",
+        "depends_on": [],
+        "expected_output": "知识切片列表",
+    },
+    {
+        "step_name": "matching_analysis",
+        "description": "分析简历与JD匹配度",
+        "depends_on": ["knowledge_retrieval"],
+        "expected_output": "匹配度评分和维度分析",
+    },
+    {
+        "step_name": "resume_optimization",
+        "description": "生成简历优化建议",
+        "depends_on": ["matching_analysis"],
+        "expected_output": "具体优化建议",
+    },
+    {
+        "step_name": "interview_question_generation",
+        "description": "生成面试题",
+        "depends_on": ["matching_analysis"],
+        "expected_output": "四类面试题",
+    },
+    {
+        "step_name": "self_check",
+        "description": "自我校验分析质量",
+        "depends_on": ["matching_analysis", "resume_optimization", "interview_question_generation"],
+        "expected_output": "校验报告",
+    },
 ]
 
 _MOCK_SELF_CHECK = {
@@ -321,6 +366,7 @@ _MOCK_FINAL_REPORT = {
 
 # ===================== 多智能体 Mock 数据（第四阶段）=====================
 
+
 def _wrap_json(data: Any) -> str:
     """把 dict/list 包装成 ```json``` 文本，模拟 LLM 返回格式"""
     return "```json\n" + json.dumps(data, ensure_ascii=False, indent=2) + "\n```"
@@ -328,9 +374,11 @@ def _wrap_json(data: Any) -> str:
 
 _MOCK_AGENT_RESUME = {
     "basic_info": {
-        "name": "张三", "years_exp": 5,
+        "name": "张三",
+        "years_exp": 5,
         "skills": ["Python", "FastAPI", "MySQL", "Docker", "LangChain"],
-        "current_title": "Python 后端开发工程师", "education": "本科",
+        "current_title": "Python 后端开发工程师",
+        "education": "本科",
         "major": "计算机科学与技术",
     },
     "strengths": [
@@ -338,10 +386,18 @@ _MOCK_AGENT_RESUME = {
         {"aspect": "AI 落地经验", "detail": "有 LLM/RAG 项目实战，稀缺加分项"},
     ],
     "weaknesses": [
-        {"aspect": "成果量化", "severity": "高", "detail": "项目描述缺少数据指标",
-         "suggestion": "补充 QPS、准确率、降本比例等量化结果"},
-        {"aspect": "无效技能词", "severity": "中", "detail": "罗列'精通 Office'等弱相关项",
-         "suggestion": "删除并替换为 RAG/Agent 等岗位关键词"},
+        {
+            "aspect": "成果量化",
+            "severity": "高",
+            "detail": "项目描述缺少数据指标",
+            "suggestion": "补充 QPS、准确率、降本比例等量化结果",
+        },
+        {
+            "aspect": "无效技能词",
+            "severity": "中",
+            "detail": "罗列'精通 Office'等弱相关项",
+            "suggestion": "删除并替换为 RAG/Agent 等岗位关键词",
+        },
     ],
     "expression_quality": {
         "score": 75,
@@ -360,8 +416,10 @@ _MOCK_AGENT_RESUME = {
 
 _MOCK_AGENT_JOB = {
     "position_info": {
-        "title": "Python 后端开发工程师", "company": "示例科技",
-        "location": "北京", "salary_range": "20k-35k",
+        "title": "Python 后端开发工程师",
+        "company": "示例科技",
+        "location": "北京",
+        "salary_range": "20k-35k",
     },
     "required_skills": [
         {"skill": "Python", "level": "精通", "importance": "核心"},
@@ -390,8 +448,12 @@ _MOCK_AGENT_JOB = {
 _MOCK_AGENT_MATCH = {
     "match_score": 82,
     "dimension_scores": {
-        "skills": {"score": 90, "analysis": "核心技术栈高度吻合",
-                   "matched": ["Python", "FastAPI", "MySQL"], "missing": ["大规模高并发"]},
+        "skills": {
+            "score": 90,
+            "analysis": "核心技术栈高度吻合",
+            "matched": ["Python", "FastAPI", "MySQL"],
+            "missing": ["大规模高并发"],
+        },
         "experience": {"score": 80, "analysis": "5 年经验符合 3-5 年要求"},
         "education": {"score": 75, "analysis": "本科学历达标"},
         "industry": {"score": 85, "analysis": "AI 行业背景契合"},
@@ -401,8 +463,7 @@ _MOCK_AGENT_MATCH = {
         {"item": "技术栈吻合", "impact": "可快速上手", "evidence": "Python+FastAPI+MySQL"},
     ],
     "gaps": [
-        {"item": "缺少高并发经验", "severity": "中", "impact": "架构题可能受限",
-         "action": "准备压测与性能优化案例"},
+        {"item": "缺少高并发经验", "severity": "中", "impact": "架构题可能受限", "action": "准备压测与性能优化案例"},
     ],
     "risk_points": ["薪资预期可能略高于预算"],
     "recommendation": "推荐投递",
@@ -411,22 +472,44 @@ _MOCK_AGENT_MATCH = {
 
 _MOCK_AGENT_INTERVIEW = {
     "tech_questions": [
-        {"question": "FastAPI 依赖注入的实现原理？", "focus": "框架理解", "difficulty": "中等",
-         "expected_answer": "Depends + 子依赖树 + yield 资源管理", "preparation_tips": "结合源码理解作用域"},
-        {"question": "RAG 召回效果差如何排查？", "focus": "RAG 实战", "difficulty": "困难",
-         "expected_answer": "分块/嵌入/召回/重排分段定位", "preparation_tips": "准备一次真实调优经历"},
+        {
+            "question": "FastAPI 依赖注入的实现原理？",
+            "focus": "框架理解",
+            "difficulty": "中等",
+            "expected_answer": "Depends + 子依赖树 + yield 资源管理",
+            "preparation_tips": "结合源码理解作用域",
+        },
+        {
+            "question": "RAG 召回效果差如何排查？",
+            "focus": "RAG 实战",
+            "difficulty": "困难",
+            "expected_answer": "分块/嵌入/召回/重排分段定位",
+            "preparation_tips": "准备一次真实调优经历",
+        },
     ],
     "project_questions": [
-        {"question": "简历解析服务如何兼顾准确率和成本？", "target_project": "智能简历解析服务",
-         "focus": "系统设计/权衡", "expected_answer": "小模型兜底 + LLM 精修 + 缓存"},
+        {
+            "question": "简历解析服务如何兼顾准确率和成本？",
+            "target_project": "智能简历解析服务",
+            "focus": "系统设计/权衡",
+            "expected_answer": "小模型兜底 + LLM 精修 + 缓存",
+        },
     ],
     "hr_questions": [
-        {"question": "为什么选择这个机会？", "focus": "动机与稳定性", "risk_point": "跳槽频率",
-         "suggested_answer": "结合 AI 方向兴趣与公司业务"},
+        {
+            "question": "为什么选择这个机会？",
+            "focus": "动机与稳定性",
+            "risk_point": "跳槽频率",
+            "suggested_answer": "结合 AI 方向兴趣与公司业务",
+        },
     ],
     "scenario_questions": [
-        {"question": "QPS 突增 10 倍如何保障服务稳定？", "scenario": "流量高峰",
-         "focus": "高并发设计", "evaluation_criteria": "限流/缓存/扩容/降级是否完整"},
+        {
+            "question": "QPS 突增 10 倍如何保障服务稳定？",
+            "scenario": "流量高峰",
+            "focus": "高并发设计",
+            "evaluation_criteria": "限流/缓存/扩容/降级是否完整",
+        },
     ],
     "total_questions": 5,
     "preparation_strategy": "以 AI 项目为主线讲故事，补强高并发与系统设计短板。",
@@ -436,24 +519,50 @@ _MOCK_AGENT_INTERVIEW = {
 
 _MOCK_AGENT_CAREER = {
     "current_status": {
-        "level": "中级后端工程师", "strengths": ["Python 工程能力", "AI 落地经验"],
-        "development_areas": ["高并发架构", "系统设计"], "career_stage": "成长期",
+        "level": "中级后端工程师",
+        "strengths": ["Python 工程能力", "AI 落地经验"],
+        "development_areas": ["高并发架构", "系统设计"],
+        "career_stage": "成长期",
     },
     "skill_gaps": [
-        {"skill": "高并发/分布式", "priority": "高", "current_level": "了解",
-         "target_level": "熟练", "acquisition_method": "项目实战 + 系统设计课程"},
-        {"skill": "多智能体框架", "priority": "中", "current_level": "了解",
-         "target_level": "熟练", "acquisition_method": "开源项目贡献"},
+        {
+            "skill": "高并发/分布式",
+            "priority": "高",
+            "current_level": "了解",
+            "target_level": "熟练",
+            "acquisition_method": "项目实战 + 系统设计课程",
+        },
+        {
+            "skill": "多智能体框架",
+            "priority": "中",
+            "current_level": "了解",
+            "target_level": "熟练",
+            "acquisition_method": "开源项目贡献",
+        },
     ],
     "learning_roadmap": [
-        {"phase": "夯实基础", "duration": "1-3个月", "focus": "高并发与缓存",
-         "resources": ["《设计数据密集型应用》", "Redis 实战"], "milestone": "完成一个高并发 Demo"},
-        {"phase": "深入 AI 工程", "duration": "3-6个月", "focus": "RAG/Agent 工程化",
-         "resources": ["LangGraph 文档", "向量数据库实战"], "milestone": "落地一个多智能体项目"},
+        {
+            "phase": "夯实基础",
+            "duration": "1-3个月",
+            "focus": "高并发与缓存",
+            "resources": ["《设计数据密集型应用》", "Redis 实战"],
+            "milestone": "完成一个高并发 Demo",
+        },
+        {
+            "phase": "深入 AI 工程",
+            "duration": "3-6个月",
+            "focus": "RAG/Agent 工程化",
+            "resources": ["LangGraph 文档", "向量数据库实战"],
+            "milestone": "落地一个多智能体项目",
+        },
     ],
     "project_recommendations": [
-        {"project": "高并发短链服务", "reason": "补强高并发短板",
-         "tech_stack": ["FastAPI", "Redis", "MySQL"], "complexity": "中等"},
+        {
+            "project": "高并发短链服务",
+            "reason": "补强高并发短板",
+            "tech_stack": ["FastAPI", "Redis", "MySQL"],
+            "complexity": "中等",
+        },
     ],
     "short_term_plan": {"timeline": "1-3个月", "goals": ["补齐高并发知识"], "actions": ["完成压测实验"]},
     "mid_term_plan": {"timeline": "3-12个月", "goals": ["主导一个 AI 项目"], "actions": ["落地多智能体系统"]},
@@ -465,8 +574,10 @@ _MOCK_AGENT_SUMMARY = {
     "report_title": "智能招聘综合分析报告",
     "generated_at": "2026-06-06",
     "summary": {
-        "candidate": "张三", "target_position": "Python 后端开发工程师",
-        "target_company": "示例科技", "match_score": 82,
+        "candidate": "张三",
+        "target_position": "Python 后端开发工程师",
+        "target_company": "示例科技",
+        "match_score": 82,
         "verdict": "技术与岗位高度匹配，建议推进面试",
     },
     "resume_diagnosis": {
@@ -480,7 +591,8 @@ _MOCK_AGENT_SUMMARY = {
         "hidden_demands": ["高并发经验", "AI 工程化能力"],
     },
     "match_result": {
-        "score": 82, "verdict": "推荐投递",
+        "score": 82,
+        "verdict": "推荐投递",
         "strengths_summary": "技术栈吻合且具备 AI 实战经验",
         "gaps_summary": "缺少大规模高并发经验",
     },
@@ -547,7 +659,7 @@ def _mock_chat(prompt: str) -> str:
         data = _MOCK_JD
     elif "匹配度分析" in prompt:
         data = _MOCK_MATCH
-    elif "简历修改建议" in prompt:   # OPTIMIZE_PROMPT 正文关键词（原 "简历优化" 仅在 docstring，无法命中）
+    elif "简历修改建议" in prompt:  # OPTIMIZE_PROMPT 正文关键词（原 "简历优化" 仅在 docstring，无法命中）
         data = _MOCK_OPTIMIZE
     elif "资深技术面试官" in prompt:  # INTERVIEW_PROMPT 正文关键词（原 "生成面试题" 不连续，无法命中）
         data = _MOCK_INTERVIEW
@@ -557,6 +669,7 @@ def _mock_chat(prompt: str) -> str:
 
 
 # ===================== 真实 LLM 调用 =====================
+
 
 def _openai_compatible_chat(prompt: str, base_url: str = None, *, json_mode: bool = True, model: str = None) -> str:
     """
@@ -601,7 +714,7 @@ def _openai_compatible_chat(prompt: str, base_url: str = None, *, json_mode: boo
                 raise _RetryableLLMError(f"AI 接口服务端错误(HTTP {status})") from e
             if status in (401, 403):
                 raise LLMAuthError(f"AI 接口鉴权失败(HTTP {status}): {str(e)}") from e
-            raise RuntimeError(f"AI 接口调用失败: {str(e)}")
+            raise RuntimeError(f"AI 接口调用失败: {str(e)}") from e
         except requests.RequestException as e:
             raise _RetryableLLMError(f"AI 接口调用失败: {str(e)}") from e
         except (KeyError, IndexError, json.JSONDecodeError) as e:
@@ -638,10 +751,10 @@ def _simplify_prompt(prompt: str) -> str:
     )
 
 
-def _call_with_fallbacks(primary_call: Callable[[str, Optional[str]], str], prompt: str) -> str:
+def _call_with_fallbacks(primary_call: Callable[[str, str | None], str], prompt: str) -> str:
     """LLM fallback chain: primary model -> fallback model -> simplified prompt -> mock (dev only)."""
     errors: list[str] = []
-    attempts: list[tuple[str, str, Optional[str]]] = [("primary", prompt, None)]
+    attempts: list[tuple[str, str, str | None]] = [("primary", prompt, None)]
     fallback_model = (settings.LLM_FALLBACK_MODEL or "").strip()
     if fallback_model and fallback_model != settings.LLM_MODEL:
         attempts.append(("fallback_model", prompt, fallback_model))
@@ -672,7 +785,8 @@ def provider_allows_mock_fallback() -> bool:
 
 # ===================== 对外统一接口 =====================
 
-def chat_json(prompt: str, schema: Type[BaseModel] | None = None) -> Dict[str, Any]:
+
+def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, Any]:
     """
     唯一对外接口：输入 prompt，输出解析后的 dict
     - mock：本地模板，无网络
@@ -700,7 +814,8 @@ def chat_json(prompt: str, schema: Type[BaseModel] | None = None) -> Dict[str, A
     trace_extra = {
         key: value
         for key, value in trace_context.items()
-        if key not in {
+        if key
+        not in {
             "source",
             "prompt_version",
             "prompt_name",
@@ -772,12 +887,9 @@ def chat_json(prompt: str, schema: Type[BaseModel] | None = None) -> Dict[str, A
     # ---- 2) 将 AI 返回文本解析为 JSON ----
     try:
         result = extract_json(raw)
-    except ValueError as e:
+    except ValueError as exc:
         # 尝试兜底：AI 说了"抱歉"之类非 JSON 内容
-        raise ValueError(
-            f"AI 返回内容不是合法 JSON，无法解析。"
-            f"原始响应片段: {raw[:200]}..."
-        )
+        raise ValueError(f"AI 返回内容不是合法 JSON，无法解析。原始响应片段: {raw[:200]}...") from exc
 
     result = _validate_schema(result, schema)
 
@@ -885,11 +997,11 @@ def _openai_compatible_chat_with_tools(
             status = e.response.status_code if e.response is not None else 0
             if status == 429 or 500 <= status < 600:
                 raise _RetryableLLMError(f"AI 接口调用失败(HTTP {status})") from e
-            raise RuntimeError(f"AI 接口调用失败: {str(e)}")
+            raise RuntimeError(f"AI 接口调用失败: {str(e)}") from e
         except requests.RequestException as e:
             raise _RetryableLLMError(f"AI 接口调用失败: {str(e)}") from e
         except (KeyError, IndexError, json.JSONDecodeError) as e:
-            raise RuntimeError(f"AI 返回格式异常: {str(e)}")
+            raise RuntimeError(f"AI 返回格式异常: {str(e)}") from e
 
     try:
         return retry_call(
@@ -899,7 +1011,7 @@ def _openai_compatible_chat_with_tools(
             log_prefix="LLM-Tools",
         )
     except RuntimeError as e:
-        raise RuntimeError(f"{e}，请稍后重试")
+        raise RuntimeError(f"{e}，请稍后重试") from e
 
 
 def chat_with_tools(
@@ -943,7 +1055,7 @@ def chat_with_tools(
     if tools:
         tool_defs = [t.to_openai_tool() if isinstance(t, Tool) else t for t in tools]
         for t in tools:
-            name = t.name if isinstance(t, Tool) else t.get("function", {}).get("name", "")
+            t.name if isinstance(t, Tool) else t.get("function", {}).get("name", "")
             if isinstance(t, Tool):
                 tool_map[t.name] = t
             elif isinstance(t, dict):
@@ -979,9 +1091,7 @@ def chat_with_tools(
             if content and content.strip():
                 return extract_json(content)
             # content 为空但也没 tool_calls → 异常
-            raise ValueError(
-                f"LLM 返回空内容且无工具调用 (finish_reason={choice.get('finish_reason')})"
-            )
+            raise ValueError(f"LLM 返回空内容且无工具调用 (finish_reason={choice.get('finish_reason')})")
 
         # 情况 B: LLM 请求调用工具
         assistant_msg = {"role": "assistant", "content": msg.get("content")}
@@ -998,7 +1108,9 @@ def chat_with_tools(
 
             logger.info(
                 "[chat_with_tools] round=%d tool=%s args=%s",
-                _round + 1, fn_name, fn_args,
+                _round + 1,
+                fn_name,
+                fn_args,
             )
 
             tool = tool_map.get(fn_name) or get_tool(fn_name)
@@ -1006,16 +1118,21 @@ def chat_with_tools(
                 result = tool.execute(**fn_args)
                 content_str = json.dumps(result, ensure_ascii=False)
             else:
-                content_str = json.dumps({
-                    "success": False,
-                    "error": f"未知工具 '{fn_name}'，可用工具: {list(tool_map.keys())}",
-                }, ensure_ascii=False)
+                content_str = json.dumps(
+                    {
+                        "success": False,
+                        "error": f"未知工具 '{fn_name}'，可用工具: {list(tool_map.keys())}",
+                    },
+                    ensure_ascii=False,
+                )
 
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc["id"],
-                "content": content_str,
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": content_str,
+                }
+            )
 
     # ---- 超过最大工具轮次，兜底提取 ----
     logger.warning("[chat_with_tools] 达到最大工具轮次 %d，尝试从最后消息提取 JSON", max_tool_rounds)
@@ -1025,6 +1142,4 @@ def chat_with_tools(
             return extract_json(last_content)
         except ValueError:
             pass
-    raise RuntimeError(
-        f"工具调用超过 {max_tool_rounds} 轮仍未返回有效 JSON，请简化任务或重试"
-    )
+    raise RuntimeError(f"工具调用超过 {max_tool_rounds} 轮仍未返回有效 JSON，请简化任务或重试")

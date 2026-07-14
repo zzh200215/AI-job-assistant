@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
 """简历相关业务：上传文件 + 解析为结构化 JSON"""
+
 import os
 import uuid
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -22,7 +22,7 @@ def _date_dir() -> str:
     return os.path.join(settings.UPLOAD_DIR, str(now.year), f"{now.month:02d}")
 
 
-def save_upload_file(file_bytes: bytes, original_filename: str) -> Dict[str, Any]:
+def save_upload_file(file_bytes: bytes, original_filename: str) -> dict[str, Any]:
     """
     落盘简历文件，返回元信息。
     按 uploads/YYYY/MM/uuid.ext 结构存储。
@@ -64,21 +64,28 @@ def parse_and_save(db: Session, resume_id: int) -> Resume:
         err_msg = str(e)
         # 将具体错误转换为友好提示
         if "encrypted" in err_msg.lower() or "password" in err_msg.lower():
-            raise ValueError("该 PDF 文件已加密，请先解密后重新上传")
+            raise ValueError("该 PDF 文件已加密，请先解密后重新上传") from e
         if "未开启 ocr" in err_msg.lower() or "tesseract" in err_msg.lower():
-            raise ValueError("当前环境未开启 OCR 简历识别，请联系管理员开启后再上传图片简历或扫描件 PDF")
-        if "扫描" in err_msg or "image" in err_msg.lower() or "图片 ocr" in err_msg.lower() or "图片型 pdf" in err_msg.lower():
-            raise ValueError("该文件为扫描件或图片简历，OCR 未识别出有效文本，请更换更清晰图片或上传可编辑 PDF / DOCX")
+            raise ValueError("当前环境未开启 OCR 简历识别，请联系管理员开启后再上传图片简历或扫描件 PDF") from e
+        if (
+            "扫描" in err_msg
+            or "image" in err_msg.lower()
+            or "图片 ocr" in err_msg.lower()
+            or "图片型 pdf" in err_msg.lower()
+        ):
+            raise ValueError(
+                "该文件为扫描件或图片简历，OCR 未识别出有效文本，请更换更清晰图片或上传可编辑 PDF / DOCX"
+            ) from e
         if "not a pdf" in err_msg.lower() or "corrupt" in err_msg.lower():
-            raise ValueError("文件格式已损坏，请检查后重新上传")
-        raise ValueError(f"文件解析失败: {err_msg}")
+            raise ValueError("文件格式已损坏，请检查后重新上传") from e
+        raise ValueError(f"文件解析失败: {err_msg}") from e
 
     if not raw_text or not raw_text.strip():
         raise ValueError("从文件中未能提取到有效文本，请检查文件内容")
 
     # 截断避免超长
     prompt = render_prompt(RESUME_PARSE_PROMPT, resume_text=raw_text[:6000])
-    parsed: Dict[str, Any] = chat_json(prompt)
+    parsed: dict[str, Any] = chat_json(prompt)
 
     resume.raw_text = raw_text
     resume.parsed_json = parsed

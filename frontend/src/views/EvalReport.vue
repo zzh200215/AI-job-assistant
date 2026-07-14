@@ -5,7 +5,7 @@
         <div>
           <p class="eyebrow">Offline Evaluation</p>
           <h2>评测报表</h2>
-	          <div class="page-header-sub">
+          <div class="page-header-sub">
             展示 `RAG` 与 `Agent` 离线评测的最新结果、历史快照和版本对比。
           </div>
         </div>
@@ -101,12 +101,11 @@
           <el-table-column label="核心指标" min-width="220">
             <template #default="{ row }">
               <span v-if="row.report_type === 'rag'">
-                {{ row.metrics.recall_label || 'Recall' }} {{ metricText(row.metrics.recall) }}
-                / MRR {{ metricText(row.metrics.mrr) }}
+                {{ row.metrics.recall_label || 'Recall' }} {{ metricText(row.metrics.recall) }} /
+                MRR {{ metricText(row.metrics.mrr) }}
               </span>
               <span v-else>
-                MAE {{ metricText(row.metrics.mae) }}
-                / ρ {{ metricText(row.metrics.spearman_rho) }}
+                MAE {{ metricText(row.metrics.mae) }} / ρ {{ metricText(row.metrics.spearman_rho) }}
               </span>
             </template>
           </el-table-column>
@@ -125,7 +124,9 @@
         <template #header>
           <div class="card-head">
             <span>报告对比</span>
-            <el-button type="primary" :loading="loading.compare" @click="runCompare">开始对比</el-button>
+            <el-button type="primary" :loading="loading.compare" @click="runCompare"
+              >开始对比</el-button
+            >
           </div>
         </template>
 
@@ -134,7 +135,12 @@
             <el-option label="RAG" value="rag" />
             <el-option label="Agent" value="agent" />
           </el-select>
-          <el-select v-model="compareForm.reportA" filterable placeholder="报告 A" style="width: 240px">
+          <el-select
+            v-model="compareForm.reportA"
+            filterable
+            placeholder="报告 A"
+            style="width: 240px"
+          >
             <el-option
               v-for="item in compareOptions"
               :key="`a-${item.report_id}`"
@@ -142,7 +148,12 @@
               :value="item.report_id"
             />
           </el-select>
-          <el-select v-model="compareForm.reportB" filterable placeholder="报告 B" style="width: 240px">
+          <el-select
+            v-model="compareForm.reportB"
+            filterable
+            placeholder="报告 B"
+            style="width: 240px"
+          >
             <el-option
               v-for="item in compareOptions"
               :key="`b-${item.report_id}`"
@@ -175,18 +186,30 @@
     <el-drawer v-model="detailVisible" size="62%" title="评测报告详情">
       <div v-if="detail" class="detail-wrap">
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="类型">{{ detail.summary.report_type.toUpperCase() }}</el-descriptions-item>
-          <el-descriptions-item label="时间">{{ formatDate(detail.summary.generated_at) }}</el-descriptions-item>
-          <el-descriptions-item label="报告文件">{{ detail.summary.filename }}</el-descriptions-item>
+          <el-descriptions-item label="类型">{{
+            detail.summary.report_type.toUpperCase()
+          }}</el-descriptions-item>
+          <el-descriptions-item label="时间">{{
+            formatDate(detail.summary.generated_at)
+          }}</el-descriptions-item>
+          <el-descriptions-item label="报告文件">{{
+            detail.summary.filename
+          }}</el-descriptions-item>
           <el-descriptions-item label="样本数">{{ detail.summary.total }}</el-descriptions-item>
-          <el-descriptions-item label="评测集" :span="2">{{ detail.summary.eval_set || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="评测集" :span="2">{{
+            detail.summary.eval_set || '-'
+          }}</el-descriptions-item>
         </el-descriptions>
 
         <div v-if="detail.summary.report_type === 'rag'" class="detail-grid">
           <el-card shadow="never" class="inner-card">
             <template #header><span>Doc Type Recall</span></template>
             <div v-if="Object.keys(detail.raw.per_doc_type_recall || {}).length" class="kv-list">
-              <div v-for="(value, key) in detail.raw.per_doc_type_recall" :key="key" class="kv-item">
+              <div
+                v-for="(value, key) in detail.raw.per_doc_type_recall"
+                :key="key"
+                class="kv-item"
+              >
                 <span>{{ key }}</span>
                 <strong>{{ metricText(value) }}</strong>
               </div>
@@ -256,7 +279,7 @@ const detailVisible = ref(false)
 const latestRag = computed(() => summary.value?.latest_by_type?.rag || null)
 const latestAgent = computed(() => summary.value?.latest_by_type?.agent || null)
 const compareOptions = computed(() =>
-  reportList.value.filter(item => item.report_type === compareForm.reportType),
+  reportList.value.filter((item) => item.report_type === compareForm.reportType)
 )
 
 onMounted(async () => {
@@ -272,11 +295,12 @@ async function reloadAll() {
     ])
     summary.value = summaryData || { counts: {}, latest_by_type: {} }
     reportList.value = listData?.items || []
-    if (!compareOptions.value.some(item => item.report_id === compareForm.reportA)) {
+    if (!compareOptions.value.some((item) => item.report_id === compareForm.reportA)) {
       compareForm.reportA = compareOptions.value[0]?.report_id || ''
     }
-    if (!compareOptions.value.some(item => item.report_id === compareForm.reportB)) {
-      compareForm.reportB = compareOptions.value[1]?.report_id || compareOptions.value[0]?.report_id || ''
+    if (!compareOptions.value.some((item) => item.report_id === compareForm.reportB)) {
+      compareForm.reportB =
+        compareOptions.value[1]?.report_id || compareOptions.value[0]?.report_id || ''
     }
     compareResult.value = null
   } finally {
@@ -316,7 +340,9 @@ async function openDetail(reportId) {
 
 function metricText(value) {
   if (value === null || value === undefined) return '-'
-  return Number(value).toFixed(3).replace(/\.?0+$/, '')
+  return Number(value)
+    .toFixed(3)
+    .replace(/\.?0+$/, '')
 }
 
 function formatDate(value) {
@@ -483,7 +509,7 @@ function compareMetricBlock(item) {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: var(--app-font-mono, "Consolas", monospace);
+  font-family: var(--app-font-mono, 'Consolas', monospace);
 }
 
 .metric-pre {

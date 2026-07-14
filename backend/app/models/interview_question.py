@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
 """面试题库 ORM 模型"""
-from sqlalchemy import Column, BigInteger, String, Integer, DateTime, Text, JSON
+
+from sqlalchemy import JSON, BigInteger, Column, DateTime, Integer, String, Text
 
 from app.core.database import Base
 from app.utils.time_helper import utc_now
@@ -8,6 +8,7 @@ from app.utils.time_helper import utc_now
 
 class InterviewQuestion(Base):
     """面试题库表"""
+
     __tablename__ = "interview_question"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)

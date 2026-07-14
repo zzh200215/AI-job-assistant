@@ -1,16 +1,16 @@
-# -*- coding: utf-8 -*-
 """求职目标管理 API"""
-from fastapi import APIRouter, Body, Depends, Query
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
-from app.models.job_pipeline import JobApplicationPipeline, ACTIVE_STAGES
+from app.models.job_pipeline import ACTIVE_STAGES, JobApplicationPipeline
 from app.models.job_target import JobTarget
 from app.models.user import User
 from app.schemas.c_end import TargetCreate, TargetUpdate
-from app.utils.response import ERR_PARAM, ok, fail
+from app.utils.response import ERR_PARAM, fail, ok
 
 router = APIRouter()
 
@@ -26,10 +26,14 @@ async def create_target(
         return fail(message="目标名称必填", code=ERR_PARAM)
 
     # 检查用户目标数量上限
-    existing = db.query(JobTarget).filter(
-        JobTarget.user_id == current_user.id,
-        JobTarget.status == "active",
-    ).count()
+    existing = (
+        db.query(JobTarget)
+        .filter(
+            JobTarget.user_id == current_user.id,
+            JobTarget.status == "active",
+        )
+        .count()
+    )
     if existing >= 5:
         return fail(message="最多同时维护5个活跃求职目标", code=ERR_PARAM)
 
@@ -94,10 +98,14 @@ async def get_target(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    target = db.query(JobTarget).filter(
-        JobTarget.id == target_id,
-        JobTarget.user_id == current_user.id,
-    ).first()
+    target = (
+        db.query(JobTarget)
+        .filter(
+            JobTarget.id == target_id,
+            JobTarget.user_id == current_user.id,
+        )
+        .first()
+    )
     if not target:
         return fail(message="目标不存在", code=ERR_PARAM)
 
@@ -114,10 +122,14 @@ async def update_target(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    target = db.query(JobTarget).filter(
-        JobTarget.id == target_id,
-        JobTarget.user_id == current_user.id,
-    ).first()
+    target = (
+        db.query(JobTarget)
+        .filter(
+            JobTarget.id == target_id,
+            JobTarget.user_id == current_user.id,
+        )
+        .first()
+    )
     if not target:
         return fail(message="目标不存在", code=ERR_PARAM)
 
@@ -147,10 +159,14 @@ async def delete_target(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    target = db.query(JobTarget).filter(
-        JobTarget.id == target_id,
-        JobTarget.user_id == current_user.id,
-    ).first()
+    target = (
+        db.query(JobTarget)
+        .filter(
+            JobTarget.id == target_id,
+            JobTarget.user_id == current_user.id,
+        )
+        .first()
+    )
     if not target:
         return fail(message="目标不存在", code=ERR_PARAM)
 
@@ -170,10 +186,14 @@ async def set_primary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    target = db.query(JobTarget).filter(
-        JobTarget.id == target_id,
-        JobTarget.user_id == current_user.id,
-    ).first()
+    target = (
+        db.query(JobTarget)
+        .filter(
+            JobTarget.id == target_id,
+            JobTarget.user_id == current_user.id,
+        )
+        .first()
+    )
     if not target:
         return fail(message="目标不存在", code=ERR_PARAM)
 
@@ -197,10 +217,14 @@ async def target_applications(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    target = db.query(JobTarget).filter(
-        JobTarget.id == target_id,
-        JobTarget.user_id == current_user.id,
-    ).first()
+    target = (
+        db.query(JobTarget)
+        .filter(
+            JobTarget.id == target_id,
+            JobTarget.user_id == current_user.id,
+        )
+        .first()
+    )
     if not target:
         return fail(message="目标不存在", code=ERR_PARAM)
 
@@ -212,15 +236,15 @@ async def target_applications(
         q = q.filter(JobApplicationPipeline.stage == stage)
 
     total = q.count()
-    items = q.order_by(JobApplicationPipeline.create_time.desc()).offset(
-        (page - 1) * page_size
-    ).limit(page_size).all()
+    items = q.order_by(JobApplicationPipeline.create_time.desc()).offset((page - 1) * page_size).limit(page_size).all()
 
-    return ok({
-        "total": total,
-        "items": [a.to_dict() for a in items],
-        "target": target.to_dict(),
-    })
+    return ok(
+        {
+            "total": total,
+            "items": [a.to_dict() for a in items],
+            "target": target.to_dict(),
+        }
+    )
 
 
 @router.get("/{target_id}/progress", summary="目标进度分析")
@@ -229,20 +253,27 @@ async def target_progress(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    target = db.query(JobTarget).filter(
-        JobTarget.id == target_id,
-        JobTarget.user_id == current_user.id,
-    ).first()
+    target = (
+        db.query(JobTarget)
+        .filter(
+            JobTarget.id == target_id,
+            JobTarget.user_id == current_user.id,
+        )
+        .first()
+    )
     if not target:
         return fail(message="目标不存在", code=ERR_PARAM)
 
     # 各阶段数量
-    stage_rows = db.query(
-        JobApplicationPipeline.stage, func.count(JobApplicationPipeline.id)
-    ).filter(
-        JobApplicationPipeline.target_id == target_id,
-    ).group_by(JobApplicationPipeline.stage).all()
-    stage_counts = {s: c for s, c in stage_rows}
+    stage_rows = (
+        db.query(JobApplicationPipeline.stage, func.count(JobApplicationPipeline.id))
+        .filter(
+            JobApplicationPipeline.target_id == target_id,
+        )
+        .group_by(JobApplicationPipeline.stage)
+        .all()
+    )
+    stage_counts = dict(stage_rows)
 
     total = sum(stage_counts.values())
     active = sum(stage_counts.get(s, 0) for s in ACTIVE_STAGES)
@@ -270,25 +301,27 @@ async def target_progress(
         progress_level = "empty"
         message = "还没有关联的投递记录，开始行动吧！"
 
-    return ok({
-        "target": target.to_dict(),
-        "progress": {
-            "level": progress_level,
-            "message": message,
-            "total_applications": total,
-            "active_applications": active,
-            "interviews": interviews,
-            "offers": offers,
-            "response_rate": response_rate,
-        },
-        "stage_distribution": stage_counts,
-        "funnel": {
-            "todo": stage_counts.get("todo", 0),
-            "applied": applied,
-            "interview": interviews,
-            "offer": offers,
-        },
-    })
+    return ok(
+        {
+            "target": target.to_dict(),
+            "progress": {
+                "level": progress_level,
+                "message": message,
+                "total_applications": total,
+                "active_applications": active,
+                "interviews": interviews,
+                "offers": offers,
+                "response_rate": response_rate,
+            },
+            "stage_distribution": stage_counts,
+            "funnel": {
+                "todo": stage_counts.get("todo", 0),
+                "applied": applied,
+                "interview": interviews,
+                "offer": offers,
+            },
+        }
+    )
 
 
 def _compute_target_stats(target: JobTarget, db: Session) -> dict:
@@ -316,9 +349,11 @@ def _refresh_target_stats(target: JobTarget, db: Session) -> dict:
     """刷新目标的冗余统计字段（仅由定时任务调用）"""
     stats = _compute_target_stats(target, db)
 
-    if (target.application_count != stats["total_applications"]
-            or target.interview_count != stats["interview_count"]
-            or target.offer_count != stats["offer_count"]):
+    if (
+        target.application_count != stats["total_applications"]
+        or target.interview_count != stats["interview_count"]
+        or target.offer_count != stats["offer_count"]
+    ):
         target.application_count = stats["total_applications"]
         target.interview_count = stats["interview_count"]
         target.offer_count = stats["offer_count"]

@@ -1,16 +1,17 @@
-# -*- coding: utf-8 -*-
 """Recommendation quality evaluation script."""
+
 from __future__ import annotations
 
 import argparse
 import json
 import logging
 import sys
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import pstdev
 from types import SimpleNamespace
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
@@ -20,9 +21,9 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 logger = logging.getLogger("eval_recommend")
 
 
-def load_eval_set(path: str) -> List[Dict[str, Any]]:
-    items: List[Dict[str, Any]] = []
-    with open(path, "r", encoding="utf-8") as f:
+def load_eval_set(path: str) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    with open(path, encoding="utf-8") as f:
         for line_no, line in enumerate(f, 1):
             line = line.strip()
             if not line or line.startswith("#"):
@@ -34,15 +35,15 @@ def load_eval_set(path: str) -> List[Dict[str, Any]]:
     return items
 
 
-def _mean(values: Iterable[Optional[float]], digits: int = 3) -> Optional[float]:
+def _mean(values: Iterable[float | None], digits: int = 3) -> float | None:
     filtered = [float(value) for value in values if value is not None]
     if not filtered:
         return None
     return round(sum(filtered) / len(filtered), digits)
 
 
-def _normalize_terms(values: Iterable[Any]) -> List[str]:
-    result: List[str] = []
+def _normalize_terms(values: Iterable[Any]) -> list[str]:
+    result: list[str] = []
     for value in values:
         text = str(value or "").strip().lower()
         if text:
@@ -68,17 +69,19 @@ def _keyword_hit_rate(texts: Iterable[str], keywords: Iterable[Any]) -> float:
     return hits / len(normalized_keywords)
 
 
-def _build_resume_stub(profile: Dict[str, Any]) -> SimpleNamespace:
+def _build_resume_stub(profile: dict[str, Any]) -> SimpleNamespace:
     normalized = dict(profile or {})
     normalized.setdefault("skills", [])
     normalized.setdefault("project_experience", normalized.get("projects", []))
     normalized.setdefault("work_experience", [])
     normalized.setdefault("education", normalized.get("degree", ""))
     normalized.setdefault("years_exp", normalized.get("years_exp", 0))
-    return SimpleNamespace(parsed_json=normalized, name=normalized.get("name", "eval_resume"), file_name="eval_resume.json")
+    return SimpleNamespace(
+        parsed_json=normalized, name=normalized.get("name", "eval_resume"), file_name="eval_resume.json"
+    )
 
 
-def _build_jd_stub(profile: Dict[str, Any]) -> SimpleNamespace:
+def _build_jd_stub(profile: dict[str, Any]) -> SimpleNamespace:
     normalized = dict(profile or {})
     normalized.setdefault("required_skills", [])
     normalized.setdefault("nice_to_have", [])
@@ -96,16 +99,18 @@ def _build_jd_stub(profile: Dict[str, Any]) -> SimpleNamespace:
     )
 
 
-def _run_explainer(resume_profile: Dict[str, Any], jd_profile: Dict[str, Any]) -> Dict[str, Any]:
+def _run_explainer(resume_profile: dict[str, Any], jd_profile: dict[str, Any]) -> dict[str, Any]:
     from app.services.match_explainer_service import MatchExplainer
 
     explainer = MatchExplainer()
-    explainer._llm_explain = lambda dims, _skill_match, overall, _resume, _jd: explainer._fallback_explain(dims, overall)  # type: ignore[attr-defined]
+    explainer._llm_explain = lambda dims, _skill_match, overall, _resume, _jd: explainer._fallback_explain(
+        dims, overall
+    )  # type: ignore[attr-defined]
     result = explainer.explain(_build_resume_stub(resume_profile), _build_jd_stub(jd_profile))
     return result.to_dict()
 
 
-def _structure_score(result: Dict[str, Any]) -> float:
+def _structure_score(result: dict[str, Any]) -> float:
     dimensions = result.get("dimensions") or []
     dimension_reason_count = sum(1 for item in dimensions if str(item.get("reason") or "").strip())
     checks = [
@@ -117,7 +122,7 @@ def _structure_score(result: Dict[str, Any]) -> float:
     return sum(1 for item in checks if item) / len(checks)
 
 
-def _interview_score_stability(scores: Iterable[Any]) -> Optional[float]:
+def _interview_score_stability(scores: Iterable[Any]) -> float | None:
     values = [float(score) for score in scores if score is not None]
     if not values:
         return None
@@ -132,7 +137,7 @@ def _recommendation_positive(label: str) -> bool:
     return normalized not in {"不建议投递", "谨慎投递", "不推荐", "hold"}
 
 
-def _evaluate_case(item: Dict[str, Any]) -> Dict[str, Any]:
+def _evaluate_case(item: dict[str, Any]) -> dict[str, Any]:
     result = _run_explainer(item.get("resume_profile") or {}, item.get("jd_profile") or {})
     predicted_overlap = result.get("skill_match", {}).get("matched") or []
     predicted_missing = result.get("skill_match", {}).get("missing_required") or []
@@ -185,13 +190,18 @@ def _evaluate_case(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _build_online_feedback_linkage(eval_set: List[Dict[str, Any]], details: List[Dict[str, Any]], db) -> Dict[str, Any]:
+def _build_online_feedback_linkage(eval_set: list[dict[str, Any]], details: list[dict[str, Any]], db) -> dict[str, Any]:
     if db is None:
         return {
             "linked_pair_count": 0,
             "linked_feedback_count": 0,
             "feedback_agreement_rate": None,
-            "feedback_summary": {"total_feedback": 0, "like_rate": 0.0, "high_score_dislike_count": 0, "low_score_like_count": 0},
+            "feedback_summary": {
+                "total_feedback": 0,
+                "like_rate": 0.0,
+                "high_score_dislike_count": 0,
+                "low_score_like_count": 0,
+            },
         }
 
     from app.models.job_recommend import JobRecommendationFeedback
@@ -202,7 +212,7 @@ def _build_online_feedback_linkage(eval_set: List[Dict[str, Any]], details: List
         if item.get("resume_id") is not None and item.get("jd_id") is not None
     }
     rows = db.query(JobRecommendationFeedback).all()
-    pair_rows: Dict[tuple[int, int], List[JobRecommendationFeedback]] = {}
+    pair_rows: dict[tuple[int, int], list[JobRecommendationFeedback]] = {}
     total_feedback = 0
     like_count = 0
     high_score_dislike_count = 0
@@ -264,14 +274,15 @@ def _build_online_feedback_linkage(eval_set: List[Dict[str, Any]], details: List
     }
 
 
-def run_eval(eval_set: List[Dict[str, Any]], db=None) -> Dict[str, Any]:
+def run_eval(eval_set: list[dict[str, Any]], db=None) -> dict[str, Any]:
     details = [_evaluate_case(item) for item in eval_set]
     linkage = _build_online_feedback_linkage(eval_set, details, db)
     return {
         "total": len(eval_set),
         "skill_match_accuracy": _mean([item["skill_match_accuracy"] for item in details], digits=3) or 0.0,
         "jd_explanation_consistency": _mean([item["jd_explanation_consistency"] for item in details], digits=3) or 0.0,
-        "recommendation_explainability": _mean([item["recommendation_explainability"] for item in details], digits=3) or 0.0,
+        "recommendation_explainability": _mean([item["recommendation_explainability"] for item in details], digits=3)
+        or 0.0,
         "interview_score_stability": _mean([item["interview_score_stability"] for item in details], digits=3),
         "feedback_agreement_rate": linkage.get("feedback_agreement_rate"),
         "online_feedback_linkage": linkage,
@@ -280,26 +291,35 @@ def run_eval(eval_set: List[Dict[str, Any]], db=None) -> Dict[str, Any]:
 
 
 def check_thresholds(
-    report: Dict[str, Any],
+    report: dict[str, Any],
     *,
-    min_skill_match_accuracy: Optional[float] = None,
-    min_explanation_consistency: Optional[float] = None,
-    min_explainability: Optional[float] = None,
-    min_interview_stability: Optional[float] = None,
-    min_feedback_agreement_rate: Optional[float] = None,
-) -> List[str]:
-    failed: List[str] = []
+    min_skill_match_accuracy: float | None = None,
+    min_explanation_consistency: float | None = None,
+    min_explainability: float | None = None,
+    min_interview_stability: float | None = None,
+    min_feedback_agreement_rate: float | None = None,
+) -> list[str]:
+    failed: list[str] = []
     if min_skill_match_accuracy is not None and float(report["skill_match_accuracy"]) < min_skill_match_accuracy:
         failed.append(f"skill_match_accuracy {report['skill_match_accuracy']} < {min_skill_match_accuracy}")
-    if min_explanation_consistency is not None and float(report["jd_explanation_consistency"]) < min_explanation_consistency:
-        failed.append(f"jd_explanation_consistency {report['jd_explanation_consistency']} < {min_explanation_consistency}")
+    if (
+        min_explanation_consistency is not None
+        and float(report["jd_explanation_consistency"]) < min_explanation_consistency
+    ):
+        failed.append(
+            f"jd_explanation_consistency {report['jd_explanation_consistency']} < {min_explanation_consistency}"
+        )
     if min_explainability is not None and float(report["recommendation_explainability"]) < min_explainability:
         failed.append(f"recommendation_explainability {report['recommendation_explainability']} < {min_explainability}")
     stability = report.get("interview_score_stability")
     if min_interview_stability is not None and stability is not None and float(stability) < min_interview_stability:
         failed.append(f"interview_score_stability {stability} < {min_interview_stability}")
     feedback_agreement = report.get("feedback_agreement_rate")
-    if min_feedback_agreement_rate is not None and feedback_agreement is not None and float(feedback_agreement) < min_feedback_agreement_rate:
+    if (
+        min_feedback_agreement_rate is not None
+        and feedback_agreement is not None
+        and float(feedback_agreement) < min_feedback_agreement_rate
+    ):
         failed.append(f"feedback_agreement_rate {feedback_agreement} < {min_feedback_agreement_rate}")
     return failed
 

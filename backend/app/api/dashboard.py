@@ -1,16 +1,16 @@
-# -*- coding: utf-8 -*-
 """用户仪表盘 API — 求职数据统计汇总"""
+
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, and_
+from fastapi import APIRouter, Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
-from app.models.history import AnalysisRecord, JobDescription, Resume
+from app.models.history import AnalysisRecord, Resume
 from app.models.interview_session import InterviewSession
-from app.models.job_pipeline import JobApplicationPipeline, ACTIVE_STAGES
+from app.models.job_pipeline import ACTIVE_STAGES, JobApplicationPipeline
 from app.models.notification import Notification
 from app.models.user import User
 from app.utils.response import ok
@@ -32,9 +32,7 @@ async def dashboard_overview(
     # --- 投递数据 ---
     pipeline_base = db.query(JobApplicationPipeline).filter(JobApplicationPipeline.user_id == uid)
     total_applications = pipeline_base.count()
-    active_applications = pipeline_base.filter(
-        JobApplicationPipeline.stage.in_(ACTIVE_STAGES)
-    ).count()
+    active_applications = pipeline_base.filter(JobApplicationPipeline.stage.in_(ACTIVE_STAGES)).count()
 
     # 按阶段统计
     stage_rows = (
@@ -43,17 +41,13 @@ async def dashboard_overview(
         .group_by(JobApplicationPipeline.stage)
         .all()
     )
-    stage_counts = {stage: count for stage, count in stage_rows}
+    stage_counts = dict(stage_rows)
 
     # 本周新增
-    weekly_new = pipeline_base.filter(
-        JobApplicationPipeline.create_time >= week_ago
-    ).count()
+    weekly_new = pipeline_base.filter(JobApplicationPipeline.create_time >= week_ago).count()
 
     # 本月新增
-    monthly_new = pipeline_base.filter(
-        JobApplicationPipeline.create_time >= month_ago
-    ).count()
+    monthly_new = pipeline_base.filter(JobApplicationPipeline.create_time >= month_ago).count()
 
     # --- 面试数据 ---
     upcoming_interviews = (
@@ -67,18 +61,10 @@ async def dashboard_overview(
         .scalar()
     )
 
-    total_interview_sessions = (
-        db.query(func.count(InterviewSession.id))
-        .filter(InterviewSession.user_id == uid)
-        .scalar()
-    )
+    (db.query(func.count(InterviewSession.id)).filter(InterviewSession.user_id == uid).scalar())
 
     # --- 简历数据 ---
-    total_resumes = (
-        db.query(func.count(Resume.id))
-        .filter(Resume.user_id == uid, Resume.is_deleted == 0)
-        .scalar()
-    )
+    total_resumes = db.query(func.count(Resume.id)).filter(Resume.user_id == uid, Resume.is_deleted == 0).scalar()
 
     # --- 匹配分析数据 ---
     avg_match_score = (
@@ -93,6 +79,7 @@ async def dashboard_overview(
 
     # --- 收藏数据 ---
     from app.models.job_recommend import JobBookmark
+
     bookmarked_count = (
         db.query(func.count(JobBookmark.id))
         .filter(JobBookmark.user_id == uid, JobBookmark.action == "bookmark")
@@ -101,19 +88,13 @@ async def dashboard_overview(
 
     # --- 未读消息 ---
     unread_notifications = (
-        db.query(func.count(Notification.id))
-        .filter(Notification.user_id == uid, Notification.is_read == 0)
-        .scalar()
+        db.query(func.count(Notification.id)).filter(Notification.user_id == uid, Notification.is_read == 0).scalar()
     )
 
     # --- Offer 数据 ---
-    offer_count = pipeline_base.filter(
-        JobApplicationPipeline.stage.in_(["offer", "accepted"])
-    ).count()
+    pipeline_base.filter(JobApplicationPipeline.stage.in_(["offer", "accepted"])).count()
 
-    pending_offers = pipeline_base.filter(
-        JobApplicationPipeline.stage == "offer"
-    ).count()
+    pending_offers = pipeline_base.filter(JobApplicationPipeline.stage == "offer").count()
 
     # --- 最近活动（最近5条投递变化）---
     recent_activities = (
@@ -149,31 +130,33 @@ async def dashboard_overview(
         "offer": stage_counts.get("offer", 0) + stage_counts.get("accepted", 0),
     }
 
-    return ok({
-        "user": {
-            "id": current_user.id,
-            "username": current_user.username,
-            "nickname": getattr(current_user, "nickname", "") or "",
-            "avatar_url": getattr(current_user, "avatar_url", "") or "",
-            "job_seeking_status": getattr(current_user, "job_seeking_status", "") or "",
-        },
-        "summary": {
-            "total_applications": total_applications,
-            "active_applications": active_applications,
-            "upcoming_interviews": upcoming_interviews,
-            "pending_offers": pending_offers,
-            "total_resumes": total_resumes,
-            "bookmarked_jobs": bookmarked_count,
-            "unread_notifications": unread_notifications,
-            "avg_match_score": round(float(avg_match_score), 1) if avg_match_score else None,
-        },
-        "weekly_new": weekly_new,
-        "monthly_new": monthly_new,
-        "funnel": funnel,
-        "stage_counts": stage_counts,
-        "trend": trend,
-        "recent_activities": [a.to_dict() for a in recent_activities],
-    })
+    return ok(
+        {
+            "user": {
+                "id": current_user.id,
+                "username": current_user.username,
+                "nickname": getattr(current_user, "nickname", "") or "",
+                "avatar_url": getattr(current_user, "avatar_url", "") or "",
+                "job_seeking_status": getattr(current_user, "job_seeking_status", "") or "",
+            },
+            "summary": {
+                "total_applications": total_applications,
+                "active_applications": active_applications,
+                "upcoming_interviews": upcoming_interviews,
+                "pending_offers": pending_offers,
+                "total_resumes": total_resumes,
+                "bookmarked_jobs": bookmarked_count,
+                "unread_notifications": unread_notifications,
+                "avg_match_score": round(float(avg_match_score), 1) if avg_match_score else None,
+            },
+            "weekly_new": weekly_new,
+            "monthly_new": monthly_new,
+            "funnel": funnel,
+            "stage_counts": stage_counts,
+            "trend": trend,
+            "recent_activities": [a.to_dict() for a in recent_activities],
+        }
+    )
 
 
 @router.get("/weekly-report", summary="求职周报")
@@ -203,24 +186,27 @@ async def weekly_report(
         for h in history:
             if h.get("at"):
                 from datetime import datetime
+
                 try:
                     at = datetime.fromisoformat(h["at"].replace("Z", "+00:00"))
                     if at >= week_ago:
-                        stage_changes.append({
-                            "application_id": app.id,
-                            "title": app.title,
-                            "company": app.company,
-                            "from_stage": h.get("from_stage", ""),
-                            "to_stage": h.get("stage", ""),
-                            "at": h["at"],
-                        })
+                        stage_changes.append(
+                            {
+                                "application_id": app.id,
+                                "title": app.title,
+                                "company": app.company,
+                                "from_stage": h.get("from_stage", ""),
+                                "to_stage": h.get("stage", ""),
+                                "at": h["at"],
+                            }
+                        )
                 except (ValueError, TypeError):
                     pass
 
     # 本周面试
     weekly_interviews = [
-        a.to_dict() for a in
-        db.query(JobApplicationPipeline)
+        a.to_dict()
+        for a in db.query(JobApplicationPipeline)
         .filter(
             JobApplicationPipeline.user_id == uid,
             JobApplicationPipeline.stage == "interview",
@@ -248,19 +234,21 @@ async def weekly_report(
         .all()
     )
 
-    return ok({
-        "period": {
-            "from": week_ago.isoformat(),
-            "to": now.isoformat(),
-        },
-        "new_applications": len(new_applications),
-        "new_application_list": [a.to_dict() for a in new_applications[:10]],
-        "stage_changes": stage_changes[:20],
-        "upcoming_interviews": weekly_interviews,
-        "mock_interviews_completed": weekly_mock_interviews,
-        "current_stage_distribution": dict(stage_rows),
-        "suggestions": _generate_suggestions(new_applications, stage_changes, weekly_interviews),
-    })
+    return ok(
+        {
+            "period": {
+                "from": week_ago.isoformat(),
+                "to": now.isoformat(),
+            },
+            "new_applications": len(new_applications),
+            "new_application_list": [a.to_dict() for a in new_applications[:10]],
+            "stage_changes": stage_changes[:20],
+            "upcoming_interviews": weekly_interviews,
+            "mock_interviews_completed": weekly_mock_interviews,
+            "current_stage_distribution": dict(stage_rows),
+            "suggestions": _generate_suggestions(new_applications, stage_changes, weekly_interviews),
+        }
+    )
 
 
 def _generate_suggestions(new_apps, stage_changes, interviews):
@@ -312,14 +300,16 @@ async def today_tasks(
         .all()
     )
     for p in today_interviews:
-        tasks.append({
-            "type": "interview",
-            "priority": "high",
-            "title": f"面试 {p.company or ''} - {p.title or ''}",
-            "subtitle": f"第{p.interview_round or 1}轮 {p.interview_at.strftime('%H:%M') if p.interview_at else ''}",
-            "link": f"/jobs/pipeline/{p.id}",
-            "pipeline_id": p.id,
-        })
+        tasks.append(
+            {
+                "type": "interview",
+                "priority": "high",
+                "title": f"面试 {p.company or ''} - {p.title or ''}",
+                "subtitle": f"第{p.interview_round or 1}轮 {p.interview_at.strftime('%H:%M') if p.interview_at else ''}",
+                "link": f"/jobs/pipeline/{p.id}",
+                "pipeline_id": p.id,
+            }
+        )
 
     # 2. Offer即将到期（3天内）
     offer_deadlines = (
@@ -335,14 +325,16 @@ async def today_tasks(
     )
     for p in offer_deadlines:
         days_left = (p.offer_deadline - now).days
-        tasks.append({
-            "type": "offer_deadline",
-            "priority": "high" if days_left <= 1 else "medium",
-            "title": f"Offer决策 {p.company or ''}",
-            "subtitle": f"还剩 {days_left} 天到期",
-            "link": f"/jobs/pipeline/{p.id}",
-            "pipeline_id": p.id,
-        })
+        tasks.append(
+            {
+                "type": "offer_deadline",
+                "priority": "high" if days_left <= 1 else "medium",
+                "title": f"Offer决策 {p.company or ''}",
+                "subtitle": f"还剩 {days_left} 天到期",
+                "link": f"/jobs/pipeline/{p.id}",
+                "pipeline_id": p.id,
+            }
+        )
 
     # 3. 投递跟进（5天无回复）
     stalled = (
@@ -358,14 +350,16 @@ async def today_tasks(
     )
     for p in stalled:
         days = (now - p.update_time).days if p.update_time else 0
-        tasks.append({
-            "type": "follow_up",
-            "priority": "medium",
-            "title": f"跟进 {p.company or ''}",
-            "subtitle": f"投递 {days} 天无回复",
-            "link": f"/jobs/pipeline/{p.id}",
-            "pipeline_id": p.id,
-        })
+        tasks.append(
+            {
+                "type": "follow_up",
+                "priority": "medium",
+                "title": f"跟进 {p.company or ''}",
+                "subtitle": f"投递 {days} 天无回复",
+                "link": f"/jobs/pipeline/{p.id}",
+                "pipeline_id": p.id,
+            }
+        )
 
     # 4. 待投递
     todo_count = (
@@ -374,39 +368,46 @@ async def today_tasks(
         .scalar()
     )
     if todo_count > 0:
-        tasks.append({
-            "type": "apply",
-            "priority": "medium",
-            "title": f"投递待办",
-            "subtitle": f"{todo_count} 个岗位待投递",
-            "link": "/jobs/pipeline/kanban?stage=todo",
-        })
+        tasks.append(
+            {
+                "type": "apply",
+                "priority": "medium",
+                "title": "投递待办",
+                "subtitle": f"{todo_count} 个岗位待投递",
+                "link": "/jobs/pipeline/kanban?stage=todo",
+            }
+        )
 
     # 5. 推荐岗位
     from app.models.job_recommend import JobBookmark
+
     bookmarked_count = (
         db.query(func.count(JobBookmark.id))
         .filter(JobBookmark.user_id == uid, JobBookmark.action == "bookmark")
         .scalar()
     )
     if bookmarked_count > 0:
-        tasks.append({
-            "type": "bookmark",
-            "priority": "low",
-            "title": "查看收藏岗位",
-            "subtitle": f"{bookmarked_count} 个收藏待处理",
-            "link": "/jobs/bookmarks/list",
-        })
+        tasks.append(
+            {
+                "type": "bookmark",
+                "priority": "low",
+                "title": "查看收藏岗位",
+                "subtitle": f"{bookmarked_count} 个收藏待处理",
+                "link": "/jobs/bookmarks/list",
+            }
+        )
 
     # 按优先级排序
     priority_order = {"high": 0, "medium": 1, "low": 2}
     tasks.sort(key=lambda t: priority_order.get(t["priority"], 3))
 
-    return ok({
-        "total": len(tasks),
-        "high_priority": sum(1 for t in tasks if t["priority"] == "high"),
-        "tasks": tasks,
-    })
+    return ok(
+        {
+            "total": len(tasks),
+            "high_priority": sum(1 for t in tasks if t["priority"] == "high"),
+            "tasks": tasks,
+        }
+    )
 
 
 @router.get("/ai-suggestions", summary="AI下一步建议")
@@ -420,40 +421,69 @@ async def ai_suggestions(
     week_ago = now - timedelta(days=7)
 
     # 收集上下文
-    total_apps = db.query(func.count(JobApplicationPipeline.id)).filter(
-        JobApplicationPipeline.user_id == uid,
-    ).scalar()
+    total_apps = (
+        db.query(func.count(JobApplicationPipeline.id))
+        .filter(
+            JobApplicationPipeline.user_id == uid,
+        )
+        .scalar()
+    )
 
-    weekly_apps = db.query(func.count(JobApplicationPipeline.id)).filter(
-        JobApplicationPipeline.user_id == uid,
-        JobApplicationPipeline.create_time >= week_ago,
-    ).scalar()
+    weekly_apps = (
+        db.query(func.count(JobApplicationPipeline.id))
+        .filter(
+            JobApplicationPipeline.user_id == uid,
+            JobApplicationPipeline.create_time >= week_ago,
+        )
+        .scalar()
+    )
 
-    interviews = db.query(func.count(JobApplicationPipeline.id)).filter(
-        JobApplicationPipeline.user_id == uid,
-        JobApplicationPipeline.stage.in_(["interview", "offer", "accepted"]),
-    ).scalar()
+    interviews = (
+        db.query(func.count(JobApplicationPipeline.id))
+        .filter(
+            JobApplicationPipeline.user_id == uid,
+            JobApplicationPipeline.stage.in_(["interview", "offer", "accepted"]),
+        )
+        .scalar()
+    )
 
-    offers = db.query(func.count(JobApplicationPipeline.id)).filter(
-        JobApplicationPipeline.user_id == uid,
-        JobApplicationPipeline.stage.in_(["offer", "accepted"]),
-    ).scalar()
+    offers = (
+        db.query(func.count(JobApplicationPipeline.id))
+        .filter(
+            JobApplicationPipeline.user_id == uid,
+            JobApplicationPipeline.stage.in_(["offer", "accepted"]),
+        )
+        .scalar()
+    )
 
-    stalled = db.query(func.count(JobApplicationPipeline.id)).filter(
-        JobApplicationPipeline.user_id == uid,
-        JobApplicationPipeline.stage == "applied",
-        JobApplicationPipeline.update_time <= now - timedelta(days=7),
-    ).scalar()
+    stalled = (
+        db.query(func.count(JobApplicationPipeline.id))
+        .filter(
+            JobApplicationPipeline.user_id == uid,
+            JobApplicationPipeline.stage == "applied",
+            JobApplicationPipeline.update_time <= now - timedelta(days=7),
+        )
+        .scalar()
+    )
 
-    upcoming = db.query(func.count(JobApplicationPipeline.id)).filter(
-        JobApplicationPipeline.user_id == uid,
-        JobApplicationPipeline.stage == "interview",
-        JobApplicationPipeline.interview_at >= now,
-    ).scalar()
+    upcoming = (
+        db.query(func.count(JobApplicationPipeline.id))
+        .filter(
+            JobApplicationPipeline.user_id == uid,
+            JobApplicationPipeline.stage == "interview",
+            JobApplicationPipeline.interview_at >= now,
+        )
+        .scalar()
+    )
 
-    resumes = db.query(func.count(Resume.id)).filter(
-        Resume.user_id == uid, Resume.is_deleted == 0,
-    ).scalar()
+    resumes = (
+        db.query(func.count(Resume.id))
+        .filter(
+            Resume.user_id == uid,
+            Resume.is_deleted == 0,
+        )
+        .scalar()
+    )
 
     response_rate = round(interviews / total_apps * 100, 1) if total_apps > 0 else 0
 
@@ -461,76 +491,92 @@ async def ai_suggestions(
 
     # 规则引擎生成建议
     if offers > 0:
-        suggestions.append({
-            "action": "review_offers",
-            "title": "处理Offer决策",
-            "description": f"你有 {offers} 个Offer待处理，对比薪资和成长空间后尽快决定",
-            "priority": "high",
-            "link": "/jobs/pipeline/kanban?stage=offer",
-        })
+        suggestions.append(
+            {
+                "action": "review_offers",
+                "title": "处理Offer决策",
+                "description": f"你有 {offers} 个Offer待处理，对比薪资和成长空间后尽快决定",
+                "priority": "high",
+                "link": "/jobs/pipeline/kanban?stage=offer",
+            }
+        )
 
     if upcoming > 0:
-        suggestions.append({
-            "action": "prepare_interview",
-            "title": "准备即将到来的面试",
-            "description": f"你有 {upcoming} 场面试即将开始，建议用AI模拟面试提前热身",
-            "priority": "high",
-            "link": "/interview",
-        })
+        suggestions.append(
+            {
+                "action": "prepare_interview",
+                "title": "准备即将到来的面试",
+                "description": f"你有 {upcoming} 场面试即将开始，建议用AI模拟面试提前热身",
+                "priority": "high",
+                "link": "/interview",
+            }
+        )
 
     if stalled > 0:
-        suggestions.append({
-            "action": "follow_up",
-            "title": "跟进沉默投递",
-            "description": f"有 {stalled} 个投递超7天无回复，考虑发邮件跟进或寻找其他渠道",
-            "priority": "medium",
-            "link": "/jobs/pipeline/kanban?stage=applied",
-        })
+        suggestions.append(
+            {
+                "action": "follow_up",
+                "title": "跟进沉默投递",
+                "description": f"有 {stalled} 个投递超7天无回复，考虑发邮件跟进或寻找其他渠道",
+                "priority": "medium",
+                "link": "/jobs/pipeline/kanban?stage=applied",
+            }
+        )
 
     if weekly_apps < 3 and total_apps < 30:
-        suggestions.append({
-            "action": "apply_more",
-            "title": "增加投递量",
-            "description": f"本周仅投递 {weekly_apps} 个岗位，建议每天投递3-5个保持活跃度",
-            "priority": "medium",
-            "link": "/jobs/recommend",
-        })
+        suggestions.append(
+            {
+                "action": "apply_more",
+                "title": "增加投递量",
+                "description": f"本周仅投递 {weekly_apps} 个岗位，建议每天投递3-5个保持活跃度",
+                "priority": "medium",
+                "link": "/jobs/recommend",
+            }
+        )
 
     if response_rate < 20 and total_apps >= 5:
-        suggestions.append({
-            "action": "optimize_resume",
-            "title": "优化简历提升回复率",
-            "description": f"当前回复率 {response_rate}%，建议使用AI优化简历匹配度",
-            "priority": "medium",
-            "link": "/resume",
-        })
+        suggestions.append(
+            {
+                "action": "optimize_resume",
+                "title": "优化简历提升回复率",
+                "description": f"当前回复率 {response_rate}%，建议使用AI优化简历匹配度",
+                "priority": "medium",
+                "link": "/resume",
+            }
+        )
 
     if resumes == 0:
-        suggestions.append({
-            "action": "upload_resume",
-            "title": "上传简历",
-            "description": "还没有简历，上传后可使用AI优化和匹配推荐",
-            "priority": "high",
-            "link": "/resume",
-        })
+        suggestions.append(
+            {
+                "action": "upload_resume",
+                "title": "上传简历",
+                "description": "还没有简历，上传后可使用AI优化和匹配推荐",
+                "priority": "high",
+                "link": "/resume",
+            }
+        )
 
     # 确保至少返回3条建议
     if len(suggestions) < 3:
-        suggestions.append({
-            "action": "browse_jobs",
-            "title": "浏览推荐岗位",
-            "description": "查看AI根据你的求职目标推荐的最新岗位",
-            "priority": "low",
-            "link": "/jobs/recommend",
-        })
+        suggestions.append(
+            {
+                "action": "browse_jobs",
+                "title": "浏览推荐岗位",
+                "description": "查看AI根据你的求职目标推荐的最新岗位",
+                "priority": "low",
+                "link": "/jobs/recommend",
+            }
+        )
 
-    return ok({
-        "context": {
-            "total_applications": total_apps,
-            "weekly_applications": weekly_apps,
-            "response_rate": response_rate,
-            "upcoming_interviews": upcoming,
-            "stalled_applications": stalled,
-        },
-        "suggestions": suggestions[:3],
-    })
+    return ok(
+        {
+            "context": {
+                "total_applications": total_apps,
+                "weekly_applications": weekly_apps,
+                "response_rate": response_rate,
+                "upcoming_interviews": upcoming,
+                "stalled_applications": stalled,
+            },
+            "suggestions": suggestions[:3],
+        }
+    )

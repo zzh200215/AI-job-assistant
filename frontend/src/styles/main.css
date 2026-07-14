@@ -38,7 +38,8 @@
   --app-radius-sm: 12px;
   --app-radius-xs: 8px;
 
-  --app-font: 'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system, sans-serif;
+  --app-font:
+    'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system, sans-serif;
   --app-font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
 
   /* ---- Element Plus override ---- */
@@ -116,7 +117,10 @@ select {
 
 /* ---- Typography helpers ---- */
 
-h1, h2, h3, h4,
+h1,
+h2,
+h3,
+h4,
 .page-title,
 .hero-title-row h1,
 .hero-copy h1 {
@@ -124,12 +128,21 @@ h1, h2, h3, h4,
   font-weight: 700;
 }
 
-h1 { font-size: 2rem; }
-h2 { font-size: 1.5rem; }
-h3 { font-size: 1.25rem; }
-h4 { font-size: 1rem; }
+h1 {
+  font-size: 2rem;
+}
+h2 {
+  font-size: 1.5rem;
+}
+h3 {
+  font-size: 1.25rem;
+}
+h4 {
+  font-size: 1rem;
+}
 
-code, .mono {
+code,
+.mono {
   font-family: var(--app-font-mono);
 }
 
@@ -323,7 +336,15 @@ code, .mono {
 }
 
 /* ---- Utility ---- */
-.mt { margin-top: 16px; }
-.mb { margin-bottom: 16px; }
-.ml { margin-left: 8px; }
-.mr { margin-right: 8px; }
+.mt {
+  margin-top: 16px;
+}
+.mb {
+  margin-bottom: 16px;
+}
+.ml {
+  margin-left: 8px;
+}
+.mr {
+  margin-right: 8px;
+}

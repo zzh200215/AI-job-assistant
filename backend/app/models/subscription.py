@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """订阅与权益 ORM 模型。"""
-from sqlalchemy import BigInteger, Column, DateTime, String, Integer, JSON, Numeric, Enum as SAEnum
-from sqlalchemy import ForeignKey
+
 import enum
+
+from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, Integer, Numeric, String
 
 from app.core.database import Base
 from app.utils.time_helper import utc_now
@@ -24,6 +24,7 @@ class OrderStatus(str, enum.Enum):
 
 class SubscriptionPlan(Base):
     """套餐定义表（系统预置，运行时不变）"""
+
     __tablename__ = "subscription_plan"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -39,6 +40,7 @@ class SubscriptionPlan(Base):
 
 class UserSubscription(Base):
     """用户订阅状态表"""
+
     __tablename__ = "user_subscription"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -57,6 +59,7 @@ class UserSubscription(Base):
 
 class SubscriptionOrder(Base):
     """订阅订单表"""
+
     __tablename__ = "subscription_order"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)

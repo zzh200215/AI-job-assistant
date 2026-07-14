@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 import app.api.agent as agent_api
 import app.api.analysis as analysis_api

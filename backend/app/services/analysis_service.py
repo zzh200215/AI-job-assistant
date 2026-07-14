@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Unified entrypoint for async analysis execution."""
 
 from app.core.config import settings

@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
 """数据埋点 API。"""
+
 from __future__ import annotations
 
 from datetime import datetime
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -22,9 +23,9 @@ def track_events(
 ):
     """
     接收前端批量上报的埋点事件。
-    
+
     请求体: {"events": [{"event": "upload_resume", "properties": {...}, "timestamp": "..."}]}
-    
+
     当前为 stub 实现，存入日志文件。
     后续可接入 ClickHouse / Prometheus / 自建分析系统。
     """
@@ -33,7 +34,7 @@ def track_events(
 
     logger = logging.getLogger("tracking")
     events = payload.get("events", [])
-    
+
     for event in events:
         log_entry = {
             "user_id": current_user.id,

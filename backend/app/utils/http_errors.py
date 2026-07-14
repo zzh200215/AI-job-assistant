@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Helpers for raising structured HTTP errors."""
+
 from fastapi import HTTPException
 
 

@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """Tool-assisted match analysis agent."""
+
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 from app.agents.base_agent import BaseAgent
 from app.orchestration.context import AgentContext
@@ -11,12 +11,12 @@ from app.orchestration.context import AgentContext
 class MatchAnalysisAgent(BaseAgent):
     name = "MatchAnalysisAgent"
     description = "Use safe tools to produce a structured resume/JD match report."
-    depends_on: List[str] = ["ResumeParseAgent", "JDParseAgent"]
+    depends_on: list[str] = ["ResumeParseAgent", "JDParseAgent"]
     result_type = "match_report"
 
     _TOOL_NAMES = ["search_knowledge", "calc_skill_coverage"]
 
-    def run_impl(self, context: AgentContext) -> Dict[str, Any]:
+    def run_impl(self, context: AgentContext) -> dict[str, Any]:
         resume_id = context.resume_id
         jd_id = context.jd_id
         if not resume_id or not jd_id:
@@ -63,7 +63,7 @@ Return strict JSON with this schema:
 
         return list_tools(self._TOOL_NAMES)
 
-    def _call_llm_with_tools(self, prompt: str, tools: list) -> Dict[str, Any]:
+    def _call_llm_with_tools(self, prompt: str, tools: list) -> dict[str, Any]:
         from app.services.llm_service import chat_with_tools
 
         system_prompt = (
@@ -101,7 +101,7 @@ Return strict JSON with this schema:
                 "_error": str(exc)[:200],
             }
 
-    def _make_summary(self, result: Dict[str, Any]) -> str:
+    def _make_summary(self, result: dict[str, Any]) -> str:
         score = result.get("match_score", 0)
         recommendation = result.get("recommendation", "unknown")
         return f"match analysis: {score}/100 | {recommendation}"

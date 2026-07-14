@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
 """智能提醒 API"""
-from fastapi import APIRouter, Body, Depends, Query
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
@@ -14,7 +14,7 @@ from app.services.reminder_service import (
     send_new_jd_notifications,
 )
 from app.utils.job_access import is_admin
-from app.utils.response import ok, fail, ERR_PARAM, ERR_AUTH
+from app.utils.response import ERR_AUTH, ERR_PARAM, fail, ok
 
 router = APIRouter()
 
@@ -38,6 +38,7 @@ async def upcoming_reminders(
 ):
     """获取当前用户即将到来的面试、Offer截止等提醒。"""
     from datetime import timedelta, timezone
+
     from app.models.job_pipeline import JobApplicationPipeline
     from app.utils.time_helper import utc_now
 
@@ -65,19 +66,21 @@ async def upcoming_reminders(
     for p in interviews:
         interview_at = make_aware(p.interview_at)
         hours_until = (interview_at - now).total_seconds() / 3600
-        reminders.append({
-            "type": "interview",
-            "title": f"面试：{p.company or ''} - {p.title or ''}",
-            "time": p.interview_at.isoformat(),
-            "hours_until": round(hours_until, 1),
-            "urgency": "high" if hours_until < 24 else "medium",
-            "pipeline_id": p.id,
-            "details": {
-                "round": p.interview_round,
-                "location": p.interview_location,
-                "contact": p.interview_contact,
-            },
-        })
+        reminders.append(
+            {
+                "type": "interview",
+                "title": f"面试：{p.company or ''} - {p.title or ''}",
+                "time": p.interview_at.isoformat(),
+                "hours_until": round(hours_until, 1),
+                "urgency": "high" if hours_until < 24 else "medium",
+                "pipeline_id": p.id,
+                "details": {
+                    "round": p.interview_round,
+                    "location": p.interview_location,
+                    "contact": p.interview_contact,
+                },
+            }
+        )
 
     # Offer即将到期（7天内）
     offers = (
@@ -95,20 +98,21 @@ async def upcoming_reminders(
     for p in offers:
         deadline = make_aware(p.offer_deadline)
         days_until = (deadline - now).days
-        reminders.append({
-            "type": "offer_deadline",
-            "title": f"Offer到期：{p.company or ''} - {p.title or ''}",
-            "time": p.offer_deadline.isoformat(),
-            "days_until": days_until,
-            "urgency": "high" if days_until <= 1 else "medium",
-            "pipeline_id": p.id,
-            "details": {
-                "salary": p.offer_salary,
-            },
-        })
+        reminders.append(
+            {
+                "type": "offer_deadline",
+                "title": f"Offer到期：{p.company or ''} - {p.title or ''}",
+                "time": p.offer_deadline.isoformat(),
+                "days_until": days_until,
+                "urgency": "high" if days_until <= 1 else "medium",
+                "pipeline_id": p.id,
+                "details": {
+                    "salary": p.offer_salary,
+                },
+            }
+        )
 
     # 投递超5天无回复
-    from sqlalchemy import func
     stalled = (
         db.query(JobApplicationPipeline)
         .filter(
@@ -122,24 +126,28 @@ async def upcoming_reminders(
     for p in stalled:
         update_time = make_aware(p.update_time)
         days = (now - update_time).days if update_time else 0
-        reminders.append({
-            "type": "follow_up",
-            "title": f"投递 {days} 天无回复：{p.company or ''} - {p.title or ''}",
-            "time": p.update_time.isoformat(),
-            "days_stalled": days,
-            "urgency": "low",
-            "pipeline_id": p.id,
-        })
+        reminders.append(
+            {
+                "type": "follow_up",
+                "title": f"投递 {days} 天无回复：{p.company or ''} - {p.title or ''}",
+                "time": p.update_time.isoformat(),
+                "days_stalled": days,
+                "urgency": "low",
+                "pipeline_id": p.id,
+            }
+        )
 
     # 按紧急度排序
     urgency_order = {"high": 0, "medium": 1, "low": 2}
     reminders.sort(key=lambda r: (urgency_order.get(r["urgency"], 3), r.get("hours_until", 999) or 999))
 
-    return ok({
-        "total": len(reminders),
-        "high_urgency": sum(1 for r in reminders if r["urgency"] == "high"),
-        "reminders": reminders,
-    })
+    return ok(
+        {
+            "total": len(reminders),
+            "high_urgency": sum(1 for r in reminders if r["urgency"] == "high"),
+            "reminders": reminders,
+        }
+    )
 
 
 @router.post("/match-jds", summary="为求职目标匹配新JD")
@@ -152,10 +160,14 @@ async def match_jds_for_target(
     target_id = payload.target_id
 
     if target_id:
-        target = db.query(JobTarget).filter(
-            JobTarget.id == target_id,
-            JobTarget.user_id == current_user.id,
-        ).first()
+        target = (
+            db.query(JobTarget)
+            .filter(
+                JobTarget.id == target_id,
+                JobTarget.user_id == current_user.id,
+            )
+            .first()
+        )
         if not target:
             return fail(message="目标不存在", code=ERR_PARAM)
         count = send_new_jd_notifications(db, current_user.id, target_id)
@@ -173,27 +185,33 @@ async def preview_matches(
     current_user: User = Depends(get_current_user),
 ):
     """预览某个求职目标匹配的新JD，不发送通知。"""
-    target = db.query(JobTarget).filter(
-        JobTarget.id == target_id,
-        JobTarget.user_id == current_user.id,
-    ).first()
+    target = (
+        db.query(JobTarget)
+        .filter(
+            JobTarget.id == target_id,
+            JobTarget.user_id == current_user.id,
+        )
+        .first()
+    )
     if not target:
         return fail(message="目标不存在", code=ERR_PARAM)
 
     matched = match_new_jds_for_target(db, target, limit=limit)
-    return ok({
-        "target": target.to_dict(),
-        "matched_count": len(matched),
-        "matched_jds": [
-            {
-                "id": jd.id,
-                "title": jd.title,
-                "company": jd.company,
-                "location": jd.location,
-                "salary_range": jd.salary_range,
-                "industry": jd.industry,
-                "create_time": jd.create_time.isoformat() if jd.create_time else None,
-            }
-            for jd in matched
-        ],
-    })
+    return ok(
+        {
+            "target": target.to_dict(),
+            "matched_count": len(matched),
+            "matched_jds": [
+                {
+                    "id": jd.id,
+                    "title": jd.title,
+                    "company": jd.company,
+                    "location": jd.location,
+                    "salary_range": jd.salary_range,
+                    "industry": jd.industry,
+                    "create_time": jd.create_time.isoformat() if jd.create_time else None,
+                }
+                for jd in matched
+            ],
+        }
+    )

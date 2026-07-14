@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Knowledge base management APIs."""
+
 import os
 import traceback
 

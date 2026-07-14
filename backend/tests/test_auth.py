@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """Authentication API tests."""
 
 from __future__ import annotations
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from app.api.auth import router as auth_router
 from app.core.database import get_db

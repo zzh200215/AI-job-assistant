@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 """RAG retrieval helpers."""
+
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -46,8 +45,8 @@ def _filter_visible_results(
     *,
     visible_doc_ids: set[str] | None,
     top_k: int,
-) -> List[Dict]:
-    retrieved: List[Dict] = []
+) -> list[dict]:
+    retrieved: list[dict] = []
     ids = (results or {}).get("ids") or []
     if not ids or not ids[0]:
         return retrieved
@@ -92,12 +91,12 @@ def _filter_visible_results(
 
 def search_knowledge(
     query: str,
-    doc_type: Optional[str] = None,
+    doc_type: str | None = None,
     top_k: int = None,
-    query_embedding: Optional[List[float]] = None,
+    query_embedding: list[float] | None = None,
     db: Session | None = None,
     user_id: int | None = None,
-) -> List[Dict]:
+) -> list[dict]:
     if top_k is None:
         top_k = settings.RAG_TOP_K
 
@@ -154,7 +153,7 @@ def build_rag_context_multi(
     intent: str = "full_analysis",
     resume_summary: str = "",
     jd_summary: str = "",
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Agentic 检索：先用 planner 决定查哪些 doc_type、各取多少，再分别检索。
 
     返回结构保持与旧版兼容：固定 8 个 key + "all" + "_plan"（调试用）。
@@ -168,7 +167,10 @@ def build_rag_context_multi(
     )
     logger.info(
         "rag plan source=%s intent=%s doc_types=%s reasoning=%s",
-        plan.source, intent, plan.doc_types, plan.reasoning,
+        plan.source,
+        intent,
+        plan.doc_types,
+        plan.reasoning,
     )
 
     try:
@@ -177,7 +179,7 @@ def build_rag_context_multi(
         logger.warning("precomputing query embedding failed, falling back to per-call embedding: %s", exc)
         q_emb = None
 
-    def _search(doc_type: str, top_k: int) -> List[Dict]:
+    def _search(doc_type: str, top_k: int) -> list[dict]:
         return search_knowledge(
             query,
             doc_type=doc_type,
@@ -187,7 +189,7 @@ def build_rag_context_multi(
             user_id=user_id,
         )
 
-    def _format(label: str, items: List[Dict]) -> str:
+    def _format(label: str, items: list[dict]) -> str:
         if not items:
             return ""
         lines = [f"===== {label} ====="]
@@ -197,8 +199,8 @@ def build_rag_context_multi(
             lines.append("---")
         return "\n".join(lines)
 
-    output: Dict[str, str] = {key: "" for key in _DOC_TYPE_TO_KEY.values()}
-    all_blocks: List[str] = []
+    output: dict[str, str] = dict.fromkeys(_DOC_TYPE_TO_KEY.values(), "")
+    all_blocks: list[str] = []
 
     for doc_type, top_k in plan.doc_types.items():
         items = _search(doc_type, top_k)
@@ -215,9 +217,9 @@ def build_rag_context_multi(
     return output
 
 
-def get_knowledge_references(query: str, db: Session | None = None, user_id: int | None = None) -> List[Dict]:
+def get_knowledge_references(query: str, db: Session | None = None, user_id: int | None = None) -> list[dict]:
     results = search_knowledge(query, db=db, user_id=user_id)
-    seen_docs: Dict[str, Dict] = {}
+    seen_docs: dict[str, dict] = {}
     for item in results:
         key = item["doc_title"]
         if key not in seen_docs:
@@ -236,16 +238,16 @@ def get_knowledge_references(query: str, db: Session | None = None, user_id: int
 
 
 def search_knowledge_multi_queries(
-    rewritten_queries: List[RewrittenQuery],
-    doc_type: Optional[str] = None,
+    rewritten_queries: list[RewrittenQuery],
+    doc_type: str | None = None,
     top_k_per_query: int = None,
     db: Session | None = None,
     user_id: int | None = None,
-) -> List[Dict]:
+) -> list[dict]:
     if top_k_per_query is None:
         top_k_per_query = settings.RAG_TOP_K
 
-    all_results: List[Dict] = []
+    all_results: list[dict] = []
     for rewritten in rewritten_queries:
         if not rewritten.query_text:
             continue
@@ -271,8 +273,8 @@ def search_knowledge_multi_queries(
     return rerank_results(query=rerank_query, results=merged, top_k=len(merged))
 
 
-def merge_and_dedup_results(results: List[Dict]) -> List[Dict]:
-    best_by_chunk: Dict[str, Dict] = {}
+def merge_and_dedup_results(results: list[dict]) -> list[dict]:
+    best_by_chunk: dict[str, dict] = {}
 
     for item in results:
         chunk_id = item["chunk_id"]
@@ -304,8 +306,8 @@ def merge_and_dedup_results(results: List[Dict]) -> List[Dict]:
 
 
 def build_rag_context_with_rewrite(
-    rewritten_queries: List[RewrittenQuery],
-    doc_type: Optional[str] = None,
+    rewritten_queries: list[RewrittenQuery],
+    doc_type: str | None = None,
     top_k_per_query: int = None,
     db: Session | None = None,
     user_id: int | None = None,
@@ -329,12 +331,12 @@ def build_rag_context_with_rewrite(
 
 
 def get_knowledge_references_with_rewrite(
-    rewritten_queries: List[RewrittenQuery],
-    doc_type: Optional[str] = None,
+    rewritten_queries: list[RewrittenQuery],
+    doc_type: str | None = None,
     top_k_per_query: int = None,
     db: Session | None = None,
     user_id: int | None = None,
-) -> List[Dict]:
+) -> list[dict]:
     results = search_knowledge_multi_queries(
         rewritten_queries=rewritten_queries,
         doc_type=doc_type,
@@ -343,7 +345,7 @@ def get_knowledge_references_with_rewrite(
         user_id=user_id,
     )
 
-    seen_docs: Dict[str, Dict] = {}
+    seen_docs: dict[str, dict] = {}
     for item in results:
         key = item["doc_title"]
         if key not in seen_docs:

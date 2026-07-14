@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Common weak password blacklist."""
 
 from __future__ import annotations

@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """简历结构化解析 Prompt"""
+
 RESUME_PARSE_PROMPT = """你是一名资深 HR 助理，擅长将非结构化简历解析为 JSON。
 
 【任务】从下面这份简历文本中提取信息，并按下方 JSON Schema 严格输出。

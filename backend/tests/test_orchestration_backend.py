@@ -1,12 +1,11 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 from threading import Event
 
 from app.services.orchestration_backend import (
+    RedisQueueOrchestrationBackend,
     TaskPayload,
     ThreadOrchestrationBackend,
-    RedisQueueOrchestrationBackend,
     health_snapshot,
 )
 

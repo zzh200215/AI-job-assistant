@@ -18,6 +18,29 @@ export const generateOptimized = (resumeId, targetJdId) =>
 
 export const getResumeVersions = (resumeId) => request.get(`/resume/${resumeId}/versions`)
 
+export const createResumeVersion = (resumeId, payload) =>
+  request.post(`/resume/${resumeId}/versions`, payload)
+
+export const updateResumeVersion = (resumeId, versionId, payload) =>
+  request.patch(`/resume/${resumeId}/versions/${versionId}`, payload)
+
+export const getResumeVersionDiff = (resumeId, compareVersionId, baseVersionId = null) =>
+  request.get(`/resume/${resumeId}/versions/diff`, {
+    params: {
+      compare_version_id: compareVersionId,
+      ...(baseVersionId ? { base_version_id: baseVersionId } : {}),
+    },
+  })
+
+export const saveResumeSuggestionDecision = (resumeId, versionId, payload) =>
+  request.post(`/resume/${resumeId}/versions/${versionId}/suggestions`, payload)
+
+export const previewResumeAts = (resumeId, payload = {}) =>
+  request.post(`/resume/${resumeId}/ats-preview`, payload)
+
+export const tailorResume = (resumeId, jdId) =>
+  request.post(`/resume/${resumeId}/tailor`, { jd_id: jdId })
+
 export const getResumeQuickScore = (resumeId, config = {}) =>
   request.get(`/resume/${resumeId}/quick-score`, config)
 
@@ -29,9 +52,9 @@ export const deleteResume = (resumeId) => request.delete(`/resume/${resumeId}`)
 export const exportResume = (resumeId, format, version) =>
   request.post(`/resume/${resumeId}/export`, { format, version })
 
-export const downloadResumeExport = (resumeId, format, version) =>
+export const downloadResumeExport = (resumeId, format, version, versionId = null) =>
   request.get(`/resume/${resumeId}/download`, {
-    params: { format, version },
+    params: { format, version, ...(versionId ? { version_id: versionId } : {}) },
     responseType: 'blob',
   })
 

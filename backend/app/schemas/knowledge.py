@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 """Knowledge base request/response schemas."""
-from typing import Any, Dict, List, Optional
+
+from typing import Any
 
 from pydantic import BaseModel, Field
-
 
 DOC_TYPE_CHOICES = [
     "resume_template",
@@ -31,7 +30,7 @@ class KBUploadResp(BaseModel):
     file_size: int
     doc_type: str
     status: str
-    create_time: Optional[str] = None
+    create_time: str | None = None
 
 
 class KBDocumentResp(BaseModel):
@@ -39,23 +38,23 @@ class KBDocumentResp(BaseModel):
     title: str
     file_name: str
     file_type: str
-    file_size: Optional[int] = 0
+    file_size: int | None = 0
     doc_type: str
     chunk_count: int = 0
     status: str
-    error_msg: Optional[str] = None
-    create_time: Optional[str] = None
-    update_time: Optional[str] = None
+    error_msg: str | None = None
+    create_time: str | None = None
+    update_time: str | None = None
 
 
 class KBListResp(BaseModel):
     total: int
-    items: List[KBDocumentResp]
+    items: list[KBDocumentResp]
 
 
 class KBSearchReq(BaseModel):
     query: str = Field(..., description="检索关键词")
-    doc_type: Optional[str] = Field(None, description="按文档类型过滤")
+    doc_type: str | None = Field(None, description="按文档类型过滤")
     top_k: int = Field(5, ge=1, le=20, description="返回数量")
 
 
@@ -69,14 +68,14 @@ class KBSearchResult(BaseModel):
 
 
 class KBSearchResp(BaseModel):
-    results: List[KBSearchResult]
+    results: list[KBSearchResult]
 
 
 class QueryRewriteReq(BaseModel):
     original_query: str = Field(..., min_length=1, description="用户原始问题")
-    resume_summary: Optional[str] = Field("", description="简历摘要")
-    jd_summary: Optional[str] = Field("", description="JD 摘要")
-    doc_type: Optional[str] = Field(None, description="按文档类型过滤")
+    resume_summary: str | None = Field("", description="简历摘要")
+    jd_summary: str | None = Field("", description="JD 摘要")
+    doc_type: str | None = Field(None, description="按文档类型过滤")
     top_k_per_query: int = Field(5, ge=1, le=20, description="每个 query 返回数量")
     max_queries: int = Field(5, ge=1, le=10, description="最大改写 query 数")
 
@@ -100,17 +99,17 @@ class RetrievedChunkItem(BaseModel):
     rerank_source: str = ""
     query_used: str
     query_type: str
-    queries: List[Dict[str, str]] = Field(default_factory=list, description="召回该切片的所有 query")
+    queries: list[dict[str, str]] = Field(default_factory=list, description="召回该切片的所有 query")
 
 
 class QueryRewriteResp(BaseModel):
     original_query: str
-    rewritten_queries: List[RewrittenQueryItem]
-    retrieved_chunks: List[RetrievedChunkItem]
+    rewritten_queries: list[RewrittenQueryItem]
+    retrieved_chunks: list[RetrievedChunkItem]
     total_chunks: int
-    rag_confidence: Dict[str, Any]
+    rag_confidence: dict[str, Any]
     rag_context: str
-    references: List[Dict[str, Any]]
+    references: list[dict[str, Any]]
 
 
 class KBDocumentChunkResp(BaseModel):

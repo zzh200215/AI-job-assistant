@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """Prompt trace ORM model for lightweight LLM observability."""
+
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Integer, JSON, SmallInteger, String, Text
+from sqlalchemy import JSON, BigInteger, Column, DateTime, Float, ForeignKey, Integer, SmallInteger, String, Text
 
 from app.core.database import Base
 from app.utils.time_helper import utc_now

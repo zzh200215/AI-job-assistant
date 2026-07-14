@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """面试题生成 Prompt（支持 RAG 上下文注入）"""
+
 INTERVIEW_PROMPT = """你是一名资深技术面试官，请根据候选人简历和目标岗位 JD，生成结构化面试题。
 
 {rag_context}

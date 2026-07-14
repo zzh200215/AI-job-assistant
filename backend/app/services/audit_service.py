@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 """审计日志工具。记录用户敏感操作轨迹。"""
+
 from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Optional
 
 from fastapi import Request
 from sqlalchemy.orm import Session
@@ -27,7 +26,7 @@ def write_audit_log(
 ) -> AuditLog:
     """
     写入审计日志。
-    
+
     参数:
         user: 当前用户
         action: 操作类型，命名规则: domain.operation
@@ -68,9 +67,9 @@ def _get_client_ip(request: Request) -> str:
 
 def list_audit_logs(
     db: Session,
-    user_id: Optional[int] = None,
-    action: Optional[str] = None,
-    resource_type: Optional[str] = None,
+    user_id: int | None = None,
+    action: str | None = None,
+    resource_type: str | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[AuditLog]:

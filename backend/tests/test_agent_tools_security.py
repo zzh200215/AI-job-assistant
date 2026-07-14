@@ -1,6 +1,5 @@
-# -*- coding: utf-8 -*-
-from app.agents.tools import get_tool, tool_names
 from app.agents.match_analysis_agent import MatchAnalysisAgent
+from app.agents.tools import get_tool, tool_names
 
 
 def test_dangerous_get_document_tool_is_not_registered():

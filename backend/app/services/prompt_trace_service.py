@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
 """Prompt trace persistence helpers."""
+
 from __future__ import annotations
 
 import hashlib
 import logging
-import time
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, Optional
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def _session_scope(existing: Optional[Session] = None) -> Iterator[Session]:
+def _session_scope(existing: Session | None = None) -> Iterator[Session]:
     if existing is not None:
         yield existing
         return
@@ -50,8 +50,8 @@ def build_trace_context(
     jd_id: int | None = None,
     task_id: int | None = None,
     analysis_record_id: int | None = None,
-    extra: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     context = {
         "source": source,
         "prompt_name": prompt_name,
@@ -72,7 +72,7 @@ def record_prompt_trace(
     *,
     prompt: str,
     response_text: str | None,
-    response_json: Dict[str, Any] | None,
+    response_json: dict[str, Any] | None,
     provider: str,
     model: str | None,
     prompt_version: str | None = None,
@@ -92,8 +92,8 @@ def record_prompt_trace(
     jd_id: int | None = None,
     task_id: int | None = None,
     analysis_record_id: int | None = None,
-    trace_context: Optional[Dict[str, Any]] = None,
-    prompt_metadata: Optional[Dict[str, Any]] = None,
+    trace_context: dict[str, Any] | None = None,
+    prompt_metadata: dict[str, Any] | None = None,
     db: Session | None = None,
 ) -> PromptTrace:
     trace_context = trace_context or {}

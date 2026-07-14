@@ -1,7 +1,7 @@
-# -*- coding: utf-8 -*-
 from scripts.eval_agent import check_thresholds as check_agent_thresholds
-from scripts.eval_recommend import check_thresholds as check_recommend_thresholds
 from scripts.eval_rag import check_thresholds as check_rag_thresholds
+from scripts.eval_rag import run_eval as run_rag_eval
+from scripts.eval_recommend import check_thresholds as check_recommend_thresholds
 
 
 def test_rag_thresholds_pass_when_metrics_meet_floor():
@@ -44,6 +44,31 @@ def test_rag_thresholds_report_all_failed_metrics():
         "mrr 0.8 < 0.85",
         "keyword_hit_rate 0.7 < 0.75",
     ]
+
+
+def test_rag_eval_uses_hybrid_recall(monkeypatch):
+    calls = []
+
+    def fake_multi_recall(query, top_k):
+        calls.append((query, top_k))
+        return [{"doc_type": "resume_template", "text": "Python backend resume"}]
+
+    monkeypatch.setattr("app.services.multi_recall.multi_recall", fake_multi_recall)
+
+    report = run_rag_eval(
+        [
+            {
+                "query": "Python resume",
+                "expected_doc_types": ["resume_template"],
+                "expected_keywords": ["Python"],
+            }
+        ],
+        top_k=5,
+    )
+
+    assert calls == [("Python resume", 5)]
+    assert report["recall@5"] == 1.0
+    assert report["keyword_hit_rate"] == 1.0
 
 
 def test_agent_thresholds_pass_when_metrics_meet_gate():

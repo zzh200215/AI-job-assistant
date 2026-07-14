@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """文本切片服务
 
 策略:
@@ -7,15 +6,14 @@
 3. 单个切片控制在 200-500 字符，过长则再按句子拆分
 4. 切片间保留 50 字符重叠
 """
-import re
-from typing import List, Dict
 
+import re
 
 DEFAULT_CHUNK_SIZE = 500
 DEFAULT_OVERLAP = 50
 
 
-def _split_by_headings(text: str) -> List[str]:
+def _split_by_headings(text: str) -> list[str]:
     """按 Markdown 标题分割"""
     lines = text.split("\n")
     chunks = []
@@ -32,19 +30,19 @@ def _split_by_headings(text: str) -> List[str]:
     return chunks
 
 
-def _split_by_paragraphs(text: str) -> List[str]:
+def _split_by_paragraphs(text: str) -> list[str]:
     """按段落(连续两个换行)分割"""
     parts = re.split(r"\n\s*\n", text)
     return [p.strip() for p in parts if p.strip()]
 
 
-def _split_by_sentences(text: str, max_size: int = DEFAULT_CHUNK_SIZE) -> List[str]:
+def _split_by_sentences(text: str, max_size: int = DEFAULT_CHUNK_SIZE) -> list[str]:
     """
     按句子拆分，保证每段不超过 max_size 字符。
     中文句号、问号、感叹号、换行都是分割点。
     """
     # 先按句子分割
-    sentences = re.split(r'(?<=[。！？\n])\s*', text)
+    sentences = re.split(r"(?<=[。！？\n])\s*", text)
     sentences = [s.strip() for s in sentences if s.strip()]
 
     chunks = []
@@ -61,7 +59,7 @@ def _split_by_sentences(text: str, max_size: int = DEFAULT_CHUNK_SIZE) -> List[s
     return chunks
 
 
-def _add_overlap(chunks: List[str], overlap_chars: int = DEFAULT_OVERLAP) -> List[str]:
+def _add_overlap(chunks: list[str], overlap_chars: int = DEFAULT_OVERLAP) -> list[str]:
     """给相邻切片添加重叠"""
     if len(chunks) <= 1:
         return chunks
@@ -75,9 +73,7 @@ def _add_overlap(chunks: List[str], overlap_chars: int = DEFAULT_OVERLAP) -> Lis
     return result
 
 
-def chunk_document(text: str,
-                   chunk_size: int = DEFAULT_CHUNK_SIZE,
-                   overlap: int = DEFAULT_OVERLAP) -> List[Dict]:
+def chunk_document(text: str, chunk_size: int = DEFAULT_CHUNK_SIZE, overlap: int = DEFAULT_OVERLAP) -> list[dict]:
     """
     将文档文本切片。
 

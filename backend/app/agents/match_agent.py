@@ -1,8 +1,7 @@
-# -*- coding: utf-8 -*-
 """MatchAgent — 匹配度评估智能体"""
+
 import json
-from typing import Dict, Any, List
-from sqlalchemy.orm import Session
+from typing import Any
 
 from app.agents.base_agent import BaseAgent
 from app.orchestration.context import AgentContext
@@ -16,10 +15,10 @@ from app.services.rag_service import search_knowledge
 class MatchAgent(BaseAgent):
     name = "MatchAgent"
     description = "匹配度评估智能体 — 计算匹配分、输出优劣势、投递建议"
-    depends_on: List[str] = ["ResumeAgent", "JobAgent"]
+    depends_on: list[str] = ["ResumeAgent", "JobAgent"]
     result_type = "match_report"
 
-    def run_impl(self, context: AgentContext) -> Dict[str, Any]:
+    def run_impl(self, context: AgentContext) -> dict[str, Any]:
         resume_report = context.get_agent_output("ResumeAgent", {}) or {}
         job_report = context.get_agent_output("JobAgent", {}) or {}
 
@@ -31,10 +30,7 @@ class MatchAgent(BaseAgent):
 
         # RAG 检索
         rag_results = search_knowledge(query, top_k=5)
-        rag_text = "\n".join([
-            f"【{r.get('doc_title','')}】{r.get('text','')[:200]}"
-            for r in rag_results
-        ])
+        rag_text = "\n".join([f"【{r.get('doc_title', '')}】{r.get('text', '')[:200]}" for r in rag_results])
 
         prompt = render_prompt(
             MATCH_AGENT_PROMPT,
@@ -60,7 +56,7 @@ class MatchAgent(BaseAgent):
                 "analysis_record_id": context.get("analysis_record_id"),
             }
         )
-        result: Dict[str, Any] = chat_json(prompt)
+        result: dict[str, Any] = chat_json(prompt)
         apply_match_score_cap(
             result,
             json.dumps(resume_report, ensure_ascii=False),
@@ -69,7 +65,7 @@ class MatchAgent(BaseAgent):
         result["_rag_references"] = rag_results  # 附上引用
         return result
 
-    def _make_summary(self, result: Dict[str, Any]) -> str:
+    def _make_summary(self, result: dict[str, Any]) -> str:
         score = result.get("match_score", 0)
         rec = result.get("recommendation", "未知")
         strengths = len(result.get("strengths", []))

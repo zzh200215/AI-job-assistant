@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 """Prometheus metrics registry and recording helpers."""
 
 from __future__ import annotations
 
-from prometheus_client import Counter, Histogram, CollectorRegistry, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Counter, Histogram, generate_latest
 
 REGISTRY = CollectorRegistry()
 

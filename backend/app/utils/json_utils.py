@@ -1,14 +1,13 @@
-# -*- coding: utf-8 -*-
 """稳健的 JSON 抽取：兼容 ```json``` 包裹、夹杂解释文字、嵌套对象等"""
+
 import json
 import re
-from typing import Any, Optional
-
+from typing import Any
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
 
-def _find_balanced_span(s: str) -> Optional[str]:
+def _find_balanced_span(s: str) -> str | None:
     """从字符串中找出第一个**括号配对平衡**的 JSON 值（对象或数组）。
 
     通过逐字符扫描并对 {}/[] 计数实现，正确处理嵌套结构与字符串字面量
@@ -45,7 +44,7 @@ def _find_balanced_span(s: str) -> Optional[str]:
         elif ch == close_ch:
             depth -= 1
             if depth == 0:
-                return s[start:i + 1]
+                return s[start : i + 1]
     return None  # 括号未闭合
 
 
@@ -77,5 +76,5 @@ def extract_json(text: str) -> Any:
         cleaned = re.sub(r",\s*([}\]])", r"\1", s)
         try:
             return json.loads(cleaned)
-        except json.JSONDecodeError:
-            raise ValueError(f"无法从 LLM 返回中抽取 JSON: {e}; raw={text[:300]}")
+        except json.JSONDecodeError as cleaned_error:
+            raise ValueError(f"无法从 LLM 返回中抽取 JSON: {e}; raw={text[:300]}") from cleaned_error

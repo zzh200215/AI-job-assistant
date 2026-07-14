@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """重置 Chroma 知识库 collection"""
+
 from app.core.chroma_client import reset_collection
 from app.core.database import SessionLocal
 from app.models.knowledge import KnowledgeDocument

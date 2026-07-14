@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Canonical prompt for SummaryAgent."""
 
 PROMPT_VERSION = "summary-agent-v1"

@@ -11,15 +11,17 @@ export function normalizeInterviewQuestions(interviewQuestions, { dropEmpty = tr
   const normalized = Object.fromEntries(
     INTERVIEW_GROUP_DEFS.map(({ key, legacy }) => {
       const currentItems = Array.isArray(interviewQuestions[key]) ? interviewQuestions[key] : []
-      const legacyItems = Array.isArray(interviewQuestions[legacy]) ? interviewQuestions[legacy] : []
+      const legacyItems = Array.isArray(interviewQuestions[legacy])
+        ? interviewQuestions[legacy]
+        : []
       return [key, currentItems.length ? currentItems : legacyItems]
-    }),
+    })
   )
 
   if (!dropEmpty) return normalized
 
   return Object.fromEntries(
-    Object.entries(normalized).filter(([, items]) => Array.isArray(items) && items.length > 0),
+    Object.entries(normalized).filter(([, items]) => Array.isArray(items) && items.length > 0)
   )
 }
 
@@ -28,5 +30,5 @@ export function hasInterviewQuestions(interviewQuestions) {
 }
 
 export function getInterviewGroupTitle(key) {
-  return INTERVIEW_GROUP_DEFS.find(item => item.key === key)?.title || key
+  return INTERVIEW_GROUP_DEFS.find((item) => item.key === key)?.title || key
 }

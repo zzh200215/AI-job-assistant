@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
 """Centralized application settings."""
-from __future__ import annotations
 
-from typing import List, Optional
+from __future__ import annotations
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -30,17 +28,17 @@ class Settings(BaseSettings):
     MYSQL_USER: str = "root"
     MYSQL_PASSWORD: str = ""
     MYSQL_DB: str = "llmXM"
-    DATABASE_URL: Optional[str] = None
+    DATABASE_URL: str | None = None
 
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_MB: int = 10
 
     LLM_PROVIDER: str = "mock"
-    LLM_API_KEY: Optional[str] = None
-    LLM_BASE_URL: Optional[str] = None
+    LLM_API_KEY: str | None = None
+    LLM_BASE_URL: str | None = None
     LLM_MODEL: str = "gpt-3.5-turbo"
     LLM_TIMEOUT: int = 60
-    LLM_FALLBACK_MODEL: Optional[str] = None
+    LLM_FALLBACK_MODEL: str | None = None
     LLM_ALLOW_MOCK_FALLBACK: bool = False
     LLM_INPUT_COST_PER_1K_CENTS: float = 0.0
     LLM_OUTPUT_COST_PER_1K_CENTS: float = 0.0
@@ -52,17 +50,18 @@ class Settings(BaseSettings):
     ORCHESTRATION_STALE_TASK_MINUTES: int = 30
     ORCHESTRATION_QUEUE_NAME: str = "analysis-tasks"
     ORCHESTRATION_QUEUE_POLL_SECONDS: float = 1.0
-    REDIS_URL: Optional[str] = None
+    REDIS_URL: str | None = None
+    INTERVIEW_EVALUATION_MAX_WORKERS: int = 2
 
     EMBEDDING_PROVIDER: str = "mock"
-    EMBEDDING_API_KEY: Optional[str] = None
-    EMBEDDING_BASE_URL: Optional[str] = None
+    EMBEDDING_API_KEY: str | None = None
+    EMBEDDING_BASE_URL: str | None = None
     EMBEDDING_MODEL: str = "text-embedding-v3"
     EMBEDDING_TIMEOUT: int = 30
     EMBEDDING_MAX_RETRIES: int = 2
 
     RERANKER_PROVIDER: str = "auto"
-    RERANKER_MODEL_PATH: Optional[str] = None
+    RERANKER_MODEL_PATH: str | None = None
     RERANKER_BATCH_SIZE: int = 8
 
     JWT_SECRET: str = _DEFAULT_JWT_SECRET
@@ -74,9 +73,9 @@ class Settings(BaseSettings):
     RUN_SCHEDULER: bool = True
 
     # Rate limiting (slowapi). Empty/unset falls back to code defaults.
-    RATE_LIMIT_GENERAL: Optional[str] = None
-    RATE_LIMIT_AUTH: Optional[str] = None
-    RATE_LIMIT_LOGIN: Optional[str] = None
+    RATE_LIMIT_GENERAL: str | None = None
+    RATE_LIMIT_AUTH: str | None = None
+    RATE_LIMIT_LOGIN: str | None = None
 
     # Backup retention
     BACKUP_KEEP_DAYS: int = 7
@@ -109,11 +108,11 @@ class Settings(BaseSettings):
         )
 
     @property
-    def cors_origins_list(self) -> List[str]:
+    def cors_origins_list(self) -> list[str]:
         return [item.strip() for item in self.CORS_ORIGINS.split(",") if item.strip()]
 
     @property
-    def admin_usernames_list(self) -> List[str]:
+    def admin_usernames_list(self) -> list[str]:
         return [item.strip() for item in self.ADMIN_USERNAMES.split(",") if item.strip()]
 
     @property
@@ -129,7 +128,9 @@ class Settings(BaseSettings):
             raise ValueError("APP_DEBUG must be False when APP_ENV=production.")
 
         if self.is_production and self.AUTO_CREATE_TABLES:
-            raise ValueError("AUTO_CREATE_TABLES must be False when APP_ENV=production. Run Alembic migrations instead.")
+            raise ValueError(
+                "AUTO_CREATE_TABLES must be False when APP_ENV=production. Run Alembic migrations instead."
+            )
 
         if self.is_production and self.JWT_SECRET == _DEFAULT_JWT_SECRET:
             raise ValueError("Set a unique JWT_SECRET before running in production.")
@@ -146,11 +147,21 @@ class Settings(BaseSettings):
         if self.is_production and str(self.LLM_FALLBACK_MODEL or "").strip().lower() == "mock":
             raise ValueError("LLM_FALLBACK_MODEL cannot be 'mock' in production.")
 
-        if self.is_production and str(self.LLM_PROVIDER or "").strip().lower() in {"openai", "qwen", "local"} and not (self.LLM_API_KEY or "").strip():
+        if (
+            self.is_production
+            and str(self.LLM_PROVIDER or "").strip().lower() in {"openai", "qwen", "local"}
+            and not (self.LLM_API_KEY or "").strip()
+        ):
             raise ValueError("LLM_API_KEY is required for the configured LLM provider in production.")
 
-        if self.is_production and str(self.EMBEDDING_PROVIDER or "").strip().lower() in {"openai", "qwen", "dashscope"} and not (self.EMBEDDING_API_KEY or self.LLM_API_KEY or "").strip():
-            raise ValueError("EMBEDDING_API_KEY (or LLM_API_KEY) is required for the configured embedding provider in production.")
+        if (
+            self.is_production
+            and str(self.EMBEDDING_PROVIDER or "").strip().lower() in {"openai", "qwen", "dashscope"}
+            and not (self.EMBEDDING_API_KEY or self.LLM_API_KEY or "").strip()
+        ):
+            raise ValueError(
+                "EMBEDDING_API_KEY (or LLM_API_KEY) is required for the configured embedding provider in production."
+            )
 
         return self
 

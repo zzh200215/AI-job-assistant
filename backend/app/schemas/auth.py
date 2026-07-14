@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 """Authentication-related Pydantic models."""
 
 from __future__ import annotations
 
 import re
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
@@ -150,7 +149,7 @@ class UserInfo(BaseModel):
     email: str
     role: Literal["candidate", "admin"] = CANDIDATE_ROLE
     is_admin: bool = False
-    created_at: Optional[str] = None
+    created_at: str | None = None
     # 求职者资料
     avatar_url: str = ""
     nickname: str = ""
@@ -173,34 +172,35 @@ class UserInfo(BaseModel):
 
 class UserProfileUpdateReq(BaseModel):
     """用户个人资料更新请求"""
-    avatar_url: Optional[str] = Field(default=None, max_length=500)
-    nickname: Optional[str] = Field(default=None, max_length=50)
-    phone: Optional[str] = Field(default=None, max_length=20)
-    bio: Optional[str] = None
+
+    avatar_url: str | None = Field(default=None, max_length=500)
+    nickname: str | None = Field(default=None, max_length=50)
+    phone: str | None = Field(default=None, max_length=20)
+    bio: str | None = None
     # 求职意向
-    job_seeking_status: Optional[str] = None
-    expected_position: Optional[str] = Field(default=None, max_length=200)
-    expected_city: Optional[str] = Field(default=None, max_length=200)
-    expected_salary_min: Optional[int] = Field(default=None, ge=0)
-    expected_salary_max: Optional[int] = Field(default=None, ge=0)
-    expected_industry: Optional[str] = Field(default=None, max_length=200)
-    work_years: Optional[int] = Field(default=None, ge=0)
-    education: Optional[str] = Field(default=None)
-    current_employer: Optional[str] = Field(default=None, max_length=200)
-    current_position: Optional[str] = Field(default=None, max_length=200)
-    skill_tags: Optional[list] = None
-    social_links: Optional[dict] = None
+    job_seeking_status: str | None = None
+    expected_position: str | None = Field(default=None, max_length=200)
+    expected_city: str | None = Field(default=None, max_length=200)
+    expected_salary_min: int | None = Field(default=None, ge=0)
+    expected_salary_max: int | None = Field(default=None, ge=0)
+    expected_industry: str | None = Field(default=None, max_length=200)
+    work_years: int | None = Field(default=None, ge=0)
+    education: str | None = Field(default=None)
+    current_employer: str | None = Field(default=None, max_length=200)
+    current_position: str | None = Field(default=None, max_length=200)
+    skill_tags: list | None = None
+    social_links: dict | None = None
 
     @field_validator("job_seeking_status")
     @classmethod
-    def validate_job_seeking_status(cls, value: Optional[str]) -> Optional[str]:
+    def validate_job_seeking_status(cls, value: str | None) -> str | None:
         if value is not None and value not in {"active", "urgent", "observing", "not_looking", ""}:
             raise ValueError("求职状态可选值: active/urgent/observing/not_looking")
         return value
 
     @field_validator("education")
     @classmethod
-    def validate_education(cls, value: Optional[str]) -> Optional[str]:
+    def validate_education(cls, value: str | None) -> str | None:
         if value is not None and value not in {"", "high_school", "associate", "bachelor", "master", "phd"}:
             raise ValueError("学历可选值: high_school/associate/bachelor/master/phd")
         return value

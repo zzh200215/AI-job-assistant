@@ -1,27 +1,25 @@
-# -*- coding: utf-8 -*-
 """薪资洞察 API — 基于 JD 库的薪资分析与对比"""
+
 import re
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, and_
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.history import JobDescription
 from app.models.user import User
-from app.utils.response import ERR_PARAM, ok, fail
+from app.utils.response import ok
 
 router = APIRouter()
 
 
-def _parse_salary_range(salary_str: str) -> Optional[tuple]:
+def _parse_salary_range(salary_str: str) -> tuple | None:
     """解析薪资范围字符串，返回 (min_k, max_k) 千/月"""
     if not salary_str:
         return None
     # 匹配数字模式：如 "15-25K", "15000-25000", "15k-25k", "1.5w-2.5w"
-    nums = re.findall(r'[\d.]+', salary_str)
+    nums = re.findall(r"[\d.]+", salary_str)
     if len(nums) < 2:
         return None
 
@@ -32,10 +30,10 @@ def _parse_salary_range(salary_str: str) -> Optional[tuple]:
 
     # 判断单位
     s_lower = salary_str.lower()
-    if 'w' in s_lower or '万' in salary_str:
+    if "w" in s_lower or "万" in salary_str:
         # 万/年 → 千/月
         return (round(low * 10 / 12, 1), round(high * 10 / 12, 1))
-    elif 'k' in s_lower or 'K' in salary_str:
+    elif "k" in s_lower or "K" in salary_str:
         return (low, high)
     else:
         # 纯数字，>= 1000 认为是元/月 → 千/月
@@ -73,24 +71,28 @@ async def salary_overview(
     for jd in jds:
         parsed = _parse_salary_range(jd.salary_range or "")
         if parsed:
-            salary_data.append({
-                "id": jd.id,
-                "title": jd.title,
-                "company": jd.company,
-                "location": jd.location,
-                "salary_range": jd.salary_range,
-                "salary_min_k": parsed[0],
-                "salary_max_k": parsed[1],
-                "salary_mid_k": round((parsed[0] + parsed[1]) / 2, 1),
-            })
+            salary_data.append(
+                {
+                    "id": jd.id,
+                    "title": jd.title,
+                    "company": jd.company,
+                    "location": jd.location,
+                    "salary_range": jd.salary_range,
+                    "salary_min_k": parsed[0],
+                    "salary_max_k": parsed[1],
+                    "salary_mid_k": round((parsed[0] + parsed[1]) / 2, 1),
+                }
+            )
 
     if not salary_data:
-        return ok({
-            "has_data": False,
-            "total_jds": len(jds),
-            "parsed_count": 0,
-            "message": "未找到可解析的薪资数据，请先导入更多包含薪资信息的JD",
-        })
+        return ok(
+            {
+                "has_data": False,
+                "total_jds": len(jds),
+                "parsed_count": 0,
+                "message": "未找到可解析的薪资数据，请先导入更多包含薪资信息的JD",
+            }
+        )
 
     # 统计
     min_vals = [d["salary_min_k"] for d in salary_data]
@@ -109,30 +111,32 @@ async def salary_overview(
     distribution = {}
     for mid in mid_vals:
         bucket = int(mid // 5) * 5  # 5K一档
-        label = f"{bucket}-{bucket+5}K"
+        label = f"{bucket}-{bucket + 5}K"
         distribution[label] = distribution.get(label, 0) + 1
 
-    return ok({
-        "has_data": True,
-        "total_jds": len(jds),
-        "parsed_count": len(salary_data),
-        "statistics": {
-            "avg_min": round(sum(min_vals) / len(min_vals), 1),
-            "avg_max": round(sum(max_vals) / len(max_vals), 1),
-            "avg_mid": round(sum(mid_vals) / len(mid_vals), 1),
-            "p10": percentile(sorted_mid, 10),
-            "p25": percentile(sorted_mid, 25),
-            "p50": percentile(sorted_mid, 50),
-            "p75": percentile(sorted_mid, 75),
-            "p90": percentile(sorted_mid, 90),
-        },
-        "distribution": dict(sorted(distribution.items(), key=lambda x: int(x[0].split("-")[0]))),
-        "filters": {
-            "position": position,
-            "city": city,
-            "industry": industry,
-        },
-    })
+    return ok(
+        {
+            "has_data": True,
+            "total_jds": len(jds),
+            "parsed_count": len(salary_data),
+            "statistics": {
+                "avg_min": round(sum(min_vals) / len(min_vals), 1),
+                "avg_max": round(sum(max_vals) / len(max_vals), 1),
+                "avg_mid": round(sum(mid_vals) / len(mid_vals), 1),
+                "p10": percentile(sorted_mid, 10),
+                "p25": percentile(sorted_mid, 25),
+                "p50": percentile(sorted_mid, 50),
+                "p75": percentile(sorted_mid, 75),
+                "p90": percentile(sorted_mid, 90),
+            },
+            "distribution": dict(sorted(distribution.items(), key=lambda x: int(x[0].split("-")[0]))),
+            "filters": {
+                "position": position,
+                "city": city,
+                "industry": industry,
+            },
+        }
+    )
 
 
 @router.get("/compare", summary="薪资对比")
@@ -168,32 +172,38 @@ async def salary_compare(
 
         if loc not in city_data:
             city_data[loc] = []
-        city_data[loc].append({
-            "min_k": parsed[0],
-            "max_k": parsed[1],
-            "mid_k": round((parsed[0] + parsed[1]) / 2, 1),
-        })
+        city_data[loc].append(
+            {
+                "min_k": parsed[0],
+                "max_k": parsed[1],
+                "mid_k": round((parsed[0] + parsed[1]) / 2, 1),
+            }
+        )
 
     # 计算每个城市的统计
     comparison = []
     for city, items in sorted(city_data.items(), key=lambda x: -len(x[1])):
         mids = [i["mid_k"] for i in items]
-        comparison.append({
-            "city": city,
-            "count": len(items),
-            "avg_min": round(sum(i["min_k"] for i in items) / len(items), 1),
-            "avg_max": round(sum(i["max_k"] for i in items) / len(items), 1),
-            "avg_mid": round(sum(mids) / len(mids), 1),
-            "p25": sorted(mids)[max(0, len(mids) // 4)],
-            "p50": sorted(mids)[len(mids) // 2],
-            "p75": sorted(mids)[min(len(mids) - 1, 3 * len(mids) // 4)],
-        })
+        comparison.append(
+            {
+                "city": city,
+                "count": len(items),
+                "avg_min": round(sum(i["min_k"] for i in items) / len(items), 1),
+                "avg_max": round(sum(i["max_k"] for i in items) / len(items), 1),
+                "avg_mid": round(sum(mids) / len(mids), 1),
+                "p25": sorted(mids)[max(0, len(mids) // 4)],
+                "p50": sorted(mids)[len(mids) // 2],
+                "p75": sorted(mids)[min(len(mids) - 1, 3 * len(mids) // 4)],
+            }
+        )
 
-    return ok({
-        "position": position or "全部",
-        "city_count": len(comparison),
-        "comparison": comparison,
-    })
+    return ok(
+        {
+            "position": position or "全部",
+            "city_count": len(comparison),
+            "comparison": comparison,
+        }
+    )
 
 
 @router.get("/expectation-check", summary="期望薪资合理性评估")
@@ -224,11 +234,13 @@ async def salary_expectation_check(
             mid_vals.append(round((parsed[0] + parsed[1]) / 2, 1))
 
     if not mid_vals:
-        return ok({
-            "has_data": False,
-            "expected_range": f"{expected_min}-{expected_max}K",
-            "message": "市场数据不足，无法评估。建议先导入更多该岗位的JD",
-        })
+        return ok(
+            {
+                "has_data": False,
+                "expected_range": f"{expected_min}-{expected_max}K",
+                "message": "市场数据不足，无法评估。建议先导入更多该岗位的JD",
+            }
+        )
 
     sorted_mids = sorted(mid_vals)
     n = len(sorted_mids)
@@ -251,7 +263,7 @@ async def salary_expectation_check(
         suggestion = f"你的期望薪资在市场中位数（{p50}K）附近偏上，合理且有议价空间"
     else:
         level = "合理"
-        suggestion = f"你的期望薪资在市场合理范围内，有一定谈薪空间"
+        suggestion = "你的期望薪资在市场合理范围内，有一定谈薪空间"
 
     # 经验调整建议
     exp_note = ""
@@ -260,20 +272,22 @@ async def salary_expectation_check(
     elif experience_years >= 8 and expected_mid < p50:
         exp_note = "以你的经验年限，薪资期望可能偏低，建议适当提高"
 
-    return ok({
-        "has_data": True,
-        "sample_size": n,
-        "expected_range": f"{expected_min}-{expected_max}K",
-        "market_stats": {
-            "avg": avg,
-            "p25": p25,
-            "p50": p50,
-            "p75": p75,
-        },
-        "assessment": {
-            "level": level,
-            "suggestion": suggestion,
-            "experience_note": exp_note,
-        },
-        "percentile_rank": round(sum(1 for m in mid_vals if m <= expected_mid) / n * 100, 1),
-    })
+    return ok(
+        {
+            "has_data": True,
+            "sample_size": n,
+            "expected_range": f"{expected_min}-{expected_max}K",
+            "market_stats": {
+                "avg": avg,
+                "p25": p25,
+                "p50": p50,
+                "p75": p75,
+            },
+            "assessment": {
+                "level": level,
+                "suggestion": suggestion,
+                "experience_note": exp_note,
+            },
+            "percentile_rank": round(sum(1 for m in mid_vals if m <= expected_mid) / n * 100, 1),
+        }
+    )

@@ -1,6 +1,15 @@
 <template>
   <div class="page-shell" v-loading="loading">
     <template v-if="report">
+      <el-alert
+        v-if="report.evaluation_status === 'processing'"
+        class="processing-alert"
+        type="info"
+        :closable="false"
+        show-icon
+      >
+        <template #title>逐题评分仍在后台完成，报告会自动刷新。</template>
+      </el-alert>
       <section class="report-hero">
         <div>
           <p class="eyebrow">Interview Debrief</p>
@@ -47,7 +56,10 @@
               </div>
             </div>
             <div class="panel-body">
-              <div class="decision-strip" :style="{ borderColor: scoreColor(report.overall_score) }">
+              <div
+                class="decision-strip"
+                :style="{ borderColor: scoreColor(report.overall_score) }"
+              >
                 <div>
                   <div class="decision-label">当前判断</div>
                   <strong>{{ verdictTitle }}</strong>
@@ -66,13 +78,20 @@
             </div>
             <div class="panel-body">
               <div class="dimension-list">
-                <div v-for="(score, key) in report.dimension_scores" :key="key" class="dimension-item">
+                <div
+                  v-for="(score, key) in report.dimension_scores"
+                  :key="key"
+                  class="dimension-item"
+                >
                   <div class="dimension-top">
                     <span>{{ dimLabels[key] || key }}</span>
                     <strong :style="{ color: scoreColor(score) }">{{ score }}</strong>
                   </div>
                   <div class="dimension-track">
-                    <div class="dimension-fill" :style="{ width: `${score}%`, background: scoreColor(score) }"></div>
+                    <div
+                      class="dimension-fill"
+                      :style="{ width: `${score}%`, background: scoreColor(score) }"
+                    ></div>
                   </div>
                   <p>{{ dimensionComment(key, score) }}</p>
                 </div>
@@ -89,7 +108,12 @@
               </div>
               <div class="panel-body">
                 <ul class="plain-list">
-                  <li v-for="item in localizedStrengths.length ? localizedStrengths : fallbackStrengths" :key="item">
+                  <li
+                    v-for="item in localizedStrengths.length
+                      ? localizedStrengths
+                      : fallbackStrengths"
+                    :key="item"
+                  >
                     {{ item }}
                   </li>
                 </ul>
@@ -104,7 +128,12 @@
               </div>
               <div class="panel-body">
                 <ul class="plain-list warning">
-                  <li v-for="item in localizedWeaknesses.length ? localizedWeaknesses : fallbackWeaknesses" :key="item">
+                  <li
+                    v-for="item in localizedWeaknesses.length
+                      ? localizedWeaknesses
+                      : fallbackWeaknesses"
+                    :key="item"
+                  >
                     {{ item }}
                   </li>
                 </ul>
@@ -133,7 +162,10 @@
                         <strong>{{ item.category || '通用问题' }}</strong>
                         <p>{{ item.question }}</p>
                       </div>
-                      <div class="timeline-score" :style="{ color: scoreColor(item.overall_score) }">
+                      <div
+                        class="timeline-score"
+                        :style="{ color: scoreColor(item.overall_score) }"
+                      >
                         {{ item.overall_score }}
                       </div>
                     </div>
@@ -159,6 +191,11 @@
                       <div class="field-label">如何补强</div>
                       <p class="improvement">{{ item.improvement }}</p>
                     </div>
+
+                    <div v-if="item.evidence" class="timeline-answer evidence-block">
+                      <div class="field-label">评分证据</div>
+                      <p>{{ item.evidence.answer_excerpt || '已保留本题回答和评分维度。' }}</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -175,7 +212,11 @@
             </div>
             <div class="panel-body">
               <div class="training-list">
-                <div v-for="(item, index) in trainingPlan" :key="`${index}-${item}`" class="training-item">
+                <div
+                  v-for="(item, index) in trainingPlan"
+                  :key="`${index}-${item}`"
+                  class="training-item"
+                >
                   <span>{{ String(index + 1).padStart(2, '0') }}</span>
                   <p>{{ item }}</p>
                 </div>
@@ -215,8 +256,8 @@
               <ul class="plain-list">
                 <li>如果只看一项，先补 {{ weakestDimension.label }}。</li>
                 <li>当前最稳定的能力维度是 {{ strongestDimension.label }}。</li>
-                  <li>{{ localizedHiringRecommendation || '系统当前未给出明确推进建议。' }}</li>
-                </ul>
+                <li>{{ localizedHiringRecommendation || '系统当前未给出明确推进建议。' }}</li>
+              </ul>
             </div>
           </div>
         </aside>
@@ -236,7 +277,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
 import { getInterviewDetail } from '@/api/interview'
@@ -251,6 +292,7 @@ const router = useRouter()
 
 const loading = ref(true)
 const report = ref(null)
+let reportRefreshTimer = null
 
 const dimLabels = {
   completeness: '完整性',
@@ -278,8 +320,12 @@ const formattedDuration = computed(() => {
 const timeoutCount = computed(() => {
   return report.value?.timeout_count || 0
 })
-const localizedHiringRecommendation = computed(() => localizeRecommendationText(report.value?.hiring_recommendation || ''))
-const localizedOverallEvaluation = computed(() => localizeSentence(report.value?.overall_evaluation || ''))
+const localizedHiringRecommendation = computed(() =>
+  localizeRecommendationText(report.value?.hiring_recommendation || '')
+)
+const localizedOverallEvaluation = computed(() =>
+  localizeSentence(report.value?.overall_evaluation || '')
+)
 const localizedStrengths = computed(() => normalizeLocalizedTextList(report.value?.strengths))
 const localizedWeaknesses = computed(() => normalizeLocalizedTextList(report.value?.weaknesses))
 
@@ -306,7 +352,9 @@ const weakestDimension = computed(() => {
 })
 
 const fallbackEvaluation = computed(() => {
-  return localizeSentence(`整体表现落在 ${verdictTitle.value}，建议优先补强 ${weakestDimension.value.label}，再巩固 ${strongestDimension.value.label} 的优势展示。`)
+  return localizeSentence(
+    `整体表现落在 ${verdictTitle.value}，建议优先补强 ${weakestDimension.value.label}，再巩固 ${strongestDimension.value.label} 的优势展示。`
+  )
 })
 
 const fallbackStrengths = computed(() => [
@@ -373,6 +421,11 @@ async function loadReport() {
       total_duration_seconds: evaluation.total_duration_seconds || 0,
       overall_evaluation: evaluation.overall_evaluation || '',
       hiring_recommendation: evaluation.hiring_recommendation || '',
+      evaluation_status: data.evaluation_status || evaluation.evaluation_status || 'completed',
+      interview_memory: data.memory_snapshot || evaluation.interview_memory || {},
+    }
+    if (report.value.evaluation_status === 'processing') {
+      reportRefreshTimer = setTimeout(loadReport, 2000)
     }
   } catch (error) {
     ElMessage.error(`加载报告失败: ${error.message || error}`)
@@ -393,8 +446,10 @@ function goSetup() {
   router.push('/interview/setup')
 }
 
-onMounted(() => {
-  loadReport()
+onMounted(loadReport)
+
+onUnmounted(() => {
+  if (reportRefreshTimer) clearTimeout(reportRefreshTimer)
 })
 </script>
 

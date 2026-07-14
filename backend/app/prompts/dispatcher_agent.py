@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Canonical prompt for DispatcherAgent."""
 
 PROMPT_VERSION = "dispatcher-agent-v1"

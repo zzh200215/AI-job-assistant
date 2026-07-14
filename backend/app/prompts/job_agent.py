@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Canonical prompt for JobAgent."""
 
 PROMPT_VERSION = "job-agent-v1"

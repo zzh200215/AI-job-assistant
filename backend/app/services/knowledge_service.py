@@ -1,24 +1,23 @@
-# -*- coding: utf-8 -*-
 """
 知识库业务服务：文档上传 → 解析 → 切片 → 向量化 → 写入 Chroma
 """
+
+import logging
 import os
 import uuid
-import logging
 from datetime import datetime
-from typing import List
 
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
-
-from app.core.config import settings
 from app.core.chroma_client import get_knowledge_collection
+from app.core.config import settings
 from app.models.knowledge import KnowledgeDocument
-from app.services.document_service import parse_document
 from app.services.chunk_service import chunk_document
+from app.services.document_service import parse_document
 from app.services.embedding_service import embed_texts
 from app.utils.file_access import resolve_upload_path
+
+logger = logging.getLogger(__name__)
 
 
 def _get_upload_dir() -> tuple:
@@ -161,7 +160,7 @@ def delete_document(db: Session, doc_id: int) -> bool:
     return True
 
 
-def get_document_chunks(doc_id: int) -> List[dict]:
+def get_document_chunks(doc_id: int) -> list[dict]:
     """Load indexed chunks for a knowledge document from Chroma."""
     collection = get_knowledge_collection()
     try:
@@ -179,13 +178,15 @@ def get_document_chunks(doc_id: int) -> List[dict]:
     metadatas = results.get("metadatas") or []
     for index, chunk_id in enumerate(ids):
         meta = metadatas[index] if index < len(metadatas) else {}
-        chunk_items.append({
-            "chunk_id": chunk_id,
-            "chunk_index": int((meta or {}).get("chunk_index", index)),
-            "text": documents[index] if index < len(documents) else "",
-            "doc_title": (meta or {}).get("doc_title", ""),
-            "doc_type": (meta or {}).get("doc_type", ""),
-        })
+        chunk_items.append(
+            {
+                "chunk_id": chunk_id,
+                "chunk_index": int((meta or {}).get("chunk_index", index)),
+                "text": documents[index] if index < len(documents) else "",
+                "doc_title": (meta or {}).get("doc_title", ""),
+                "doc_type": (meta or {}).get("doc_type", ""),
+            }
+        )
 
     return sorted(chunk_items, key=lambda item: item["chunk_index"])
 
@@ -277,11 +278,10 @@ def reprocess_document(db: Session, doc_id: int) -> KnowledgeDocument | None:
 def rebuild_all(db: Session):
     """重建所有文档（先清空 Chroma 再重新处理所有 ready 文档）"""
     from app.core.chroma_client import reset_collection
+
     reset_collection()
 
-    docs = db.query(KnowledgeDocument).filter(
-        KnowledgeDocument.status.in_(["ready", "failed"])
-    ).all()
+    docs = db.query(KnowledgeDocument).filter(KnowledgeDocument.status.in_(["ready", "failed"])).all()
 
     for doc in docs:
         try:
@@ -300,14 +300,20 @@ def rebuild_all(db: Session):
 
             chunk_texts = [c["text"] for c in chunks]
             chunk_ids = [f"doc_{doc.id}_chunk_{c['index']}" for c in chunks]
-            metadatas = [{"doc_id": str(doc.id), "doc_title": doc.title,
-                          "doc_type": doc.doc_type, "chunk_index": c["index"],
-                          "file_name": doc.file_name} for c in chunks]
+            metadatas = [
+                {
+                    "doc_id": str(doc.id),
+                    "doc_title": doc.title,
+                    "doc_type": doc.doc_type,
+                    "chunk_index": c["index"],
+                    "file_name": doc.file_name,
+                }
+                for c in chunks
+            ]
 
             collection = get_knowledge_collection()
             embeddings = embed_texts(chunk_texts)
-            collection.add(ids=chunk_ids, documents=chunk_texts,
-                           embeddings=embeddings, metadatas=metadatas)
+            collection.add(ids=chunk_ids, documents=chunk_texts, embeddings=embeddings, metadatas=metadatas)
 
             doc.chunk_count = len(chunks)
             doc.status = "ready"

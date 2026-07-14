@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Canonical prompt for InterviewAgent."""
 
 PROMPT_VERSION = "interview-agent-v1"

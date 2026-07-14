@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 智能订阅与提醒服务
 
@@ -7,12 +6,13 @@
 3. 面试时间提醒（提前1天/2小时）
 4. Offer截止提醒（提前3天/1天）
 """
+
 from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
 from app.api.notification import create_notification
-from app.models.job_pipeline import JobApplicationPipeline, ACTIVE_STAGES
+from app.models.job_pipeline import JobApplicationPipeline
 from app.models.job_target import JobTarget
 from app.models.user import User
 from app.utils.time_helper import utc_now
@@ -48,12 +48,18 @@ def check_and_send_reminders(db: Session) -> dict:
 def _has_reminder_today(db: Session, user_id: int, reminder_key: str, today_str: str) -> bool:
     """检查今天是否已经发送过相同key的提醒，防重复"""
     from app.models.notification import Notification
-    return db.query(Notification).filter(
-        Notification.user_id == user_id,
-        Notification.type.in_(["interview_reminder", "offer_reminder", "application_update"]),
-        Notification.ext_data.op('->>')('reminder_key') == reminder_key,
-        Notification.ext_data.op('->>')('reminder_date') == today_str,
-    ).first() is not None
+
+    return (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == user_id,
+            Notification.type.in_(["interview_reminder", "offer_reminder", "application_update"]),
+            Notification.ext_data.op("->>")("reminder_key") == reminder_key,
+            Notification.ext_data.op("->>")("reminder_date") == today_str,
+        )
+        .first()
+        is not None
+    )
 
 
 def _check_interview_reminders(db: Session, now, today_str: str) -> int:
@@ -93,7 +99,7 @@ def _check_interview_reminders(db: Session, now, today_str: str) -> int:
                 type="interview_reminder",
                 title=f"面试提醒：明天 {p.interview_at.strftime('%H:%M')} 面试",
                 content=f"你明天有一场 {p.company or ''} - {p.title or ''} 的面试"
-                       f"（第{p.interview_round or 1}轮），请提前准备。",
+                f"（第{p.interview_round or 1}轮），请提前准备。",
                 link=f"/jobs/{p.id}",
                 metadata={
                     "pipeline_id": p.id,
@@ -118,8 +124,7 @@ def _check_interview_reminders(db: Session, now, today_str: str) -> int:
                 user_id=p.user_id,
                 type="interview_reminder",
                 title=f"面试即将开始：2小时后 {p.company or ''} 面试",
-                content=f"你的 {p.company or ''} - {p.title or ''} 面试将在约2小时后开始，"
-                       f"请检查网络/路线准备。",
+                content=f"你的 {p.company or ''} - {p.title or ''} 面试将在约2小时后开始，请检查网络/路线准备。",
                 link=f"/jobs/{p.id}",
                 metadata={
                     "pipeline_id": p.id,
@@ -171,7 +176,7 @@ def _check_offer_deadlines(db: Session, now, today_str: str) -> int:
                 type="offer_reminder",
                 title=f"Offer即将到期：{p.company or ''} 还有3天",
                 content=f"你来自 {p.company or ''} 的Offer将在 {p.offer_deadline.strftime('%m月%d日')} 到期，"
-                       f"请尽快决定是否接受。",
+                f"请尽快决定是否接受。",
                 link=f"/jobs/{p.id}",
                 metadata={
                     "pipeline_id": p.id,
@@ -245,7 +250,7 @@ def _check_follow_ups(db: Session, now, today_str: str) -> int:
             type="application_update",
             title=f"投递已 {days_since} 天无回复：{p.company or ''}",
             content=f"你投递的 {p.company or ''} - {p.title or ''} 已经过去 {days_since} 天"
-                   f"没有进展，建议：\n1. 检查邮件是否在垃圾箱\n2. 考虑跟进联系HR\n3. 继续投递其他机会",
+            f"没有进展，建议：\n1. 检查邮件是否在垃圾箱\n2. 考虑跟进联系HR\n3. 继续投递其他机会",
             link=f"/jobs/{p.id}",
             metadata={
                 "pipeline_id": p.id,
@@ -269,9 +274,10 @@ def match_new_jds_for_target(db: Session, target: JobTarget, limit: int = 10) ->
     根据求职目标匹配新JD。
     简单关键词匹配，后续可接入向量检索。
     """
+    from sqlalchemy import or_
+
     from app.models.history import JobDescription
     from app.models.job_recommend import JobBookmark
-    from sqlalchemy import or_
 
     q = db.query(JobDescription)
 
@@ -291,16 +297,17 @@ def match_new_jds_for_target(db: Session, target: JobTarget, limit: int = 10) ->
 
     # 排除已收藏/不感兴趣的
     bookmarked_jd_ids = {
-        row.jd_id for row in
-        db.query(JobBookmark.jd_id).filter(JobBookmark.user_id == target.user_id).all()
+        row.jd_id for row in db.query(JobBookmark.jd_id).filter(JobBookmark.user_id == target.user_id).all()
     }
 
     # 排除已投递的
     applied_jd_ids = {
-        row.jd_id for row in
-        db.query(JobApplicationPipeline.jd_id).filter(
+        row.jd_id
+        for row in db.query(JobApplicationPipeline.jd_id)
+        .filter(
             JobApplicationPipeline.user_id == target.user_id,
-        ).all()
+        )
+        .all()
     }
 
     exclude_ids = bookmarked_jd_ids | applied_jd_ids
@@ -346,7 +353,7 @@ def send_new_jd_notifications(db: Session, user_id: int, target_id: int = None) 
             type="recommendation",
             title=f"新职位推荐：{target.name}",
             content=f"根据你的求职目标「{target.name}」，发现 {len(matched_jds)} 个新机会：\n"
-                   + "\n".join(jd_summaries),
+            + "\n".join(jd_summaries),
             link="/jobs/bookmarks/list",
             metadata={
                 "target_id": target.id,

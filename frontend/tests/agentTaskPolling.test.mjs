@@ -26,7 +26,7 @@ test('pollTask resolves after running task reaches completed state', async () =>
       setPollingState(value) {
         pollingStates.push(value)
       },
-    },
+    }
   )
 
   const result = await poller.pollTask(12, {
@@ -67,7 +67,7 @@ test('pollTask rejects immediately when task is cancelled', async () => {
       assert.equal(error.code, 'task_cancelled')
       assert.equal(error.taskStatus, 'cancelled')
       return true
-    },
+    }
   )
 
   assert.equal(cancelledCallbackCount, 1)

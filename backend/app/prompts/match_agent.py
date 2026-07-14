@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Canonical prompt for MatchAgent."""
 
 PROMPT_VERSION = "match-agent-v1"

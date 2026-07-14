@@ -5,6 +5,7 @@ import {
   createInterview,
   disconnectInterviewWS,
   endInterview,
+  getInterviewEvaluations,
   sendAnswer,
   skipQuestion,
 } from '@/api/interview'
@@ -26,6 +27,7 @@ export const useInterviewStore = defineStore('interview', () => {
 
   let sessionTimer = null
   let roundTimer = null
+  let evaluationTimer = null
 
   const currentQuestion = computed(() => {
     for (let i = messages.value.length - 1; i >= 0; i -= 1) {
@@ -84,6 +86,7 @@ export const useInterviewStore = defineStore('interview', () => {
     roundRemaining.value = ROUND_SECONDS
     stopSessionTimer()
     stopRoundTimer()
+    stopEvaluationPolling()
   }
 
   async function initSession(resumeId, jdId, interviewType) {
@@ -115,8 +118,18 @@ export const useInterviewStore = defineStore('interview', () => {
       status.value = detail?.status || status.value
     }
     evaluation.value = detail?.evaluation || null
-    currentRound.value = Math.max(detail?.answered_count || 0, getLatestQuestionRound(detail?.messages || []))
-    lastScore.value = [...(detail?.messages || [])].reverse().find(msg => msg?.type === 'evaluation')?.metadata || null
+    session.value = {
+      ...session.value,
+      evaluation_status: detail?.evaluation_status || session.value?.evaluation_status || 'idle',
+      memory_snapshot: detail?.memory_snapshot || session.value?.memory_snapshot || {},
+    }
+    currentRound.value = Math.max(
+      detail?.answered_count || 0,
+      getLatestQuestionRound(detail?.messages || [])
+    )
+    lastScore.value =
+      [...(detail?.messages || [])].reverse().find((msg) => msg?.type === 'evaluation')?.metadata ||
+      null
     isFollowUp.value = !!currentQuestion.value?.metadata?.is_follow_up
   }
 
@@ -125,6 +138,7 @@ export const useInterviewStore = defineStore('interview', () => {
     disconnectInterviewWS()
     stopRoundTimer()
     stopSessionTimer()
+    stopEvaluationPolling()
     if (!isSameSession) {
       session.value = null
       messages.value = []
@@ -138,6 +152,7 @@ export const useInterviewStore = defineStore('interview', () => {
     }
     status.value = 'connecting'
     errorMsg.value = ''
+    startEvaluationPolling(sessionId)
 
     connectInterviewWS(
       sessionId,
@@ -161,7 +176,7 @@ export const useInterviewStore = defineStore('interview', () => {
           status.value = 'error'
           stopRoundTimer()
         }
-      },
+      }
     )
   }
 
@@ -188,6 +203,15 @@ export const useInterviewStore = defineStore('interview', () => {
     }
 
     if (type === 'evaluation') {
+      const turnId = meta.turn_id
+      if (
+        turnId &&
+        messages.value.some(
+          (item) => item?.type === 'evaluation' && item?.metadata?.turn_id === turnId
+        )
+      ) {
+        return
+      }
       messages.value.push({
         role: 'system',
         type: 'evaluation',
@@ -203,8 +227,7 @@ export const useInterviewStore = defineStore('interview', () => {
         expression: meta.expression,
         improvement: meta.improvement,
       }
-      status.value = 'evaluating'
-      stopRoundTimer()
+      status.value = currentQuestion.value ? 'ongoing' : 'evaluating'
       return
     }
 
@@ -278,6 +301,57 @@ export const useInterviewStore = defineStore('interview', () => {
     disconnectInterviewWS()
     stopRoundTimer()
     stopSessionTimer()
+    stopEvaluationPolling()
+  }
+
+  async function pollEvaluations(sessionId) {
+    try {
+      const data = await getInterviewEvaluations(sessionId)
+      session.value = {
+        ...(session.value || {}),
+        evaluation_status: data?.evaluation_status || 'idle',
+        memory_snapshot: data?.memory_snapshot || {},
+      }
+      for (const item of data?.items || []) {
+        if (item.status !== 'completed') continue
+        handleWSMessage({
+          type: 'evaluation',
+          content: item.feedback,
+          metadata: {
+            turn_id: item.turn_id,
+            round: item.question_index + 1,
+            score: item.overall_score,
+            completeness: item.completeness,
+            accuracy: item.accuracy,
+            depth: item.depth,
+            expression: item.expression,
+            improvement: item.improvement,
+            evidence: item.evidence,
+            async: true,
+          },
+        })
+      }
+    } catch {
+      // A transient status refresh must not interrupt the active WebSocket interview.
+    }
+  }
+
+  function startEvaluationPolling(sessionId) {
+    stopEvaluationPolling()
+    const poll = async () => {
+      await pollEvaluations(sessionId)
+      if (Number(session.value?.id) === Number(sessionId) && !isCompleted.value) {
+        evaluationTimer = setTimeout(poll, 2000)
+      }
+    }
+    poll()
+  }
+
+  function stopEvaluationPolling() {
+    if (evaluationTimer) {
+      clearTimeout(evaluationTimer)
+      evaluationTimer = null
+    }
   }
 
   function startSessionTimer() {

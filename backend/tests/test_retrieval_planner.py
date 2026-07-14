@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """测试 retrieval_planner 模块
 
 覆盖：
@@ -7,9 +6,8 @@
   - _normalize_plan 清洗逻辑
   - 缓存命中
 """
-from __future__ import annotations
 
-import pytest
+from __future__ import annotations
 
 from app.services.retrieval_planner import (
     RetrievalPlan,
@@ -20,8 +18,14 @@ from app.services.retrieval_planner import (
 )
 
 _VALID_DOC_TYPES = {
-    "resume_template", "jd_lib", "interview_q", "skill_model",
-    "industry_report", "career_path", "salary_market", "transition_guide",
+    "resume_template",
+    "jd_lib",
+    "interview_q",
+    "skill_model",
+    "industry_report",
+    "career_path",
+    "salary_market",
+    "transition_guide",
 }
 
 
@@ -103,7 +107,7 @@ class TestNormalize:
 
     def test_total_scaled(self):
         """超出总上限时按比例缩减"""
-        raw = {"doc_types": {t: 5 for t in list(_VALID_DOC_TYPES)[:6]}}
+        raw = {"doc_types": dict.fromkeys(list(_VALID_DOC_TYPES)[:6], 5)}
         cleaned = _normalize_plan(raw)
         total = sum(cleaned.values())
         assert 1 <= total <= 15
@@ -125,8 +129,8 @@ class TestCache:
 
     def test_cache_key_mismatch(self):
         clear_plan_cache()
-        p1 = plan_retrieval("query A", intent="full_analysis", use_llm=False)
-        p2 = plan_retrieval("query B", intent="full_analysis", use_llm=False)
+        plan_retrieval("query A", intent="full_analysis", use_llm=False)
+        plan_retrieval("query B", intent="full_analysis", use_llm=False)
         # 不同 query 不应共享缓存
         k1 = _cache_key("query A", "full_analysis")
         k2 = _cache_key("query B", "full_analysis")
@@ -135,6 +139,7 @@ class TestCache:
     def test_clear_cache(self):
         clear_plan_cache()
         from app.services.retrieval_planner import _PLAN_CACHE
+
         assert len(_PLAN_CACHE) == 0
 
 

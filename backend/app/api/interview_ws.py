@@ -1,12 +1,12 @@
-# -*- coding: utf-8 -*-
 """
 WebSocket 面试路由
 ws://localhost:8000/ws/interview/{session_id}
 """
+
 import asyncio
+import contextlib
 import json
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -36,7 +36,7 @@ def _cleanup_engine(session_id: int):
         engine.cleanup()
 
 
-def _verify_ws_token(token: str) -> Optional[int]:
+def _verify_ws_token(token: str) -> int | None:
     payload = decode_access_token(token)
     if payload:
         return int(payload.get("sub", 0))
@@ -54,8 +54,7 @@ def _payload_from_message(message: dict) -> dict:
 def _new_server_messages(engine: InterviewEngine, previous_count: int) -> list[dict]:
     messages = (engine.session.messages if engine.session else []) or []
     return [
-        item for item in messages[previous_count:]
-        if not (item.get("role") == "user" and item.get("type") == "answer")
+        item for item in messages[previous_count:] if not (item.get("role") == "user" and item.get("type") == "answer")
     ]
 
 
@@ -63,7 +62,7 @@ async def _emit_engine_messages(
     websocket: WebSocket,
     engine: InterviewEngine,
     previous_count: int,
-    fallback: Optional[dict] = None,
+    fallback: dict | None = None,
 ):
     emitted = False
     for message in _new_server_messages(engine, previous_count):
@@ -76,7 +75,7 @@ async def _emit_engine_messages(
 @router.websocket("/ws/interview/{session_id}")
 async def interview_websocket(websocket: WebSocket, session_id: int):
     token = ""
-    accept_subprotocol: Optional[str] = None
+    accept_subprotocol: str | None = None
     proto_header = websocket.headers.get("sec-websocket-protocol", "")
     if proto_header:
         parts = [item.strip() for item in proto_header.split(",") if item.strip()]
@@ -110,14 +109,14 @@ async def interview_websocket(websocket: WebSocket, session_id: int):
     logger.info("WS connected: session_id=%s user_id=%s", session_id, user_id)
 
     engine = _get_engine(session_id)
-    current_task: Optional[asyncio.Task] = None
+    current_task: asyncio.Task | None = None
 
     async def timeout_timer(round_num: int):
         await asyncio.sleep(InterviewEngine.TIMEOUT_SECONDS)
         engine._load_session()
         if engine.session and engine.session.status == "ongoing" and engine.current_index == round_num - 1:
             logger.info("Timeout: session=%s round=%s", session_id, round_num)
-            before_count = len((engine.session.messages or []))
+            before_count = len(engine.session.messages or [])
             result = engine.handle_timeout()
             await _emit_engine_messages(websocket, engine, before_count, fallback=result)
             if result.get("type") == "end":
@@ -131,7 +130,7 @@ async def interview_websocket(websocket: WebSocket, session_id: int):
             if result:
                 await websocket.send_json(result)
         else:
-            before_count = len((engine.session.messages or []))
+            before_count = len(engine.session.messages or [])
             result = engine.start()
             await _emit_engine_messages(websocket, engine, before_count, fallback=result)
 
@@ -157,20 +156,22 @@ async def interview_websocket(websocket: WebSocket, session_id: int):
                 await websocket.send_json({"type": "pong", "content": ""})
                 continue
 
-            before_count = len((engine.session.messages or []))
+            before_count = len(engine.session.messages or [])
 
             if msg_type == "answer":
-                result = engine.handle_answer(content)
+                result = engine.handle_answer(content, defer_evaluation=True)
                 await _emit_engine_messages(websocket, engine, before_count, fallback=result)
 
             elif msg_type == "skip":
-                engine.save_message({
-                    "role": "system",
-                    "type": "system",
-                    "content": f"第 {engine.current_index + 1} 题已跳过，进入下一题。",
-                    "metadata": {"round": engine.current_index + 1},
-                    "timestamp": utc_now().isoformat(),
-                })
+                engine.save_message(
+                    {
+                        "role": "system",
+                        "type": "system",
+                        "content": f"第 {engine.current_index + 1} 题已跳过，进入下一题。",
+                        "metadata": {"round": engine.current_index + 1},
+                        "timestamp": utc_now().isoformat(),
+                    }
+                )
                 result = engine.next_question()
                 await _emit_engine_messages(websocket, engine, before_count, fallback=result)
 
@@ -195,8 +196,6 @@ async def interview_websocket(websocket: WebSocket, session_id: int):
             current_task.cancel()
     except Exception as exc:
         logger.error("WS error: session_id=%s error=%s", session_id, exc, exc_info=True)
-        try:
+        with contextlib.suppress(Exception):
             await websocket.send_json({"type": "error", "content": f"服务端内部错误: {str(exc)[:100]}"})
-        except Exception:
-            pass
         _cleanup_engine(session_id)

@@ -1,24 +1,24 @@
-# -*- coding: utf-8 -*-
 """RAG confidence scoring based on retrieval evidence."""
-from typing import Any, Dict, List
+
+from typing import Any
 
 
-def _as_similarity(item: Dict[str, Any]) -> float:
+def _as_similarity(item: dict[str, Any]) -> float:
     final_score = item.get("final_score")
-    if isinstance(final_score, (int, float)):
+    if isinstance(final_score, int | float):
         return max(0.0, min(1.0, float(final_score)))
 
     vector_similarity = item.get("vector_similarity")
-    if isinstance(vector_similarity, (int, float)):
+    if isinstance(vector_similarity, int | float):
         return max(0.0, min(1.0, float(vector_similarity)))
 
     raw_score = item.get("score")
-    if isinstance(raw_score, (int, float)):
+    if isinstance(raw_score, int | float):
         return 1.0 / (1.0 + max(float(raw_score), 0.0))
     return 0.0
 
 
-def _breakdown_item(name: str, score: float, weight: float, detail: str) -> Dict[str, Any]:
+def _breakdown_item(name: str, score: float, weight: float, detail: str) -> dict[str, Any]:
     return {
         "name": name,
         "score": round(score, 1),
@@ -27,9 +27,9 @@ def _breakdown_item(name: str, score: float, weight: float, detail: str) -> Dict
     }
 
 
-def evaluate_rag_confidence(query: str, retrievals: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
-    all_items: List[Dict[str, Any]] = []
-    counts: Dict[str, int] = {}
+def evaluate_rag_confidence(query: str, retrievals: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    all_items: list[dict[str, Any]] = []
+    counts: dict[str, int] = {}
     unique_docs = set()
     for doc_type, items in (retrievals or {}).items():
         counts[doc_type] = len(items or [])
@@ -48,10 +48,7 @@ def evaluate_rag_confidence(query: str, retrievals: Dict[str, List[Dict[str, Any
     similar_jd_score = 100.0 if counts.get("jd_lib", 0) > 0 else 35.0
 
     final_score = round(
-        recall_score * 0.35
-        + similarity_score * 0.35
-        + skill_model_score * 0.15
-        + similar_jd_score * 0.15
+        recall_score * 0.35 + similarity_score * 0.35 + skill_model_score * 0.15 + similar_jd_score * 0.15
     )
 
     if final_score >= 80:
@@ -64,8 +61,8 @@ def evaluate_rag_confidence(query: str, retrievals: Dict[str, List[Dict[str, Any
         level = "low"
         label = "低"
 
-    strengths: List[str] = []
-    risks: List[str] = []
+    strengths: list[str] = []
+    risks: list[str] = []
     if total_chunks >= 8:
         strengths.append("召回证据较充足，支持后续分析。")
     else:
@@ -117,8 +114,8 @@ def evaluate_rag_confidence(query: str, retrievals: Dict[str, List[Dict[str, Any
     }
 
 
-def confidence_from_flat_results(query: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-    grouped: Dict[str, List[Dict[str, Any]]] = {}
+def confidence_from_flat_results(query: str, results: list[dict[str, Any]]) -> dict[str, Any]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
     for item in results or []:
         doc_type = item.get("doc_type") or "general"
         grouped.setdefault(doc_type, []).append(item)

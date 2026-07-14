@@ -4,11 +4,15 @@
       <div>
         <p class="eyebrow">Recommendation Tuning</p>
         <h2>推荐权重配置</h2>
-        <div class="page-header-sub">调整向量/规则权重、规则子项占比和推荐阈值。保存后会直接作用于后续岗位推荐结果。</div>
+        <div class="page-header-sub">
+          调整向量/规则权重、规则子项占比和推荐阈值。保存后会直接作用于后续岗位推荐结果。
+        </div>
       </div>
       <div class="hero-actions">
         <el-button @click="router.push('/jobs/recommend/evaluation')">返回推荐评测</el-button>
-        <el-button :loading="loading.compare" type="success" plain @click="runCompare">实验对比</el-button>
+        <el-button :loading="loading.compare" type="success" plain @click="runCompare"
+          >实验对比</el-button
+        >
         <el-button :loading="loading.reset" @click="handleReset">恢复默认</el-button>
         <el-button type="primary" :loading="loading.save" @click="handleSave">保存配置</el-button>
       </div>
@@ -122,13 +126,19 @@
             <span class="compare-label">{{ compareResult.variant_a.label }}</span>
             <strong>{{ percentText(compareResult.variant_a.summary.agreement_rate) }}</strong>
             <small>一致率</small>
-            <p>高分点踩 {{ compareResult.variant_a.summary.high_score_dislike_count }} · 低分点赞 {{ compareResult.variant_a.summary.low_score_like_count }}</p>
+            <p>
+              高分点踩 {{ compareResult.variant_a.summary.high_score_dislike_count }} · 低分点赞
+              {{ compareResult.variant_a.summary.low_score_like_count }}
+            </p>
           </div>
           <div class="compare-card">
             <span class="compare-label">{{ compareResult.variant_b.label }}</span>
             <strong>{{ percentText(compareResult.variant_b.summary.agreement_rate) }}</strong>
             <small>一致率</small>
-            <p>高分点踩 {{ compareResult.variant_b.summary.high_score_dislike_count }} · 低分点赞 {{ compareResult.variant_b.summary.low_score_like_count }}</p>
+            <p>
+              高分点踩 {{ compareResult.variant_b.summary.high_score_dislike_count }} · 低分点赞
+              {{ compareResult.variant_b.summary.low_score_like_count }}
+            </p>
           </div>
           <div class="compare-card delta-card">
             <span class="compare-label">变化</span>
@@ -141,10 +151,18 @@
         <div class="mover-list" v-if="compareResult.delta.top_movers?.length">
           <div class="mover-title">变化最大的样本</div>
           <div class="mover-items">
-            <div v-for="item in compareResult.delta.top_movers" :key="item.feedback_id" class="mover-item">
+            <div
+              v-for="item in compareResult.delta.top_movers"
+              :key="item.feedback_id"
+              class="mover-item"
+            >
               <strong>{{ item.jd_title }}</strong>
               <span>{{ item.resume_title }} · {{ item.feedback_type }}</span>
-              <span>{{ item.score_a }} → {{ item.score_b }}（{{ signedNumber(item.score_delta) }}）</span>
+              <span
+                >{{ item.score_a }} → {{ item.score_b }}（{{
+                  signedNumber(item.score_delta)
+                }}）</span
+              >
               <span>{{ item.type_a }} → {{ item.type_b }}</span>
             </div>
           </div>
@@ -220,7 +238,7 @@ const experiencePercent = computed({
 })
 
 const remainingAfterExperience = computed(() =>
-  Math.max(100 - skillPercent.value - experiencePercent.value, 0),
+  Math.max(100 - skillPercent.value - experiencePercent.value, 0)
 )
 
 const salaryPercent = computed({
@@ -242,8 +260,8 @@ const configPreview = computed(() =>
       thresholds: form.thresholds,
     },
     null,
-    2,
-  ),
+    2
+  )
 )
 
 onMounted(() => {

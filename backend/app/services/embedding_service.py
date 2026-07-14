@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Embedding 服务 — 可替换接口
 
@@ -9,14 +8,14 @@ Embedding 服务 — 可替换接口
 
 通过环境变量 EMBEDDING_PROVIDER 切换，默认 mock。
 """
-import math
-import logging
+
 import hashlib
+import logging
+import math
 import threading
 import time
 from collections import OrderedDict
 from datetime import datetime, timezone
-from typing import List, Optional, Tuple
 
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -33,22 +32,26 @@ _EMBED_BATCH_SIZE = 10
 
 class EmbeddingProviderError(Exception):
     """Embedding provider 错误基类"""
+
     pass
 
 
 class EmbeddingTimeoutError(EmbeddingProviderError):
     """Embedding 调用超时"""
+
     pass
 
 
 class EmbeddingAuthError(EmbeddingProviderError):
     """Embedding 鉴权失败"""
+
     pass
+
 
 # ===================== Embedding 结果缓存 =====================
 # 相同文本（同一 provider+model）直接复用上次向量，避免重复调用 embedding API。
 # 进程内 LRU；命中后可显著降低时延与 token 成本。
-_EMBED_CACHE: "OrderedDict[str, List[float]]" = OrderedDict()
+_EMBED_CACHE: "OrderedDict[str, list[float]]" = OrderedDict()
 _EMBED_CACHE_MAX = 512
 _EMBED_CACHE_LOCK = threading.Lock()
 _EMBED_STATS_LOCK = threading.Lock()
@@ -120,7 +123,11 @@ def get_embedding_daily_stats(days: int = 7) -> list[dict]:
     try:
         rows = (
             session.query(EmbeddingUsageDaily)
-            .order_by(EmbeddingUsageDaily.stat_date.desc(), EmbeddingUsageDaily.provider.asc(), EmbeddingUsageDaily.model.asc())
+            .order_by(
+                EmbeddingUsageDaily.stat_date.desc(),
+                EmbeddingUsageDaily.provider.asc(),
+                EmbeddingUsageDaily.model.asc(),
+            )
             .limit(max(days, 1) * 20)
             .all()
         )
@@ -246,7 +253,7 @@ def _log_embedding_stats(
     )
 
 
-def _with_retry(fn, texts: List[str]) -> List[List[float]]:
+def _with_retry(fn, texts: list[str]) -> list[list[float]]:
     """对网络型 embedding 调用做有限次重试 + 退避。"""
     return retry_call(
         fn,
@@ -267,7 +274,7 @@ def _mock_embedding_dimension(model: str) -> int:
     return 512
 
 
-def _mock_embed(text: str, dimension: Optional[int] = None) -> List[float]:
+def _mock_embed(text: str, dimension: int | None = None) -> list[float]:
     """
     基于文本 hash 生成伪 embedding（仅测试用）。
     相同文本返回相同向量，保证检索可复现。
@@ -290,12 +297,12 @@ def _mock_embed(text: str, dimension: Optional[int] = None) -> List[float]:
     return vec
 
 
-def _dashscope_embed(texts: List[str]) -> List[List[float]]:
+def _dashscope_embed(texts: list[str]) -> list[list[float]]:
     """通过阿里云 千问 embedding API"""
     try:
         from dashscope import TextEmbedding
-    except ImportError:
-        raise EmbeddingProviderError("请安装 dashscope: pip install dashscope")
+    except ImportError as exc:
+        raise EmbeddingProviderError("请安装 dashscope: pip install dashscope") from exc
 
     model = settings.EMBEDDING_MODEL or "text-embedding-v3"
     resp = TextEmbedding.call(
@@ -313,7 +320,7 @@ def _dashscope_embed(texts: List[str]) -> List[List[float]]:
     return [item["embedding"] for item in ordered]
 
 
-def _openai_embed(texts: List[str]) -> List[List[float]]:
+def _openai_embed(texts: list[str]) -> list[list[float]]:
     """OpenAI 兼容协议 embedding"""
     import requests
 
@@ -348,7 +355,7 @@ def _openai_embed(texts: List[str]) -> List[List[float]]:
     return [item["embedding"] for item in ordered]
 
 
-def _known_embedding_dimension(model: str) -> Optional[int]:
+def _known_embedding_dimension(model: str) -> int | None:
     """根据常见模型名返回默认维度，未知返回 None。"""
     normalized = (model or "").strip().lower()
     if normalized == "text-embedding-v3":
@@ -361,9 +368,9 @@ def _known_embedding_dimension(model: str) -> Optional[int]:
 
 
 def validate_embedding_dimension(
-    vectors: List[List[float]],
-    expected_dimension: Optional[int] = None,
-) -> Tuple[bool, Optional[int], Optional[int]]:
+    vectors: list[list[float]],
+    expected_dimension: int | None = None,
+) -> tuple[bool, int | None, int | None]:
     """校验向量维度是否一致并返回实际维度。
 
     Returns:
@@ -379,7 +386,7 @@ def validate_embedding_dimension(
     return True, exp, actual
 
 
-def get_expected_embedding_dimension(collection) -> Optional[int]:
+def get_expected_embedding_dimension(collection) -> int | None:
     """从 Chroma collection metadata 读取期望维度。"""
     try:
         metadata = collection.metadata or {}
@@ -399,12 +406,12 @@ def set_expected_embedding_dimension(collection, dimension: int) -> None:
         logger.warning("Failed to set embedding_dimension in collection metadata", exc_info=True)
 
 
-def embed_text(text: str) -> List[float]:
+def embed_text(text: str) -> list[float]:
     """单条文本向量化"""
     return embed_texts([text])[0]
 
 
-def embed_texts(texts: List[str]) -> List[List[float]]:
+def embed_texts(texts: list[str]) -> list[list[float]]:
     """
     批量文本向量化。
     通过 settings.EMBEDDING_PROVIDER 切换后端。
@@ -437,9 +444,9 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
 
     # ---- 1) 查缓存，分离命中/未命中 ----
     with _EMBED_CACHE_LOCK:
-        results: List[Optional[List[float]]] = [None] * len(texts)
-        missing_indices: List[int] = []
-        missing_texts: List[str] = []
+        results: list[list[float] | None] = [None] * len(texts)
+        missing_indices: list[int] = []
+        missing_texts: list[str] = []
         for i, text in enumerate(texts):
             key = _embed_cache_key(provider, text)
             cached = _EMBED_CACHE.get(key)
@@ -477,11 +484,11 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
     else:
         raise ValueError(f"未知的 EMBEDDING_PROVIDER: {provider}")
 
-    fetched: List[List[float]] = []
-    start_ts = time.time()
+    fetched: list[list[float]] = []
+    time.time()
     try:
         for i in range(0, len(missing_texts), _EMBED_BATCH_SIZE):
-            batch = missing_texts[i:i + _EMBED_BATCH_SIZE]
+            batch = missing_texts[i : i + _EMBED_BATCH_SIZE]
             batch_count += 1
             fetched.extend(_with_retry(fn, batch))
     except EmbeddingProviderError as e:

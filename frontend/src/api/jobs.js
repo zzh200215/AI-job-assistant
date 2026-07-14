@@ -2,12 +2,10 @@
 import request from './request'
 
 // 获取岗位推荐
-export const getJobRecommendations = (params) =>
-  request.get('/jobs/recommend', { params })
+export const getJobRecommendations = (params) => request.get('/jobs/recommend', { params })
 
 // 写入模拟数据
-export const seedMockJobs = () =>
-  request.post('/jobs/seed')
+export const seedMockJobs = () => request.post('/jobs/seed')
 
 // 批量导入 JD
 export const batchImportJobs = (file, source = 'imported') => {
@@ -22,15 +20,18 @@ export const batchImportJobs = (file, source = 'imported') => {
 // 提交推荐反馈
 export const submitJobFeedback = (resumeId, jdId, feedbackType, matchScore) =>
   request.post('/jobs/feedback', null, {
-    params: { resume_id: resumeId, jd_id: jdId, feedback_type: feedbackType, match_score: matchScore },
+    params: {
+      resume_id: resumeId,
+      jd_id: jdId,
+      feedback_type: feedbackType,
+      match_score: matchScore,
+    },
   })
 
 // 推荐反馈汇总
-export const getJobFeedbackStats = () =>
-  request.get('/jobs/feedback/stats')
+export const getJobFeedbackStats = () => request.get('/jobs/feedback/stats')
 
-export const getJobFeedbackEvaluation = () =>
-  request.get('/jobs/feedback/evaluation')
+export const getJobFeedbackEvaluation = () => request.get('/jobs/feedback/evaluation')
 
 export const getJobTuningSamples = (params = {}) =>
   request.get('/jobs/feedback/tuning-samples', { params })
@@ -38,47 +39,38 @@ export const getJobTuningSamples = (params = {}) =>
 export const exportJobTuningSamples = (params = {}) =>
   request.get('/jobs/feedback/tuning-export', { params, responseType: 'blob' })
 
-export const getJobRecommendConfig = () =>
-  request.get('/jobs/recommend-config')
+export const getJobRecommendConfig = () => request.get('/jobs/recommend-config')
 
-export const updateJobRecommendConfig = (data) =>
-  request.put('/jobs/recommend-config', data)
+export const updateJobRecommendConfig = (data) => request.put('/jobs/recommend-config', data)
 
-export const resetJobRecommendConfig = () =>
-  request.post('/jobs/recommend-config/reset')
+export const resetJobRecommendConfig = () => request.post('/jobs/recommend-config/reset')
 
 export const compareJobRecommendConfig = (data) =>
   request.post('/jobs/recommend-config/compare', data)
 
 // 获取 JD 列表
-export const getJobList = (params = {}) =>
-  request.get('/jobs/list', { params })
+export const getJobList = (params = {}) => request.get('/jobs/list', { params })
 
 // 获取 JD 详情
-export const getJobDetail = (jdId) =>
-  request.get(`/jobs/${jdId}`)
+export const getJobDetail = (jdId) => request.get(`/jobs/${jdId}`)
 
 // === 投递流程 ===
 
 // 获取投递流程列表
-export const getJobPipelineList = (params = {}) =>
-  request.get('/jobs/pipeline/list', { params })
+export const getJobPipelineList = (params = {}) => request.get('/jobs/pipeline/list', { params })
 
 // 创建投递流程记录
-export const createJobPipelineEntry = (data) =>
-  request.post('/jobs/pipeline', data)
+export const createJobPipelineEntry = (data) => request.post('/jobs/pipeline', data)
 
 // 更新投递流程记录
 export const updateJobPipelineEntry = (entryId, data) =>
   request.put(`/jobs/pipeline/${entryId}`, data)
 
 // 删除投递流程记录
-export const deleteJobPipelineEntry = (entryId) =>
-  request.delete(`/jobs/pipeline/${entryId}`)
+export const deleteJobPipelineEntry = (entryId) => request.delete(`/jobs/pipeline/${entryId}`)
 
 // 清理已淘汰记录
-export const clearRejectedJobPipeline = () =>
-  request.delete('/jobs/pipeline/terminal')
+export const clearRejectedJobPipeline = () => request.delete('/jobs/pipeline/terminal')
 
 // 发起完整分析（复用已有接口）
 export const startFullAnalysis = (resumeId, jdId) =>
@@ -95,12 +87,10 @@ export const fetchJobDetail = (source, url) =>
   request.post('/jobs/fetch-detail', null, { params: { source, url } })
 
 // 获取支持的城市列表
-export const getCities = () =>
-  request.get('/jobs/cities')
+export const getCities = () => request.get('/jobs/cities')
 
 // 一键导入演示岗位数据 (10 条本地 JD，便于体验推荐)
-export const seedDemoJobs = () =>
-  request.post('/jobs/seed-demo')
+export const seedDemoJobs = () => request.post('/jobs/seed-demo')
 
 // === 职业方向推荐 ===
 

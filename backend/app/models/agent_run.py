@@ -1,14 +1,14 @@
-# -*- coding: utf-8 -*-
 """多智能体协作 ORM 模型"""
-from sqlalchemy import (
-    Column, BigInteger, String, Integer, DateTime, Text, JSON, ForeignKey, Float
-)
+
+from sqlalchemy import JSON, BigInteger, Column, DateTime, Float, ForeignKey, Integer, String, Text
+
 from app.core.database import Base
 from app.utils.time_helper import utc_now
 
 
 class AgentRun(Base):
     """多智能体运行记录"""
+
     __tablename__ = "agent_run"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -18,8 +18,7 @@ class AgentRun(Base):
     intent = Column(String(50), comment="调度识别出的意图")
     selected_agents = Column(JSON, comment="本次实际调用的智能体列表")
     dispatch_reason = Column(Text, comment="调度理由")
-    status = Column(String(20), nullable=False, default="pending",
-                    comment="状态: pending/running/completed/failed")
+    status = Column(String(20), nullable=False, default="pending", comment="状态: pending/running/completed/failed")
     summary_report = Column(JSON, comment="汇总报告")
     error_msg = Column(Text, comment="失败原因")
     start_time = Column(DateTime, comment="开始时间")
@@ -46,13 +45,13 @@ class AgentRun(Base):
 
 class AgentMessage(Base):
     """智能体消息（每个智能体每次执行）"""
+
     __tablename__ = "agent_message"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     run_id = Column(BigInteger, ForeignKey("agent_run.id", ondelete="CASCADE"), nullable=False)
     agent_name = Column(String(50), nullable=False, comment="智能体名称")
-    status = Column(String(20), nullable=False, default="pending",
-                    comment="状态: pending/running/completed/failed")
+    status = Column(String(20), nullable=False, default="pending", comment="状态: pending/running/completed/failed")
     depends_on = Column(JSON, comment="依赖列表")
     input_data = Column(JSON, comment="输入")
     output_data = Column(JSON, comment="输出")
@@ -84,6 +83,7 @@ class AgentMessage(Base):
 
 class AgentResult(Base):
     """智能体结果"""
+
     __tablename__ = "agent_result"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)

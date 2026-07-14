@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """检索路由器 — Agentic RAG 的"指挥官"。
 
 固定流水线（每次都查 8 类知识、各取固定 top_k）的问题：
@@ -8,6 +7,7 @@
 本模块用 LLM（mock 时回退到启发式）先判断本次 query 该查哪些 doc_type、各取多少。
 对外接口：plan_retrieval(query, intent, resume_summary, jd_summary) -> RetrievalPlan
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -15,7 +15,6 @@ import logging
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Dict, Optional
 
 from app.core.config import settings
 from app.prompts.retrieval_plan import RETRIEVAL_PLAN_PROMPT
@@ -39,7 +38,7 @@ _MAX_TOTAL_CHUNKS = 15
 _MAX_TOP_K_PER_SOURCE = 5
 
 # planner 缓存：相同 query+intent 不重复决策
-_PLAN_CACHE: "OrderedDict[str, RetrievalPlan]" = OrderedDict()
+_PLAN_CACHE: OrderedDict[str, RetrievalPlan] = OrderedDict()
 _PLAN_CACHE_MAX = 128
 _PLAN_CACHE_LOCK = threading.Lock()
 
@@ -47,7 +46,8 @@ _PLAN_CACHE_LOCK = threading.Lock()
 @dataclass
 class RetrievalPlan:
     """检索计划：每个 doc_type 该取多少条、决策原因、来源（llm / heuristic）"""
-    doc_types: Dict[str, int]
+
+    doc_types: dict[str, int]
     reasoning: str = ""
     source: str = "heuristic"  # llm / heuristic / fallback
 
@@ -75,8 +75,12 @@ _INTENT_RULES = {
     "interview_prep": {"interview_q": 4, "skill_model": 2},
     "career_planning": {"career_path": 3, "industry_report": 2, "salary_market": 2, "transition_guide": 1},
     "full_analysis": {
-        "resume_template": 2, "jd_lib": 2, "interview_q": 2,
-        "skill_model": 2, "industry_report": 1, "career_path": 1,
+        "resume_template": 2,
+        "jd_lib": 2,
+        "interview_q": 2,
+        "skill_model": 2,
+        "industry_report": 1,
+        "career_path": 1,
     },
 }
 
@@ -115,7 +119,8 @@ def _heuristic_plan(query: str, intent: str) -> RetrievalPlan:
 
 # ===================== LLM 决策 =====================
 
-def _normalize_plan(raw: dict) -> Dict[str, int]:
+
+def _normalize_plan(raw: dict) -> dict[str, int]:
     """
     清洗 LLM 输出：
       - 只保留合法 doc_type
@@ -126,7 +131,7 @@ def _normalize_plan(raw: dict) -> Dict[str, int]:
     if not isinstance(doc_types_raw, dict):
         return {}
 
-    cleaned: Dict[str, int] = {}
+    cleaned: dict[str, int] = {}
     for key, value in doc_types_raw.items():
         if key not in _VALID_DOC_TYPES:
             continue
@@ -146,7 +151,7 @@ def _normalize_plan(raw: dict) -> Dict[str, int]:
     return cleaned
 
 
-def _llm_plan(query: str, intent: str, resume_summary: str, jd_summary: str) -> Optional[RetrievalPlan]:
+def _llm_plan(query: str, intent: str, resume_summary: str, jd_summary: str) -> RetrievalPlan | None:
     """调用 LLM 出检索计划。失败返回 None 由上游回退。"""
     # 延迟 import 避免循环依赖
     from app.services.llm_service import chat_json
@@ -178,13 +183,14 @@ def _llm_plan(query: str, intent: str, resume_summary: str, jd_summary: str) -> 
 
 # ===================== 对外主接口 =====================
 
+
 def plan_retrieval(
     query: str,
     intent: str = "full_analysis",
     resume_summary: str = "",
     jd_summary: str = "",
     *,
-    use_llm: Optional[bool] = None,
+    use_llm: bool | None = None,
 ) -> RetrievalPlan:
     """决定本次检索路由。
 
@@ -202,7 +208,7 @@ def plan_retrieval(
             _PLAN_CACHE.move_to_end(cache_k)
             return cached
 
-    plan: Optional[RetrievalPlan] = None
+    plan: RetrievalPlan | None = None
     if use_llm_resolved:
         plan = _llm_plan(query, intent, resume_summary, jd_summary)
 

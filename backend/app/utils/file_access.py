@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Helpers for resolving files stored under the upload directory."""
+
 from __future__ import annotations
 
 import os
@@ -22,7 +22,7 @@ def resolve_upload_path(relative_path: str) -> Path:
     if normalized == upload_dir_name:
         normalized = ""
     elif normalized.startswith(prefix):
-        normalized = normalized[len(prefix):]
+        normalized = normalized[len(prefix) :]
 
     target = (uploads_root() / normalized).resolve()
     if os.path.commonpath([str(uploads_root()), str(target)]) != str(uploads_root()):

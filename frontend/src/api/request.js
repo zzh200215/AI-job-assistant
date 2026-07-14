@@ -24,7 +24,7 @@ request.interceptors.request.use(
     }
     return config
   },
-  (err) => Promise.reject(err),
+  (err) => Promise.reject(err)
 )
 
 request.interceptors.response.use(
@@ -79,16 +79,17 @@ request.interceptors.response.use(
     }
 
     const requestId = err?.response?.data?.request_id || err?.response?.headers?.['x-request-id']
-    const msg = err?.response?.data?.message
-      || err?.response?.data?.msg
-      || err.message
-      || '网络异常，请稍后重试'
+    const msg =
+      err?.response?.data?.message ||
+      err?.response?.data?.msg ||
+      err.message ||
+      '网络异常，请稍后重试'
     if (shouldNotify) {
       ElMessage.error(formatApiErrorMessage(msg, requestId, '网络异常，请稍后重试'))
     }
     err.userMessage = msg
     return Promise.reject(err)
-  },
+  }
 )
 
 export default request

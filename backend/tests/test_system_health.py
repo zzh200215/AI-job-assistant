@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """System health, readiness, and metrics endpoint tests."""
 
 from __future__ import annotations

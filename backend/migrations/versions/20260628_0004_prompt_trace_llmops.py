@@ -7,9 +7,10 @@ Create Date: 2026-06-28
 
 from __future__ import annotations
 
-from alembic import op
-import sqlalchemy as sa
+import contextlib
 
+import sqlalchemy as sa
+from alembic import op
 
 revision = "20260628_0004"
 down_revision = "20260624_0003"
@@ -50,10 +51,8 @@ def downgrade() -> None:
         "ix_prompt_trace_prompt_name",
         "ix_prompt_trace_prompt_family",
     ]:
-        try:
+        with contextlib.suppress(Exception):
             op.drop_index(index_name, table_name="prompt_trace")
-        except Exception:
-            pass
     for column_name in [
         "feedback_score",
         "feedback_note",

@@ -9,8 +9,9 @@
         <div>
           <p class="eyebrow">Runtime Overview</p>
           <h2>Project Runtime Dashboard</h2>
-	          <div class="page-header-sub">
-            Inspect environment mode, orchestration settings, request metrics, and embedding usage from one place.
+          <div class="page-header-sub">
+            Inspect environment mode, orchestration settings, request metrics, and embedding usage
+            from one place.
           </div>
         </div>
         <div class="hero-badges">
@@ -18,7 +19,14 @@
             {{ status.demo_mode ? 'Demo Mode' : 'Live Mode' }}
           </el-tag>
           <el-tag type="info">
-            {{ status.runtime_notes?.knowledge_seed_ready ? 'Knowledge Seeds Ready' : 'Knowledge Seeds Pending' }}
+            {{
+              status.runtime_notes?.knowledge_seed_ready
+                ? 'Knowledge Seeds Ready'
+                : 'Knowledge Seeds Pending'
+            }}
+          </el-tag>
+          <el-tag :type="status.model_runtime?.ready ? 'success' : 'danger'">
+            {{ status.model_runtime?.ready ? 'Model Runtime Ready' : 'Model Runtime Needs Setup' }}
           </el-tag>
         </div>
       </div>
@@ -32,24 +40,66 @@
         </el-col>
       </el-row>
       <el-alert v-else class="mt" type="info" :closable="false" show-icon>
-        <template #title>
-          Global overview metrics are limited to admins.
-        </template>
+        <template #title> Global overview metrics are limited to admins. </template>
       </el-alert>
 
       <el-descriptions :column="2" border class="mt">
         <el-descriptions-item label="Environment">{{ status.app_env || '-' }}</el-descriptions-item>
         <el-descriptions-item label="Log Level">{{ status.log_level || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="Orchestration Strategy">{{ status.orchestration_strategy || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="Orchestration Engine">{{ status.orchestration_engine || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="LLM Mode">{{ status.runtime_notes?.llm_mode || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="Embedding Mode">{{ status.runtime_notes?.embedding_mode || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="Orchestration Strategy">{{
+          status.orchestration_strategy || '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item label="Orchestration Engine">{{
+          status.orchestration_engine || '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item label="LLM Mode">{{
+          status.runtime_notes?.llm_mode || '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item label="Embedding Mode">{{
+          status.runtime_notes?.embedding_mode || '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item label="LLM Configuration">
+          {{ status.model_runtime?.llm?.configured ? 'Configured' : 'Missing Configuration' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="Embedding Configuration">
+          {{ status.model_runtime?.embedding?.configured ? 'Configured' : 'Missing Configuration' }}
+        </el-descriptions-item>
         <el-descriptions-item label="OCR Resume Parsing">
           {{ status.capabilities?.ocr_resume_parse ? 'Enabled' : 'Disabled' }}
         </el-descriptions-item>
         <el-descriptions-item label="Knowledge Seeds">
           {{ status.runtime_notes?.knowledge_seed_ready ? 'Ready' : 'Pending' }}
         </el-descriptions-item>
+      </el-descriptions>
+    </el-card>
+
+    <el-card v-if="canViewOverview" shadow="never" class="panel-card">
+      <template #header>
+        <div class="card-header-actions">
+          <span>Live Provider Probe</span>
+          <el-button type="primary" :loading="probing" @click="runModelProbe"
+            >Run minimal probe</el-button
+          >
+        </div>
+      </template>
+      <el-alert type="info" :closable="false" show-icon>
+        <template #title>
+          The probe makes one minimal LLM request and one embedding request.
+        </template>
+      </el-alert>
+      <el-descriptions v-if="modelProbe" :column="2" border class="mt">
+        <el-descriptions-item label="Checked At">{{
+          modelProbe.checked_at || '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item label="Live Ready">{{
+          modelProbe.runtime?.live_ready ? 'Yes' : 'No'
+        }}</el-descriptions-item>
+        <el-descriptions-item label="LLM Probe">{{
+          probeLabel(modelProbe.checks?.llm)
+        }}</el-descriptions-item>
+        <el-descriptions-item label="Embedding Probe">{{
+          probeLabel(modelProbe.checks?.embedding)
+        }}</el-descriptions-item>
       </el-descriptions>
     </el-card>
 
@@ -117,12 +167,15 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { getSystemOverview, getSystemStatus } from '@/api/system'
+import { getSystemOverview, getSystemStatus, probeModelRuntime } from '@/api/system'
 import { useAuthStore } from '@/stores/auth'
+import { ElMessage } from 'element-plus'
 
 const authStore = useAuthStore()
 const status = ref({})
 const overview = ref({})
+const modelProbe = ref(null)
+const probing = ref(false)
 const canViewOverview = computed(() => !!authStore.user?.is_admin)
 
 const overviewMetrics = computed(() => {
@@ -168,6 +221,28 @@ function formatPairs(data) {
     .join(' | ')
 }
 
+function probeLabel(check) {
+  if (!check) return '-'
+  if (check.skipped) return 'Skipped'
+  if (check.ok) return `OK (${check.latency_ms ?? '-'} ms)`
+  return `Failed${check.error_type ? `: ${check.error_type}` : ''}`
+}
+
+async function runModelProbe() {
+  probing.value = true
+  try {
+    const response = await probeModelRuntime()
+    modelProbe.value = response?.data || response || null
+    if (modelProbe.value?.checks?.llm?.ok && modelProbe.value?.checks?.embedding?.ok) {
+      ElMessage.success('模型与向量服务连通性检测通过')
+    } else {
+      ElMessage.warning('模型连通性检测未完全通过，请检查系统状态')
+    }
+  } finally {
+    probing.value = false
+  }
+}
+
 onMounted(async () => {
   const statusRes = await getSystemStatus()
   status.value = statusRes?.data || statusRes || {}
@@ -200,6 +275,13 @@ onMounted(async () => {
   gap: 16px;
   align-items: flex-start;
   margin-bottom: 16px;
+}
+
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .eyebrow {

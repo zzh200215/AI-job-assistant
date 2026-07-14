@@ -1,11 +1,11 @@
-# -*- coding: utf-8 -*-
 """InterviewQuestionAgent — 面试题生成 Agent
 
 RAG 检索面试题库 + 生成四类面试题。
 复用 interview prompt + rag_service
 """
+
 import json
-from typing import Dict, Any, List
+from typing import Any
 
 from app.agents.base_agent import BaseAgent
 from app.orchestration.context import AgentContext
@@ -18,15 +18,16 @@ from app.services.rag_service import search_knowledge
 class InterviewQuestionAgent(BaseAgent):
     name = "InterviewQuestionAgent"
     description = "面试题生成 Agent — RAG 检索面试题库 + 生成四类面试题"
-    depends_on: List[str] = ["MatchAnalysisAgent"]
+    depends_on: list[str] = ["MatchAnalysisAgent"]
     result_type = "interview_questions"
 
-    def run_impl(self, context: AgentContext) -> Dict[str, Any]:
+    def run_impl(self, context: AgentContext) -> dict[str, Any]:
         db = context.db
         resume_id = context.resume_id
         jd_id = context.jd_id
 
-        from app.models.history import Resume, JobDescription
+        from app.models.history import JobDescription, Resume
+
         resume: Resume = db.get(Resume, resume_id)
         jd: JobDescription = db.get(JobDescription, jd_id)
 
@@ -54,10 +55,10 @@ class InterviewQuestionAgent(BaseAgent):
             resume_json=resume_json,
             jd_json=jd_json,
         )
-        result: Dict[str, Any] = chat_json(prompt)
+        result: dict[str, Any] = chat_json(prompt)
         return result
 
-    def _make_summary(self, result: Dict[str, Any]) -> str:
+    def _make_summary(self, result: dict[str, Any]) -> str:
         total = result.get("total_questions", 0)
         tech = len(result.get("tech", []))
         project = len(result.get("project", []))

@@ -1,7 +1,6 @@
-# -*- coding: utf-8 -*-
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 import app.api.resume as resume_api
 from app.api.auth import router as auth_router

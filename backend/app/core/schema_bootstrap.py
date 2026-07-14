@@ -17,9 +17,7 @@ def ensure_user_role_column(engine: Engine) -> None:
         return
 
     with engine.begin() as conn:
-        conn.execute(
-            text("ALTER TABLE tb_user ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'candidate'")
-        )
+        conn.execute(text("ALTER TABLE tb_user ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'candidate'"))
 
 
 def ensure_agent_message_usage_columns(engine: Engine) -> None:
@@ -117,7 +115,8 @@ def ensure_job_bookmark_table(engine: Engine) -> None:
         return
 
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE job_bookmark (
                 id BIGINT AUTO_INCREMENT PRIMARY KEY,
                 user_id BIGINT NOT NULL,
@@ -129,7 +128,8 @@ def ensure_job_bookmark_table(engine: Engine) -> None:
                 INDEX ix_job_bookmark_jd_id (jd_id),
                 INDEX ix_job_bookmark_action (action)
             )
-        """))
+        """)
+        )
 
 
 def ensure_notification_table(engine: Engine) -> None:
@@ -139,7 +139,8 @@ def ensure_notification_table(engine: Engine) -> None:
         return
 
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE notification (
                 id BIGINT AUTO_INCREMENT PRIMARY KEY,
                 user_id BIGINT NOT NULL,
@@ -156,7 +157,8 @@ def ensure_notification_table(engine: Engine) -> None:
                 INDEX ix_notification_is_read (is_read),
                 INDEX ix_notification_created_at (created_at)
             )
-        """))
+        """)
+        )
 
 
 def ensure_interview_question_table(engine: Engine) -> None:
@@ -166,7 +168,8 @@ def ensure_interview_question_table(engine: Engine) -> None:
         return
 
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE interview_question (
                 id BIGINT AUTO_INCREMENT PRIMARY KEY,
                 category VARCHAR(30) NOT NULL,
@@ -185,7 +188,57 @@ def ensure_interview_question_table(engine: Engine) -> None:
                 INDEX ix_interview_question_sub_category (sub_category),
                 INDEX ix_interview_question_difficulty (difficulty)
             )
-        """))
+        """)
+        )
+
+
+def ensure_interview_evaluation_schema(engine: Engine) -> None:
+    """Backfill P1 interview state columns for development databases predating Alembic."""
+    inspector = inspect(engine)
+    if "interview_session" in inspector.get_table_names():
+        columns = {column["name"] for column in inspector.get_columns("interview_session")}
+        additions = {
+            "evaluation_status": "VARCHAR(20) DEFAULT 'idle'",
+            "memory_snapshot": "JSON",
+        }
+        with engine.begin() as conn:
+            for name, definition in additions.items():
+                if name not in columns:
+                    conn.execute(text(f"ALTER TABLE interview_session ADD COLUMN {name} {definition}"))
+
+    if "interview_turn_evaluation" in inspector.get_table_names():
+        return
+
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+            CREATE TABLE interview_turn_evaluation (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                session_id BIGINT NOT NULL,
+                turn_id VARCHAR(80) NOT NULL,
+                question_index INTEGER NOT NULL DEFAULT 0,
+                question TEXT,
+                category VARCHAR(50) DEFAULT 'general',
+                user_answer TEXT,
+                is_follow_up INTEGER DEFAULT 0,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                completeness INTEGER DEFAULT 0,
+                accuracy INTEGER DEFAULT 0,
+                depth INTEGER DEFAULT 0,
+                expression INTEGER DEFAULT 0,
+                overall_score INTEGER DEFAULT 0,
+                feedback TEXT,
+                improvement TEXT,
+                evidence JSON,
+                error_msg VARCHAR(500) DEFAULT '',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                completed_at DATETIME NULL,
+                UNIQUE KEY uq_interview_turn_evaluation_turn (session_id, turn_id),
+                INDEX ix_interview_turn_evaluation_session_id (session_id),
+                INDEX ix_interview_turn_evaluation_status (status)
+            )
+        """)
+        )
 
 
 def ensure_job_journal_table(engine: Engine) -> None:
@@ -195,7 +248,8 @@ def ensure_job_journal_table(engine: Engine) -> None:
         return
 
     with engine.begin() as conn:
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE TABLE job_journal (
                 id BIGINT AUTO_INCREMENT PRIMARY KEY,
                 user_id BIGINT NOT NULL,
@@ -220,7 +274,8 @@ def ensure_job_journal_table(engine: Engine) -> None:
                 INDEX ix_job_journal_entry_type (entry_type),
                 INDEX ix_job_journal_created_at (created_at)
             )
-        """))
+        """)
+        )
 
 
 def ensure_job_pipeline_columns(engine: Engine) -> None:
@@ -272,7 +327,8 @@ def ensure_job_target_table(engine: Engine) -> None:
 
     if "job_target" not in inspector.get_table_names():
         with engine.begin() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 CREATE TABLE job_target (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
                     user_id BIGINT NOT NULL,
@@ -297,17 +353,20 @@ def ensure_job_target_table(engine: Engine) -> None:
                     INDEX ix_job_target_status (status),
                     INDEX ix_job_target_is_primary (is_primary)
                 )
-            """))
+            """)
+            )
 
     # Add target_id column to job_application_pipeline
     if "job_application_pipeline" in inspector.get_table_names():
         columns = {col["name"] for col in inspector.get_columns("job_application_pipeline")}
         if "target_id" not in columns:
             with engine.begin() as conn:
-                conn.execute(text(
-                    "ALTER TABLE job_application_pipeline ADD COLUMN target_id BIGINT NULL, "
-                    "ADD INDEX ix_pipeline_target_id (target_id)"
-                ))
+                conn.execute(
+                    text(
+                        "ALTER TABLE job_application_pipeline ADD COLUMN target_id BIGINT NULL, "
+                        "ADD INDEX ix_pipeline_target_id (target_id)"
+                    )
+                )
 
 
 def ensure_resume_columns(engine: Engine) -> None:

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Admin role and authorization tests."""
 
 from __future__ import annotations

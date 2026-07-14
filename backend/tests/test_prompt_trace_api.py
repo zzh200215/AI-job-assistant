@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 from datetime import datetime
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from app.api.auth import router as auth_router
 from app.api.prompt_trace import router as prompt_trace_router

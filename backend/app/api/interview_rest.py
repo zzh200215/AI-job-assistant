@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 面试会话 REST API
 - POST /api/interview/sessions      创建新面试
@@ -6,25 +5,28 @@
 - GET  /api/interview/sessions/{id} 面试详情（含报告）
 - DELETE /api/interview/sessions/{id} 删除面试
 """
+
 import json
 import traceback
-from typing import Any, Dict, List
+from typing import Any
 
 from fastapi import APIRouter, Depends
+from fastapi import Query as QueryParam
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.history import JobDescription, Resume
+from app.models.interview_question import InterviewQuestion
 from app.models.interview_session import InterviewSession
 from app.models.user import User
 from app.prompts.interview import INTERVIEW_PROMPT
 from app.schemas.interview_session import InterviewSessionCreate
+from app.services.interview_evaluation_service import evaluation_payloads
 from app.services.llm_service import chat_json
 from app.services.rag_service import search_knowledge
 from app.utils.job_access import get_accessible_job
-from app.utils.response import ERR_COMMON, ERR_PARAM, ERR_QUOTA, fail, ok
-from app.services.subscription_service import check_quota
+from app.utils.response import ERR_COMMON, ERR_PARAM, fail, ok
 
 router = APIRouter()
 
@@ -36,11 +38,15 @@ async def create_session(
     current_user: User = Depends(get_current_user),
 ):
     """创建面试会话并自动生成题目。"""
-    resume = db.query(Resume).filter(
-        Resume.id == payload.resume_id,
-        Resume.user_id == current_user.id,
-        Resume.is_deleted == 0,
-    ).first()
+    resume = (
+        db.query(Resume)
+        .filter(
+            Resume.id == payload.resume_id,
+            Resume.user_id == current_user.id,
+            Resume.is_deleted == 0,
+        )
+        .first()
+    )
     if not resume:
         return fail(message="简历不存在或无权限", code=ERR_PARAM)
 
@@ -60,7 +66,7 @@ async def create_session(
     }
     search_types = type_hints.get(payload.interview_type, ["interview_q", "skill_model"])
 
-    rag_parts: List[str] = []
+    rag_parts: list[str] = []
     for doc_type in search_types:
         results = search_knowledge(f"{jd_title} {' '.join(required_skills[:5])}".strip(), doc_type=doc_type, top_k=3)
         if not results:
@@ -91,20 +97,22 @@ async def create_session(
         traceback.print_exc()
         return fail(message=f"生成面试题失败: {str(exc)}", code=ERR_COMMON)
 
-    ordered_questions: List[Dict[str, Any]] = []
+    ordered_questions: list[dict[str, Any]] = []
     for q_type in ["basic", "tech", "project", "scenario"]:
         for item in questions_data.get(q_type, []) or []:
             question_text = item.get("q") or item.get("question") or ""
             if not question_text:
                 continue
-            ordered_questions.append({
-                "id": len(ordered_questions) + 1,
-                "type": q_type,
-                "category": _map_category(q_type),
-                "question": question_text,
-                "intent": item.get("intent", ""),
-                "ref_answer": item.get("ref_answer") or item.get("expected_answer") or "",
-            })
+            ordered_questions.append(
+                {
+                    "id": len(ordered_questions) + 1,
+                    "type": q_type,
+                    "category": _map_category(q_type),
+                    "question": question_text,
+                    "intent": item.get("intent", ""),
+                    "ref_answer": item.get("ref_answer") or item.get("expected_answer") or "",
+                }
+            )
 
     if len(ordered_questions) < 10:
         extra_prompt = (
@@ -118,14 +126,16 @@ async def create_session(
             for item in extra.get("questions", []) or []:
                 if len(ordered_questions) >= 10:
                     break
-                ordered_questions.append({
-                    "id": len(ordered_questions) + 1,
-                    "type": item.get("type", "tech"),
-                    "category": _map_category(item.get("type", "tech")),
-                    "question": item.get("q") or item.get("question") or "",
-                    "intent": item.get("intent", ""),
-                    "ref_answer": item.get("ref_answer", ""),
-                })
+                ordered_questions.append(
+                    {
+                        "id": len(ordered_questions) + 1,
+                        "type": item.get("type", "tech"),
+                        "category": _map_category(item.get("type", "tech")),
+                        "question": item.get("q") or item.get("question") or "",
+                        "intent": item.get("intent", ""),
+                        "ref_answer": item.get("ref_answer", ""),
+                    }
+                )
         except Exception:
             pass
 
@@ -138,6 +148,8 @@ async def create_session(
         questions=ordered_questions,
         messages=[],
         evaluation={},
+        evaluation_status="idle",
+        memory_snapshot={},
         total_questions=len(ordered_questions),
         answered_count=0,
         timeout_count=0,
@@ -166,17 +178,19 @@ async def list_sessions(
 
     resume_ids = {item.resume_id for item in sessions if item.resume_id}
     jd_ids = {item.jd_id for item in sessions if item.jd_id}
-    resumes = {
-        item.id: item for item in db.query(Resume).filter(Resume.id.in_(resume_ids)).all()
-    } if resume_ids else {}
-    jds = {
-        item.id: item for item in db.query(JobDescription).filter(JobDescription.id.in_(jd_ids)).all()
-    } if jd_ids else {}
+    resumes = {item.id: item for item in db.query(Resume).filter(Resume.id.in_(resume_ids)).all()} if resume_ids else {}
+    jds = (
+        {item.id: item for item in db.query(JobDescription).filter(JobDescription.id.in_(jd_ids)).all()}
+        if jd_ids
+        else {}
+    )
 
-    return ok(data=[
-        _serialize_session(item, db, resume=resumes.get(item.resume_id), jd=jds.get(item.jd_id))
-        for item in sessions
-    ])
+    return ok(
+        data=[
+            _serialize_session(item, db, resume=resumes.get(item.resume_id), jd=jds.get(item.jd_id))
+            for item in sessions
+        ]
+    )
 
 
 @router.get("/sessions/{session_id}", summary="面试详情（含报告）")
@@ -185,13 +199,42 @@ async def get_session(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    session = db.query(InterviewSession).filter(
-        InterviewSession.id == session_id,
-        InterviewSession.user_id == current_user.id,
-    ).first()
+    session = (
+        db.query(InterviewSession)
+        .filter(
+            InterviewSession.id == session_id,
+            InterviewSession.user_id == current_user.id,
+        )
+        .first()
+    )
     if not session:
         return fail(message="面试不存在或无权限", code=ERR_PARAM)
     return ok(data=_serialize_session(session, db))
+
+
+@router.get("/sessions/{session_id}/evaluations", summary="获取异步逐题评分状态")
+async def get_session_evaluations(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    session = (
+        db.query(InterviewSession)
+        .filter(
+            InterviewSession.id == session_id,
+            InterviewSession.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not session:
+        return fail(message="面试不存在或无权限", code=ERR_PARAM)
+    return ok(
+        {
+            "items": evaluation_payloads(db, session_id),
+            "evaluation_status": session.evaluation_status or "idle",
+            "memory_snapshot": session.memory_snapshot or {},
+        }
+    )
 
 
 @router.delete("/sessions/{session_id}", summary="删除面试")
@@ -200,10 +243,14 @@ async def delete_session(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    session = db.query(InterviewSession).filter(
-        InterviewSession.id == session_id,
-        InterviewSession.user_id == current_user.id,
-    ).first()
+    session = (
+        db.query(InterviewSession)
+        .filter(
+            InterviewSession.id == session_id,
+            InterviewSession.user_id == current_user.id,
+        )
+        .first()
+    )
     if not session:
         return fail(message="面试不存在或无权限", code=ERR_PARAM)
     db.delete(session)
@@ -216,7 +263,7 @@ def _serialize_session(
     db: Session,
     resume: Resume | None = None,
     jd: JobDescription | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     resume = resume or (db.query(Resume).filter(Resume.id == session.resume_id).first() if session.resume_id else None)
     jd = jd or (db.query(JobDescription).filter(JobDescription.id == session.jd_id).first() if session.jd_id else None)
 
@@ -224,10 +271,11 @@ def _serialize_session(
     base["resume_summary"] = _build_resume_summary(resume)
     base["jd_summary"] = _build_jd_summary(jd)
     base["question_stats"] = _question_stats(base.get("questions") or [])
+    base["turn_evaluations"] = evaluation_payloads(db, session.id)
     return base
 
 
-def _build_resume_summary(resume: Resume | None) -> Dict[str, Any]:
+def _build_resume_summary(resume: Resume | None) -> dict[str, Any]:
     if not resume:
         return {}
     parsed = resume.parsed_json or {}
@@ -242,7 +290,7 @@ def _build_resume_summary(resume: Resume | None) -> Dict[str, Any]:
     }
 
 
-def _build_jd_summary(jd: JobDescription | None) -> Dict[str, Any]:
+def _build_jd_summary(jd: JobDescription | None) -> dict[str, Any]:
     if not jd:
         return {}
     parsed = jd.parsed_json or {}
@@ -258,7 +306,7 @@ def _build_jd_summary(jd: JobDescription | None) -> Dict[str, Any]:
     }
 
 
-def _extract_skills(jd: JobDescription) -> List[str]:
+def _extract_skills(jd: JobDescription) -> list[str]:
     parsed = jd.parsed_json or {}
     skills = parsed.get("required_skills") or parsed.get("skills") or jd.skill_tags or []
     if isinstance(skills, str):
@@ -266,9 +314,9 @@ def _extract_skills(jd: JobDescription) -> List[str]:
     return [str(item).strip() for item in skills if str(item).strip()]
 
 
-def _question_stats(questions: List[Dict[str, Any]]) -> Dict[str, Any]:
-    categories: Dict[str, int] = {}
-    types: Dict[str, int] = {}
+def _question_stats(questions: list[dict[str, Any]]) -> dict[str, Any]:
+    categories: dict[str, int] = {}
+    types: dict[str, int] = {}
     for item in questions:
         cat = item.get("category") or "通用"
         q_type = item.get("type") or "general"
@@ -294,9 +342,6 @@ def _map_category(q_type: str) -> str:
 # ============================================================
 # 面试题库
 # ============================================================
-
-from app.models.interview_question import InterviewQuestion
-from fastapi import Query as QueryParam
 
 
 @router.get("/question-bank", summary="浏览面试题库")
@@ -368,6 +413,7 @@ async def interview_preparation(
 ):
     """根据JD分析，给出针对性的面试准备建议和推荐练习题。"""
     from app.utils.job_access import get_accessible_job
+
     jd = get_accessible_job(db, jd_id, current_user)
     if not jd:
         return fail(message="岗位不存在或无权限", code=ERR_PARAM)
@@ -380,6 +426,7 @@ async def interview_preparation(
     related_questions = []
     if required_skills:
         from sqlalchemy import or_
+
         skill_filters = [InterviewQuestion.question.contains(skill) for skill in required_skills[:5]]
         skill_filters += [InterviewQuestion.sub_category.contains(skill) for skill in required_skills[:5]]
         related_questions = (
@@ -420,18 +467,20 @@ async def interview_preparation(
         performance=performance,
     )
 
-    return ok({
-        "jd": {
-            "id": jd.id,
-            "title": title,
-            "company": jd.company,
-            "required_skills": required_skills,
-        },
-        "suggestions": suggestions,
-        "related_questions": [q.to_dict() for q in related_questions],
-        "common_questions": [q.to_dict() for q in common_questions],
-        "past_performance": performance,
-    })
+    return ok(
+        {
+            "jd": {
+                "id": jd.id,
+                "title": title,
+                "company": jd.company,
+                "required_skills": required_skills,
+            },
+            "suggestions": suggestions,
+            "related_questions": [q.to_dict() for q in related_questions],
+            "common_questions": [q.to_dict() for q in common_questions],
+            "past_performance": performance,
+        }
+    )
 
 
 @router.get("/performance", summary="面试表现趋势分析")
@@ -451,13 +500,15 @@ async def interview_performance(
     )
 
     if not sessions:
-        return ok({
-            "total_sessions": 0,
-            "trend": [],
-            "strengths": [],
-            "weaknesses": [],
-            "summary": "还没有完成过模拟面试，建议先创建一次面试体验。",
-        })
+        return ok(
+            {
+                "total_sessions": 0,
+                "trend": [],
+                "strengths": [],
+                "weaknesses": [],
+                "summary": "还没有完成过模拟面试，建议先创建一次面试体验。",
+            }
+        )
 
     trend = []
     all_dimension_scores = {"completeness": [], "accuracy": [], "depth": [], "expression": []}
@@ -472,14 +523,16 @@ async def interview_performance(
             if val:
                 all_dimension_scores[dim].append(val)
 
-        trend.append({
-            "session_id": session.id,
-            "interview_type": session.interview_type,
-            "overall_score": overall,
-            "dimension_scores": dim_scores,
-            "answered_questions": evaluation.get("answered_questions", 0),
-            "completed_at": session.completed_at.isoformat() if session.completed_at else None,
-        })
+        trend.append(
+            {
+                "session_id": session.id,
+                "interview_type": session.interview_type,
+                "overall_score": overall,
+                "dimension_scores": dim_scores,
+                "answered_questions": evaluation.get("answered_questions", 0),
+                "completed_at": session.completed_at.isoformat() if session.completed_at else None,
+            }
+        )
 
     # 分析维度强弱
     avg_dims = {}
@@ -500,18 +553,26 @@ async def interview_performance(
         "expression": "表达力",
     }
 
-    return ok({
-        "total_sessions": len(sessions),
-        "avg_overall_score": avg_overall,
-        "trend": trend,
-        "dimension_averages": avg_dims,
-        "strengths": [{"dimension": dim_labels.get(s["dimension"], s["dimension"]), "avg_score": s["avg_score"]} for s in strengths],
-        "weaknesses": [{"dimension": dim_labels.get(w["dimension"], w["dimension"]), "avg_score": w["avg_score"]} for w in weaknesses],
-        "improvement_priority": [
-            f"重点提升「{dim_labels.get(w['dimension'], w['dimension'])}」维度，当前均分 {w['avg_score']}"
-            for w in weaknesses
-        ],
-    })
+    return ok(
+        {
+            "total_sessions": len(sessions),
+            "avg_overall_score": avg_overall,
+            "trend": trend,
+            "dimension_averages": avg_dims,
+            "strengths": [
+                {"dimension": dim_labels.get(s["dimension"], s["dimension"]), "avg_score": s["avg_score"]}
+                for s in strengths
+            ],
+            "weaknesses": [
+                {"dimension": dim_labels.get(w["dimension"], w["dimension"]), "avg_score": w["avg_score"]}
+                for w in weaknesses
+            ],
+            "improvement_priority": [
+                f"重点提升「{dim_labels.get(w['dimension'], w['dimension'])}」维度，当前均分 {w['avg_score']}"
+                for w in weaknesses
+            ],
+        }
+    )
 
 
 def _analyze_past_performance(sessions):
@@ -554,10 +615,7 @@ def _build_preparation_suggestions(title, required_skills, performance):
 
     if required_skills:
         top_skills = required_skills[:5]
-        suggestions.append(
-            f"该岗位「{title}」核心技术栈为 {', '.join(top_skills)}，"
-            f"建议重点复习这些领域的常见面试题"
-        )
+        suggestions.append(f"该岗位「{title}」核心技术栈为 {', '.join(top_skills)}，建议重点复习这些领域的常见面试题")
 
     if performance.get("has_data"):
         weakest = performance.get("weakest_dimension")

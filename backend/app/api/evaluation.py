@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Offline evaluation report APIs."""
 
 from __future__ import annotations
@@ -6,7 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 
@@ -123,9 +122,7 @@ def _normalize_report(path: Path, payload: dict[str, Any]) -> dict[str, Any] | N
 
     if report_type == "recommend":
         linkage = (
-            payload.get("online_feedback_linkage")
-            if isinstance(payload.get("online_feedback_linkage"), dict)
-            else {}
+            payload.get("online_feedback_linkage") if isinstance(payload.get("online_feedback_linkage"), dict) else {}
         )
         metrics = {
             "skill_match_accuracy": payload.get("skill_match_accuracy"),
@@ -158,7 +155,7 @@ def _normalize_report(path: Path, payload: dict[str, Any]) -> dict[str, Any] | N
     }
 
 
-def _list_reports(report_type: Optional[str] = None) -> list[dict[str, Any]]:
+def _list_reports(report_type: str | None = None) -> list[dict[str, Any]]:
     _ensure_reports_dir()
     items: list[dict[str, Any]] = []
     for path in REPORTS_DIR.glob("*.json"):
@@ -242,7 +239,7 @@ def _delta(left: Any, right: Any) -> float | None:
 
 @router.get("/summary", summary="Offline evaluation report summary")
 async def evaluation_summary(
-    report_type: Optional[str] = Query(None),
+    report_type: str | None = Query(None),
     current_user: User = Depends(get_current_user),
 ):
     _ = current_user
@@ -251,7 +248,7 @@ async def evaluation_summary(
 
     items = _list_reports(report_type=report_type)
     latest_by_type: dict[str, dict[str, Any]] = {}
-    counts = {key: 0 for key in sorted(SUPPORTED_REPORT_TYPES)}
+    counts = dict.fromkeys(sorted(SUPPORTED_REPORT_TYPES), 0)
     for item in items:
         counts[item["report_type"]] += 1
         latest_by_type.setdefault(item["report_type"], item)
@@ -268,7 +265,7 @@ async def evaluation_summary(
 
 @router.get("/list", summary="List offline evaluation reports")
 async def list_evaluation_reports(
-    report_type: Optional[str] = Query(None),
+    report_type: str | None = Query(None),
     current_user: User = Depends(get_current_user),
 ):
     _ = current_user

@@ -10,7 +10,7 @@ export function useAgentTaskPolling() {
       setPollingState(value) {
         isPolling.value = value
       },
-    },
+    }
   )
 
   onUnmounted(poller.stopPolling)

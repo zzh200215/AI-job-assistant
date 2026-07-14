@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Agent 匹配质量评估脚本
 
 用法（在 backend/ 目录下运行，需要启动 DB）：
@@ -16,6 +15,7 @@
   将每条 eval record 的 resume_profile / jd_profile 直接喂给 match_agent，
   对比输出的 match_score 与 expected_match_score。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,7 +24,6 @@ import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
@@ -34,9 +33,9 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 logger = logging.getLogger("eval_agent")
 
 
-def load_eval_set(path: str) -> List[Dict]:
+def load_eval_set(path: str) -> list[dict]:
     items = []
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         for line_no, line in enumerate(f, 1):
             line = line.strip()
             if not line or line.startswith("#"):
@@ -48,20 +47,20 @@ def load_eval_set(path: str) -> List[Dict]:
     return items
 
 
-def compute_mae(predicted: List[float], actual: List[float]) -> float:
+def compute_mae(predicted: list[float], actual: list[float]) -> float:
     n = len(predicted)
     if n == 0:
         return 0.0
-    return sum(abs(p - a) for p, a in zip(predicted, actual)) / n
+    return sum(abs(p - a) for p, a in zip(predicted, actual, strict=False)) / n
 
 
-def compute_spearman(predicted: List[float], actual: List[float]) -> float:
+def compute_spearman(predicted: list[float], actual: list[float]) -> float:
     """Spearman 等级相关系数（简化实现，无需 scipy）。"""
     n = len(predicted)
     if n < 2:
         return 0.0
 
-    def rank(vals: List[float]) -> List[float]:
+    def rank(vals: list[float]) -> list[float]:
         indexed = sorted(enumerate(vals), key=lambda x: x[1])
         ranks = [0.0] * n
         i = 0
@@ -78,15 +77,15 @@ def compute_spearman(predicted: List[float], actual: List[float]) -> float:
     r_pred = rank(predicted)
     r_actual = rank(actual)
 
-    d_sq_sum = sum((rp - ra) ** 2 for rp, ra in zip(r_pred, r_actual))
-    return 1 - (6 * d_sq_sum) / (n * (n ** 2 - 1))
+    d_sq_sum = sum((rp - ra) ** 2 for rp, ra in zip(r_pred, r_actual, strict=False))
+    return 1 - (6 * d_sq_sum) / (n * (n**2 - 1))
 
 
-def run_eval(eval_set: List[Dict]) -> Dict:
+def run_eval(eval_set: list[dict]) -> dict:
     """逐条用 match_agent 的 prompt 直接获取分数，与人工标注对比。"""
+    from app.prompts.match_agent import MATCH_AGENT_PROMPT
     from app.services.llm_service import chat_json
     from app.services.match_score_calibration import apply_match_score_cap
-    from app.prompts.match_agent import MATCH_AGENT_PROMPT
 
     predicted_scores = []
     actual_scores = []
@@ -116,13 +115,15 @@ def run_eval(eval_set: List[Dict]) -> Dict:
         actual_scores.append(float(expected_score))
 
         diff = predicted - expected_score
-        details.append({
-            "id": pair_id,
-            "predicted": predicted,
-            "expected": expected_score,
-            "diff": diff,
-            "label": "hit" if abs(diff) <= 10 else ("over" if diff > 0 else "under"),
-        })
+        details.append(
+            {
+                "id": pair_id,
+                "predicted": predicted,
+                "expected": expected_score,
+                "diff": diff,
+                "label": "hit" if abs(diff) <= 10 else ("over" if diff > 0 else "under"),
+            }
+        )
 
         if (idx + 1) % 5 == 0:
             logger.info("已评估 %d/%d ...", idx + 1, len(eval_set))
@@ -145,12 +146,12 @@ def run_eval(eval_set: List[Dict]) -> Dict:
 
 
 def check_thresholds(
-    report: Dict,
+    report: dict,
     *,
-    max_mae: Optional[float] = None,
-    min_spearman: Optional[float] = None,
-    min_hit_tol10: Optional[int] = None,
-) -> List[str]:
+    max_mae: float | None = None,
+    min_spearman: float | None = None,
+    min_hit_tol10: int | None = None,
+) -> list[str]:
     """Return human-readable threshold failures for a completed Agent report."""
     failed = []
     if max_mae is not None and report["mae"] > max_mae:
@@ -165,20 +166,23 @@ def check_thresholds(
 
 def main():
     parser = argparse.ArgumentParser(description="Agent 匹配质量评估")
-    parser.add_argument("--eval-set", default=str(_PROJECT_ROOT / "tests" / "eval" / "agent_eval.jsonl"),
-                        help="评估集 JSONL 路径")
+    parser.add_argument(
+        "--eval-set", default=str(_PROJECT_ROOT / "tests" / "eval" / "agent_eval.jsonl"), help="评估集 JSONL 路径"
+    )
     parser.add_argument("--sample", type=int, default=None, help="只跑前 N 条")
     parser.add_argument("--output", default=None, help="输出 JSON 报告路径")
     parser.add_argument("--max-mae", type=float, default=None, help="Fail if MAE is above this threshold")
     parser.add_argument("--min-spearman", type=float, default=None, help="Fail if Spearman rho is below this threshold")
-    parser.add_argument("--min-hit-tol10", type=int, default=None, help="Fail if hit count within +/-10 is below this threshold")
+    parser.add_argument(
+        "--min-hit-tol10", type=int, default=None, help="Fail if hit count within +/-10 is below this threshold"
+    )
     args = parser.parse_args()
 
     eval_set = load_eval_set(args.eval_set)
     logger.info("加载评估集 %d 条 from %s", len(eval_set), args.eval_set)
 
     if args.sample:
-        eval_set = eval_set[:args.sample]
+        eval_set = eval_set[: args.sample]
         logger.info("截取前 %d 条", args.sample)
 
     report = run_eval(eval_set)
@@ -199,13 +203,17 @@ def main():
     print("=" * 50)
     print(f"  MAE (平均绝对误差) : {report['mae']}")
     print(f"  Spearman ρ         : {report['spearman_rho']}")
-    print(f"  分数偏差分布       : 命中(±10)={report['score_dist']['hit_tol10']}  "
-          f"偏高={report['score_dist']['over']}  偏低={report['score_dist']['under']}")
+    print(
+        f"  分数偏差分布       : 命中(±10)={report['score_dist']['hit_tol10']}  "
+        f"偏高={report['score_dist']['over']}  偏低={report['score_dist']['under']}"
+    )
     print()
     for d in report["details"]:
         sign = "+" if d["diff"] > 0 else ""
-        print(f"  {d['id']:10s}  预测={d['predicted']:3d}  期望={d['expected']:3d}  "
-              f"偏差={sign}{d['diff']:d}  [{d['label']}]")
+        print(
+            f"  {d['id']:10s}  预测={d['predicted']:3d}  期望={d['expected']:3d}  "
+            f"偏差={sign}{d['diff']:d}  [{d['label']}]"
+        )
     print("=" * 50)
 
     if args.output:

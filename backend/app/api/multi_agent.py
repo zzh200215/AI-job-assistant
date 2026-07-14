@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Deprecated compatibility endpoints for legacy multi-agent flows."""
 
 import traceback
@@ -63,11 +62,7 @@ async def auto_analyze(
         resume_id = latest_resume.id if latest_resume else None
 
     if not jd_id:
-        latest_jd = (
-            accessible_job_query(db, current_user)
-            .order_by(JobDescription.create_time.desc())
-            .first()
-        )
+        latest_jd = accessible_job_query(db, current_user).order_by(JobDescription.create_time.desc()).first()
         jd_id = latest_jd.id if latest_jd else None
 
     if not resume_id or not _get_owned_resume(db, resume_id, current_user.id):
@@ -129,18 +124,8 @@ async def get_run_detail(
     if not run:
         return fail(message="run not found", code=ERR_PARAM)
 
-    messages = (
-        db.query(AgentMessage)
-        .filter(AgentMessage.run_id == run_id)
-        .order_by(AgentMessage.id)
-        .all()
-    )
-    results = (
-        db.query(AgentResult)
-        .filter(AgentResult.run_id == run_id)
-        .order_by(AgentResult.id)
-        .all()
-    )
+    messages = db.query(AgentMessage).filter(AgentMessage.run_id == run_id).order_by(AgentMessage.id).all()
+    results = db.query(AgentResult).filter(AgentResult.run_id == run_id).order_by(AgentResult.id).all()
 
     return ok(
         data={

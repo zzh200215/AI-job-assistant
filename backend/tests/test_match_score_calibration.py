@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from app.services.match_score_calibration import apply_match_score_cap, infer_match_score_cap
 
 

@@ -9,9 +9,16 @@
 
     <div class="panel">
       <div class="panel-body">
-        <el-alert title="调度 Agent 会识别你的意图并自动编排子智能体" type="success" :closable="false" show-icon class="mb">
+        <el-alert
+          title="调度 Agent 会识别你的意图并自动编排子智能体"
+          type="success"
+          :closable="false"
+          show-icon
+          class="mb"
+        >
           <template #default>
-            调度 Agent 会识别你的意图 -> 自动选择并编排子智能体（简历诊断 / 岗位分析 / 匹配评估 / 面试辅导 / 职业规划）-> 汇总报告<br>
+            调度 Agent 会识别你的意图 -> 自动选择并编排子智能体（简历诊断 / 岗位分析 / 匹配评估 /
+            面试辅导 / 职业规划）-> 汇总报告<br />
             <small>无需手动选流程，依赖关系由系统自动补齐</small>
           </template>
         </el-alert>
@@ -62,12 +69,18 @@
             <el-tag size="small" type="primary">{{ intentLabel(dispatch.intent) }}</el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="调度理由">{{ dispatch.reason || '-' }}</el-descriptions-item>
-          <el-descriptions-item v-if="dispatch.user_profile" label="用户画像">{{ dispatch.user_profile }}</el-descriptions-item>
+          <el-descriptions-item v-if="dispatch.user_profile" label="用户画像">{{
+            dispatch.user_profile
+          }}</el-descriptions-item>
           <el-descriptions-item label="本次调用">
             <el-tag
-              v-for="n in selectedAgents" :key="n"
-              size="small" effect="plain" style="margin:2px;"
-            >{{ agentLabel(n) }}</el-tag>
+              v-for="n in selectedAgents"
+              :key="n"
+              size="small"
+              effect="plain"
+              style="margin: 2px"
+              >{{ agentLabel(n) }}</el-tag
+            >
           </el-descriptions-item>
           <el-descriptions-item v-if="dispatch.notes" label="提示">
             <el-text type="warning">{{ dispatch.notes }}</el-text>
@@ -97,9 +110,15 @@
               </div>
               <div class="panel-body">
                 <div class="agent-status">
-                  <el-icon v-if="agent.status === 'completed'" class="s-green"><SuccessFilled /></el-icon>
-                  <el-icon v-else-if="agent.status === 'running'" class="is-loading s-warning"><Loading /></el-icon>
-                  <el-icon v-else-if="agent.status === 'failed'" class="s-danger"><WarningFilled /></el-icon>
+                  <el-icon v-if="agent.status === 'completed'" class="s-green"
+                    ><SuccessFilled
+                  /></el-icon>
+                  <el-icon v-else-if="agent.status === 'running'" class="is-loading s-warning"
+                    ><Loading
+                  /></el-icon>
+                  <el-icon v-else-if="agent.status === 'failed'" class="s-danger"
+                    ><WarningFilled
+                  /></el-icon>
                   <el-icon v-else class="s-info"><Clock /></el-icon>
                   <span>{{ agentStatusText(agent) }}</span>
                 </div>
@@ -108,7 +127,9 @@
 
                 <el-button
                   v-if="agent.output_data && Object.keys(agent.output_data).length"
-                  size="small" text type="primary"
+                  size="small"
+                  text
+                  type="primary"
                   @click="showAgentDetail(agent)"
                 >
                   查看详情
@@ -122,7 +143,10 @@
 
         <div class="dep-graph">
           <el-tag size="small" type="info" effect="plain">依赖关系</el-tag>
-          <span class="dep-line">ResumeAgent + JobAgent -> MatchAgent -> InterviewAgent + CareerAgent -> SummaryAgent</span>
+          <span class="dep-line"
+            >ResumeAgent + JobAgent -> MatchAgent -> InterviewAgent + CareerAgent ->
+            SummaryAgent</span
+          >
         </div>
       </div>
     </div>
@@ -137,31 +161,54 @@
         <el-tabs>
           <el-tab-pane label="总览">
             <el-descriptions :column="2" border size="small">
-              <el-descriptions-item label="候选人">{{ summaryReport.summary?.candidate || '-' }}</el-descriptions-item>
-              <el-descriptions-item label="目标岗位">{{ summaryReport.summary?.target_position || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="候选人">{{
+                summaryReport.summary?.candidate || '-'
+              }}</el-descriptions-item>
+              <el-descriptions-item label="目标岗位">{{
+                summaryReport.summary?.target_position || '-'
+              }}</el-descriptions-item>
               <el-descriptions-item label="匹配度">
                 <el-tag :type="scoreTag(summaryReport.summary?.match_score)">
                   {{ summaryReport.summary?.match_score }}
                 </el-tag>
               </el-descriptions-item>
-              <el-descriptions-item label="结论">{{ summaryReport.summary?.verdict || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="结论">{{
+                summaryReport.summary?.verdict || '-'
+              }}</el-descriptions-item>
             </el-descriptions>
           </el-tab-pane>
 
           <el-tab-pane label="简历诊断">
             <p><b>评分：</b>{{ summaryReport.resume_diagnosis?.score }}</p>
-            <ul><li v-for="(f, i) in summaryReport.resume_diagnosis?.key_findings || []" :key="i">{{ f }}</li></ul>
+            <ul>
+              <li v-for="(f, i) in summaryReport.resume_diagnosis?.key_findings || []" :key="i">
+                {{ f }}
+              </li>
+            </ul>
           </el-tab-pane>
 
           <el-tab-pane label="岗位分析">
             <p><b>核心技能：</b></p>
-            <el-tag v-for="(s, i) in summaryReport.job_analysis?.core_skills || []" :key="i" style="margin:2px;">{{ s }}</el-tag>
+            <el-tag
+              v-for="(s, i) in summaryReport.job_analysis?.core_skills || []"
+              :key="i"
+              style="margin: 2px"
+              >{{ s }}</el-tag
+            >
           </el-tab-pane>
 
           <el-tab-pane label="面试准备">
-            <p>共 <b>{{ summaryReport.interview_preparation?.questions_count || 0 }}</b> 道题</p>
+            <p>
+              共 <b>{{ summaryReport.interview_preparation?.questions_count || 0 }}</b> 道题
+            </p>
             <p>重点领域：</p>
-            <el-tag v-for="(f, i) in summaryReport.interview_preparation?.focus_areas || []" :key="i" style="margin:2px;" type="warning">{{ f }}</el-tag>
+            <el-tag
+              v-for="(f, i) in summaryReport.interview_preparation?.focus_areas || []"
+              :key="i"
+              style="margin: 2px"
+              type="warning"
+              >{{ f }}</el-tag
+            >
           </el-tab-pane>
 
           <el-tab-pane label="职业规划">
@@ -182,7 +229,12 @@
             <el-table :data="summaryReport.action_items || []" size="small">
               <el-table-column prop="priority" label="优先级" width="80">
                 <template #default="{ row }">
-                  <el-tag :type="row.priority === '高' ? 'danger' : row.priority === '中' ? 'warning' : 'info'" size="small">
+                  <el-tag
+                    :type="
+                      row.priority === '高' ? 'danger' : row.priority === '中' ? 'warning' : 'info'
+                    "
+                    size="small"
+                  >
                     {{ row.priority }}
                   </el-tag>
                 </template>
@@ -195,7 +247,12 @@
       </div>
     </div>
 
-    <el-dialog v-model="detailVisible" :title="`${agentLabel(detailAgent?.name)} — 完整输出`" width="800px" top="5vh">
+    <el-dialog
+      v-model="detailVisible"
+      :title="`${agentLabel(detailAgent?.name)} — 完整输出`"
+      width="800px"
+      top="5vh"
+    >
       <pre class="json-preview">{{ JSON.stringify(detailAgent?.output_data, null, 2) }}</pre>
     </el-dialog>
 
@@ -227,29 +284,54 @@ const detailAgent = ref(null)
 let pollTimer = null
 let pollCount = 0
 let pollErrors = 0
-const MAX_POLLS = 400        // 1.5s * 400 = 10 minutes upper limit
-const MAX_POLL_ERRORS = 5    // 5 consecutive request failures to give up
+const MAX_POLLS = 400 // 1.5s * 400 = 10 minutes upper limit
+const MAX_POLL_ERRORS = 5 // 5 consecutive request failures to give up
 
 const form = reactive({ user_request: '', resume_id: null, jd_id: null })
 
-const ALL_AGENT_NAMES = ["ResumeAgent", "JobAgent", "MatchAgent", "InterviewAgent", "CareerAgent", "SummaryAgent"]
+const ALL_AGENT_NAMES = [
+  'ResumeAgent',
+  'JobAgent',
+  'MatchAgent',
+  'InterviewAgent',
+  'CareerAgent',
+  'SummaryAgent',
+]
 
 // ---- computed ----
 const isComplete = computed(() => ['completed', 'failed'].includes(run.value?.status))
-const statusLabel = computed(() => ({
-  pending: '等待中', running: '执行中', completed: '已完成', failed: '失败'
-}[run.value?.status] || run.value?.status || ''))
-const statusTag = computed(() => ({
-  pending: 'info', running: 'warning', completed: 'success', failed: 'danger'
-}[run.value?.status] || 'info'))
+const statusLabel = computed(
+  () =>
+    ({
+      pending: '等待中',
+      running: '执行中',
+      completed: '已完成',
+      failed: '失败',
+    })[run.value?.status] ||
+    run.value?.status ||
+    ''
+)
+const statusTag = computed(
+  () =>
+    ({
+      pending: 'info',
+      running: 'warning',
+      completed: 'success',
+      failed: 'danger',
+    })[run.value?.status] || 'info'
+)
 const summaryReport = computed(() => run.value?.summary_report || null)
 
 // Dispatch decision: prefer full output from Dispatcher message, fallback to run fields
 const dispatch = computed(() => {
-  const dm = messages.value.find(m => m.agent_name === 'Dispatcher')
+  const dm = messages.value.find((m) => m.agent_name === 'Dispatcher')
   if (dm && dm.output_data && Object.keys(dm.output_data).length) return dm.output_data
   if (run.value?.intent || (run.value?.selected_agents || []).length) {
-    return { intent: run.value.intent, reason: run.value.dispatch_reason, target_agents: run.value.selected_agents }
+    return {
+      intent: run.value.intent,
+      reason: run.value.dispatch_reason,
+      target_agents: run.value.selected_agents,
+    }
   }
   return null
 })
@@ -257,18 +339,19 @@ const dispatch = computed(() => {
 // Actually invoked agents (written back by backend after dispatch; use full list as placeholder until ready)
 const selectedAgents = computed(() => {
   const sel = run.value?.selected_agents
-  return (sel && sel.length) ? sel : ALL_AGENT_NAMES
+  return sel && sel.length ? sel : ALL_AGENT_NAMES
 })
 
-const completedCount = computed(() =>
-  messages.value.filter(m => m.status === 'completed' && m.agent_name !== 'Dispatcher').length
+const completedCount = computed(
+  () =>
+    messages.value.filter((m) => m.status === 'completed' && m.agent_name !== 'Dispatcher').length
 )
 
 // Merge messages into agents list (only show dispatched agents)
 const agents = computed(() => {
-  return selectedAgents.value.map(name => {
-    const msg = messages.value.find(m => m.agent_name === name)
-    const res = results.value.find(r => r.agent_name === name)
+  return selectedAgents.value.map((name) => {
+    const msg = messages.value.find((m) => m.agent_name === name)
+    const res = results.value.find((r) => r.agent_name === name)
     return {
       name,
       status: msg?.status || 'pending',
@@ -308,17 +391,23 @@ const onStart = async () => {
     pollErrors = 0
     ElMessage.success('智能分析已启动')
     pollDetail()
-  } catch { /* request.js */ }
-  finally { starting.value = false }
+  } catch {
+    /* request.js */
+  } finally {
+    starting.value = false
+  }
 }
 
-const intentLabel = (intent) => ({
-  resume_diagnosis: '简历诊断',
-  job_matching: '岗位匹配',
-  interview_prep: '面试准备',
-  career_planning: '职业规划',
-  full: '全面分析',
-}[intent] || intent || '全面分析')
+const intentLabel = (intent) =>
+  ({
+    resume_diagnosis: '简历诊断',
+    job_matching: '岗位匹配',
+    interview_prep: '面试准备',
+    career_planning: '职业规划',
+    full: '全面分析',
+  })[intent] ||
+  intent ||
+  '全面分析'
 
 const pollDetail = async () => {
   if (!runId.value) return
@@ -349,14 +438,15 @@ const showAgentDetail = (agent) => {
 }
 
 // ---- helpers ----
-const agentLabel = (name) => ({
-  ResumeAgent: '简历诊断',
-  JobAgent: '岗位分析',
-  MatchAgent: '匹配度评估',
-  InterviewAgent: '面试辅导',
-  CareerAgent: '职业规划',
-  SummaryAgent: '汇总报告',
-}[name] || name)
+const agentLabel = (name) =>
+  ({
+    ResumeAgent: '简历诊断',
+    JobAgent: '岗位分析',
+    MatchAgent: '匹配度评估',
+    InterviewAgent: '面试辅导',
+    CareerAgent: '职业规划',
+    SummaryAgent: '汇总报告',
+  })[name] || name
 
 const agentStatusTag = (agent) => {
   if (agent.status === 'completed') return 'success'
@@ -381,27 +471,92 @@ const scoreTag = (s) => {
 
 // ---- lifecycle ----
 onMounted(fillLast)
-onUnmounted(() => { if (pollTimer) clearTimeout(pollTimer) })
+onUnmounted(() => {
+  if (pollTimer) clearTimeout(pollTimer)
+})
 </script>
 
 <style scoped>
-.mb { margin-bottom: 8px; }
-.start-row { display: flex; align-items: center; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
-.adv { margin-top: 4px; }
-.agent-card { margin-bottom: 8px; }
-.agent-card.pending { opacity: .7; }
-.agent-card.running { border-color: var(--app-warning); }
-.agent-card.completed { border-color: var(--app-success); }
-.agent-card.failed { border-color: var(--app-danger); }
-.agent-time { color: var(--app-muted); font-size: 11px; }
-.agent-status { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 6px; }
-.agent-summary { font-size: 12px; color: var(--app-muted); background: var(--app-bg); padding: 4px 8px; border-radius: var(--app-radius-xs, 8px); }
-.agent-error { color: var(--app-danger); font-size: 12px; margin-top: 4px; }
-.dep-graph { margin-top: 12px; text-align: center; font-size: 12px; color: var(--app-muted); }
-.dep-line { margin-left: 6px; }
-.s-green { color: var(--app-success); }
-.s-warning { color: var(--app-warning); }
-.s-danger { color: var(--app-danger); }
-.s-info { color: var(--app-muted); }
-.json-preview { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: var(--app-radius-xs, 8px); font-size: 12px; max-height: 500px; overflow: auto; white-space: pre-wrap; }
+.mb {
+  margin-bottom: 8px;
+}
+.start-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+.adv {
+  margin-top: 4px;
+}
+.agent-card {
+  margin-bottom: 8px;
+}
+.agent-card.pending {
+  opacity: 0.7;
+}
+.agent-card.running {
+  border-color: var(--app-warning);
+}
+.agent-card.completed {
+  border-color: var(--app-success);
+}
+.agent-card.failed {
+  border-color: var(--app-danger);
+}
+.agent-time {
+  color: var(--app-muted);
+  font-size: 11px;
+}
+.agent-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.agent-summary {
+  font-size: 12px;
+  color: var(--app-muted);
+  background: var(--app-bg);
+  padding: 4px 8px;
+  border-radius: var(--app-radius-xs, 8px);
+}
+.agent-error {
+  color: var(--app-danger);
+  font-size: 12px;
+  margin-top: 4px;
+}
+.dep-graph {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.dep-line {
+  margin-left: 6px;
+}
+.s-green {
+  color: var(--app-success);
+}
+.s-warning {
+  color: var(--app-warning);
+}
+.s-danger {
+  color: var(--app-danger);
+}
+.s-info {
+  color: var(--app-muted);
+}
+.json-preview {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 16px;
+  border-radius: var(--app-radius-xs, 8px);
+  font-size: 12px;
+  max-height: 500px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
 </style>

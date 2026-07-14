@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 InterviewEngine - 模拟面试流程引擎
 
@@ -11,9 +10,10 @@ created -> ongoing -> completed
 3. 生成逐题评估
 4. 汇总最终报告
 """
+
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,14 @@ from app.agents.answer_evaluation_agent import AnswerEvaluationAgent, FinalRepor
 from app.core.database import SessionLocal
 from app.models.interview_session import InterviewSession
 from app.orchestration.context import AgentContext
+from app.services.interview_evaluation_service import (
+    build_memory_snapshot,
+    complete_turn_evaluation,
+    completed_evaluation_payloads,
+    create_pending_turn_evaluation,
+    pending_evaluation_count,
+    submit_turn_evaluation,
+)
 from app.utils.time_helper import utc_now
 
 
@@ -33,14 +41,14 @@ class InterviewEngine:
 
     def __init__(self, session_id: int):
         self.session_id = session_id
-        self.db: Optional[Session] = None
-        self.session: Optional[InterviewSession] = None
+        self.db: Session | None = None
+        self.session: InterviewSession | None = None
 
         self.current_index = -1
         self.question_count = 0
         self.start_time = 0.0
         self.timeout_count = 0
-        self.evaluations: List[Dict[str, Any]] = []
+        self.evaluations: list[dict[str, Any]] = []
         self._stopped = False
 
     def _load_session(self) -> InterviewSession:
@@ -51,7 +59,7 @@ class InterviewEngine:
             raise ValueError(f"InterviewSession {self.session_id} not found")
         return self.session
 
-    def init(self) -> Dict[str, Any]:
+    def init(self) -> dict[str, Any]:
         self._load_session()
         self.question_count = len(self.session.questions or [])
         self.current_index = -1
@@ -60,23 +68,25 @@ class InterviewEngine:
         self._stopped = False
         return self._get_state()
 
-    def _get_state(self) -> Dict[str, Any]:
+    def _get_state(self) -> dict[str, Any]:
         return {
             "session_id": self.session_id,
             "status": self.session.status if self.session else "unknown",
             "current_index": self.current_index,
             "total_questions": self.question_count,
-            "answered_count": len(self.evaluations),
+            "answered_count": self.session.answered_count if self.session else len(self.evaluations),
             "timeout_count": self.timeout_count,
             "max_timeouts": self.MAX_TIMEOUTS,
         }
 
-    def start(self) -> Dict[str, Any]:
+    def start(self) -> dict[str, Any]:
         self._load_session()
         self.session.status = "ongoing"
         self.session.answered_count = 0
         self.session.timeout_count = 0
         self.session.messages = self.session.messages or []
+        self.session.evaluation_status = "idle"
+        self.session.memory_snapshot = {}
         self.db.commit()
 
         self.current_index = -1
@@ -87,7 +97,7 @@ class InterviewEngine:
 
         return self.next_question()
 
-    def resume(self) -> Optional[Dict[str, Any]]:
+    def resume(self) -> dict[str, Any] | None:
         self._load_session()
         self.question_count = len(self.session.questions or [])
         self.timeout_count = self.session.timeout_count or 0
@@ -101,7 +111,7 @@ class InterviewEngine:
             return self._message_to_payload(current_question)
         return None
 
-    def next_question(self) -> Dict[str, Any]:
+    def next_question(self) -> dict[str, Any]:
         self.current_index += 1
         self._load_session()
 
@@ -122,13 +132,15 @@ class InterviewEngine:
                 "total": len(questions),
                 "category": category,
                 "question_id": question.get("id", self.current_index),
+                "turn_id": f"q-{self.current_index + 1}",
             },
             "timestamp": utc_now().isoformat(),
         }
         self.save_message(message)
         return self._message_to_payload(message)
 
-    def handle_answer(self, user_answer: str) -> Dict[str, Any]:
+    def handle_answer(self, user_answer: str, *, defer_evaluation: bool = False) -> dict[str, Any]:
+        """Persist an answer and either evaluate inline or schedule the P1 background evaluation path."""
         self._load_session()
         questions = self.session.questions or []
         if self.current_index < 0 or self.current_index >= len(questions):
@@ -138,6 +150,13 @@ class InterviewEngine:
         question_text = question.get("question") or question.get("q") or ""
         ref_answer = question.get("ref_answer") or question.get("expected_answer") or ""
         category = question.get("category") or question.get("type") or "general"
+        active_question = self._get_latest_question_message() or {}
+        active_meta = active_question.get("metadata") or {}
+        is_follow_up = bool(active_meta.get("is_follow_up")) and int(active_meta.get("round") or 0) == (
+            self.current_index + 1
+        )
+        # Main turns are derived from the engine index. JSON message persistence can be stale within one ORM session.
+        turn_id = str(active_meta.get("turn_id")) if is_follow_up else f"q-{self.current_index + 1}"
 
         user_message = {
             "role": "user",
@@ -146,10 +165,39 @@ class InterviewEngine:
             "metadata": {
                 "round": self.current_index + 1,
                 "category": category,
+                "turn_id": turn_id,
+                "is_follow_up": is_follow_up,
             },
             "timestamp": utc_now().isoformat(),
         }
         self.save_message(user_message)
+
+        record = create_pending_turn_evaluation(
+            self.db,
+            session_id=self.session_id,
+            turn_id=turn_id,
+            question_index=self.current_index,
+            question=question_text,
+            category=category,
+            user_answer=user_answer,
+            is_follow_up=is_follow_up,
+        )
+
+        if defer_evaluation:
+            self.session.answered_count = (self.session.answered_count or 0) + 1
+            self.session.evaluation_status = "processing"
+            self.db.commit()
+            self.save_message(
+                {
+                    "role": "system",
+                    "type": "system",
+                    "content": "本题回答已记录，评分将在后台完成，不影响继续作答。",
+                    "metadata": {"round": self.current_index + 1, "turn_id": turn_id, "evaluation_pending": True},
+                    "timestamp": utc_now().isoformat(),
+                }
+            )
+            submit_turn_evaluation(self.session_id, record.id)
+            return self.next_question()
 
         try:
             evaluation = self._evaluate_answer(question_text, ref_answer, user_answer)
@@ -164,6 +212,8 @@ class InterviewEngine:
                 "improvement": "请覆盖问题核心点，并用更清晰的结构表达。",
                 "follow_up": False,
             }
+
+        complete_turn_evaluation(record, evaluation)
 
         evaluation["question_index"] = self.current_index
         evaluation["question"] = question_text
@@ -183,11 +233,15 @@ class InterviewEngine:
                 "depth": evaluation.get("depth", 0),
                 "expression": evaluation.get("expression", 0),
                 "improvement": evaluation.get("improvement", ""),
+                "turn_id": turn_id,
+                "evidence": record.evidence or {},
             },
             "timestamp": utc_now().isoformat(),
         }
         self.save_message(evaluation_message)
         self.session.answered_count = len(self.evaluations)
+        self.session.memory_snapshot = build_memory_snapshot(self.db, self.session_id)
+        self.session.evaluation_status = "idle"
         self.db.commit()
 
         if evaluation.get("follow_up") and evaluation.get("overall_score", 0) < 70:
@@ -205,6 +259,7 @@ class InterviewEngine:
                     "category": category,
                     "question_id": question.get("id", self.current_index),
                     "is_follow_up": True,
+                    "turn_id": f"{turn_id}-follow-up",
                     "evaluation": {
                         "score": evaluation.get("overall_score", 0),
                         "feedback": evaluation.get("feedback", ""),
@@ -217,7 +272,7 @@ class InterviewEngine:
 
         return self.next_question()
 
-    def handle_timeout(self) -> Dict[str, Any]:
+    def handle_timeout(self) -> dict[str, Any]:
         self.timeout_count += 1
         self._load_session()
         self.session.timeout_count = self.timeout_count
@@ -228,20 +283,22 @@ class InterviewEngine:
         question_text = question.get("question") or question.get("q") or ""
         category = question.get("category") or question.get("type") or "general"
 
-        self.evaluations.append({
-            "question_index": self.current_index,
-            "question": question_text,
-            "category": category,
-            "completeness": 0,
-            "accuracy": 0,
-            "depth": 0,
-            "expression": 0,
-            "overall_score": 0,
-            "feedback": "回答超时，未收到有效答案。",
-            "improvement": "建议在 30 秒内先给结论，再展开细节。",
-            "user_answer": "",
-            "timed_out": True,
-        })
+        self.evaluations.append(
+            {
+                "question_index": self.current_index,
+                "question": question_text,
+                "category": category,
+                "completeness": 0,
+                "accuracy": 0,
+                "depth": 0,
+                "expression": 0,
+                "overall_score": 0,
+                "feedback": "回答超时，未收到有效答案。",
+                "improvement": "建议在 30 秒内先给结论，再展开细节。",
+                "user_answer": "",
+                "timed_out": True,
+            }
+        )
 
         timeout_message = {
             "role": "system",
@@ -259,10 +316,10 @@ class InterviewEngine:
             return self._finish(reason="达到最大超时次数，面试结束")
         return self.next_question()
 
-    def finish(self) -> Dict[str, Any]:
+    def finish(self) -> dict[str, Any]:
         return self._finish(reason="用户主动结束面试")
 
-    def _finish(self, reason: str = "面试完成") -> Dict[str, Any]:
+    def _finish(self, reason: str = "面试完成") -> dict[str, Any]:
         self._load_session()
         self.session.status = "completed"
         self.session.completed_at = utc_now()
@@ -274,6 +331,14 @@ class InterviewEngine:
             report = self._fallback_report()
 
         self.session.evaluation = report
+        if pending_evaluation_count(self.db, self.session_id):
+            self.session.evaluation_status = "processing"
+            self.session.memory_snapshot = build_memory_snapshot(self.db, self.session_id)
+            report["evaluation_status"] = "processing"
+            report["interview_memory"] = self.session.memory_snapshot
+        else:
+            self.session.evaluation_status = "completed"
+            report["evaluation_status"] = "completed"
         self.db.commit()
 
         end_message = {
@@ -286,7 +351,7 @@ class InterviewEngine:
         self.save_message(end_message)
         return self._message_to_payload(end_message)
 
-    def _evaluate_answer(self, question: str, ref_answer: str, user_answer: str) -> Dict[str, Any]:
+    def _evaluate_answer(self, question: str, ref_answer: str, user_answer: str) -> dict[str, Any]:
         agent = AnswerEvaluationAgent()
         context = AgentContext()
         context.set_extra("question", question)
@@ -294,10 +359,9 @@ class InterviewEngine:
         context.set_extra("user_answer", user_answer)
         return agent.run_impl(context)
 
-    def _generate_report(self) -> Dict[str, Any]:
+    def _generate_report(self) -> dict[str, Any]:
         valid_evals = [
-            item for item in self.evaluations
-            if not item.get("timed_out") and item.get("overall_score", 0) > 0
+            item for item in self.evaluations if not item.get("timed_out") and item.get("overall_score", 0) > 0
         ]
         if not valid_evals:
             return self._fallback_report()
@@ -306,14 +370,9 @@ class InterviewEngine:
         avg_accuracy = sum(item["accuracy"] for item in valid_evals) / len(valid_evals)
         avg_depth = sum(item["depth"] for item in valid_evals) / len(valid_evals)
         avg_expression = sum(item["expression"] for item in valid_evals) / len(valid_evals)
-        overall_score = round(
-            avg_completeness * 0.30
-            + avg_accuracy * 0.30
-            + avg_depth * 0.25
-            + avg_expression * 0.15
-        )
+        overall_score = round(avg_completeness * 0.30 + avg_accuracy * 0.30 + avg_depth * 0.25 + avg_expression * 0.15)
 
-        ai_report: Dict[str, Any] = {}
+        ai_report: dict[str, Any] = {}
         try:
             lines = []
             for item in valid_evals:
@@ -354,10 +413,12 @@ class InterviewEngine:
             "overall_evaluation": ai_report.get("overall_evaluation", ""),
             "dimensions": ai_report.get("dimensions", {}),
             "hiring_recommendation": ai_report.get("hiring_recommendation", ""),
+            "evaluation_status": self.session.evaluation_status if self.session else "completed",
+            "interview_memory": self.session.memory_snapshot if self.session else {},
         }
         return report
 
-    def _fallback_report(self) -> Dict[str, Any]:
+    def _fallback_report(self) -> dict[str, Any]:
         return {
             "overall_score": 0,
             "dimension_scores": {
@@ -377,16 +438,18 @@ class InterviewEngine:
             "overall_evaluation": "当前有效作答不足，暂时无法生成完整评估。",
             "dimensions": {},
             "hiring_recommendation": "待定",
+            "evaluation_status": self.session.evaluation_status if self.session else "completed",
+            "interview_memory": self.session.memory_snapshot if self.session else {},
         }
 
-    def save_message(self, msg: Dict[str, Any]):
+    def save_message(self, msg: dict[str, Any]):
         self._load_session()
-        messages = self.session.messages or []
+        messages = list(self.session.messages or [])
         messages.append(msg)
         self.session.messages = messages
         self.db.commit()
 
-    def get_current_question(self) -> Optional[Dict[str, Any]]:
+    def get_current_question(self) -> dict[str, Any] | None:
         self._load_session()
         questions = self.session.questions or []
         if 0 <= self.current_index < len(questions):
@@ -401,7 +464,7 @@ class InterviewEngine:
             self.db.close()
             self.db = None
 
-    def _get_latest_question_message(self) -> Optional[Dict[str, Any]]:
+    def _get_latest_question_message(self) -> dict[str, Any] | None:
         self._load_session()
         for msg in reversed(self.session.messages or []):
             if msg.get("type") == "question":
@@ -432,12 +495,33 @@ class InterviewEngine:
             return self.session.created_at.timestamp()
         return time.time()
 
-    def _rebuild_evaluations(self) -> List[Dict[str, Any]]:
+    def _rebuild_evaluations(self) -> list[dict[str, Any]]:
         self._load_session()
+        stored_evaluations = completed_evaluation_payloads(self.db, self.session_id)
+        if stored_evaluations:
+            return [
+                {
+                    "question_index": item["question_index"],
+                    "question": item["question"],
+                    "category": item["category"],
+                    "user_answer": item["user_answer"],
+                    "completeness": item["completeness"],
+                    "accuracy": item["accuracy"],
+                    "depth": item["depth"],
+                    "expression": item["expression"],
+                    "overall_score": item["overall_score"],
+                    "feedback": item["feedback"],
+                    "improvement": item["improvement"],
+                    "follow_up": item["is_follow_up"],
+                    "evidence": item["evidence"],
+                    "turn_id": item["turn_id"],
+                }
+                for item in stored_evaluations
+            ]
         questions = self.session.questions or []
-        evaluations: List[Dict[str, Any]] = []
-        pending_answers: List[Dict[str, Any]] = []
-        active_question: Optional[Dict[str, Any]] = None
+        evaluations: list[dict[str, Any]] = []
+        pending_answers: list[dict[str, Any]] = []
+        active_question: dict[str, Any] | None = None
 
         for msg in self.session.messages or []:
             msg_type = msg.get("type")
@@ -455,48 +539,52 @@ class InterviewEngine:
                 round_num = int(meta.get("round") or 0)
                 question = self._resolve_question_snapshot(questions, active_question, round_num)
                 answer_msg = pending_answers.pop(0) if pending_answers else None
-                evaluations.append({
-                    "question_index": max(round_num - 1, 0),
-                    "question": question.get("question", ""),
-                    "category": question.get("category", "general"),
-                    "user_answer": answer_msg.get("content", "") if answer_msg else "",
-                    "completeness": meta.get("completeness", 0),
-                    "accuracy": meta.get("accuracy", 0),
-                    "depth": meta.get("depth", 0),
-                    "expression": meta.get("expression", 0),
-                    "overall_score": meta.get("score", 0),
-                    "feedback": msg.get("content", ""),
-                    "improvement": meta.get("improvement", ""),
-                    "follow_up": bool((active_question or {}).get("metadata", {}).get("is_follow_up")),
-                })
+                evaluations.append(
+                    {
+                        "question_index": max(round_num - 1, 0),
+                        "question": question.get("question", ""),
+                        "category": question.get("category", "general"),
+                        "user_answer": answer_msg.get("content", "") if answer_msg else "",
+                        "completeness": meta.get("completeness", 0),
+                        "accuracy": meta.get("accuracy", 0),
+                        "depth": meta.get("depth", 0),
+                        "expression": meta.get("expression", 0),
+                        "overall_score": meta.get("score", 0),
+                        "feedback": msg.get("content", ""),
+                        "improvement": meta.get("improvement", ""),
+                        "follow_up": bool((active_question or {}).get("metadata", {}).get("is_follow_up")),
+                    }
+                )
                 continue
 
             if msg_type == "system" and "timeout_count" in meta:
                 round_num = int(meta.get("round") or 0)
                 question = self._resolve_question_snapshot(questions, active_question, round_num)
-                evaluations.append({
-                    "question_index": max(round_num - 1, 0),
-                    "question": question.get("question", ""),
-                    "category": question.get("category", "general"),
-                    "user_answer": "",
-                    "completeness": 0,
-                    "accuracy": 0,
-                    "depth": 0,
-                    "expression": 0,
-                    "overall_score": 0,
-                    "feedback": "回答超时，未收到有效答案。",
-                    "improvement": "建议在 30 秒内先给结论，再展开细节。",
-                    "timed_out": True,
-                })
+                evaluations.append(
+                    {
+                        "question_index": max(round_num - 1, 0),
+                        "question": question.get("question", ""),
+                        "category": question.get("category", "general"),
+                        "user_answer": "",
+                        "completeness": 0,
+                        "accuracy": 0,
+                        "depth": 0,
+                        "expression": 0,
+                        "overall_score": 0,
+                        "feedback": "回答超时，未收到有效答案。",
+                        "improvement": "建议在 30 秒内先给结论，再展开细节。",
+                        "timed_out": True,
+                    }
+                )
 
         return evaluations
 
     @staticmethod
     def _resolve_question_snapshot(
-        questions: List[Dict[str, Any]],
-        active_question: Optional[Dict[str, Any]],
+        questions: list[dict[str, Any]],
+        active_question: dict[str, Any] | None,
         round_num: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         if active_question:
             meta = active_question.get("metadata") or {}
             return {
@@ -512,7 +600,7 @@ class InterviewEngine:
         return {"question": "", "category": "general"}
 
     @staticmethod
-    def _parse_timestamp(timestamp: Optional[str]) -> Optional[float]:
+    def _parse_timestamp(timestamp: str | None) -> float | None:
         if not timestamp:
             return None
         try:
@@ -521,7 +609,7 @@ class InterviewEngine:
             return None
 
     @staticmethod
-    def _message_to_payload(message: Dict[str, Any]) -> Dict[str, Any]:
+    def _message_to_payload(message: dict[str, Any]) -> dict[str, Any]:
         return {
             "type": message.get("type", ""),
             "content": message.get("content", ""),

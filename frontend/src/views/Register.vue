@@ -4,10 +4,21 @@
       <div class="panel-header">
         <div class="brand">
           <span class="brand-mark">
-            <svg width="18" height="18" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 40 40"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
               <rect width="40" height="40" rx="12" fill="currentColor" />
               <path d="M12 28V16l8-6 8 6v12H12z" fill="white" opacity="0.9" />
-              <path d="M16 28V22a2 2 0 014 0v6" stroke="white" stroke-width="1.5" stroke-linecap="round" />
+              <path
+                d="M16 28V22a2 2 0 014 0v6"
+                stroke="white"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
             </svg>
           </span>
           <span>智能招聘平台</span>
@@ -19,7 +30,13 @@
         </div>
       </div>
 
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="0" @keyup.enter="handleRegister">
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="0"
+        @keyup.enter="handleRegister"
+      >
         <div class="field">
           <label for="username">用户名</label>
           <el-form-item prop="username">
@@ -95,7 +112,13 @@
         <p class="hint">注册后会自动进入对应工作台</p>
 
         <el-form-item>
-          <el-button type="primary" size="large" class="submit" :loading="loading" @click="handleRegister">
+          <el-button
+            type="primary"
+            size="large"
+            class="submit"
+            :loading="loading"
+            @click="handleRegister"
+          >
             注册
           </el-button>
         </el-form-item>
@@ -194,7 +217,7 @@ const handleRegister = async () => {
       form.value.username,
       form.value.email,
       form.value.password,
-      form.value.role,
+      form.value.role
     )
     ElMessage.success('注册成功')
     router.replace(authStore.homeRoute)
@@ -310,7 +333,10 @@ const handleRegister = async () => {
   background: #ffffff;
   box-shadow: none !important;
   padding: 0 16px;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
 }
 
 .input-wrap :deep(.el-input__wrapper:hover) {
@@ -380,6 +406,5 @@ const handleRegister = async () => {
   .title-block h1 {
     font-size: 36px;
   }
-
 }
 </style>

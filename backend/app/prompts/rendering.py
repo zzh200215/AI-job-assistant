@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """Prompt rendering helpers with prompt-injection boundaries."""
+
 from __future__ import annotations
 
 import html
@@ -27,7 +27,7 @@ def wrap_untrusted(value: Any, tag: str) -> str:
     """Wrap user-controlled text in a clear data boundary."""
     text = "" if value is None else str(value)
     escaped = html.escape(text, quote=False)
-    return f"<{tag} data-role=\"untrusted\">\n{escaped}\n</{tag}>"
+    return f'<{tag} data-role="untrusted">\n{escaped}\n</{tag}>'
 
 
 def _field_names(template: str) -> set[str]:

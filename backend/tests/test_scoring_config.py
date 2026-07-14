@@ -1,4 +1,4 @@
-from app.services.scoring_config import GRAD_WEIGHTS, DEFAULT_WEIGHTS, get_weights_for_job
+from app.services.scoring_config import DEFAULT_WEIGHTS, GRAD_WEIGHTS, get_weights_for_job
 
 
 def test_get_weights_for_job_accepts_none_title():

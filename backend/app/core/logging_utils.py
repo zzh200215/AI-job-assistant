@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """Logging helpers with request-scoped context."""
 
 from __future__ import annotations
 
 import logging
 import sys
-from typing import Any, Optional
+from typing import Any
 
 from app.core.request_context import get_request_id
 
@@ -49,6 +48,7 @@ class _LoggingContext:
 
     def __init__(self):
         import threading
+
         self._local = threading.local()
 
     @property
@@ -75,9 +75,7 @@ def clear_logging_context() -> None:
     _LOGGING_CONTEXT.clear()
 
 
-def configure_logging(
-    *, debug: bool = False, level_name: Optional[str] = None, structured: bool = False
-) -> None:
+def configure_logging(*, debug: bool = False, level_name: str | None = None, structured: bool = False) -> None:
     """Configure root logging once for the whole app process."""
     level = (level_name or ("DEBUG" if debug else "INFO")).upper()
     handler = logging.StreamHandler(sys.stdout)

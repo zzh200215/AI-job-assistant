@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Orchestration backend abstraction.
 
 默认使用线程池保持现有行为；当 `ORCHESTRATION_BACKEND=redis_queue` 且可用 Redis 时，
@@ -9,12 +8,13 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 import threading
+import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from threading import Event
-from typing import Any, Callable, Optional
+from typing import Any
 
 from app.core.config import settings
 
@@ -27,7 +27,7 @@ class TaskPayload:
     task_id: int
     resume_id: int
     jd_id: int
-    user_id: Optional[int] = None
+    user_id: int | None = None
 
     def to_json(self) -> str:
         return json.dumps(
@@ -42,7 +42,7 @@ class TaskPayload:
         )
 
     @classmethod
-    def from_json(cls, raw: str) -> "TaskPayload":
+    def from_json(cls, raw: str) -> TaskPayload:
         data = json.loads(raw)
         return cls(
             strategy_name=data["strategy_name"],
@@ -139,15 +139,6 @@ class RedisQueueOrchestrationBackend(OrchestrationBackend):
             except Exception as exc:
                 logger.exception("Redis orchestration worker failed: %s", exc)
                 time.sleep(max(0.1, float(settings.ORCHESTRATION_QUEUE_POLL_SECONDS or 1.0)))
-
-    def queue_health(self) -> dict[str, Any]:
-        client = self._get_client()
-        try:
-            ping = bool(client.ping())
-            length = int(client.llen(settings.ORCHESTRATION_QUEUE_NAME))
-            return {"ok": ping, "queue_length": length, "queue_name": settings.ORCHESTRATION_QUEUE_NAME}
-        except Exception as exc:
-            return {"ok": False, "error": str(exc), "queue_name": settings.ORCHESTRATION_QUEUE_NAME}
 
 
 def get_orchestration_backend() -> OrchestrationBackend:

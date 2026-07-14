@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 编排策略测试
 
@@ -7,25 +6,22 @@
   2. LayeredParallelStrategy — 分层并行 + 同层并发 + 层间串行
   3. StepByStepStrategy    — 细粒度步骤 + 步骤日志
 """
-import json
-from typing import Any, Dict, List
-from unittest.mock import ANY, MagicMock, patch
+
+from typing import Any
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy.orm import Session
 
-from app.models.agent import AgentTask, AgentStepLog
-from app.models.history import Resume, JobDescription
+from app.models.agent import AgentStepLog, AgentTask
 from app.orchestration.context import AgentContext
-from app.orchestration.registry import AgentSpec, DEFAULT_REGISTRY, UnifiedRegistry
+from app.orchestration.registry import DEFAULT_REGISTRY, AgentSpec, UnifiedRegistry
 from app.orchestration.strategies import (
-    LinearStrategy,
     LayeredParallelStrategy,
+    LinearStrategy,
     StepByStepStrategy,
     StrategyFactory,
 )
-from app.utils.time_helper import utc_now
-
 
 # ===================== Mock Agent Classes =====================
 
@@ -33,14 +29,21 @@ from app.utils.time_helper import utc_now
 class _MockAgent:
     """Mock agent that returns predefined data."""
 
-    _outputs: Dict[str, Any] = {
+    _outputs: dict[str, Any] = {
         "IntentAgent": {
             "intent": "full_analysis",
             "intent_confidence": 0.95,
             "required_steps": [
-                "intent_recognition", "resume_parse", "jd_parse", "task_planning",
-                "knowledge_retrieval", "matching_analysis", "resume_optimization",
-                "interview_question_generation", "self_check", "final_report",
+                "intent_recognition",
+                "resume_parse",
+                "jd_parse",
+                "task_planning",
+                "knowledge_retrieval",
+                "matching_analysis",
+                "resume_optimization",
+                "interview_question_generation",
+                "self_check",
+                "final_report",
             ],
         },
         "ResumeParseAgent": {"parsed": {"name": "测试", "skills": ["Python"]}},
@@ -74,10 +77,10 @@ class _MockAgent:
     def __init__(self, db=None):
         self.db = db
 
-    def run_impl(self, context: AgentContext) -> Dict[str, Any]:
+    def run_impl(self, context: AgentContext) -> dict[str, Any]:
         """Return predefined output based on agent name lookup."""
         # Try to find by agent_outputs key first (for strategies that record by name)
-        for name, output in self._outputs.items():
+        for _name, _output in self._outputs.items():
             # Check if this agent matches by looking at what the strategy expects
             pass
         # Default fallback
@@ -90,7 +93,7 @@ class _MockFailAgent:
     def __init__(self, db=None):
         self.db = db
 
-    def run_impl(self, context: AgentContext) -> Dict[str, Any]:
+    def run_impl(self, context: AgentContext) -> dict[str, Any]:
         raise RuntimeError("模拟 Agent 执行失败")
 
 
@@ -100,13 +103,17 @@ class _MockSkipIntentAgent:
     def __init__(self, db=None):
         self.db = db
 
-    def run_impl(self, context: AgentContext) -> Dict[str, Any]:
+    def run_impl(self, context: AgentContext) -> dict[str, Any]:
         return {
             "intent": "resume_match_only",
             "intent_confidence": 0.85,
             "required_steps": [
-                "intent_recognition", "resume_parse", "jd_parse",
-                "knowledge_retrieval", "matching_analysis", "final_report",
+                "intent_recognition",
+                "resume_parse",
+                "jd_parse",
+                "knowledge_retrieval",
+                "matching_analysis",
+                "final_report",
             ],
         }
 
@@ -143,6 +150,7 @@ def mock_registry():
 def default_settings():
     """Ensure RAG_TOP_K is set to a small value for tests."""
     from app.core.config import settings
+
     original = settings.RAG_TOP_K
     settings.RAG_TOP_K = 3
     yield
@@ -155,8 +163,9 @@ def default_settings():
 class TestLinearStrategy:
     """LinearStrategy 执行路径测试"""
 
-    def _run_strategy(self, db: Session, task_id: int, resume_id: int, jd_id: int,
-                      registry: UnifiedRegistry = None) -> Dict[str, Any]:
+    def _run_strategy(
+        self, db: Session, task_id: int, resume_id: int, jd_id: int, registry: UnifiedRegistry = None
+    ) -> dict[str, Any]:
         strategy = LinearStrategy(registry or DEFAULT_REGISTRY)
         return strategy.run(task_id, resume_id, jd_id, user_id=1, db=db)
 
@@ -179,8 +188,7 @@ class TestLinearStrategy:
         jd_id = make_jd()
         task_id = self._create_task(db_session, resume_id, jd_id)
 
-        result = self._run_strategy(db_session, task_id, resume_id, jd_id,
-                                    registry=mock_registry)
+        result = self._run_strategy(db_session, task_id, resume_id, jd_id, registry=mock_registry)
 
         assert result["status"] == "completed"
         assert len(result["steps"]) == 7
@@ -207,12 +215,13 @@ class TestLinearStrategy:
 
         # 把 IntentAgent 替换为会失败的版本
         mock_registry._agents["IntentAgent"] = AgentSpec(
-            "IntentAgent", _MockFailAgent, critical=True,
+            "IntentAgent",
+            _MockFailAgent,
+            critical=True,
             strategies=["linear", "langgraph_linear"],
         )
 
-        result = self._run_strategy(db_session, task_id, resume_id, jd_id,
-                                    registry=mock_registry)
+        result = self._run_strategy(db_session, task_id, resume_id, jd_id, registry=mock_registry)
 
         assert result["status"] == "failed"
         assert result["steps"][0]["status"] == "failed"
@@ -230,12 +239,13 @@ class TestLinearStrategy:
 
         # InterviewQuestionAgent 是非关键的（critical=False）
         mock_registry._agents["InterviewQuestionAgent"] = AgentSpec(
-            "InterviewQuestionAgent", _MockFailAgent, critical=False,
+            "InterviewQuestionAgent",
+            _MockFailAgent,
+            critical=False,
             strategies=["linear", "langgraph_linear"],
         )
 
-        result = self._run_strategy(db_session, task_id, resume_id, jd_id,
-                                    registry=mock_registry)
+        result = self._run_strategy(db_session, task_id, resume_id, jd_id, registry=mock_registry)
 
         assert result["status"] == "partial"
         assert len(result["steps"]) == 7
@@ -253,12 +263,13 @@ class TestLinearStrategy:
 
         # 替换 IntentAgent 为返回 resume_match_only 的版本
         mock_registry._agents["IntentAgent"] = AgentSpec(
-            "IntentAgent", _MockSkipIntentAgent, critical=True,
+            "IntentAgent",
+            _MockSkipIntentAgent,
+            critical=True,
             strategies=["linear", "langgraph_linear"],
         )
 
-        result = self._run_strategy(db_session, task_id, resume_id, jd_id,
-                                    registry=mock_registry)
+        result = self._run_strategy(db_session, task_id, resume_id, jd_id, registry=mock_registry)
 
         assert result["status"] == "completed"
         # 验证跳过了特定步骤
@@ -269,8 +280,8 @@ class TestLinearStrategy:
 
         # 验证日志也标记为 skipped
         logs = db_session.query(AgentStepLog).filter_by(task_id=task_id).all()
-        skipped_logs = [l for l in logs if l.status == "skipped"]
-        skipped_log_names = [l.step_name for l in skipped_logs]
+        skipped_logs = [log for log in logs if log.status == "skipped"]
+        skipped_log_names = [log.step_name for log in skipped_logs]
         assert "ResumeOptimizeAgent" in skipped_log_names
 
     def test_task_not_found(self, db_session, mock_registry):
@@ -292,7 +303,7 @@ class TestLinearStrategy:
             ("interview_only", {"InterviewQuestionAgent", "SummaryAgent"}),
         ]
 
-        for intent_name, expected_non_skipped in intent_test_cases:
+        for intent_name, _expected_non_skipped in intent_test_cases:
             # 为当前测试重置 task 状态
             db_session.query(AgentTask).filter_by(id=task_id).update({"status": "pending"})
             db_session.commit()
@@ -300,12 +311,17 @@ class TestLinearStrategy:
             # 用新的 IntentAgent mock
             class _IntentForTest:
                 _intent = intent_name
-                def __init__(self, db=None): pass
+
+                def __init__(self, db=None):
+                    pass
+
                 def run_impl(self, ctx):
                     return {"intent": self._intent, "intent_confidence": 0.9, "required_steps": []}
 
             mock_registry._agents["IntentAgent"] = AgentSpec(
-                "IntentAgent", _IntentForTest, critical=True,
+                "IntentAgent",
+                _IntentForTest,
+                critical=True,
                 strategies=["linear", "langgraph_linear"],
             )
 
@@ -334,7 +350,10 @@ class TestLayeredParallelStrategy:
         resume_id = make_resume()
         jd_id = make_jd()
         task = AgentTask(
-            user_id=1, resume_id=resume_id, jd_id=jd_id, status="pending",
+            user_id=1,
+            resume_id=resume_id,
+            jd_id=jd_id,
+            status="pending",
         )
         db_session.add(task)
         db_session.commit()
@@ -362,7 +381,10 @@ class TestLayeredParallelStrategy:
         resume_id = make_resume()
         jd_id = make_jd()
         task = AgentTask(
-            user_id=1, resume_id=resume_id, jd_id=jd_id, status="pending",
+            user_id=1,
+            resume_id=resume_id,
+            jd_id=jd_id,
+            status="pending",
         )
         db_session.add(task)
         db_session.commit()
@@ -370,7 +392,9 @@ class TestLayeredParallelStrategy:
 
         # 把核心的 MatchAgent 替换为会失败的
         mock_registry._agents["MatchAgent"] = AgentSpec(
-            "MatchAgent", _MockFailAgent, critical=True,
+            "MatchAgent",
+            _MockFailAgent,
+            critical=True,
             strategies=["layered", "langgraph_layered"],
         )
 
@@ -384,7 +408,10 @@ class TestLayeredParallelStrategy:
         resume_id = make_resume()
         jd_id = make_jd()
         task = AgentTask(
-            user_id=1, resume_id=resume_id, jd_id=jd_id, status="pending",
+            user_id=1,
+            resume_id=resume_id,
+            jd_id=jd_id,
+            status="pending",
         )
         db_session.add(task)
         db_session.commit()
@@ -417,9 +444,22 @@ class TestStepByStepStrategy:
     @patch("app.services.agent_steps.step_self_check")
     @patch("app.services.agent_steps.step_final_report")
     def test_full_step_execution(
-        self, mock_report, mock_check, mock_interview, mock_optimize,
-        mock_match, mock_kb, mock_plan, mock_jd, mock_resume, mock_intent,
-        db_session, make_resume, make_jd, default_settings, mock_registry,
+        self,
+        mock_report,
+        mock_check,
+        mock_interview,
+        mock_optimize,
+        mock_match,
+        mock_kb,
+        mock_plan,
+        mock_jd,
+        mock_resume,
+        mock_intent,
+        db_session,
+        make_resume,
+        make_jd,
+        default_settings,
+        mock_registry,
     ):
         """所有步骤按顺序执行并记录日志。"""
         # 配置 mock 返回值
@@ -432,7 +472,9 @@ class TestStepByStepStrategy:
         mock_jd.return_value = {"skipped": False, "parsed": {"title": "AI工程师"}}
         mock_plan.return_value = {"plan": [{"step": "分析匹配度"}], "steps_count": 1}
         mock_kb.return_value = {
-            "query": "test", "retrievals": {}, "rag_confidence": {"score": 80},
+            "query": "test",
+            "retrievals": {},
+            "rag_confidence": {"score": 80},
         }
         mock_match.return_value = {"match_score": 85, "detail": "匹配良好"}
         mock_optimize.return_value = {"suggestions": ["增加LLM项目"]}
@@ -443,7 +485,10 @@ class TestStepByStepStrategy:
         resume_id = make_resume()
         jd_id = make_jd()
         task = AgentTask(
-            user_id=1, resume_id=resume_id, jd_id=jd_id, status="pending",
+            user_id=1,
+            resume_id=resume_id,
+            jd_id=jd_id,
+            status="pending",
         )
         db_session.add(task)
         db_session.commit()
@@ -485,9 +530,22 @@ class TestStepByStepStrategy:
     @patch("app.services.agent_steps.step_self_check")
     @patch("app.services.agent_steps.step_final_report")
     def test_step_log_metadata(
-        self, mock_report, mock_check, mock_interview, mock_optimize,
-        mock_match, mock_kb, mock_plan, mock_jd, mock_resume, mock_intent,
-        db_session, make_resume, make_jd, default_settings, mock_registry,
+        self,
+        mock_report,
+        mock_check,
+        mock_interview,
+        mock_optimize,
+        mock_match,
+        mock_kb,
+        mock_plan,
+        mock_jd,
+        mock_resume,
+        mock_intent,
+        db_session,
+        make_resume,
+        make_jd,
+        default_settings,
+        mock_registry,
     ):
         """验证每个步骤的日志包含正确的元数据（耗时、状态等）。"""
         mock_intent.return_value = {"intent": "full_analysis", "intent_confidence": 0.9, "required_steps": []}
@@ -505,7 +563,11 @@ class TestStepByStepStrategy:
         jd_id = make_jd()
         task_id = db_session.query(AgentTask).count() + 1
         task = AgentTask(
-            id=task_id, user_id=1, resume_id=resume_id, jd_id=jd_id, status="pending",
+            id=task_id,
+            user_id=1,
+            resume_id=resume_id,
+            jd_id=jd_id,
+            status="pending",
         )
         db_session.add(task)
         db_session.commit()
@@ -522,14 +584,19 @@ class TestStepByStepStrategy:
             assert isinstance(log.duration_ms, int)
 
     @patch("app.services.agent_steps.step_intent_recognition")
-    def test_critical_step_failure(self, mock_intent, db_session, make_resume, make_jd, default_settings, mock_registry):
+    def test_critical_step_failure(
+        self, mock_intent, db_session, make_resume, make_jd, default_settings, mock_registry
+    ):
         """关键步骤失败时流水线停止并返回 failed。"""
         mock_intent.side_effect = RuntimeError("意图识别失败")
 
         resume_id = make_resume()
         jd_id = make_jd()
         task = AgentTask(
-            user_id=1, resume_id=resume_id, jd_id=jd_id, status="pending",
+            user_id=1,
+            resume_id=resume_id,
+            jd_id=jd_id,
+            status="pending",
         )
         db_session.add(task)
         db_session.commit()
@@ -542,14 +609,19 @@ class TestStepByStepStrategy:
         assert "意图识别失败" in result.get("error", "") or result["steps"][0]["status"] == "failed"
 
     @patch("app.services.agent_steps.step_intent_recognition")
-    def test_step_logging_on_failure(self, mock_intent, db_session, make_resume, make_jd, default_settings, mock_registry):
+    def test_step_logging_on_failure(
+        self, mock_intent, db_session, make_resume, make_jd, default_settings, mock_registry
+    ):
         """步骤失败时日志应记录错误信息。"""
         mock_intent.side_effect = RuntimeError("意图识别失败")
 
         resume_id = make_resume()
         jd_id = make_jd()
         task = AgentTask(
-            user_id=1, resume_id=resume_id, jd_id=jd_id, status="pending",
+            user_id=1,
+            resume_id=resume_id,
+            jd_id=jd_id,
+            status="pending",
         )
         db_session.add(task)
         db_session.commit()
@@ -560,7 +632,7 @@ class TestStepByStepStrategy:
 
         # 验证错误日志
         logs = db_session.query(AgentStepLog).filter_by(task_id=task_id).all()
-        failed_logs = [l for l in logs if l.status == "failed"]
+        failed_logs = [log for log in logs if log.status == "failed"]
         assert len(failed_logs) >= 1
         for log in failed_logs:
             assert log.error_msg is not None
@@ -577,9 +649,22 @@ class TestStepByStepStrategy:
     @patch("app.services.agent_steps.step_self_check")
     @patch("app.services.agent_steps.step_final_report")
     def test_step_context_passing(
-        self, mock_report, mock_check, mock_interview, mock_optimize,
-        mock_match, mock_kb, mock_plan, mock_jd, mock_resume, mock_intent,
-        db_session, make_resume, make_jd, default_settings, mock_registry,
+        self,
+        mock_report,
+        mock_check,
+        mock_interview,
+        mock_optimize,
+        mock_match,
+        mock_kb,
+        mock_plan,
+        mock_jd,
+        mock_resume,
+        mock_intent,
+        db_session,
+        make_resume,
+        make_jd,
+        default_settings,
+        mock_registry,
     ):
         """验证上下文在各步骤间正确传递。"""
         mock_intent.return_value = {"intent": "full_analysis", "intent_confidence": 0.9, "required_steps": []}
@@ -596,7 +681,10 @@ class TestStepByStepStrategy:
         resume_id = make_resume()
         jd_id = make_jd()
         task = AgentTask(
-            user_id=1, resume_id=resume_id, jd_id=jd_id, status="pending",
+            user_id=1,
+            resume_id=resume_id,
+            jd_id=jd_id,
+            status="pending",
         )
         db_session.add(task)
         db_session.commit()

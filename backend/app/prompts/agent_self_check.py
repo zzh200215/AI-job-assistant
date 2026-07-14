@@ -1,5 +1,5 @@
-# -*- coding: utf-8 -*-
 """自我校验 Prompt：检查 AI 生成结果的质量"""
+
 AGENT_SELF_CHECK_PROMPT = """你是一名 AI 输出质量审核专家。请对下面由 AI 生成的招聘分析结果进行自我校验。
 
 【校验对象】

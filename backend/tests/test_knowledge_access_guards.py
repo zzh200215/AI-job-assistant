@@ -1,14 +1,13 @@
-# -*- coding: utf-8 -*-
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from app.api.auth import router as auth_router
 from app.api.knowledge import router as knowledge_router
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password
-from app.models.knowledge import KnowledgeDocument
 from app.models.history import AnalysisRecord, JobDescription, Resume
+from app.models.knowledge import KnowledgeDocument
 from app.models.user import User
 
 
@@ -94,11 +93,28 @@ def test_knowledge_search_only_returns_visible_docs(knowledge_client, db_session
                 "query": lambda self, **kwargs: {
                     "ids": [[f"doc_{foreign_doc.id}", f"doc_{owner_doc.id}", f"doc_{public_doc.id}"]],
                     "documents": [["foreign text", "owner text", "public text"]],
-                    "metadatas": [[
-                        {"doc_id": str(foreign_doc.id), "doc_title": foreign_doc.title, "doc_type": "general", "chunk_index": 0},
-                        {"doc_id": str(owner_doc.id), "doc_title": owner_doc.title, "doc_type": "general", "chunk_index": 0},
-                        {"doc_id": str(public_doc.id), "doc_title": public_doc.title, "doc_type": "general", "chunk_index": 0},
-                    ]],
+                    "metadatas": [
+                        [
+                            {
+                                "doc_id": str(foreign_doc.id),
+                                "doc_title": foreign_doc.title,
+                                "doc_type": "general",
+                                "chunk_index": 0,
+                            },
+                            {
+                                "doc_id": str(owner_doc.id),
+                                "doc_title": owner_doc.title,
+                                "doc_type": "general",
+                                "chunk_index": 0,
+                            },
+                            {
+                                "doc_id": str(public_doc.id),
+                                "doc_title": public_doc.title,
+                                "doc_type": "general",
+                                "chunk_index": 0,
+                            },
+                        ]
+                    ],
                     "distances": [[0.01, 0.02, 0.03]],
                 },
             },
@@ -209,11 +225,28 @@ def test_analysis_references_only_return_visible_docs(knowledge_client, db_sessi
                 "query": lambda self, **kwargs: {
                     "ids": [[f"doc_{foreign_doc.id}", f"doc_{owner_doc.id}", f"doc_{public_doc.id}"]],
                     "documents": [["foreign text", "owner text", "public text"]],
-                    "metadatas": [[
-                        {"doc_id": str(foreign_doc.id), "doc_title": foreign_doc.title, "doc_type": "general", "chunk_index": 0},
-                        {"doc_id": str(owner_doc.id), "doc_title": owner_doc.title, "doc_type": "general", "chunk_index": 0},
-                        {"doc_id": str(public_doc.id), "doc_title": public_doc.title, "doc_type": "general", "chunk_index": 0},
-                    ]],
+                    "metadatas": [
+                        [
+                            {
+                                "doc_id": str(foreign_doc.id),
+                                "doc_title": foreign_doc.title,
+                                "doc_type": "general",
+                                "chunk_index": 0,
+                            },
+                            {
+                                "doc_id": str(owner_doc.id),
+                                "doc_title": owner_doc.title,
+                                "doc_type": "general",
+                                "chunk_index": 0,
+                            },
+                            {
+                                "doc_id": str(public_doc.id),
+                                "doc_title": public_doc.title,
+                                "doc_type": "general",
+                                "chunk_index": 0,
+                            },
+                        ]
+                    ],
                     "distances": [[0.01, 0.02, 0.03]],
                 },
             },
@@ -223,10 +256,13 @@ def test_analysis_references_only_return_visible_docs(knowledge_client, db_sessi
 
     analysis_app = FastAPI()
     from app.api.analysis import router as analysis_router
+
     analysis_app.include_router(auth_router, prefix="/auth")
     analysis_app.include_router(analysis_router, prefix="/analysis")
+
     def override_get_db():
         yield db_session
+
     analysis_app.dependency_overrides[get_db] = override_get_db
 
     with TestClient(analysis_app) as client:

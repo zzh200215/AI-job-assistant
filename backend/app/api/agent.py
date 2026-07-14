@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Legacy agent workflow endpoints kept for backward compatibility."""
 
 from __future__ import annotations
@@ -14,10 +13,10 @@ from app.models.agent import AgentStepLog, RetrievalLog, SelfCheckLog
 from app.models.history import Resume
 from app.models.user import User
 from app.schemas.agent import AgentStartReq
-from app.services.analysis_service import get_configured_strategy_name
 from app.services.agent_workflow import run_workflow
-from app.services.task_center_service import get_task_with_progress, get_user_task_summary, list_user_tasks
+from app.services.analysis_service import get_configured_strategy_name
 from app.services.orchestration_runner import cancel_task, retry_task
+from app.services.task_center_service import get_task_with_progress, get_user_task_summary, list_user_tasks
 from app.utils.http_errors import api_error
 from app.utils.job_access import get_accessible_job
 from app.utils.response import ERR_COMMON, ERR_PARAM, ok
@@ -53,7 +52,7 @@ async def start_analysis(
         return ok(data={"task_id": task_id}, message="workflow started")
     except Exception as exc:
         logger.exception("Failed to start legacy workflow resume_id=%s jd_id=%s", payload.resume_id, payload.jd_id)
-        raise api_error(500, f"failed to start workflow: {exc}", ERR_COMMON)
+        raise api_error(500, f"failed to start workflow: {exc}", ERR_COMMON) from exc
 
 
 @router.get("/tasks", summary="List current user's agent tasks")
@@ -128,12 +127,7 @@ async def get_task_steps(
     if not task or not payload:
         raise api_error(404, "task not found", ERR_PARAM)
 
-    steps = (
-        db.query(AgentStepLog)
-        .filter(AgentStepLog.task_id == task_id)
-        .order_by(AgentStepLog.step_index)
-        .all()
-    )
+    steps = db.query(AgentStepLog).filter(AgentStepLog.task_id == task_id).order_by(AgentStepLog.step_index).all()
     retrievals = db.query(RetrievalLog).filter(RetrievalLog.task_id == task_id).all()
     checks = db.query(SelfCheckLog).filter(SelfCheckLog.task_id == task_id).all()
 

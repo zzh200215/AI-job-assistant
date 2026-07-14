@@ -1,18 +1,22 @@
-# -*- coding: utf-8 -*-
 """用户 ORM 模型。"""
-from sqlalchemy import BigInteger, Column, DateTime, String, JSON, Integer, Text
+
+from sqlalchemy import JSON, BigInteger, Column, DateTime, Integer, String, Text
 
 from app.core.database import Base
 from app.core.user_roles import CANDIDATE_ROLE
 from app.utils.time_helper import utc_now
 
 # 求职状态常量
-JOB_SEEKING_STATUS_ACTIVE = "active"          # 在职看机会
-JOB_SEEKING_STATUS_URGENT = "urgent"          # 离职急找
-JOB_SEEKING_STATUS_OBSERVING = "observing"    # 观望中
+JOB_SEEKING_STATUS_ACTIVE = "active"  # 在职看机会
+JOB_SEEKING_STATUS_URGENT = "urgent"  # 离职急找
+JOB_SEEKING_STATUS_OBSERVING = "observing"  # 观望中
 JOB_SEEKING_STATUS_NOT_LOOKING = "not_looking"  # 暂不考虑
-JOB_SEEKING_STATUSES = {JOB_SEEKING_STATUS_ACTIVE, JOB_SEEKING_STATUS_URGENT,
-                        JOB_SEEKING_STATUS_OBSERVING, JOB_SEEKING_STATUS_NOT_LOOKING}
+JOB_SEEKING_STATUSES = {
+    JOB_SEEKING_STATUS_ACTIVE,
+    JOB_SEEKING_STATUS_URGENT,
+    JOB_SEEKING_STATUS_OBSERVING,
+    JOB_SEEKING_STATUS_NOT_LOOKING,
+}
 
 
 class User(Base):
@@ -31,10 +35,7 @@ class User(Base):
     bio = Column(Text, default="", comment="个人简介")
 
     # ===== 求职意向 =====
-    job_seeking_status = Column(
-        String(20), default="",
-        comment="求职状态: active/urgent/observing/not_looking"
-    )
+    job_seeking_status = Column(String(20), default="", comment="求职状态: active/urgent/observing/not_looking")
     expected_position = Column(String(200), default="", comment="期望岗位，逗号分隔")
     expected_city = Column(String(200), default="", comment="期望城市，逗号分隔")
     expected_salary_min = Column(Integer, default=0, comment="期望最低月薪(K)")
@@ -52,7 +53,10 @@ class User(Base):
     # ===== 用户偏好设置 =====
     default_resume_id = Column(BigInteger, comment="默认简历ID")
     default_target_id = Column(BigInteger, comment="默认求职目标ID")
-    notification_preferences = Column(JSON, comment="通知偏好: {interview_reminder, offer_reminder, follow_up, jd_push, quiet_hours_start, quiet_hours_end}")
+    notification_preferences = Column(
+        JSON,
+        comment="通知偏好: {interview_reminder, offer_reminder, follow_up, jd_push, quiet_hours_start, quiet_hours_end}",
+    )
     privacy_settings = Column(JSON, comment="隐私设置: {profile_visible, share_anonymized_stats}")
     language = Column(String(10), default="zh-CN", comment="界面语言")
     theme = Column(String(10), default="light", comment="主题: light/dark")

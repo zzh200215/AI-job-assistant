@@ -1,12 +1,11 @@
-# -*- coding: utf-8 -*-
 """CareerPathAgent — 职业方向推荐智能体
 
 根据用户简历技能、经验、学历，智能推荐多个可能的岗位方向。
 """
-from typing import Dict, Any, List
+
+from typing import Any
 
 from app.services.llm_service import chat_json
-
 
 CAREER_PATH_PROMPT = """你是一名资深职业规划师。请根据候选人的技能和经验，推荐适合的岗位方向。
 
@@ -45,7 +44,7 @@ CAREER_PATH_PROMPT = """你是一名资深职业规划师。请根据候选人�
 class CareerPathAgent:
     """职业方向推荐"""
 
-    def recommend(self, resume_data: Dict[str, Any]) -> Dict[str, Any]:
+    def recommend(self, resume_data: dict[str, Any]) -> dict[str, Any]:
         """根据简历数据推荐岗位方向"""
         skills = resume_data.get("skills", [])
         if isinstance(skills, list):
@@ -59,14 +58,15 @@ class CareerPathAgent:
         projects = resume_data.get("project_experience", [])
 
         # 构建摘要
-        exp_desc = "\n".join([
-            f"- {w.get('company','')} {w.get('title','')}: {w.get('desc','')[:100]}"
-            for w in (work_exp or [])[:3]
-        ])
-        proj_desc = "\n".join([
-            f"- {p.get('name','')}: {p.get('desc','')[:100]} (技术栈: {', '.join(p.get('tech',[]) or [])})"
-            for p in (projects or [])[:3]
-        ])
+        exp_desc = "\n".join(
+            [f"- {w.get('company', '')} {w.get('title', '')}: {w.get('desc', '')[:100]}" for w in (work_exp or [])[:3]]
+        )
+        proj_desc = "\n".join(
+            [
+                f"- {p.get('name', '')}: {p.get('desc', '')[:100]} (技术栈: {', '.join(p.get('tech', []) or [])})"
+                for p in (projects or [])[:3]
+            ]
+        )
 
         summary = (
             f"技能: {', '.join(skills[:12])}\n"
@@ -78,5 +78,5 @@ class CareerPathAgent:
         )
 
         prompt = CAREER_PATH_PROMPT.format(resume_summary=summary)
-        result: Dict[str, Any] = chat_json(prompt)
+        result: dict[str, Any] = chat_json(prompt)
         return result

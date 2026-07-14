@@ -1,9 +1,6 @@
-# -*- coding: utf-8 -*-
 """Prompt trace APIs for lightweight LLMOps observability."""
 
 from __future__ import annotations
-
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -65,13 +62,13 @@ def _query_rows(
     db: Session,
     *,
     user_id: int,
-    source: Optional[str] = None,
-    prompt_version: Optional[str] = None,
-    status: Optional[str] = None,
-    request_id: Optional[str] = None,
-    task_id: Optional[int] = None,
-    analysis_record_id: Optional[int] = None,
-    model: Optional[str] = None,
+    source: str | None = None,
+    prompt_version: str | None = None,
+    status: str | None = None,
+    request_id: str | None = None,
+    task_id: int | None = None,
+    analysis_record_id: int | None = None,
+    model: str | None = None,
 ) -> list[PromptTrace]:
     query = db.query(PromptTrace).filter(PromptTrace.user_id == user_id)
     if source:
@@ -93,13 +90,13 @@ def _query_rows(
 
 @router.get("/summary", summary="Prompt trace summary")
 async def prompt_trace_summary(
-    source: Optional[str] = Query(None),
-    prompt_version: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
-    request_id: Optional[str] = Query(None),
-    task_id: Optional[int] = Query(None),
-    analysis_record_id: Optional[int] = Query(None),
-    model: Optional[str] = Query(None),
+    source: str | None = Query(None),
+    prompt_version: str | None = Query(None),
+    status: str | None = Query(None),
+    request_id: str | None = Query(None),
+    task_id: int | None = Query(None),
+    analysis_record_id: int | None = Query(None),
+    model: str | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -131,9 +128,7 @@ async def prompt_trace_summary(
 
     version_groups = []
     for (group_source, version), group_rows in by_version.items():
-        version_groups.append(
-            _build_group_item(version, group_rows, group_type="prompt_version", source=group_source)
-        )
+        version_groups.append(_build_group_item(version, group_rows, group_type="prompt_version", source=group_source))
     version_groups.sort(key=lambda item: (item["total"], item["last_seen"] or ""), reverse=True)
 
     versions = sorted({item["prompt_version"] for item in version_groups})
@@ -156,13 +151,13 @@ async def prompt_trace_summary(
 async def list_prompt_traces(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    source: Optional[str] = Query(None),
-    prompt_version: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
-    request_id: Optional[str] = Query(None),
-    task_id: Optional[int] = Query(None),
-    analysis_record_id: Optional[int] = Query(None),
-    model: Optional[str] = Query(None),
+    source: str | None = Query(None),
+    prompt_version: str | None = Query(None),
+    status: str | None = Query(None),
+    request_id: str | None = Query(None),
+    task_id: int | None = Query(None),
+    analysis_record_id: int | None = Query(None),
+    model: str | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -179,7 +174,7 @@ async def list_prompt_traces(
     )
     total = len(rows)
     start = (page - 1) * page_size
-    items = rows[start:start + page_size]
+    items = rows[start : start + page_size]
     return ok(
         {
             "items": [item.to_summary_dict() for item in items],
@@ -194,7 +189,7 @@ async def list_prompt_traces(
 async def compare_prompt_versions(
     version_a: str = Query(..., min_length=1),
     version_b: str = Query(..., min_length=1),
-    source: Optional[str] = Query(None),
+    source: str | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -254,11 +249,7 @@ async def get_prompt_trace_detail(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    trace = (
-        db.query(PromptTrace)
-        .filter(PromptTrace.id == trace_id, PromptTrace.user_id == current_user.id)
-        .first()
-    )
+    trace = db.query(PromptTrace).filter(PromptTrace.id == trace_id, PromptTrace.user_id == current_user.id).first()
     if not trace:
         return fail(message="prompt trace not found", code=ERR_PARAM)
     return ok(trace.to_dict())
@@ -271,11 +262,7 @@ async def update_prompt_trace_feedback(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    trace = (
-        db.query(PromptTrace)
-        .filter(PromptTrace.id == trace_id, PromptTrace.user_id == current_user.id)
-        .first()
-    )
+    trace = db.query(PromptTrace).filter(PromptTrace.id == trace_id, PromptTrace.user_id == current_user.id).first()
     if not trace:
         return fail(message="prompt trace not found", code=ERR_PARAM)
 

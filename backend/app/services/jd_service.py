@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
 """JD 相关业务：创建 JD + 解析为结构化 JSON"""
-from typing import Dict, Any
+
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -24,7 +24,7 @@ def parse_and_save(db: Session, jd_id: int) -> JobDescription:
         raise ValueError(f"jd {jd_id} not found")
 
     prompt = render_prompt(JD_PARSE_PROMPT, jd_text=(jd.raw_text or "")[:4000])
-    parsed: Dict[str, Any] = chat_json(prompt)
+    parsed: dict[str, Any] = chat_json(prompt)
 
     jd.parsed_json = parsed
     jd.salary_range = parsed.get("salary_range")

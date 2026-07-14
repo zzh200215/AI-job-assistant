@@ -1,23 +1,19 @@
-# -*- coding: utf-8 -*-
 """FastAPI application entrypoint."""
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 import logging
 import os
+from contextlib import asynccontextmanager
 from time import perf_counter
 from uuid import uuid4
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-
-load_dotenv()
 
 import app.models  # noqa: F401
 from app.api.interview_ws import router as interview_ws_router
@@ -29,11 +25,12 @@ from app.core.prometheus_metrics import record_http_request, record_rate_limited
 from app.core.rate_limiter import get_limiter
 from app.core.request_context import set_request_id
 from app.core.runtime_metrics import record_request
-from app.core.scheduler import start_scheduler, shutdown_scheduler
+from app.core.scheduler import shutdown_scheduler, start_scheduler
 from app.core.schema_bootstrap import (
     ensure_agent_message_usage_columns,
     ensure_agent_task_columns,
     ensure_analysis_record_columns,
+    ensure_interview_evaluation_schema,
     ensure_interview_question_table,
     ensure_jd_columns,
     ensure_job_bookmark_table,
@@ -45,6 +42,7 @@ from app.core.schema_bootstrap import (
     ensure_user_profile_columns,
     ensure_user_role_column,
 )
+from app.services.interview_evaluation_service import shutdown_interview_evaluation_executor
 from app.services.orchestration_runner import mark_stale_running_tasks_failed, shutdown_orchestration_executor
 from app.utils.response import ERR_AUTH, ERR_COMMON, ERR_PARAM, fail, ok
 
@@ -67,6 +65,7 @@ async def lifespan(_app: FastAPI):
         ensure_job_bookmark_table(engine)
         ensure_notification_table(engine)
         ensure_interview_question_table(engine)
+        ensure_interview_evaluation_schema(engine)
         ensure_job_journal_table(engine)
         ensure_job_target_table(engine)
         ensure_job_pipeline_columns(engine)
@@ -77,6 +76,7 @@ async def lifespan(_app: FastAPI):
     start_scheduler()
     yield
     shutdown_scheduler()
+    shutdown_interview_evaluation_executor()
     shutdown_orchestration_executor()
 
 
@@ -117,6 +117,7 @@ async def request_context_middleware(request: Request, call_next):
     if authorization.startswith("Bearer "):
         try:
             from app.core.security import decode_access_token
+
             token = authorization[7:]
             payload = decode_access_token(token)
             if payload and payload.get("sub"):

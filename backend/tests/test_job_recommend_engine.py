@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -60,10 +59,13 @@ def test_recommend_cache_reuses_full_results_for_different_limits(db_session, ma
     for idx in range(3):
         _create_job(db_session, title=f"Backend {idx}")
 
-    with patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()), patch(
-        "app.services.job_recommend_engine.embed_texts",
-        side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
-    ) as mock_embed:
+    with (
+        patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()),
+        patch(
+            "app.services.job_recommend_engine.embed_texts",
+            side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
+        ) as mock_embed,
+    ):
         engine = JobRecommendationEngine(db_session)
         first = engine.recommend(resume_id=resume_id, limit=1)
         second = engine.recommend(resume_id=resume_id, limit=3)
@@ -85,10 +87,13 @@ def test_recommend_cache_uses_stable_filter_key(db_session, make_resume):
     )
     _create_job(db_session, title="Backend Stable")
 
-    with patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()), patch(
-        "app.services.job_recommend_engine.embed_texts",
-        side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
-    ) as mock_embed:
+    with (
+        patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()),
+        patch(
+            "app.services.job_recommend_engine.embed_texts",
+            side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
+        ) as mock_embed,
+    ):
         engine = JobRecommendationEngine(db_session)
         filters_a = {"location": "Beijing", "salary_min": 20}
         filters_b = {"salary_min": 20, "location": "Beijing"}
@@ -111,10 +116,13 @@ def test_recommend_cache_returns_isolated_copies(db_session, make_resume):
     )
     _create_job(db_session, title="Backend Copy")
 
-    with patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()), patch(
-        "app.services.job_recommend_engine.embed_texts",
-        side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
-    ) as mock_embed:
+    with (
+        patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()),
+        patch(
+            "app.services.job_recommend_engine.embed_texts",
+            side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
+        ) as mock_embed,
+    ):
         engine = JobRecommendationEngine(db_session)
         first = engine.recommend(resume_id=resume_id, limit=5)
         first[0]["job_title"] = "Mutated"
@@ -137,9 +145,12 @@ def test_recommend_exp_level_filter_is_applied(db_session, make_resume):
     _create_job(db_session, title="Junior Backend", experience_requirement="1-3 years")
     _create_job(db_session, title="Senior Backend", experience_requirement="5-8 years")
 
-    with patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()), patch(
-        "app.services.job_recommend_engine.embed_texts",
-        side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
+    with (
+        patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()),
+        patch(
+            "app.services.job_recommend_engine.embed_texts",
+            side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
+        ),
     ):
         engine = JobRecommendationEngine(db_session)
         results = engine.recommend(
@@ -167,9 +178,12 @@ def test_recommend_only_uses_owned_and_public_jobs(db_session, make_resume):
     _create_job(db_session, title="Public Backend", user_id=None)
     _create_job(db_session, title="Other User Backend", user_id=2)
 
-    with patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()), patch(
-        "app.services.job_recommend_engine.embed_texts",
-        side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
+    with (
+        patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()),
+        patch(
+            "app.services.job_recommend_engine.embed_texts",
+            side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
+        ),
     ):
         engine = JobRecommendationEngine(db_session)
         results = engine.recommend(resume_id=resume_id, limit=10, bypass_cache=True)
@@ -190,9 +204,12 @@ def test_recommend_industry_filter_matches_normalized_keyword(db_session, make_r
     _create_job(db_session, title="AI Backend", industry="AI")
     _create_job(db_session, title="Cloud Backend", industry="Cloud")
 
-    with patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()), patch(
-        "app.services.job_recommend_engine.embed_texts",
-        side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
+    with (
+        patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()),
+        patch(
+            "app.services.job_recommend_engine.embed_texts",
+            side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
+        ),
     ):
         engine = JobRecommendationEngine(db_session)
         results = engine.recommend(
@@ -219,9 +236,12 @@ def test_recommend_exp_level_filter_keeps_jobs_without_experience_requirement(db
     _create_job(db_session, title="Junior Backend", experience_requirement="1-3 years")
     _create_job(db_session, title="Senior Backend", experience_requirement="8-10 years")
 
-    with patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()), patch(
-        "app.services.job_recommend_engine.embed_texts",
-        side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
+    with (
+        patch("app.services.job_recommend_engine.get_knowledge_collection", return_value=MagicMock()),
+        patch(
+            "app.services.job_recommend_engine.embed_texts",
+            side_effect=lambda texts: [[1.0, 0.0] for _ in texts],
+        ),
     ):
         engine = JobRecommendationEngine(db_session)
         results = engine.recommend(

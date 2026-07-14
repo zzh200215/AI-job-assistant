@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
 """投递流程 ORM 模型
 
 阶段流转：todo → applied → written_test → interview → offer → accepted / rejected / withdrawn
 """
-from sqlalchemy import Column, BigInteger, String, DateTime, ForeignKey, Text, JSON, Integer, Float
+
+from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, Integer, String, Text
 
 from app.core.database import Base
 from app.utils.time_helper import utc_now
@@ -19,9 +19,14 @@ STAGE_REJECTED = "rejected"
 STAGE_WITHDRAWN = "withdrawn"
 
 PIPELINE_STAGES = {
-    STAGE_TODO, STAGE_APPLIED, STAGE_WRITTEN_TEST,
-    STAGE_INTERVIEW, STAGE_OFFER, STAGE_ACCEPTED,
-    STAGE_REJECTED, STAGE_WITHDRAWN,
+    STAGE_TODO,
+    STAGE_APPLIED,
+    STAGE_WRITTEN_TEST,
+    STAGE_INTERVIEW,
+    STAGE_OFFER,
+    STAGE_ACCEPTED,
+    STAGE_REJECTED,
+    STAGE_WITHDRAWN,
 }
 
 # 看板分组：活跃阶段 vs 终态阶段
@@ -47,8 +52,21 @@ class JobApplicationPipeline(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("tb_user.id", ondelete="CASCADE"), nullable=False, index=True)
     resume_id = Column(BigInteger, ForeignKey("tb_resume.id", ondelete="SET NULL"), nullable=True, index=True)
+    resume_version_id = Column(BigInteger, nullable=True, index=True, comment="投递使用的简历版本ID")
+    resume_version_label = Column(String(120), default="", comment="投递时的简历版本名称快照")
+    feedback_type = Column(String(30), default="", comment="反馈类型: hr_reply/interview/rejection/offer")
+    feedback_score = Column(Integer, nullable=True, comment="反馈评价 1-5")
+    feedback_tags = Column(JSON, comment="结构化反馈标签")
+    feedback_note = Column(Text, comment="反馈原文或复盘")
+    feedback_at = Column(DateTime, nullable=True, comment="反馈记录时间")
     jd_id = Column(BigInteger, ForeignKey("tb_jd.id", ondelete="SET NULL"), nullable=True, index=True)
-    target_id = Column(BigInteger, ForeignKey("job_target.id", ondelete="SET NULL"), nullable=True, index=True, comment="关联求职目标ID")
+    target_id = Column(
+        BigInteger,
+        ForeignKey("job_target.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="关联求职目标ID",
+    )
 
     title = Column(String(200), nullable=False, index=True)
     company = Column(String(200), default="", index=True)
@@ -93,6 +111,13 @@ class JobApplicationPipeline(Base):
             "id": self.id,
             "user_id": self.user_id,
             "resume_id": self.resume_id,
+            "resume_version_id": self.resume_version_id,
+            "resume_version_label": self.resume_version_label or "",
+            "feedback_type": self.feedback_type or "",
+            "feedback_score": self.feedback_score,
+            "feedback_tags": self.feedback_tags or [],
+            "feedback_note": self.feedback_note or "",
+            "feedback_at": self.feedback_at.isoformat() if self.feedback_at else None,
             "jd_id": self.jd_id,
             "target_id": self.target_id,
             "title": self.title,

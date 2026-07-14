@@ -1,13 +1,12 @@
-# -*- coding: utf-8 -*-
 """RAG Query Rewrite 模块测试用例"""
-import pytest
-from unittest.mock import patch, MagicMock
 
-from app.services.query_rewrite_service import rewrite_queries, RewrittenQuery, _build_prompt
-from app.services.rag_service import merge_and_dedup_results, search_knowledge_multi_queries
+from unittest.mock import patch
 
+from app.services.query_rewrite_service import RewrittenQuery, _build_prompt, rewrite_queries
+from app.services.rag_service import merge_and_dedup_results
 
 # ==================== Query Rewrite Service 测试 ====================
+
 
 class TestQueryRewriteService:
     def test_build_prompt_contains_fields(self):
@@ -65,8 +64,7 @@ class TestQueryRewriteService:
     @patch("app.services.query_rewrite_service.chat_json")
     def test_rewrite_queries_max_queries(self, mock_chat_json):
         mock_chat_json.return_value = [
-            {"query_text": f"query{i}", "query_type": "skill", "purpose": "", "priority": i}
-            for i in range(10)
+            {"query_text": f"query{i}", "query_type": "skill", "purpose": "", "priority": i} for i in range(10)
         ]
         result = rewrite_queries("test", max_queries=3)
         assert len(result) <= 4  # 3个 + 可能1个original
@@ -89,12 +87,37 @@ class TestQueryRewriteService:
 
 # ==================== RAG Merge & Dedup 测试 ====================
 
+
 class TestMergeAndDedup:
     def test_merge_and_dedup_basic(self):
         results = [
-            {"chunk_id": "c1", "text": "text1", "score": 0.5, "query_used": "q1", "query_type": "skill", "doc_title": "A", "doc_type": "t"},
-            {"chunk_id": "c2", "text": "text2", "score": 0.3, "query_used": "q1", "query_type": "skill", "doc_title": "B", "doc_type": "t"},
-            {"chunk_id": "c1", "text": "text1", "score": 0.2, "query_used": "q2", "query_type": "interview", "doc_title": "A", "doc_type": "t"},
+            {
+                "chunk_id": "c1",
+                "text": "text1",
+                "score": 0.5,
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "A",
+                "doc_type": "t",
+            },
+            {
+                "chunk_id": "c2",
+                "text": "text2",
+                "score": 0.3,
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "B",
+                "doc_type": "t",
+            },
+            {
+                "chunk_id": "c1",
+                "text": "text1",
+                "score": 0.2,
+                "query_used": "q2",
+                "query_type": "interview",
+                "doc_title": "A",
+                "doc_type": "t",
+            },
         ]
         merged = merge_and_dedup_results(results)
         assert len(merged) == 2
@@ -106,7 +129,15 @@ class TestMergeAndDedup:
 
     def test_merge_and_dedup_single(self):
         results = [
-            {"chunk_id": "c1", "text": "text1", "score": 0.1, "query_used": "q1", "query_type": "skill", "doc_title": "A", "doc_type": "t"},
+            {
+                "chunk_id": "c1",
+                "text": "text1",
+                "score": 0.1,
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "A",
+                "doc_type": "t",
+            },
         ]
         merged = merge_and_dedup_results(results)
         assert len(merged) == 1
@@ -117,9 +148,33 @@ class TestMergeAndDedup:
 
     def test_merge_and_dedup_sort_order(self):
         results = [
-            {"chunk_id": "c3", "text": "t3", "score": 0.8, "query_used": "q1", "query_type": "skill", "doc_title": "A", "doc_type": "t"},
-            {"chunk_id": "c1", "text": "t1", "score": 0.1, "query_used": "q1", "query_type": "skill", "doc_title": "A", "doc_type": "t"},
-            {"chunk_id": "c2", "text": "t2", "score": 0.5, "query_used": "q1", "query_type": "skill", "doc_title": "A", "doc_type": "t"},
+            {
+                "chunk_id": "c3",
+                "text": "t3",
+                "score": 0.8,
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "A",
+                "doc_type": "t",
+            },
+            {
+                "chunk_id": "c1",
+                "text": "t1",
+                "score": 0.1,
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "A",
+                "doc_type": "t",
+            },
+            {
+                "chunk_id": "c2",
+                "text": "t2",
+                "score": 0.5,
+                "query_used": "q1",
+                "query_type": "skill",
+                "doc_title": "A",
+                "doc_type": "t",
+            },
         ]
         merged = merge_and_dedup_results(results)
         scores = [m["score"] for m in merged]
@@ -127,6 +182,7 @@ class TestMergeAndDedup:
 
 
 # ==================== RewrittenQuery Dataclass 测试 ====================
+
 
 class TestRewrittenQuery:
     def test_dataclass_creation(self):

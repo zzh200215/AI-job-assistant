@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 模拟面试引擎测试
 
@@ -10,24 +9,21 @@
   5. 评估报告 — 正常作答后的 _generate_report
   6. 边界条件 — 空题目列表、全部超时、用户主动结束
 """
-import json
-import time
-from typing import Any, Dict, List
-from unittest.mock import ANY, MagicMock, patch
+
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy.orm import Session
 
 from app.models.interview_session import InterviewSession
 from app.services.interview_engine import InterviewEngine
 from app.utils.time_helper import utc_now
 
-
 # ===================== Fixtures =====================
 
 
 @pytest.fixture
-def sample_questions() -> List[Dict[str, Any]]:
+def sample_questions() -> list[dict[str, Any]]:
     """标准面试题列表。"""
     return [
         {
@@ -236,8 +232,13 @@ class TestNormalFlow:
 
         # 模拟评估函数
         mock_eval = {
-            "completeness": 80, "accuracy": 85, "depth": 75, "expression": 80,
-            "overall_score": 80, "feedback": "不错", "improvement": "继续加油",
+            "completeness": 80,
+            "accuracy": 85,
+            "depth": 75,
+            "expression": 80,
+            "overall_score": 80,
+            "feedback": "不错",
+            "improvement": "继续加油",
             "follow_up": False,
         }
 
@@ -257,7 +258,7 @@ class TestNormalFlow:
 
             # 验证所有题目都被回答了
             total = len(sample_questions)
-            expected_answered = max(0, total - 1)  # start 已经消耗了第一题
+            max(0, total - 1)  # start 已经消耗了第一题
             assert engine.evaluations is not None
             # 验证生成了报告
             assert engine.session.status == "completed"
@@ -269,8 +270,13 @@ class TestNormalFlow:
 
         with patch.object(engine, "_evaluate_answer") as mock_eval:
             mock_eval.return_value = {
-                "completeness": 80, "accuracy": 80, "depth": 70, "expression": 80,
-                "overall_score": 78, "feedback": "良好", "improvement": "再具体些",
+                "completeness": 80,
+                "accuracy": 80,
+                "depth": 70,
+                "expression": 80,
+                "overall_score": 78,
+                "feedback": "良好",
+                "improvement": "再具体些",
                 "follow_up": False,
             }
 
@@ -333,8 +339,13 @@ class TestTimeout:
         # 正常回答
         with patch.object(engine, "_evaluate_answer") as mock_eval:
             mock_eval.return_value = {
-                "completeness": 80, "accuracy": 80, "depth": 70, "expression": 80,
-                "overall_score": 78, "feedback": "好", "improvement": "",
+                "completeness": 80,
+                "accuracy": 80,
+                "depth": 70,
+                "expression": 80,
+                "overall_score": 78,
+                "feedback": "好",
+                "improvement": "",
                 "follow_up": False,
             }
             engine.handle_answer("正常回答")
@@ -356,9 +367,13 @@ class TestFollowUp:
 
         with patch.object(engine, "_evaluate_answer") as mock_eval:
             mock_eval.return_value = {
-                "completeness": 40, "accuracy": 40, "depth": 30, "expression": 50,
+                "completeness": 40,
+                "accuracy": 40,
+                "depth": 30,
+                "expression": 50,
                 "overall_score": 40,  # < 70 → 应触发 follow-up
-                "feedback": "回答不够完整", "improvement": "需要更详细",
+                "feedback": "回答不够完整",
+                "improvement": "需要更详细",
                 "follow_up": True,
             }
 
@@ -376,9 +391,13 @@ class TestFollowUp:
 
         with patch.object(engine, "_evaluate_answer") as mock_eval:
             mock_eval.return_value = {
-                "completeness": 90, "accuracy": 95, "depth": 88, "expression": 90,
+                "completeness": 90,
+                "accuracy": 95,
+                "depth": 88,
+                "expression": 90,
                 "overall_score": 91,  # >= 70 → 不触发
-                "feedback": "非常好", "improvement": "",
+                "feedback": "非常好",
+                "improvement": "",
                 "follow_up": False,
             }
 
@@ -408,12 +427,30 @@ class TestReportGeneration:
 
         # 添加虚拟评估数据
         engine.evaluations = [
-            {"question_index": 0, "question": "项目经验", "category": "project",
-             "completeness": 80, "accuracy": 85, "depth": 75, "expression": 80,
-             "overall_score": 80, "feedback": "好", "user_answer": "回答1"},
-            {"question_index": 1, "question": "RAG原理", "category": "tech",
-             "completeness": 70, "accuracy": 75, "depth": 70, "expression": 75,
-             "overall_score": 73, "feedback": "尚可", "user_answer": "回答2"},
+            {
+                "question_index": 0,
+                "question": "项目经验",
+                "category": "project",
+                "completeness": 80,
+                "accuracy": 85,
+                "depth": 75,
+                "expression": 80,
+                "overall_score": 80,
+                "feedback": "好",
+                "user_answer": "回答1",
+            },
+            {
+                "question_index": 1,
+                "question": "RAG原理",
+                "category": "tech",
+                "completeness": 70,
+                "accuracy": 75,
+                "depth": 70,
+                "expression": 75,
+                "overall_score": 73,
+                "feedback": "尚可",
+                "user_answer": "回答2",
+            },
         ]
 
         report = engine._generate_report()
@@ -433,12 +470,31 @@ class TestReportGeneration:
         engine.start()
 
         engine.evaluations = [
-            {"question_index": 0, "question": "项目经验", "category": "project",
-             "completeness": 80, "accuracy": 85, "depth": 75, "expression": 80,
-             "overall_score": 80, "feedback": "好", "user_answer": "回答1"},
-            {"question_index": 1, "question": "RAG原理", "category": "tech",
-             "completeness": 0, "accuracy": 0, "depth": 0, "expression": 0,
-             "overall_score": 0, "feedback": "超时", "timed_out": True, "user_answer": ""},
+            {
+                "question_index": 0,
+                "question": "项目经验",
+                "category": "project",
+                "completeness": 80,
+                "accuracy": 85,
+                "depth": 75,
+                "expression": 80,
+                "overall_score": 80,
+                "feedback": "好",
+                "user_answer": "回答1",
+            },
+            {
+                "question_index": 1,
+                "question": "RAG原理",
+                "category": "tech",
+                "completeness": 0,
+                "accuracy": 0,
+                "depth": 0,
+                "expression": 0,
+                "overall_score": 0,
+                "feedback": "超时",
+                "timed_out": True,
+                "user_answer": "",
+            },
         ]
 
         report = engine._generate_report()
@@ -451,9 +507,18 @@ class TestReportGeneration:
         engine.start()
 
         engine.evaluations = [
-            {"question_index": 0, "question": "测试", "category": "tech",
-             "completeness": 80, "accuracy": 80, "depth": 75, "expression": 80,
-             "overall_score": 79, "feedback": "好", "user_answer": "回答"},
+            {
+                "question_index": 0,
+                "question": "测试",
+                "category": "tech",
+                "completeness": 80,
+                "accuracy": 80,
+                "depth": 75,
+                "expression": 80,
+                "overall_score": 79,
+                "feedback": "好",
+                "user_answer": "回答",
+            },
         ]
 
         with patch.object(engine, "_generate_report") as mock_report:
@@ -489,8 +554,13 @@ class TestEvaluation:
         with patch("app.services.interview_engine.AnswerEvaluationAgent") as MockAgent:
             mock_instance = MagicMock()
             mock_instance.run_impl.return_value = {
-                "completeness": 80, "accuracy": 80, "depth": 70, "expression": 80,
-                "overall_score": 78, "feedback": "好", "improvement": "",
+                "completeness": 80,
+                "accuracy": 80,
+                "depth": 70,
+                "expression": 80,
+                "overall_score": 78,
+                "feedback": "好",
+                "improvement": "",
                 "follow_up": False,
             }
             MockAgent.return_value = mock_instance
@@ -556,8 +626,13 @@ class TestMessageRecording:
 
         with patch.object(engine, "_evaluate_answer") as mock_eval:
             mock_eval.return_value = {
-                "completeness": 80, "accuracy": 80, "depth": 70, "expression": 80,
-                "overall_score": 78, "feedback": "表现不错", "improvement": "继续加油",
+                "completeness": 80,
+                "accuracy": 80,
+                "depth": 70,
+                "expression": 80,
+                "overall_score": 78,
+                "feedback": "表现不错",
+                "improvement": "继续加油",
                 "follow_up": False,
             }
             engine.handle_answer("我的回答")
@@ -576,9 +651,11 @@ class TestEdgeCases:
 
     def test_interview_with_single_question(self, db_session, make_interview_session):
         """只有一道题的面试。"""
-        session_id = make_interview_session(questions=[
-            {"id": 0, "question": "唯一的问题", "category": "general", "ref_answer": ""},
-        ])
+        session_id = make_interview_session(
+            questions=[
+                {"id": 0, "question": "唯一的问题", "category": "general", "ref_answer": ""},
+            ]
+        )
         eng = InterviewEngine(session_id)
         eng.db = db_session
         eng.session = db_session.get(InterviewSession, session_id)
@@ -587,8 +664,13 @@ class TestEdgeCases:
 
         with patch.object(eng, "_evaluate_answer") as mock_eval:
             mock_eval.return_value = {
-                "completeness": 80, "accuracy": 80, "depth": 70, "expression": 80,
-                "overall_score": 78, "feedback": "好", "improvement": "",
+                "completeness": 80,
+                "accuracy": 80,
+                "depth": 70,
+                "expression": 80,
+                "overall_score": 78,
+                "feedback": "好",
+                "improvement": "",
                 "follow_up": False,
             }
 
@@ -624,8 +706,13 @@ class TestEdgeCases:
 
         with patch.object(engine, "_evaluate_answer") as mock_eval:
             mock_eval.return_value = {
-                "completeness": 80, "accuracy": 80, "depth": 70, "expression": 80,
-                "overall_score": 78, "feedback": "好", "improvement": "",
+                "completeness": 80,
+                "accuracy": 80,
+                "depth": 70,
+                "expression": 80,
+                "overall_score": 78,
+                "feedback": "好",
+                "improvement": "",
                 "follow_up": False,
             }
             # 第一题回答后，next_question 应触发 MAX_QUESTIONS 限制

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """统一重试工具
 
 为网络型调用（LLM / Embedding / 外部 API）提供统一的重试、退避、日志策略，
@@ -12,10 +11,12 @@
 或函数式：
     result = retry_call(fn, args=(texts,), max_retries=2)
 """
-import time
-import logging
+
 import functools
-from typing import Callable, Any, Optional
+import logging
+import time
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ def with_retry(
     max_retries: int = 2,
     backoff_factor: float = 1.5,
     retryable_exceptions: tuple = (Exception,),
-    on_retry: Optional[Callable[[Exception, int, int], None]] = None,
+    on_retry: Callable[[Exception, int, int], None] | None = None,
     log_prefix: str = "",
 ):
     """重试装饰器
@@ -36,6 +37,7 @@ def with_retry(
         on_retry:         每次重试前的回调 fn(exc, attempt, max_retries)
         log_prefix:       日志前缀，便于区分不同调用方
     """
+
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(*args, **kwargs) -> Any:
@@ -50,7 +52,9 @@ def with_retry(
                         prefix = f"[{log_prefix}] " if log_prefix else ""
                         logger.warning(
                             f"{prefix}调用失败将重试(%d/%d): %s",
-                            attempt + 1, max_retries, e,
+                            attempt + 1,
+                            max_retries,
+                            e,
                         )
                         if on_retry:
                             on_retry(e, attempt, max_retries)
@@ -58,17 +62,18 @@ def with_retry(
                     else:
                         break
             raise RuntimeError(
-                f"{log_prefix + ' ' if log_prefix else ''}调用失败"
-                f"（已重试 {max_retries} 次）: {last_err}"
+                f"{log_prefix + ' ' if log_prefix else ''}调用失败（已重试 {max_retries} 次）: {last_err}"
             )
+
         return wrapper
+
     return decorator
 
 
 def retry_call(
     fn: Callable,
     args: tuple = (),
-    kwargs: Optional[dict] = None,
+    kwargs: dict | None = None,
     max_retries: int = 2,
     backoff_factor: float = 1.5,
     retryable_exceptions: tuple = (Exception,),
@@ -87,12 +92,11 @@ def retry_call(
                 prefix = f"[{log_prefix}] " if log_prefix else ""
                 logger.warning(
                     f"{prefix}调用失败将重试(%d/%d): %s",
-                    attempt + 1, max_retries, e,
+                    attempt + 1,
+                    max_retries,
+                    e,
                 )
                 time.sleep(wait)
             else:
                 break
-    raise RuntimeError(
-        f"{log_prefix + ' ' if log_prefix else ''}调用失败"
-        f"（已重试 {max_retries} 次）: {last_err}"
-    )
+    raise RuntimeError(f"{log_prefix + ' ' if log_prefix else ''}调用失败（已重试 {max_retries} 次）: {last_err}")

@@ -1,22 +1,21 @@
-# -*- coding: utf-8 -*-
 """Deprecated compatibility wrapper for legacy multi-agent endpoints."""
-import warnings
-from typing import Optional
 
+import warnings
+
+from app.agents.career_agent import CareerAgent
+from app.agents.interview_agent import InterviewAgent
+from app.agents.job_agent import JobAgent
+from app.agents.match_agent import MatchAgent
+
+# Backward-compatible exports for legacy imports.
+from app.agents.resume_agent import ResumeAgent
+from app.agents.summary_agent import SummaryAgent
 from app.core.database import SessionLocal
 from app.models.agent import AgentTask
 from app.models.agent_run import AgentRun
 from app.orchestration.context import AgentContext
 from app.services.orchestration_runner import create_legacy_run, create_task, start_legacy_layered_thread
 from app.utils.time_helper import utc_now
-
-# Backward-compatible exports for legacy imports.
-from app.agents.resume_agent import ResumeAgent
-from app.agents.job_agent import JobAgent
-from app.agents.match_agent import MatchAgent
-from app.agents.interview_agent import InterviewAgent
-from app.agents.career_agent import CareerAgent
-from app.agents.summary_agent import SummaryAgent
 
 AGENT_REGISTRY = {
     "ResumeAgent": ResumeAgent,
@@ -30,7 +29,7 @@ AGENT_REGISTRY = {
 C_END_AGENTS = ["ResumeAgent", "JobAgent", "MatchAgent", "InterviewAgent", "CareerAgent"]
 
 
-def run_multi_agents(resume_id: int, jd_id: int, user_id: Optional[int] = None) -> int:
+def run_multi_agents(resume_id: int, jd_id: int, user_id: int | None = None) -> int:
     """Start the legacy full multi-agent flow via the shared layered runner."""
     warnings.warn(
         "run_multi_agents 已废弃，请使用 run_smart_analysis → smart_orchestrator",
@@ -51,9 +50,9 @@ def run_multi_agents(resume_id: int, jd_id: int, user_id: Optional[int] = None) 
 
 def run_auto_agents(
     user_request: str,
-    resume_id: Optional[int] = None,
-    jd_id: Optional[int] = None,
-    user_id: Optional[int] = None,
+    resume_id: int | None = None,
+    jd_id: int | None = None,
+    user_id: int | None = None,
 ) -> int:
     """Start the legacy auto-dispatch flow and persist intent metadata."""
     warnings.warn(
@@ -96,9 +95,9 @@ def run_auto_agents(
 
 def _update_run_metadata(
     run_id: int,
-    intent: Optional[str] = None,
-    selected_agents: Optional[list] = None,
-    dispatch_reason: Optional[str] = None,
+    intent: str | None = None,
+    selected_agents: list | None = None,
+    dispatch_reason: str | None = None,
 ):
     db = SessionLocal()
     try:

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import pytest
 
 from app.models.history import AnalysisRecord, JobDescription, Resume

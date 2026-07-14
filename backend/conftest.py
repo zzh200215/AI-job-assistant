@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """Pytest bootstrap for backend tests."""
+
 from __future__ import annotations
 
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
 from unittest import mock
 
 import pytest
@@ -22,7 +21,6 @@ os.environ["ORCHESTRATION_BACKEND"] = "thread"
 os.environ["RUN_SCHEDULER"] = "false"
 
 from app.core.database import Base, SessionLocal
-
 
 BACKEND_ROOT = Path(__file__).resolve().parent
 if str(BACKEND_ROOT) not in sys.path:
@@ -61,16 +59,16 @@ def mocker():
 def db_session() -> Session:
     """In-memory SQLite session with all tables created."""
     # Ensure all models are imported so their tables register in Base.metadata
-    import app.models.user  # noqa: F401
-    import app.models.history  # noqa: F401
     import app.models.agent  # noqa: F401
     import app.models.agent_run  # noqa: F401
     import app.models.embedding_usage  # noqa: F401
+    import app.models.history  # noqa: F401
     import app.models.interview_session  # noqa: F401
-    import app.models.knowledge  # noqa: F401
     import app.models.job_pipeline  # noqa: F401
     import app.models.job_recommend  # noqa: F401
+    import app.models.knowledge  # noqa: F401
     import app.models.prompt_trace  # noqa: F401
+    import app.models.user  # noqa: F401
 
     engine = create_engine(
         "sqlite://",
@@ -110,7 +108,7 @@ def make_resume(db_session: Session):
     def _make(
         name: str = "测试用户",
         file_name: str = "resume.pdf",
-        parsed_json: Optional[Dict] = None,
+        parsed_json: dict | None = None,
         **overrides,
     ) -> int:
         from app.models.history import Resume
@@ -121,7 +119,8 @@ def make_resume(db_session: Session):
             file_path=f"uploads/{file_name}",
             file_type="pdf",
             file_size=1024,
-            parsed_json=parsed_json or {
+            parsed_json=parsed_json
+            or {
                 "name": name,
                 "skills": ["Python", "FastAPI", "PostgreSQL"],
                 "years_exp": 3,
@@ -146,10 +145,11 @@ def make_resume(db_session: Session):
 @pytest.fixture
 def make_jd(db_session: Session):
     """Factory fixture: create a JobDescription record and return its id."""
+
     def _make(
         title: str = "AI应用开发工程师",
         company: str = "测试科技",
-        parsed_json: Optional[Dict] = None,
+        parsed_json: dict | None = None,
         **overrides,
     ) -> int:
         from app.models.history import JobDescription
@@ -158,7 +158,8 @@ def make_jd(db_session: Session):
             title=title,
             company=company,
             raw_text=f"招聘{title}岗位",
-            parsed_json=parsed_json or {
+            parsed_json=parsed_json
+            or {
                 "title": title,
                 "company": company,
                 "required_skills": ["Python", "FastAPI", "LLM"],
@@ -178,6 +179,7 @@ def make_jd(db_session: Session):
 @pytest.fixture
 def make_agent_task(db_session: Session):
     """Factory fixture: create an AgentTask record."""
+
     def _make(
         resume_id: int,
         jd_id: int,
@@ -205,12 +207,13 @@ def make_agent_task(db_session: Session):
 @pytest.fixture
 def make_interview_session(db_session: Session):
     """Factory fixture: create an InterviewSession record."""
+
     def _make(
         user_id: int = 1,
         resume_id: int = 1,
         jd_id: int = 1,
         status: str = "created",
-        questions: Optional[List[Dict]] = None,
+        questions: list[dict] | None = None,
         **overrides,
     ) -> int:
         from app.models.interview_session import InterviewSession
@@ -221,13 +224,17 @@ def make_interview_session(db_session: Session):
             jd_id=jd_id,
             interview_type="tech",
             status=status,
-            questions=questions if questions is not None else [
-                {"id": 0, "question": "请介绍你的项目经验", "category": "project",
-                 "ref_answer": "从背景、挑战、方案、成果四方面回答"},
-                {"id": 1, "question": "解释RAG的工作原理", "category": "tech",
-                 "ref_answer": "检索+生成两阶段"},
-                {"id": 2, "question": "如何处理高并发请求", "category": "tech",
-                 "ref_answer": "缓存、异步、水平扩展"},
+            questions=questions
+            if questions is not None
+            else [
+                {
+                    "id": 0,
+                    "question": "请介绍你的项目经验",
+                    "category": "project",
+                    "ref_answer": "从背景、挑战、方案、成果四方面回答",
+                },
+                {"id": 1, "question": "解释RAG的工作原理", "category": "tech", "ref_answer": "检索+生成两阶段"},
+                {"id": 2, "question": "如何处理高并发请求", "category": "tech", "ref_answer": "缓存、异步、水平扩展"},
             ],
             **overrides,
         )
@@ -280,11 +287,12 @@ def mock_embedding(mocker):
 @pytest.fixture
 def mock_reranker(mocker):
     """Mock rerank service to pass through results unchanged."""
+
     def _passthrough(query, results, top_k=None):
         if not results:
             return []
         ranked = []
-        for idx, item in enumerate(results):
+        for _idx, item in enumerate(results):
             enriched = dict(item)
             enriched["vector_similarity"] = 0.5
             enriched["keyword_score"] = 0.3

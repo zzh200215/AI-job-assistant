@@ -1,12 +1,11 @@
-# -*- coding: utf-8 -*-
 """AnswerEvaluationAgent — 回答评估智能体
 
 功能：对候选人的每道题回答进行多维评分，输出量化评估
 输入：问题内容 + 参考答案思路 + 用户回答
 输出：completeness/accuracy/depth/expression/overall_score + 反馈
 """
-import json
-from typing import Dict, Any, List
+
+from typing import Any
 
 from app.agents.base_agent import BaseAgent
 from app.orchestration.context import AgentContext
@@ -17,12 +16,13 @@ from app.services.llm_service import chat_json, set_llm_trace_context
 
 class AnswerEvaluationAgent(BaseAgent):
     """逐题回答评估"""
+
     name = "AnswerEvaluationAgent"
     description = "回答评估智能体 — 逐题评估候选人回答质量"
-    depends_on: List[str] = []
+    depends_on: list[str] = []
     result_type = "answer_evaluation"
 
-    def run_impl(self, context: AgentContext) -> Dict[str, Any]:
+    def run_impl(self, context: AgentContext) -> dict[str, Any]:
         question = context.get("question", "")
         ref_answer = context.get("ref_answer", "")
         user_answer = context.get("user_answer", "")
@@ -46,22 +46,23 @@ class AnswerEvaluationAgent(BaseAgent):
                 },
             }
         )
-        result: Dict[str, Any] = chat_json(prompt)
+        result: dict[str, Any] = chat_json(prompt)
         return result
 
-    def _make_summary(self, result: Dict[str, Any]) -> str:
+    def _make_summary(self, result: dict[str, Any]) -> str:
         score = result.get("overall_score", 0)
-        return f"回答评分: {score}/100 | 完整性{result.get('completeness',0)} 准确性{result.get('accuracy',0)}"
+        return f"回答评分: {score}/100 | 完整性{result.get('completeness', 0)} 准确性{result.get('accuracy', 0)}"
 
 
 class FinalReportAgent(BaseAgent):
     """综合报告生成 — 汇总所有题目评分生成最终报告"""
+
     name = "FinalReportAgent"
     description = "综合报告智能体 — 汇总面试评分生成最终报告"
-    depends_on: List[str] = ["AnswerEvaluationAgent"]
+    depends_on: list[str] = ["AnswerEvaluationAgent"]
     result_type = "final_report"
 
-    def run_impl(self, context: AgentContext) -> Dict[str, Any]:
+    def run_impl(self, context: AgentContext) -> dict[str, Any]:
         evaluation_summary = context.get("evaluation_summary", "")
         avg_completeness = context.get("avg_completeness", 0)
         avg_accuracy = context.get("avg_accuracy", 0)
@@ -93,9 +94,9 @@ class FinalReportAgent(BaseAgent):
                 },
             }
         )
-        result: Dict[str, Any] = chat_json(prompt)
+        result: dict[str, Any] = chat_json(prompt)
         return result
 
-    def _make_summary(self, result: Dict[str, Any]) -> str:
+    def _make_summary(self, result: dict[str, Any]) -> str:
         score = result.get("overall_score", 0)
         return f"面试报告: {score}/100 | 推荐: {result.get('hiring_recommendation', '')}"

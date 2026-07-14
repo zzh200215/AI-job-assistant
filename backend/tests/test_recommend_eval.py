@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from datetime import datetime
 
 from app.models.job_recommend import JobRecommendationFeedback

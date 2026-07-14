@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Rate limiting tests."""
 
 from __future__ import annotations

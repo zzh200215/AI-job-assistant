@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 简历自适应改写服务
 
@@ -7,8 +6,9 @@
 - 保留匹配分析和改写说明
 - 自动保存为新的 ResumeVersion
 """
+
 import json
-from typing import Any, Dict, Optional
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -25,7 +25,7 @@ def tailor_resume_for_jd(
     resume_id: int,
     jd_id: int,
     user_id: int | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     根据目标 JD 生成定制版简历。
 
@@ -45,11 +45,7 @@ def tailor_resume_for_jd(
     if not resume.parsed_json:
         raise ValueError("简历未解析，请先解析简历")
 
-    jd = (
-        get_accessible_job_for_user(db, jd_id, user_id)
-        if user_id is not None
-        else db.get(JobDescription, jd_id)
-    )
+    jd = get_accessible_job_for_user(db, jd_id, user_id) if user_id is not None else db.get(JobDescription, jd_id)
     if not jd:
         raise ValueError("目标岗位不存在")
 
@@ -78,7 +74,7 @@ def tailor_resume_for_jd(
         resume_json=resume_json,
         jd_json=jd_json,
     )
-    result: Dict[str, Any] = chat_json(prompt)
+    result: dict[str, Any] = chat_json(prompt)
 
     # 保存 Markdown 版本
     markdown = result.get("tailored_markdown", "")
@@ -88,6 +84,9 @@ def tailor_resume_for_jd(
             version_type="tailored",
             content=markdown,
             format="md",
+            label=f"{title or '目标岗位'} 定制版",
+            target_jd_id=jd_id,
+            change_log=result.get("tailoring_notes", {}),
         )
         db.add(md_version)
 
@@ -102,6 +101,8 @@ def tailor_resume_for_jd(
             version_type="tailored",
             content=json.dumps(structured, ensure_ascii=False),
             format="json",
+            label=f"{title or '目标岗位'} 定制版数据",
+            target_jd_id=jd_id,
         )
         db.add(json_version)
 

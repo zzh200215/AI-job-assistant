@@ -1,6 +1,7 @@
-# -*- coding: utf-8 -*-
 """JD Pydantic 模型"""
-from typing import Optional, Any, Dict
+
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -13,14 +14,14 @@ class JDCreateReq(BaseModel):
 class JDCreateResp(BaseModel):
     id: int
     title: str
-    company: Optional[str] = None
+    company: str | None = None
     raw_text: str
-    parsed: Dict[str, Any] = {}
+    parsed: dict[str, Any] = {}
 
 
 class JDParseResp(BaseModel):
     id: int
     title: str
-    parsed: Dict[str, Any] = {}
-    salary_range: Optional[str] = None
-    location: Optional[str] = None
+    parsed: dict[str, Any] = {}
+    salary_range: str | None = None
+    location: str | None = None

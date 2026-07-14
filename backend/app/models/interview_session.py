@@ -1,6 +1,6 @@
-# -*- coding: utf-8 -*-
 """面试会话表：InterviewSession"""
-from sqlalchemy import Column, BigInteger, String, Integer, DateTime, ForeignKey, JSON, Text
+
+from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, Integer, String
 
 from app.core.database import Base
 from app.utils.time_helper import utc_now
@@ -8,6 +8,7 @@ from app.utils.time_helper import utc_now
 
 class InterviewSession(Base):
     """AI 模拟面试会话"""
+
     __tablename__ = "interview_session"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -27,6 +28,8 @@ class InterviewSession(Base):
 
     # 评估结果
     evaluation = Column(JSON, comment="最终评估报告")
+    evaluation_status = Column(String(20), default="idle", comment="idle/processing/completed")
+    memory_snapshot = Column(JSON, comment="异步评估聚合出的面试记忆快照")
 
     # 面试状态统计
     total_questions = Column(Integer, default=0)
@@ -48,6 +51,8 @@ class InterviewSession(Base):
             "questions": self.questions or [],
             "messages": self.messages or [],
             "evaluation": self.evaluation or {},
+            "evaluation_status": self.evaluation_status or "idle",
+            "memory_snapshot": self.memory_snapshot or {},
             "total_questions": self.total_questions,
             "answered_count": self.answered_count,
             "timeout_count": self.timeout_count,

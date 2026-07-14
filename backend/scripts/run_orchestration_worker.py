@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Standalone orchestration worker for redis_queue backend."""
 
 from __future__ import annotations
