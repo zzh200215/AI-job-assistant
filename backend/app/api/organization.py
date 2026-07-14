@@ -48,6 +48,13 @@ def _require_manager(db: Session, organization_id: int, user: User) -> Organizat
     return membership
 
 
+def _require_owner(db: Session, organization_id: int, user: User) -> OrganizationMembership:
+    membership = _membership(db, organization_id, user.id)
+    if membership is None or membership.role != "owner":
+        raise api_error(403, "需要组织所有者权限", ERR_AUTH)
+    return membership
+
+
 def get_active_organization(
     x_organization_id: int | None = Header(None),
     db: Session = Depends(get_db),
@@ -138,6 +145,64 @@ async def add_member(organization_id: int, payload: dict, db: Session = Depends(
     db.commit()
     write_audit_log(db, current_user, "organization.member_add", resource_type="organization", resource_id=str(organization_id), detail={"user_id": user.id, "role": role})
     return ok({"user_id": user.id, "role": role}, message="组织成员已添加")
+
+
+@router.put("/{organization_id}/members/{user_id}", summary="Change an organization member role")
+async def change_member_role(
+    organization_id: int,
+    user_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_owner(db, organization_id, current_user)
+    role = str(payload.get("role") or "").strip().lower()
+    membership = _membership(db, organization_id, user_id)
+    if membership is None or membership.role == "owner" or role not in _MEMBER_ROLES:
+        raise api_error(400, "成员或角色不合法", ERR_PARAM)
+    if membership.role == role:
+        return ok({"user_id": user_id, "role": role}, message="成员角色未变化")
+    previous_role = membership.role
+    membership.role = role
+    db.commit()
+    write_audit_log(
+        db,
+        current_user,
+        "organization.member_role_change",
+        resource_type="organization",
+        resource_id=str(organization_id),
+        detail={"user_id": user_id, "previous_role": previous_role, "role": role},
+    )
+    return ok({"user_id": user_id, "role": role}, message="成员角色已更新")
+
+
+@router.delete("/{organization_id}/members/{user_id}", summary="Remove an organization member")
+async def remove_member(
+    organization_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    actor_membership = _require_manager(db, organization_id, current_user)
+    membership = _membership(db, organization_id, user_id)
+    if membership is None or membership.role == "owner":
+        raise api_error(400, "无法移除该成员", ERR_PARAM)
+    if actor_membership.role != "owner" and membership.role == "admin":
+        raise api_error(403, "组织管理员不能移除其他管理员", ERR_AUTH)
+    membership.status = "removed"
+    user = db.get(User, user_id)
+    if user is not None and user.active_organization_id == organization_id:
+        user.active_organization_id = None
+    db.commit()
+    write_audit_log(
+        db,
+        current_user,
+        "organization.member_remove",
+        resource_type="organization",
+        resource_id=str(organization_id),
+        detail={"user_id": user_id, "role": membership.role},
+    )
+    return ok(message="成员已移除")
 
 
 @router.put("/{organization_id}/sso", summary="Configure organization SSO provider")

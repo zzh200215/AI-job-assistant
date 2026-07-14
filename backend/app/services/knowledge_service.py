@@ -42,6 +42,7 @@ def save_and_process(
     title: str,
     doc_type: str = "general",
     user_id: int = None,
+    organization_id: int = None,
 ) -> KnowledgeDocument:
     """
     保存文件 → 创建 DB 记录 → 解析 → 切片 → 向量化 → 写入 Chroma
@@ -64,6 +65,7 @@ def save_and_process(
     # ---- 2) 创建 DB 记录 ----
     doc = KnowledgeDocument(
         user_id=user_id,
+        organization_id=organization_id,
         title=title,
         file_name=original_filename,
         file_type=ext,

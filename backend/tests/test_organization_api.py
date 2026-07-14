@@ -60,3 +60,18 @@ def test_organization_owner_controls_membership_and_workspace(db_session):
 
         listed = client.get(f"/organizations/{organization['id']}/members", headers=_headers(owner))
         assert {item["email"] for item in listed.json()["data"]["items"]} == {owner.email, member.email}
+
+        promoted = client.put(
+            f"/organizations/{organization['id']}/members/{member.id}",
+            json={"role": "admin"},
+            headers=_headers(owner),
+        )
+        assert promoted.status_code == 200
+        assert promoted.json()["data"]["role"] == "admin"
+
+        removed = client.delete(f"/organizations/{organization['id']}/members/{member.id}", headers=_headers(owner))
+        assert removed.status_code == 200
+        assert db_session.get(User, member.id).active_organization_id is None
+
+        no_longer_member = client.get("/organizations", headers=_headers(member))
+        assert no_longer_member.json()["data"]["items"] == []

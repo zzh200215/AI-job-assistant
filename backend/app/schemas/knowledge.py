@@ -30,6 +30,7 @@ class KBUploadResp(BaseModel):
     file_size: int
     doc_type: str
     status: str
+    organization_id: int | None = None
     create_time: str | None = None
 
 
@@ -43,6 +44,7 @@ class KBDocumentResp(BaseModel):
     chunk_count: int = 0
     status: str
     error_msg: str | None = None
+    organization_id: int | None = None
     create_time: str | None = None
     update_time: str | None = None
 

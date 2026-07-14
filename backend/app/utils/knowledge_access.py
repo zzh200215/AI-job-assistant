@@ -29,8 +29,15 @@ def get_visible_knowledge_doc_ids(
     *,
     user: User | None = None,
     user_id: int | None = None,
+    organization_id: int | None = None,
 ) -> set[str] | None:
-    visibility = visible_knowledge_filter(user=user, user_id=user_id)
+    if organization_id is not None:
+        visibility = or_(
+            KnowledgeDocument.organization_id == organization_id,
+            (KnowledgeDocument.organization_id.is_(None) & KnowledgeDocument.user_id.is_(None)),
+        )
+    else:
+        visibility = visible_knowledge_filter(user=user, user_id=user_id)
     if visibility is None:
         return None
 
