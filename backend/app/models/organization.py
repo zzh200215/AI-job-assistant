@@ -45,3 +45,14 @@ class OrganizationSSOIdentity(Base):
     subject = Column(String(200), nullable=False)
     user_id = Column(BigInteger, nullable=False, index=True)
     created_at = Column(DateTime, nullable=False, default=utc_now)
+
+
+class OrganizationSSOState(Base):
+    __tablename__ = "organization_sso_state"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    state_hash = Column(String(64), nullable=False, unique=True, index=True)
+    organization_id = Column(BigInteger, nullable=False, index=True)
+    provider = Column(String(20), nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=utc_now)

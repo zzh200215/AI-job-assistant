@@ -16,7 +16,7 @@ from app.models.job_target import JobTarget
 from app.models.knowledge import KnowledgeDocument
 from app.models.notification import Notification
 from app.models.operational_alert import OperationalAlert
-from app.models.organization import Organization, OrganizationMembership, OrganizationSSOIdentity
+from app.models.organization import Organization, OrganizationMembership, OrganizationSSOIdentity, OrganizationSSOState
 from app.models.prompt_trace import PromptTrace
 from app.models.subscription import SubscriptionOrder, SubscriptionPlan, UserSubscription
 from app.models.user import User
@@ -46,6 +46,7 @@ __all__ = [
     "Organization",
     "OrganizationMembership",
     "OrganizationSSOIdentity",
+    "OrganizationSSOState",
     "PromptTrace",
     "Resume",
     "ResumeVersion",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import secrets
 from datetime import timedelta
@@ -16,11 +17,12 @@ from app.api.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, decode_access_token, hash_password
-from app.models.organization import Organization, OrganizationMembership, OrganizationSSOIdentity
+from app.models.organization import Organization, OrganizationMembership, OrganizationSSOIdentity, OrganizationSSOState
 from app.models.user import User
 from app.services.audit_service import write_audit_log
 from app.utils.http_errors import api_error
 from app.utils.response import ERR_AUTH, ERR_PARAM, ok
+from app.utils.time_helper import utc_now
 
 router = APIRouter()
 _MANAGER_ROLES = {"owner", "admin"}
@@ -160,7 +162,10 @@ async def start_feishu_sso(slug: str, db: Session = Depends(get_db)):
     organization = db.query(Organization).filter(Organization.slug == slug, Organization.status == "active").first()
     if not organization or organization.sso_provider != "feishu":
         raise api_error(404, "该组织未启用飞书 SSO", ERR_PARAM)
-    state = create_access_token({"type": "feishu_sso", "organization_id": organization.id}, expires_delta=timedelta(minutes=10))
+    nonce = secrets.token_urlsafe(24)
+    state = create_access_token({"type": "feishu_sso", "organization_id": organization.id, "nonce": nonce}, expires_delta=timedelta(minutes=10))
+    db.add(OrganizationSSOState(state_hash=hashlib.sha256(nonce.encode()).hexdigest(), organization_id=organization.id, provider="feishu", expires_at=utc_now() + timedelta(minutes=10)))
+    db.commit()
     query = urlencode({"app_id": settings.FEISHU_APP_ID, "redirect_uri": settings.FEISHU_REDIRECT_URI, "state": state})
     return RedirectResponse(url=f"https://accounts.feishu.cn/open-apis/authen/v1/index?{query}", status_code=302)
 
@@ -171,6 +176,12 @@ async def complete_feishu_sso(code: str = Query(..., min_length=1), state: str =
     if not state_data or state_data.get("type") != "feishu_sso":
         raise api_error(400, "飞书 SSO 状态无效或已过期", ERR_PARAM)
     organization_id = int(state_data.get("organization_id") or 0)
+    nonce = str(state_data.get("nonce") or "")
+    state_record = db.query(OrganizationSSOState).filter(OrganizationSSOState.state_hash == hashlib.sha256(nonce.encode()).hexdigest(), OrganizationSSOState.organization_id == organization_id, OrganizationSSOState.provider == "feishu", OrganizationSSOState.expires_at >= utc_now()).first()
+    if not nonce or state_record is None:
+        raise api_error(400, "飞书 SSO 状态已被使用或已过期", ERR_PARAM)
+    db.delete(state_record)
+    db.commit()
     organization = db.query(Organization).filter(Organization.id == organization_id, Organization.sso_provider == "feishu").first()
     if organization is None:
         raise api_error(404, "组织未启用飞书 SSO", ERR_PARAM)

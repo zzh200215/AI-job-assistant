@@ -67,4 +67,4 @@ def test_feishu_sso_start_and_callback_provisions_member(db_session, monkeypatch
         assert data["user"]["email"] == "new.feishu@example.com"
 
         callback_again = client.get("/organizations/sso/feishu/callback", params={"code": "grant-code", "state": state})
-        assert callback_again.json()["data"]["user"]["id"] == data["user"]["id"]
+        assert callback_again.status_code == 400
