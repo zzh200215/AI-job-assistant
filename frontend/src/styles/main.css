@@ -1,71 +1,79 @@
 /* ============================================================
    Career Signal — Global Design Tokens & Theme
-   Cobalt blue + coral accent, Inter typography,
-   reduced border-radius, cleaner surfaces.
+   Dual-surface workbench: dark command surfaces + light reading flows.
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-  /* ---- Palette ---- */
-  --app-bg: #f6f7fa;
-  --app-surface: rgba(255, 255, 255, 0.95);
+  /* ---- Semantic surfaces ---- */
+  --app-bg: #f4f6fa;
+  --app-surface: rgba(255, 255, 255, 0.98);
   --app-surface-strong: #ffffff;
-  --app-surface-muted: #f0f2f5;
-  --app-surface-contrast: #1a1d2a;
-  --app-text: #1a1d2a;
-  --app-muted: #6b7280;
-  --app-line: rgba(209, 213, 219, 0.8);
-  --app-line-strong: rgba(185, 190, 197, 0.9);
+  --app-surface-muted: #eef1f6;
+  --app-surface-contrast: #101117;
+  --app-text: #1c2230;
+  --app-muted: #697386;
+  --app-line: #e0e5ed;
+  --app-line-strong: #cbd3df;
 
-  --app-primary: #196bdb;
-  --app-primary-dark: #1254b8;
-  --app-primary-light: #e8effd;
-  --app-accent: #d4442f;
-  --app-accent-soft: #fff0ee;
-  --app-success: #1db954;
-  --app-warning: #f5a623;
-  --app-violet: #6d4fc7;
+  --workspace-ink: #101117;
+  --workspace-panel: #171922;
+  --workspace-panel-raised: #1d1f2a;
+  --workspace-line: #2c2f3d;
+  --workspace-text: #f1f3f8;
+  --workspace-muted: #9699aa;
+
+  /* ---- Signals ---- */
+  --app-primary: #2563eb;
+  --app-primary-dark: #1d4ed8;
+  --app-primary-light: #e8efff;
+  --app-accent: #d9534f;
+  --app-accent-soft: #fff0ef;
+  --app-success: #16a879;
+  --app-warning: #d99013;
+  --app-violet: #7147d9;
   --app-violet-light: #f0ebff;
-  --app-danger: #d4442f;
+  --app-cyan: #22b8e8;
+  --app-danger: #d9534f;
 
-  --app-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-  --app-shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.04);
-  --app-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.08);
+  --app-shadow: 0 10px 28px rgba(26, 35, 52, 0.08);
+  --app-shadow-soft: 0 2px 8px rgba(26, 35, 52, 0.045);
+  --app-shadow-lg: 0 18px 40px rgba(26, 35, 52, 0.14);
 
-  --app-radius-lg: 20px;
-  --app-radius-md: 16px;
-  --app-radius-sm: 12px;
-  --app-radius-xs: 8px;
+  --app-radius-lg: 10px;
+  --app-radius-md: 8px;
+  --app-radius-sm: 6px;
+  --app-radius-xs: 4px;
 
   --app-font:
     'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system, sans-serif;
   --app-font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
 
   /* ---- Element Plus override ---- */
-  --el-color-primary: #196bdb;
-  --el-color-primary-light-3: #4a8fe5;
-  --el-color-primary-light-5: #7db0ee;
-  --el-color-primary-light-7: #b4cef5;
-  --el-color-primary-light-8: #d3e2fa;
-  --el-color-primary-light-9: #ecf3fe;
-  --el-color-primary-dark-2: #1254b8;
-  --el-color-success: #1db954;
-  --el-color-warning: #f5a623;
-  --el-color-danger: #d4442f;
-  --el-color-info: #6b7280;
-  --el-text-color-primary: #1a1d2a;
-  --el-text-color-regular: #4b5563;
-  --el-text-color-secondary: #6b7280;
-  --el-border-color: #e5e7eb;
-  --el-border-color-light: #f0f1f3;
-  --el-border-color-lighter: #f3f4f6;
-  --el-fill-color-light: #f6f7fa;
+  --el-color-primary: #2563eb;
+  --el-color-primary-light-3: #5b8def;
+  --el-color-primary-light-5: #8fb3f4;
+  --el-color-primary-light-7: #bfd4f8;
+  --el-color-primary-light-8: #d9e6fb;
+  --el-color-primary-light-9: #edf4ff;
+  --el-color-primary-dark-2: #1d4ed8;
+  --el-color-success: #16a879;
+  --el-color-warning: #d99013;
+  --el-color-danger: #d9534f;
+  --el-color-info: #697386;
+  --el-text-color-primary: #1c2230;
+  --el-text-color-regular: #465266;
+  --el-text-color-secondary: #697386;
+  --el-border-color: #dfe5ee;
+  --el-border-color-light: #e9edf3;
+  --el-border-color-lighter: #f0f2f6;
+  --el-fill-color-light: #f5f7fa;
   --el-fill-color-blank: #ffffff;
   --el-bg-color: #ffffff;
-  --el-bg-color-page: #f6f7fa;
-  --el-mask-color: rgba(26, 29, 42, 0.42);
-  --el-border-radius-base: 12px;
+  --el-bg-color-page: #f4f6fa;
+  --el-mask-color: rgba(16, 17, 23, 0.48);
+  --el-border-radius-base: 8px;
   --el-border-radius-round: 999px;
   --el-box-shadow-light: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
@@ -124,7 +132,7 @@ h4,
 .page-title,
 .hero-title-row h1,
 .hero-copy h1 {
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   font-weight: 700;
 }
 
@@ -151,14 +159,15 @@ code,
 .data-value {
   font-family: var(--app-font-mono);
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 /* ---- Element Plus overrides ---- */
 
 .el-card {
   border-color: var(--app-line) !important;
-  box-shadow: var(--app-shadow);
+  border-radius: var(--app-radius-md) !important;
+  box-shadow: var(--app-shadow-soft);
   background: var(--app-surface);
 }
 
@@ -172,7 +181,7 @@ code,
 }
 
 .el-button {
-  border-radius: 10px;
+  border-radius: var(--app-radius-sm);
   font-weight: 600;
   transition: all 0.18s ease;
 }
@@ -194,14 +203,14 @@ code,
 }
 
 .el-button--large {
-  border-radius: 12px;
+  border-radius: var(--app-radius-md);
   padding: 14px 24px;
 }
 
 .el-input__wrapper,
 .el-textarea__inner,
 .el-select__wrapper {
-  border-radius: 10px !important;
+  border-radius: var(--app-radius-sm) !important;
   background: rgba(255, 255, 255, 0.96) !important;
   box-shadow: 0 0 0 1px rgba(209, 213, 219, 0.8) inset !important;
   transition: box-shadow 0.18s ease;
@@ -216,19 +225,19 @@ code,
 }
 
 .el-tag {
-  border-radius: 8px;
+  border-radius: var(--app-radius-xs);
   font-weight: 500;
 }
 
 .el-tag--small {
-  border-radius: 6px;
+  border-radius: var(--app-radius-xs);
 }
 
 .el-dialog,
 .el-message,
 .el-popover,
 .el-dropdown-menu {
-  border-radius: 16px !important;
+  border-radius: var(--app-radius-lg) !important;
 }
 
 .el-dropdown-menu {
@@ -238,18 +247,36 @@ code,
 }
 
 .el-dropdown-menu__item {
-  border-radius: 8px;
+  border-radius: var(--app-radius-xs);
   padding: 8px 12px;
 }
 
 .el-table {
-  --el-table-border-color: #e5e7eb;
-  --el-table-header-bg-color: #f6f7fa;
+  --el-table-border-color: #e1e6ee;
+  --el-table-header-bg-color: #f5f7fa;
+  --el-table-row-hover-bg-color: #f1f5ff;
 }
 
 .el-table th.el-table__cell {
   font-weight: 600;
   color: var(--app-muted);
+}
+
+.el-table td.el-table__cell,
+.el-table th.el-table__cell {
+  padding: 12px 0;
+}
+
+.el-drawer {
+  box-shadow: -16px 0 42px rgba(16, 17, 23, 0.16);
+}
+
+.el-drawer__header {
+  margin-bottom: 0;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--app-line);
+  color: var(--app-text);
+  font-weight: 700;
 }
 
 .el-empty {
@@ -262,7 +289,7 @@ code,
 }
 
 .el-alert {
-  border-radius: 12px;
+  border-radius: var(--app-radius-md);
 }
 
 /* ---- Steps ---- */
@@ -320,14 +347,14 @@ code,
 }
 
 ::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.12);
+  border-radius: var(--app-radius-md);
+  background: rgba(50, 61, 80, 0.16);
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(50, 61, 80, 0.28);
   background-clip: padding-box;
 }
 
@@ -347,4 +374,30 @@ code,
 }
 .mr {
   margin-right: 8px;
+}
+
+.flow-surface {
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+.workspace-surface {
+  background: var(--workspace-ink);
+  color: var(--workspace-text);
+}
+
+:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.32);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

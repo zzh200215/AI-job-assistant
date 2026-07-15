@@ -5,6 +5,7 @@
 
 /* ---- Page shell ---- */
 .page-shell {
+  width: 100%;
   padding: 24px;
   min-height: 100%;
 }
@@ -13,26 +14,29 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  gap: 16px;
+  margin-bottom: 18px;
 }
 
 .page-header h2 {
   margin: 0;
   font-size: 22px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .page-header-sub {
   font-size: 14px;
   color: var(--app-muted);
-  margin-top: 4px;
+  max-width: 720px;
+  margin-top: 5px;
+  line-height: 1.55;
 }
 
 /* ---- Panel ---- */
 .panel {
-  background: #fff;
-  border-radius: var(--app-radius-md, 16px);
+  background: var(--app-surface-strong);
+  border-radius: var(--app-radius-md, 8px);
   border: 1px solid var(--app-line);
   box-shadow: var(--app-shadow-soft);
 }
@@ -41,7 +45,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px 12px;
+  gap: 16px;
+  padding: 15px 20px;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
@@ -55,6 +60,7 @@
   margin: 0;
   font-size: 16px;
   font-weight: 700;
+  letter-spacing: 0;
 }
 
 .panel-body {
@@ -70,8 +76,8 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 18px 16px;
-  border-radius: var(--app-radius-sm, 12px);
+  padding: 16px;
+  border-radius: var(--app-radius-sm, 6px);
   border: 1px solid var(--app-line);
   background: #fff;
 }
@@ -128,8 +134,11 @@
 /* ---- States ---- */
 .loading-state,
 .empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  padding: 36px 16px;
   text-align: center;
-  padding: 32px 0;
   color: var(--app-muted);
   font-size: 14px;
 }
@@ -138,6 +147,14 @@
   display: block;
   margin-top: 4px;
   font-size: 12px;
+}
+
+.panel-actions,
+.page-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* ---- Grid helpers ---- */
@@ -173,6 +190,15 @@
 }
 
 @media (max-width: 768px) {
+  .page-shell {
+    padding: 16px;
+  }
+
+  .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .grid-3 {
     grid-template-columns: 1fr;
   }
