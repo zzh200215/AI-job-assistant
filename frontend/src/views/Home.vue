@@ -3,7 +3,8 @@
     <!-- 顶部欢迎栏 -->
     <section class="welcome-bar">
       <div class="welcome-left">
-        <h1>求职助手</h1>
+        <div class="signal-kicker"><span class="signal-dot" /> CAREER SIGNAL / LIVE WORKSPACE</div>
+        <h1><span>今天，</span><em>推进一份机会</em></h1>
         <p class="welcome-sub">
           {{ greeting }}，{{ username }}。{{
             overviewLoaded ? `当前有 ${overview.active_applications || 0} 个活跃投递` : '加载中...'
@@ -12,11 +13,25 @@
       </div>
       <div class="welcome-actions">
         <el-button type="primary" @click="go('/jobs/pipeline/kanban')">
-          <el-icon><Grid /></el-icon> 投递看板
+          <el-icon><Grid /></el-icon> 打开投递看板
         </el-button>
         <el-button @click="go('/smart-analysis')">
-          <el-icon><MagicStick /></el-icon> 智能分析
+          <el-icon><MagicStick /></el-icon> 开始智能分析
         </el-button>
+      </div>
+      <div class="signal-stats" aria-label="求职关键指标">
+        <div>
+          <strong>{{ overviewLoaded ? overview.active_applications || 0 : '--' }}</strong>
+          <span>活跃投递</span>
+        </div>
+        <div>
+          <strong>{{ overviewLoaded ? overview.weekly_new || 0 : '--' }}</strong>
+          <span>本周新增</span>
+        </div>
+        <div>
+          <strong>{{ interviewRate }}</strong>
+          <span>面试转化</span>
+        </div>
       </div>
     </section>
 
@@ -433,48 +448,159 @@ onMounted(loadDashboard)
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: calc(100vh - 76px);
+  margin: -20px -24px -24px;
+  padding: 32px;
+  background:
+    radial-gradient(circle at 88% 4%, rgba(124, 58, 237, 0.2), transparent 30%),
+    radial-gradient(circle at 5% 100%, rgba(34, 184, 232, 0.1), transparent 32%), #0d0e14;
+  color: #f4f5f8;
 }
 
 /* ===== Welcome Bar ===== */
 .welcome-bar {
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 28px;
-  border-radius: 20px;
-  background: linear-gradient(135deg, #196bdb 0%, #4a8fe5 100%);
-  color: #fff;
+  gap: 24px;
+  min-height: 196px;
+  padding: 30px 32px;
+  overflow: hidden;
+  border: 1px solid #2b2d3a;
+  border-radius: 12px;
+  background: linear-gradient(110deg, #151620 0%, #171825 60%, #211842 100%);
+  color: #f8f8fb;
+}
+
+.welcome-bar::after {
+  position: absolute;
+  right: -68px;
+  bottom: -90px;
+  z-index: -1;
+  width: 290px;
+  height: 290px;
+  border: 1px solid rgba(110, 231, 255, 0.19);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 42px rgba(124, 58, 237, 0.07),
+    0 0 0 86px rgba(34, 184, 232, 0.04);
+  content: '';
+}
+
+.welcome-left {
+  position: relative;
+  z-index: 1;
+  max-width: 560px;
+}
+
+.signal-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 11px;
+  color: #a7a9ba;
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.signal-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.8);
 }
 
 .welcome-bar h1 {
   margin: 0;
-  font-size: 28px;
+  font-size: 35px;
+  line-height: 1.16;
   font-weight: 800;
+  letter-spacing: 0;
+}
+
+.welcome-bar h1 span {
+  color: #f3f4f6;
+}
+
+.welcome-bar h1 em {
+  margin-left: 8px;
+  color: #22b8e8;
+  font-style: normal;
 }
 
 .welcome-sub {
-  margin: 6px 0 0;
+  margin: 10px 0 0;
+  color: #a7a9ba;
   font-size: 14px;
-  opacity: 0.9;
 }
 
 .welcome-actions {
+  position: relative;
+  z-index: 1;
   display: flex;
   gap: 10px;
+  align-self: flex-end;
 }
 
 .welcome-actions .el-button {
-  border-radius: 12px;
+  min-height: 40px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.welcome-actions :deep(.el-button--primary) {
+  background: #7c3aed;
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.28);
 }
 
 .welcome-actions .el-button--default {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.04);
+  border-color: #3a3c4b;
+  color: #e8e9f0;
 }
 
 .welcome-actions .el-button--default:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.signal-stats {
+  position: absolute;
+  right: 32px;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(96px, 1fr));
+  overflow: hidden;
+  border: 1px solid #303242;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: rgba(11, 12, 18, 0.6);
+}
+
+.signal-stats div {
+  display: grid;
+  gap: 3px;
+  padding: 12px 17px;
+  border-right: 1px solid #303242;
+}
+
+.signal-stats div:last-child {
+  border-right: 0;
+}
+
+.signal-stats strong {
+  color: #f8f8fb;
+  font-family: var(--app-font-mono);
+  font-size: 19px;
+  line-height: 1;
+}
+
+.signal-stats span {
+  color: #8d90a1;
+  font-size: 11px;
 }
 
 /* ===== Core Entrance Row ===== */
@@ -489,17 +615,18 @@ onMounted(loadDashboard)
   align-items: center;
   gap: 14px;
   padding: 20px 24px;
-  border-radius: 16px;
-  border: 1px solid var(--app-line);
-  background: #fff;
-  box-shadow: var(--app-shadow-soft);
+  border-radius: 10px;
+  border: 1px solid #2a2c38;
+  background: #171922;
+  box-shadow: none;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .core-card:hover {
   transform: translateY(-2px);
-  box-shadow: var(--app-shadow-hover);
+  border-color: #575a70;
+  background: #1c1e29;
 }
 
 .core-resume:hover {
@@ -544,20 +671,20 @@ onMounted(loadDashboard)
   margin: 0;
   font-size: 16px;
   font-weight: 700;
-  color: var(--app-text);
+  color: #f1f2f6;
 }
 
 .core-info p {
   margin: 4px 0 0;
   font-size: 13px;
-  color: var(--app-muted);
+  color: #989baa;
 }
 
 .core-meta {
   display: block;
   margin-top: 4px;
   font-size: 12px;
-  color: var(--app-muted);
+  color: #7f8293;
   opacity: 0.8;
 }
 
@@ -841,7 +968,7 @@ onMounted(loadDashboard)
 .metric-label {
   display: block;
   font-size: 12px;
-  color: var(--app-muted);
+  color: #86899a;
 }
 
 .metric-body strong {
@@ -976,6 +1103,87 @@ onMounted(loadDashboard)
   color: var(--app-accent);
 }
 
+/* ===== Signal Deck Skin ===== */
+.dashboard-page .panel,
+.quick-entry-panel,
+.metric-card {
+  border-color: #2a2c38;
+  background: #171922;
+  box-shadow: none;
+}
+
+.dashboard-page .panel-header {
+  border-bottom-color: #2a2c38;
+}
+
+.dashboard-page .panel-header h3,
+.quick-entry-panel h3,
+.dashboard-page .task-info strong,
+.dashboard-page .sug-body strong {
+  color: #f1f2f6;
+}
+
+.dashboard-page .panel-tip,
+.dashboard-page .task-info span,
+.dashboard-page .sug-body p,
+.dashboard-page .metric-label,
+.dashboard-page .funnel-label,
+.dashboard-page .trend-date,
+.dashboard-page .loading-state,
+.dashboard-page .empty-state,
+.dashboard-page .error-state {
+  color: #8f92a3;
+}
+
+.dashboard-page .metric-body strong,
+.dashboard-page .funnel-count,
+.dashboard-page .trend-count {
+  color: #f5f6fa;
+}
+
+.dashboard-page .task-item:hover {
+  background: #20222f;
+}
+
+.dashboard-page .suggestion-item {
+  border: 1px solid #2e3040;
+  background: #1d1d2b;
+}
+
+.dashboard-page .suggestion-item:hover {
+  background: #242237;
+}
+
+.dashboard-page .sug-index {
+  background: #6d3ce8;
+}
+
+.dashboard-page .funnel-bar-fill {
+  background: linear-gradient(180deg, #22b8e8 0%, #2563eb 100%);
+}
+
+.dashboard-page .trend-bar {
+  background: linear-gradient(180deg, #31d39b 0%, #0f9f78 100%);
+}
+
+.dashboard-page .quick-btn {
+  border-color: #2d2f3d;
+  background: #1b1d28;
+  color: #e7e8ee;
+}
+
+.dashboard-page .quick-btn:hover {
+  border-color: #5b4f95;
+  background: #222432;
+  box-shadow: none;
+}
+
+.dashboard-page :deep(.el-tag) {
+  border-color: #3a3d4d;
+  background: #222430;
+  color: #c3c5d1;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 1024px) {
   .top-row {
@@ -990,14 +1198,43 @@ onMounted(loadDashboard)
 }
 
 @media (max-width: 768px) {
+  .dashboard-page {
+    min-height: 0;
+    margin: -12px -16px -16px;
+    padding: 20px 16px;
+  }
+
   .welcome-bar {
+    min-height: 0;
     flex-direction: column;
     align-items: flex-start;
     gap: 14px;
+    padding: 24px 20px 104px;
   }
 
   .welcome-bar h1 {
-    font-size: 22px;
+    font-size: 27px;
+  }
+
+  .welcome-actions {
+    align-self: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .signal-stats {
+    right: 20px;
+    left: 20px;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .signal-stats div {
+    min-width: 0;
+    padding: 11px 8px;
+    text-align: center;
+  }
+
+  .signal-stats strong {
+    font-size: 16px;
   }
 
   .metrics-grid {

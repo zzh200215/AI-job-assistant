@@ -397,7 +397,7 @@ onMounted(async () => {
 /* ===== Shell ===== */
 .layout-shell {
   min-height: 100vh;
-  background: var(--app-bg);
+  background: #f4f5f8;
 }
 
 /* ===== Sidebar ===== */
@@ -406,8 +406,8 @@ onMounted(async () => {
   flex-direction: column;
   gap: 4px;
   padding: 16px 12px;
-  background: #fff;
-  border-right: 1px solid var(--app-line);
+  background: #101117;
+  border-right: 1px solid #252733;
 }
 
 /* Brand */
@@ -418,7 +418,7 @@ onMounted(async () => {
   padding: 12px 12px 20px;
   cursor: pointer;
   transition: opacity 0.18s ease;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid #252733;
   margin-bottom: 8px;
 }
 
@@ -432,9 +432,9 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  color: var(--app-primary);
-  background: var(--app-primary-light);
+  border-radius: 8px;
+  color: #f6f4ff;
+  background: #6d3ce8;
   flex-shrink: 0;
 }
 
@@ -442,15 +442,15 @@ onMounted(async () => {
   display: block;
   font-size: 15px;
   font-weight: 700;
-  color: var(--app-text);
-  letter-spacing: -0.02em;
+  color: #f2f3f8;
+  letter-spacing: 0;
 }
 
 .brand-copy small {
   display: block;
   margin-top: 2px;
   font-size: 11px;
-  color: var(--app-muted);
+  color: #86899a;
 }
 
 /* Navigation */
@@ -466,19 +466,36 @@ onMounted(async () => {
 .nav-menu :deep(.el-menu-item) {
   height: 42px;
   margin-bottom: 2px;
-  border-radius: 10px;
+  border-radius: 7px;
   font-size: 14px;
+  color: #a7a9b5 !important;
   transition: background 0.15s ease;
 }
 
 .nav-menu :deep(.el-menu-item:hover) {
-  background: var(--el-fill-color-light) !important;
+  background: #1b1d27 !important;
+  color: #f3f4f8 !important;
 }
 
 .nav-menu :deep(.el-menu-item.is-active) {
-  background: var(--app-primary-light) !important;
-  color: var(--app-primary) !important;
+  background: #271947 !important;
+  color: #bda4ff !important;
   font-weight: 600;
+}
+
+.nav-menu :deep(.el-sub-menu__title) {
+  height: 42px;
+  border-radius: 7px;
+  color: #a7a9b5 !important;
+}
+
+.nav-menu :deep(.el-sub-menu__title:hover) {
+  background: #1b1d27 !important;
+  color: #f3f4f8 !important;
+}
+
+.nav-menu :deep(.el-menu--inline) {
+  background: transparent !important;
 }
 
 .nav-menu :deep(.el-menu-item .el-icon) {
@@ -488,7 +505,7 @@ onMounted(async () => {
 /* Aside footer */
 .aside-footer {
   padding-top: 8px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid #252733;
 }
 
 .aside-chip {
@@ -496,8 +513,8 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--el-fill-color-light);
+  border-radius: 7px;
+  background: #1a1c26;
 }
 
 .aside-chip-dot {
@@ -523,12 +540,12 @@ onMounted(async () => {
 .aside-chip-copy strong {
   font-size: 13px;
   font-weight: 600;
-  color: var(--app-text);
+  color: #e9eaf0;
 }
 
 .aside-chip-copy span {
   font-size: 11px;
-  color: var(--app-muted);
+  color: #858899;
 }
 
 /* ===== Content area ===== */
@@ -541,8 +558,8 @@ onMounted(async () => {
 .topbar {
   height: auto;
   padding: 0;
-  background: #fff;
-  border-bottom: 1px solid var(--app-line);
+  background: #101117;
+  border-bottom: 1px solid #252733;
 }
 
 .topbar-main {
@@ -561,7 +578,7 @@ onMounted(async () => {
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--app-muted);
+  color: #858899;
   margin-bottom: 2px;
 }
 
@@ -569,7 +586,7 @@ onMounted(async () => {
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: var(--app-text);
+  color: #f2f3f8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -592,16 +609,16 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: 7px;
   font-size: 12px;
   font-weight: 500;
-  background: var(--el-fill-color-light);
-  color: var(--app-muted);
+  background: #1c1e28;
+  color: #aeb0bd;
 }
 
 .badge-outline {
-  background: transparent;
-  border: 1px solid var(--app-line);
+  background: #171923;
+  border: 1px solid #343643;
 }
 
 .badge-dot {
@@ -611,7 +628,7 @@ onMounted(async () => {
 }
 
 .dot-blue {
-  background: var(--app-primary);
+  background: #22b8e8;
 }
 .dot-violet {
   background: var(--app-violet);
@@ -623,24 +640,24 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   padding: 6px 10px 6px 6px;
-  border-radius: 10px;
+  border-radius: 7px;
   cursor: pointer;
-  background: var(--el-fill-color-light);
+  background: #1c1e28;
   transition: background 0.15s ease;
 }
 
 .user-chip:hover {
-  background: var(--el-border-color-lighter);
+  background: #272a36;
 }
 
 .user-avatar {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--app-primary);
+  background: #6d3ce8;
   color: #fff;
   font-size: 13px;
   font-weight: 700;
@@ -649,7 +666,7 @@ onMounted(async () => {
 .user-name {
   font-size: 13px;
   font-weight: 500;
-  color: var(--app-text);
+  color: #e8e9ef;
 }
 
 /* ===== Main content ===== */
