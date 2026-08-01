@@ -9,6 +9,9 @@ export const createInterview = (data) => request.post('/interview/sessions', dat
 // 获取面试列表
 export const getInterviewList = () => request.get('/interview/sessions')
 
+// T3-2：获取当前租户可见的面试题型配置（租户自定义优先，回落平台/内置）
+export const getInterviewConfigTypes = () => request.get('/interview/config/types')
+
 // 获取面试详情（含报告）
 export const getInterviewDetail = (sessionId) => request.get(`/interview/sessions/${sessionId}`)
 
@@ -77,7 +80,10 @@ export function connectInterviewWS(sid, onMessage, onError, onClose) {
     base = wsBase.replace(/\/$/, '')
   } else {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host
+    const localHosts = ['localhost', '127.0.0.1', '::1']
+    const host = localHosts.includes(window.location.hostname)
+      ? `${window.location.hostname}:8000`
+      : window.location.host
     base = `${protocol}//${host}`
   }
 

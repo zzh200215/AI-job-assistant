@@ -6,10 +6,22 @@
         <h2>今天的系统运营信号</h2>
         <p class="page-header-sub">统一查看用户增长、订阅转化和需要跟进的订单。</p>
       </div>
-      <el-button :loading="loading" @click="loadOverview">
-        <el-icon><Refresh /></el-icon>
-        刷新数据
-      </el-button>
+      <div class="heading-actions">
+        <el-select
+          v-model="tenantId"
+          class="tenant-select"
+          clearable
+          placeholder="全部租户"
+          @change="loadAnalytics"
+        >
+          <el-option label="全部租户（平台级）" value="" />
+          <el-option v-for="t in tenants" :key="t.id" :label="t.name" :value="t.id" />
+        </el-select>
+        <el-button :loading="loading" @click="loadOverview">
+          <el-icon><Refresh /></el-icon>
+          刷新数据
+        </el-button>
+      </div>
     </section>
 
     <section class="metrics-grid">
@@ -24,12 +36,34 @@
     </section>
 
     <section class="work-grid">
-      <el-card shadow="never" class="panel trend-panel">
+      <el-card shadow="never" class="panel funnel-panel">
+        <template #header>
+          <div class="card-heading">
+            <div>
+              <h3>转化漏斗</h3>
+              <span>近 30 天{{ tenantLabel }}注册 → 上传 → 分析 → 面试 → 订阅</span>
+            </div>
+          </div>
+        </template>
+        <div class="funnel-list">
+          <div v-for="s in funnelSteps" :key="s.key" class="funnel-row">
+            <span class="funnel-label">{{ s.label }}</span>
+            <div class="funnel-track">
+              <span :style="{ width: s.width }" />
+            </div>
+            <b>{{ s.count }}</b>
+            <em>{{ s.rate }}%</em>
+          </div>
+        </div>
+        <el-empty v-if="!funnelSteps.length && !loading" description="暂无漏斗数据" :image-size="72" />
+      </el-card>
+
+      <el-card shadow="never" class="panel action-panel">
         <template #header>
           <div class="card-heading">
             <div>
               <h3>订单状态</h3>
-              <span>当前已加载的最近订单</span>
+              <span>{{ tenantLabel }}最近订单</span>
             </div>
             <el-button text @click="router.push('/admin/orders')">查看订单</el-button>
           </div>
@@ -43,44 +77,7 @@
             <b>{{ item.value }}</b>
           </div>
         </div>
-        <el-empty v-if="!orders.length && !loading" description="暂无订单数据" :image-size="72" />
-      </el-card>
-
-      <el-card shadow="never" class="panel action-panel">
-        <template #header
-          ><div class="card-heading">
-            <div>
-              <h3>待处理事项</h3>
-              <span>按优先级快速进入工作区</span>
-            </div>
-          </div></template
-        >
-        <div class="action-list">
-          <button class="action-item" type="button" @click="router.push('/admin/orders')">
-            <span class="action-icon amber"
-              ><el-icon><Tickets /></el-icon
-            ></span>
-            <span
-              ><strong>待支付订单</strong
-              ><small>{{ pendingOrders }} 笔订单等待处理或确认</small></span
-            >
-            <el-icon class="action-arrow"><ArrowRight /></el-icon>
-          </button>
-          <button class="action-item" type="button" @click="router.push('/admin/users')">
-            <span class="action-icon blue"
-              ><el-icon><User /></el-icon
-            ></span>
-            <span><strong>最新注册用户</strong><small>查看最近加入的平台用户</small></span>
-            <el-icon class="action-arrow"><ArrowRight /></el-icon>
-          </button>
-          <button class="action-item" type="button" @click="router.push('/system-status')">
-            <span class="action-icon green"
-              ><el-icon><Monitor /></el-icon
-            ></span>
-            <span><strong>运行状态检查</strong><small>确认服务模式与功能开关</small></span>
-            <el-icon class="action-arrow"><ArrowRight /></el-icon>
-          </button>
-        </div>
+        <el-empty v-if="!filteredOrders.length && !loading" description="暂无订单数据" :image-size="72" />
       </el-card>
     </section>
 
@@ -89,12 +86,12 @@
         <div class="card-heading">
           <div>
             <h3>最新订单</h3>
-            <span>最近 6 笔订阅记录</span>
+            <span>最近 6 笔{{ tenantLabel }}订阅记录</span>
           </div>
           <el-button type="primary" plain @click="router.push('/admin/orders')">管理订单</el-button>
         </div>
       </template>
-      <el-table v-if="orders.length" :data="orders.slice(0, 6)" size="small" style="width: 100%">
+      <el-table v-if="filteredOrders.length" :data="filteredOrders.slice(0, 6)" size="small" style="width: 100%">
         <el-table-column prop="id" label="订单号" width="88"
           ><template #default="{ row }">#{{ row.id }}</template></el-table-column
         >
@@ -123,76 +120,83 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  ArrowRight,
-  CreditCard,
-  Monitor,
-  Refresh,
-  Tickets,
-  User,
-  UserFilled,
-} from '@element-plus/icons-vue'
+import { CreditCard, Refresh, Tickets, User, UserFilled } from '@element-plus/icons-vue'
 import request from '@/api/request'
+import { listTenants } from '@/api/tenant'
 
 const router = useRouter()
 const loading = ref(false)
-const totalUsers = ref(0)
+const tenants = ref([])
+const tenantId = ref('')
+const summary = ref({})
+const revenue = ref({})
+const funnel = ref({})
 const orders = ref([])
 
-const paidOrders = computed(() => orders.value.filter((order) => order.status === 'paid'))
-const pendingOrders = computed(
-  () => orders.value.filter((order) => order.status === 'pending').length
-)
-const totalRevenue = computed(() =>
-  paidOrders.value.reduce((sum, order) => sum + Number(order.amount || 0), 0)
-)
-const proUsers = computed(
-  () =>
-    new Set(
-      paidOrders.value.filter((order) => order.plan_tier === 'pro').map((order) => order.user_id)
-    ).size
-)
+const tenantLabel = computed(() => {
+  if (!tenantId.value) return '平台'
+  const t = tenants.value.find((item) => String(item.id) === String(tenantId.value))
+  return t ? `「${t.name}」` : '当前租户'
+})
+const filteredOrders = computed(() => {
+  if (!tenantId.value) return orders.value
+  const tid = Number(tenantId.value)
+  return orders.value.filter((order) => Number(order.tenant_id) === tid)
+})
+const paidOrders = computed(() => filteredOrders.value.filter((order) => order.status === 'paid'))
+const proUsers = computed(() => summary.value.pro_users || 0)
+const totalUsers = computed(() => summary.value.total_users || 0)
+const paidOrderCount = computed(() => summary.value.paid_orders || 0)
 
 const metricCards = computed(() => [
   {
     label: '注册用户',
     value: totalUsers.value,
-    hint: '平台累计账户数',
+    hint: `${tenantLabel.value}用户口径`,
     icon: UserFilled,
     tone: 'blue',
   },
   {
     label: 'Pro 用户',
     value: proUsers.value,
-    hint: '按已支付 Pro 订单估算',
+    hint: '有效 pro 订阅用户',
     icon: User,
     tone: 'violet',
   },
   {
-    label: '待处理订单',
-    value: pendingOrders.value,
-    hint: '需要继续跟进',
+    label: '付费订单',
+    value: paidOrderCount.value,
+    hint: '已支付订单笔数',
     icon: Tickets,
     tone: 'amber',
   },
   {
     label: '已收款',
-    value: formatMoney(totalRevenue.value),
-    hint: '当前订单列表中的已支付金额',
+    value: formatMoney(revenue.value.total_amount),
+    hint: '近 30 天已支付金额',
     icon: CreditCard,
     tone: 'green',
   },
 ])
 
+const funnelSteps = computed(() => {
+  const steps = funnel.value.steps || []
+  const max = Math.max(...steps.map((s) => s.count || 0), 1)
+  return steps.map((s) => ({
+    ...s,
+    width: `${Math.max((s.count / max) * 100, s.count ? 8 : 0)}%`,
+  }))
+})
+
 const orderBreakdown = computed(() => {
-  const total = orders.value.length || 1
+  const total = filteredOrders.value.length || 1
   const states = [
     { key: 'paid', label: '已支付', tone: 'green' },
     { key: 'pending', label: '待支付', tone: 'amber' },
     { key: 'cancelled', label: '已取消', tone: 'slate' },
   ]
   return states.map((state) => {
-    const value = orders.value.filter((order) => order.status === state.key).length
+    const value = filteredOrders.value.filter((order) => order.status === state.key).length
     return {
       ...state,
       value,
@@ -217,19 +221,55 @@ function statusType(status) {
   return { paid: 'success', pending: 'warning', cancelled: 'info' }[status] || 'info'
 }
 
+async function loadTenants() {
+  try {
+    const res = await listTenants({ page: 1, page_size: 100 }, { notifyError: false })
+    const data = res?.data || res || {}
+    tenants.value = data.items || []
+  } catch {
+    tenants.value = []
+  }
+}
+
+async function loadAnalytics() {
+  loading.value = true
+  try {
+    const params = {}
+    if (tenantId.value) params.tenant_id = tenantId.value
+    const [summaryRes, revenueRes, funnelRes] = await Promise.all([
+      request.get('/analytics/summary', { params: { ...params }, notifyError: false }),
+      request.get('/admin/analytics/revenue', { params: { ...params }, notifyError: false }),
+      request.get('/analytics/funnel', { params: { ...params }, notifyError: false }),
+    ])
+    summary.value = summaryRes?.data || summaryRes || {}
+    revenue.value = revenueRes?.data || revenueRes || {}
+    funnel.value = funnelRes?.data || funnelRes || {}
+  } catch {
+    summary.value = {}
+    revenue.value = {}
+    funnel.value = {}
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadOrders() {
+  try {
+    const res = await request.get('/subscription/admin/orders', {
+      params: { page: 1, page_size: 100 },
+      notifyError: false,
+    })
+    const data = res?.data || res || {}
+    orders.value = data.items || []
+  } catch {
+    orders.value = []
+  }
+}
+
 async function loadOverview() {
   loading.value = true
   try {
-    const [usersData, ordersData] = await Promise.all([
-      request.get('/auth/admin/users', { params: { page: 1, page_size: 1 }, notifyError: false }),
-      request.get('/subscription/admin/orders', {
-        params: { page: 1, page_size: 100 },
-        notifyError: false,
-      }),
-    ])
-    totalUsers.value = usersData?.data?.total || usersData?.total || 0
-    const data = ordersData?.data || ordersData || {}
-    orders.value = data.items || []
+    await Promise.all([loadTenants(), loadOrders(), loadAnalytics()])
   } finally {
     loading.value = false
   }
@@ -251,6 +291,14 @@ onMounted(loadOverview)
   align-items: flex-end;
   justify-content: space-between;
   gap: 18px;
+}
+.heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tenant-select {
+  width: 200px;
 }
 .section-kicker {
   margin: 0 0 5px;
@@ -361,6 +409,45 @@ onMounted(loadOverview)
   color: var(--app-muted);
   font-size: 12px;
 }
+.funnel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px;
+}
+.funnel-row {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr) 34px 44px;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.funnel-label {
+  color: var(--app-text);
+}
+.funnel-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--el-fill-color-light);
+}
+.funnel-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--app-primary);
+}
+.funnel-row b {
+  color: var(--app-text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.funnel-row em {
+  color: var(--app-muted);
+  font-size: 12px;
+  font-style: normal;
+  text-align: right;
+}
 .status-list {
   display: flex;
   flex-direction: column;
@@ -410,71 +497,6 @@ onMounted(loadOverview)
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-.action-list {
-  display: flex;
-  flex-direction: column;
-}
-.action-item {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 18px;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  padding: 11px 0;
-  border: 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-.action-item:last-child {
-  border-bottom: 0;
-}
-.action-item:hover strong {
-  color: var(--app-primary);
-}
-.action-item span:not(.action-icon) {
-  min-width: 0;
-}
-.action-item strong,
-.action-item small {
-  display: block;
-}
-.action-item strong {
-  color: var(--app-text);
-  font-size: 13px;
-}
-.action-item small {
-  overflow: hidden;
-  margin-top: 3px;
-  color: var(--app-muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.action-icon {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 7px;
-}
-.action-icon.amber {
-  color: #9a6200;
-  background: #fff4d8;
-}
-.action-icon.blue {
-  color: var(--app-primary);
-  background: var(--app-primary-light);
-}
-.action-icon.green {
-  color: #137a4a;
-  background: #e7f7ef;
-}
-.action-arrow {
-  color: var(--app-muted);
-}
 .recent-panel :deep(.el-card__body) {
   padding-top: 8px;
 }
@@ -490,6 +512,14 @@ onMounted(loadOverview)
   .overview-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .heading-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .tenant-select {
+    flex: 1;
+    min-width: 160px;
   }
   .metrics-grid {
     grid-template-columns: 1fr;

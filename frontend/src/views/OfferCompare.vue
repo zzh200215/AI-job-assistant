@@ -1,11 +1,53 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell offer-compare-page">
     <div class="page-header">
       <div>
         <h2>Offer 决策</h2>
         <div class="page-header-sub">多维对比、AI 辅助决策、谈薪资话术、入职准备清单</div>
       </div>
     </div>
+
+    <section v-if="offers.length" class="offer-decision-strip" aria-label="Offer 决策摘要">
+      <div class="offer-lead">
+        <span class="decision-label">当前优先项</span>
+        <strong>{{ leadingOfferLabel }}</strong>
+        <p>
+          {{
+            leadingOffer
+              ? `按当前权重计算为 ${weightedScore(leadingOffer)} 分，仅作为比较起点。`
+              : '选择 Offer 后可开始对比。'
+          }}
+        </p>
+      </div>
+      <div class="offer-signals">
+        <span class="decision-label">决策信号</span>
+        <div class="offer-signal-grid">
+          <span
+            ><b>{{ selectedOffers.length }}</b> 个已选</span
+          >
+          <span
+            ><b>{{ offers.length }}</b> 个待决</span
+          >
+          <span
+            ><b>{{ urgentOfferCount }}</b> 个临近截止</span
+          >
+        </div>
+        <p>{{ urgentOfferMessage }}</p>
+      </div>
+      <div class="offer-next">
+        <span class="decision-label">下一步</span>
+        <p>
+          {{
+            selectedOffers.length >= 2
+              ? '先确认个人权重，再生成对比建议。'
+              : '至少选择两个 Offer，系统才会生成有意义的取舍建议。'
+          }}
+        </p>
+        <el-button type="primary" size="small" :loading="adviceLoading" @click="prepareComparison">
+          {{ selectedOffers.length >= 2 ? '生成决策建议' : '选择用于对比的 Offer' }}
+        </el-button>
+      </div>
+    </section>
 
     <!-- Offer 列表 -->
     <div class="panel">
@@ -448,6 +490,27 @@ function resetWeights() {
 
 const selectedOffers = computed(() => offers.value.filter((o) => selectedIds.value.includes(o.id)))
 const adviceLines = computed(() => (adviceText.value || '').split('\n').filter(Boolean))
+const leadingOffer = computed(() => {
+  if (!offers.value.length) return null
+  return [...offers.value].sort((a, b) => weightedScore(b) - weightedScore(a))[0]
+})
+const leadingOfferLabel = computed(() => {
+  if (!leadingOffer.value) return '等待 Offer 数据'
+  return `${leadingOffer.value.company || '未知公司'} - ${leadingOffer.value.title || '未知岗位'}`
+})
+const urgentOfferCount = computed(
+  () =>
+    offers.value.filter((offer) => {
+      if (!offer.offer_deadline) return false
+      const days = Math.ceil((new Date(offer.offer_deadline) - new Date()) / 86400000)
+      return days >= 0 && days <= 3
+    }).length
+)
+const urgentOfferMessage = computed(() =>
+  urgentOfferCount.value
+    ? '存在临近截止的 Offer，先确认书面条件和可协商空间。'
+    : '暂无临近截止的 Offer，可按职业优先级完成比较。'
+)
 
 // 入职清单
 const checklistSections = reactive([
@@ -550,6 +613,15 @@ function toggleSelect(id) {
   const idx = selectedIds.value.indexOf(id)
   if (idx >= 0) selectedIds.value.splice(idx, 1)
   else selectedIds.value.push(id)
+}
+
+function prepareComparison() {
+  if (selectedOffers.value.length < 2) {
+    selectedIds.value = offers.value.slice(0, 2).map((offer) => offer.id)
+    ElMessage.success('已选择两个 Offer 用于对比')
+    return
+  }
+  generateAdvice()
 }
 
 async function loadOffers() {
@@ -681,6 +753,76 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
 }
+
+.offer-decision-strip {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.2fr) minmax(240px, 1fr) minmax(220px, 0.85fr);
+  gap: 0;
+  margin-bottom: 16px;
+  background: #fff;
+  border: 1px solid var(--app-line);
+  border-left: 4px solid var(--app-primary);
+  border-radius: var(--app-radius-sm, 8px);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.offer-decision-strip > div {
+  min-width: 0;
+  padding: 18px 20px;
+  border-left: 1px solid var(--app-line);
+}
+
+.offer-decision-strip > div:first-child {
+  border-left: 0;
+}
+
+.decision-label {
+  display: block;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.offer-lead strong {
+  display: block;
+  margin-top: 7px;
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.offer-decision-strip p {
+  margin: 7px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.offer-signal-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.offer-signal-grid span {
+  padding: 4px 7px;
+  border-radius: 3px;
+  background: var(--app-bg);
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.offer-signal-grid b {
+  color: var(--app-text);
+}
+
+.offer-next .el-button {
+  margin-top: 12px;
+}
 .empty-inline {
   text-align: center;
   padding: 16px 0;
@@ -722,7 +864,7 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border-radius: var(--app-radius-xs, 8px);
+  border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s;
   border: 2px solid transparent;
@@ -772,7 +914,7 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 8px 14px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--app-bg);
   border: 1px solid var(--app-line);
 }
@@ -877,7 +1019,7 @@ onMounted(() => {
 .stat-card {
   text-align: center;
   padding: 12px 20px;
-  border-radius: var(--app-radius-sm, 12px);
+  border-radius: 6px;
   background: var(--el-fill-color-lighter);
   min-width: 80px;
 }
@@ -969,6 +1111,24 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .offer-decision-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .offer-decision-strip > div,
+  .offer-decision-strip > div:first-child {
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+  }
+
+  .offer-decision-strip > div:first-child {
+    border-top: 0;
+  }
+
+  .offer-next .el-button {
+    width: 100%;
+  }
+
   .load-error {
     align-items: flex-start;
     flex-direction: column;

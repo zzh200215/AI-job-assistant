@@ -1,5 +1,5 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell job-recommend-page">
     <!-- 每日推荐头部 -->
     <div class="panel daily-feed-header">
       <div class="panel-body feed-header-body">
@@ -27,6 +27,41 @@
         </div>
       </div>
     </div>
+
+    <section v-if="selectedResumeId" class="recommendation-brief" aria-label="本轮推荐摘要">
+      <div class="brief-current">
+        <span class="brief-label">本轮匹配</span>
+        <strong>{{ selectedResumeLabel }}</strong>
+        <small>岗位建议会随着简历版本和筛选条件变化</small>
+      </div>
+      <div class="brief-metrics">
+        <div>
+          <b>{{ recommendations.length }}</b
+          ><span>匹配岗位</span>
+        </div>
+        <div>
+          <b>{{ priorityJobCount }}</b
+          ><span>优先投递</span>
+        </div>
+        <div>
+          <b>{{ pipelineJobCount }}</b
+          ><span>已加入看板</span>
+        </div>
+      </div>
+      <div class="brief-next">
+        <span class="brief-label">建议动作</span>
+        <p>
+          {{
+            priorityJobCount
+              ? '先处理高匹配岗位，再把有意向的机会加入投递节奏。'
+              : '调整筛选条件，或补全简历后重新匹配。'
+          }}
+        </p>
+        <el-button size="small" @click="$router.push('/jobs/pipeline/kanban')"
+          >查看投递节奏</el-button
+        >
+      </div>
+    </section>
 
     <!-- 顶部：选择简历 + 操作 -->
     <div class="panel">
@@ -488,6 +523,8 @@ import {
   submitJobFeedback,
   startFullAnalysis,
   getJobPipelineList,
+  bookmarkJob,
+  unbookmarkJob,
 } from '@/api/jobs'
 import { ElMessage } from '@/plugins/element-services'
 import {
@@ -536,6 +573,16 @@ const hasAnomalySignals = computed(() => {
   const signals = feedbackStats.value?.tuning_signals
   return Boolean(signals?.high_score_dislikes?.length || signals?.low_score_likes?.length)
 })
+const selectedResumeLabel = computed(() => {
+  const resume = resumeList.value.find((item) => item.id === selectedResumeId.value)
+  return resume?.name || resume?.file_name || '已选简历'
+})
+const priorityJobCount = computed(
+  () =>
+    recommendations.value.filter((job) => Number(job.match_score || 0) >= 80 && !job._applied)
+      .length
+)
+const pipelineJobCount = computed(() => recommendations.value.filter((job) => job._applied).length)
 
 // === 每日推荐 ===
 const todayText = computed(() => {
@@ -670,9 +717,21 @@ function generateInterviewPrep(job) {
   })
 }
 
-function toggleBookmark(job) {
-  job._bookmarked = !job._bookmarked
-  ElMessage.success(job._bookmarked ? '已收藏' : '已取消收藏')
+async function toggleBookmark(job) {
+  // 同步后端：收藏/取消收藏落库，避免只改本地状态、刷新后丢失
+  const next = !job._bookmarked
+  const jdId = job.jd_id || job.id
+  try {
+    if (next) {
+      await bookmarkJob(jdId, 'bookmark')
+    } else {
+      await unbookmarkJob(jdId)
+    }
+    job._bookmarked = next
+    ElMessage.success(next ? '已收藏' : '已取消收藏')
+  } catch (e) {
+    ElMessage.error('收藏操作失败: ' + (e.message || e))
+  }
 }
 
 async function addToKanban(job) {
@@ -780,8 +839,10 @@ function formatShortDate(dateText) {
 
 /* 每日推荐头部 */
 .daily-feed-header {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e8f4fd 100%);
-  border-color: #b3d9f2;
+  background: #fff;
+  border-color: var(--app-line);
+  border-top: 3px solid var(--app-primary);
+  border-radius: var(--app-radius-sm, 8px);
 }
 
 .feed-header-body {
@@ -800,7 +861,7 @@ function formatShortDate(dateText) {
 .feed-header-icon {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: 6px;
   background: var(--app-primary-light);
   color: var(--app-primary);
   display: flex;
@@ -828,6 +889,119 @@ function formatShortDate(dateText) {
   flex-shrink: 0;
 }
 
+@media (max-width: 960px) {
+  .recommendation-brief {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .brief-next {
+    grid-column: 1 / -1;
+    padding-top: 14px;
+    border-top: 1px solid var(--app-line);
+  }
+}
+
+@media (max-width: 640px) {
+  .recommendation-brief,
+  .brief-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .brief-metrics {
+    gap: 8px;
+    border: 0;
+  }
+
+  .brief-metrics div,
+  .brief-metrics div + div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+    text-align: left;
+  }
+}
+
+.recommendation-brief {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(270px, 1fr) minmax(250px, 1.2fr);
+  gap: 20px;
+  align-items: center;
+  padding: 18px 20px;
+  background: #fff;
+  border: 1px solid var(--app-line);
+  border-left: 4px solid var(--app-primary);
+  border-radius: var(--app-radius-sm, 8px);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.brief-label {
+  display: block;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.brief-current strong {
+  display: block;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brief-current small,
+.brief-next p {
+  display: block;
+  margin: 6px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.brief-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-right: 1px solid var(--app-line);
+  border-left: 1px solid var(--app-line);
+}
+
+.brief-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 2px 13px;
+  text-align: center;
+}
+
+.brief-metrics div + div {
+  border-left: 1px solid var(--app-line);
+}
+
+.brief-metrics b {
+  color: var(--app-primary-dark);
+  font-size: 23px;
+  line-height: 1;
+}
+
+.brief-metrics span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.brief-next {
+  display: grid;
+  justify-items: start;
+}
+
+.brief-next .el-button {
+  margin-top: 10px;
+}
+
 /* 顶部 */
 .stats-row {
   display: grid;
@@ -836,7 +1010,7 @@ function formatShortDate(dateText) {
 }
 .stats-item {
   padding: 12px 14px;
-  border-radius: var(--app-radius-sm, 12px);
+  border-radius: var(--app-radius-xs, 6px);
   background: var(--app-bg);
 }
 .stats-value {
@@ -860,8 +1034,8 @@ function formatShortDate(dateText) {
 }
 .insight-block {
   padding: 16px;
-  border-radius: var(--app-radius-sm, 12px);
-  background: #fbfcfa;
+  border-radius: var(--app-radius-xs, 6px);
+  background: #fff;
   border: 1px solid var(--app-line);
 }
 .insight-title {

@@ -101,15 +101,25 @@ def search_knowledge(
     if top_k is None:
         top_k = settings.RAG_TOP_K
 
+    # 安全底线：没有 DB 会话就无法做租户/用户可见性过滤。
+    # 宁可不检索（返回空）也不允许跨租户/跨用户泄漏（fail-closed）。
+    # 置于 Chroma 访问之前，无 db 时完全不触碰知识库。
+    if db is None:
+        logger.warning(
+            "search_knowledge called without db session; refusing unqualified retrieval "
+            "(query=%r, doc_type=%r)",
+            query[:50],
+            doc_type,
+        )
+        return []
+
     collection = get_knowledge_collection()
     if collection.count() == 0:
         return []
 
-    visible_doc_ids = None
-    if db is not None:
-        visible_doc_ids = get_visible_knowledge_doc_ids(db, user_id=user_id, organization_id=organization_id)
-        if visible_doc_ids == set():
-            return []
+    visible_doc_ids = get_visible_knowledge_doc_ids(db, user_id=user_id, organization_id=organization_id)
+    if visible_doc_ids == set():
+        return []
 
     where_filter = {"doc_type": doc_type} if doc_type else None
 

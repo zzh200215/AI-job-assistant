@@ -46,13 +46,17 @@ jobs:
       - name: Run backend tests
         run: python -m pytest
 
-      - name: Validate Alembic migrations
+      - name: Validate Alembic migrations (T1-3)
         env:
           DATABASE_URL: sqlite:///./ci_migration_check.sqlite3
         run: |
           rm -f ci_migration_check.sqlite3
           python -m alembic -c alembic.ini upgrade head
           python -m alembic -c alembic.ini current
+          python -m alembic -c alembic.ini check
+
+      - name: Check schema baseline drift (T1-2)
+        run: python scripts/export_schema_baseline.py --check
 
       - name: Run RAG eval (min recall >= 0.5)
         run: python scripts/eval_rag.py --min-recall 0.5

@@ -3,9 +3,10 @@
 阶段流转：todo → applied → written_test → interview → offer → accepted / rejected / withdrawn
 """
 
-from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, Text
 
 from app.core.database import Base
+from app.models.base import TenantScopedMixin
 from app.utils.time_helper import utc_now
 
 # ===== 投递流程阶段常量 =====
@@ -46,8 +47,9 @@ VALID_TRANSITIONS = {
 }
 
 
-class JobApplicationPipeline(Base):
+class JobApplicationPipeline(TenantScopedMixin, Base):
     __tablename__ = "job_application_pipeline"
+    __table_args__ = (Index("ix_job_application_pipeline_tenant_user", "tenant_id", "user_id"),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("tb_user.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -109,6 +111,7 @@ class JobApplicationPipeline(Base):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "user_id": self.user_id,
             "resume_id": self.resume_id,
             "resume_version_id": self.resume_version_id,

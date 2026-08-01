@@ -5,7 +5,14 @@
       <section class="brand-pane" aria-label="产品信息">
         <div class="brand-head">
           <span class="brand-mark">
+            <img
+              v-if="tenantStore.brand?.logo_url"
+              :src="tenantStore.brand.logo_url"
+              alt="logo"
+              class="brand-logo-img"
+            />
             <svg
+              v-else
               width="20"
               height="20"
               viewBox="0 0 32 32"
@@ -30,7 +37,7 @@
               />
             </svg>
           </span>
-          <span class="brand-name">Career Signal</span>
+          <span class="brand-name">{{ tenantStore.brand?.name || 'Career Signal' }}</span>
         </div>
 
         <div class="brand-body">
@@ -229,16 +236,21 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Lock, User } from '@element-plus/icons-vue'
 
 import { ElMessage } from '@/plugins/element-services'
 import { useAuthStore } from '@/stores/auth'
+import { useTenantStore } from '@/stores/tenant'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const tenantStore = useTenantStore()
 const formRef = ref()
+
+// 登录页无登录态：品牌接口走默认/域名租户，进入即应用品牌
+onMounted(() => tenantStore.init())
 const loading = ref(false)
 const rememberMe = ref(false)
 const loginError = ref('')
@@ -315,7 +327,8 @@ const handleLogin = async () => {
 .brand-pane {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(145deg, #0f1729 0%, #162544 100%);
+  /* T2-5：租户配置 login_bg 时用品牌背景图，否则回落默认渐变 */
+  background: var(--app-login-bg, linear-gradient(145deg, #0f1729 0%, #162544 100%)) center / cover no-repeat;
   color: #f0f4ff;
   padding: 44px 40px;
   display: flex;
@@ -358,6 +371,13 @@ const handleLogin = async () => {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
+}
+
+.brand-mark .brand-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 .brand-name {

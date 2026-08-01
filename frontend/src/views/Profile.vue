@@ -624,7 +624,7 @@ async function refreshAll() {
 async function verifyEmail() {
   verifying.value = true
   try {
-    await request.post('/auth/send-verify-email')
+    await request.post('/auth/send-verification-email')
     ElMessage.success('验证邮件已发送，请查收')
   } catch {
     ElMessage.error('发送失败')

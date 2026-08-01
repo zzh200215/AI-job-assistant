@@ -16,6 +16,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # 基线 0001 用 Base.metadata.create_all 建表，全新库升级时本表已存在，需幂等处理。
+    if sa.inspect(op.get_bind()).has_table("organization_sso_state"):
+        return
+
     op.create_table(
         "organization_sso_state",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),

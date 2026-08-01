@@ -25,7 +25,7 @@ class InterviewAgent(BaseAgent):
         # RAG 检索面试题库
         pos = job_report.get("position_info", {})
         title = pos.get("title", "")
-        rag_results = search_knowledge(title, doc_type="interview_q", top_k=5)
+        rag_results = search_knowledge(title, doc_type="interview_q", top_k=5, db=context.db, user_id=context.user_id)
         rag_text = "\n".join([f"【{r.get('doc_title', '')}】{r.get('text', '')[:200]}" for r in rag_results])
 
         prompt = render_prompt(

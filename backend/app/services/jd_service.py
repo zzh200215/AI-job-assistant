@@ -4,6 +4,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.tenant_context import stamp_tenant
 from app.models.history import JobDescription
 from app.prompts.jd_parse import JD_PARSE_PROMPT
 from app.prompts.rendering import render_prompt
@@ -11,7 +12,8 @@ from app.services.llm_service import chat_json
 
 
 def create_jd(db: Session, title: str, company: str, raw_text: str, user_id: int = None) -> JobDescription:
-    jd = JobDescription(user_id=user_id, title=title, company=company, raw_text=raw_text)
+    # 用户创建/解析的 JD 必须盖当前租户标记，避免落到「NULL=平台共享」被全局归为平台岗位
+    jd = stamp_tenant(JobDescription(user_id=user_id, title=title, company=company, raw_text=raw_text))
     db.add(jd)
     db.commit()
     db.refresh(jd)

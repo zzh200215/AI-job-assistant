@@ -7,7 +7,7 @@
         <h1><span>今天，</span><em>推进一份机会</em></h1>
         <p class="welcome-sub">
           {{ greeting }}，{{ username }}。{{
-            overviewLoaded ? `当前有 ${overview.active_applications || 0} 个活跃投递` : '加载中...'
+            overviewLoaded ? `当前有 ${dashSummary.active_applications || 0} 个活跃投递` : '加载中...'
           }}
         </p>
       </div>
@@ -21,7 +21,7 @@
       </div>
       <div class="signal-stats" aria-label="求职关键指标">
         <div>
-          <strong>{{ overviewLoaded ? overview.active_applications || 0 : '--' }}</strong>
+          <strong>{{ overviewLoaded ? dashSummary.active_applications || 0 : '--' }}</strong>
           <span>活跃投递</span>
         </div>
         <div>
@@ -59,7 +59,7 @@
           <h3>简历中心</h3>
           <p>管理、优化、诊断多份简历</p>
           <span class="core-meta">{{
-            overviewLoaded ? (overview.resume_count || '--') + ' 份简历' : '加载中...'
+            overviewLoaded ? (dashSummary.total_resumes || '--') + ' 份简历' : '加载中...'
           }}</span>
         </div>
         <el-icon class="core-arrow"><ArrowRight /></el-icon>
@@ -72,7 +72,7 @@
           <h3>岗位推荐</h3>
           <p>智能匹配每日高匹配岗位</p>
           <span class="core-meta">{{
-            overviewLoaded ? (overview.recommend_count || '--') + ' 个推荐' : '加载中...'
+            overviewLoaded ? (dashSummary.bookmarked_jobs || '--') + ' 个收藏岗位' : '加载中...'
           }}</span>
         </div>
         <el-icon class="core-arrow"><ArrowRight /></el-icon>
@@ -85,7 +85,7 @@
           <h3>AI 模拟面试</h3>
           <p>针对性面试训练、能力评估</p>
           <span class="core-meta">{{
-            overviewLoaded ? (overview.interview_count || '--') + ' 次面试' : '加载中...'
+            overviewLoaded ? (dashSummary.total_interviews || '--') + ' 次面试' : '加载中...'
           }}</span>
         </div>
         <el-icon class="core-arrow"><ArrowRight /></el-icon>
@@ -230,7 +230,7 @@
           <div class="metric-body">
             <span class="metric-label">平均匹配</span>
             <strong class="data-value">{{
-              overviewLoaded ? (overview.avg_match_score ?? '--') : '-'
+              overviewLoaded ? (dashSummary.avg_match_score ?? '--') : '-'
             }}</strong>
           </div>
         </div>
@@ -241,7 +241,7 @@
           <div class="metric-body">
             <span class="metric-label">Offer 数</span>
             <strong class="data-value">{{
-              overviewLoaded ? overview.pending_offers || 0 : '-'
+              overviewLoaded ? dashSummary.pending_offers || 0 : '-'
             }}</strong>
           </div>
         </div>
@@ -364,6 +364,10 @@ const tasksError = ref(false)
 const aiSuggestions = ref([])
 const aiLoading = ref(true)
 const aiError = ref(false)
+
+// 后端关键指标统一放在 data.summary 下（total_resumes/active_applications 等），
+// 模板统一经 dashSummary 读取，避免读顶层字段永远 0/--。
+const dashSummary = computed(() => overview.value.summary || overview.value)
 
 const interviewRate = computed(() => {
   if (!overviewLoaded.value) return '-'

@@ -2152,15 +2152,20 @@ function pushRecentSearch(value) {
 }
 
 function recommendTagType(value) {
-  if ((value || '').includes('楂樺害')) return 'success'
-  if ((value || '').includes('鍊煎緱')) return 'warning'
+  // 后端推荐类型：高度推荐 / 值得一试 / 谨慎考虑
+  const v = value || ''
+  if (v.includes('高度')) return 'success'
+  if (v.includes('值得')) return 'warning'
+  if (v.includes('谨慎')) return 'danger'
   return 'info'
 }
 
 function priorityTagType(value) {
-  if ((value || '').includes('浼樺厛') || (value || '').includes('寮虹儓')) return 'success'
-  if ((value || '').includes('鍊煎緱') || (value || '').includes('鍙互')) return 'warning'
-  if ((value || '').includes('璋ㄦ厧')) return 'danger'
+  // 投递优先级标签：优先投递 / 值得投递 / 先观察；兼容遗留 强烈/可以/谨慎
+  const v = value || ''
+  if (v.includes('优先') || v.includes('强烈')) return 'success'
+  if (v.includes('值得') || v.includes('可以')) return 'warning'
+  if (v.includes('谨慎')) return 'danger'
   return 'info'
 }
 

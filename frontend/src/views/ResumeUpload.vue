@@ -14,6 +14,46 @@
       </div>
     </div>
 
+    <section v-if="!listLoading && resumes.length" class="resume-workflow" aria-label="简历工作流">
+      <div class="workflow-summary">
+        <span class="workflow-eyebrow">当前投递版本</span>
+        <strong>{{ activeResume?.name || activeResume?.file_name || '选择一份简历开始' }}</strong>
+        <span class="workflow-caption">
+          {{
+            activeResume
+              ? `更新于 ${formatDate(activeResume.create_time)}`
+              : '上传后可进行诊断与匹配'
+          }}
+        </span>
+      </div>
+      <div class="workflow-steps">
+        <div class="workflow-step is-current">
+          <span class="workflow-index">01</span>
+          <div>
+            <b>确认版本</b><small>{{ resumes.length }} 份简历</small>
+          </div>
+        </div>
+        <div class="workflow-step" :class="{ 'is-ready': scoredResumeCount > 0 }">
+          <span class="workflow-index">02</span>
+          <div>
+            <b>检查可投递性</b
+            ><small>{{
+              scoredResumeCount ? `${scoredResumeCount} 份已有 ATS 评分` : '等待评分'
+            }}</small>
+          </div>
+        </div>
+        <div class="workflow-step" :class="{ 'is-ready': activeResume }">
+          <span class="workflow-index">03</span>
+          <div>
+            <b>匹配目标岗位</b><small>{{ activeResume ? '进入深度分析' : '先选择简历' }}</small>
+          </div>
+        </div>
+      </div>
+      <el-button type="primary" class="workflow-action" @click="goAnalysis(activeResume)">
+        开始匹配
+      </el-button>
+    </section>
+
     <!-- 上传对话框 -->
     <el-dialog v-model="showUpload" title="上传简历" width="560px" :close-on-click-modal="false">
       <el-upload
@@ -262,6 +302,7 @@
       >
         <div class="card-top">
           <div class="card-title-row">
+            <span class="record-mark">{{ r.id === defaultResumeId ? '投递中' : '备选版本' }}</span>
             <h3>{{ r.name || r.file_name || '未命名简历' }}</h3>
             <el-dropdown trigger="click" @command="(cmd) => handleCmd(cmd, r)">
               <el-icon class="more-btn"><MoreFilled /></el-icon>
@@ -354,9 +395,11 @@
         </div>
 
         <div class="card-footer">
-          <span class="card-date">{{ formatDate(r.create_time) }}</span>
+          <span class="card-date">版本记录 {{ formatDate(r.create_time) }}</span>
           <div class="card-actions">
-            <el-button size="small" type="primary" @click="goAnalysis(r)">去分析</el-button>
+            <el-button size="small" type="primary" @click="goAnalysis(r)">
+              {{ r.id === defaultResumeId ? '匹配岗位' : '去分析' }}
+            </el-button>
             <el-button size="small" @click="handleCmd('diagnose', r)">AI诊断</el-button>
           </div>
         </div>
@@ -366,7 +409,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   UploadFilled,
@@ -423,6 +466,13 @@ const diagActivePanels = ref(['structure', 'expression', 'keywords', 'highlights
 const desensitized = ref(false)
 
 const LS_DEFAULT_KEY = 'recruit.defaultResumeId'
+
+const activeResume = computed(
+  () => resumes.value.find((item) => item.id === defaultResumeId.value) || resumes.value[0] || null
+)
+const scoredResumeCount = computed(
+  () => resumes.value.filter((item) => item._score?.total !== undefined).length
+)
 
 onMounted(() => {
   defaultResumeId.value = Number(localStorage.getItem(LS_DEFAULT_KEY)) || null
@@ -810,12 +860,108 @@ function goAnalysisFromDiag() {
   gap: 16px;
 }
 
+.resume-workflow {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.9fr) minmax(0, 1.8fr) auto;
+  align-items: center;
+  gap: 22px;
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  background: #fff;
+  border: 1px solid var(--app-line);
+  border-left: 4px solid var(--app-primary);
+  border-radius: var(--app-radius-sm, 8px);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.workflow-summary {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.workflow-eyebrow,
+.workflow-caption,
+.workflow-step small {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.workflow-eyebrow {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.workflow-summary strong {
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding-left: 10px;
+  border-left: 1px solid var(--app-line);
+}
+
+.workflow-step:first-child {
+  border-left: 0;
+}
+
+.workflow-index {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--app-bg);
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.workflow-step.is-current .workflow-index,
+.workflow-step.is-ready .workflow-index {
+  background: var(--app-primary);
+  color: #fff;
+}
+
+.workflow-step div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.workflow-step b {
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-action {
+  min-width: 104px;
+}
+
 .resume-card {
   background: #fff;
   border-radius: var(--app-radius-md, 16px);
   border: 1px solid var(--app-line);
   box-shadow: var(--app-shadow-soft);
-  padding: 20px;
+  padding: 18px;
   transition:
     box-shadow 0.2s,
     border-color 0.2s;
@@ -826,7 +972,8 @@ function goAnalysisFromDiag() {
 }
 
 .resume-card.is-default {
-  border-color: var(--app-success);
+  border-color: var(--app-primary);
+  box-shadow: 0 8px 20px rgba(20, 86, 68, 0.1);
 }
 
 .card-top {
@@ -842,6 +989,21 @@ function goAnalysisFromDiag() {
   gap: 8px;
   flex: 1;
   min-width: 0;
+}
+
+.record-mark {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border-radius: 3px;
+  background: var(--app-bg);
+  color: var(--app-muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.is-default .record-mark {
+  background: var(--app-primary-soft);
+  color: var(--app-primary-dark);
 }
 
 .card-title-row h3 {
@@ -969,6 +1131,35 @@ function goAnalysisFromDiag() {
 .card-actions {
   display: flex;
   gap: 6px;
+}
+
+@media (max-width: 960px) {
+  .resume-workflow {
+    grid-template-columns: 1fr auto;
+  }
+
+  .workflow-steps {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 640px) {
+  .resume-workflow,
+  .workflow-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-action {
+    width: 100%;
+  }
+
+  .workflow-step,
+  .workflow-step:first-child {
+    padding: 9px 0 0;
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+  }
 }
 
 /* Upload progress */

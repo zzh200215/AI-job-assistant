@@ -2,9 +2,10 @@
 
 import enum
 
-from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, Index, Integer, Numeric, String
 
 from app.core.database import Base
+from app.models.base import TenantScopedMixin
 from app.utils.time_helper import utc_now
 
 
@@ -23,12 +24,22 @@ class OrderStatus(str, enum.Enum):
 
 
 class SubscriptionPlan(Base):
-    """套餐定义表（系统预置，运行时不变）"""
+    """套餐定义表（tenant_id=NULL=平台默认；租户自定义行覆盖对应 tier 的默认套餐）"""
 
     __tablename__ = "subscription_plan"
+    __table_args__ = (
+        Index("uq_subscription_plan_tenant_tier", "tenant_id", "tier", unique=True),
+    )
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    tier = Column(String(20), nullable=False, unique=True, comment="套餐标识: free/pro/enterprise")
+    tier = Column(String(20), nullable=False, comment="套餐标识: free/pro/enterprise")
+    tenant_id = Column(
+        BigInteger,
+        nullable=True,
+        index=True,
+        comment="归属租户 organization.id；NULL=平台默认套餐（T3-1）",
+    )
+    is_custom = Column(Integer, default=0, comment="是否租户自定义套餐（T3-1）")
     name = Column(String(50), nullable=False, comment="展示名称")
     price_monthly = Column(Numeric(10, 2), default=0, comment="月付价格(分)")
     price_yearly = Column(Numeric(10, 2), default=0, comment="年付价格(分)")
@@ -38,10 +49,11 @@ class SubscriptionPlan(Base):
     created_at = Column(DateTime, default=utc_now)
 
 
-class UserSubscription(Base):
+class UserSubscription(TenantScopedMixin, Base):
     """用户订阅状态表"""
 
     __tablename__ = "user_subscription"
+    __table_args__ = (Index("ix_user_subscription_tenant_user", "tenant_id", "user_id"),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("tb_user.id"), nullable=False, index=True)
@@ -57,10 +69,11 @@ class UserSubscription(Base):
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 
-class SubscriptionOrder(Base):
+class SubscriptionOrder(TenantScopedMixin, Base):
     """订阅订单表"""
 
     __tablename__ = "subscription_order"
+    __table_args__ = (Index("ix_subscription_order_tenant_user", "tenant_id", "user_id"),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("tb_user.id"), nullable=False, index=True)

@@ -61,7 +61,9 @@ async def dashboard_overview(
         .scalar()
     )
 
-    (db.query(func.count(InterviewSession.id)).filter(InterviewSession.user_id == uid).scalar())
+    total_interviews = (
+        db.query(func.count(InterviewSession.id)).filter(InterviewSession.user_id == uid).scalar() or 0
+    )
 
     # --- 简历数据 ---
     total_resumes = db.query(func.count(Resume.id)).filter(Resume.user_id == uid, Resume.is_deleted == 0).scalar()
@@ -145,6 +147,7 @@ async def dashboard_overview(
                 "upcoming_interviews": upcoming_interviews,
                 "pending_offers": pending_offers,
                 "total_resumes": total_resumes,
+                "total_interviews": total_interviews,
                 "bookmarked_jobs": bookmarked_count,
                 "unread_notifications": unread_notifications,
                 "avg_match_score": round(float(avg_match_score), 1) if avg_match_score else None,

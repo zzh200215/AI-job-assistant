@@ -65,6 +65,39 @@ def test_deferred_evaluation_persists_pending_turn_and_moves_to_next_question(
     assert any((item.get("metadata") or {}).get("evaluation_pending") for item in engine.session.messages)
 
 
+def test_duplicate_answer_reuses_pending_turn_record(db_session, make_interview_session):
+    """重复作答同一题（同 session+turn）应复用同一行，不撞唯一约束卡死会话（#19）。"""
+    session_id = make_interview_session(status="ongoing")
+
+    first = interview_evaluation_service.create_pending_turn_evaluation(
+        db_session,
+        session_id=session_id,
+        turn_id="q-1",
+        question_index=0,
+        question="第一题",
+        category="tech",
+        user_answer="第一次回答",
+        is_follow_up=False,
+    )
+    first_id = first.id
+
+    second = interview_evaluation_service.create_pending_turn_evaluation(
+        db_session,
+        session_id=session_id,
+        turn_id="q-1",
+        question_index=0,
+        question="第一题",
+        category="tech",
+        user_answer="第二次回答",
+        is_follow_up=False,
+    )
+    assert second.id == first_id  # 复用同一行而非插入新行
+    assert second.user_answer == "第二次回答"  # 内容已更新
+    assert second.status == "pending"
+    rows = db_session.query(InterviewTurnEvaluation).filter(InterviewTurnEvaluation.session_id == session_id).all()
+    assert len(rows) == 1
+
+
 def test_persisted_turn_evaluations_are_the_resume_source_of_truth(db_session, make_interview_session):
     engine = _engine(db_session, make_interview_session)
     db_session.add(

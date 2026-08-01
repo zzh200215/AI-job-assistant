@@ -1,15 +1,17 @@
 """岗位推荐相关 ORM 模型"""
 
-from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, String
+from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Index, String
 
 from app.core.database import Base
+from app.models.base import TenantScopedMixin
 from app.utils.time_helper import utc_now
 
 
-class JobRecommendationFeedback(Base):
+class JobRecommendationFeedback(TenantScopedMixin, Base):
     """用户推荐反馈表"""
 
     __tablename__ = "job_recommend_feedback"
+    __table_args__ = (Index("ix_job_recommend_feedback_tenant_user", "tenant_id", "user_id"),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("tb_user.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -22,6 +24,7 @@ class JobRecommendationFeedback(Base):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "user_id": self.user_id,
             "resume_id": self.resume_id,
             "jd_id": self.jd_id,
@@ -31,10 +34,11 @@ class JobRecommendationFeedback(Base):
         }
 
 
-class JobBookmark(Base):
+class JobBookmark(TenantScopedMixin, Base):
     """职位收藏/不感兴趣表"""
 
     __tablename__ = "job_bookmark"
+    __table_args__ = (Index("ix_job_bookmark_tenant_user", "tenant_id", "user_id"),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("tb_user.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -46,6 +50,7 @@ class JobBookmark(Base):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "user_id": self.user_id,
             "jd_id": self.jd_id,
             "action": self.action,

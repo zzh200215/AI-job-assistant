@@ -19,8 +19,17 @@ os.environ["LLM_PROVIDER"] = "mock"
 os.environ["EMBEDDING_PROVIDER"] = "mock"
 os.environ["ORCHESTRATION_BACKEND"] = "thread"
 os.environ["RUN_SCHEDULER"] = "false"
+# 必须在导入 app.core.database（settings 单例实例化）之前设置，否则 settings 会绑定到
+# 开发者 .env 的 MySQL，导致后台任务（SessionLocal）连到真实数据库（tests/conftest 中再设已太晚）。
+# database.py 已为内存 sqlite 启用 StaticPool，此处建表后所有连接共享同一库。
+os.environ["DATABASE_URL"] = "sqlite://"
 
-from app.core.database import Base, SessionLocal
+from app.core.database import Base, SessionLocal, engine as _app_engine
+
+# 注册全部模型并给 app 引擎建表，使后台任务（SessionLocal 直连 app 引擎）可查询。
+import app.models  # noqa: F401
+
+Base.metadata.create_all(bind=_app_engine)
 
 BACKEND_ROOT = Path(__file__).resolve().parent
 if str(BACKEND_ROOT) not in sys.path:

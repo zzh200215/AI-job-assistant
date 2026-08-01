@@ -1,5 +1,5 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell analysis-result-page">
     <section class="result-hero">
       <div class="hero-copy">
         <span class="hero-kicker">Analysis Workspace</span>
@@ -95,6 +95,36 @@
     </div>
 
     <template v-if="result">
+      <section class="decision-strip" aria-label="分析决策摘要">
+        <div class="decision-conclusion">
+          <span class="decision-label">结论</span>
+          <strong>{{ localizedMatchRecommendation || '待评估' }}</strong>
+          <p>{{ localizedMatchSummary || '当前报告尚未提供摘要。' }}</p>
+        </div>
+        <div class="decision-evidence">
+          <span class="decision-label">关键依据</span>
+          <div class="evidence-stats">
+            <span
+              ><b>{{ localizedStrengths.length }}</b> 项优势</span
+            >
+            <span
+              ><b>{{ localizedGaps.length }}</b> 项待补齐</span
+            >
+            <span
+              ><b>{{ localizedRiskPoints.length }}</b> 个风险点</span
+            >
+          </div>
+          <p><b>优先处理：</b>{{ primaryGap }}</p>
+        </div>
+        <div class="decision-next">
+          <span class="decision-label">下一步</span>
+          <p>{{ priorityAction }}</p>
+          <el-button type="primary" @click="onGenerateOptimized">
+            <el-icon><EditPen /></el-icon> 生成优化版本
+          </el-button>
+        </div>
+      </section>
+
       <section class="overview-grid">
         <div class="panel score-card">
           <div class="panel-body">
@@ -431,6 +461,18 @@ const localizedGaps = computed(() => normalizeLocalizedObjectList(result.value?.
 const localizedRiskPoints = computed(() =>
   normalizeLocalizedTextList(result.value?.match_report?.risk_points)
 )
+const primaryGap = computed(() => {
+  const gap = localizedGaps.value[0]
+  if (!gap) return '当前没有识别到需要优先补齐的明显差距。'
+  return typeof gap === 'string'
+    ? gap
+    : gap.item || gap.action || gap.impact || '查看完整匹配报告。'
+})
+const priorityAction = computed(() => {
+  const gap = localizedGaps.value[0]
+  if (gap && typeof gap === 'object' && gap.action) return gap.action
+  return '先生成优化版本，再用目标岗位重新验证匹配度。'
+})
 
 const refTypeLabel = (t) =>
   ({
@@ -604,11 +646,10 @@ const goJobMarket = () => router.push('/jobs/search')
   gap: 16px;
   align-items: flex-end;
   padding: 24px 26px;
-  border-radius: var(--app-radius-md, 16px);
-  background:
-    radial-gradient(circle at top right, rgba(224, 178, 104, 0.18), transparent 28%),
-    linear-gradient(135deg, rgba(255, 251, 245, 0.96), rgba(245, 251, 246, 0.98));
+  border-radius: var(--app-radius-sm, 8px);
+  background: #fff;
   border: 1px solid var(--app-line);
+  border-top: 3px solid var(--app-primary);
 }
 
 .hero-kicker {
@@ -648,8 +689,8 @@ const goJobMarket = () => router.push('/jobs/search')
 
 .progress-stat {
   padding: 16px 18px;
-  border-radius: var(--app-radius-sm, 12px);
-  background: linear-gradient(135deg, #fbfdfb, #f1f7f3);
+  border-radius: var(--app-radius-xs, 6px);
+  background: #fff;
   border: 1px solid var(--app-line);
 }
 
@@ -670,6 +711,73 @@ const goJobMarket = () => router.push('/jobs/search')
   display: grid;
   grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
   gap: 18px;
+}
+
+.decision-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(210px, 0.72fr);
+  gap: 0;
+  margin-bottom: 18px;
+  background: #fff;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-sm, 8px);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.decision-strip > div {
+  min-width: 0;
+  padding: 19px 20px;
+  border-left: 1px solid var(--app-line);
+}
+
+.decision-strip > div:first-child {
+  border-left: 0;
+}
+
+.decision-label {
+  display: block;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.decision-conclusion strong {
+  display: block;
+  margin-top: 7px;
+  color: var(--app-text);
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.decision-strip p {
+  margin: 8px 0 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.evidence-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.evidence-stats span {
+  padding: 4px 7px;
+  border-radius: 3px;
+  background: var(--app-bg);
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.evidence-stats b {
+  color: var(--app-text);
+}
+
+.decision-next .el-button {
+  margin-top: 13px;
 }
 
 .score-shell {
@@ -721,8 +829,8 @@ const goJobMarket = () => router.push('/jobs/search')
 
 .metric-item {
   padding: 16px 18px;
-  border-radius: var(--app-radius-sm, 12px);
-  background: linear-gradient(135deg, #fbfdfb, #f2f7f3);
+  border-radius: var(--app-radius-xs, 6px);
+  background: var(--app-bg);
   border: 1px solid var(--app-line);
 }
 
@@ -760,8 +868,8 @@ const goJobMarket = () => router.push('/jobs/search')
 
 .detail-block {
   padding: 18px;
-  border-radius: var(--app-radius-sm, 12px);
-  background: linear-gradient(135deg, rgba(251, 253, 251, 0.96), rgba(242, 247, 243, 0.98));
+  border-radius: var(--app-radius-xs, 6px);
+  background: #fff;
   border: 1px solid var(--app-line);
 }
 
@@ -791,8 +899,8 @@ const goJobMarket = () => router.push('/jobs/search')
 .generate-area {
   margin-top: 18px;
   padding: 24px;
-  border-radius: var(--app-radius-md, 16px);
-  background: linear-gradient(135deg, #fff8f1, #f7fbf6);
+  border-radius: var(--app-radius-sm, 8px);
+  background: var(--app-bg);
   border: 1px solid var(--app-line);
   text-align: center;
 }
@@ -854,6 +962,7 @@ const goJobMarket = () => router.push('/jobs/search')
 @media (max-width: 960px) {
   .result-hero,
   .overview-grid,
+  .decision-strip,
   .detail-grid,
   .keyword-grid,
   .progress-grid {
@@ -868,6 +977,16 @@ const goJobMarket = () => router.push('/jobs/search')
 
   .metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .decision-strip > div,
+  .decision-strip > div:first-child {
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+  }
+
+  .decision-strip > div:first-child {
+    border-top: 0;
   }
 }
 
@@ -885,6 +1004,10 @@ const goJobMarket = () => router.push('/jobs/search')
   .score-actions {
     width: 100%;
     flex-direction: column;
+  }
+
+  .decision-next .el-button {
+    width: 100%;
   }
 
   .metric-grid {

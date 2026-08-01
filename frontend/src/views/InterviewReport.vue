@@ -1,5 +1,5 @@
 <template>
-  <div class="page-shell" v-loading="loading">
+  <div class="page-shell interview-report-page" v-loading="loading">
     <template v-if="report">
       <el-alert
         v-if="report.evaluation_status === 'processing'"
@@ -809,6 +809,84 @@ onUnmounted(() => {
   justify-content: center;
   gap: 12px;
   padding-bottom: 8px;
+}
+
+/* P1 report treatment: a reading surface instead of a marketing hero. */
+.interview-report-page {
+  background: linear-gradient(135deg, #f7f9fd 0%, #f2f7ff 100%);
+}
+
+.interview-report-page .report-hero {
+  position: relative;
+  border: 1px solid #d7e0ed;
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface-strong);
+  box-shadow: var(--app-shadow-soft);
+  color: var(--app-text);
+}
+
+.interview-report-page .report-hero::before {
+  position: absolute;
+  top: 28px;
+  left: 0;
+  width: 4px;
+  height: 50px;
+  border-radius: var(--app-radius-xs);
+  background: var(--app-primary);
+  content: '';
+}
+
+.interview-report-page .report-hero > div:first-child {
+  padding-left: 18px;
+}
+
+.interview-report-page .report-hero h1 {
+  color: var(--app-text);
+}
+
+.interview-report-page .report-hero p,
+.interview-report-page .report-hero .eyebrow {
+  color: var(--app-muted);
+  opacity: 1;
+}
+
+.interview-report-page .score-ring {
+  border-width: 7px;
+  background: #fbfcff;
+  box-shadow: inset 0 0 0 10px #f0f3f8;
+}
+
+.interview-report-page .score-ring span {
+  color: var(--app-muted);
+}
+
+.interview-report-page .summary-grid .stat-card {
+  border-top: 3px solid #d7e5fb;
+}
+
+.interview-report-page .decision-strip {
+  background: #f6f9ff;
+}
+
+.interview-report-page .dimension-item,
+.interview-report-page .timeline-content,
+.interview-report-page .training-item {
+  border: 1px solid #e1e7f0;
+  background: #f9fbfe;
+}
+
+.interview-report-page .timeline-badge {
+  background: #245fd1;
+}
+
+.interview-report-page .timeline-tags span {
+  border-radius: var(--app-radius-xs);
+  background: #e9f1ff;
+}
+
+.interview-report-page .job-skills span {
+  border-radius: var(--app-radius-xs);
+  background: #eff4fb;
 }
 
 /* ---- Responsive ---- */

@@ -2,15 +2,17 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, Column, DateTime, String
+from sqlalchemy import JSON, BigInteger, Column, DateTime, Index, String
 
 from app.core.database import Base
+from app.models.base import TenantScopedMixin
 
 
-class AuditLog(Base):
+class AuditLog(TenantScopedMixin, Base):
     """审计日志表"""
 
     __tablename__ = "audit_log"
+    __table_args__ = (Index("ix_audit_log_tenant_user", "tenant_id", "user_id"),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, nullable=False, index=True, comment="操作用户ID")

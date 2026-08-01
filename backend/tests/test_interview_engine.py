@@ -183,6 +183,68 @@ class TestInterviewEngineInit:
         assert len(eng.evaluations) == 1
         assert eng.evaluations[0]["overall_score"] == 82
 
+    def test_resume_does_not_repush_answered_question(self, db_session, make_interview_session):
+        """断线若发生在「已作答、下一题未推送」间隙，resume() 不应重复推送已答题目（#19）。"""
+        session_id = make_interview_session(
+            status="ongoing",
+            total_questions=3,
+            answered_count=1,
+            messages=[
+                {
+                    "role": "ai", "type": "question", "content": "第一题",
+                    "metadata": {"round": 1, "total": 3, "category": "project"},
+                    "timestamp": utc_now().isoformat(),
+                },
+                {
+                    "role": "user", "type": "answer", "content": "回答一",
+                    "metadata": {"round": 1, "category": "project"},
+                    "timestamp": utc_now().isoformat(),
+                },
+            ],
+        )
+        eng = InterviewEngine(session_id)
+        eng.db = db_session
+        eng.session = db_session.get(InterviewSession, session_id)
+
+        payload = eng.resume()
+        assert payload is None  # 不重复推送已答的第一题
+
+        nxt = eng.next_question()
+        assert nxt["type"] == "question"
+        assert nxt["metadata"]["round"] == 2  # 直接推进到下一题
+
+    def test_resume_repushes_unanswered_followup(self, db_session, make_interview_session):
+        """追问未作答时 resume() 仍应推送追问（不能因主题已答而跳过追问）。"""
+        session_id = make_interview_session(
+            status="ongoing",
+            total_questions=3,
+            answered_count=1,
+            messages=[
+                {
+                    "role": "ai", "type": "question", "content": "第一题",
+                    "metadata": {"round": 1, "total": 3, "category": "project"},
+                    "timestamp": utc_now().isoformat(),
+                },
+                {
+                    "role": "user", "type": "answer", "content": "回答一",
+                    "metadata": {"round": 1, "category": "project"},
+                    "timestamp": utc_now().isoformat(),
+                },
+                {
+                    "role": "ai", "type": "question", "content": "再深入一点？",
+                    "metadata": {"round": 1, "total": 3, "category": "project", "is_follow_up": True},
+                    "timestamp": utc_now().isoformat(),
+                },
+            ],
+        )
+        eng = InterviewEngine(session_id)
+        eng.db = db_session
+        eng.session = db_session.get(InterviewSession, session_id)
+
+        payload = eng.resume()
+        assert payload is not None
+        assert payload["content"] == "再深入一点？"  # 追问仍未作答，应推送追问
+
 
 # ==================== Normal Flow Tests ====================
 
@@ -464,6 +526,32 @@ class TestReportGeneration:
         assert "expression" in report["dimension_scores"]
         assert "strengths" in report
         assert "weaknesses" in report
+
+    def test_overall_score_normalized_with_heavy_custom_weights(self, engine):
+        """自定义评分权重和≠1 时总分须归一化，overall_score 不超 100（#19）。"""
+        from app.models.interview_config import InterviewScoringRule
+
+        db = engine.db
+        db.add(InterviewScoringRule(tenant_id=1, dimension="completeness", label="要点覆盖", weight=0.6, sort_order=0))
+        db.add(InterviewScoringRule(tenant_id=1, dimension="expression", label="表达", weight=0.6, sort_order=1))
+        db.commit()
+
+        engine.session.tenant_id = 1
+        engine.start_time = 0
+        engine.question_count = 2
+        engine.evaluations = [
+            {
+                "question_index": i, "question": f"q{i}", "category": "tech",
+                "completeness": 100, "accuracy": 0, "depth": 0, "expression": 80,
+                "overall_score": 90, "feedback": "f", "improvement": "i",
+            }
+            for i in range(2)
+        ]
+        report = engine._generate_report()
+        # 未归一化：100*0.6 + 80*0.6 = 108 会超 100；
+        # 归一化后权重和 = 0.6+0.30+0.25+0.6 = 1.75 → (60+48)/1.75 ≈ 61.7 → 62
+        assert report["overall_score"] <= 100
+        assert report["overall_score"] == 62
 
     def test_report_with_mixed_timed_out_and_valid(self, engine):
         """混合超时和有效回答应只统计有效的。"""

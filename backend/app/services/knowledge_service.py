@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.chroma_client import get_knowledge_collection
 from app.core.config import settings
+from app.core.tenant_context import current_tenant_id
 from app.models.knowledge import KnowledgeDocument
 from app.services.chunk_service import chunk_document
 from app.services.document_service import parse_document
@@ -43,6 +44,7 @@ def save_and_process(
     doc_type: str = "general",
     user_id: int = None,
     organization_id: int = None,
+    tenant_id: int = None,
 ) -> KnowledgeDocument:
     """
     保存文件 → 创建 DB 记录 → 解析 → 切片 → 向量化 → 写入 Chroma
@@ -63,9 +65,18 @@ def save_and_process(
     rel_path = os.path.join("knowledge", str(year), f"{month:02d}", stored_name).replace("\\", "/")
 
     # ---- 2) 创建 DB 记录 ----
+    # 租户归属优先级：显式 tenant_id > organization_id（Organization 即租户）> 当前上下文
+    doc_tenant_id = (
+        tenant_id
+        if tenant_id is not None
+        else organization_id
+        if organization_id is not None
+        else current_tenant_id()
+    )
     doc = KnowledgeDocument(
         user_id=user_id,
         organization_id=organization_id,
+        tenant_id=doc_tenant_id,
         title=title,
         file_name=original_filename,
         file_type=ext,
@@ -101,6 +112,7 @@ def save_and_process(
                 "doc_type": doc_type,
                 "chunk_index": c["index"],
                 "file_name": original_filename,
+                "tenant_id": str(doc.tenant_id or 0),
             }
             for c in chunks
         ]
@@ -251,6 +263,7 @@ def reprocess_document(db: Session, doc_id: int) -> KnowledgeDocument | None:
                 "doc_type": doc.doc_type,
                 "chunk_index": chunk["index"],
                 "file_name": doc.file_name,
+                "tenant_id": str(doc.tenant_id or 0),
             }
             for chunk in chunks
         ]
@@ -309,6 +322,7 @@ def rebuild_all(db: Session):
                     "doc_type": doc.doc_type,
                     "chunk_index": c["index"],
                     "file_name": doc.file_name,
+                    "tenant_id": str(doc.tenant_id or 0),
                 }
                 for c in chunks
             ]

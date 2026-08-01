@@ -1,5 +1,5 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell pipeline-page">
     <div class="page-header">
       <div>
         <h2>投递看板</h2>
@@ -33,6 +33,41 @@
         </el-button>
       </div>
     </div>
+
+    <section v-if="totalCards > 0" class="pipeline-focus-strip" aria-label="投递行动摘要">
+      <div class="focus-message">
+        <span class="focus-label">本周重点</span>
+        <strong>{{ pipelineFocusTitle }}</strong>
+        <p>{{ pipelineFocusDescription }}</p>
+      </div>
+      <div class="focus-metrics">
+        <div>
+          <b>{{ followUpCount }}</b
+          ><span>待跟进</span>
+        </div>
+        <div>
+          <b>{{ counts.interview || 0 }}</b
+          ><span>面试进行中</span>
+        </div>
+        <div>
+          <b>{{ counts.offer || 0 }}</b
+          ><span>待决 Offer</span>
+        </div>
+      </div>
+      <div class="focus-actions">
+        <el-button size="small" @click="showStats = !showStats">
+          {{ showStats ? '收起转化分析' : '查看转化分析' }}
+        </el-button>
+        <el-button
+          v-if="counts.offer"
+          size="small"
+          type="primary"
+          @click="router.push('/offer/compare')"
+        >
+          进入 Offer 决策
+        </el-button>
+      </div>
+    </section>
 
     <!-- 投递统计面板 -->
     <div v-if="showStats && totalCards > 0" class="stats-panel">
@@ -598,6 +633,22 @@ const avgResponseDays = computed(() => {
   return avg + 'd'
 })
 
+const followUpCount = computed(
+  () => allCards.value.filter((card) => needsFollowUp(card) && followUpDays(card) >= 3).length
+)
+const pipelineFocusTitle = computed(() => {
+  if (counts.value.offer) return '优先完成 Offer 取舍与确认。'
+  if (counts.value.interview) return '把面试机会转化为可执行的准备计划。'
+  if (followUpCount.value) return '有投递记录等待跟进，先处理超 3 天未回复的机会。'
+  return '继续补充高匹配岗位，让投递保持稳定节奏。'
+})
+const pipelineFocusDescription = computed(() => {
+  if (counts.value.offer) return 'Offer 已进入决策阶段，比较整体回报、成长空间与截止日期。'
+  if (counts.value.interview) return '从看板直接发起模拟面试，并把准备情况沉淀在对应机会中。'
+  if (followUpCount.value) return '优先处理等待时间较长的投递，避免遗漏有效机会。'
+  return '从岗位推荐中挑选高匹配机会，加入看板后持续追踪。'
+})
+
 function funnelPercent(count) {
   const max = Math.max(1, ...funnelData.value.map((s) => s.count))
   return Math.max(2, (count / max) * 100)
@@ -972,6 +1023,78 @@ onMounted(() => {
   gap: 8px;
 }
 
+.pipeline-focus-strip {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.4fr) minmax(240px, 0.9fr) auto;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 18px 20px;
+  background: #fff;
+  border: 1px solid var(--app-line);
+  border-left: 4px solid var(--app-primary);
+  border-radius: var(--app-radius-sm, 8px);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.focus-label {
+  display: block;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.focus-message strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--app-text);
+  font-size: 17px;
+}
+
+.focus-message p {
+  margin: 6px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.focus-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-right: 1px solid var(--app-line);
+  border-left: 1px solid var(--app-line);
+}
+
+.focus-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 2px 14px;
+  text-align: center;
+}
+
+.focus-metrics div + div {
+  border-left: 1px solid var(--app-line);
+}
+
+.focus-metrics b {
+  color: var(--app-primary-dark);
+  font-size: 23px;
+  line-height: 1;
+}
+
+.focus-metrics span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.focus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .version-performance {
   margin-bottom: 16px;
   border: 1px solid var(--app-line);
@@ -1068,7 +1191,7 @@ onMounted(() => {
   max-width: 300px;
   flex: 1;
   background: var(--app-bg);
-  border-radius: var(--app-radius-md, 16px);
+  border-radius: var(--app-radius-sm, 8px);
   border: 1px solid var(--app-line);
   display: flex;
   flex-direction: column;
@@ -1081,7 +1204,7 @@ onMounted(() => {
   padding: 14px 16px;
   border-bottom: 1px solid var(--app-line);
   background: #fff;
-  border-radius: var(--app-radius-md, 16px) var(--app-radius-md, 16px) 0 0;
+  border-radius: var(--app-radius-sm, 8px) var(--app-radius-sm, 8px) 0 0;
 }
 
 .col-dot {
@@ -1148,7 +1271,7 @@ onMounted(() => {
 /* Card */
 .kanban-card {
   padding: 14px;
-  border-radius: var(--app-radius-sm, 12px);
+  border-radius: var(--app-radius-xs, 6px);
   background: #fff;
   border: 1px solid var(--app-line);
   cursor: grab;
@@ -1325,7 +1448,7 @@ onMounted(() => {
 /* 统计面板 */
 .stats-panel {
   background: #fff;
-  border-radius: var(--app-radius-md, 16px);
+  border-radius: var(--app-radius-sm, 8px);
   border: 1px solid var(--app-line);
   box-shadow: var(--app-shadow-soft);
   overflow: hidden;
@@ -1351,7 +1474,7 @@ onMounted(() => {
 .stat-item {
   text-align: center;
   padding: 12px 8px;
-  border-radius: 12px;
+  border-radius: 6px;
   background: var(--app-bg);
 }
 .stat-value {
@@ -1434,7 +1557,7 @@ onMounted(() => {
 /* 列表视图 */
 .list-view {
   background: #fff;
-  border-radius: var(--app-radius-md, 16px);
+  border-radius: var(--app-radius-sm, 8px);
   border: 1px solid var(--app-line);
   overflow: hidden;
 }
@@ -1478,6 +1601,17 @@ onMounted(() => {
 }
 
 @media (max-width: 1024px) {
+  .pipeline-focus-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .focus-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding-top: 12px;
+    border-top: 1px solid var(--app-line);
+  }
+
   .kanban-board {
     flex-wrap: wrap;
   }
@@ -1488,6 +1622,27 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .pipeline-focus-strip,
+  .focus-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .focus-metrics {
+    gap: 8px;
+    border: 0;
+  }
+
+  .focus-metrics div,
+  .focus-metrics div + div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+    text-align: left;
+  }
+
   .load-error {
     align-items: flex-start;
     flex-direction: column;

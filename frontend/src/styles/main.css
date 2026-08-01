@@ -386,6 +386,268 @@ code,
   color: var(--workspace-text);
 }
 
+/* ---- Career Signal workbench ----
+   Every signed-in route lives inside this scope. Keeping the dark tokens here
+   lets specialized pages retain their information architecture without
+   falling back to the legacy white-card application shell. */
+.workspace-theme {
+  --app-bg: #101117;
+  --app-surface: #171922;
+  --app-surface-strong: #171922;
+  --app-surface-muted: #20222e;
+  --app-text: #f1f3f8;
+  --app-muted: #989baa;
+  --app-line: #2c2f3d;
+  --app-line-strong: #414554;
+  --app-shadow: 0 14px 34px rgba(0, 0, 0, 0.2);
+  --app-shadow-soft: none;
+  --el-bg-color: #171922;
+  --el-bg-color-page: #101117;
+  --el-bg-color-overlay: #1d1f2a;
+  --el-fill-color-blank: #171922;
+  --el-fill-color-light: #20222e;
+  --el-fill-color-lighter: #1b1d27;
+  --el-fill-color-dark: #252836;
+  --el-fill-color-darker: #2c2f3d;
+  --el-text-color-primary: #f1f3f8;
+  --el-text-color-regular: #c8cad4;
+  --el-text-color-secondary: #989baa;
+  --el-text-color-placeholder: #777b8d;
+  --el-border-color: #343744;
+  --el-border-color-light: #2c2f3d;
+  --el-border-color-lighter: #252833;
+  --el-mask-color: rgba(0, 0, 0, 0.62);
+  color: var(--app-text);
+  background: var(--app-bg);
+}
+
+.workspace-theme .content-shell,
+.workspace-theme .main-shell {
+  background: var(--app-bg) !important;
+}
+
+.workspace-theme .main-shell > * {
+  color: var(--app-text);
+}
+
+.workspace-theme .page-shell,
+.workspace-theme .guide-page,
+.workspace-theme .em-page,
+.workspace-theme .knowledge-page,
+.workspace-theme .organization-page,
+.workspace-theme .status-page,
+.workspace-theme .workspace-page,
+.workspace-theme .page,
+.workspace-theme .resume-workspace {
+  background: var(--app-bg) !important;
+  color: var(--app-text);
+}
+
+.workspace-theme .workspace-page {
+  --ink: #f1f3f8;
+  --muted: #989baa;
+  --line: #2c2f3d;
+  --canvas: #101117;
+  --accent: #22b8e8;
+}
+
+.workspace-theme .workspace-page .version-strip,
+.workspace-theme .workspace-page .editor-surface,
+.workspace-theme .workspace-page .rail-panel,
+.workspace-theme .workspace-page .insight-panel,
+.workspace-theme .knowledge-page .embed-stat-card {
+  background: var(--app-surface-strong) !important;
+  border-color: var(--app-line) !important;
+}
+
+.workspace-theme .el-card,
+.workspace-theme .panel,
+.workspace-theme .stat-card {
+  background: var(--app-surface-strong) !important;
+  border-color: var(--app-line) !important;
+  box-shadow: none !important;
+}
+
+/* Legacy view compatibility: older routes used independent white cards and
+   light text tokens. These structural classes are the content surfaces, not
+   status badges, so bringing them into the workbench palette keeps every
+   route coherent without flattening semantic feedback colours. */
+.workspace-theme .main-shell [class*='-card'],
+.workspace-theme .main-shell [class*='-panel'],
+.workspace-theme .main-shell [class*='-surface'],
+.workspace-theme .main-shell [class*='-box'],
+.workspace-theme .main-shell [class*='-header'],
+.workspace-theme .main-shell [class*='-toolbar'],
+.workspace-theme .main-shell [class*='-filter'],
+.workspace-theme .main-shell [class*='-feed'],
+.workspace-theme .main-shell [class*='-strip'],
+.workspace-theme .main-shell [class*='-summary'],
+.workspace-theme .main-shell [class*='-detail'],
+.workspace-theme .main-shell [class*='-table'],
+.workspace-theme .main-shell [class*='-board'],
+.workspace-theme .main-shell [class*='-view'],
+.workspace-theme .main-shell [class*='-workspace'],
+.workspace-theme .main-shell [class*='-list'],
+.workspace-theme .main-shell [class*='list-'] {
+  background: var(--app-surface-strong) !important;
+  border-color: var(--app-line) !important;
+  box-shadow: none !important;
+}
+
+.workspace-theme .main-shell [class*='-item'],
+.workspace-theme .main-shell [class*='-row'] {
+  border-color: var(--app-line) !important;
+}
+
+/* Page composition surfaces: these are intentionally explicit. Several of the
+   original modules used `background` shorthands with light gradients, which
+   cannot be corrected by a background-color compatibility rule. */
+.workspace-theme .main-shell :is(
+  .resume-workflow,
+  .analysis-hero,
+  .career-hero,
+  .agent-focus-strip,
+  .career-focus-strip,
+  .page-header,
+  .identity-card,
+  .status-card,
+  .summary-card,
+  .hm-item,
+  .trace-result-item,
+  .achievement-card.locked
+) {
+  background: var(--app-surface-strong) !important;
+  border-color: var(--app-line) !important;
+  box-shadow: none !important;
+}
+
+.workspace-theme .main-shell :is(.resume-workflow, .agent-focus-strip, .career-focus-strip) {
+  border-left-color: var(--app-primary) !important;
+}
+
+.workspace-theme .main-shell :is(.hero-copy, .workflow-index, .trace-stat-card, .trace-card, .step-output) {
+  background: var(--app-bg) !important;
+  border-color: var(--app-line) !important;
+}
+
+.workspace-theme .main-shell .summary-card::before {
+  background: #253b66 !important;
+}
+
+.workspace-theme .main-shell .tone-green::before {
+  background: #1d4c48 !important;
+}
+
+.workspace-theme .main-shell .tone-amber::before {
+  background: #55401d !important;
+}
+
+.workspace-theme .main-shell .tone-dark::before {
+  background: #39345f !important;
+}
+
+.workspace-theme .main-shell :is(.hero-badges span, .identity-pills span, .hero-pills span, .hero-tags span) {
+  background: #202538 !important;
+  border-color: #34466e !important;
+  color: #a9c5ff !important;
+}
+
+.workspace-theme .main-shell :is(h1, h2, h3, h4),
+.workspace-theme .main-shell [class*='-title'],
+.workspace-theme .main-shell [class*='-name'],
+.workspace-theme .main-shell [class*='-value'] {
+  color: var(--app-text) !important;
+}
+
+.workspace-theme .main-shell [class*='-sub'],
+.workspace-theme .main-shell [class*='-hint'],
+.workspace-theme .main-shell [class*='-desc'],
+.workspace-theme .main-shell [class*='-label'],
+.workspace-theme .main-shell [class*='-meta'] {
+  color: var(--app-muted) !important;
+}
+
+.workspace-theme .el-card__header,
+.workspace-theme .panel-header {
+  border-bottom-color: var(--app-line) !important;
+}
+
+.workspace-theme .el-input__wrapper,
+.workspace-theme .el-select__wrapper,
+.workspace-theme .el-textarea__inner {
+  color: var(--app-text) !important;
+  background: #1b1d27 !important;
+  box-shadow: 0 0 0 1px #343744 inset !important;
+}
+
+.workspace-theme .el-input__inner,
+.workspace-theme .el-textarea__inner,
+.workspace-theme .el-select__placeholder,
+.workspace-theme .el-select__selected-item {
+  color: var(--app-text) !important;
+}
+
+.workspace-theme .el-table,
+.workspace-theme .el-table tr,
+.workspace-theme .el-table__expanded-cell {
+  --el-table-bg-color: #171922;
+  --el-table-tr-bg-color: #171922;
+  --el-table-header-bg-color: #20222e;
+  --el-table-row-hover-bg-color: #202538;
+  --el-table-border-color: #2c2f3d;
+  --el-table-text-color: #d9dbe4;
+  --el-table-header-text-color: #aeb1bf;
+  background: #171922 !important;
+  color: #d9dbe4;
+}
+
+.workspace-theme .el-table th.el-table__cell {
+  color: #aeb1bf;
+}
+
+.workspace-theme .el-table::before,
+.workspace-theme .el-table__inner-wrapper::before {
+  background-color: var(--app-line) !important;
+}
+
+.workspace-theme .el-tabs__nav-wrap::after,
+.workspace-theme .el-divider,
+.workspace-theme .el-collapse,
+.workspace-theme .el-collapse-item__header,
+.workspace-theme .el-collapse-item__wrap {
+  border-color: var(--app-line) !important;
+  background: transparent;
+}
+
+.workspace-theme .el-collapse-item__header,
+.workspace-theme .el-collapse-item__content,
+.workspace-theme .el-descriptions__label.el-descriptions__cell,
+.workspace-theme .el-descriptions__content.el-descriptions__cell {
+  color: var(--app-text);
+  background: #1b1d27 !important;
+  border-color: var(--app-line) !important;
+}
+
+.workspace-theme .el-pagination {
+  --el-pagination-bg-color: #1b1d27;
+  --el-pagination-button-color: #b8bbc7;
+  --el-pagination-button-disabled-bg-color: #171922;
+  --el-pagination-hover-color: #8bb4ff;
+}
+
+.workspace-theme .el-empty__description,
+.workspace-theme .el-empty__description p,
+.workspace-theme .el-form-item__label,
+.workspace-theme .el-checkbox,
+.workspace-theme .el-radio {
+  color: var(--app-muted);
+}
+
+.workspace-theme .el-alert {
+  background: #20222e;
+  border: 1px solid var(--app-line);
+}
+
 :focus-visible {
   outline: 3px solid rgba(37, 99, 235, 0.32);
   outline-offset: 2px;

@@ -88,6 +88,7 @@ def _serialize_document(doc: KnowledgeDocument) -> dict:
         "id": doc.id,
         "user_id": doc.user_id,
         "organization_id": doc.organization_id,
+        "tenant_id": doc.tenant_id,
         "title": doc.title,
         "file_name": doc.file_name,
         "file_type": doc.file_type,

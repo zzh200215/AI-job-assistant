@@ -12,6 +12,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.core.database import SessionLocal
 from app.core.security import decode_access_token
+from app.core.tenant_context import TenantContext, reset_current_tenant, set_current_tenant
 from app.models.interview_session import InterviewSession
 from app.services.interview_engine import InterviewEngine
 from app.utils.time_helper import utc_now
@@ -105,8 +106,23 @@ async def interview_websocket(websocket: WebSocket, session_id: int):
     finally:
         db.close()
 
+    # WS 不经过 HTTP 租户中间件（中间件仅 HTTP scope），手动注入会话所属租户上下文，
+    # 保证后续评分规则读取 / tenant_filter / 知识检索都落在正确租户上。
+    tenant_token = set_current_tenant(TenantContext(tenant_id=session.tenant_id or 1))
+    try:
+        return await _handle_ws_loop(websocket, session_id, session, accept_subprotocol)
+    finally:
+        reset_current_tenant(tenant_token)
+
+
+async def _handle_ws_loop(
+    websocket: WebSocket,
+    session_id: int,
+    session: InterviewSession,
+    accept_subprotocol: str | None,
+):
     await websocket.accept(subprotocol=accept_subprotocol)
-    logger.info("WS connected: session_id=%s user_id=%s", session_id, user_id)
+    logger.info("WS connected: session_id=%s user_id=%s", session_id, session.user_id)
 
     engine = _get_engine(session_id)
     current_task: asyncio.Task | None = None
@@ -125,16 +141,21 @@ async def interview_websocket(websocket: WebSocket, session_id: int):
 
     try:
         engine._load_session()
+        result: dict | None = None
         if engine.session.status == "ongoing":
             result = engine.resume()
             if result:
                 await websocket.send_json(result)
+            else:
+                before_count = len(engine.session.messages or [])
+                result = engine.next_question()
+                await _emit_engine_messages(websocket, engine, before_count, fallback=result)
         else:
             before_count = len(engine.session.messages or [])
             result = engine.start()
             await _emit_engine_messages(websocket, engine, before_count, fallback=result)
 
-        if result.get("type") == "question":
+        if result and result.get("type") == "question":
             current_task = asyncio.create_task(timeout_timer(result["metadata"]["round"]))
 
         while True:

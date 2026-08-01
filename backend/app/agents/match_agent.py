@@ -29,7 +29,7 @@ class MatchAgent(BaseAgent):
         query = f"{title} {' '.join(skills)}".strip()
 
         # RAG 检索
-        rag_results = search_knowledge(query, top_k=5)
+        rag_results = search_knowledge(query, top_k=5, db=context.db, user_id=context.user_id)
         rag_text = "\n".join([f"【{r.get('doc_title', '')}】{r.get('text', '')[:200]}" for r in rag_results])
 
         prompt = render_prompt(

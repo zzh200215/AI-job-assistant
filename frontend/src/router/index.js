@@ -215,6 +215,12 @@ const routes = [
         meta: { title: '订单管理', roles: ADMIN },
       },
       {
+        path: 'admin/tenants',
+        name: 'admin-tenants',
+        component: () => import('@/views/admin/Tenants.vue'),
+        meta: { title: '租户管理', roles: ADMIN },
+      },
+      {
         path: 'prompt-traces',
         name: 'prompt-traces',
         component: () => import('@/views/PromptTrace.vue'),

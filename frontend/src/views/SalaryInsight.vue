@@ -1,5 +1,5 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell salary-insight-page">
     <div class="page-header">
       <div>
         <h2>薪资洞察</h2>
@@ -41,6 +41,24 @@
 
     <!-- 薪资总览 -->
     <div v-if="overview" class="overview-section">
+      <section class="market-brief" aria-label="市场薪资摘要">
+        <div class="market-position">
+          <span class="market-label">当前市场定位</span>
+          <strong>{{ searchPosition }}{{ searchCity ? ` · ${searchCity}` : '' }}</strong>
+          <p>用市场分位区间校准期望薪资，并为谈薪准备可解释的参考数据。</p>
+        </div>
+        <div class="market-range">
+          <span class="market-label">合理区间</span>
+          <strong>{{ marketRange }}</strong>
+          <small>中位数 {{ formatK(overview.median) }}</small>
+        </div>
+        <div class="market-action">
+          <span class="market-label">下一步</span>
+          <p>将当前岗位带入期望薪资评估，确认自己的报价位置。</p>
+          <el-button size="small" type="primary" @click="syncExpectation">评估期望薪资</el-button>
+        </div>
+      </section>
+
       <div class="stats-row">
         <div class="stat-card">
           <span class="stat-label">样本数</span>
@@ -202,6 +220,9 @@ const maxDist = computed(() => {
   if (!overview.value?.distribution) return 1
   return Math.max(1, ...overview.value.distribution.map((d) => d.count))
 })
+const marketRange = computed(() =>
+  overview.value ? `${formatK(overview.value.p25)} - ${formatK(overview.value.p75)}` : '--'
+)
 
 function formatK(val) {
   if (val == null) return '--'
@@ -232,6 +253,11 @@ function applyQuickSearch(position) {
   doSearch()
 }
 
+function syncExpectation() {
+  expectPosition.value = searchPosition.value
+  expectCity.value = searchCity.value
+}
+
 async function checkExpectation() {
   if (!expectPosition.value.trim() || !expectSalary.value) return
   try {
@@ -252,6 +278,60 @@ async function checkExpectation() {
   display: flex;
   gap: 10px;
   margin-bottom: 20px;
+}
+
+.market-brief {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(190px, 0.75fr) minmax(230px, 0.95fr);
+  gap: 0;
+  margin-bottom: 18px;
+  background: #fff;
+  border: 1px solid var(--app-line);
+  border-left: 4px solid var(--app-primary);
+  border-radius: var(--app-radius-sm, 8px);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.market-brief > div {
+  min-width: 0;
+  padding: 18px 20px;
+  border-left: 1px solid var(--app-line);
+}
+
+.market-brief > div:first-child {
+  border-left: 0;
+}
+
+.market-label {
+  display: block;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.market-position strong,
+.market-range strong {
+  display: block;
+  margin-top: 7px;
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.market-brief p,
+.market-range small {
+  display: block;
+  margin: 7px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.market-action .el-button {
+  margin-top: 12px;
 }
 
 .quick-searches {
@@ -293,7 +373,7 @@ async function checkExpectation() {
 .stat-card {
   flex: 1;
   padding: 16px;
-  border-radius: var(--app-radius-sm, 12px);
+  border-radius: var(--app-radius-xs, 6px);
   border: 1px solid var(--app-line);
   background: #fff;
   text-align: center;
@@ -421,7 +501,7 @@ async function checkExpectation() {
   width: 100%;
   max-width: 48px;
   border-radius: 6px 6px 0 0;
-  background: linear-gradient(180deg, var(--app-primary) 0%, #7db0ee 100%);
+  background: var(--app-primary);
   transition: height 0.4s ease;
 }
 
@@ -467,6 +547,24 @@ async function checkExpectation() {
 }
 
 @media (max-width: 768px) {
+  .market-brief {
+    grid-template-columns: 1fr;
+  }
+
+  .market-brief > div,
+  .market-brief > div:first-child {
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+  }
+
+  .market-brief > div:first-child {
+    border-top: 0;
+  }
+
+  .market-action .el-button {
+    width: 100%;
+  }
+
   .stats-row {
     flex-wrap: wrap;
   }

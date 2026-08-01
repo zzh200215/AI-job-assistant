@@ -1,5 +1,5 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell weekly-report-page">
     <div class="page-header">
       <div>
         <h2>求职周报</h2>
@@ -15,6 +15,35 @@
     </div>
 
     <template v-else-if="report">
+      <section class="weekly-focus-strip" aria-label="本周求职重点">
+        <div class="weekly-focus-main">
+          <span class="weekly-focus-label">本周复盘</span>
+          <strong>{{ weeklyFocusTitle }}</strong>
+          <p>{{ weeklyFocusDescription }}</p>
+        </div>
+        <div class="weekly-focus-metrics">
+          <div>
+            <b>{{ report.applications_this_week || 0 }}</b
+            ><span>本周投递</span>
+          </div>
+          <div>
+            <b>{{ interviewRateText }}</b
+            ><span>面试率</span>
+          </div>
+          <div>
+            <b>{{ responseRateText }}</b
+            ><span>响应率</span>
+          </div>
+        </div>
+        <div class="weekly-focus-action">
+          <span class="weekly-focus-label">下周第一步</span>
+          <p>{{ nextSuggestion }}</p>
+          <el-button size="small" type="primary" @click="$router.push('/jobs/pipeline/kanban')"
+            >查看投递节奏</el-button
+          >
+        </div>
+      </section>
+
       <!-- 周报概览 -->
       <div class="panel">
         <div class="panel-header">
@@ -171,7 +200,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import {
   Refresh,
   Calendar,
@@ -186,6 +215,36 @@ import { getWeeklyReport } from '@/api/dashboard'
 const loading = ref(false)
 const report = ref(null)
 const loadError = ref('')
+
+const interviewRateText = computed(() =>
+  report.value?.interview_rate ? `${(report.value.interview_rate * 100).toFixed(1)}%` : '--'
+)
+const responseRateText = computed(() =>
+  report.value?.response_rate ? `${(report.value.response_rate * 100).toFixed(1)}%` : '--'
+)
+const weeklyFocusTitle = computed(() => {
+  if ((report.value?.offers_this_week || 0) > 0) return '本周已出现 Offer，优先完成条件核验与取舍。'
+  if ((report.value?.interviews_this_week || 0) > 0)
+    return '本周有面试进展，优先把准备沉淀为下一轮表现。'
+  if ((report.value?.applications_this_week || 0) > 0)
+    return '本周投递已启动，重点观察响应并及时跟进。'
+  return '本周尚未形成投递数据，先明确一批高匹配目标岗位。'
+})
+const weeklyFocusDescription = computed(() => {
+  if ((report.value?.offers_this_week || 0) > 0)
+    return '将薪资、成长性与截止日期放进同一套决策框架。'
+  if ((report.value?.interviews_this_week || 0) > 0)
+    return '根据反馈复盘高频问题，再安排针对性的模拟练习。'
+  if ((report.value?.applications_this_week || 0) > 0)
+    return '结合匹配分与响应率调整投递节奏，而不是只增加数量。'
+  return '从岗位推荐中加入机会，再用看板建立持续跟进节奏。'
+})
+const nextSuggestion = computed(() => {
+  const suggestion = report.value?.suggestions?.[0]
+  return (
+    suggestion?.title || suggestion?.description || '挑选高匹配机会并为每个机会安排明确的下一步。'
+  )
+})
 
 const funnelStages = [
   { key: 'todo', label: '待投递', accent: 'accent-blue' },
@@ -285,12 +344,85 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.weekly-focus-strip {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.25fr) minmax(240px, 0.9fr) minmax(230px, 0.9fr);
+  gap: 0;
+  margin-bottom: 18px;
+  background: #fff;
+  border: 1px solid var(--app-line);
+  border-left: 4px solid var(--app-primary);
+  border-radius: var(--app-radius-sm, 8px);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.weekly-focus-strip > div {
+  min-width: 0;
+  padding: 18px 20px;
+  border-left: 1px solid var(--app-line);
+}
+
+.weekly-focus-strip > div:first-child {
+  border-left: 0;
+}
+
+.weekly-focus-label {
+  display: block;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.weekly-focus-main strong {
+  display: block;
+  margin-top: 7px;
+  color: var(--app-text);
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.weekly-focus-strip p {
+  margin: 7px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.weekly-focus-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.weekly-focus-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 2px 12px;
+  text-align: center;
+}
+
+.weekly-focus-metrics div + div {
+  border-left: 1px solid var(--app-line);
+}
+.weekly-focus-metrics b {
+  color: var(--app-primary-dark);
+  font-size: 23px;
+  line-height: 1;
+}
+.weekly-focus-metrics span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+.weekly-focus-action .el-button {
+  margin-top: 12px;
+}
+
 .stat-card {
   flex: 1;
   min-width: 120px;
   text-align: center;
   padding: 16px 12px;
-  border-radius: var(--app-radius-sm, 12px);
+  border-radius: var(--app-radius-xs, 6px);
   background: var(--el-fill-color-lighter);
 }
 
@@ -388,7 +520,7 @@ onMounted(() => {
 
 .metric-item {
   padding: 12px;
-  border-radius: var(--app-radius-xs, 8px);
+  border-radius: 6px;
   background: var(--el-fill-color-lighter);
 }
 
@@ -416,7 +548,7 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   padding: 12px;
-  border-radius: var(--app-radius-xs, 8px);
+  border-radius: 6px;
   border: 1px solid var(--app-line);
 }
 
@@ -498,6 +630,40 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .weekly-focus-strip,
+  .weekly-focus-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .weekly-focus-strip > div,
+  .weekly-focus-strip > div:first-child {
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+  }
+
+  .weekly-focus-strip > div:first-child {
+    border-top: 0;
+  }
+
+  .weekly-focus-metrics {
+    gap: 8px;
+  }
+
+  .weekly-focus-metrics div,
+  .weekly-focus-metrics div + div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+    text-align: left;
+  }
+
+  .weekly-focus-action .el-button {
+    width: 100%;
+  }
+
   .load-error {
     align-items: flex-start;
     flex-direction: column;

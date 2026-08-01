@@ -20,6 +20,11 @@ def upgrade() -> None:
     columns = {column["name"] for column in inspector.get_columns("organization")}
     if "sso_provider" not in columns:
         op.add_column("organization", sa.Column("sso_provider", sa.String(length=20), nullable=True))
+
+    # 基线 0001 用 Base.metadata.create_all 建表，全新库升级时本表已存在，需幂等处理。
+    if inspector.has_table("organization_sso_identity"):
+        return
+
     op.create_table(
         "organization_sso_identity",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),

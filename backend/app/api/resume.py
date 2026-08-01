@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
+from app.core.tenant_context import stamp_tenant, tenant_filter
 from app.models.history import Resume, ResumeVersion
 from app.models.user import User
 from app.schemas.resume import ResumeParseResp, ResumeUploadResp
@@ -51,6 +52,7 @@ def _get_owned_resume(db: Session, resume_id: int, user_id: int) -> Resume | Non
     return (
         db.query(Resume)
         .filter(
+            tenant_filter(Resume),
             Resume.id == resume_id,
             Resume.user_id == user_id,
             Resume.is_deleted == 0,
@@ -122,12 +124,14 @@ async def upload_resume(
 
     try:
         meta = resume_service.save_upload_file(raw, file.filename)
-        obj = Resume(
-            user_id=current_user.id,
-            file_name=meta["file_name"],
-            file_path=meta["file_path"],
-            file_type=meta["file_type"],
-            file_size=meta["file_size"],
+        obj = stamp_tenant(
+            Resume(
+                user_id=current_user.id,
+                file_name=meta["file_name"],
+                file_path=meta["file_path"],
+                file_type=meta["file_type"],
+                file_size=meta["file_size"],
+            )
         )
         db.add(obj)
         db.commit()
@@ -189,6 +193,7 @@ async def list_resume(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Resume).filter(
+        tenant_filter(Resume),
         Resume.is_deleted == 0,
         Resume.user_id == current_user.id,
     )
@@ -233,6 +238,7 @@ async def accessible_resume_list(
 ):
     """返回当前用户自己可安全用于筛选的简历列表。"""
     query = db.query(Resume).filter(
+        tenant_filter(Resume),
         Resume.is_deleted == 0,
         Resume.user_id == current_user.id,
     )
@@ -486,6 +492,7 @@ async def seed_demo_resumes(
         existing = (
             db.query(Resume)
             .filter(
+                tenant_filter(Resume),
                 Resume.user_id == current_user.id,
                 Resume.name == cand["name"],
             )
@@ -497,18 +504,20 @@ async def seed_demo_resumes(
 
         import json
 
-        obj = Resume(
-            user_id=current_user.id,
-            file_name=f"{cand['name']}_简历.pdf",
-            file_path="",
-            file_type="pdf",
-            file_size=0,
-            name=cand["name"],
-            phone=cand["phone"],
-            email=cand["email"],
-            years_exp=cand["years_exp"],
-            parsed_json=cand["parsed_json"],
-            raw_text=json.dumps(cand["parsed_json"], ensure_ascii=False),
+        obj = stamp_tenant(
+            Resume(
+                user_id=current_user.id,
+                file_name=f"{cand['name']}_简历.pdf",
+                file_path="",
+                file_type="pdf",
+                file_size=0,
+                name=cand["name"],
+                phone=cand["phone"],
+                email=cand["email"],
+                years_exp=cand["years_exp"],
+                parsed_json=cand["parsed_json"],
+                raw_text=json.dumps(cand["parsed_json"], ensure_ascii=False),
+            )
         )
         db.add(obj)
         inserted += 1

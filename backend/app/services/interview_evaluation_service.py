@@ -53,6 +53,32 @@ def create_pending_turn_evaluation(
     user_answer: str,
     is_follow_up: bool,
 ) -> InterviewTurnEvaluation:
+    # 重复作答（如断线重连后重提同一题、双击提交）会撞 (session_id, turn_id) 唯一约束，
+    # 抛 IntegrityError 直接卡死会话。复用同一行并重置为 pending，保证会话可继续。
+    existing = (
+        db.query(InterviewTurnEvaluation)
+        .filter(
+            InterviewTurnEvaluation.session_id == session_id,
+            InterviewTurnEvaluation.turn_id == turn_id,
+        )
+        .first()
+    )
+    if existing is not None:
+        existing.question_index = question_index
+        existing.question = question
+        existing.category = category
+        existing.user_answer = user_answer
+        existing.is_follow_up = 1 if is_follow_up else 0
+        existing.status = "pending"
+        existing.overall_score = 0
+        existing.feedback = ""
+        existing.improvement = ""
+        existing.evidence = None
+        existing.error_msg = ""
+        existing.completed_at = None
+        db.flush()
+        return existing
+
     record = InterviewTurnEvaluation(
         session_id=session_id,
         turn_id=turn_id,

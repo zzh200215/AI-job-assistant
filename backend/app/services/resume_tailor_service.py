@@ -60,7 +60,7 @@ def tailor_resume_for_jd(
 
     rag_parts = []
     for dtype in ["resume_template", "skill_model"]:
-        results = search_knowledge(query, doc_type=dtype, top_k=3)
+        results = search_knowledge(query, doc_type=dtype, top_k=3, db=db, user_id=user_id)
         if results:
             rag_parts.append(f"===== {dtype} =====")
             for r in results:

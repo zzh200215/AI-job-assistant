@@ -68,6 +68,49 @@ class TestAuthApi:
 
         assert response.status_code == 422
 
+
+class TestAccountDeletion:
+    def test_delete_account_removes_user_and_data(self, client, db_session):
+        """DELETE /auth/account 应删除用户及其关联数据（#9）。"""
+        reg = register_user(client, username="del_user", email="del@example.com")
+        assert reg.status_code == 200
+        token = reg.json()["data"]["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        from app.models.user import User
+
+        user = db_session.query(User).filter(User.username == "del_user").first()
+        assert user is not None
+
+        from app.models.history import AnalysisRecord, JobDescription, Resume
+
+        resume = Resume(
+            user_id=user.id, file_name="r.pdf", file_path="uploads/r.pdf",
+            file_type="pdf", file_size=1, parsed_json={"name": "张三"}, is_deleted=0,
+        )
+        jd = JobDescription(user_id=user.id, title="后端工程师", company="X", raw_text="jd", source="manual", is_active=1)
+        db_session.add_all([resume, jd])
+        db_session.commit()
+        db_session.refresh(resume)
+        db_session.refresh(jd)
+        analysis = AnalysisRecord(
+            user_id=user.id, resume_id=resume.id, jd_id=jd.id,
+            match_score=80, match_report={}, optimize_suggestions={}, interview_questions={},
+        )
+        db_session.add(analysis)
+        db_session.commit()
+        # 删除前先缓存主键：bulk delete 后对象在 identity map 中 stale，
+        # 此时再访问属性（如 resume.id）会触发刷新并抛 ObjectDeletedError
+        user_id, resume_id, analysis_id = user.id, resume.id, analysis.id
+
+        resp = client.delete("/auth/account", headers=headers)
+        assert resp.status_code == 200
+        assert resp.json()["code"] == 0
+
+        assert db_session.query(User).filter(User.id == user_id).count() == 0
+        assert db_session.query(Resume).filter(Resume.id == resume_id).count() == 0
+        assert db_session.query(AnalysisRecord).filter(AnalysisRecord.id == analysis_id).count() == 0
+
     def test_login_supports_username(self, client):
         register_user(client, username="login_user", email="login@example.com")
         response = client.post(

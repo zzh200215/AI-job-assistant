@@ -1,5 +1,5 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell history-page">
     <div class="page-header">
       <div>
         <h2>分析历史记录</h2>
@@ -7,6 +7,35 @@
       </div>
       <el-button @click="loadList">刷新</el-button>
     </div>
+
+    <section v-if="list.length" class="history-focus-strip" aria-label="历史分析摘要">
+      <div class="history-focus-main">
+        <span class="history-focus-label">分析沉淀</span>
+        <strong>最近 {{ list.length }} 条记录可继续复用</strong>
+        <p>从过往分析回看匹配依据和优化建议，避免为相同岗位重复准备。</p>
+      </div>
+      <div class="history-focus-metrics">
+        <div>
+          <b>{{ total }}</b
+          ><span>累计记录</span>
+        </div>
+        <div>
+          <b>{{ averageMatchScore }}</b
+          ><span>平均匹配分</span>
+        </div>
+        <div>
+          <b>{{ highMatchCount }}</b
+          ><span>高匹配记录</span>
+        </div>
+      </div>
+      <div class="history-focus-action">
+        <span class="history-focus-label">下一步</span>
+        <p>优先打开高匹配记录，继续准备面试或生成优化版本。</p>
+        <el-button size="small" type="primary" @click="$router.push('/resume-center')"
+          >管理简历版本</el-button
+        >
+      </div>
+    </section>
 
     <div class="panel">
       <div class="panel-header">
@@ -280,6 +309,14 @@ const localizedGaps = computed(() => normalizeLocalizedObjectList(detail.value?.
 const localizedRiskPoints = computed(() =>
   normalizeLocalizedTextList(detail.value?.match_report?.risk_points)
 )
+const averageMatchScore = computed(() => {
+  const scores = list.value.map((item) => Number(item.match_score)).filter(Number.isFinite)
+  if (!scores.length) return '--'
+  return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
+})
+const highMatchCount = computed(
+  () => list.value.filter((item) => Number(item.match_score) >= 80).length
+)
 
 const loadList = async () => {
   loading.value = true
@@ -339,6 +376,69 @@ onMounted(loadList)
 </script>
 
 <style scoped>
+.history-focus-strip {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.25fr) minmax(230px, 0.85fr) minmax(220px, 0.85fr);
+  gap: 0;
+  margin-bottom: 18px;
+  background: #fff;
+  border: 1px solid var(--app-line);
+  border-left: 4px solid var(--app-primary);
+  border-radius: var(--app-radius-sm, 8px);
+  box-shadow: var(--app-shadow-soft);
+}
+.history-focus-strip > div {
+  min-width: 0;
+  padding: 18px 20px;
+  border-left: 1px solid var(--app-line);
+}
+.history-focus-strip > div:first-child {
+  border-left: 0;
+}
+.history-focus-label {
+  display: block;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.history-focus-main strong {
+  display: block;
+  margin-top: 7px;
+  color: var(--app-text);
+  font-size: 18px;
+}
+.history-focus-strip p {
+  margin: 7px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.history-focus-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.history-focus-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 2px 10px;
+  text-align: center;
+}
+.history-focus-metrics div + div {
+  border-left: 1px solid var(--app-line);
+}
+.history-focus-metrics b {
+  color: var(--app-primary-dark);
+  font-size: 23px;
+  line-height: 1;
+}
+.history-focus-metrics span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+.history-focus-action .el-button {
+  margin-top: 12px;
+}
 .muted {
   color: var(--app-muted);
   font-size: 12px;
@@ -373,5 +473,36 @@ h4 {
 ul {
   padding-left: 18px;
   margin: 4px 0;
+}
+
+@media (max-width: 768px) {
+  .history-focus-strip,
+  .history-focus-metrics {
+    grid-template-columns: 1fr;
+  }
+  .history-focus-strip > div,
+  .history-focus-strip > div:first-child {
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+  }
+  .history-focus-strip > div:first-child {
+    border-top: 0;
+  }
+  .history-focus-metrics {
+    gap: 8px;
+  }
+  .history-focus-metrics div,
+  .history-focus-metrics div + div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+    text-align: left;
+  }
+  .history-focus-action .el-button {
+    width: 100%;
+  }
 }
 </style>

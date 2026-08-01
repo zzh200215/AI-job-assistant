@@ -8,7 +8,7 @@
 
 import logging
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -16,13 +16,15 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-_scheduler: AsyncIOScheduler | None = None
+_scheduler: BackgroundScheduler | None = None
 
 
-def get_scheduler() -> AsyncIOScheduler:
+def get_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is None:
-        _scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
+        # 所有任务都是同步 DB 操作，用线程池调度器而非 AsyncIOScheduler：
+        # 避免长任务（提醒扫描/JD 推送/月度结算）阻塞 FastAPI 事件循环。
+        _scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
     return _scheduler
 
 
@@ -67,6 +69,24 @@ def start_scheduler() -> None:
         trigger=IntervalTrigger(minutes=5),
         id="operational_alert_evaluation",
         name="运维告警评估",
+        replace_existing=True,
+    )
+
+    # ---- 租户计费扫描：每小时一次（T4-3） ----
+    scheduler.add_job(
+        _run_tenant_billing_check,
+        trigger=IntervalTrigger(hours=1),
+        id="tenant_billing_check",
+        name="租户到期停用/恢复",
+        replace_existing=True,
+    )
+
+    # ---- 外部 API 月度结算：每月 1 日 02:30（T6-2） ----
+    scheduler.add_job(
+        _run_external_api_monthly_billing,
+        trigger=CronTrigger(hour=2, minute=30, day=1),
+        id="external_api_monthly_billing",
+        name="外部 API 月度账单生成",
         replace_existing=True,
     )
 
@@ -164,5 +184,44 @@ def _run_operational_alert_evaluation():
     except Exception as exc:
         logger.error("Operational alert evaluation failed: %s", exc)
         db.rollback()
+    finally:
+        db.close()
+
+
+def _run_tenant_billing_check():
+    """租户计费扫描（T4-3）：每小时执行一次。"""
+    from app.core.database import SessionLocal
+    from app.services.subscription_service import run_tenant_billing_check
+
+    db = SessionLocal()
+    try:
+        stats = run_tenant_billing_check(db)
+        logger.info("Tenant billing check completed: %s", stats)
+    except Exception as exc:
+        db.rollback()
+        logger.error("Tenant billing check failed: %s", exc)
+    finally:
+        db.close()
+
+
+def _run_external_api_monthly_billing():
+    """外部 API 月度结算（T6-2）：每月 1 日对上月用量聚合出账。"""
+    from datetime import datetime
+
+    from app.core.database import SessionLocal
+    from app.services.api_key_service import run_monthly_billing
+
+    now = datetime.now()
+    year, month = now.year, now.month - 1
+    if month == 0:
+        year, month = year - 1, 12
+
+    db = SessionLocal()
+    try:
+        bill_ids = run_monthly_billing(db, year, month)
+        logger.info("External API monthly billing completed: %d bills for %04d-%02d", len(bill_ids), year, month)
+    except Exception as exc:
+        db.rollback()
+        logger.error("External API monthly billing failed: %s", exc)
     finally:
         db.close()

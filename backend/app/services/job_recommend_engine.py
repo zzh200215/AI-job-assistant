@@ -22,10 +22,11 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from app.core.chroma_client import get_knowledge_collection
+from app.core.tenant_context import current_tenant_id
 from app.models.history import JobDescription, Resume
 from app.services.embedding_service import embed_texts
 from app.services.recommendation_tuning import DEFAULT_RECOMMENDATION_TUNING_CONFIG
@@ -36,10 +37,18 @@ _RECOMMEND_CACHE_LOCK = threading.Lock()
 _CACHE_TTL = 86400  # 24 灏忔椂
 
 
-def _visible_job_filter(owner_id: int | None):
+def _visible_job_filter(owner_id: int | None, tenant_id: int | None = None):
+    """岗位可见性：本人 + 平台共享，且归属当前租户或平台共享（T3-3 租户隔离）。
+
+    tenant_id 为空时取当前租户上下文（未注入回落默认租户 1），保证单测/后台任务行为稳定。
+    """
     if owner_id is None:
-        return JobDescription.user_id.is_(None)
-    return or_(JobDescription.user_id == owner_id, JobDescription.user_id.is_(None))
+        base = JobDescription.user_id.is_(None)
+    else:
+        base = or_(JobDescription.user_id == owner_id, JobDescription.user_id.is_(None))
+    tid = tenant_id if tenant_id is not None else current_tenant_id()
+    tenant_cond = or_(JobDescription.tenant_id == tid, JobDescription.tenant_id.is_(None))
+    return and_(base, tenant_cond)
 
 
 def _normalize_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
@@ -59,9 +68,10 @@ def _normalize_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
     return normalized
 
 
-def _recommend_cache_key(resume_id: int, resume_version: str, filters: dict[str, Any]) -> str:
+def _recommend_cache_key(resume_id: int, resume_version: str, filters: dict[str, Any], tenant_id: int = None) -> str:
     payload = json.dumps(filters, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    raw = f"{resume_id}|{resume_version}|{payload}"
+    tid = tenant_id if tenant_id is not None else current_tenant_id()
+    raw = f"{resume_id}|{resume_version}|{tid}|{payload}"
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 
@@ -200,7 +210,7 @@ class JobRecommendationEngine:
             if (resume.update_time or resume.create_time)
             else "unknown"
         )
-        cache_key = _recommend_cache_key(resume_id, resume_version, normalized_filters)
+        cache_key = _recommend_cache_key(resume_id, resume_version, normalized_filters, tenant_id=current_tenant_id())
         now = time.time()
         if not bypass_cache:
             cached = _get_cached_recommendations(cache_key, now, _CACHE_TTL)
@@ -632,7 +642,13 @@ class JobRecommendationEngine:
 # ==================== 独立工具函数 ====================
 
 
-def batch_import_jobs(db: Session, jobs: list[dict], source: str = "imported") -> list[int]:
+def batch_import_jobs(
+    db: Session,
+    jobs: list[dict],
+    source: str = "imported",
+    tenant_id: int | None = None,
+    user_id: int | None = None,
+) -> list[int]:
     """
     批量导入岗位
 
@@ -640,6 +656,8 @@ def batch_import_jobs(db: Session, jobs: list[dict], source: str = "imported") -
         jobs: [{"title", "company", "location", "salary_range",
                 "raw_text", "industry", ...}, ...]
         source: manual / imported / api
+        tenant_id: 归属租户；None=平台共享岗位（对所有租户可见）（T3-3）
+        user_id: 归属用户；None=非个人岗位
 
     返回:
         新增的 jd_id 列表
@@ -656,6 +674,8 @@ def batch_import_jobs(db: Session, jobs: list[dict], source: str = "imported") -
             source=source,
             industry=j.get("industry", ""),
             is_active=1,
+            tenant_id=tenant_id,
+            user_id=user_id,
         )
         db.add(jd)
         db.flush()

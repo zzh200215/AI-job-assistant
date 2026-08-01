@@ -317,6 +317,7 @@ def _rrf_fuse(
     bm25_results: list[tuple[str, float]],
     rewrite_results: list[dict],
     top_k: int = None,
+    visible_doc_ids: set[str] | None = None,
 ) -> list[dict]:
     """
     Reciprocal Rank Fusion 融合三路结果。
@@ -371,6 +372,13 @@ def _rrf_fuse(
     ]:
         for rank, item in enumerate(results, start=1):
             cid = item[0] if path_name == "bm25" else item["chunk_id"]
+            # BM25 路不经过 _build_vector_results 过滤，融合时统一按可见集合裁剪，
+            # 防止词法命中的不可见文档（他人/他租户）混入最终结果。
+            if visible_doc_ids is not None:
+                meta = meta_by_cid.get(cid, {})
+                doc_id = str(meta.get("doc_id", ""))
+                if doc_id not in visible_doc_ids:
+                    continue
             rrf = 1.0 / (_RRF_K + rank)
             score = item[1] if path_name == "bm25" else item.get("score", 0)
 
@@ -446,11 +454,19 @@ def multi_recall(
     if top_k is None:
         top_k = settings.RAG_TOP_K
 
-    visible_doc_ids = None
-    if db is not None:
-        visible_doc_ids = get_visible_knowledge_doc_ids(db, user_id=user_id)
-        if visible_doc_ids == set():
-            return []
+    # 安全底线：没有 DB 会话就无法做租户/用户可见性过滤。
+    # 宁可不检索（返回空）也不允许跨租户/跨用户泄漏（fail-closed）。
+    if db is None:
+        logger.warning(
+            "multi_recall called without db session; refusing unqualified retrieval "
+            "(query=%r, doc_type=%r)",
+            query[:50],
+            doc_type,
+        )
+        return []
+    visible_doc_ids = get_visible_knowledge_doc_ids(db, user_id=user_id)
+    if visible_doc_ids == set():
+        return []
 
     # === 计算 query 向量（三路复用） ===
     try:
@@ -482,7 +498,13 @@ def multi_recall(
     )
 
     # === 4) RRF 融合 ===
-    fused = _rrf_fuse(vector_results, bm25_raw, rewrite_results, top_k=max(top_k * 2, top_k))
+    fused = _rrf_fuse(
+        vector_results,
+        bm25_raw,
+        rewrite_results,
+        top_k=max(top_k * 2, top_k),
+        visible_doc_ids=visible_doc_ids,
+    )
     reranked = rerank_results(query, fused, top_k=top_k)
 
     # === 5) 回填文本（RRF 融合后，从向量结果中按 chunk_id 回填 text） ===

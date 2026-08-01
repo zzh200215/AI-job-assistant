@@ -38,9 +38,16 @@ class Tool:
 
 
 def _tool_search_knowledge(query: str, doc_type: str = None, top_k: int = 3) -> dict:
+    from app.core.database import SessionLocal
     from app.services.multi_recall import multi_recall
 
-    results = multi_recall(query, doc_type=doc_type, top_k=top_k)
+    # 工具执行无显式 user_id，仍必须带 DB 会话做租户级可见性过滤（fail-closed）。
+    # 未注入租户上下文时回落默认租户，只可检索租户级 + 平台共享文档，杜绝跨租户泄漏。
+    db = SessionLocal()
+    try:
+        results = multi_recall(query, db=db, doc_type=doc_type, top_k=top_k)
+    finally:
+        db.close()
     return {
         "results": [
             {

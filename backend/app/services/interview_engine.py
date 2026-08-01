@@ -108,6 +108,11 @@ class InterviewEngine:
 
         current_question = self._get_latest_question_message()
         if current_question and self.session.status == "ongoing":
+            # 断线若发生在「已作答、下一题还没推」的间隙，重连时不应重复推送已作答的题目
+            # （否则客户端会再答一次，撞 (session_id, turn_id) 唯一约束）。返回 None 交给
+            # 上层调用 next_question() 推进到下一题。
+            if self._question_answered(current_question):
+                return None
             return self._message_to_payload(current_question)
         return None
 
@@ -370,7 +375,28 @@ class InterviewEngine:
         avg_accuracy = sum(item["accuracy"] for item in valid_evals) / len(valid_evals)
         avg_depth = sum(item["depth"] for item in valid_evals) / len(valid_evals)
         avg_expression = sum(item["expression"] for item in valid_evals) / len(valid_evals)
-        overall_score = round(avg_completeness * 0.30 + avg_accuracy * 0.30 + avg_depth * 0.25 + avg_expression * 0.15)
+
+        # T3-2：租户评分规则权重（未配置回落默认 0.30/0.30/0.25/0.15）
+        from app.services.interview_config_service import get_scoring_rules, scoring_rule_map
+
+        tenant_id = self.session.tenant_id if self.session else None
+        scoring_rules = get_scoring_rules(self.db, tenant_id or 1)
+        # 权重归一化：租户自定义权重和可能 ≠ 1（如只配了 0.10+0.60），
+        # 不归一化会导致 overall_score 超过 100。归一化后恒落在 [0,100]。
+        _DEFAULT_WEIGHTS = {"completeness": 0.30, "accuracy": 0.30, "depth": 0.25, "expression": 0.15}
+        weights = dict(_DEFAULT_WEIGHTS)
+        weights.update(
+            {k: v for k, v in scoring_rule_map(self.db, tenant_id or 1).items() if k in _DEFAULT_WEIGHTS}
+        )
+        total_weight = sum(weights.values())
+        if total_weight > 0:
+            weights = {k: v / total_weight for k, v in weights.items()}
+        overall_score = round(
+            avg_completeness * weights.get("completeness", 0.30)
+            + avg_accuracy * weights.get("accuracy", 0.30)
+            + avg_depth * weights.get("depth", 0.25)
+            + avg_expression * weights.get("expression", 0.15)
+        )
 
         ai_report: dict[str, Any] = {}
         try:
@@ -402,6 +428,7 @@ class InterviewEngine:
                 "depth": round(avg_depth, 1),
                 "expression": round(avg_expression, 1),
             },
+            "scoring_rules": scoring_rules,  # T3-2：租户评分规则（维度/权重/展示名）
             "question_evaluations": self.evaluations,
             "total_questions": self.question_count,
             "answered_questions": len(valid_evals),
@@ -470,6 +497,29 @@ class InterviewEngine:
             if msg.get("type") == "question":
                 return msg
         return None
+
+    def _question_answered(self, question: dict[str, Any]) -> bool:
+        """判断该题消息之后是否已有同 round 的作答（避免断线后重复推送已答题目）。
+
+        只统计位置在该题消息「之后」的 answer：这样主题的作答不会把其后的追问
+        误判为已答（追问与主题同 round）。
+        """
+        meta = question.get("metadata") or {}
+        round_num = int(meta.get("round") or 0)
+        if not round_num:
+            return False
+        messages = self.session.messages or []
+        q_pos = None
+        for idx, msg in enumerate(messages):
+            if msg is question:
+                q_pos = idx
+                break
+        if q_pos is None:
+            return False
+        for msg in messages[q_pos + 1 :]:
+            if msg.get("type") == "answer" and (msg.get("metadata") or {}).get("round") == round_num:
+                return True
+        return False
 
     def _infer_current_index(self) -> int:
         self._load_session()

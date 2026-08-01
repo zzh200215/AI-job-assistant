@@ -14,6 +14,12 @@ class KnowledgeDocument(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, default=None, index=True, comment="所属用户ID")
     organization_id = Column(BigInteger, default=None, index=True, comment="所属组织ID；为空表示个人或平台知识")
+    tenant_id = Column(
+        BigInteger,
+        nullable=True,
+        index=True,
+        comment="归属租户 organization.id；NULL=平台共享文档（T3-3，与 organization_id 同值时表示租户知识）",
+    )
     title = Column(String(255), nullable=False, comment="文档标题")
     file_name = Column(String(255), nullable=False, comment="原始文件名")
     file_type = Column(String(20), nullable=False, comment="文件类型")
@@ -36,6 +42,7 @@ class KnowledgeDocument(Base):
             "id": self.id,
             "user_id": self.user_id,
             "organization_id": self.organization_id,
+            "tenant_id": self.tenant_id,
             "title": self.title,
             "file_name": self.file_name,
             "file_type": self.file_type,

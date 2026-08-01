@@ -1,5 +1,5 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell interview-room-page">
     <section class="room-hero">
       <div>
         <p class="eyebrow">Interview Workspace</p>
@@ -1306,6 +1306,99 @@ onUnmounted(() => {
   padding-left: 18px;
   color: var(--app-muted);
   line-height: 1.9;
+}
+
+/* P1 focus treatment: status stays visible while the question remains dominant. */
+.interview-room-page {
+  background: #f6f8fc;
+}
+
+.interview-room-page .room-hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #252b3a;
+  border-radius: var(--app-radius-md);
+  background: linear-gradient(115deg, #111522 0%, #18223a 62%, #1a2845 100%);
+}
+
+.interview-room-page .room-hero::after {
+  position: absolute;
+  right: -42px;
+  bottom: -94px;
+  width: 220px;
+  height: 220px;
+  border: 1px solid rgba(34, 184, 232, 0.24);
+  border-radius: 50%;
+  box-shadow: 0 0 0 34px rgba(37, 99, 235, 0.08);
+  content: '';
+}
+
+.interview-room-page .hero-actions {
+  position: relative;
+  z-index: 1;
+}
+
+.interview-room-page .stage-card {
+  border-top: 3px solid var(--app-cyan);
+}
+
+.interview-room-page .question-card {
+  border-color: #cfd9ea;
+  box-shadow: 0 12px 28px rgba(31, 55, 94, 0.08);
+}
+
+.interview-room-page .interviewer-avatar {
+  background: linear-gradient(135deg, #2359d9, #22a9d8);
+}
+
+.interview-room-page .structure-box {
+  border-color: #d6e5fb;
+  background: #f5f9ff;
+}
+
+.interview-room-page .structure-tips span {
+  border-radius: var(--app-radius-xs);
+  background: #e7f1ff;
+  color: #2461b7;
+}
+
+.interview-room-page .transcript-card,
+.interview-room-page .answer-card {
+  border-color: #d9e0eb;
+}
+
+.interview-room-page .user-shell {
+  background: linear-gradient(135deg, #2359d9, #2c72d9);
+}
+
+.interview-room-page .voice-trigger {
+  border-color: #d8e3f4;
+  background: #f7faff;
+}
+
+.interview-room-page .voice-trigger.active {
+  border-color: rgba(37, 99, 235, 0.42);
+  background: #eef5ff;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.1);
+}
+
+.interview-room-page .voice-trigger-icon {
+  background: linear-gradient(135deg, #2359d9, #2c72d9);
+}
+
+.interview-room-page .voice-trigger.active .voice-trigger-icon::after {
+  border-color: rgba(37, 99, 235, 0.28);
+}
+
+.interview-room-page .voice-trigger-signal.live {
+  background: var(--app-primary);
+  box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.15);
+}
+
+.interview-room-page .voice-status.active,
+.interview-room-page .score-improvement,
+.interview-room-page .snapshot-note {
+  color: #2461b7 !important;
 }
 
 @keyframes voice-pulse {

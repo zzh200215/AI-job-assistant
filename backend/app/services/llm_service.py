@@ -952,8 +952,10 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
         result = extract_json(raw)
     except ValueError as exc:
         persist_trace(status="failed", response_text=raw, error_message=str(exc))
-        # 尝试兜底：AI 说了"抱歉"之类非 JSON 内容
-        raise ValueError(f"AI 返回内容不是合法 JSON，无法解析。原始响应片段: {raw[:200]}...") from exc
+        # 尝试兜底：AI 说了"抱歉"之类非 JSON 内容。
+        # 注意：不要把 raw 原始响应片段拼进错误信息——它会沿外部 API 的错误路径
+        # 原样回给调用方，造成 LLM 返回内容泄漏；raw 已由 persist_trace 落库留痕。
+        raise ValueError("AI 返回内容不是合法 JSON，无法解析") from exc
     try:
         result = _validate_schema(result, schema)
     except ValueError as exc:

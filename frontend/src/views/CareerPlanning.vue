@@ -1,5 +1,5 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell career-planning-page">
     <section class="career-hero">
       <div class="hero-copy">
         <div class="hero-kicker">Career Planning</div>
@@ -208,6 +208,43 @@
         </el-timeline-item>
       </el-timeline>
     </el-card>
+
+    <section v-if="careerResult" class="career-focus-strip" aria-label="职业规划重点">
+      <div class="career-focus-main">
+        <span class="career-focus-label">当前发展重点</span>
+        <strong>{{
+          targetRole || careerResult.visual_roadmap?.career_direction || '职业目标待确认'
+        }}</strong>
+        <p>
+          {{
+            localizedShortTermGoals[0] ||
+            localizedOverallAdvice ||
+            '先完成目标岗位建模，获得可执行的成长路径。'
+          }}
+        </p>
+      </div>
+      <div class="career-focus-metrics">
+        <div>
+          <b>{{ skillGapCount }}</b
+          ><span>能力缺口</span>
+        </div>
+        <div>
+          <b>{{ roadmapPhases.length }}</b
+          ><span>成长阶段</span>
+        </div>
+        <div>
+          <b>{{ roadmapDuration || '-' }}</b
+          ><span>预计月数</span>
+        </div>
+      </div>
+      <div class="career-focus-action">
+        <span class="career-focus-label">下一步</span>
+        <p>从目标岗位中验证规划，再把短期目标变成实际投递与面试准备。</p>
+        <el-button size="small" type="primary" @click="router.push('/jobs/search')"
+          >查看岗位市场</el-button
+        >
+      </div>
+    </section>
 
     <el-row v-if="careerResult" :gutter="18" class="result-grid">
       <el-col :xl="16" :lg="15" :md="24">
@@ -1258,9 +1295,10 @@ function stepIcon(status) {
   grid-template-columns: minmax(0, 1.2fr) minmax(360px, 1fr);
   gap: 18px;
   padding: 28px;
-  border-radius: var(--app-radius-md, 16px);
-  background: var(--app-bg);
+  border-radius: var(--app-radius-sm, 8px);
+  background: #fff;
   border: 1px solid var(--app-line);
+  border-top: 3px solid var(--app-primary);
   box-shadow: var(--app-shadow-soft);
 }
 
@@ -1272,8 +1310,8 @@ function stepIcon(status) {
 
 .hero-copy {
   padding: 24px;
-  border-radius: var(--app-radius-sm, 12px);
-  background: rgba(255, 255, 255, 0.84);
+  border-radius: var(--app-radius-xs, 6px);
+  background: var(--app-bg);
   border: 1px solid var(--app-line);
 }
 
@@ -1322,7 +1360,7 @@ function stepIcon(status) {
   position: relative;
   min-height: 134px;
   padding: 18px 18px 18px 76px;
-  border-radius: var(--app-radius-sm, 12px);
+  border-radius: var(--app-radius-xs, 6px);
   color: var(--app-text);
   display: flex;
   flex-direction: column;
@@ -1354,16 +1392,90 @@ function stepIcon(status) {
 }
 
 .tone-blue::before {
-  background: linear-gradient(135deg, #dff5e7, #c7ead4);
+  background: #dff5e7;
 }
 .tone-green::before {
-  background: linear-gradient(135deg, #e8f7ea, #d5f0da);
+  background: #e8f7ea;
 }
 .tone-amber::before {
-  background: linear-gradient(135deg, #fff1e6, #f7dcc5);
+  background: #fff1e6;
 }
 .tone-dark::before {
-  background: linear-gradient(135deg, #eef1ff, #dce3ff);
+  background: #eef1ff;
+}
+
+.career-focus-strip {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.25fr) minmax(240px, 0.9fr) minmax(220px, 0.85fr);
+  gap: 0;
+  background: #fff;
+  border: 1px solid var(--app-line);
+  border-left: 4px solid var(--app-primary);
+  border-radius: var(--app-radius-sm, 8px);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.career-focus-strip > div {
+  min-width: 0;
+  padding: 18px 20px;
+  border-left: 1px solid var(--app-line);
+}
+
+.career-focus-strip > div:first-child {
+  border-left: 0;
+}
+
+.career-focus-label {
+  display: block;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.career-focus-main strong {
+  display: block;
+  margin-top: 7px;
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.career-focus-strip p {
+  margin: 7px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.career-focus-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.career-focus-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 2px 12px;
+  text-align: center;
+}
+
+.career-focus-metrics div + div {
+  border-left: 1px solid var(--app-line);
+}
+.career-focus-metrics b {
+  color: var(--app-primary-dark);
+  font-size: 23px;
+  line-height: 1;
+}
+.career-focus-metrics span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+.career-focus-action .el-button {
+  margin-top: 12px;
 }
 
 .control-card,
@@ -1378,7 +1490,7 @@ function stepIcon(status) {
 .next-card,
 .salary-card,
 .resource-card {
-  border-radius: var(--app-radius-md, 16px);
+  border-radius: var(--app-radius-sm, 8px);
   border: 1px solid var(--app-line);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--app-shadow-soft);
@@ -1989,11 +2101,22 @@ function stepIcon(status) {
 
 @media (max-width: 1200px) {
   .career-hero,
+  .career-focus-strip,
   .radar-layout,
   .control-grid,
   .overview-grid,
   .project-grid {
     grid-template-columns: 1fr;
+  }
+
+  .career-focus-strip > div,
+  .career-focus-strip > div:first-child {
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+  }
+
+  .career-focus-strip > div:first-child {
+    border-top: 0;
   }
 }
 
@@ -2011,10 +2134,15 @@ function stepIcon(status) {
   }
 
   .hero-summary,
+  .career-focus-metrics,
   .progress-snapshot,
   .overview-grid,
   .project-grid {
     grid-template-columns: 1fr;
+  }
+
+  .career-focus-action .el-button {
+    width: 100%;
   }
 
   .action-row,

@@ -8,6 +8,7 @@ from datetime import datetime
 from fastapi import Request
 from sqlalchemy.orm import Session
 
+from app.core.tenant_context import stamp_tenant
 from app.models.audit_log import AuditLog
 from app.models.user import User
 
@@ -37,17 +38,19 @@ def write_audit_log(
         request: FastAPI Request 对象（自动提取 IP 和 UA）
         status: 操作结果（success / failure / blocked）
     """
-    log = AuditLog(
-        user_id=user.id,
-        username=user.username or "",
-        action=action,
-        resource_type=resource_type,
-        resource_id=str(resource_id) if resource_id else "",
-        detail=detail or {},
-        ip_address=_get_client_ip(request) if request else "",
-        user_agent=str(request.headers.get("user-agent", "")) if request else "",
-        status=status,
-        created_at=datetime.utcnow(),
+    log = stamp_tenant(
+        AuditLog(
+            user_id=user.id,
+            username=user.username or "",
+            action=action,
+            resource_type=resource_type,
+            resource_id=str(resource_id) if resource_id else "",
+            detail=detail or {},
+            ip_address=_get_client_ip(request) if request else "",
+            user_agent=str(request.headers.get("user-agent", "")) if request else "",
+            status=status,
+            created_at=datetime.utcnow(),
+        )
     )
     db.add(log)
     db.commit()

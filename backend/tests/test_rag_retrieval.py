@@ -37,6 +37,55 @@ def auto_mock_chroma_and_embed(mock_chroma_collection, mock_embedding, mock_rera
     yield
 
 
+@pytest.fixture(autouse=True)
+def _tenantless_rag_db(db_session):
+    """让纯检索逻辑用例的 RAG 入口带上 DB 会话并放开可见性过滤。
+
+    本文件用例只验证检索/组装逻辑（Chroma 已 mock），不验证租户隔离——
+    隔离行为由 tests/test_tenant_jobs_knowledge.py 专项覆盖，故此处：
+      1. get_visible_knowledge_doc_ids → None（全量可见，admin 语义）；
+      2. 未显式传 db 的调用自动补上 db_session（绕过 fail-closed）。
+
+    同时替换 rag_service / multi_recall 模块属性与本文件 `from ... import` 的名字
+    （import 时已绑定，仅 patch 模块属性不足以覆盖本文件的直接调用）。
+    """
+    import sys
+    from unittest import mock
+
+    import app.services.multi_recall as mr
+    import app.services.rag_service as rs
+
+    test_module = sys.modules[__name__]
+    _orig_search = rs.search_knowledge
+    _orig_multi = mr.multi_recall
+
+    def _search(*args, **kwargs):
+        if kwargs.get("db") is None:
+            kwargs["db"] = db_session
+        return _orig_search(*args, **kwargs)
+
+    def _multi(*args, **kwargs):
+        if kwargs.get("db") is None:
+            kwargs["db"] = db_session
+        return _orig_multi(*args, **kwargs)
+
+    patchers = [
+        mock.patch("app.services.rag_service.get_visible_knowledge_doc_ids", return_value=None),
+        mock.patch("app.services.multi_recall.get_visible_knowledge_doc_ids", return_value=None),
+        mock.patch("app.services.rag_service.search_knowledge", side_effect=_search),
+        mock.patch("app.services.multi_recall.multi_recall", side_effect=_multi),
+        mock.patch.object(test_module, "search_knowledge", side_effect=_search),
+        mock.patch.object(test_module, "multi_recall", side_effect=_multi),
+    ]
+    for patcher in patchers:
+        patcher.start()
+    try:
+        yield
+    finally:
+        for patcher in reversed(patchers):
+            patcher.stop()
+
+
 @pytest.fixture
 def sample_chunks():
     """Create sample Chroma-like results to return from mock query."""

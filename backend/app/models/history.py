@@ -1,14 +1,16 @@
 """SQLAlchemy ORM 模型：对应 3 张表"""
 
-from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+from app.models.base import TenantScopedMixin
 from app.utils.time_helper import utc_now
 
 
-class Resume(Base):
+class Resume(TenantScopedMixin, Base):
     __tablename__ = "tb_resume"
+    __table_args__ = (Index("ix_tb_resume_tenant_user", "tenant_id", "user_id"),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, default=None, index=True)
@@ -36,9 +38,11 @@ class Resume(Base):
 
 class JobDescription(Base):
     __tablename__ = "tb_jd"
+    __table_args__ = (Index("ix_tb_jd_tenant_active", "tenant_id", "is_active"),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, default=None, index=True)
+    tenant_id = Column(BigInteger, nullable=True, comment="归属租户 organization.id；NULL=平台共享岗位（T3-3）")
     title = Column(String(200), nullable=False, index=True)
     company = Column(String(200), index=True)
     location = Column(String(100))
@@ -57,8 +61,9 @@ class JobDescription(Base):
     update_time = Column(DateTime, default=utc_now, onupdate=utc_now)
 
 
-class AnalysisRecord(Base):
+class AnalysisRecord(TenantScopedMixin, Base):
     __tablename__ = "tb_analysis_record"
+    __table_args__ = (Index("ix_tb_analysis_record_tenant_user", "tenant_id", "user_id"),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, default=None, index=True)

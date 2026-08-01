@@ -1,15 +1,17 @@
 """面试会话表：InterviewSession"""
 
-from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, BigInteger, Column, DateTime, ForeignKey, Index, Integer, String
 
 from app.core.database import Base
+from app.models.base import TenantScopedMixin
 from app.utils.time_helper import utc_now
 
 
-class InterviewSession(Base):
+class InterviewSession(TenantScopedMixin, Base):
     """AI 模拟面试会话"""
 
     __tablename__ = "interview_session"
+    __table_args__ = (Index("ix_interview_session_tenant_user", "tenant_id", "user_id"),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("tb_user.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -43,6 +45,7 @@ class InterviewSession(Base):
     def to_dict(self):
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "user_id": self.user_id,
             "resume_id": self.resume_id,
             "jd_id": self.jd_id,

@@ -136,7 +136,7 @@ async function loadPlans() {
       plans.value = data.items.map((p) => ({
         id: p.tier,
         name: p.name,
-        price: p.tier === 'free' ? '¥0' : p.tier === 'pro' ? '¥99' : '定制',
+        price: formatPrice(p),
         desc:
           p.tier === 'free'
             ? '适合求职初期，体验核心功能'
@@ -151,6 +151,14 @@ async function loadPlans() {
   } catch {
     // fallback 到静态数据
   }
+}
+
+// T3-1：套餐价格取自后端（租户自定义价格优先），单位为分
+function formatPrice(p) {
+  const monthly = Number(p.price_monthly || 0)
+  if (monthly <= 0) return p.tier === 'free' ? '¥0' : '定制'
+  const yuan = monthly % 100 === 0 ? monthly / 100 : (monthly / 100).toFixed(2)
+  return `¥${yuan}`
 }
 
 function buildFeatureGroups(features) {

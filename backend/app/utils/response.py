@@ -17,6 +17,7 @@ ERR_AI: int = -4  # AI 调用失败
 ERR_DB: int = -5  # 数据库操作失败
 ERR_AUTH: int = -6  # 认证 / 授权失败
 ERR_QUOTA: int = -7  # 额度不足 / 套餐限制
+ERR_TENANT: int = -13  # 租户不可用（不存在 / 停用 / 无效）
 
 
 def _build_payload(code: int, message: str, data: Any) -> dict:

@@ -36,7 +36,9 @@ class CareerAgent(BaseAgent):
 
         rag_parts = []
         for dtype in ["industry_report", "skill_model", "career_path", "salary_market", "transition_guide"]:
-            results = search_knowledge(f"{title} {industry}", doc_type=dtype, top_k=3)
+            results = search_knowledge(
+                f"{title} {industry}", doc_type=dtype, top_k=3, db=context.db, user_id=context.user_id
+            )
             if results:
                 rag_parts.append(f"===== {dtype} =====")
                 for r in results:

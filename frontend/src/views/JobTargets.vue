@@ -1,5 +1,5 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell job-targets-page">
     <div class="page-header">
       <div>
         <h2>求职目标</h2>
@@ -11,6 +11,41 @@
         <el-icon><Plus /></el-icon> 新建目标
       </el-button>
     </div>
+
+    <section v-if="targets.length" class="target-focus-strip" aria-label="求职目标摘要">
+      <div class="target-focus-main">
+        <span class="target-focus-label">当前主目标</span>
+        <strong>{{ primaryTarget?.name || '尚未指定主目标' }}</strong>
+        <p>
+          {{
+            primaryTarget
+              ? `${primaryTarget.position || '目标岗位'}${primaryTarget.cities?.length ? ` · ${primaryTarget.cities.join(' / ')}` : ''}`
+              : '选择一个优先目标，让推荐、分析和面试准备保持同一方向。'
+          }}
+        </p>
+      </div>
+      <div class="target-focus-metrics">
+        <div>
+          <b>{{ targets.length }}</b
+          ><span>目标方向</span>
+        </div>
+        <div>
+          <b>{{ highPriorityCount }}</b
+          ><span>高优先级</span>
+        </div>
+        <div>
+          <b>{{ totalApplications }}</b
+          ><span>关联投递</span>
+        </div>
+      </div>
+      <div class="target-focus-action">
+        <span class="target-focus-label">下一步</span>
+        <p>从主目标进入岗位市场，验证目标与真实机会的匹配度。</p>
+        <el-button size="small" type="primary" @click="$router.push('/jobs/search')"
+          >查看岗位市场</el-button
+        >
+      </div>
+    </section>
 
     <!-- 目标列表 -->
     <div v-if="loading" class="loading-state">
@@ -202,7 +237,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import {
   Aim,
   Briefcase,
@@ -258,6 +293,15 @@ const defaultForm = () => ({
 })
 
 const form = ref(defaultForm())
+const primaryTarget = computed(
+  () => targets.value.find((target) => target.is_primary) || targets.value[0] || null
+)
+const highPriorityCount = computed(
+  () => targets.value.filter((target) => target.priority === 'high').length
+)
+const totalApplications = computed(() =>
+  targets.value.reduce((total, target) => total + Number(target.application_count || 0), 0)
+)
 
 const formRules = {
   name: [{ required: true, message: '请输入目标名称', trigger: 'blur' }],
@@ -403,9 +447,77 @@ onMounted(loadTargets)
   gap: 16px;
 }
 
+.target-focus-strip {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.25fr) minmax(230px, 0.85fr) minmax(220px, 0.85fr);
+  gap: 0;
+  margin-bottom: 18px;
+  background: #fff;
+  border: 1px solid var(--app-line);
+  border-left: 4px solid var(--app-primary);
+  border-radius: var(--app-radius-sm, 8px);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.target-focus-strip > div {
+  min-width: 0;
+  padding: 18px 20px;
+  border-left: 1px solid var(--app-line);
+}
+.target-focus-strip > div:first-child {
+  border-left: 0;
+}
+.target-focus-label {
+  display: block;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.target-focus-main strong {
+  display: block;
+  margin-top: 7px;
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.target-focus-strip p {
+  margin: 7px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.target-focus-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.target-focus-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 2px 10px;
+  text-align: center;
+}
+.target-focus-metrics div + div {
+  border-left: 1px solid var(--app-line);
+}
+.target-focus-metrics b {
+  color: var(--app-primary-dark);
+  font-size: 23px;
+  line-height: 1;
+}
+.target-focus-metrics span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+.target-focus-action .el-button {
+  margin-top: 12px;
+}
+
 .target-card {
   padding: 20px;
-  border-radius: var(--app-radius-sm, 12px);
+  border-radius: var(--app-radius-xs, 6px);
   border: 1px solid var(--app-line);
   background: #fff;
   cursor: pointer;
@@ -517,6 +629,35 @@ onMounted(loadTargets)
 }
 
 @media (max-width: 768px) {
+  .target-focus-strip,
+  .target-focus-metrics {
+    grid-template-columns: 1fr;
+  }
+  .target-focus-strip > div,
+  .target-focus-strip > div:first-child {
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+  }
+  .target-focus-strip > div:first-child {
+    border-top: 0;
+  }
+  .target-focus-metrics {
+    gap: 8px;
+  }
+  .target-focus-metrics div,
+  .target-focus-metrics div + div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+    text-align: left;
+  }
+  .target-focus-action .el-button {
+    width: 100%;
+  }
+
   .load-error {
     align-items: flex-start;
     flex-direction: column;

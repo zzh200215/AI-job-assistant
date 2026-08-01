@@ -438,3 +438,73 @@ async def delete_user_interviews(db: Session = Depends(get_db), current_user: Us
     db.commit()
     write_audit_log(db, current_user, "interview.delete", resource_type="interview", detail={"deleted_count": count})
     return ok(message=f"已删除 {count} 条面试记录")
+
+
+@router.delete("/account", summary="注销账号（永久删除账号与全部数据）")
+async def delete_account(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """永久注销当前账号：删除其全部关联数据与用户记录本身。
+
+    删除范围按 user_id 或间接关联（简历/任务/会话 id）覆盖核心业务表；
+    先删引用子记录再删父记录，保证 MySQL 外键约束下删除顺序安全。
+    审计日志（AuditLog）保留作注销留痕，不随账号删除。
+    """
+    from app.models.agent import AgentStepLog, AgentTask, RetrievalLog, SelfCheckLog
+    from app.models.agent_run import AgentMessage, AgentResult, AgentRun
+    from app.models.history import AnalysisRecord, JobDescription, Resume, ResumeVersion
+    from app.models.interview_evaluation import InterviewTurnEvaluation
+    from app.models.interview_session import InterviewSession
+    from app.models.job_journal import JobJournal
+    from app.models.job_pipeline import JobApplicationPipeline
+    from app.models.job_recommend import JobBookmark, JobRecommendationFeedback
+    from app.models.job_target import JobTarget
+    from app.models.knowledge import KnowledgeDocument
+    from app.models.notification import Notification
+    from app.models.prompt_trace import PromptTrace
+    from app.models.subscription import SubscriptionOrder, UserSubscription
+    from app.services.audit_service import write_audit_log
+
+    uid = current_user.id
+
+    # 审计先行（独立 commit，作为注销留痕，不受后续删除影响）
+    write_audit_log(db, current_user, "account.delete", resource_type="user", resource_id=str(uid))
+
+    my_resume_ids = db.query(Resume.id).filter(Resume.user_id == uid)
+    my_jd_ids = db.query(JobDescription.id).filter(JobDescription.user_id == uid)
+    my_session_ids = db.query(InterviewSession.id).filter(InterviewSession.user_id == uid)
+    my_task_ids = db.query(AgentTask.id).filter(AgentTask.user_id == uid)
+    my_run_ids = db.query(AgentRun.id).filter(AgentRun.resume_id.in_(my_resume_ids))
+
+    # 1) 引用子记录
+    db.query(ResumeVersion).filter(ResumeVersion.resume_id.in_(my_resume_ids)).delete(synchronize_session=False)
+    db.query(AnalysisRecord).filter(AnalysisRecord.resume_id.in_(my_resume_ids)).delete(synchronize_session=False)
+    db.query(AnalysisRecord).filter(AnalysisRecord.jd_id.in_(my_jd_ids)).delete(synchronize_session=False)
+    db.query(InterviewTurnEvaluation).filter(InterviewTurnEvaluation.session_id.in_(my_session_ids)).delete(synchronize_session=False)
+    db.query(AgentStepLog).filter(AgentStepLog.task_id.in_(my_task_ids)).delete(synchronize_session=False)
+    db.query(RetrievalLog).filter(RetrievalLog.task_id.in_(my_task_ids)).delete(synchronize_session=False)
+    db.query(SelfCheckLog).filter(SelfCheckLog.task_id.in_(my_task_ids)).delete(synchronize_session=False)
+    db.query(AgentMessage).filter(AgentMessage.run_id.in_(my_run_ids)).delete(synchronize_session=False)
+    db.query(AgentResult).filter(AgentResult.run_id.in_(my_run_ids)).delete(synchronize_session=False)
+    db.query(PromptTrace).filter(PromptTrace.user_id == uid).delete(synchronize_session=False)
+    db.query(PromptTrace).filter(PromptTrace.resume_id.in_(my_resume_ids)).delete(synchronize_session=False)
+    db.query(PromptTrace).filter(PromptTrace.task_id.in_(my_task_ids)).delete(synchronize_session=False)
+
+    # 2) 主业务数据
+    db.query(JobBookmark).filter(JobBookmark.user_id == uid).delete(synchronize_session=False)
+    db.query(JobRecommendationFeedback).filter(JobRecommendationFeedback.user_id == uid).delete(synchronize_session=False)
+    db.query(JobApplicationPipeline).filter(JobApplicationPipeline.user_id == uid).delete(synchronize_session=False)
+    db.query(InterviewSession).filter(InterviewSession.user_id == uid).delete(synchronize_session=False)
+    db.query(SubscriptionOrder).filter(SubscriptionOrder.user_id == uid).delete(synchronize_session=False)
+    db.query(UserSubscription).filter(UserSubscription.user_id == uid).delete(synchronize_session=False)
+    db.query(KnowledgeDocument).filter(KnowledgeDocument.user_id == uid).delete(synchronize_session=False)
+    db.query(AgentTask).filter(AgentTask.user_id == uid).delete(synchronize_session=False)
+    db.query(AgentRun).filter(AgentRun.resume_id.in_(my_resume_ids)).delete(synchronize_session=False)
+    db.query(JobTarget).filter(JobTarget.user_id == uid).delete(synchronize_session=False)
+    db.query(JobJournal).filter(JobJournal.user_id == uid).delete(synchronize_session=False)
+    db.query(Notification).filter(Notification.user_id == uid).delete(synchronize_session=False)
+    db.query(Resume).filter(Resume.user_id == uid).delete(synchronize_session=False)
+    db.query(JobDescription).filter(JobDescription.user_id == uid).delete(synchronize_session=False)
+
+    # 3) 用户本身
+    db.delete(current_user)
+    db.commit()
+    return ok(message="账号已注销，全部数据已删除")

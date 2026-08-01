@@ -1,5 +1,5 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell interview-setup-page">
     <div class="page-header">
       <div>
         <h2>AI 模拟面试</h2>
@@ -8,6 +8,21 @@
         </div>
       </div>
     </div>
+
+    <section class="setup-journey" aria-label="面试创建步骤">
+      <div
+        v-for="step in journeySteps"
+        :key="step.index"
+        class="journey-step"
+        :class="{ complete: setupStep > step.index, active: setupStep === step.index }"
+      >
+        <span class="journey-index">0{{ step.index }}</span>
+        <div>
+          <strong>{{ step.title }}</strong>
+          <small>{{ step.detail }}</small>
+        </div>
+      </div>
+    </section>
 
     <div class="grid-3 stat-row">
       <div class="stat-card">
@@ -34,7 +49,7 @@
       <div class="panel">
         <div class="panel-header">
           <div class="panel-title-row">
-            <h3>面试配置</h3>
+            <h3>配置本场面试</h3>
           </div>
           <el-tag type="danger" effect="plain">基础版</el-tag>
         </div>
@@ -271,7 +286,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
-import { getInterviewList } from '@/api/interview'
+import { getInterviewConfigTypes, getInterviewList } from '@/api/interview'
 import { getJDList } from '@/api/jd'
 import { getResumeList } from '@/api/resume'
 import { useInterviewStore } from '@/stores/interview'
@@ -312,7 +327,7 @@ const rules = {
   interview_type: [{ required: true, message: '请选择面试风格', trigger: 'change' }],
 }
 
-const typeOptions = [
+const defaultTypeOptions = [
   { value: 'tech', label: '技术深挖' },
   { value: 'hr', label: 'HR / 行为面' },
   { value: 'comprehensive', label: '综合面试' },
@@ -320,7 +335,7 @@ const typeOptions = [
   { value: 'group', label: '群面模拟' },
 ]
 
-const typeConfigs = {
+const defaultTypeConfigs = {
   tech: {
     label: '技术深挖',
     persona: '像一位会持续追问的技术面试官',
@@ -353,7 +368,58 @@ const typeConfigs = {
   },
 }
 
-const typeConfig = computed(() => typeConfigs[form.interview_type] || typeConfigs.tech)
+// T3-2：题型配置从后端拉取（租户自定义优先），失败回落内置静态配置
+const typeOptions = ref(defaultTypeOptions)
+const typeConfigs = ref(defaultTypeConfigs)
+
+async function loadTypeConfigs() {
+  try {
+    const data = await getInterviewConfigTypes()
+    if (!data?.items?.length) return
+    const options = []
+    const configs = {}
+    for (const item of data.items) {
+      const t = item.type
+      options.push({ value: t, label: item.title || t })
+      configs[t] = {
+        label: item.title || t,
+        persona: item.persona || defaultTypeConfigs[t]?.persona || 'AI 面试官',
+        description: item.description || defaultTypeConfigs[t]?.description || '',
+        focus: item.focus?.length ? item.focus : defaultTypeConfigs[t]?.focus || [],
+        tags: item.tags || [],
+        is_custom: !!item.is_custom,
+      }
+    }
+    if (options.length) {
+      typeOptions.value = options
+      typeConfigs.value = configs
+    }
+  } catch {
+    // 接口失败保持内置静态配置
+  }
+}
+
+const typeConfig = computed(() => typeConfigs.value[form.interview_type] || typeConfigs.value.tech)
+
+const setupStep = computed(() => {
+  if (!form.resume_id) return 1
+  if (!form.jd_id) return 2
+  return 3
+})
+
+const journeySteps = computed(() => [
+  {
+    index: 1,
+    title: '候选人资料',
+    detail: form.resume_id ? '简历已选定' : '选择用于本场面试的简历',
+  },
+  { index: 2, title: '目标岗位', detail: form.jd_id ? '岗位已选定' : '确定本场面试的 JD' },
+  {
+    index: 3,
+    title: '面试场景',
+    detail: `${typeConfig.value.label} · ${questionPlan.value.total}`,
+  },
+])
 
 const selectedResume = computed(() => resumeList.value.find((item) => item.id === form.resume_id))
 const selectedJD = computed(() => jdList.value.find((item) => item.id === form.jd_id))
@@ -481,8 +547,10 @@ async function startInterview() {
   loading.start = true
   try {
     const session = await store.initSession(form.resume_id, form.jd_id, form.interview_type)
-    ElMessage.success(`面试已创建，共 ${session.total_questions} 道题`)
+    ElMessage.success(`面试已创建，共 ${session.total_questions} 道题，正在进入面试房间`)
     router.push(`/interview/room/${session.id}`)
+  } catch (error) {
+    ElMessage.error(error?.message || '创建面试失败，请检查简历和岗位配置后重试')
   } finally {
     loading.start = false
   }
@@ -499,6 +567,7 @@ function openSession(item) {
 onMounted(async () => {
   await Promise.all([fetchResumes(), fetchJDs()])
   fetchHistory()
+  loadTypeConfigs()
   if (route.query.jd_id) {
     const jid = Number(route.query.jd_id)
     if (!isNaN(jid)) form.jd_id = jid
@@ -525,6 +594,92 @@ onMounted(async () => {
 .stat-row .stat-body strong {
   font-size: 28px;
   margin-top: 4px;
+}
+
+.interview-setup-page {
+  background: linear-gradient(135deg, #f7f9fd 0%, #f3f6fc 100%);
+}
+
+.setup-journey {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0 0 20px;
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface-strong);
+}
+
+.journey-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 74px;
+  padding: 14px 18px;
+  border-right: 1px solid var(--app-line);
+  color: var(--app-muted);
+}
+
+.journey-step:last-child {
+  border-right: 0;
+}
+
+.journey-step::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: transparent;
+  content: '';
+}
+
+.journey-step.active {
+  background: #f4f7ff;
+  color: var(--app-text);
+}
+
+.journey-step.active::after,
+.journey-step.complete::after {
+  background: var(--app-primary);
+}
+
+.journey-step.complete .journey-index {
+  background: var(--app-success);
+}
+
+.journey-index {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e6eaf2;
+  color: #fff;
+  font-family: var(--app-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.journey-step.active .journey-index {
+  background: var(--app-primary);
+}
+
+.journey-step strong,
+.journey-step small {
+  display: block;
+}
+
+.journey-step strong {
+  font-size: 13px;
+}
+
+.journey-step small {
+  margin-top: 3px;
+  color: var(--app-muted);
+  font-size: 12px;
 }
 
 /* ---- Setup grid ---- */
@@ -561,6 +716,23 @@ onMounted(async () => {
 /* ---- Type group ---- */
 .type-group {
   width: 100%;
+}
+
+.type-group :deep(.el-radio-button) {
+  margin: 0 6px 8px 0;
+}
+
+.type-group :deep(.el-radio-button__inner) {
+  min-width: 94px;
+  border: 1px solid var(--app-line) !important;
+  border-radius: var(--app-radius-xs) !important;
+  box-shadow: none !important;
+}
+
+.type-group :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  border-color: var(--app-primary) !important;
+  background: var(--app-primary-light) !important;
+  color: var(--app-primary) !important;
 }
 
 .type-preview {
@@ -801,6 +973,14 @@ onMounted(async () => {
   line-height: 1.6;
 }
 
+.setup-grid > .panel:first-child {
+  border-top: 3px solid var(--app-primary);
+}
+
+.preview-column > .panel:first-child {
+  border-top: 3px solid var(--app-cyan);
+}
+
 /* ---- History ---- */
 .history-list {
   display: grid;
@@ -846,6 +1026,20 @@ onMounted(async () => {
 }
 
 @media (max-width: 640px) {
+  .setup-journey {
+    grid-template-columns: 1fr;
+  }
+
+  .journey-step {
+    min-height: 64px;
+    border-right: 0;
+    border-bottom: 1px solid var(--app-line);
+  }
+
+  .journey-step:last-child {
+    border-bottom: 0;
+  }
+
   .checklist {
     grid-template-columns: 1fr;
   }

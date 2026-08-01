@@ -178,3 +178,37 @@ docker compose -f docker-compose.prod.yml up -d --build
 □ 数据库自动备份已配置
 □ 关键接口已加入健康检查
 ```
+
+---
+
+## 6. Pilot 环境实施回归（T5-2，第二个客户上线前逐条打勾）
+
+> 流程细节见 `docs/pilot-plan.md` §4；实施后把结果与耗时填入 `docs/pilot-report.md` §2。
+
+### 6.1 建租户与品牌
+- [ ] `POST /admin/tenants` 创建 Pilot 客户租户成功（name/slug/plan_tier/expires_at 生效）
+- [ ] 前端「运营后台 → 租户管理」可见该租户，带到期倒计时 tag
+- [ ] `PUT /admin/tenants/{id}/brand` 更新 logo/主色/company/contact 后，前端登录页刷新生效
+- [ ] `POST /admin/tenants/{id}/domains` 绑定主域名（is_primary=1）成功
+
+### 6.2 配套餐与题型
+- [ ] `POST /subscription/admin/plans` 自定义 pro 套餐名/价格，订阅页展示自定义套餐
+- [ ] `InterviewQuestionBank` 按租户覆盖题型模板/静态题生效（前端面试题来自租户题库）
+- [ ] `InterviewScoringRule` 按租户配置评分维度/权重生效
+
+### 6.3 导入岗位与知识
+- [ ] `POST /admin/tenants/{id}/jobs` 批量导入岗位成功，岗位仅在该租户可见
+- [ ] `POST /admin/tenants/{id}/knowledge` 上传客户文档成功，知识检索命中客户内容
+- [ ] 种子知识导入后 RAG 检索有引用证据可回看
+
+### 6.4 数据隔离
+- [ ] 该租户数据在其他租户（对照租户）登录后不可见（简历/岗位/知识/报表）
+- [ ] 到期或停用后该租户用户访问被拦截（403，code=-13）
+
+### 6.5 客户管理员可用
+- [ ] 客户管理员账号可登录，能查看本租户状态与报表（看不到其他租户）
+- [ ] 客户管理员不可访问平台级运营后台（租户管理/全局报表）
+
+### 6.6 全流程可用
+- [ ] 该租户下注册 → 传简历 → 智能分析 → 模拟面试 → 岗位推荐 → 职业规划 全链路可跑通
+- [ ] 额度体系生效（free/pro 限额差异可验证）

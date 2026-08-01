@@ -1,10 +1,37 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell agent-analysis-page">
     <div class="page-header">
       <div>
         <h2>Agentic RAG 智能分析</h2>
       </div>
     </div>
+
+    <section v-if="taskId" class="agent-focus-strip" aria-label="Agent 任务摘要">
+      <div class="agent-focus-main">
+        <span class="agent-focus-label">当前任务</span>
+        <strong>{{ taskStatusLabel || '等待任务状态' }}</strong>
+        <p>{{ agentFocusDescription }}</p>
+      </div>
+      <div class="agent-focus-metrics">
+        <div>
+          <b>{{ completedCount }}/{{ steps.length }}</b
+          ><span>完成步骤</span>
+        </div>
+        <div>
+          <b>{{ retrievalResultCount }}</b
+          ><span>证据片段</span>
+        </div>
+        <div>
+          <b>{{ passedChecks }}/{{ checks.length }}</b
+          ><span>自检通过</span>
+        </div>
+      </div>
+      <div class="agent-focus-action">
+        <span class="agent-focus-label">可追溯性</span>
+        <p>可查看检索证据、输入输出与 Prompt 执行记录。</p>
+        <el-button size="small" type="primary" @click="openPromptTrace">打开 Prompt 追踪</el-button>
+      </div>
+    </section>
 
     <div class="panel">
       <div class="panel-body">
@@ -444,6 +471,13 @@ const retrievalResultCount = computed(() =>
   retrievals.value.reduce((sum, item) => sum + Number(item.result_count || 0), 0)
 )
 const passedChecks = computed(() => checks.value.filter((item) => Boolean(item.passed)).length)
+const agentFocusDescription = computed(() => {
+  if (task.value?.status === 'completed') return '任务已完成，可从最终报告回看结论与依据。'
+  if (task.value?.status === 'partial') return '任务部分完成，优先查看未完成步骤和可用结果。'
+  if (task.value?.status === 'failed') return '任务失败，查看出错步骤后重试或调整输入。'
+  if (task.value?.status === 'cancelled') return '任务已取消，可保留当前痕迹或重新发起分析。'
+  return '任务正在执行，系统会持续更新步骤、检索和自检结果。'
+})
 const finalReport = computed(() => task.value?.final_report || null)
 const taskUsage = computed(() => task.value?.usage || { tokens_used: 0, cost_cents: 0 })
 const localizedSummaryRecommendation = computed(() =>
@@ -672,6 +706,69 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.agent-focus-strip {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.2fr) minmax(240px, 0.9fr) minmax(230px, 0.9fr);
+  gap: 0;
+  margin-bottom: 18px;
+  background: #fff;
+  border: 1px solid var(--app-line);
+  border-left: 4px solid var(--app-primary);
+  border-radius: var(--app-radius-sm, 8px);
+  box-shadow: var(--app-shadow-soft);
+}
+.agent-focus-strip > div {
+  min-width: 0;
+  padding: 18px 20px;
+  border-left: 1px solid var(--app-line);
+}
+.agent-focus-strip > div:first-child {
+  border-left: 0;
+}
+.agent-focus-label {
+  display: block;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.agent-focus-main strong {
+  display: block;
+  margin-top: 7px;
+  color: var(--app-text);
+  font-size: 18px;
+}
+.agent-focus-strip p {
+  margin: 7px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.agent-focus-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.agent-focus-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 2px 10px;
+  text-align: center;
+}
+.agent-focus-metrics div + div {
+  border-left: 1px solid var(--app-line);
+}
+.agent-focus-metrics b {
+  color: var(--app-primary-dark);
+  font-size: 21px;
+  line-height: 1;
+}
+.agent-focus-metrics span {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+.agent-focus-action .el-button {
+  margin-top: 12px;
+}
 .task-card-head,
 .task-head-actions,
 .trace-stats,
@@ -870,6 +967,35 @@ ul {
 }
 
 @media (max-width: 768px) {
+  .agent-focus-strip,
+  .agent-focus-metrics {
+    grid-template-columns: 1fr;
+  }
+  .agent-focus-strip > div,
+  .agent-focus-strip > div:first-child {
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+  }
+  .agent-focus-strip > div:first-child {
+    border-top: 0;
+  }
+  .agent-focus-metrics {
+    gap: 8px;
+  }
+  .agent-focus-metrics div,
+  .agent-focus-metrics div + div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-top: 1px solid var(--app-line);
+    border-left: 0;
+    text-align: left;
+  }
+  .agent-focus-action .el-button {
+    width: 100%;
+  }
+
   .task-card-head,
   .trace-card-head,
   .trace-grid,
