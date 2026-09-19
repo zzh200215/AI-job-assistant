@@ -175,9 +175,15 @@
             <div v-for="dim in diagnosisDims" :key="dim.key" class="diag-dim-item">
               <div class="dim-label">
                 <span>{{ dim.label }}</span>
-                <strong :style="{ color: dimColor(dim.score) }">{{ dim.score }}</strong>
+                <strong :style="{ color: dimColor(dim.score) }">{{ dim.score ?? '—' }}</strong>
               </div>
-              <el-progress :percentage="dim.score" :color="dimColor(dim.score)" :stroke-width="6" />
+              <el-progress
+                v-if="typeof dim.score === 'number'"
+                :percentage="dim.score"
+                :color="dimColor(dim.score)"
+                :stroke-width="6"
+              />
+              <p v-else class="dim-none">本次分析未给出该维度评分</p>
             </div>
           </div>
         </div>
@@ -244,7 +250,7 @@
             <el-empty v-else :image-size="60" description="未指定对比岗位" />
           </el-collapse-item>
           <el-collapse-item title="🤖 ATS 友好度" name="ats">
-            <div v-if="currentDiagnosis.ats_score">
+            <div v-if="typeof currentDiagnosis.ats_score === 'number'">
               <p class="diag-note">
                 模型评分 {{ currentDiagnosis.ats_score }}，用于估计格式与关键词的可解析性。
               </p>
@@ -277,6 +283,86 @@
               </p>
             </div>
             <el-empty v-else :image-size="60" description="暂无改进建议" />
+          </el-collapse-item>
+          <el-collapse-item name="rewrite">
+            <template #title>
+              <span>✏️ 行级改写（原文 → 改后）</span>
+              <span v-if="rewrite.items.length" class="rw-count">{{ rewrite.items.length }} 条待处理</span>
+            </template>
+
+            <div class="rw-head">
+              <el-button
+                size="small"
+                :loading="rewrite.loading"
+                :disabled="!currentDiagnosis.resume_id"
+                @click="generateRewrites"
+              >
+                {{ rewrite.loaded ? '重新生成建议' : '生成改写建议' }}
+              </el-button>
+              <span class="rw-hint">建议只覆盖你已写过的文字，逐条决定采纳哪几条；未采纳的不会写进简历。</span>
+            </div>
+
+            <el-alert v-if="rewrite.error" type="error" :closable="false" show-icon :title="rewrite.error" />
+
+            <div v-if="rewrite.loading" class="rw-loading">
+              <el-icon class="is-loading"><Loading /></el-icon> 正在逐条比对可改写的文本…
+            </div>
+
+            <template v-else>
+              <div v-for="item in rewrite.items" :key="item.block_id" class="rw-item">
+                <div class="rw-item-head">
+                  <el-checkbox v-model="item._accepted">采纳</el-checkbox>
+                  <span class="rw-item-label">{{ item.label }}</span>
+                  <el-tag v-if="rewriteKindLabel(item.kind) !== item.label" size="small" effect="plain">
+                    {{ rewriteKindLabel(item.kind) }}
+                  </el-tag>
+                </div>
+                <div class="rw-compare">
+                  <div class="rw-col">
+                    <div class="rw-col-title">原文</div>
+                    <p class="rw-text">{{ item.original }}</p>
+                  </div>
+                  <div class="rw-col">
+                    <div class="rw-col-title">改后</div>
+                    <p class="rw-text rw-text-new">{{ item.proposed_text }}</p>
+                  </div>
+                </div>
+                <p v-if="item.reason" class="rw-reason">依据：{{ item.reason }}</p>
+              </div>
+
+              <el-empty
+                v-if="rewrite.loaded && !rewrite.items.length"
+                :image-size="60"
+                description="没有可展示的改写建议"
+              />
+
+              <div v-if="rewrite.dropped.length" class="rw-dropped">
+                已自动丢弃 {{ rewrite.dropped.length }} 条不可用建议：
+                <span v-for="(d, i) in rewrite.dropped" :key="i" class="rw-drop-item">
+                  {{ d.block_id || '未知位置' }} — {{ rejectLabel(d.reason) }}
+                </span>
+              </div>
+
+              <div v-if="acceptedRewrites.length || rewrite.result" class="rw-actions">
+                <el-button
+                  type="primary"
+                  size="small"
+                  :loading="rewrite.applying"
+                  :disabled="!acceptedRewrites.length"
+                  @click="applyRewrites"
+                >
+                  应用已采纳的 {{ acceptedRewrites.length }} 条
+                </el-button>
+                <span v-if="rewriteScoreLine" class="rw-score">{{ rewriteScoreLine }}</span>
+                <span v-else-if="rewrite.result?.changed" class="rw-score">
+                  未指定目标岗位，本次不显示匹配分变化
+                </span>
+              </div>
+
+              <p v-if="diagnosisStale" class="diag-note">
+                简历内容已更新，上方的维度评分仍是改写前的结果；关闭后重新打开诊断即可刷新。
+              </p>
+            </template>
           </el-collapse-item>
         </el-collapse>
       </div>
@@ -417,7 +503,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   UploadFilled,
@@ -437,6 +523,8 @@ import {
   getResumeVersions,
   getResumeQuickScore,
   diagnoseResume,
+  getRewriteSuggestions,
+  applyResumeRewrites,
   deleteResume,
   generateOptimized,
   exportResume,
@@ -469,7 +557,108 @@ const currentShareResume = ref(null)
 const diagnosisLoading = ref(false)
 const diagnosisError = ref('')
 const currentDiagnosis = ref(null)
+const diagnosisStale = ref(false)
 const diagActivePanels = ref(['structure', 'expression', 'keywords', 'highlights'])
+
+// 行级改写（B1）：建议只在打开面板后按需生成，采纳才写回简历
+const rewrite = reactive({
+  loading: false,
+  applying: false,
+  error: '',
+  loaded: false,
+  items: [],
+  dropped: [],
+  result: null,
+})
+
+const REJECT_LABELS = {
+  unknown_block: '锚点不存在',
+  original_mismatch: '原文与简历对不上',
+  duplicate_block: '同一处重复建议',
+  empty_proposal: '改后内容为空',
+  unchanged: '与原文相同',
+  proposal_too_long: '改动过长',
+  over_limit: '超出条数上限',
+  malformed_response: '模型返回格式异常',
+  stale_anchor: '简历已更新，该条已失效',
+  missing_block_id: '缺少锚点',
+  empty_or_missing_text: '缺少改后内容',
+  empty_skill_list: '技能被清空',
+  not_an_object: '条目格式异常',
+}
+
+function rejectLabel(reason) {
+  return REJECT_LABELS[reason] || reason || '已拒绝'
+}
+
+function rewriteKindLabel(kind) {
+  return { skills: '技能', self_evaluation: '自我评价', work: '工作经历', project: '项目经历' }[kind] || kind
+}
+
+const acceptedRewrites = computed(() => rewrite.items.filter((item) => item._accepted))
+
+const rewriteScoreLine = computed(() => {
+  const score = rewrite.result?.score
+  const before = score?.before?.score
+  const after = score?.after?.score
+  if (typeof before !== 'number' || typeof after !== 'number') return ''
+  return `匹配分 ${before} → ${after}`
+})
+
+async function generateRewrites() {
+  const resumeId = currentDiagnosis.value?.resume_id
+  if (!resumeId || rewrite.loading) return
+  rewrite.loading = true
+  rewrite.error = ''
+  rewrite.result = null
+  try {
+    const data = await getRewriteSuggestions(resumeId, currentDiagnosis.value?.jd_id || null)
+    rewrite.items = (data?.suggestions || []).map((s) => ({ ...s, _accepted: true }))
+    rewrite.dropped = data?.rejected || []
+    rewrite.loaded = true
+    if (!rewrite.items.length) {
+      ElMessage.info(data?.note || '模型没有给出值得采纳的改写；不是错误，可能这份简历这几处已经写清楚了')
+    }
+  } catch (e) {
+    rewrite.items = []
+    rewrite.dropped = []
+    rewrite.error = e.userMessage || e.message || '改写建议生成失败'
+  } finally {
+    rewrite.loading = false
+  }
+}
+
+async function applyRewrites() {
+  const resumeId = currentDiagnosis.value?.resume_id
+  const edits = acceptedRewrites.value.map((s) => ({
+    block_id: s.block_id,
+    proposed_text: s.proposed_text,
+    expected_original: s.original,
+  }))
+  if (!resumeId || !edits.length || rewrite.applying) return
+
+  rewrite.applying = true
+  rewrite.error = ''
+  try {
+    const data = await applyResumeRewrites(resumeId, edits, currentDiagnosis.value?.jd_id || null)
+    rewrite.result = data
+    // Only the rows that actually landed leave the list; refused ones stay with
+    // their reason, so a no-op cannot read as success.
+    const appliedIds = new Set((data?.applied || []).map((a) => a.block_id))
+    rewrite.items = rewrite.items.filter((s) => !appliedIds.has(s.block_id))
+    rewrite.dropped = data?.rejected || []
+    if (data?.changed) {
+      diagnosisStale.value = true
+      ElMessage.success(`已应用 ${appliedIds.size} 处改写，简历已更新`)
+    } else {
+      ElMessage.warning('没有改动被应用')
+    }
+  } catch (e) {
+    rewrite.error = e.userMessage || e.message || '应用改写失败'
+  } finally {
+    rewrite.applying = false
+  }
+}
 
 // 脱敏
 const desensitized = ref(false)
@@ -520,6 +709,7 @@ function scoreLevel(v) {
 }
 
 function dimColor(v) {
+  if (typeof v !== 'number') return 'var(--app-muted)'
   if (v >= 80) return '#67c23a'
   if (v >= 60) return '#e6a23c'
   return '#f56c6c'
@@ -735,7 +925,15 @@ async function showDiagnosisDialog(r) {
   showDiagnosis.value = true
   diagnosisLoading.value = true
   diagnosisError.value = ''
+  diagnosisStale.value = false
   currentDiagnosis.value = null
+  rewrite.loading = false
+  rewrite.applying = false
+  rewrite.error = ''
+  rewrite.loaded = false
+  rewrite.items = []
+  rewrite.dropped = []
+  rewrite.result = null
 
   let d = null
   try {
@@ -759,12 +957,13 @@ async function showDiagnosisDialog(r) {
   }
 
   currentDiagnosis.value = {
+    resume_id: r.id,
     total_score: d.total_score ?? null,
-    structure_score: d.structure_score || 0,
-    expression_score: d.expression_score || 0,
-    keyword_score: d.keyword_score || 0,
-    highlight_score: d.highlight_score || 0,
-    ats_score: d.ats_score || 0,
+    structure_score: d.structure_score ?? null,
+    expression_score: d.expression_score ?? null,
+    keyword_score: d.keyword_score ?? null,
+    highlight_score: d.highlight_score ?? null,
+    ats_score: d.ats_score ?? null,
     structure_issues: d.structure_issues || [],
     expression_issues: d.expression_issues || [],
     missing_keywords: d.missing_keywords || [],
@@ -774,10 +973,12 @@ async function showDiagnosisDialog(r) {
     completeness_score: d.completeness_score ?? null,
     module_check: d.module_check || {},
     improvement_roadmap: d.improvement_roadmap || [],
-    jd_id: null,
+    // /diagnose scores against a target *position string*, not a stored JD, so
+    // this is normally null and the jump-to-analysis action stays hidden.
+    jd_id: d.jd_id ?? null,
   }
   diagnosisDims.forEach((dim) => {
-    dim.score = d[dim.key] || 0
+    dim.score = d[dim.key] ?? null
   })
   r._diagnosisScore = d.total_score
   diagnosisLoading.value = false
@@ -1241,6 +1442,106 @@ function goAnalysisFromDiag() {
   padding: 6px 0;
   font-size: 14px;
   color: var(--app-muted);
+}
+.dim-none {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+
+.rw-count {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.rw-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.rw-hint {
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.rw-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--app-muted);
+}
+.rw-item {
+  padding: 10px 0;
+  border-top: 1px solid var(--app-line);
+}
+.rw-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.rw-item-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+.rw-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.rw-col-title {
+  margin-bottom: 2px;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.rw-text {
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--app-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--app-surface-muted);
+  border-radius: var(--app-radius-sm);
+}
+.rw-text-new {
+  border-left: 2px solid var(--app-success);
+}
+.rw-reason {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.rw-dropped {
+  margin-top: 10px;
+  padding: 8px;
+  font-size: 12px;
+  color: var(--app-muted);
+  background: var(--app-surface-muted);
+  border-radius: var(--app-radius-sm);
+}
+.rw-drop-item {
+  display: block;
+}
+.rw-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.rw-score {
+  font-size: 13px;
+  color: var(--app-muted);
+}
+
+@media (max-width: 768px) {
+  .rw-compare {
+    grid-template-columns: 1fr;
+  }
 }
 
 .diag-issue .el-icon {

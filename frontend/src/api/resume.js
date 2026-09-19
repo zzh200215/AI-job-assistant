@@ -13,6 +13,13 @@ export const parseResume = (resumeId) => request.post('/resume/parse', { resume_
 
 export const getResume = (id) => request.get(`/resume/${id}`)
 
+// 行级改写：建议按 block_id 锚定到简历里的具体文本，采纳后才写回
+export const getRewriteSuggestions = (resumeId, jdId = null) =>
+  request.post(`/resume/${resumeId}/rewrite-suggestions`, jdId ? { jd_id: jdId } : {})
+
+export const applyResumeRewrites = (resumeId, edits, jdId = null) =>
+  request.post(`/resume/${resumeId}/apply-rewrites`, { edits, ...(jdId ? { jd_id: jdId } : {}) })
+
 export const generateOptimized = (resumeId, targetJdId) =>
   request.post(`/resume/${resumeId}/generate-optimized`, { target_jd_id: targetJdId || null })
 
