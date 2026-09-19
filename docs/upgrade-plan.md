@@ -262,6 +262,45 @@
 
 **验收**：`/api/multi-agent` 返回真实消息序列；任务中心显示非零 token 与成本；`prompt_trace` 能还原每个节点的输入输出；评测集在收敛后的两条编排路径上结果一致。
 
+#### 已交付：C1 节点入口恢复为唯一路径（提交 `4e07e9a`）
+
+真机口径：provider=qwen、`ORCHESTRATION_BACKEND=redis_queue`（独立 worker 进程消费），一次性验证账号 + 演示数据，验完删除。
+
+| 项 | 结果 |
+|---|---|
+| 唯一节点入口 | `BaseAgent.execute() = run_node() + record_node_outcome()`。`run_node()` 只跑 `run_impl` + 重试 + 归集用量、**不写库**，所以分层并行策略能在工作线程里跑它、由主线程落库（session 不能跨线程复用）。三条策略不再各自 `agent.run_impl(context)` |
+| 节点流水真的有行了 | 线性 task 90：1 条 `agent_run(task_id=90)` + 5 条 `agent_message`（4 completed + 1 failed）+ 4 条 `agent_result`。legacy `/multi-agent/auto` run 6：4 条消息**全部落在客户端轮询的那条 run 上**，终态 failed 且带真实 error_msg；该 task 只有 1 条 run（修复前是 2 条） |
+| 并行层 | 同层 ResumeAgent(1293 tok) 与 JobAgent(887 tok) 并发执行，各自成行；步骤日志改为整层先落 `running`（过去在完成时才建，并行时只看得见先完成的那一条） |
+| 用量归属 | `prompt_trace` 出现 `source='agent.IntentAgent' / 'agent.ResumeAgent' …`、`response_source='real'`、真实 total_tokens。此前编排路径所有 LLM 调用的 `task_id` 都是 NULL，无法反查到节点 |
+| 任务中心 | `/api/agent/task/90` → `usage.tokens_used=1332`，来自 `AgentMessage` 列的汇总（新 join），不再是塞在 `output_data["_usage"]` 里的那份 JSON |
+
+**四条被实测推翻的计划前提**
+
+1. `execute()` 不只是"零调用"——它**一调用就 TypeError**：它给 `retry_call` 传 `on_retry`，而 `retry_call` 没有这个参数（只有那个同样零调用的 `with_retry` 装饰器有）。同一个重试循环写了两份，只有一份带这个参数，所以"死代码"其实一直没法被调用。现在 `retry_call` 是唯一实现（带 `on_retry`），`with_retry` 删除。
+2. 计划写"`task_center_service.py:138` 成本恒为 0"，实际是**死 join**：它按 `AgentRun.user_request == f"task:{id}"` 关联，而全项目没有任何写入方产出这个字符串，`_usage_by_task` 恒命中 0 行；显示出来的成本一直来自步骤日志。改为 `agent_run.task_id` 真外键（migration `0026`）。
+3. C6 说的"工具调用路径不计费"已在 A 阶段修好（`llm_service.py:1117` 有 `_record_usage`）。C6 剩下的只有 tracing / cache / fallback。
+4. `langgraph_linear` / `langgraph_layered` 在测试里从未真正执行过节点（只被 `create()` 过一次）。现在 4 条编排路径都有断言。
+
+**顺带修掉的（都在 C1 的影响面内）**
+
+- `execute()` 原来只捕 `RuntimeError`：非 RuntimeError 会让消息行永久停在 `running`，并把裸异常抛穿编排层。现在任何异常都规整成 failed 节点。
+- 重试不再丢成本：每次尝试花掉的 token 计入本节点（测试钉住"3 次尝试 = 45 token"）。
+- `_usage` 不再被塞进 agent 结果体：它会随 `output_data` 进前端，还会进下游 prompt。
+- `AgentStepLog.input_data` 原本写死 `{"resume_id": None, "jd_id": None}`，现在填真实 ids。
+- **Redis 后端丢弃 runner**：`RedisQueueOrchestrationBackend.submit(payload, runner)` 只入队 payload，闭包过不了进程边界，所以 `start_legacy_layered_thread` 包在闭包里的 `run_id` 在真机上根本不生效——worker 会为同一任务另建一条 run，客户端轮询的那条永远 `running`、明细永远为空（现场就是这样复现的）。现在 `run_id` 进 `TaskPayload`，两种后端统一走 `_run_task_payload`。
+- `scripts/run_orchestration_worker.py`：`--once` 是空开关（两个分支同一句），删掉；补上 `python -m scripts.run_orchestration_worker` 的启动方式（直接按路径跑会 `ModuleNotFoundError: app`）。
+- `orchestration_runner` 里 2 处构造完即丢弃的 `TaskPayload(...)` 表达式。
+
+**验收对照**（不含水分）
+
+- "`/api/multi-agent` 返回真实消息序列" → ✅ 真机 run 6。
+- "任务中心显示非零 token" → ✅ 1332 / 2787。"非零成本" → ❌ 本环境 `LLM_INPUT_COST_PER_1K_CENTS = LLM_OUTPUT_COST_PER_1K_CENTS = 0.0`，价格没配就算不出钱；算术由测试钉住（7 节点 × 0.07 = 0.49 分）。
+- "`prompt_trace` 还原每个节点" → ✅ 部分：覆盖节点的**首个** LLM 调用（`chat_json` 取用一次即清空 trace 上下文）。多调用节点要等 C6 一起改。
+- "两条编排路径结果一致" → ✅ 4 条路径断言同一份事实。
+
+**阻塞项（环境，非本次改动引入）**：嵌入式 Chroma 的知识库索引在本机已损坏——`chromadb/segment/impl/metadata/sqlite.py:668 _decode_seq_id` 抛 `TypeError: object of type 'int' has no len()`，`get_knowledge_collection().count()` 单句即复现。凡走 RAG 检索的节点（ResumeOptimize / MatchAnalysis / Match / Interview / Career）真机必挂，编排端到端跑不完；上述证据里 `tokens_used=0` 的失败节点都是**在调模型之前**就死在检索层，不是模型问题。恢复需要重建知识库（`scripts/import_knowledge.py`），C2/C3/C5 的端到端验证依赖它。
+
+
 ---
 
 ## 7. 阶段 D｜前端（已完成的阶段 0 + 后续）
