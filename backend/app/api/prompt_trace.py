@@ -31,6 +31,12 @@ def _metrics_from_rows(rows: list[PromptTrace]) -> dict:
     success_count = sum(1 for row in rows if row.status == "success")
     failed_count = sum(1 for row in rows if row.status != "success")
     cache_hit_count = sum(1 for row in rows if row.cache_hit)
+    degraded_rows = [row for row in rows if row.degraded]
+    degraded_count = len(degraded_rows)
+    by_source: dict[str, int] = {}
+    for row in degraded_rows:
+        key = str(row.response_source or "unknown")
+        by_source[key] = by_source.get(key, 0) + 1
 
     return {
         "total": total,
@@ -39,6 +45,9 @@ def _metrics_from_rows(rows: list[PromptTrace]) -> dict:
         "success_rate": round(success_count / total, 4) if total else 0,
         "cache_hit_count": cache_hit_count,
         "cache_hit_rate": round(cache_hit_count / total, 4) if total else 0,
+        "degraded_count": degraded_count,
+        "degraded_rate": round(degraded_count / total, 4) if total else 0,
+        "degraded_by_source": by_source,
         "avg_duration_ms": _round_or_none([row.duration_ms for row in rows]),
         "avg_prompt_chars": _round_or_none([row.prompt_chars for row in rows]),
         "avg_total_tokens": _round_or_none([row.total_tokens for row in rows]),
@@ -69,6 +78,8 @@ def _query_rows(
     task_id: int | None = None,
     analysis_record_id: int | None = None,
     model: str | None = None,
+    response_source: str | None = None,
+    degraded: bool | None = None,
 ) -> list[PromptTrace]:
     query = db.query(PromptTrace).filter(PromptTrace.user_id == user_id)
     if source:
@@ -85,6 +96,10 @@ def _query_rows(
         query = query.filter(PromptTrace.analysis_record_id == analysis_record_id)
     if model:
         query = query.filter(PromptTrace.model == model)
+    if response_source:
+        query = query.filter(PromptTrace.response_source == response_source)
+    if degraded is not None:
+        query = query.filter(PromptTrace.degraded == (1 if degraded else 0))
     return query.order_by(PromptTrace.created_at.desc(), PromptTrace.id.desc()).all()
 
 
@@ -97,6 +112,8 @@ async def prompt_trace_summary(
     task_id: int | None = Query(None),
     analysis_record_id: int | None = Query(None),
     model: str | None = Query(None),
+    response_source: str | None = Query(None),
+    degraded: bool | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -110,6 +127,8 @@ async def prompt_trace_summary(
         task_id=task_id,
         analysis_record_id=analysis_record_id,
         model=model,
+        response_source=response_source,
+        degraded=degraded,
     )
 
     by_source: dict[str, list[PromptTrace]] = {}
@@ -134,6 +153,7 @@ async def prompt_trace_summary(
     versions = sorted({item["prompt_version"] for item in version_groups})
     sources = sorted({item["source"] for item in source_groups})
     models = sorted({row.model for row in rows if row.model})
+    response_sources = sorted({str(row.response_source or "unknown") for row in rows})
 
     return ok(
         {
@@ -141,6 +161,7 @@ async def prompt_trace_summary(
             "sources": sources,
             "versions": versions,
             "models": models,
+            "response_sources": response_sources,
             "source_groups": source_groups[:10],
             "version_groups": version_groups[:20],
         }
@@ -158,6 +179,8 @@ async def list_prompt_traces(
     task_id: int | None = Query(None),
     analysis_record_id: int | None = Query(None),
     model: str | None = Query(None),
+    response_source: str | None = Query(None),
+    degraded: bool | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -171,6 +194,8 @@ async def list_prompt_traces(
         task_id=task_id,
         analysis_record_id=analysis_record_id,
         model=model,
+        response_source=response_source,
+        degraded=degraded,
     )
     total = len(rows)
     start = (page - 1) * page_size

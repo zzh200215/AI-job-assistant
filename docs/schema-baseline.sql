@@ -88,6 +88,7 @@ CREATE INDEX ix_prompt_trace_prompt_family ON prompt_trace (prompt_family);
 CREATE INDEX ix_prompt_trace_prompt_hash ON prompt_trace (prompt_hash);
 CREATE INDEX ix_prompt_trace_prompt_name ON prompt_trace (prompt_name);
 CREATE INDEX ix_prompt_trace_request_id ON prompt_trace (request_id);
+CREATE INDEX ix_prompt_trace_response_source ON prompt_trace (response_source);
 CREATE INDEX ix_prompt_trace_resume_id ON prompt_trace (resume_id);
 CREATE INDEX ix_prompt_trace_source ON prompt_trace (source);
 CREATE INDEX ix_prompt_trace_task_id ON prompt_trace (task_id);
@@ -974,6 +975,8 @@ CREATE TABLE prompt_trace (
 	prompt_name VARCHAR(100), 
 	provider VARCHAR(20) NOT NULL, 
 	model VARCHAR(100), 
+	response_source VARCHAR(20) NOT NULL, 
+	degraded SMALLINT NOT NULL, 
 	status VARCHAR(20) NOT NULL, 
 	cache_hit SMALLINT NOT NULL, 
 	duration_ms INTEGER, 

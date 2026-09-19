@@ -29,6 +29,19 @@ class PromptTrace(Base):
     prompt_name = Column(String(100), index=True, comment="Canonical prompt name")
     provider = Column(String(20), nullable=False, comment="LLM provider")
     model = Column(String(100), comment="Effective model used")
+    response_source = Column(
+        String(20),
+        nullable=False,
+        default="unknown",
+        index=True,
+        comment="real/mock/truncated/fallback_model; provider above is only the configured value",
+    )
+    degraded = Column(
+        SmallInteger,
+        nullable=False,
+        default=0,
+        comment="1 when the response did not come from the configured primary model",
+    )
     status = Column(String(20), nullable=False, default="success", comment="success/failed")
     cache_hit = Column(SmallInteger, nullable=False, default=0, comment="Whether response came from cache")
     duration_ms = Column(Integer, comment="End-to-end duration in milliseconds")
@@ -64,6 +77,8 @@ class PromptTrace(Base):
             "prompt_name": self.prompt_name,
             "provider": self.provider,
             "model": self.model,
+            "response_source": self.response_source or "unknown",
+            "degraded": bool(self.degraded),
             "status": self.status,
             "cache_hit": bool(self.cache_hit),
             "duration_ms": self.duration_ms,
@@ -100,6 +115,8 @@ class PromptTrace(Base):
             "prompt_name": self.prompt_name,
             "provider": self.provider,
             "model": self.model,
+            "response_source": self.response_source or "unknown",
+            "degraded": bool(self.degraded),
             "status": self.status,
             "cache_hit": bool(self.cache_hit),
             "duration_ms": self.duration_ms,

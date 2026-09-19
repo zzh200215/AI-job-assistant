@@ -38,6 +38,9 @@ const WORKSPACE_ROUTES = [
   ['/profile', '个人中心'],
   ['/tasks', '任务中心'],
   ['/history', '历史记录'],
+  // Admin-owned page, but the test router carries no guard so it mounts for any
+  // role; it is here because A2 changed its template and script.
+  ['/prompt-traces', 'Prompt 追踪'],
 ]
 
 describe('workspace routes render inside the themed shell', () => {

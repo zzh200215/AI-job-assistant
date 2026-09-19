@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -81,6 +82,53 @@ def collect_operational_alerts(
                 "模型调用失败激增",
                 "近期模型调用失败数量超过阈值，请检查供应商状态、限流和提示词追踪。",
                 {"failed_calls": failed_llm_calls, "window_minutes": settings.OPERATIONS_ALERT_WINDOW_MINUTES, "threshold": settings.OPERATIONS_ALERT_LLM_FAILURE_THRESHOLD},
+            )
+        )
+
+    # Degraded responses succeed, so they are invisible to the failure alert
+    # above. They are the ones where a candidate sees template or truncated
+    # content presented as model analysis.
+    degraded_rows = (
+        db.query(PromptTrace.response_source, func.count(PromptTrace.id))
+        .filter(PromptTrace.degraded == 1, PromptTrace.status == "success", PromptTrace.created_at >= since)
+        .group_by(PromptTrace.response_source)
+        .all()
+    )
+    degraded_calls = sum(int(count or 0) for _, count in degraded_rows)
+    by_source = {str(src): int(count) for src, count in degraded_rows}
+    mock_calls = by_source.get("mock", 0)
+    window = settings.OPERATIONS_ALERT_WINDOW_MINUTES
+    if mock_calls >= settings.OPERATIONS_ALERT_LLM_MOCK_THRESHOLD:
+        alerts.append(
+            _alert(
+                "llm_mock_responses_served",
+                "critical",
+                "已向用户返回 mock 模板内容",
+                "有 AI 结果由本地 mock 模板生成而非模型输出。候选人侧不显示降级提示，"
+                "请立即核对供应商配置、限流与 LLM_ALLOW_MOCK_FALLBACK。",
+                {
+                    "mock_calls": mock_calls,
+                    "degraded_calls": degraded_calls,
+                    "by_source": by_source,
+                    "window_minutes": window,
+                    "threshold": settings.OPERATIONS_ALERT_LLM_MOCK_THRESHOLD,
+                },
+            )
+        )
+    elif degraded_calls >= settings.OPERATIONS_ALERT_LLM_DEGRADED_THRESHOLD:
+        alerts.append(
+            _alert(
+                "llm_degraded_responses",
+                "warning",
+                "模型应答降级",
+                "近期有 AI 结果并非由配置的主模型生成（截断提示 / 备用模型），"
+                "内容仍来自模型但质量可能下降，请以提示词追踪核对受影响功能。",
+                {
+                    "degraded_calls": degraded_calls,
+                    "by_source": by_source,
+                    "window_minutes": window,
+                    "threshold": settings.OPERATIONS_ALERT_LLM_DEGRADED_THRESHOLD,
+                },
             )
         )
 

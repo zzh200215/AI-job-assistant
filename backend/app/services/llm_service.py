@@ -21,7 +21,12 @@ from pydantic import BaseModel, ValidationError
 
 from app.agents.tools import Tool, get_tool
 from app.core.config import settings
-from app.core.prometheus_metrics import record_llm_error, record_llm_request
+from app.core.prometheus_metrics import (
+    record_llm_degraded_response,
+    record_llm_error,
+    record_llm_request,
+    record_prompt_trace_write_failure,
+)
 from app.core.request_context import get_request_id
 from app.utils.json_utils import extract_json
 from app.utils.retry import retry_call
@@ -79,6 +84,45 @@ _LLM_CACHE_MAX = 256
 # 多智能体并行执行时 chat_json 会被多线程并发调用，缓存读写需加锁
 _LLM_CACHE_LOCK = threading.Lock()
 _LLM_TRACE_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar("llm_trace_context", default=None)
+
+# Where a response actually came from. `settings.LLM_PROVIDER` only records what
+# was *configured*, so a reply served by the mock fallback used to be traced as
+# the real provider. This contextvar carries the truth to the trace row and to
+# any caller that needs to show a degraded badge.
+_LLM_PROVENANCE_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar("llm_provenance_context", default=None)
+
+# Only answers straight from the configured primary model may be cached. Caching
+# a mock reply would pin fabricated content under a real-looking cache key.
+CACHEABLE_RESPONSE_SOURCES = frozenset({"real"})
+
+
+def _provenance(
+    source: str,
+    *,
+    reason: str | None = None,
+    attempts: list[str] | None = None,
+    cache_hit: bool = False,
+) -> dict[str, Any]:
+    return {
+        "source": source,
+        "degraded": source != "real",
+        "reason": reason,
+        "attempts": list(attempts or []),
+        "cache_hit": cache_hit,
+    }
+
+
+def set_llm_provenance(provenance: dict[str, Any] | None) -> None:
+    _LLM_PROVENANCE_CONTEXT.set(dict(provenance) if provenance else None)
+
+
+def get_llm_provenance() -> dict[str, Any]:
+    """Provenance of the most recent chat_json call in this context."""
+    return dict(_LLM_PROVENANCE_CONTEXT.get() or _provenance("unknown"))
+
+
+def reset_llm_provenance() -> None:
+    _LLM_PROVENANCE_CONTEXT.set(None)
 
 
 def _cache_key(provider: str, prompt: str) -> str:
@@ -751,27 +795,45 @@ def _simplify_prompt(prompt: str) -> str:
     )
 
 
-def _call_with_fallbacks(primary_call: Callable[[str, str | None], str], prompt: str) -> str:
-    """LLM fallback chain: primary model -> fallback model -> simplified prompt -> mock (dev only)."""
+def _call_with_fallbacks(
+    primary_call: Callable[[str, str | None], str], prompt: str
+) -> tuple[str, dict[str, Any]]:
+    """LLM fallback chain: primary model -> fallback model -> simplified prompt -> mock (dev only).
+
+    Returns (raw_text, provenance). Provenance reports which link in the chain
+    actually produced the answer, because the configured provider alone does not
+    tell a caller whether the content came from the model it thinks it asked.
+    """
     errors: list[str] = []
     attempts: list[tuple[str, str, str | None]] = [("primary", prompt, None)]
     fallback_model = (settings.LLM_FALLBACK_MODEL or "").strip()
     if fallback_model and fallback_model != settings.LLM_MODEL:
         attempts.append(("fallback_model", prompt, fallback_model))
     if len(prompt or "") > _SIMPLIFIED_PROMPT_MAX_CHARS:
-        attempts.append(("simplified_prompt", _simplify_prompt(prompt), fallback_model or None))
+        attempts.append(("truncated", _simplify_prompt(prompt), fallback_model or None))
 
     for label, candidate_prompt, model in attempts:
         try:
             if label != "primary":
                 logger.warning("LLM fallback attempt=%s model=%s", label, model or settings.LLM_MODEL)
-            return primary_call(candidate_prompt, model)
+            raw = primary_call(candidate_prompt, model)
+            if label == "primary":
+                return raw, _provenance("real")
+            return raw, _provenance(
+                label,
+                reason=f"主模型调用失败，改由 {label} 链路应答: " + " | ".join(errors)[-300:],
+                attempts=list(errors),
+            )
         except (RuntimeError, LLMProviderError) as exc:
             errors.append(f"{label}: {exc}")
 
     if provider_allows_mock_fallback():
         logger.warning("LLM fallback attempt=mock after failures: %s", " | ".join(errors)[-500:])
-        return _mock_chat(prompt)
+        return _mock_chat(prompt), _provenance(
+            "mock",
+            reason="真实模型链路全部失败，已回退到本地 mock 模板，内容并非模型生成",
+            attempts=list(errors),
+        )
 
     raise LLMProviderError("AI 调用失败，fallback 链路均未成功: " + " | ".join(errors)[-800:])
 
@@ -839,10 +901,13 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
         response_text: str | None = None,
         response_json: dict[str, Any] | None = None,
         error_message: str | None = None,
+        provenance: dict[str, Any] | None = None,
+        cache_hit: bool = False,
     ) -> None:
         """Persist success and failure traces without affecting the LLM request result."""
         if not trace_enabled:
             return
+        provenance = provenance or _provenance("unknown", cache_hit=cache_hit)
         usage_after = get_llm_usage()
         call_usage = {
             key: max(0.0, float(usage_after.get(key, 0.0)) - float(usage_before.get(key, 0.0)))
@@ -857,12 +922,14 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
                 response_json=response_json,
                 provider=provider,
                 model=settings.LLM_MODEL,
+                response_source=str(provenance.get("source") or "unknown"),
+                degraded=bool(provenance.get("degraded")),
                 prompt_version=prompt_version,
                 source=source,
                 prompt_name=prompt_name,
                 prompt_family=prompt_family,
                 status=status,
-                cache_hit=False,
+                cache_hit=cache_hit or bool(provenance.get("cache_hit")),
                 duration_ms=int((time.time() - start_ts) * 1000),
                 prompt_tokens=int(call_usage["prompt_tokens"]),
                 completion_tokens=int(call_usage["completion_tokens"]),
@@ -890,29 +957,43 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
                 db=trace_db,
             )
         except Exception:
-            logger.exception("failed to persist prompt trace")
+            # A trace row that silently fails to write turns "queryable
+            # internally" into a fiction. Count it so the alerting layer can
+            # report when the audit trail itself is unreliable.
+            record_prompt_trace_write_failure("chat_json")
+            logger.exception("failed to persist prompt trace; audit trail is incomplete for this call")
 
     # ---- 0) 查缓存（命中则返回深拷贝，避免调用方改动污染缓存）----
+    # 只有 source=real 的结果会被写入，所以命中必然等价于一次真实应答。
     key = _cache_key(provider, prompt)
     with _LLM_CACHE_LOCK:
         cached = _LLM_CACHE.get(key)
         if cached is not None:
             _LLM_CACHE.move_to_end(key)  # LRU：命中刷新到最新
-            return _validate_schema(copy.deepcopy(cached), schema)
+            # Cache holds only source=real entries, so a hit is still a genuine
+            # model answer. Deliberately not traced: the cache path is the
+            # DB-free fast path, and `cache_hit` in provenance carries the signal.
+            set_llm_provenance(_provenance("real", cache_hit=True))
+            return _validate_schema(copy.deepcopy(cached["result"]), schema)
 
     start_ts = time.time()
+    # Seed before calling so an exception path cannot leave the previous
+    # call's provenance behind in the context.
+    provenance = _provenance("unknown")
+    set_llm_provenance(provenance)
 
     # ---- 1) 调用 AI 获取原始文本 ----
     try:
         if provider == "mock":
             raw = _mock_chat(prompt)
+            provenance = _provenance("mock", reason="LLM_PROVIDER=mock，内容由本地模板生成，非模型输出")
         elif provider in ("openai", "qwen"):
-            raw = _call_with_fallbacks(
+            raw, provenance = _call_with_fallbacks(
                 lambda candidate_prompt, model: _openai_compatible_chat(candidate_prompt, json_mode=True, model=model),
                 prompt,
             )
         elif provider == "local":
-            raw = _call_with_fallbacks(
+            raw, provenance = _call_with_fallbacks(
                 lambda candidate_prompt, model: _openai_compatible_chat(
                     candidate_prompt,
                     base_url=settings.LLM_BASE_URL or "http://localhost:11434/v1",
@@ -923,35 +1004,46 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
             )
         else:
             raise ValueError(f"unknown LLM_PROVIDER: {provider}")
+        set_llm_provenance(provenance)
     except LLMProviderError as e:
         error_type = type(e).__name__
         duration_seconds = time.time() - start_ts
         record_llm_error(provider=provider, model=settings.LLM_MODEL, error_type=error_type)
         record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
-        persist_trace(status="failed", error_message=str(e))
+        persist_trace(status="failed", error_message=str(e), provenance=provenance)
         raise  # 直接向上冒泡，保留类型化异常
     except RuntimeError as e:
         duration_seconds = time.time() - start_ts
         record_llm_error(provider=provider, model=settings.LLM_MODEL, error_type="RuntimeError")
         record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
-        persist_trace(status="failed", error_message=str(e))
+        persist_trace(status="failed", error_message=str(e), provenance=provenance)
         raise LLMProviderError(f"AI 调用失败: {str(e)}") from e
     except Exception as e:
         duration_seconds = time.time() - start_ts
         record_llm_error(provider=provider, model=settings.LLM_MODEL, error_type=type(e).__name__)
         record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
-        persist_trace(status="failed", error_message=str(e))
+        persist_trace(status="failed", error_message=str(e), provenance=provenance)
         raise LLMProviderError(f"AI 调用异常: {str(e)}") from e
 
     # 成功时记录指标
     duration_seconds = time.time() - start_ts
     record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
+    if provenance["degraded"]:
+        record_llm_degraded_response(
+            provider=provider, model=settings.LLM_MODEL, response_source=provenance["source"]
+        )
+        logger.warning(
+            "LLM degraded response provider=%s source=%s reason=%s",
+            provider,
+            provenance["source"],
+            (provenance.get("reason") or "")[-200:],
+        )
 
     # ---- 2) 将 AI 返回文本解析为 JSON ----
     try:
         result = extract_json(raw)
     except ValueError as exc:
-        persist_trace(status="failed", response_text=raw, error_message=str(exc))
+        persist_trace(status="failed", response_text=raw, error_message=str(exc), provenance=provenance)
         # 尝试兜底：AI 说了"抱歉"之类非 JSON 内容。
         # 注意：不要把 raw 原始响应片段拼进错误信息——它会沿外部 API 的错误路径
         # 原样回给调用方，造成 LLM 返回内容泄漏；raw 已由 persist_trace 落库留痕。
@@ -959,15 +1051,18 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
     try:
         result = _validate_schema(result, schema)
     except ValueError as exc:
-        persist_trace(status="failed", response_text=raw, error_message=str(exc))
+        persist_trace(status="failed", response_text=raw, error_message=str(exc), provenance=provenance)
         raise
-    persist_trace(status="success", response_text=raw, response_json=result)
+    persist_trace(status="success", response_text=raw, response_json=result, provenance=provenance)
 
     # ---- 3) 写入缓存（带容量上限的 LRU 淘汰）----
-    with _LLM_CACHE_LOCK:
-        _LLM_CACHE[key] = copy.deepcopy(result)
-        if len(_LLM_CACHE) > _LLM_CACHE_MAX:
-            _LLM_CACHE.popitem(last=False)  # 淘汰最久未用
+    # mock / truncated / fallback 应答一律不缓存：否则一次瞬时故障会把伪造内容
+    # 长期钉在缓存键上，之后每次命中都被当成真实模型输出。
+    if provenance["source"] in CACHEABLE_RESPONSE_SOURCES:
+        with _LLM_CACHE_LOCK:
+            _LLM_CACHE[key] = {"result": copy.deepcopy(result), "source": provenance["source"]}
+            if len(_LLM_CACHE) > _LLM_CACHE_MAX:
+                _LLM_CACHE.popitem(last=False)  # 淘汰最久未用
     return result
 
 
@@ -1016,7 +1111,11 @@ def _openai_compatible_chat_with_tools(
                 timeout=settings.LLM_TIMEOUT,
             )
             resp.raise_for_status()
-            return resp.json()
+            data = resp.json()
+            # Tool calls were previously the only LLM path that spent tokens
+            # without recording them, so any agent using tools billed as zero.
+            _record_usage(data.get("usage"), model=payload["model"])
+            return data
         except requests.Timeout as e:
             raise _RetryableLLMError(f"AI 请求超时（{settings.LLM_TIMEOUT}s）") from e
         except requests.HTTPError as e:
@@ -1073,7 +1172,9 @@ def chat_with_tools(
     # ---- mock 无工具能力，降级 ----
     if provider == "mock":
         logger.info("[chat_with_tools] mock provider 不支持工具调用，降级为 chat_json")
-        return chat_json(prompt)
+        result = chat_json(prompt)
+        set_llm_provenance({**get_llm_provenance(), "reason": "mock provider 不支持工具调用，已降级为模板应答"})
+        return result
 
     # ---- 准备工具定义（OpenAI 格式）----
     tool_defs = None
@@ -1081,7 +1182,6 @@ def chat_with_tools(
     if tools:
         tool_defs = [t.to_openai_tool() if isinstance(t, Tool) else t for t in tools]
         for t in tools:
-            t.name if isinstance(t, Tool) else t.get("function", {}).get("name", "")
             if isinstance(t, Tool):
                 tool_map[t.name] = t
             elif isinstance(t, dict):
@@ -1115,6 +1215,7 @@ def chat_with_tools(
         if not msg.get("tool_calls"):
             content = msg.get("content", "")
             if content and content.strip():
+                set_llm_provenance(_provenance("real", reason=f"含 {_round + 1} 轮工具调用后的模型应答"))
                 return extract_json(content)
             # content 为空但也没 tool_calls → 异常
             raise ValueError(f"LLM 返回空内容且无工具调用 (finish_reason={choice.get('finish_reason')})")
@@ -1161,11 +1262,22 @@ def chat_with_tools(
             )
 
     # ---- 超过最大工具轮次，兜底提取 ----
+    # NOTE: after a tool round messages[-1] is the *tool* reply, so this parses
+    # tool output as if it were the model's analysis. Flagged degraded rather
+    # than silently presented as a model answer; fixing the behaviour itself
+    # needs its own regression test.
     logger.warning("[chat_with_tools] 达到最大工具轮次 %d，尝试从最后消息提取 JSON", max_tool_rounds)
     last_content = messages[-1].get("content", "")
     if isinstance(last_content, str) and last_content.strip():
         try:
-            return extract_json(last_content)
+            result = extract_json(last_content)
+            set_llm_provenance(
+                _provenance(
+                    "tool_output",
+                    reason=f"模型在 {max_tool_rounds} 轮工具调用内未给出最终答复，此处返回的是工具输出而非模型分析",
+                )
+            )
+            return result
         except ValueError:
             pass
     raise RuntimeError(f"工具调用超过 {max_tool_rounds} 轮仍未返回有效 JSON，请简化任务或重试")

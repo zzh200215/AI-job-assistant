@@ -94,6 +94,8 @@ def record_prompt_trace(
     analysis_record_id: int | None = None,
     trace_context: dict[str, Any] | None = None,
     prompt_metadata: dict[str, Any] | None = None,
+    response_source: str = "unknown",
+    degraded: bool | None = None,
     db: Session | None = None,
 ) -> PromptTrace:
     trace_context = trace_context or {}
@@ -101,6 +103,9 @@ def record_prompt_trace(
     request_id = trace_context.get("request_id") or get_request_id()
     source_value = source or trace_context.get("source") or "unknown"
     prompt_version_value = prompt_version or prompt_metadata.get("prompt_version") or "unknown"
+    # Anything that is not a direct answer from the configured primary model is
+    # degraded, unless the caller says otherwise.
+    degraded_value = int(bool(degraded)) if degraded is not None else int(response_source != "real")
 
     payload = {
         "request_id": request_id,
@@ -110,6 +115,8 @@ def record_prompt_trace(
         "prompt_name": prompt_name or prompt_metadata.get("prompt_name"),
         "provider": provider,
         "model": model or "",
+        "response_source": response_source,
+        "degraded": degraded_value,
         "status": status,
         "cache_hit": int(bool(cache_hit)),
         "duration_ms": duration_ms,

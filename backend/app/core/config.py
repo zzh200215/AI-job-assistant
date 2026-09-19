@@ -58,6 +58,15 @@ class Settings(BaseSettings):
     OPERATIONS_ALERT_QUEUE_BACKLOG_THRESHOLD: int = 100
     OPERATIONS_ALERT_TASK_FAILURE_THRESHOLD: int = 5
     OPERATIONS_ALERT_LLM_FAILURE_THRESHOLD: int = 5
+    # Degraded = a response that did not come from the configured primary model
+    # (mock / truncated / fallback_model). Candidates are not told, so ops is the
+    # only channel that can notice fabricated content reaching results.
+    OPERATIONS_ALERT_LLM_DEGRADED_THRESHOLD: int = 3
+    # A single mock response means fabricated content was already served to a
+    # candidate, so it alerts on its own terms rather than waiting for a volume
+    # threshold to be crossed.
+    OPERATIONS_ALERT_LLM_MOCK_THRESHOLD: int = 1
+    OPERATIONS_ALERT_TRACE_WRITE_FAILURE_THRESHOLD: int = 1
     OPERATIONS_ALERT_MIN_REQUESTS: int = 20
     OPERATIONS_ALERT_HTTP_ERROR_RATE_THRESHOLD: float = 0.15
 

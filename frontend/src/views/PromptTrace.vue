@@ -49,6 +49,30 @@
           <el-option label="成功" value="success" />
           <el-option label="失败" value="failed" />
         </el-select>
+        <el-select
+          v-model="filters.response_source"
+          clearable
+          placeholder="应答来源"
+          style="width: 160px"
+          @change="reloadAll"
+        >
+          <el-option
+            v-for="item in summary.response_sources || []"
+            :key="item"
+            :label="item"
+            :value="item"
+          />
+        </el-select>
+        <el-select
+          v-model="filters.degraded"
+          clearable
+          placeholder="是否降级"
+          style="width: 140px"
+          @change="reloadAll"
+        >
+          <el-option label="仅非主模型应答" value="true" />
+          <el-option label="仅主模型应答" value="false" />
+        </el-select>
         <el-input
           v-model.trim="filters.request_id"
           clearable
@@ -85,7 +109,7 @@
       :title="scopeHint"
     />
 
-    <div class="grid-5">
+    <div class="grid-6">
       <div class="stat-card">
         <div class="stat-value">{{ summary.total || 0 }}</div>
         <div class="stat-label">总调用</div>
@@ -93,6 +117,12 @@
       <div class="stat-card">
         <div class="stat-value">{{ percentText(summary.success_rate || 0) }}</div>
         <div class="stat-label">成功率</div>
+      </div>
+      <div class="stat-card" :class="{ 'stat-card-alert': degradedCount > 0 }">
+        <div class="stat-value">{{ percentText(summary.degraded_rate || 0) }}</div>
+        <div class="stat-label">
+          非主模型应答 {{ degradedCount }} 次<span v-if="degradedBreakdown">（{{ degradedBreakdown }}）</span>
+        </div>
       </div>
       <div class="stat-card">
         <div class="stat-value">{{ summary.avg_duration_ms ?? '-' }}</div>
@@ -250,6 +280,13 @@
           <el-table-column prop="source" label="来源" min-width="220" show-overflow-tooltip />
           <el-table-column prop="prompt_version" label="版本" min-width="120" />
           <el-table-column prop="model" label="模型" min-width="140" />
+          <el-table-column prop="response_source" label="应答来源" min-width="120">
+            <template #default="{ row }">
+              <el-tag :type="sourceTagType(row)" effect="plain">
+                {{ sourceLabel(row) }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="status" label="状态" min-width="90">
             <template #default="{ row }">
               <el-tag :type="row.status === 'success' ? 'success' : 'danger'" effect="plain">
@@ -339,6 +376,8 @@ const filters = reactive({
   source: '',
   prompt_version: '',
   status: '',
+  response_source: '',
+  degraded: '',
   request_id: '',
   task_id: null,
   analysis_record_id: null,
@@ -385,6 +424,40 @@ const scopeHint = computed(() => {
     return `当前按分析记录 #${filters.analysis_record_id} 查看追踪`
   }
   return ''
+})
+
+const RESPONSE_SOURCES = {
+  real: { label: '主模型', type: 'success' },
+  fallback_model: { label: '备用模型', type: 'warning' },
+  truncated: { label: '截断提示', type: 'warning' },
+  mock: { label: 'Mock 模板', type: 'danger' },
+  tool_output: { label: '工具输出', type: 'warning' },
+  unknown: { label: '未知', type: 'info' },
+}
+
+function sourceMeta(row) {
+  return RESPONSE_SOURCES[row?.response_source] || { label: row?.response_source || '未知', type: 'info' }
+}
+
+function sourceLabel(row) {
+  return sourceMeta(row).label
+}
+
+function sourceTagType(row) {
+  // A row written before response provenance existed reports `unknown`; only
+  // flag it when the degraded column itself says so.
+  if (row?.degraded && row?.response_source !== 'unknown') return sourceMeta(row).type
+  if (row?.degraded) return 'warning'
+  return sourceMeta(row).type
+}
+
+const degradedCount = computed(() => summary.degraded_count || 0)
+
+const degradedBreakdown = computed(() => {
+  const bySource = summary.degraded_by_source || {}
+  return Object.entries(bySource)
+    .map(([key, count]) => `${(RESPONSE_SOURCES[key] || { label: key }).label} ${count}`)
+    .join(' / ')
 })
 
 const compareVersionOptions = computed(() => {
@@ -493,6 +566,8 @@ function resetFilters() {
   filters.source = ''
   filters.prompt_version = ''
   filters.status = ''
+  filters.response_source = ''
+  filters.degraded = ''
   filters.request_id = ''
   filters.task_id = null
   filters.analysis_record_id = null
@@ -500,11 +575,21 @@ function resetFilters() {
   reloadAll()
 }
 
+// `degraded` is a tri-state select rendered as '' | 'true' | 'false'.
+function degradedParam() {
+  if (filters.degraded === 'true' || filters.degraded === 'false') {
+    return filters.degraded === 'true'
+  }
+  return undefined
+}
+
 function buildFilterParams() {
   return {
     source: filters.source || undefined,
     prompt_version: filters.prompt_version || undefined,
     status: filters.status || undefined,
+    response_source: filters.response_source || undefined,
+    degraded: degradedParam(),
     request_id: filters.request_id || undefined,
     task_id: filters.task_id || undefined,
     analysis_record_id: filters.analysis_record_id || undefined,
@@ -515,6 +600,8 @@ function hydrateFiltersFromRoute() {
   filters.source = normalizeQueryText(route.query.source)
   filters.prompt_version = normalizeQueryText(route.query.prompt_version)
   filters.status = normalizeQueryText(route.query.status)
+  filters.response_source = normalizeQueryText(route.query.response_source)
+  filters.degraded = ['true', 'false'].includes(route.query.degraded) ? route.query.degraded : ''
   filters.request_id = normalizeQueryText(route.query.request_id)
   filters.task_id = normalizePositiveNumber(route.query.task_id)
   filters.analysis_record_id = normalizePositiveNumber(route.query.analysis_record_id)
@@ -528,6 +615,8 @@ function syncRouteQuery() {
       source: filters.source || undefined,
       prompt_version: filters.prompt_version || undefined,
       status: filters.status || undefined,
+      response_source: filters.response_source || undefined,
+      degraded: filters.degraded || undefined,
       request_id: filters.request_id || undefined,
       task_id: filters.task_id || undefined,
       analysis_record_id: filters.analysis_record_id || undefined,
@@ -580,11 +669,19 @@ function formatDate(value) {
   color: var(--app-muted);
 }
 
-.grid-5 {
+.grid-6 {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.stat-card-alert {
+  border-color: var(--app-danger);
+}
+
+.stat-card-alert .stat-value {
+  color: var(--app-danger);
 }
 
 .stat-card {
@@ -704,7 +801,7 @@ function formatDate(value) {
 }
 
 @media (max-width: 960px) {
-  .grid-5 {
+  .grid-6 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .dual-grid,

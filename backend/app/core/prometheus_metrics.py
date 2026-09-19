@@ -43,6 +43,20 @@ llm_errors_total = Counter(
     registry=REGISTRY,
 )
 
+llm_degraded_responses_total = Counter(
+    "llm_degraded_responses_total",
+    "LLM responses that did not come from the configured primary model",
+    ["provider", "model", "response_source"],
+    registry=REGISTRY,
+)
+
+prompt_trace_write_failures_total = Counter(
+    "prompt_trace_write_failures_total",
+    "Prompt trace writes that failed; while these are non-zero the trace table is NOT a reliable audit trail",
+    ["stage"],
+    registry=REGISTRY,
+)
+
 embedding_requests_total = Counter(
     "embedding_requests_total",
     "Total embedding API requests",
@@ -113,6 +127,16 @@ def record_llm_request(provider: str, model: str, duration_seconds: float) -> No
 
 def record_llm_error(provider: str, model: str, error_type: str) -> None:
     llm_errors_total.labels(provider=provider, model=model, error_type=error_type).inc()
+
+
+def record_llm_degraded_response(provider: str, model: str, response_source: str) -> None:
+    llm_degraded_responses_total.labels(
+        provider=provider, model=model, response_source=response_source
+    ).inc()
+
+
+def record_prompt_trace_write_failure(stage: str) -> None:
+    prompt_trace_write_failures_total.labels(stage=stage).inc()
 
 
 def record_embedding_request(provider: str, model: str, text_count: int) -> None:
