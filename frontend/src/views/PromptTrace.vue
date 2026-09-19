@@ -591,7 +591,7 @@ function formatDate(value) {
   padding: 16px;
   border-radius: var(--app-radius-sm, 12px);
   border: 1px solid var(--app-line);
-  background: #fff;
+  background: var(--app-surface-strong);
   text-align: center;
 }
 

@@ -839,7 +839,7 @@ function formatShortDate(dateText) {
 
 /* 每日推荐头部 */
 .daily-feed-header {
-  background: #fff;
+  background: var(--app-surface-strong);
   border-color: var(--app-line);
   border-top: 3px solid var(--app-primary);
   border-radius: var(--app-radius-sm, 8px);
@@ -930,7 +930,7 @@ function formatShortDate(dateText) {
   gap: 20px;
   align-items: center;
   padding: 18px 20px;
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
   border-left: 4px solid var(--app-primary);
   border-radius: var(--app-radius-sm, 8px);
@@ -1035,7 +1035,7 @@ function formatShortDate(dateText) {
 .insight-block {
   padding: 16px;
   border-radius: var(--app-radius-xs, 6px);
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
 }
 .insight-title {
@@ -1058,7 +1058,7 @@ function formatShortDate(dateText) {
 .action-item {
   padding: 12px;
   border-radius: var(--app-radius-xs, 8px);
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
 }
 .trend-head,

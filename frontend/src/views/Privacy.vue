@@ -239,7 +239,7 @@ function notifyDeleteFailure(error, action) {
 .panel {
   border-radius: 16px;
   border: 1px solid var(--app-line);
-  background: #fff;
+  background: var(--app-surface-strong);
   box-shadow: var(--app-shadow-soft);
 }
 .data-summary {
@@ -247,7 +247,7 @@ function notifyDeleteFailure(error, action) {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   border: 1px solid var(--app-line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--app-surface-strong);
 }
 .summary-item {
   display: flex;

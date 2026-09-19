@@ -40,4 +40,50 @@ export default [
     plugins: { prettier: prettierPlugin },
     rules: { 'prettier/prettier': 'warn' },
   },
+  {
+    name: 'app/no-raw-axios',
+    files: ['src/**/*.{js,vue}'],
+    ignores: ['src/api/request.js'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'axios', message: 'Use the shared instance in src/api/request.js instead.' },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // Views must go through src/api/<domain>.js so the response interceptor,
+    // auth headers and error toasts stay in one place. The files below still
+    // reach for the raw instance; removing one from this list is a cleanup.
+    name: 'app/views-use-api-layer',
+    files: ['src/views/**/*.vue', 'src/layouts/**/*.vue'],
+    ignores: [
+      'src/views/admin/Orders.vue',
+      'src/views/admin/Overview.vue',
+      'src/views/admin/Users.vue',
+      'src/views/Privacy.vue',
+      'src/views/Profile.vue',
+      'src/views/Subscription.vue',
+      'src/views/TaskCenter.vue',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'axios', message: 'Use the shared instance in src/api/request.js instead.' },
+            {
+              name: '@/api/request',
+              message:
+                'Add the endpoint to a src/api/<domain>.js module instead of importing the request instance.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]

@@ -867,7 +867,7 @@ function goAnalysisFromDiag() {
   gap: 22px;
   margin-bottom: 18px;
   padding: 18px 20px;
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
   border-left: 4px solid var(--app-primary);
   border-radius: var(--app-radius-sm, 8px);
@@ -957,7 +957,7 @@ function goAnalysisFromDiag() {
 }
 
 .resume-card {
-  background: #fff;
+  background: var(--app-surface-strong);
   border-radius: var(--app-radius-md, 16px);
   border: 1px solid var(--app-line);
   box-shadow: var(--app-shadow-soft);

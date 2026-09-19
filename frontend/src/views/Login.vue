@@ -318,7 +318,7 @@ const handleLogin = async () => {
   grid-template-columns: 1.1fr 0.9fr;
   border-radius: 20px;
   overflow: hidden;
-  background: #fff;
+  background: var(--app-surface-strong);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.08);
   border: 1px solid var(--app-line);
 }
@@ -458,7 +458,7 @@ const handleLogin = async () => {
   align-items: center;
   justify-content: center;
   padding: 40px;
-  background: #fff;
+  background: var(--app-surface-strong);
 }
 
 .login-form {
@@ -553,7 +553,7 @@ const handleLogin = async () => {
 .divider-label {
   position: relative;
   padding: 0 12px;
-  background: #fff;
+  background: var(--app-surface-strong);
   color: var(--app-muted);
   font-size: 12px;
 }
@@ -573,7 +573,7 @@ const handleLogin = async () => {
   gap: 8px;
   border: 1px solid var(--app-line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--app-surface-strong);
   color: var(--app-text);
   font-size: 13px;
   font-weight: 500;

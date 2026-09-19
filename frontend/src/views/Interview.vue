@@ -789,7 +789,7 @@ onMounted(() => {
   margin-top: 12px;
   padding: 12px;
   border-radius: 8px;
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
 }
 

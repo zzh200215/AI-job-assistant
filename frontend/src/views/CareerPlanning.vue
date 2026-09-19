@@ -1296,7 +1296,7 @@ function stepIcon(status) {
   gap: 18px;
   padding: 28px;
   border-radius: var(--app-radius-sm, 8px);
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
   border-top: 3px solid var(--app-primary);
   box-shadow: var(--app-shadow-soft);
@@ -1408,7 +1408,7 @@ function stepIcon(status) {
   display: grid;
   grid-template-columns: minmax(250px, 1.25fr) minmax(240px, 0.9fr) minmax(220px, 0.85fr);
   gap: 0;
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
   border-left: 4px solid var(--app-primary);
   border-radius: var(--app-radius-sm, 8px);

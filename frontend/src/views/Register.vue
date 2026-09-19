@@ -330,7 +330,7 @@ const handleRegister = async () => {
   min-height: 54px;
   border: 1px solid #d5dfed;
   border-radius: 16px;
-  background: #ffffff;
+  background: var(--app-surface-strong);
   box-shadow: none !important;
   padding: 0 16px;
   transition:

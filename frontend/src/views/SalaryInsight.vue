@@ -285,7 +285,7 @@ async function checkExpectation() {
   grid-template-columns: minmax(220px, 1.2fr) minmax(190px, 0.75fr) minmax(230px, 0.95fr);
   gap: 0;
   margin-bottom: 18px;
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
   border-left: 4px solid var(--app-primary);
   border-radius: var(--app-radius-sm, 8px);
@@ -350,7 +350,7 @@ async function checkExpectation() {
   padding: 4px 9px;
   border: 1px solid var(--app-line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--app-surface-strong);
   color: var(--app-text);
   cursor: pointer;
   font-size: 12px;
@@ -375,7 +375,7 @@ async function checkExpectation() {
   padding: 16px;
   border-radius: var(--app-radius-xs, 6px);
   border: 1px solid var(--app-line);
-  background: #fff;
+  background: var(--app-surface-strong);
   text-align: center;
 }
 
@@ -404,7 +404,7 @@ async function checkExpectation() {
   overflow: hidden;
   border: 1px solid var(--app-line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--app-surface-strong);
   box-shadow: var(--app-shadow-soft);
   text-align: left;
 }

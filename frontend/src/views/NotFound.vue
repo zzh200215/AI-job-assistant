@@ -27,7 +27,7 @@ import { WarningFilled, HomeFilled } from '@element-plus/icons-vue'
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 .not-found-card {
-  background: #fff;
+  background: var(--app-surface-strong);
   border-radius: 16px;
   padding: 60px 80px;
   text-align: center;

@@ -853,7 +853,7 @@ onMounted(async () => {
   gap: 8px;
   padding: 8px 10px;
   border-radius: 8px;
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
 }
 .qb-icon {

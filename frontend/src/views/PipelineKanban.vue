@@ -1030,7 +1030,7 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 16px;
   padding: 18px 20px;
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
   border-left: 4px solid var(--app-primary);
   border-radius: var(--app-radius-sm, 8px);
@@ -1100,7 +1100,7 @@ onMounted(() => {
   border: 1px solid var(--app-line);
   border-top: 3px solid var(--app-primary);
   border-radius: 8px;
-  background: #fff;
+  background: var(--app-surface-strong);
 }
 
 .version-performance-title {
@@ -1203,7 +1203,7 @@ onMounted(() => {
   gap: 8px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--app-line);
-  background: #fff;
+  background: var(--app-surface-strong);
   border-radius: var(--app-radius-sm, 8px) var(--app-radius-sm, 8px) 0 0;
 }
 
@@ -1272,7 +1272,7 @@ onMounted(() => {
 .kanban-card {
   padding: 14px;
   border-radius: var(--app-radius-xs, 6px);
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
   cursor: grab;
   transition: all 0.15s;
@@ -1447,7 +1447,7 @@ onMounted(() => {
 
 /* 统计面板 */
 .stats-panel {
-  background: #fff;
+  background: var(--app-surface-strong);
   border-radius: var(--app-radius-sm, 8px);
   border: 1px solid var(--app-line);
   box-shadow: var(--app-shadow-soft);
@@ -1556,7 +1556,7 @@ onMounted(() => {
 
 /* 列表视图 */
 .list-view {
-  background: #fff;
+  background: var(--app-surface-strong);
   border-radius: var(--app-radius-sm, 8px);
   border: 1px solid var(--app-line);
   overflow: hidden;

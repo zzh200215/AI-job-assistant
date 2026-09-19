@@ -647,7 +647,7 @@ const goJobMarket = () => router.push('/jobs/search')
   align-items: flex-end;
   padding: 24px 26px;
   border-radius: var(--app-radius-sm, 8px);
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
   border-top: 3px solid var(--app-primary);
 }
@@ -690,7 +690,7 @@ const goJobMarket = () => router.push('/jobs/search')
 .progress-stat {
   padding: 16px 18px;
   border-radius: var(--app-radius-xs, 6px);
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
 }
 
@@ -718,7 +718,7 @@ const goJobMarket = () => router.push('/jobs/search')
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(210px, 0.72fr);
   gap: 0;
   margin-bottom: 18px;
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius-sm, 8px);
   box-shadow: var(--app-shadow-soft);
@@ -869,7 +869,7 @@ const goJobMarket = () => router.push('/jobs/search')
 .detail-block {
   padding: 18px;
   border-radius: var(--app-radius-xs, 6px);
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
 }
 

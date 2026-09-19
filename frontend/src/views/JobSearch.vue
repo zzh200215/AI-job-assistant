@@ -2587,7 +2587,7 @@ function saveLocalArray(key, value) {
 .preset-chip,
 .history-chip {
   border: 1px solid var(--app-line);
-  background: #fff;
+  background: var(--app-surface-strong);
   border-radius: 999px;
   padding: 8px 12px;
   color: var(--app-text);
@@ -2801,7 +2801,7 @@ function saveLocalArray(key, value) {
 .short-item,
 .cta-item {
   border: 1px solid var(--app-line);
-  background: #fff;
+  background: var(--app-surface-strong);
   border-radius: var(--app-radius-xs, 8px);
   cursor: pointer;
   transition: 0.2s ease;

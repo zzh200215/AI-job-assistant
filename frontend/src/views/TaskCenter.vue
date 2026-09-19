@@ -286,7 +286,7 @@ onUnmounted(() => {
   padding: 15px 16px;
   border: 1px solid var(--app-line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--app-surface-strong);
   color: var(--app-text);
   cursor: pointer;
   text-align: left;
@@ -365,7 +365,7 @@ onUnmounted(() => {
 }
 
 .task-card {
-  background: #fff;
+  background: var(--app-surface-strong);
   border-radius: var(--app-radius-md, 16px);
   border: 1px solid var(--app-line);
   box-shadow: var(--app-shadow-soft);

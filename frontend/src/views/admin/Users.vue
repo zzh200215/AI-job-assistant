@@ -218,7 +218,7 @@ onMounted(loadUsers)
   overflow: hidden;
   border: 1px solid var(--app-line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--app-surface-strong);
   box-shadow: var(--app-shadow-soft);
 }
 .summary-grid div {

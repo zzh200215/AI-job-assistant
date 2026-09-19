@@ -49,7 +49,17 @@ export default defineConfig({
     port: 5173,
     open: false,
     proxy: {
-      '/api': { target: 'http://localhost:8000', changeOrigin: true },
+      '/api': {
+        target: process.env.VITE_PROXY_TARGET || 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
+  },
+  test: {
+    environment: 'jsdom',
+    include: ['tests/unit/**/*.test.js'],
+    setupFiles: ['./tests/unit/setup.js'],
+    testEnvironmentOptions: { url: 'http://localhost:5173/' },
+    server: { deps: { inline: ['element-plus'] } },
   },
 })

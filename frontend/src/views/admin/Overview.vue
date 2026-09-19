@@ -330,7 +330,7 @@ onMounted(loadOverview)
   padding: 18px;
   border: 1px solid var(--app-line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--app-surface-strong);
   box-shadow: var(--app-shadow-soft);
 }
 .metric-card::after {

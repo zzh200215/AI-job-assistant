@@ -549,7 +549,7 @@ function segmentStyle(value, total) {
 .focus-item {
   padding: 12px;
   border-radius: var(--app-radius-xs, 8px);
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
 }
 

@@ -1814,7 +1814,7 @@ onMounted(() => {
   padding: 24px;
   border-radius: var(--app-radius-sm, 12px);
   border: 1px solid var(--app-line);
-  background: #fff;
+  background: var(--app-surface-strong);
   box-shadow: var(--app-shadow);
 }
 
@@ -1898,7 +1898,7 @@ onMounted(() => {
   padding: 14px 16px;
   border-radius: var(--app-radius-sm, 12px);
   border: 1px solid var(--app-line);
-  background: #fff;
+  background: var(--app-surface-strong);
   transition: background 0.2s ease;
 }
 
@@ -2358,7 +2358,7 @@ onMounted(() => {
 .rag-metric {
   padding: 10px;
   border-radius: var(--app-radius-xs, 8px);
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--el-border-color);
 }
 
@@ -2383,7 +2383,7 @@ onMounted(() => {
 .rag-breakdown-item {
   padding: 10px;
   border-radius: var(--app-radius-xs, 8px);
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--el-border-color);
 }
 

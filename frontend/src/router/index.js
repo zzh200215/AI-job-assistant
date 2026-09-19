@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/auth'
 const CANDIDATE = [USER_ROLES.candidate] // C 端求职者
 const ADMIN = [USER_ROLES.admin] // 系统管理员
 
-const routes = [
+export const routes = [
   {
     path: '/login',
     name: 'login',

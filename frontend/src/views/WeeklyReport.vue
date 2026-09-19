@@ -349,7 +349,7 @@ onMounted(() => {
   grid-template-columns: minmax(260px, 1.25fr) minmax(240px, 0.9fr) minmax(230px, 0.9fr);
   gap: 0;
   margin-bottom: 18px;
-  background: #fff;
+  background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
   border-left: 4px solid var(--app-primary);
   border-radius: var(--app-radius-sm, 8px);

@@ -716,7 +716,7 @@ h2 {
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--app-surface-strong);
 }
 
 .version-picker {
@@ -762,7 +762,7 @@ h2 {
 .insight-panel {
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--app-surface-strong);
 }
 
 .editor-surface {

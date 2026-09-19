@@ -328,7 +328,7 @@ onMounted(() => {
   position: relative;
   border-radius: 20px;
   border: 1px solid var(--app-line);
-  background: #fff;
+  background: var(--app-surface-strong);
   box-shadow: var(--app-shadow-soft);
   display: flex;
   flex-direction: column;

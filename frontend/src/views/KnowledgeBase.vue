@@ -1105,7 +1105,7 @@ onMounted(() => {
 .embed-stat-card {
   padding: 18px;
   border-radius: var(--app-radius-sm, 12px);
-  background: #fff;
+  background: var(--app-surface-strong);
 }
 
 .embed-stat-card span,
@@ -1151,7 +1151,7 @@ onMounted(() => {
 .stat-card {
   padding: 18px;
   border-radius: var(--app-radius-sm, 12px);
-  background: #fff;
+  background: var(--app-surface-strong);
 }
 
 .stat-card span {

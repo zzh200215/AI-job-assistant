@@ -939,7 +939,7 @@ onMounted(loadDashboard)
   padding: 18px 16px;
   border-radius: 14px;
   border: 1px solid var(--app-line);
-  background: #fff;
+  background: var(--app-surface-strong);
 }
 
 .metric-icon {
@@ -1032,7 +1032,7 @@ onMounted(loadDashboard)
 
 /* Quick entry */
 .quick-entry-panel {
-  background: #fff;
+  background: var(--app-surface-strong);
   border-radius: 16px;
   border: 1px solid var(--app-line);
   box-shadow: var(--app-shadow-soft);
@@ -1059,7 +1059,7 @@ onMounted(loadDashboard)
   padding: 16px 8px;
   border-radius: 12px;
   border: 1px solid var(--app-line);
-  background: #fff;
+  background: var(--app-surface-strong);
   cursor: pointer;
   transition: all 0.15s;
   font-size: 13px;
