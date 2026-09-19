@@ -227,6 +227,21 @@
 - 结果做多样性打散（当前纯按分数排序）
 - embedding 故障时**报错或显式降级**，不再静默 `50.0`（`:313`）
 
+#### 已交付：B3 持久向量 + 显式降级 + 多样性（提交 `5d7508a`）
+
+| 项 | 结果 |
+|---|---|
+| 持久 embedding | 新表 `jd_embedding`（`jd_id, provider, model, text_hash, vector`，migration `0025`）。`vectors_for_jobs()` 只对缺失或文本变过的岗位重嵌；`raw_text` 优先、否则用结构化摘要，文本构造函数住在本模块，避免"存进去的指纹"和"查出来的文本"漂移 |
+| 不再全库载内存重嵌 | `recommend()` 不再把全库送进 embedding。真库实测（72 条活跃岗位，provider=qwen）：首次同步嵌 72 条 = 3 个本地批 → 8 次 HTTP，9.0s；第二次 `reused=72, embedded=0`，0 次 provider 调用，0.06s。此前每一次未命中缓存的请求都要付这 8 次 |
+| 静默 50.0 | `_vector_score` 缺失时返回 `None`，结果标 `retrieval_basis: "vector+rule" \| "rule_only"`，`vector_score` 为 null；Prometheus `recommend_vector_degraded_total{reason}`。按 A2 口径：这条降级**只对内可查**，候选人侧无提示 |
+| 多样性 | `_spread_by_company(per_company=2)`：同一家公司在截断前最多占 2 个名额，溢出按分数留在尾部（不丢候选）。实测前 4 名来自 4 家不同公司 |
+| 预热 | scheduler 每 30 分钟 `sync_active_job_embeddings`；批量导入后同步一次（失败不影响导入） |
+
+**两处带理由的撤回**（原计划列了、本次不做）：
+
+1. **`multi_recall` 的 BM25+RRF 不接岗位召回**。它整体是围着知识库写的：语料来自 `get_knowledge_collection()` 全量扫描、可见性走 `kb_document`、key 是 `chunk_id/doc_id`，接岗位等于再造一套语料与权限层。而本仓库岗位总量 72 条，`tb_jd` 上的 `title LIKE` + SQL 层 `notin_` 抑制 + 持久向量余弦已经覆盖召回；在加任何"召回不够"的证据之前，引入 BM25 只是多一层不可解释的融合。等岗位量级到几千再评估。
+2. **技能相似度不做 embedding 化**。展示分必须由人解释得清（B2.1 刚把这件事定成唯一权威口径），把"K8s≈容器编排"塞进分数会让缺口结论变得无法追溯；而岗位与简历的**整段文本**已经走向量通道，语义近似在那一层被召回分吸收。做法上保持分离：可解释的规则决定展示分，模糊的语义只影响召回。
+
 > 若未来引入服务端向量库（Qdrant / pgvector），租户过滤应下推到检索层——当前是 `collection.query()` 之后用 Python 过滤（`rag_service.py:120-124`、`multi_recall.py:467-469`），`n_results` 已消耗，可见结果可能被截成 0。单租户化后此问题优先级下降，但仍是正确性缺陷。
 
 ---
