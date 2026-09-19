@@ -23,7 +23,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.chroma_client import get_knowledge_collection
@@ -73,11 +73,49 @@ def _normalize_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
     return normalized
 
 
-def _recommend_cache_key(resume_id: int, resume_version: str, filters: dict[str, Any], tenant_id: int = None) -> str:
+def _recommend_cache_key(
+    resume_id: int,
+    resume_version: str,
+    filters: dict[str, Any],
+    tenant_id: int = None,
+    suppression_version: str = "",
+) -> str:
     payload = json.dumps(filters, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     tid = tenant_id if tenant_id is not None else current_tenant_id()
-    raw = f"{resume_id}|{resume_version}|{tid}|{payload}"
+    raw = f"{resume_id}|{resume_version}|{tid}|{suppression_version}|{payload}"
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
+
+
+def load_suppressed_jd_ids(db: Session, user_id: int) -> tuple[set[int], str]:
+    """Jobs the candidate has explicitly pushed away, plus a cache fingerprint.
+
+    Two sources: JobBookmark(action="dismiss") is the "不感兴趣" button, and
+    JobRecommendationFeedback(feedback_type="dislike") is the thumbs-down on a
+    recommendation. Both used to be written and then read only by the analytics
+    dashboards, so a dismissed job reappeared on the next refresh.
+
+    The fingerprint belongs in the cache key: without it a cached recommendation
+    list would keep serving a job the candidate dismissed moments ago.
+    """
+    from app.models.job_recommend import JobBookmark, JobRecommendationFeedback
+
+    dismissed = {
+        row.jd_id
+        for row in db.query(JobBookmark.jd_id).filter(JobBookmark.user_id == user_id, JobBookmark.action == "dismiss").all()
+    }
+    disliked = {
+        row.jd_id
+        for row in db.query(JobRecommendationFeedback.jd_id)
+        .filter(JobRecommendationFeedback.user_id == user_id, JobRecommendationFeedback.feedback_type == "dislike")
+        .all()
+    }
+    suppressed = dismissed | disliked
+
+    marker = db.query(func.count(JobBookmark.id)).filter(JobBookmark.user_id == user_id).scalar() or 0
+    marker_fb = db.query(func.count(JobRecommendationFeedback.id)).filter(
+        JobRecommendationFeedback.user_id == user_id
+    ).scalar() or 0
+    return suppressed, f"{marker}-{marker_fb}"
 
 
 def _prune_recommend_cache_locked(now: float, ttl: int) -> None:
@@ -219,7 +257,16 @@ class JobRecommendationEngine:
             if (resume.update_time or resume.create_time)
             else "unknown"
         )
-        cache_key = _recommend_cache_key(resume_id, resume_version, normalized_filters, tenant_id=current_tenant_id())
+        # --- 抑制集：不感兴趣 / 点踩过的岗位不再出现 ---
+        suppressed, suppression_version = load_suppressed_jd_ids(self.db, resume.user_id)
+
+        cache_key = _recommend_cache_key(
+            resume_id,
+            resume_version,
+            normalized_filters,
+            tenant_id=current_tenant_id(),
+            suppression_version=suppression_version,
+        )
         now = time.time()
         if not bypass_cache:
             cached = _get_cached_recommendations(cache_key, now, _CACHE_TTL)
@@ -227,14 +274,15 @@ class JobRecommendationEngine:
                 return cached[:limit]
 
         # --- 1) 取所有活跃 JD ---
-        jd_query = (
-            self.db.query(JobDescription)
-            .filter(
-                JobDescription.is_active == 1,
-                _visible_job_filter(resume.user_id),
-            )
-            .all()
+        jd_statement = self.db.query(JobDescription).filter(
+            JobDescription.is_active == 1,
+            _visible_job_filter(resume.user_id),
         )
+        if suppressed:
+            # Excluded in SQL rather than after retrieval, so a dismissed job
+            # cannot consume one of the `limit` slots on its way out.
+            jd_statement = jd_statement.filter(JobDescription.id.notin_(sorted(suppressed)))
+        jd_query = jd_statement.all()
 
         if not jd_query:
             return []
