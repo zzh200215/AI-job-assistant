@@ -18,6 +18,7 @@ from app.models.job_journal import JobJournal
 from app.models.job_pipeline import JobApplicationPipeline
 from app.models.job_recommend import JobBookmark, JobRecommendationFeedback
 from app.models.job_target import JobTarget
+from app.models.match_score import MatchScore
 from app.models.knowledge import KnowledgeDocument
 from app.models.notification import Notification
 from app.models.operational_alert import OperationalAlert
@@ -55,6 +56,7 @@ __all__ = [
     "JobRecommendationFeedback",
     "JobTarget",
     "KnowledgeDocument",
+    "MatchScore",
     "Notification",
     "OperationalAlert",
     "Organization",

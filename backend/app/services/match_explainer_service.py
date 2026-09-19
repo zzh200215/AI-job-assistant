@@ -18,6 +18,7 @@ from typing import Any
 
 from app.models.history import JobDescription, Resume
 from app.services.llm_service import chat_json
+from app.services.match_score_calibration import infer_match_score_cap
 from app.services.scoring_config import ScoringWeights, get_weights_for_job
 
 logger = logging.getLogger(__name__)
@@ -98,10 +99,20 @@ class MatchExplainer:
         self.weights = weights or ScoringWeights()
         self.weights.validate()
 
-    def explain(self, resume: Resume, jd: JobDescription) -> ExplainResult:
-        """对外入口：接收 ORM 对象，返回完整解释"""
-        resume_data = resume.parsed_json or {}
-        jd_data = jd.parsed_json or {}
+    def compute_rubric(self, resume: Resume, jd: JobDescription) -> dict[str, Any]:
+        """Score a resume against a JD with the 6-dimension rubric. No LLM.
+
+        Split out of `explain` so the recommend engine and match_service can take
+        their displayed score from this one rubric instead of each inventing a
+        number. `explain` adds only the natural-language layer on top.
+
+        The two copies below are load-bearing: `parsed_json` is a live dict on an
+        ORM row, and the compatibility backfills further down would otherwise
+        write `skills: []` and friends straight into the persisted resume, and
+        make scoring the same pair twice return different numbers.
+        """
+        resume_data = dict(resume.parsed_json or {})
+        jd_data = dict(jd.parsed_json or {})
         job_title = jd_data.get("title") or jd.title or ""
         years_exp = resume_data.get("years_exp", 0)
 
@@ -155,11 +166,41 @@ class MatchExplainer:
             d.weighted_score = d.score * d.weight
 
         raw_total = sum(d.weighted_score for d in dims)
-        overall = max(0, min(100, raw_total - penalty))
+        raw_score = max(0, min(100, raw_total - penalty))
+
+        # The weak-fit cap belongs here rather than at each call site: it used to
+        # run only inside the agent graph, so /recommend and /explain-match could
+        # both report a high match for a job whose hard requirements the
+        # candidate clearly does not meet.
+        cap = infer_match_score_cap(
+            json.dumps(resume_data, ensure_ascii=False, default=str),
+            json.dumps(jd_data, ensure_ascii=False, default=str),
+        )
+        overall = min(raw_score, cap) if cap is not None else raw_score
+
+        return {
+            "overall": overall,
+            "raw_score": raw_score,
+            "cap_applied": cap,
+            "dims": dims,
+            "skill_match": skill_match,
+            "missing_required": missing_req,
+            "resume_data": resume_data,
+            "jd_data": jd_data,
+            "weights": self.weights.as_dict(),
+        }
+
+    def explain(self, resume: Resume, jd: JobDescription) -> ExplainResult:
+        """对外入口：接收 ORM 对象，返回完整解释"""
+        rubric = self.compute_rubric(resume, jd)
+        dims = rubric["dims"]
+        skill_match = rubric["skill_match"]
+        missing_req = rubric["missing_required"]
+        overall = rubric["overall"]
 
         # 3. LLM 生成解释文本
         try:
-            llm_explain = self._llm_explain(dims, skill_match, overall, resume_data, jd_data)
+            llm_explain = self._llm_explain(dims, skill_match, overall, rubric["resume_data"], rubric["jd_data"])
         except Exception as e:
             logger.warning(f"LLM 解释生成失败，使用规则兜底: {e}")
             llm_explain = self._fallback_explain(dims, overall)
@@ -182,7 +223,7 @@ class MatchExplainer:
             risk_points=llm_explain.get("risk_points", []),
             optimization_suggestions=llm_explain.get("suggestions", []),
             recommendation=rec,
-            weights_used=self.weights.as_dict(),
+            weights_used=rubric["weights"],
             explain_mode=llm_explain.get("explain_mode", "llm"),
         )
 
@@ -268,9 +309,28 @@ class MatchExplainer:
             details.append(f"项目技能与 JD 重合 {hit_count} 项")
         return score, details
 
+    @staticmethod
+    def _coerce_years(value: Any) -> float | None:
+        """Normalise a stated tenure to a number, or None when unstated.
+
+        Accepts 3, 3.0, "3", "3年"; returns None for missing/blank/unparseable so
+        callers can say "not stated" instead of inventing zero.
+        """
+        if value is None or isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        match = re.search(r"\d+", str(value))
+        return float(match.group()) if match else None
+
     def _calc_experience(self, resume: dict, jd: dict) -> tuple[float, list[str]]:
         """工作经验匹配"""
-        resume_years = resume.get("years_exp", 0)
+        # `resume.get("years_exp", 0)` returns None when the key exists but is
+        # null, which is the common case for resumes parsed without a stated
+        # tenure, and made `abs(None - jd_mid)` raise. Absent is also not the
+        # same as zero: scoring an unstated tenure as "0 years" would invent a
+        # mismatch.
+        resume_years = self._coerce_years(resume.get("years_exp"))
         exp_req = jd.get("experience_requirement", "")
         if isinstance(exp_req, dict):
             exp_req = exp_req.get("years", "")
@@ -282,6 +342,9 @@ class MatchExplainer:
         nums = re.findall(r"\d+", exp_str)
         if not nums:
             return 70, [f"经验要求: {exp_str}"]
+
+        if resume_years is None:
+            return 60, [f"简历未标注工作年限，无法与要求{exp_str}比较"]
 
         if len(nums) >= 2:
             jd_min, jd_max = int(nums[0]), int(nums[1])

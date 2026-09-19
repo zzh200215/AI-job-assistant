@@ -62,6 +62,10 @@ CREATE INDEX ix_job_target_user_id ON job_target (user_id);
 CREATE INDEX ix_kb_document_organization_id ON kb_document (organization_id);
 CREATE INDEX ix_kb_document_tenant_id ON kb_document (tenant_id);
 CREATE INDEX ix_kb_document_user_id ON kb_document (user_id);
+CREATE INDEX ix_match_score_jd_id ON match_score (jd_id);
+CREATE INDEX ix_match_score_resume_id ON match_score (resume_id);
+CREATE INDEX ix_match_score_tenant_user ON match_score (tenant_id, user_id);
+CREATE INDEX ix_match_score_user_id ON match_score (user_id);
 CREATE INDEX ix_notification_created_at ON notification (created_at);
 CREATE INDEX ix_notification_is_read ON notification (is_read);
 CREATE INDEX ix_notification_type ON notification (type);
@@ -128,6 +132,7 @@ CREATE UNIQUE INDEX ix_organization_sso_state_state_hash ON organization_sso_sta
 CREATE UNIQUE INDEX uq_interview_question_bank_tenant_type ON interview_question_bank (tenant_id, type);
 CREATE UNIQUE INDEX uq_interview_report_template_tenant ON interview_report_template (tenant_id);
 CREATE UNIQUE INDEX uq_interview_scoring_rule_tenant_dim ON interview_scoring_rule (tenant_id, dimension);
+CREATE UNIQUE INDEX uq_match_score_resume_version_jd ON match_score (resume_id, resume_version, jd_id);
 CREATE UNIQUE INDEX uq_subscription_plan_tenant_tier ON subscription_plan (tenant_id, tier);
 
 CREATE TABLE agent_task (
@@ -891,6 +896,29 @@ CREATE TABLE job_bookmark (
 	tenant_id BIGINT DEFAULT '1' NOT NULL, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(user_id) REFERENCES tb_user (id) ON DELETE CASCADE, 
+	FOREIGN KEY(jd_id) REFERENCES tb_jd (id) ON DELETE CASCADE
+)
+
+;
+
+CREATE TABLE match_score (
+	id BIGINT NOT NULL, 
+	user_id BIGINT NOT NULL, 
+	resume_id BIGINT NOT NULL, 
+	resume_version VARCHAR(64) NOT NULL, 
+	jd_id BIGINT NOT NULL, 
+	score FLOAT NOT NULL, 
+	raw_score FLOAT NOT NULL, 
+	cap_applied FLOAT, 
+	method VARCHAR(32) NOT NULL, 
+	dimensions_json TEXT, 
+	skill_gap_json TEXT, 
+	created_at DATETIME, 
+	updated_at DATETIME, 
+	tenant_id BIGINT DEFAULT '1' NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(user_id) REFERENCES tb_user (id) ON DELETE CASCADE, 
+	FOREIGN KEY(resume_id) REFERENCES tb_resume (id) ON DELETE CASCADE, 
 	FOREIGN KEY(jd_id) REFERENCES tb_jd (id) ON DELETE CASCADE
 )
 

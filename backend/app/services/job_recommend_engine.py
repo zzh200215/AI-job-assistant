@@ -17,9 +17,10 @@ import json
 import math
 import re
 import threading
+import logging
 import time
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import and_, or_
@@ -31,10 +32,14 @@ from app.models.history import JobDescription, Resume
 from app.services.embedding_service import embed_texts
 from app.services.recommendation_tuning import DEFAULT_RECOMMENDATION_TUNING_CONFIG
 
+logger = logging.getLogger(__name__)
+
 _RECOMMEND_CACHE: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
 _RECOMMEND_CACHE_MAX = 128
 _RECOMMEND_CACHE_LOCK = threading.Lock()
 _CACHE_TTL = 86400  # 24 灏忔椂
+# 只对粗排后的短名单跑 canonical rubric：对全库跑代价不成比例。
+_RERANK_MIN_POOL = 20
 
 
 def _visible_job_filter(owner_id: int | None, tenant_id: int | None = None):
@@ -117,16 +122,18 @@ class RecommendResult:
     location: str
     salary_range: str
     industry: str
-    match_score: float  # 0-100 综合分
+    match_score: float  # 0-100 展示分：来自 canonical rubric，封顶后
     vector_score: float  # 0-100 向量相似度分
     rule_score: float  # 0-100 规则匹配分
-    skill_overlap: list[str]  # 重合技能
-    skill_gap: list[str]  # 缺失技能
-    salary_match: bool  # 薪资是否匹配
-    location_match: bool  # 地点是否匹配
-    experience_match: bool  # 经验层级是否匹配
-    match_reason: str  # 一句话匹配原因
-    recommendation_type: str  # 高度推荐 / 值得一试 / 谨慎考虑
+    retrieval_score: float = 0.0  # 0-100 混合召回分，仅用于粗排，不展示
+    match_score_method: str = "rubric_6dim"
+    skill_overlap: list[str] = field(default_factory=list)  # 重合技能
+    skill_gap: list[str] = field(default_factory=list)  # 缺失技能
+    salary_match: bool = True  # 薪资是否匹配
+    location_match: bool = True  # 地点是否匹配
+    experience_match: bool = True  # 经验层级是否匹配
+    match_reason: str = ""  # 一句话匹配原因
+    recommendation_type: str = ""  # 高度推荐 / 值得一试 / 谨慎考虑
     source: str = ""
 
     experience_requirement: str = ""
@@ -140,8 +147,10 @@ class RecommendResult:
             "salary_range": self.salary_range,
             "industry": self.industry,
             "match_score": round(self.match_score),
+            "match_score_method": self.match_score_method,
             "vector_score": round(self.vector_score),
             "rule_score": round(self.rule_score),
+            "retrieval_score": round(self.retrieval_score),
             "skill_overlap": self.skill_overlap,
             "skill_gap": self.skill_gap,
             "salary_match": self.salary_match,
@@ -278,6 +287,7 @@ class JobRecommendationEngine:
                 match_score=combined,
                 vector_score=vector_score,
                 rule_score=rule_score,
+                retrieval_score=combined,
                 skill_overlap=overlap[:8],
                 skill_gap=gap[:8],
                 salary_match=salary_ok,
@@ -290,16 +300,45 @@ class JobRecommendationEngine:
             )
             results.append(result)
 
-        # --- 3) 排序 ---
-        results.sort(key=lambda r: r.match_score, reverse=True)
+        # --- 3) 粗排（混合召回分）---
+        results.sort(key=lambda r: r.retrieval_score, reverse=True)
 
         # --- 4) 应用筛选 ---
         results = self._apply_filters(results, normalized_filters)
 
-        # --- 5) 截断 + 缓存 ---
-        output = [r.to_dict() for r in results]
+        # --- 5) 精排：只对短名单算 canonical 分并重排 ---
+        # 召回集合不变，仍由向量+规则决定谁进入候选；但候选人看到的分数、以及
+        # 最终排序，来自 match_score_service 那一个 rubric。对全库跑 rubric 代价
+        # 不成比例，所以只取粗排后的短名单。
+        shortlist = results[: max(limit * 4, _RERANK_MIN_POOL)]
+        shortlist = self._apply_canonical_scores(shortlist, resume)
+        shortlist.sort(key=lambda r: (r.match_score, r.retrieval_score), reverse=True)
+        tail = results[len(shortlist) :]
+
+        # --- 6) 截断 + 缓存 ---
+        output = [r.to_dict() for r in shortlist] + [r.to_dict() for r in tail]
         _set_cached_recommendations(cache_key, now, _CACHE_TTL, output)
         return output[:limit]
+
+    def _apply_canonical_scores(self, candidates: list[RecommendResult], resume: Resume) -> list[RecommendResult]:
+        """Attach the single authoritative match score to a shortlist."""
+        from app.services.match_score_service import canonical_match_score
+
+        for result in candidates:
+            jd = self.db.get(JobDescription, result.jd_id)
+            if jd is None:
+                continue
+            try:
+                scored = canonical_match_score(self.db, resume, jd, user_id=resume.user_id)
+            except Exception:
+                logger.exception("canonical match score failed for jd=%s, keeping retrieval blend", result.jd_id)
+                continue
+            result.match_score = float(scored["score"])
+            result.match_score_method = scored["method"]
+            if scored.get("skill_gap"):
+                result.skill_gap = list(scored["skill_gap"])[:8]
+            result.recommendation_type = self._recommend_type(result.match_score)
+        return candidates
 
     # ==================== 向量相似度（通道1）====================
 

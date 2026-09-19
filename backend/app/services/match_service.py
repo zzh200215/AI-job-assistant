@@ -23,6 +23,7 @@ from app.prompts.match import MATCH_PROMPT
 from app.prompts.optimize import OPTIMIZE_PROMPT
 from app.prompts.rendering import render_prompt
 from app.services.llm_service import chat_json, set_llm_trace_context
+from app.services.match_score_service import canonical_match_score
 from app.services.rag_service import build_rag_context_multi, get_knowledge_references
 from app.utils.service_access import get_accessible_job_for_user, get_owned_resume
 
@@ -92,7 +93,14 @@ def run_full_analysis(db: Session, resume_id: int, jd_id: int, remark: str = "",
             }
         )
         match: dict[str, Any] = chat_json(match_prompt)
-        match["match_score"] = max(0, min(100, int(match.get("match_score") or 0)))
+        # The model's own 0-100 number is dropped: it had no access to the rubric
+        # or the weak-fit cap, so it disagreed with the recommend and explain
+        # pages. Its prose is kept; the score comes from the single authority.
+        canonical = canonical_match_score(db, resume, jd, user_id=user_id)
+        match["match_score"] = canonical["score"]
+        match["match_score_raw"] = canonical["raw_score"]
+        match["match_score_cap_applied"] = canonical["cap_applied"]
+        match["match_score_method"] = canonical["method"]
     except (RuntimeError, ValueError) as e:
         raise RuntimeError(f"匹配度分析失败: {e}") from e
 

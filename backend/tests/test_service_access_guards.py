@@ -3,6 +3,7 @@ import pytest
 from app.models.history import AnalysisRecord, JobDescription, Resume
 from app.models.user import User
 from app.services import interview_service, match_service, optimize_service, resume_export_service
+from app.services.match_score_service import canonical_match_score
 
 
 def _create_user(db_session, username: str, email: str) -> User:
@@ -117,7 +118,16 @@ def test_match_service_allows_owned_resume_with_public_jd(db_session, monkeypatc
     assert record.user_id == owner.id
     assert record.resume_id == resume.id
     assert record.jd_id == public_job.id
-    assert record.match_score == 90
+    # A4: the stored score is the canonical rubric score, not whatever number the
+    # model happened to emit. This test is about access control, but the score
+    # assertion now guards the single-source rule from regressing. AnalysisRecord
+    # .match_score is an Integer column, so compare within one point rather than
+    # depending on whether the database truncates or rounds.
+    assert record.match_score != 90
+    canonical = canonical_match_score(
+        db_session, resume, public_job, user_id=owner.id, persist=False
+    )["score"]
+    assert abs(record.match_score - canonical) < 1
 
 
 def test_match_service_blocks_cross_user_resume_service_bypass(db_session):
