@@ -39,8 +39,19 @@
       <span class="quick-note">选择岗位后可按城市细化结果</span>
     </div>
 
+    <!-- 无市场数据：说清楚是"没数据"，不是"薪资为 0" -->
+    <div v-if="overview && !overview.has_data" class="panel">
+      <div class="panel-body">
+        <strong>没有找到 {{ searchPosition }} 的可解析薪资数据</strong>
+        <p class="no-data-hint">
+          {{ overview.message || '该筛选条件下没有可解析的薪资范围。' }}
+          共匹配 {{ overview.total_jds }} 条岗位，其中 {{ overview.parsed_count }} 条带可解析薪资。
+        </p>
+      </div>
+    </div>
+
     <!-- 薪资总览 -->
-    <div v-if="overview" class="overview-section">
+    <div v-if="overview?.has_data" class="overview-section">
       <section class="market-brief" aria-label="市场薪资摘要">
         <div class="market-position">
           <span class="market-label">当前市场定位</span>
@@ -50,7 +61,7 @@
         <div class="market-range">
           <span class="market-label">合理区间</span>
           <strong>{{ marketRange }}</strong>
-          <small>中位数 {{ formatK(overview.median) }}</small>
+          <small>中位数 {{ formatK(stats.p50) }}</small>
         </div>
         <div class="market-action">
           <span class="market-label">下一步</span>
@@ -59,37 +70,45 @@
         </div>
       </section>
 
+      <el-alert
+        v-if="overview.low_confidence"
+        type="warning"
+        :closable="false"
+        show-icon
+        :title="`仅 ${overview.sample_size} 条可解析岗位，下面的分位数不足以代表市场`"
+      />
+
       <div class="stats-row">
         <div class="stat-card">
           <span class="stat-label">样本数</span>
-          <strong class="data-value">{{ overview.sample_count || 0 }}</strong>
+          <strong class="data-value">{{ overview.sample_size || 0 }}</strong>
         </div>
         <div class="stat-card">
           <span class="stat-label">薪资中位数</span>
-          <strong class="data-value">{{ formatK(overview.median) }}</strong>
+          <strong class="data-value">{{ formatK(stats.p50) }}</strong>
         </div>
         <div class="stat-card">
           <span class="stat-label">P25</span>
-          <strong class="data-value">{{ formatK(overview.p25) }}</strong>
+          <strong class="data-value">{{ formatK(stats.p25) }}</strong>
         </div>
         <div class="stat-card">
           <span class="stat-label">P75</span>
-          <strong class="data-value">{{ formatK(overview.p75) }}</strong>
+          <strong class="data-value">{{ formatK(stats.p75) }}</strong>
         </div>
         <div class="stat-card">
           <span class="stat-label">平均</span>
-          <strong class="data-value">{{ formatK(overview.avg) }}</strong>
+          <strong class="data-value">{{ formatK(stats.avg_mid) }}</strong>
         </div>
       </div>
 
       <!-- 薪资分布 -->
-      <div v-if="overview.distribution?.length" class="panel">
+      <div v-if="distBars.length" class="panel">
         <div class="panel-header">
           <h3>薪资分布</h3>
         </div>
         <div class="panel-body">
           <div class="dist-chart">
-            <div v-for="(bin, idx) in overview.distribution" :key="idx" class="dist-bar-col">
+            <div v-for="(bin, idx) in distBars" :key="idx" class="dist-bar-col">
               <div class="dist-bar" :style="{ height: distHeight(bin.count) }" />
               <span class="dist-count">{{ bin.count }}</span>
               <span class="dist-label">{{ bin.range }}</span>
@@ -99,16 +118,16 @@
       </div>
 
       <!-- 城市对比 -->
-      <div v-if="overview.city_breakdown?.length" class="panel">
+      <div v-if="cityRows.length" class="panel">
         <div class="panel-header">
           <h3>城市薪资对比</h3>
         </div>
         <div class="panel-body">
-          <el-table :data="overview.city_breakdown" stripe>
+          <el-table :data="cityRows" stripe>
             <el-table-column prop="city" label="城市" width="120" />
-            <el-table-column prop="sample_count" label="样本数" width="100" />
-            <el-table-column prop="median" label="中位数(K)" width="120">
-              <template #default="{ row }">{{ formatK(row.median) }}</template>
+            <el-table-column prop="count" label="样本数" width="100" />
+            <el-table-column prop="p50" label="中位数(K)" width="120">
+              <template #default="{ row }">{{ formatK(row.p50) }}</template>
             </el-table-column>
             <el-table-column prop="p25" label="P25(K)" width="100">
               <template #default="{ row }">{{ formatK(row.p25) }}</template>
@@ -203,12 +222,13 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { Coin } from '@element-plus/icons-vue'
-import { getSalaryOverview, checkSalaryExpectation } from '@/api/salary'
+import { getSalaryCompare, getSalaryOverview, checkSalaryExpectation } from '@/api/salary'
 
 const searchPosition = ref('')
 const searchCity = ref('')
 const loading = ref(false)
 const overview = ref(null)
+const cityComparison = ref([])
 
 const expectPosition = ref('')
 const expectSalary = ref(null)
@@ -216,12 +236,19 @@ const expectCity = ref('')
 const expectResult = ref(null)
 const quickPositions = ['前端开发', 'Java 开发', '产品经理', '数据分析师', '算法工程师']
 
-const maxDist = computed(() => {
-  if (!overview.value?.distribution) return 1
-  return Math.max(1, ...overview.value.distribution.map((d) => d.count))
-})
+// /salary/overview reports { statistics: {p25..p90}, distribution: {label: count} }.
+// This page used to read overview.p25 / overview.distribution[] / city_breakdown,
+// which the endpoint never returned — every card rendered "--".
+const stats = computed(() => overview.value?.statistics || {})
+const distBars = computed(() =>
+  Object.entries(overview.value?.distribution || {}).map(([range, count]) => ({ range, count }))
+)
+const cityRows = computed(() => cityComparison.value || [])
+const maxDist = computed(() =>
+  distBars.value.length ? Math.max(1, ...distBars.value.map((d) => d.count)) : 1
+)
 const marketRange = computed(() =>
-  overview.value ? `${formatK(overview.value.p25)} - ${formatK(overview.value.p75)}` : '--'
+  overview.value ? `${formatK(stats.value.p25)} - ${formatK(stats.value.p75)}` : '--'
 )
 
 function formatK(val) {
@@ -237,9 +264,12 @@ async function doSearch() {
   if (!searchPosition.value.trim()) return
   loading.value = true
   overview.value = null
+  cityComparison.value = []
   try {
     const data = await getSalaryOverview({ position: searchPosition.value, city: searchCity.value })
     overview.value = data
+    const compare = await getSalaryCompare({ position: searchPosition.value })
+    cityComparison.value = compare?.comparison || []
   } catch {
     // 请求层已反馈错误，保留上一次查询结果。
   } finally {
@@ -361,6 +391,11 @@ async function checkExpectation() {
 }
 .quick-note {
   margin-left: auto;
+  color: var(--app-muted);
+}
+.no-data-hint {
+  margin: 6px 0 0;
+  font-size: 13px;
   color: var(--app-muted);
 }
 
