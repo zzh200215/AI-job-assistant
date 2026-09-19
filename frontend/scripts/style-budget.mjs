@@ -21,5 +21,8 @@ for (const f of files) {
 }
 rows.sort((a, b) => b[1] - a[1])
 console.log('files with literals:', rows.length)
-console.log('total literals:', rows.reduce((s, r) => s + r[1], 0))
+console.log(
+  'total literals:',
+  rows.reduce((s, r) => s + r[1], 0)
+)
 console.log(JSON.stringify(Object.fromEntries(rows), null, 2))

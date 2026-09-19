@@ -209,6 +209,105 @@
       </el-timeline>
     </el-card>
 
+    <!-- 岗位库实测的方向与薪资：只看简历和 JD 表，不需要先跑一次完整规划 -->
+    <el-row v-if="careerPaths.length || salaryMarket || !salaryMarketLoading" :gutter="18" class="result-grid">
+      <el-col :md="12" :xs="24">
+        <el-card v-if="careerPaths.length" class="direction-card" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span>推荐职业方向（岗位库实测）</span>
+              <el-tag size="small" type="info">
+                {{ careerPathMeta.corpus.visible_jds || 0 }} 条可见岗位 ·
+                {{ careerPathMeta.corpus.directions_found || 0 }} 个方向
+              </el-tag>
+              <el-button text size="small" :loading="careerPathLoading" @click="loadCareerPaths">
+                刷新
+              </el-button>
+            </div>
+          </template>
+
+          <div class="direction-list">
+            <article v-for="item in careerPaths" :key="item.direction_key" class="direction-item">
+              <div class="direction-top">
+                <strong>{{ item.label || item.direction_key }}</strong>
+                <el-tag v-if="item.category" size="small" type="info">{{ item.category }}</el-tag>
+                <span v-if="coveragePct(item) !== null" class="direction-cov">
+                  已覆盖该方向 {{ coveragePct(item) }}% 的明确要求
+                </span>
+                <span v-else class="direction-cov">该方向未列出可核对的硬性要求</span>
+              </div>
+              <p>{{ item.reason }}</p>
+              <ul class="direction-facts">
+                <li>
+                  样本 {{ item.sample_count }} 条岗位<template v-if="item.jd_ids?.length">
+                    （ID {{ sampleIdText(item.jd_ids) }}）</template
+                  >
+                </li>
+                <li v-if="item.salary?.has_data">
+                  薪资 P25/P50/P75 = {{ item.salary.p25 }}/{{ item.salary.p50 }}/{{ item.salary.p75 }}
+                  K（{{ item.salary.sample_size }} 条可解析）
+                </li>
+                <li v-else>薪资：样本岗位均未填写可解析区间</li>
+                <li v-if="gapFacts(item).length">
+                  主要缺口
+                  <ul class="direction-gaps">
+                    <li v-for="gap in gapFacts(item)" :key="gap.skill">
+                      {{ gap.skill }} — {{ gap.detail }}
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+              <p v-if="item.degraded" class="direction-warn">
+                样本偏薄：{{ (item.degrade_reasons || []).join('；') }}
+              </p>
+            </article>
+          </div>
+          <p v-if="careerPathMeta.summary" class="direction-summary">
+            {{ careerPathMeta.summary }}
+          </p>
+        </el-card>
+      </el-col>
+
+      <el-col :md="12" :xs="24">
+        <el-card class="salary-card" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span>薪资行情（岗位库实测）</span>
+              <el-tag v-if="salaryMarket" size="small" type="info">
+                样本 {{ salaryMarket.sample_size }} 条岗位
+              </el-tag>
+            </div>
+          </template>
+          <div v-if="salaryMarketLoading" class="salary-empty">加载中…</div>
+          <div v-else-if="salaryMarket" class="salary-body">
+            <div class="salary-current">
+              <span class="salary-label">岗位方向</span>
+              <strong>{{ salaryMarket.filters?.position || '—' }}</strong>
+            </div>
+            <el-alert
+              v-if="salaryMarket.low_confidence"
+              type="warning"
+              :closable="false"
+              show-icon
+              :title="`仅 ${salaryMarket.sample_size} 条可解析样本，分位数不代表市场`"
+            />
+            <div class="salary-percentiles">
+              <div v-for="band in salaryBands" :key="band.key" class="salary-band">
+                <span class="salary-band-label">{{ band.label }}</span>
+                <strong class="salary-band-value">{{ band.value }}K</strong>
+              </div>
+            </div>
+            <small class="salary-note">
+              分位数来自岗位库中已解析出薪资区间的记录，不代表个人 offer 报价。
+            </small>
+          </div>
+          <div v-else class="salary-empty">
+            当前岗位方向在岗位库中暂无足够的薪资样本，因此不提供数字。
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <section v-if="careerResult" class="career-focus-strip" aria-label="职业规划重点">
       <div class="career-focus-main">
         <span class="career-focus-label">当前发展重点</span>
@@ -373,6 +472,7 @@
               <div class="card-header">
                 <span>学习资源推荐</span>
                 <el-tag size="small" type="warning">{{ learningResources.length }} 项</el-tag>
+                <span class="card-note">来自本次规划报告，外链未经校验</span>
               </div>
             </template>
             <div class="resource-list">
@@ -384,16 +484,22 @@
                   }}</el-tag>
                 </div>
                 <div class="resource-links">
-                  <a
-                    v-for="res in item.resources"
-                    :key="res.name"
-                    :href="res.link"
-                    class="resource-link"
-                    target="_blank"
-                  >
-                    <el-tag size="small" effect="plain" type="info">{{ res.type }}</el-tag>
-                    {{ res.name }}
-                  </a>
+                  <template v-for="res in item.resources" :key="res.name">
+                    <a
+                      v-if="res.link"
+                      :href="res.link"
+                      class="resource-link"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <el-tag size="small" effect="plain" type="info">{{ res.type }}</el-tag>
+                      {{ res.name }}
+                    </a>
+                    <span v-else class="resource-link resource-plain">
+                      <el-tag size="small" effect="plain" type="info">{{ res.type }}</el-tag>
+                      {{ res.name }}
+                    </span>
+                  </template>
                 </div>
               </div>
             </div>
@@ -498,15 +604,9 @@
               </div>
             </div>
 
-            <div class="strategy-split">
-              <div v-for="item in strategySummary.mix" :key="item.label" class="split-row">
-                <span>{{ item.label }}</span>
-                <div class="split-bar">
-                  <div class="split-fill" :style="{ width: `${item.value}%` }"></div>
-                </div>
-                <strong>{{ item.value }}%</strong>
-              </div>
-            </div>
+            <p class="strategy-note">
+              按当前匹配分与缺口数量套用的投递节奏模板，不含投递比例数字——那类比例没有数据来源。
+            </p>
 
             <ul class="strategy-list">
               <li v-for="item in strategySummary.actions" :key="item">{{ item }}</li>
@@ -540,63 +640,6 @@
                   <span>{{ gap.target_level || '目标水平未知' }}</span>
                 </div>
               </article>
-            </div>
-          </el-card>
-
-          <el-card v-if="careerPaths.length" class="direction-card" shadow="never">
-            <template #header>
-              <div class="card-header">
-                <span>推荐职业方向</span>
-                <el-button text size="small" :loading="careerPathLoading" @click="loadCareerPaths">
-                  刷新
-                </el-button>
-              </div>
-            </template>
-
-            <div class="direction-list">
-              <article
-                v-for="item in careerPaths"
-                :key="item.title || item.path || item.position"
-                class="direction-item"
-              >
-                <div class="direction-top">
-                  <strong>{{ item.path || item.position || item.title || '岗位方向' }}</strong>
-                  <!-- 匹配度不再展示数值：agent 只拿到简历摘要，没有岗位库或
-                       市场数据，任何 0-100 分数都是编造的。顺序即匹配度排名。 -->
-                  <el-tag v-if="item.category" size="small" type="info">{{ item.category }}</el-tag>
-                </div>
-                <p>{{ item.reason || item.summary || '根据简历现状给出的方向建议。' }}</p>
-              </article>
-            </div>
-          </el-card>
-
-          <el-card class="salary-card" shadow="never">
-            <template #header>
-              <div class="card-header">
-                <span>薪资行情（岗位库实测）</span>
-                <el-tag v-if="salaryMarket" size="small" type="info">
-                  样本 {{ salaryMarket.parsed_count }} 条岗位
-                </el-tag>
-              </div>
-            </template>
-            <div v-if="salaryMarketLoading" class="salary-empty">加载中…</div>
-            <div v-else-if="salaryMarket" class="salary-body">
-              <div class="salary-current">
-                <span class="salary-label">岗位方向</span>
-                <strong>{{ salaryMarket.filters?.position || '—' }}</strong>
-              </div>
-              <div class="salary-percentiles">
-                <div v-for="band in salaryBands" :key="band.key" class="salary-band">
-                  <span class="salary-band-label">{{ band.label }}</span>
-                  <strong class="salary-band-value">{{ band.value }}K</strong>
-                </div>
-              </div>
-              <small class="salary-note">
-                分位数来自岗位库中已解析出薪资区间的记录，不代表个人 offer 报价。
-              </small>
-            </div>
-            <div v-else class="salary-empty">
-              当前岗位方向在岗位库中暂无足够的薪资样本，因此不提供数字。
             </div>
           </el-card>
 
@@ -715,6 +758,7 @@ const taskStatus = ref('pending')
 const agentSteps = ref([])
 const careerPathLoading = ref(false)
 const careerPaths = ref([])
+const careerPathMeta = ref({ summary: '', corpus: {}, message: '' })
 
 const analysisRecordId = ref(null)
 const analysisResult = ref(null)
@@ -891,34 +935,30 @@ const salaryBands = computed(() => {
   ].filter((band) => Number.isFinite(band.value))
 })
 
-// 学习资源推荐
-const learningResources = computed(() => {
-  const gaps = skillGaps.value
-  if (!gaps.length) return []
-  return gaps.slice(0, 5).map((gap) => {
-    const skill = gap.skill || ''
-    const resources = []
-    const priority = gap.priority || '中'
-    if (skill.includes('系统设计') || skill.includes('架构')) {
-      resources.push({
-        type: '书籍',
-        name: '《系统设计面试》',
-        link: 'https://book.douban.com/subject/35246717/',
-      })
-      resources.push({ type: '课程', name: 'Grokking System Design', link: '#' })
-    } else if (skill.includes('算法') || skill.includes('数据结构')) {
-      resources.push({ type: '平台', name: 'LeetCode', link: 'https://leetcode.cn' })
-      resources.push({ type: '书籍', name: '《算法导论》', link: '#' })
-    } else if (skill.includes('项目') || skill.includes('管理')) {
-      resources.push({ type: '课程', name: '项目管理 PMP 认证', link: '#' })
-      resources.push({ type: '书籍', name: '《人人都是项目经理》', link: '#' })
-    } else {
-      resources.push({ type: '实践', name: `${skill} 专项项目`, link: '#' })
-      resources.push({ type: '课程', name: `${skill} 入门到精通`, link: '#' })
-    }
-    return { skill, priority, resources, gap: gap }
-  })
-})
+// 学习资源：只用规划报告里给出的条目。原先按技能关键词硬编码书名和课程名，
+// 还带上 '#' 假链接——那是把模板当成"为你找的资源"展示。
+const learningResources = computed(() =>
+  skillGaps.value
+    .map((gap) => {
+      const raw = Array.isArray(gap.resources) ? gap.resources : []
+      const items = raw
+        .map((res) => {
+          const name = String(res?.name || (typeof res === 'string' ? res : '') || '').trim()
+          if (!name) return null
+          const url = String(res?.url || '').trim()
+          return {
+            name,
+            type: String(res?.type || '资源'),
+            link: /^https?:\/\//i.test(url) ? url : '',
+          }
+        })
+        .filter(Boolean)
+      return items.length
+        ? { skill: gap.skill || '', priority: gap.priority || '中', resources: items }
+        : null
+    })
+    .filter(Boolean)
+)
 
 const strategySummary = computed(() => {
   const score = latestMatchScore.value
@@ -930,11 +970,6 @@ const strategySummary = computed(() => {
       mode: '精准投',
       title: '以重点岗位为主线推进',
       reason: '当前匹配度较高，建议收缩投递面，优先冲击最契合的岗位和团队。',
-      mix: [
-        { label: '精准投', value: 65 },
-        { label: '海投', value: 25 },
-        { label: '保底投', value: 10 },
-      ],
       actions: [
         '优先投递与目标岗位高度相符的 10-15 个 JD。',
         '围绕项目亮点和能力缺口定制简历版本。',
@@ -948,11 +983,6 @@ const strategySummary = computed(() => {
       mode: '保底投',
       title: '先建立成交概率，再逐步上探',
       reason: '当前还处于能力过渡期，先保证 offer 概率，再同步做技能补齐和项目积累。',
-      mix: [
-        { label: '精准投', value: 20 },
-        { label: '海投', value: 30 },
-        { label: '保底投', value: 50 },
-      ],
       actions: [
         '优先投递与现有经验连续性强的岗位，缩短转化链路。',
         '每周固定补一个短板项目，把学习成果尽快转成简历素材。',
@@ -965,11 +995,6 @@ const strategySummary = computed(() => {
     mode: '海投',
     title: '扩大样本，快速验证市场反馈',
     reason: '匹配度处于中段，先通过更大样本验证定位，再筛出适合深投的岗位。',
-    mix: [
-      { label: '精准投', value: 35 },
-      { label: '海投', value: 45 },
-      { label: '保底投', value: 20 },
-    ],
     actions: [
       '按岗位族群批量投递，观察面邀率和岗位反馈。',
       '把简历拆成 2-3 个版本，分别对应后端、AI 工程、平台工程方向。',
@@ -1072,11 +1097,36 @@ async function loadCareerPaths() {
   try {
     const data = await recommendCareerPaths(selectedResumeId.value)
     careerPaths.value = data?.career_paths || []
+    careerPathMeta.value = {
+      summary: data?.summary || '',
+      corpus: data?.corpus || {},
+      message: data?.message || '',
+    }
   } catch {
     careerPaths.value = []
+    careerPathMeta.value = { summary: '', corpus: {}, message: '' }
   } finally {
     careerPathLoading.value = false
   }
+}
+
+function coveragePct(item) {
+  return Number.isFinite(item?.coverage) ? Math.round(item.coverage * 100) : null
+}
+
+function gapFacts(item) {
+  return (item?.gap_skills || []).map((row) => {
+    const parts = []
+    if (row.required_count) parts.push(`${row.required_count} 条岗位必备`)
+    if (row.nice_count) parts.push(`${row.nice_count} 条列为加分`)
+    return { skill: row.skill, detail: parts.join('，') || '仅个别岗位提及' }
+  })
+}
+
+function sampleIdText(ids) {
+  const list = ids || []
+  if (!list.length) return ''
+  return list.slice(0, 4).join('、') + (list.length > 4 ? ' 等' : '')
 }
 
 async function startCareerPlanning() {
@@ -2042,35 +2092,49 @@ function stepIcon(status) {
   font-size: 20px;
 }
 
-.strategy-split {
-  display: grid;
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.split-row {
-  display: grid;
-  grid-template-columns: 56px minmax(0, 1fr) 40px;
-  gap: 10px;
-  align-items: center;
-}
-
-.split-row span,
-.split-row strong {
+.strategy-note {
+  margin: 14px 0 0;
   font-size: 12px;
+  color: var(--app-muted);
 }
 
-.split-bar {
-  height: 10px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: var(--app-line);
+.card-note {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--app-muted);
 }
 
-.split-fill {
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #20b4ac, #74d7d1);
+.resource-plain {
+  color: var(--app-text);
+  cursor: default;
+}
+
+.direction-cov {
+  font-size: 12px;
+  color: var(--app-muted);
+}
+
+.direction-facts,
+.direction-gaps {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--app-muted);
+}
+
+.direction-warn {
+  margin: 8px 0 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--app-text);
+  background: var(--app-surface-muted);
+  border-left: 2px solid var(--app-warning);
+}
+
+.direction-summary {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--app-text);
 }
 
 .next-block + .next-block {
