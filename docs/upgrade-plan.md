@@ -103,7 +103,7 @@
 - `dry_run` 默认 `True`（`:1383`）
 - 更新幅度仅 4 个标量 ±0.03–0.05，且需 `total>=10` 才触发（`api/job_recommend.py:481`、`recommendation_tuning.py:188-221`）
 - **决定性缺陷**：`recommend()` 既不查 `JobRecommendationFeedback` 也不查 `JobBookmark`，`_apply_filters`（`:576-600`）只过滤地域/行业/薪资/年限 → **候选人点了"踩"，同一个岗位下次刷新照样出现**
-  （更正：产品上并没有"不感兴趣"按钮。`JobBookmark.action` 支持 `dismiss`、API 也接受该值，但 `JobRecommend.vue:726` 只发 `'bookmark'`。真实可达的负反馈信号是 ThumbsDown → `feedback_type="dislike"`）
+  （更正：审计时产品上并没有"不感兴趣"按钮——`JobBookmark.action` 支持 `dismiss`、API 也接受该值，但 `JobRecommend.vue:726` 只发 `'bookmark'`，真实可达的负反馈信号只有 ThumbsDown。A5 补齐阶段已在卡片头部加入"不感兴趣"入口，并配套"已忽略的岗位"恢复面板）
 - `_build_tuning_samples` 对每个异常样本重算 embedding（`:669-692`）
 
 ### 3.5 其他深度短板
@@ -140,8 +140,25 @@
 **验收**：
 - 关掉真实 provider，UI 上每一处降级内容都有可见标记；`prompt_trace` 中不存在 `provider=qwen` 但内容为 mock 的记录
 - 推荐页与解释页同一 `(resume_version, jd_id)` 分数一致
-- 点"踩"后，该岗位在后续刷新中不再出现（可自动化测试）；`dismiss` 路径同样生效，待前端补入口
+- 点"踩"后，该岗位在后续刷新中不再出现（可自动化测试）；`dismiss` 路径同样生效，且隐藏可逆
 - 全量评测集（`backend/tests/eval/` 5 个 JSONL）在真实 provider 下重跑并入库，形成基线
+
+### 已完成：阶段 A（提交 `b5461aa`…`37a1f45`，A5 补充入口在后续提交）
+
+| # | 落地内容 | 证据 |
+|---|---|---|
+| A1 | `llm_service` 每条返回路径带 `response_source`（`real/fallback_model/truncated/mock/tool_output`）+ 原因与尝试次数；**mock/truncated 不再进缓存**；缓存命中不写 trace（保住无 DB 快路径） | `llm_service.py` `_LLM_PROVENANCE_CONTEXT`、`CACHEABLE_RESPONSE_SOURCES`；`test_llm_provenance.py` 9 例 |
+| A2 | 降级对内可查：`prompt_trace` 新增 `response_source`/`degraded` 列（migration `0023`）、`/api/prompt-trace` 支持过滤并输出 `degraded_rate`；Prometheus `llm_degraded_responses_total`；APScheduler 双阈值告警（mock 1 次即 critical，其他降级 3 次 warning）。前端 `/prompt-traces` 增加应答来源列与降级卡片 | `20260919_0023_llm_response_source.py`、`operational_alert_service.py`、`test_llm_degraded_visibility.py` 8 例 |
+| A3 | 六处假 AI 逐个处置：`quick_score_resume` 更名语义为"完整度"并停止凑字数奖励；`total_score` 不再由完整度回填；模板化 `structure/expression_issues` 与 `Math.random()` 假诊断整体删除，改为显式错误态；`/ai-suggestions` → `/next-actions` 并标注 `mode:"rules"`，删除"凑够 3 条"补位；career prompt 禁止输出无数据支撑的 `match_score` 与薪资区间；规则版解释器标注 `explain_mode:"rules"` | `test_rule_output_not_labelled_ai.py` 7 例 |
+| A4 | 新建 `match_score` 表 + `match_score_service` 作为 `(resume_id, resume_version, jd_id)` 唯一权威；推荐引擎改为"向量召回 → 规则粗排 → canonical 重排"，展示分与召回分离（`retrieval_score` vs `match_score`）；cap 收敛进 `compute_rubric` 单一入口；`_coerce_years` 区分"未标注"与 0 年 | migration `0024`、`test_match_score_single_source.py` 8 例 |
+| A5 | `dismiss` + `dislike` 合成抑制集，`recommend()` 在 **SQL 层** `notin_` 排除（不再占用 `limit` 名额），抑制指纹进缓存键；随后补齐入口与恢复：卡片"不感兴趣"按钮、点踩即时移除卡片、`GET /bookmarks/dismissed` 返回隐藏原因、`POST /bookmarks/restore` 一次清掉两类信号、`_bookmarked` 改为后端回填 | `test_recommend_suppression.py` 6 例、`test_suppressed_job_recovery.py` 11 例、`jobRecommendDismiss.test.js` 4 例 |
+
+阶段 A 结束时：**467 后端 / 20 前端**测试通过；补齐入口与恢复后为 **478 后端 / 24 前端**。
+
+**遗留（不阻塞 B）**：
+- `chat_with_tools` 轮次耗尽时把工具回执当最终答案返回（已标 `tool_output` 可辨识，修复归入阶段 C）
+- A6 仍等付费墙决策（见 §10.1）
+- `.card-actions` 6 个按钮已换行成 2 排（本次改动前即如此），归入阶段 D 共享层处理
 
 ---
 
