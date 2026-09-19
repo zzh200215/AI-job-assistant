@@ -177,6 +177,22 @@
 
 **验收**：候选人能在 5 分钟内接受/拒绝至少 5 条具体改写，并看到分数变化。
 
+#### 已交付：B1.1–B1.4（提交 `019f40c`、`5239d26`、`dfee148`、`37d5766`）
+
+落点与原计划不同的一处：改写不是打在 Markdown 上，而是打在 `parsed_json` 的**锚点块**上——`ResumeVersion.content` 是评分链路读不到的另一条轨道，改它不会影响任何分数。
+
+| 件 | 内容 | 证据 |
+|---|---|---|
+| B1.1 | `resume_blocks.py`：`build_resume_blocks` 给出 `self_evaluation/skills/work[i].desc/proj[i].desc` 稳定锚点；`apply_block_edits` 按锚点写入并返回 `before/after`。两条约束：空 section 不进清单（否则会诱导模型编造经历），且解析锚点必须走同一份清单；返回值永远是深拷贝（否则 ORM 不标脏、改动不落库） | `test_resume_blocks.py` 12 例 |
+| B1.2 | `POST /resume/{id}/rewrite-suggestions`：只把清单交给模型，服务端逐条复核——未知锚点、`original` 与简历对不上、同块重复、无改动、长度超 2 倍，全部带原因返回而非静默丢弃；建议一律不落库，mock 结果不会比请求活得更久 | `test_resume_rewrite_suggestions.py`、`prompts/resume_rewrite.py`；`blocks_json` 已加入 `rendering` 的不可信字段表 |
+| B1.3 | `POST /resume/{id}/apply-rewrites`：写回 `parsed_json` + 重算目标岗位分差。`expected_original` 拒绝过期锚点（按位置寻址，建议生成后简历又改过就会覆盖新文字）；改写前的 `parsed_json` 存成 JSON 版本行，撤销才可能 | 同上，含快照与 delta 断言 |
+| B1.4 | 诊断弹窗内"行级改写"面板：按需生成、逐条勾选、只应用已采纳、被拒条目连同原因展示、无目标岗位时明说不显示分数变化、应用后明确标注上方维度评分仍是改写前 | 浏览器实测：真实模型对 4 个锚点给出建议 → 全部应用 → 新文本入库、原文进快照 |
+
+顺带修掉的两处（都在 B1 的必经之路上）：
+
+- **`resume_version_of` 从时间戳改为 `parsed_json` 内容哈希**（`71125ff`）。原先用 `update_time.isoformat()`，而 MySQL 该列是 `DATETIME(0)`（已查 `information_schema` 确认）→ 同一秒内的两次写共享版本号，改完简历仍会读到旧分数、推荐缓存最长 24h 不刷新；反之无关列的写入会让全部缓存作废。
+- **`/diagnose` 按 prompt 实际约定的形状读取模型输出**（`dfee148`）。此前 `dimensions.get("structure", 0)` 把整个 dict 当分数交给前端，五个维度条全部显示为 JSON 文本 + 0 宽进度条；`improvement_roadmap` 是三条 track 的 dict，被 `isinstance(list)` 判断丢弃，于是"改进路线图"永远显示"暂无"；模型放在 `keyword_density` 里的 `missing_keywords` 从未被读取——**缺 5 个关键词的简历被告知"关键词覆盖良好"**。三处均在浏览器中改前/改后各验证一次。
+
 ### B2 证据锚定的职业规划（1–1.5 周）
 
 现状 `career_path_agent.py:47-84` 只看简历摘要，分数与薪资区间为编造；`CareerAgent` 硬依赖 Resume/Job/Match 三个 agent（`career_agent.py:22-25,28-32`），深度版只能在 SmartAnalysis 里跑到；RAG 退化时输出 `"暂无行业参考数据"`（`:44`）。
