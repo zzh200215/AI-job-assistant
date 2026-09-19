@@ -102,7 +102,8 @@
 
 - `dry_run` 默认 `True`（`:1383`）
 - 更新幅度仅 4 个标量 ±0.03–0.05，且需 `total>=10` 才触发（`api/job_recommend.py:481`、`recommendation_tuning.py:188-221`）
-- **决定性缺陷**：`recommend()` 既不查 `JobRecommendationFeedback` 也不查 `JobBookmark`，`_apply_filters`（`:576-600`）只过滤地域/行业/薪资/年限 → **点"不感兴趣"的岗位下次刷新照样出现**
+- **决定性缺陷**：`recommend()` 既不查 `JobRecommendationFeedback` 也不查 `JobBookmark`，`_apply_filters`（`:576-600`）只过滤地域/行业/薪资/年限 → **候选人点了"踩"，同一个岗位下次刷新照样出现**
+  （更正：产品上并没有"不感兴趣"按钮。`JobBookmark.action` 支持 `dismiss`、API 也接受该值，但 `JobRecommend.vue:726` 只发 `'bookmark'`。真实可达的负反馈信号是 ThumbsDown → `feedback_type="dislike"`）
 - `_build_tuning_samples` 对每个异常样本重算 embedding（`:669-692`）
 
 ### 3.5 其他深度短板
@@ -133,13 +134,13 @@
 | A2 | 前端所有 AI 输出区渲染降级标记（复用 A1 字段），mock 与真实一眼可辨 | 各视图 + 新增 `AppDegradedBadge` |
 | A3 | §3.1 六处"假 AI"逐个处置：**要么真接 LLM，要么改名去掉 ai 前缀并在 UI 说明为规则计算**。`quick_score_resume` 必须重做（当前奖励凑字数） | `dashboard.py`、`job_recommend_engine.py:520-536`、`resume_analysis_service.py:79-170`、`match_explainer_service.py:421-466`、`career_path_agent.py:47-84` |
 | A4 | 统一匹配分：新建 `resume_version × jd_id → score` 持久表，`/recommend`、`/explain-match`、缺口清单三处共读；`apply_match_score_cap` 接进主链路 | 新表 + `job_recommend_engine.py:253`、`match_explainer_service.py:126-141`、`match_service.py:95-96` |
-| A5 | 反馈最小闭环：`不感兴趣` 写入 `jd_id` 抑制集，`recommend()` 查询时排除 | `api/job_recommend.py` + `job_recommend_engine.py:576-600` |
+| A5 | 反馈最小闭环：`dismiss` + `dislike` 合成抑制集，`recommend()` 在 SQL 层排除，并把抑制指纹接入缓存键 | `job_recommend_engine.py` |
 | A6 | 摘掉 `resume.py:121` 的 `check_quota`（若确认不做商业化）；移除 `tenant_context` 中间件与 `request.js:22-25` 的 org 头 | §2.3 |
 
 **验收**：
 - 关掉真实 provider，UI 上每一处降级内容都有可见标记；`prompt_trace` 中不存在 `provider=qwen` 但内容为 mock 的记录
 - 推荐页与解释页同一 `(resume_version, jd_id)` 分数一致
-- 点"不感兴趣"后，该岗位在后续刷新中不再出现（可自动化测试）
+- 点"踩"后，该岗位在后续刷新中不再出现（可自动化测试）；`dismiss` 路径同样生效，待前端补入口
 - 全量评测集（`backend/tests/eval/` 5 个 JSONL）在真实 provider 下重跑并入库，形成基线
 
 ---
@@ -255,7 +256,7 @@
 
 | 里程碑 | 内容 | 出口判据 |
 |---|---|---|
-| **M1**（约 1 周） | A 全部 + E 的两项一行级修复 + A6 解耦 | mock 可辨识、匹配分唯一、"不感兴趣"生效、metrics 已鉴权、评测基线入库 |
+| **M1**（约 1 周） | A 全部 + E 的两项一行级修复 + A6 解耦 | mock 可辨识、匹配分唯一、负反馈生效、metrics 已鉴权、评测基线入库 |
 | **M2**（约 2.5 周） | B1 | 候选人可一键应用 ≥5 条行级改写并看到分数变化 |
 | **M3**（约 4 周） | B2 | 规划中每个分数与薪资区间可反查支撑样本；缺口图成为单一权威产物 |
 | **M4**（约 6 周） | C | `/api/multi-agent` 返回真实消息；成本非零；编排收敛到 2 条路径且结果一致 |
