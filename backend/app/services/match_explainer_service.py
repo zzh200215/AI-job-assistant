@@ -20,6 +20,13 @@ from app.models.history import JobDescription, Resume
 from app.services.llm_service import chat_json
 from app.services.match_score_calibration import infer_match_score_cap
 from app.services.scoring_config import ScoringWeights, get_weights_for_job
+from app.services.skill_gap import (
+    canonical_skill,
+    jd_nice_to_have_names,
+    jd_required_names,
+    resume_skill_names,
+    skill_field,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -231,9 +238,9 @@ class MatchExplainer:
 
     def _calc_skill(self, resume: dict, jd: dict) -> tuple[float, list[str], dict]:
         """技能匹配：Jaccard 相似度 + 等级匹配"""
-        r_skills = set(self._extract_str_list(resume, "skills"))
-        jd_req = set(self._extract_str_list(jd, "required_skills"))
-        jd_nice = set(self._extract_str_list(jd, "nice_to_have"))
+        r_skills = self._skill_set(resume_skill_names(resume))
+        jd_req = self._skill_set(jd_required_names(jd))
+        jd_nice = self._skill_set(jd_nice_to_have_names(jd))
         all_req = jd_req | jd_nice
 
         if not all_req:
@@ -282,13 +289,13 @@ class MatchExplainer:
         if not projects:
             return 20, ["无项目经历"]
 
-        jd_skills = set(self._extract_str_list(jd, "required_skills"))
+        jd_skills = self._skill_set(jd_required_names(jd))
         jd_resp = set(self._extract_str_list(jd, "responsibilities"))
 
         hit_count = 0
         total_tech = 0
         for proj in projects:
-            techs = set(self._extract_str_list(proj, "tech"))
+            techs = self._skill_set(skill_field(proj, "tech"))
             desc = (proj.get("desc", "") or "").lower()
             total_tech += len(techs)
             hit_count += len(techs & jd_skills)
@@ -420,11 +427,11 @@ class MatchExplainer:
 
     def _calc_bonus(self, resume: dict, jd: dict) -> tuple[float, list[str]]:
         """加分项匹配"""
-        jd_nice = set(self._extract_str_list(jd, "nice_to_have"))
+        jd_nice = self._skill_set(jd_nice_to_have_names(jd))
         if not jd_nice:
             return 50, ["JD 无额外加分项"]
 
-        r_skills = set(self._extract_str_list(resume, "skills"))
+        r_skills = self._skill_set(resume_skill_names(resume))
         matched = r_skills & jd_nice
         ratio = len(matched) / len(jd_nice) if jd_nice else 0
         score = min(100, ratio * 100)
@@ -530,6 +537,12 @@ class MatchExplainer:
             return "不建议投递"
 
     # ==================== 工具 ====================
+
+    @staticmethod
+    def _skill_set(names: list[str]) -> set[str]:
+        """Canonical skill names, so "K8s" and "Kubernetes" are one skill here as
+        they are everywhere else (skill_gap owns the definition)."""
+        return {canonical for canonical in (canonical_skill(name) for name in names) if canonical}
 
     @staticmethod
     def _clean_text(value: Any) -> str:

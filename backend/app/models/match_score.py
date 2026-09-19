@@ -13,6 +13,7 @@ from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Index, S
 
 from app.core.database import Base
 from app.models.base import TenantScopedMixin
+from app.services.scoring_config import SCORE_METHOD
 from app.utils.time_helper import utc_now
 
 
@@ -34,7 +35,7 @@ class MatchScore(TenantScopedMixin, Base):
     score = Column(Float, nullable=False, comment="Canonical 0-100 match score, after any cap")
     raw_score = Column(Float, nullable=False, comment="Rubric score before the weak-fit cap")
     cap_applied = Column(Float, nullable=True, comment="Weak-fit cap that bound the score, if any")
-    method = Column(String(32), nullable=False, default="rubric_6dim", comment="Scoring method identifier")
+    method = Column(String(32), nullable=False, default=SCORE_METHOD, comment="Scoring method identifier")
 
     dimensions_json = Column(Text, comment="Per-dimension breakdown, JSON")
     skill_gap_json = Column(Text, comment="Missing skills driving the gap, JSON")

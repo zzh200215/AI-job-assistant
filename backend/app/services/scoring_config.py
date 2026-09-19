@@ -6,6 +6,13 @@
 
 from dataclasses import dataclass
 
+# Identifier written into every persisted match score. Bump it whenever a change
+# alters what the number *means*: rows stored under an older method stay in the
+# table, and without a distinct label they would keep being read back as current
+# results. v2 folds skill spelling variants together (K8s == Kubernetes) and lets
+# a posting's `skills` field count as a requirement.
+SCORE_METHOD = "rubric_6dim_v2"
+
 
 @dataclass
 class ScoringWeights:

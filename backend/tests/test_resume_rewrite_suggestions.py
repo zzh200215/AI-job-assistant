@@ -21,6 +21,7 @@ from app.models.history import JobDescription, Resume, ResumeVersion
 from app.models.user import User
 from app.api.auth import get_current_user
 from app.services import resume_rewrite_service as svc
+from app.services.scoring_config import SCORE_METHOD
 from app.services.match_score_service import canonical_match_score, resume_version_of
 from app.services.resume_blocks import build_resume_blocks
 
@@ -372,7 +373,7 @@ def test_apply_recomputes_the_match_score_for_the_target_job(db_session, actor):
 
     assert result["score"]["before"]["score"] == baseline
     assert result["score"]["delta"] is not None and result["score"]["delta"] > 0
-    assert result["score"]["after"]["method"] == "rubric_6dim"
+    assert result["score"]["after"]["method"] == SCORE_METHOD
 
 
 def test_apply_respects_ownership(db_session, actor):

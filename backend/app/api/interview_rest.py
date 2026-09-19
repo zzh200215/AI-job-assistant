@@ -35,6 +35,7 @@ from app.services.interview_config_service import (
 from app.services.interview_evaluation_service import evaluation_payloads
 from app.services.llm_service import chat_json
 from app.services.rag_service import search_knowledge
+from app.services.skill_gap import jd_required_names
 from app.utils.job_access import get_accessible_job
 from app.utils.response import ERR_PARAM, fail, ok
 
@@ -508,11 +509,12 @@ def _build_jd_summary(jd: JobDescription | None) -> dict[str, Any]:
 
 
 def _extract_skills(jd: JobDescription) -> list[str]:
+    """Required skills in the posting's own wording — the shared fallback chain in
+    `skill_gap` decides *which* field counts; the names are passed through as
+    written because they go into a prompt and onto the UI."""
     parsed = jd.parsed_json or {}
-    skills = parsed.get("required_skills") or parsed.get("skills") or jd.skill_tags or []
-    if isinstance(skills, str):
-        return [item.strip() for item in skills.split(",") if item.strip()]
-    return [str(item).strip() for item in skills if str(item).strip()]
+    names = jd_required_names(parsed) or [str(tag) for tag in (jd.skill_tags or []) if str(tag).strip()]
+    return [name.strip() for name in names if name.strip()]
 
 
 def _question_stats(questions: list[dict[str, Any]]) -> dict[str, Any]:

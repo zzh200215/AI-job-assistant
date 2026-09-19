@@ -6,6 +6,8 @@ JobRecommendationEngine — 岗位推荐引擎
   2. 规则打分（技能 Jaccard + 经验层级 + 薪资匹配）
   3. 混合排序（向量分 × 0.6 + 规则分 × 0.4）
 
+技能名与缺口的定义不在这里，统一走 app/services/skill_gap.py。
+
 使用方式：
     engine = JobRecommendationEngine(db)
     results = engine.recommend(resume_id=1, limit=5, filters={"location": "北京"})
@@ -31,6 +33,8 @@ from app.core.tenant_context import current_tenant_id
 from app.models.history import JobDescription, Resume
 from app.services.embedding_service import embed_texts
 from app.services.recommendation_tuning import DEFAULT_RECOMMENDATION_TUNING_CONFIG
+from app.services.scoring_config import SCORE_METHOD
+from app.services.skill_gap import build_skill_gap, canonical_skill, jd_skill_union, resume_skill_names
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +195,7 @@ class RecommendResult:
     vector_score: float  # 0-100 向量相似度分
     rule_score: float  # 0-100 规则匹配分
     retrieval_score: float = 0.0  # 0-100 混合召回分，仅用于粗排，不展示
-    match_score_method: str = "rubric_6dim"
+    match_score_method: str = SCORE_METHOD
     skill_overlap: list[str] = field(default_factory=list)  # 重合技能
     skill_gap: list[str] = field(default_factory=list)  # 缺失技能
     salary_match: bool = True  # 薪资是否匹配
@@ -334,11 +338,16 @@ class JobRecommendationEngine:
             rule_score = self._rule_score(resume_data, jd, jd_data)
             combined = vector_score * self._vector_weight + rule_score * self._rule_weight
 
-            # 技能分析
-            resume_skills = self._extract_skills(resume_data)
-            jd_skills = self._extract_skills(jd_data)
-            overlap = list(set(resume_skills) & set(jd_skills))
-            gap = list(set(jd_skills) - set(resume_skills))
+            # 技能分析：缺口只认 skill_gap 这一个权威实现
+            gap_graph = build_skill_gap(
+                resume_data,
+                jd_data,
+                jd_id=jd.id,
+                title=jd.title,
+                fallback_required=getattr(jd, "skill_tags", None) or [],
+            )
+            overlap = (gap_graph.matched_required + gap_graph.matched_nice_to_have)[:8]
+            gap = (gap_graph.missing_required + gap_graph.missing_nice_to_have)[:8]
 
             # 薪资 / 地点匹配
             resume_salary = self._parse_salary(resume_data.get("expected_salary", ""))
@@ -437,8 +446,10 @@ class JobRecommendationEngine:
         rule_weights = self._rule_component_weights
 
         # --- 技能 Jaccard 相似度 ---
-        resume_skills = set(self._extract_skills(resume_data))
-        jd_skills = set(self._extract_skills(jd_data))
+        resume_skills = {canonical_skill(s) for s in resume_skill_names(resume_data)}
+        jd_skills = {canonical_skill(s) for s in jd_skill_union(jd_data, getattr(jd, "skill_tags", None) or [])}
+        resume_skills.discard("")
+        jd_skills.discard("")
         if resume_skills and jd_skills:
             jaccard = len(resume_skills & jd_skills) / len(resume_skills | jd_skills)
             scores.append(jaccard * 100)
@@ -470,20 +481,6 @@ class JobRecommendationEngine:
             return 50
 
         return sum(s * w for s, w in zip(scores, weights, strict=False)) / sum(weights)
-
-    # ==================== 技能提取 ====================
-
-    def _extract_skills(self, data: dict) -> list[str]:
-        """从 parsed_json 中提取技能列表"""
-        skills = []
-        raw = data.get("skills", data.get("required_skills", data.get("nice_to_have", [])))
-        if isinstance(raw, list):
-            for s in raw:
-                if isinstance(s, str):
-                    skills.append(s.strip().lower())
-                elif isinstance(s, dict):
-                    skills.append(s.get("skill", "").strip().lower())
-        return [s for s in skills if s]
 
     def _build_vector_text(self, data: dict) -> str:
         """构建用于向量化的文本"""

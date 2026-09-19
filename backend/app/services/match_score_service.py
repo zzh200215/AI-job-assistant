@@ -22,10 +22,11 @@ from sqlalchemy.orm import Session
 from app.models.history import JobDescription, Resume
 from app.models.match_score import MatchScore
 from app.services.match_explainer_service import MatchExplainer
+from app.services.scoring_config import SCORE_METHOD
 
 logger = logging.getLogger(__name__)
 
-METHOD = "rubric_6dim"
+METHOD = SCORE_METHOD
 
 
 def resume_version_of(resume: Resume) -> str:

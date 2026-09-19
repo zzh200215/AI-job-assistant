@@ -27,6 +27,7 @@ from app.services.recommendation_tuning import (
     reset_recommendation_tuning_config,
     save_recommendation_tuning_config,
 )
+from app.services.skill_gap import build_skill_gap
 from app.utils.response import ERR_COMMON, ERR_PARAM, fail, ok
 
 router = APIRouter()
@@ -704,10 +705,11 @@ def _build_tuning_samples(db: Session, *, user_id: int, anomaly_only: bool = Tru
 
         resume_json = resume["parsed_json"] or {}
         jd_json = jd["parsed_json"] or {}
-        resume_skills = engine._extract_skills(resume_json)
-        jd_skills = engine._extract_skills(jd_json)
-        overlap = sorted(set(resume_skills) & set(jd_skills))
-        gap = sorted(set(jd_skills) - set(resume_skills))
+        tuning_gap = build_skill_gap(
+            resume_json, jd_json, jd_id=row["jd_id"], fallback_required=jd.get("skill_tags") or []
+        )
+        overlap = tuning_gap.matched_required + tuning_gap.matched_nice_to_have
+        gap = tuning_gap.missing_required + tuning_gap.missing_nice_to_have
 
         resume_salary = engine._parse_salary(resume_json.get("expected_salary", "") or "")
         jd_salary = engine._parse_salary(jd["salary_range"] or "")

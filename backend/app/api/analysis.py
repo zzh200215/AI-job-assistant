@@ -17,6 +17,7 @@ from app.services import interview_service, match_service, optimize_service
 from app.services.analysis_service import run_smart_analysis
 from app.services.match_explainer_service import MatchExplainer
 from app.services.rag_service import get_knowledge_references
+from app.services.skill_gap import build_skill_gap, jd_skill_union, resume_skill_names
 from app.utils.http_errors import api_error
 from app.utils.job_access import get_accessible_job
 from app.utils.response import ERR_AI, ERR_COMMON, ERR_DB, ERR_PARAM, fail, ok
@@ -308,21 +309,17 @@ async def get_record(
 
     resume_parsed = resume.parsed_json or {} if resume else {}
     jd_parsed = jd.parsed_json or {} if jd else {}
-    resume_skills = resume_parsed.get("skills") or []
-    if isinstance(resume_skills, list):
-        resume_skills = [s if isinstance(s, str) else s.get("skill", "") for s in resume_skills]
-    jd_skills = jd_parsed.get("required_skills") or []
-    if isinstance(jd_skills, list):
-        jd_skills = [s if isinstance(s, str) else s.get("skill", "") for s in jd_skills]
-    jd_nice = jd_parsed.get("nice_to_have") or []
-    if isinstance(jd_nice, list):
-        jd_nice = [s if isinstance(s, str) else s.get("skill", "") for s in jd_nice]
-    all_jd_skills = list(set(jd_skills + jd_nice))
-
-    resume_set = {s.lower().strip() for s in resume_skills if s}
-    jd_set = {s.lower().strip() for s in all_jd_skills if s}
-    matched = list(resume_set & jd_set)
-    missing = list(jd_set - resume_set)
+    fallback_required = list(jd.skill_tags or []) if jd else []
+    resume_skills = resume_skill_names(resume_parsed)
+    jd_skills = jd_skill_union(jd_parsed, fallback_required)
+    report_gap = build_skill_gap(
+        resume_parsed,
+        jd_parsed,
+        jd_id=rec.jd_id,
+        fallback_required=fallback_required,
+    )
+    matched = report_gap.matched_required + report_gap.matched_nice_to_have
+    missing = report_gap.missing_required + report_gap.missing_nice_to_have
 
     parsed_match = _normalize_dimension_scores(_deep_parse_json(rec.match_report))
     parsed_interview = _normalize_interview_questions(_deep_parse_json(rec.interview_questions))
@@ -342,7 +339,7 @@ async def get_record(
             "resume_title": resume.file_name if resume else "",
             "jd_title": jd.title if jd else "",
             "resume_skills": resume_skills,
-            "jd_skills": all_jd_skills,
+            "jd_skills": jd_skills,
             "matched_skills": matched,
             "missing_skills": missing,
             "final_report": final_report,

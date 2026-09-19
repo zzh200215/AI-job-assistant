@@ -13,6 +13,7 @@ from app.models.history import JobDescription, Resume
 from app.models.match_score import MatchScore
 from app.models.user import User
 from app.services.match_explainer_service import MatchExplainer
+from app.services.scoring_config import SCORE_METHOD
 from app.services.match_score_service import (
     canonical_match_score,
     compute_canonical_score,
@@ -169,7 +170,7 @@ def test_canonical_score_is_persisted_once_per_pair(db_session):
         .all()
     )
     assert len(rows) == 1
-    assert rows[0].method == "rubric_6dim"
+    assert rows[0].method == SCORE_METHOD
     assert rows[0].resume_version == resume_version_of(resume)
 
 
@@ -191,7 +192,7 @@ def test_recommend_engine_reports_the_canonical_score(monkeypatch, db_session):
 
     canonical = canonical_match_score(db_session, resume, jd, user_id=user.id, persist=False)["score"]
     assert round(float(by_id[jd.id]["match_score"])) == round(float(canonical))
-    assert by_id[jd.id]["match_score_method"] == "rubric_6dim"
+    assert by_id[jd.id]["match_score_method"] == SCORE_METHOD
     # Retrieval signal is still reported, but as a separate diagnostic field.
     assert "retrieval_score" in by_id[jd.id]
 
