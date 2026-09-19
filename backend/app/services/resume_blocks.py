@@ -163,6 +163,14 @@ def apply_block_edits(
 
         kind, entry, before = slot
         text = proposed.strip()
+
+        # Anchors are positional, so a suggestion generated against an older copy
+        # of the resume can point at different text by the time it is applied.
+        expected = edit.get("expected_original")
+        if isinstance(expected, str) and expected.strip() != before:
+            rejected.append({"index": position, "block_id": block_id, "reason": "stale_anchor"})
+            continue
+
         if kind == "skills":
             skills = _split_skills(text)
             if not skills:

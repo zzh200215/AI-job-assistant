@@ -17,6 +17,7 @@ from app.models.user import User
 from app.schemas.resume import ResumeParseResp, ResumeUploadResp
 from app.services import resume_export_service, resume_service
 from app.services.resume_analysis_service import analyze_resume, quick_score_resume
+from app.services.resume_rewrite_service import apply_rewrite_suggestions, build_rewrite_suggestions
 from app.services.resume_tailor_service import tailor_resume_for_jd
 from app.services.resume_workspace_service import build_ats_snapshot, build_markdown_diff
 from app.services.subscription_service import check_quota
@@ -934,6 +935,63 @@ async def tailor_resume(
     except Exception as exc:
         traceback.print_exc()
         return fail(message=f"改写失败: {exc}", code=ERR_AI)
+
+
+# ============================================================
+# 行级改写建议（锚定到具体文本块）
+# ============================================================
+
+
+@router.post("/{resume_id}/rewrite-suggestions", summary="生成行级简历改写建议")
+async def rewrite_suggestions(
+    resume_id: int,
+    payload: dict | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """每条建议锚定一个文本块，返回 原文 → 改后；不落库，采纳与否由候选人决定。"""
+    jd_id = (payload or {}).get("jd_id")
+    try:
+        result = build_rewrite_suggestions(db, resume_id, jd_id=int(jd_id) if jd_id else None, user_id=current_user.id)
+        return ok(result, message=f"生成 {len(result['suggestions'])} 条改写建议")
+    except ValueError as exc:
+        return fail(message=str(exc), code=ERR_PARAM)
+    except Exception as exc:
+        traceback.print_exc()
+        return fail(message=f"改写建议生成失败: {exc}", code=ERR_AI)
+
+
+@router.post("/{resume_id}/apply-rewrites", summary="应用行级改写并重算匹配分")
+async def apply_rewrites(
+    resume_id: int,
+    payload: dict | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """edits: [{block_id, proposed_text, expected_original?}]
+
+    expected_original 用于拒绝过期锚点：建议是按 position 锚定的，简历在生成建议
+    之后又被改过时，直接应用会覆盖掉候选人后来写的文字。
+    """
+    edits = (payload or {}).get("edits")
+    if not isinstance(edits, list) or not edits:
+        return fail(message="edits 必须是非空数组", code=ERR_PARAM)
+    jd_id = (payload or {}).get("jd_id")
+    try:
+        result = apply_rewrite_suggestions(
+            db, resume_id, edits, jd_id=int(jd_id) if jd_id else None, user_id=current_user.id
+        )
+        message = (
+            f"已应用 {len(result['applied'])} 处改写"
+            if result["changed"]
+            else "没有改动被应用"
+        )
+        return ok(result, message=message)
+    except ValueError as exc:
+        return fail(message=str(exc), code=ERR_PARAM)
+    except Exception as exc:
+        traceback.print_exc()
+        return fail(message=f"应用改写失败: {exc}", code=ERR_COMMON)
 
 
 # ============================================================

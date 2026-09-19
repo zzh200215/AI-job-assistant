@@ -18,6 +18,7 @@ _UNTRUSTED_FIELD_TAGS = {
     "jd_text": "jd",
     "resume_json": "resume",
     "jd_json": "jd",
+    "blocks_json": "resume_blocks",
     "user_request": "user_request",
     "answer": "candidate_answer",
 }
