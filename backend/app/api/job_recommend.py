@@ -20,7 +20,7 @@ from app.core.tenant_context import current_tenant_id, stamp_tenant, tenant_filt
 from app.models.history import JobDescription, Resume
 from app.models.job_recommend import JobBookmark, JobRecommendationFeedback
 from app.models.user import User
-from app.services.job_recommend_engine import JobRecommendationEngine
+from app.services.job_recommend_engine import JobRecommendationEngine, load_suppressed_reasons
 from app.services.recommendation_tuning import (
     build_feedback_tuning_recommendation,
     get_recommendation_tuning_config,
@@ -1486,6 +1486,9 @@ async def get_jd_detail(
 # 职位收藏 / 不感兴趣
 # ============================================================
 
+# Upper bound on the recovery list a single request may carry.
+_SUPPRESSED_LIST_MAX = 200
+
 
 @router.post("/bookmarks", summary="收藏/不感兴趣职位")
 async def bookmark_job(
@@ -1564,6 +1567,51 @@ async def remove_bookmark(
     return ok(message="已移除")
 
 
+@router.post("/bookmarks/restore", summary="恢复被隐藏的职位")
+async def restore_job(
+    payload: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Clear every signal that hides a job, in one call.
+
+    The candidate-facing alternative — "取消收藏" plus a separate feedback
+    delete — would leave a job still hidden by a thumbs-down while the UI claimed
+    it was restored. Idempotent by design: clicking 恢复 twice is not an error.
+    """
+    jd_id = payload.get("jd_id")
+    if not jd_id:
+        return fail(message="jd_id 必填", code=ERR_PARAM)
+
+    cleared = {
+        "dismiss": (
+            db.query(JobBookmark)
+            .filter(
+                tenant_filter(JobBookmark),
+                JobBookmark.user_id == current_user.id,
+                JobBookmark.jd_id == jd_id,
+                JobBookmark.action == "dismiss",
+            )
+            .delete(synchronize_session=False)
+        ),
+        "dislike": (
+            db.query(JobRecommendationFeedback)
+            .filter(
+                tenant_filter(JobRecommendationFeedback),
+                JobRecommendationFeedback.user_id == current_user.id,
+                JobRecommendationFeedback.jd_id == jd_id,
+                JobRecommendationFeedback.feedback_type == "dislike",
+            )
+            .delete(synchronize_session=False)
+        ),
+    }
+    db.commit()
+    return ok(
+        {"jd_id": jd_id, **cleared},
+        message="已恢复推荐" if any(cleared.values()) else "该职位当前未被隐藏",
+    )
+
+
 @router.get("/bookmarks/list", summary="获取收藏的职位列表")
 async def list_bookmarks(
     page: int = Query(1, ge=1),
@@ -1606,19 +1654,38 @@ async def list_bookmarks(
     return ok({"total": total, "items": items})
 
 
-@router.get("/bookmarks/dismissed", summary="获取不感兴趣的职位ID列表")
+@router.get("/bookmarks/dismissed", summary="获取被隐藏职位及原因")
 async def list_dismissed(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    jd_ids = [
-        row.jd_id
-        for row in db.query(JobBookmark.jd_id)
-        .filter(
-            tenant_filter(JobBookmark),
-            JobBookmark.user_id == current_user.id,
-            JobBookmark.action == "dismiss",
-        )
+    reasons = load_suppressed_reasons(db, current_user.id)
+    jobs = (
+        db.query(JobDescription)
+        .filter(JobDescription.id.in_(sorted(reasons)))
+        .order_by(JobDescription.id.desc())
         .all()
+        if reasons
+        else []
+    )
+    visible = jobs[:_SUPPRESSED_LIST_MAX]
+    items = [
+        {
+            "jd_id": jd.id,
+            "job_title": jd.title,
+            "company": jd.company,
+            "location": jd.location,
+            "reasons": reasons.get(jd.id, []),
+        }
+        for jd in visible
     ]
-    return ok({"dismissed_jd_ids": jd_ids})
+    # `total` counts suppression rows, which can outlive the job they point at, so
+    # the two gaps are reported separately rather than folded into one number.
+    return ok(
+        {
+            "total": len(reasons),
+            "items": items,
+            "orphaned": max(len(reasons) - len(jobs), 0),
+            "truncated": max(len(jobs) - len(visible), 0),
+        }
+    )

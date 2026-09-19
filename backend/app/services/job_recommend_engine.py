@@ -99,16 +99,7 @@ def load_suppressed_jd_ids(db: Session, user_id: int) -> tuple[set[int], str]:
     """
     from app.models.job_recommend import JobBookmark, JobRecommendationFeedback
 
-    dismissed = {
-        row.jd_id
-        for row in db.query(JobBookmark.jd_id).filter(JobBookmark.user_id == user_id, JobBookmark.action == "dismiss").all()
-    }
-    disliked = {
-        row.jd_id
-        for row in db.query(JobRecommendationFeedback.jd_id)
-        .filter(JobRecommendationFeedback.user_id == user_id, JobRecommendationFeedback.feedback_type == "dislike")
-        .all()
-    }
+    dismissed, disliked = _load_suppression_sets(db, user_id)
     suppressed = dismissed | disliked
 
     marker = db.query(func.count(JobBookmark.id)).filter(JobBookmark.user_id == user_id).scalar() or 0
@@ -116,6 +107,42 @@ def load_suppressed_jd_ids(db: Session, user_id: int) -> tuple[set[int], str]:
         JobRecommendationFeedback.user_id == user_id
     ).scalar() or 0
     return suppressed, f"{marker}-{marker_fb}"
+
+
+def _load_suppression_sets(db: Session, user_id: int) -> tuple[set[int], set[int]]:
+    from app.models.job_recommend import JobBookmark, JobRecommendationFeedback
+
+    dismissed = {
+        row.jd_id
+        for row in db.query(JobBookmark.jd_id).filter(
+            JobBookmark.user_id == user_id, JobBookmark.action == "dismiss"
+        ).all()
+    }
+    disliked = {
+        row.jd_id
+        for row in db.query(JobRecommendationFeedback.jd_id)
+        .filter(JobRecommendationFeedback.user_id == user_id, JobRecommendationFeedback.feedback_type == "dislike")
+        .all()
+    }
+    return dismissed, disliked
+
+
+def load_suppressed_reasons(db: Session, user_id: int) -> dict[int, list[str]]:
+    """jd_id -> the affordances that hid it, so the UI can say *why* a job is gone.
+
+    Without this the recovery list could only ever be labelled "不感兴趣", which
+    misreports a job hidden by a thumbs-down.
+    """
+    dismissed, disliked = _load_suppression_sets(db, user_id)
+    reasons: dict[int, list[str]] = {}
+    for jd_id in dismissed | disliked:
+        labels = []
+        if jd_id in dismissed:
+            labels.append("dismiss")
+        if jd_id in disliked:
+            labels.append("dislike")
+        reasons[jd_id] = labels
+    return reasons
 
 
 def _prune_recommend_cache_locked(now: float, ttl: int) -> None:

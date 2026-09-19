@@ -353,6 +353,7 @@
           为您推荐 <strong>{{ recommendations.length }}</strong> 个岗位
           <span v-if="appliedFilters" class="summary-filters">（已应用筛选条件）</span>
         </span>
+        <el-button size="small" text @click="openSuppressedDialog">已忽略的岗位</el-button>
       </div>
 
       <div class="card-grid">
@@ -391,6 +392,15 @@
                     effect="dark"
                     >{{ job.recommendation_type }}</el-tag
                   >
+                  <el-button
+                    size="small"
+                    text
+                    class="dismiss-btn"
+                    title="不再推荐该岗位，可在「已忽略」中恢复"
+                    @click="dismissJob(job)"
+                  >
+                    <el-icon><CircleClose /></el-icon> 不感兴趣
+                  </el-button>
                 </div>
                 <div class="job-company">
                   <el-icon><OfficeBuilding /></el-icon>
@@ -502,12 +512,57 @@
     <!-- 无结果 -->
     <el-empty v-else-if="!loading.recommend && selectedResumeId" :image-size="120">
       <template #description>
-        <span v-if="appliedFilters">没有找到符合条件的岗位，试试调整筛选条件</span>
-        <span v-else>暂无匹配的岗位推荐，请完善简历信息或导入更多岗位数据</span>
+        <span v-if="appliedFilters"
+          >没有找到符合条件的岗位，试试调整筛选条件；标记过不感兴趣的岗位也会在这里被排除</span
+        >
+        <span v-else
+          >暂无匹配的岗位推荐，请完善简历信息或导入更多岗位数据；已隐藏的岗位可在下方找回</span
+        >
       </template>
       <el-button v-if="appliedFilters" @click="resetFilters">清除筛选</el-button>
       <el-button v-else type="primary" @click="seedData">生成模拟岗位</el-button>
+      <el-button @click="openSuppressedDialog">查看已忽略的岗位</el-button>
     </el-empty>
+
+    <!-- 已忽略岗位：隐藏必须可逆，否则一次误点就永久减少推荐 -->
+    <el-dialog v-model="suppressed.dialog" title="已忽略的岗位" width="640px">
+      <div v-if="suppressed.loading" class="suppressed-loading">
+        <el-icon class="is-loading"><Loading /></el-icon> 加载中…
+      </div>
+      <template v-else>
+        <el-table v-if="suppressed.items.length" :data="suppressed.items" size="small">
+          <el-table-column label="岗位">
+            <template #default="{ row }">
+              <div class="suppressed-title">{{ row.job_title || '未命名岗位' }}</div>
+              <div class="suppressed-sub">{{ row.company }} · {{ row.location || '地点不限' }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="隐藏原因" width="150">
+            <template #default="{ row }">
+              <span class="suppressed-reason">{{ reasonText(row.reasons) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="90" align="right">
+            <template #default="{ row }">
+              <el-button
+                size="small"
+                text
+                :loading="suppressed.submittingId === row.jd_id"
+                @click="restoreSuppressed(row)"
+                >恢复</el-button
+              >
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-else :image-size="80" description="没有已忽略的岗位" />
+        <p v-if="suppressed.orphaned > 0" class="suppressed-note">
+          另有 {{ suppressed.orphaned }} 条记录对应的岗位已下架，无法恢复。
+        </p>
+        <p v-if="suppressed.truncated > 0" class="suppressed-note">
+          还有 {{ suppressed.truncated }} 个隐藏岗位未在此列出（单次最多展示 {{ suppressedMax }} 条）。
+        </p>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -523,6 +578,9 @@ import {
   submitJobFeedback,
   startFullAnalysis,
   getJobPipelineList,
+  getJobBookmarks,
+  getSuppressedJobs,
+  restoreSuppressedJob,
   bookmarkJob,
   unbookmarkJob,
 } from '@/api/jobs'
@@ -538,6 +596,8 @@ import {
   Microphone,
   Star,
   Refresh,
+  CircleClose,
+  Loading,
 } from '@element-plus/icons-vue'
 import { OfficeBuilding } from '@element-plus/icons-vue'
 import { createJobPipelineEntry } from '@/api/targets'
@@ -549,6 +609,18 @@ const resumeList = ref([])
 const recommendations = ref([])
 const analyzingId = ref(null)
 const feedbackStats = ref(null)
+
+// 被隐藏岗位的恢复面板：隐藏是双向操作，没有它"不感兴趣"就是单向陷阱
+const suppressed = reactive({
+  dialog: false,
+  loading: false,
+  submittingId: null,
+  items: [],
+  total: 0,
+  orphaned: 0,
+  truncated: 0,
+})
+const suppressedMax = 200
 
 const loading = reactive({
   resumes: false,
@@ -647,6 +719,16 @@ async function loadRecommendations() {
     } catch {
       // 投递状态加载失败时，推荐列表仍可继续浏览。
     }
+    // 收藏状态由后端持久化，不回填的话刷新后卡片会显示"未收藏"的假状态
+    try {
+      const bookmarks = await getJobBookmarks()
+      const saved = (bookmarks?.items || []).map((b) => b.jd_id).filter(Boolean)
+      recommendations.value.forEach((j) => {
+        j._bookmarked = saved.includes(j.jd_id)
+      })
+    } catch {
+      // 同上：拿不到就保持 false，不假装已收藏。
+    }
   } catch (e) {
     console.error('获取推荐失败:', e)
     recommendations.value = []
@@ -730,8 +812,64 @@ async function toggleBookmark(job) {
     job._bookmarked = next
     ElMessage.success(next ? '已收藏' : '已取消收藏')
   } catch (e) {
-    ElMessage.error('收藏操作失败: ' + (e.message || e))
+    ElMessage.error('收藏操作失败: ' + (e.userMessage || e.message || e))
   }
+}
+
+// 隐藏 = 写 JobBookmark(action='dismiss')，推荐引擎会在 SQL 层排除，不再只是记一笔
+async function dismissJob(job) {
+  const jdId = job.jd_id || job.id
+  try {
+    await bookmarkJob(jdId, 'dismiss')
+    const idx = recommendations.value.indexOf(job)
+    if (idx >= 0) recommendations.value.splice(idx, 1)
+    ElMessage.success('已标记不感兴趣，可在「已忽略」中恢复')
+  } catch (e) {
+    ElMessage.error('操作失败: ' + (e.userMessage || e.message || e))
+  }
+}
+
+function openSuppressedDialog() {
+  suppressed.dialog = true
+  loadSuppressed()
+}
+
+async function loadSuppressed() {
+  suppressed.loading = true
+  try {
+    const data = await getSuppressedJobs()
+    suppressed.items = data?.items || []
+    suppressed.total = Number(data?.total ?? suppressed.items.length)
+    suppressed.orphaned = Number(data?.orphaned ?? 0)
+    suppressed.truncated = Number(data?.truncated ?? 0)
+  } catch (e) {
+    suppressed.items = []
+    suppressed.total = 0
+    suppressed.orphaned = 0
+    suppressed.truncated = 0
+    ElMessage.error('获取已忽略岗位失败: ' + (e.userMessage || e.message || e))
+  } finally {
+    suppressed.loading = false
+  }
+}
+
+async function restoreSuppressed(item) {
+  suppressed.submittingId = item.jd_id
+  try {
+    await restoreSuppressedJob(item.jd_id)
+    ElMessage.success(`已恢复「${item.job_title || '该岗位'}」`)
+    await loadSuppressed()
+    await loadRecommendations()
+  } catch (e) {
+    ElMessage.error('恢复失败: ' + (e.userMessage || e.message || e))
+  } finally {
+    suppressed.submittingId = null
+  }
+}
+
+function reasonText(reasons) {
+  const labels = (reasons || []).map((r) => (r === 'dislike' ? '点踩过' : '标记不感兴趣'))
+  return labels.join(' · ') || '已被隐藏'
 }
 
 async function addToKanban(job) {
@@ -753,13 +891,20 @@ async function addToKanban(job) {
 
 async function toggleFeedback(job, type) {
   if (job._feedback === type) {
-    ElMessage.info('该反馈已记录，无需重复提交')
+    ElMessage.info('该反馈已记录，如需恢复推荐请到「已忽略」中查看')
     return
   }
   try {
     await submitJobFeedback(selectedResumeId.value, job.jd_id, type, job.match_score)
     job._feedback = type
-    ElMessage.success(type === 'like' ? '已点赞' : '已点踩')
+    if (type === 'dislike') {
+      // 点踩同样是隐藏信号，引擎会把它排除在下次推荐之外——卡片不能继续留在列表里
+      const idx = recommendations.value.indexOf(job)
+      if (idx >= 0) recommendations.value.splice(idx, 1)
+      ElMessage.success('已点踩，该岗位不再出现在推荐中')
+    } else {
+      ElMessage.success('已点赞')
+    }
     await loadFeedbackStats()
   } catch {
     ElMessage.error('反馈提交失败')
@@ -1178,10 +1323,45 @@ function formatShortDate(dateText) {
 
 /* 结果 */
 .result-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   font-size: 14px;
   color: var(--app-text);
 }
 .summary-filters {
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.dismiss-btn {
+  margin-left: auto;
+  color: var(--app-muted);
+}
+.dismiss-btn:hover {
+  color: var(--app-danger);
+}
+.suppressed-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--app-muted);
+}
+.suppressed-title {
+  font-size: 14px;
+  color: var(--app-text);
+}
+.suppressed-sub {
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.suppressed-reason {
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.suppressed-note {
+  margin: 10px 0 0;
   font-size: 12px;
   color: var(--app-muted);
 }
