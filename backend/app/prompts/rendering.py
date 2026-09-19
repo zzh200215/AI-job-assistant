@@ -15,10 +15,12 @@ UNTRUSTED_DATA_INSTRUCTION = (
 
 _UNTRUSTED_FIELD_TAGS = {
     "resume_text": "resume",
+    "resume_summary": "resume",
     "jd_text": "jd",
     "resume_json": "resume",
     "jd_json": "jd",
     "blocks_json": "resume_blocks",
+    "directions_json": "job_directions",
     "user_request": "user_request",
     "answer": "candidate_answer",
 }
