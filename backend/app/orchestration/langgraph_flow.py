@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from sqlalchemy.orm import Session
 
+from app.agents.base_agent import record_node_outcome
 from app.models.agent import AgentTask
 from app.models.agent_run import AgentRun
 from app.orchestration.context import AgentContext
-from app.orchestration.strategies import _agent_result, _orchestrator_result
+from app.orchestration.strategies import _agent_result, _orchestrator_result, _result_from_outcome
 from app.utils.time_helper import utc_now
 
 if TYPE_CHECKING:
@@ -69,6 +69,7 @@ def run_linear_graph(
     jd_id: int,
     user_id: int | None,
     db: Session,
+    run_id: int | None = None,
 ) -> dict[str, Any]:
     """Execute the linear pipeline with a LangGraph state graph."""
     _ensure_langgraph_available("langgraph_linear")
@@ -77,7 +78,8 @@ def run_linear_graph(
     if not task:
         return _task_not_found(task_id)
 
-    context = AgentContext.for_analysis(resume_id, jd_id, user_id=user_id, db=db)
+    run = strategy._ensure_run(db, task_id, resume_id, jd_id, run_id)
+    context = strategy._new_context(task_id, run.id, resume_id, jd_id, user_id, db)
     graph = _build_linear_graph(strategy, db)
     app = graph.compile()
     final_state = app.invoke(
@@ -89,7 +91,7 @@ def run_linear_graph(
             "error": "",
         }
     )
-    return _finalize_linear_run(strategy, db, task, resume_id, jd_id, user_id, final_state)
+    return _finalize_linear_run(strategy, db, task, run, resume_id, jd_id, user_id, final_state)
 
 
 def run_layered_graph(
@@ -99,6 +101,7 @@ def run_layered_graph(
     jd_id: int,
     user_id: int | None,
     db: Session,
+    run_id: int | None = None,
 ) -> dict[str, Any]:
     """Execute the layered pipeline with sequential graph levels."""
     _ensure_langgraph_available("langgraph_layered")
@@ -107,18 +110,8 @@ def run_layered_graph(
     if not task:
         return _task_not_found(task_id)
 
-    run = AgentRun(
-        resume_id=resume_id or 0,
-        jd_id=jd_id or 0,
-        user_request="langgraph_layered",
-        status="running",
-        start_time=utc_now(),
-    )
-    db.add(run)
-    db.commit()
-    db.refresh(run)
-
-    context = AgentContext.for_analysis(resume_id, jd_id, user_id=user_id, db=db)
+    run = strategy._ensure_run(db, task_id, resume_id, jd_id, run_id)
+    context = strategy._new_context(task_id, run.id, resume_id, jd_id, user_id, db)
     graph = _build_layered_graph(strategy, db)
     app = graph.compile()
     final_state = app.invoke(
@@ -142,6 +135,7 @@ def run_step_by_step_graph(
     jd_id: int,
     user_id: int | None,
     db: Session,
+    run_id: int | None = None,
 ) -> dict[str, Any]:
     """Execute the step-by-step workflow with a LangGraph state graph."""
     _ensure_langgraph_available("langgraph_step_by_step")
@@ -150,7 +144,7 @@ def run_step_by_step_graph(
     if not task:
         return _task_not_found(task_id)
 
-    context = AgentContext.for_analysis(resume_id, jd_id, user_id=user_id, db=db)
+    context = strategy._new_context(task_id, run_id, resume_id, jd_id, user_id, db)
     graph = _build_step_graph(strategy, db)
     app = graph.compile()
     final_state = app.invoke(
@@ -249,16 +243,18 @@ def _make_linear_agent_node(
                     "error": "",
                 }
             )
-            strategy._create_step_log(db, state["task_id"], agent_name, step_index, "skipped", {"skipped": True})
+            strategy._create_step_log(
+                db, state["task_id"], agent_name, step_index, "skipped", {"skipped": True}, context
+            )
             return {
                 **state,
                 "steps": steps,
                 "context": context,
             }
 
-        log = strategy._create_step_log(db, state["task_id"], agent_name, step_index, "running")
+        log = strategy._create_step_log(db, state["task_id"], agent_name, step_index, "running", context=context)
         critical = strategy.registry.is_critical(agent_name)
-        result = strategy._execute_agent_with_retry(db, state["task_id"], log, agent_name, context, critical)
+        result = strategy._execute_agent_node(db, log, agent_name, context)
         steps.append(result)
 
         failed_critical = state["failed_critical"]
@@ -287,10 +283,8 @@ def _make_layer_node(
 ):
     def _run(state: LayeredGraphState) -> LayeredGraphState:
         context = state["context"]
-        prior = context.fork()
         steps = list(state["steps"])
         next_step_index = state["step_index"]
-        planned_runs = []
 
         if _is_task_cancelled(db, state["task_id"]):
             return {
@@ -302,43 +296,29 @@ def _make_layer_node(
                 "error": "Cancelled by user",
             }
 
-        for agent_name in agent_names:
-            next_step_index += 1
-            log = strategy._create_step_log(db, state["task_id"], agent_name, next_step_index, "running")
-            planned_runs.append((agent_name, log))
+        # 整层先落 running 日志，再并发执行节点
+        logs = {
+            name: strategy._create_step_log(
+                db, state["task_id"], name, next_step_index + i + 1, "running", context=context
+            )
+            for i, name in enumerate(agent_names)
+        }
+        next_step_index += len(agent_names)
 
-        if len(planned_runs) == 1:
-            agent_name, log = planned_runs[0]
-            result = strategy._run_one_agent(agent_name, state["run_id"], prior.fork())
-            strategy._update_log_from_result(db, log, result)
-            steps.append(result)
-            if result.get("status") == "success":
-                context.record_agent_output(agent_name, result.get("result", {}))
-        else:
-            results_by_name: dict[str, dict[str, Any]] = {}
-            with ThreadPoolExecutor(max_workers=len(planned_runs)) as executor:
-                futures = {
-                    executor.submit(strategy._run_one_agent, agent_name, state["run_id"], prior.fork()): agent_name
-                    for agent_name, _ in planned_runs
-                }
-                for future in as_completed(futures):
-                    agent_name = futures[future]
-                    results_by_name[agent_name] = future.result()
-
-            for agent_name, log in planned_runs:
-                result = results_by_name[agent_name]
-                strategy._update_log_from_result(db, log, result)
-                steps.append(result)
-                if result.get("status") == "success":
-                    context.record_agent_output(agent_name, result.get("result", {}))
+        for name, (agent, node_context, outcome) in strategy._run_level(agent_names, context, db).items():
+            record_node_outcome(db, state["run_id"], agent, node_context, outcome)
+            strategy._update_step_log(db, logs[name], outcome)
+            steps.append(_result_from_outcome(name, outcome))
+            if outcome.succeeded:
+                context.record_agent_output(name, outcome.result)
 
         failed = state["failed"]
         error = state["error"]
-        for agent_name, _ in planned_runs:
-            result = next((item for item in reversed(steps) if item.get("agent_name") == agent_name), None)
+        for name in agent_names:
+            result = next((item for item in reversed(steps) if item.get("agent_name") == name), None)
             if isinstance(result, dict) and result.get("status") == "failed":
                 failed = True
-                error = result.get("error", "") or f"{agent_name} failed"
+                error = result.get("error", "") or f"{name} failed"
                 break
 
         return {
@@ -374,7 +354,7 @@ def _make_step_node(
                 "error": "Cancelled by user",
             }
 
-        log = strategy._create_step_log(db, state["task_id"], step_name, step_index, "running")
+        log = strategy._create_step_log(db, state["task_id"], step_name, step_index, "running", context=context)
 
         if not strategy._should_execute_step(context, step_name):
             reason = "Skipped by intent routing"
@@ -427,6 +407,7 @@ def _finalize_linear_run(
     strategy: LangGraphLinearStrategy,
     db: Session,
     task: AgentTask,
+    run: AgentRun,
     resume_id: int,
     jd_id: int,
     user_id: int | None,
@@ -459,6 +440,16 @@ def _finalize_linear_run(
     task.analysis_record_id = record_id
     db.add(task)
     db.commit()
+
+    run.summary_report = context.final_report or {}
+    db.add(run)
+    db.commit()
+    strategy._finish_run(
+        db,
+        run,
+        "failed" if (failed_critical or task.status == "cancelled") else "completed",
+        task.error_msg,
+    )
 
     return _orchestrator_result(
         status=task.status,

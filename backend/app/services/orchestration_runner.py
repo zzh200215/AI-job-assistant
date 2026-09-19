@@ -35,10 +35,18 @@ def _get_backend():
 
 
 def _run_task_payload(payload: TaskPayload) -> None:
+    """唯一的任务执行入口：线程后端和 Redis worker 跑的是同一份代码。"""
     db = SessionLocal()
     try:
         strategy = StrategyFactory.create(payload.strategy_name, DEFAULT_REGISTRY)
-        result = strategy.run(payload.task_id, payload.resume_id, payload.jd_id, payload.user_id, db)
+        result = strategy.run(
+            payload.task_id,
+            payload.resume_id,
+            payload.jd_id,
+            payload.user_id,
+            db,
+            run_id=payload.run_id,
+        )
 
         if result.get("status") == "failed":
             task = db.get(AgentTask, payload.task_id)
@@ -58,6 +66,15 @@ def _run_task_payload(payload: TaskPayload) -> None:
                 task.end_time = utc_now()
                 db.add(task)
                 db.commit()
+            if payload.run_id:
+                # 策略在跑到收尾之前炸了：run 不能永远停在 running
+                run = db.get(AgentRun, payload.run_id)
+                if run and run.status not in {"completed", "failed", "cancelled"}:
+                    run.status = "failed"
+                    run.error_msg = str(exc)[:500]
+                    run.end_time = utc_now()
+                    db.add(run)
+                    db.commit()
         except Exception:
             db.rollback()
     finally:
@@ -123,13 +140,6 @@ def run_strategy_async(
         strategy_name=strategy_name,
         retry_of_task_id=retry_of_task_id,
     )
-    TaskPayload(
-        strategy_name=strategy_name,
-        task_id=task_id,
-        resume_id=resume_id,
-        jd_id=jd_id,
-        user_id=user_id,
-    )
     start_strategy_thread(strategy_name, task_id, resume_id, jd_id, user_id=user_id)
     return task_id
 
@@ -156,6 +166,7 @@ def create_legacy_run(
     resume_id: int,
     jd_id: int,
     user_request: str,
+    task_id: int | None = None,
 ) -> int:
     """Create the legacy AgentRun row and return its id."""
     db = SessionLocal()
@@ -163,6 +174,7 @@ def create_legacy_run(
         run = AgentRun(
             resume_id=resume_id or 0,
             jd_id=jd_id or 0,
+            task_id=task_id,
             user_request=user_request,
             status="running",
             start_time=utc_now(),
@@ -182,55 +194,21 @@ def start_legacy_layered_thread(
     jd_id: int,
     user_id: int | None = None,
 ):
-    """Execute the layered strategy for a legacy AgentRun in background."""
+    """Execute the layered strategy for a legacy AgentRun in background.
+
+    run_id 放进 payload 而不是包进闭包：Redis 后端只搬运 payload，闭包会被丢弃，
+    于是 worker 会为同一个任务另建一条 run —— 客户端轮询的那条永远停在 running、
+    明细里一条消息都没有。
+    """
     payload = TaskPayload(
         strategy_name="layered",
         task_id=task_id,
         resume_id=resume_id,
         jd_id=jd_id,
         user_id=user_id,
+        run_id=run_id,
     )
-    return _get_backend().submit(payload, _run_legacy_layered_payload(run_id))
-
-
-def _run_legacy_layered_payload(run_id: int):
-    def _runner(payload: TaskPayload) -> None:
-        db = SessionLocal()
-        try:
-            strategy = StrategyFactory.create("layered", DEFAULT_REGISTRY)
-            result = strategy.run(payload.task_id, payload.resume_id or 0, payload.jd_id or 0, payload.user_id, db)
-
-            run = db.get(AgentRun, run_id)
-            if not run:
-                return
-
-            if result.get("status") == "completed":
-                run.status = "completed"
-                run.summary_report = result.get("final_report", {})
-                run.error_msg = None
-            else:
-                run.status = "failed"
-                run.error_msg = result.get("error", "legacy layered run failed")
-
-            run.end_time = utc_now()
-            db.add(run)
-            db.commit()
-        except Exception as exc:
-            traceback.print_exc()
-            try:
-                run = db.get(AgentRun, run_id)
-                if run:
-                    run.status = "failed"
-                    run.error_msg = str(exc)[:500]
-                    run.end_time = utc_now()
-                    db.add(run)
-                    db.commit()
-            except Exception:
-                db.rollback()
-        finally:
-            db.close()
-
-    return _runner
+    return _get_backend().submit(payload, _run_task_payload)
 
 
 def mark_stale_running_tasks_failed(
@@ -313,13 +291,6 @@ def retry_task(
             strategy_name=strategy_name,
             retry_of_task_id=task.id,
             db=session,
-        )
-        TaskPayload(
-            strategy_name=strategy_name,
-            task_id=new_task_id,
-            resume_id=task.resume_id,
-            jd_id=task.jd_id,
-            user_id=user_id,
         )
         start_strategy_thread(strategy_name, new_task_id, task.resume_id, task.jd_id, user_id=user_id)
         logger.info(

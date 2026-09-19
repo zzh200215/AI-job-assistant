@@ -123,33 +123,37 @@ def serialize_task(task: AgentTask, steps: Iterable[AgentStepLog]) -> dict:
     step_rows = list(steps)
     payload = task.to_dict()
     payload["progress"] = build_task_progress(task, step_rows)
-    usage = (task.final_report or {}).get("_usage") if isinstance(task.final_report, dict) else None
-    payload["usage"] = usage or _usage_from_steps(step_rows)
+    # 兜底：细粒度步骤策略不产生节点消息，用量只在步骤日志的 output_data 里。
+    # 线性/分层策略会被 _usage_by_task 覆盖成 AgentMessage 的真实汇总。
+    payload["usage"] = _usage_from_steps(step_rows)
     return payload
 
 
 def _usage_by_task(db: Session, tasks: list[AgentTask]) -> dict[int, dict]:
+    """按 agent_run.task_id 汇总节点消息 —— 每个节点真实花掉的 token 与成本。
+
+    这里曾经用 ``AgentRun.user_request == f"task:{id}"`` 当外键，而全项目没有任何
+    写入方产出这个字符串，所以该汇总永远命中 0 行。
+    """
     if not tasks:
         return {}
     task_ids = [task.id for task in tasks]
     rows = (
         db.query(
-            AgentRun.user_request,
+            AgentRun.task_id,
             func.coalesce(func.sum(AgentMessage.tokens_used), 0),
             func.coalesce(func.sum(AgentMessage.cost_cents), 0.0),
         )
         .join(AgentMessage, AgentMessage.run_id == AgentRun.id)
-        .filter(AgentRun.user_request.in_([f"task:{task_id}" for task_id in task_ids]))
-        .group_by(AgentRun.user_request)
+        .filter(AgentRun.task_id.in_(task_ids))
+        .group_by(AgentRun.task_id)
         .all()
     )
     usage = {}
-    for marker, tokens, cost in rows:
-        try:
-            task_id = int(str(marker).split(":", 1)[1])
-        except (IndexError, ValueError):
+    for task_id, tokens, cost in rows:
+        if task_id is None:
             continue
-        usage[task_id] = {"tokens_used": int(tokens or 0), "cost_cents": float(cost or 0.0)}
+        usage[int(task_id)] = {"tokens_used": int(tokens or 0), "cost_cents": round(float(cost or 0.0), 6)}
     return usage
 
 

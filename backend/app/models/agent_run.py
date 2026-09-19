@@ -12,6 +12,7 @@ class AgentRun(Base):
     __tablename__ = "agent_run"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
+    task_id = Column(BigInteger, index=True, comment="归属的编排任务 agent_task.id")
     resume_id = Column(BigInteger, nullable=False, comment="关联简历ID")
     jd_id = Column(BigInteger, nullable=False, comment="关联JDID")
     user_request = Column(Text, comment="用户自然语言需求（智能调度入口）")
@@ -28,6 +29,7 @@ class AgentRun(Base):
     def to_dict(self):
         return {
             "id": self.id,
+            "task_id": self.task_id,
             "resume_id": self.resume_id,
             "jd_id": self.jd_id,
             "user_request": self.user_request,

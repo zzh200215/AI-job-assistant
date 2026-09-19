@@ -44,6 +44,8 @@ class AgentContext:
     jd_id: int = 0
     user_id: int | None = None
     user_request: str = ""
+    task_id: int | None = None
+    run_id: int | None = None
     db: Session | None = field(default=None, repr=False, compare=False)
 
     intent: str | None = None
@@ -74,6 +76,8 @@ class AgentContext:
         user_id: int | None = None,
         db: Session | None = None,
         user_request: str = "",
+        task_id: int | None = None,
+        run_id: int | None = None,
     ) -> AgentContext:
         return cls(
             resume_id=resume_id,
@@ -81,6 +85,8 @@ class AgentContext:
             user_id=user_id,
             db=db,
             user_request=user_request,
+            task_id=task_id,
+            run_id=run_id,
         )
 
     def with_db(self, db: Session | None) -> AgentContext:
@@ -89,29 +95,12 @@ class AgentContext:
         return copied
 
     def fork(self) -> AgentContext:
-        copied = AgentContext(
-            resume_id=self.resume_id,
-            jd_id=self.jd_id,
-            user_id=self.user_id,
-            user_request=self.user_request,
-            db=self.db,
-            intent=self.intent,
-            intent_detail=deepcopy(self.intent_detail),
-            required_steps=deepcopy(self.required_steps),
-            plan=deepcopy(self.plan),
-            resume_parsed=deepcopy(self.resume_parsed),
-            jd_parsed=deepcopy(self.jd_parsed),
-            retrieval_results=deepcopy(self.retrieval_results),
-            rag_confidence=deepcopy(self.rag_confidence),
-            match_result=deepcopy(self.match_result),
-            optimize_result=deepcopy(self.optimize_result),
-            interview_result=deepcopy(self.interview_result),
-            career_result=deepcopy(self.career_result),
-            self_checks=deepcopy(self.self_checks),
-            final_report=deepcopy(self.final_report),
-            agent_outputs=deepcopy(self.agent_outputs),
-            extras=deepcopy(self.extras),
-        )
+        """深复制全部载荷字段，沿用同一个 session。
+
+        清单直接来自 dataclass：再加字段不必记得回来补一行，手写清单漏一项就是静默丢数据。
+        """
+        copied = AgentContext(**{f.name: deepcopy(getattr(self, f.name)) for f in fields(self) if f.name != "db"})
+        copied.db = self.db
         return copied
 
     def record_agent_output(self, agent_name: str, result: dict[str, Any]):

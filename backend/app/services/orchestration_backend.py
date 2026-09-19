@@ -28,6 +28,7 @@ class TaskPayload:
     resume_id: int
     jd_id: int
     user_id: int | None = None
+    run_id: int | None = None
 
     def to_json(self) -> str:
         return json.dumps(
@@ -37,6 +38,7 @@ class TaskPayload:
                 "resume_id": self.resume_id,
                 "jd_id": self.jd_id,
                 "user_id": self.user_id,
+                "run_id": self.run_id,
             },
             ensure_ascii=False,
         )
@@ -50,6 +52,7 @@ class TaskPayload:
             resume_id=int(data["resume_id"]),
             jd_id=int(data["jd_id"]),
             user_id=data.get("user_id"),
+            run_id=data.get("run_id"),
         )
 
 
@@ -106,6 +109,9 @@ class RedisQueueOrchestrationBackend(OrchestrationBackend):
         return self._client
 
     def submit(self, payload: TaskPayload, runner: Callable[[TaskPayload], None]) -> None:
+        # runner 在这里被刻意忽略：闭包过不了 Redis 这道进程边界。
+        # 所以 payload 必须自带执行所需的一切（含 run_id），worker 端统一走
+        # _run_task_payload。把额外行为藏进闭包里，只会让两种后端跑出两种结果。
         client = self._get_client()
         client.rpush(settings.ORCHESTRATION_QUEUE_NAME, payload.to_json())
 

@@ -13,6 +13,7 @@ from unittest.mock import patch
 import pytest
 from sqlalchemy.orm import Session
 
+from app.agents.base_agent import BaseAgent
 from app.models.agent import AgentStepLog, AgentTask
 from app.orchestration.context import AgentContext
 from app.orchestration.registry import DEFAULT_REGISTRY, AgentSpec, UnifiedRegistry
@@ -25,83 +26,36 @@ from app.orchestration.strategies import (
 
 # ===================== Mock Agent Classes =====================
 
+# 节点入口（BaseAgent.execute）本身要在这些 mock 上被跑到：所以 mock 必须是真的
+# BaseAgent 子类，而不是"长得像的鸭子"。name 逐类给出，AgentMessage.agent_name
+# 才有归属，重试/用量/落库走的都是生产路径。
 
-class _MockAgent:
-    """Mock agent that returns predefined data."""
 
-    _outputs: dict[str, Any] = {
-        "IntentAgent": {
-            "intent": "full_analysis",
-            "intent_confidence": 0.95,
-            "required_steps": [
-                "intent_recognition",
-                "resume_parse",
-                "jd_parse",
-                "task_planning",
-                "knowledge_retrieval",
-                "matching_analysis",
-                "resume_optimization",
-                "interview_question_generation",
-                "self_check",
-                "final_report",
-            ],
-        },
-        "ResumeParseAgent": {"parsed": {"name": "测试", "skills": ["Python"]}},
-        "JDParseAgent": {"parsed": {"title": "AI工程师", "required_skills": ["Python"]}},
-        "MatchAnalysisAgent": {"match_score": 85, "match_detail": "技能匹配度较高"},
-        "ResumeOptimizeAgent": {"suggestions": ["增加LLM项目经验"]},
-        "InterviewQuestionAgent": {
-            "questions": [{"question": "解释Transformer", "category": "tech"}],
-            "total_questions": 1,
-        },
-        "SummaryAgent": {
-            "summary": "分析完成",
-            "overall_score": 85,
-            "strengths": ["技能匹配"],
-            "weaknesses": ["缺少LLM经验"],
-        },
-        # Layered 使用的 Agent
-        "ResumeAgent": {"diagnosis": "简历完整", "score": 90},
-        "JobAgent": {"analysis": "岗位要求清晰", "required_skills": ["Python", "AI"]},
-        "MatchAgent": {"match_score": 82, "detail": "匹配度良好"},
-        "InterviewAgent": {
-            "questions": [{"question": "介绍你的项目", "category": "general"}],
-            "total_questions": 1,
-        },
-        "CareerAgent": {
-            "career_direction": "AI应用开发",
-            "phases": [{"name": "基础期", "duration": 6}],
-        },
-    }
+class _MockAgent(BaseAgent):
+    """只替掉 run_impl，其余全部按生产路径执行。"""
 
-    def __init__(self, db=None):
-        self.db = db
+    result: dict[str, Any] = {"status": "success", "data": "mock_result"}
 
     def run_impl(self, context: AgentContext) -> dict[str, Any]:
-        """Return predefined output based on agent name lookup."""
-        # Try to find by agent_outputs key first (for strategies that record by name)
-        for _name, _output in self._outputs.items():
-            # Check if this agent matches by looking at what the strategy expects
-            pass
-        # Default fallback
-        return {"status": "success", "data": "mock_result"}
+        return dict(self.result)
 
 
-class _MockFailAgent:
-    """Mock agent that raises an exception."""
-
-    def __init__(self, db=None):
-        self.db = db
+class _MockFailAgent(BaseAgent):
+    """一直抛异常的节点：用来验证重试耗尽后节点变 failed。"""
 
     def run_impl(self, context: AgentContext) -> dict[str, Any]:
         raise RuntimeError("模拟 Agent 执行失败")
 
 
-class _MockSkipIntentAgent:
+def _mock_class(name: str, base: type[BaseAgent] = _MockAgent, **attrs) -> type[BaseAgent]:
+    return type(f"Mock{name}", (base,), {"name": name, "result_type": name.lower(), **attrs})
+
+
+class _MockSkipIntentAgent(BaseAgent):
     """Mock IntentAgent that returns resume_match_only intent."""
 
-    def __init__(self, db=None):
-        self.db = db
+    name = "IntentAgent"
+    result_type = "intent"
 
     def run_impl(self, context: AgentContext) -> dict[str, Any]:
         return {
@@ -127,23 +81,31 @@ def mock_registry():
     reg = UnifiedRegistry()
 
     linear_strategies = ["linear", "langgraph_linear"]
-    reg.register(AgentSpec("IntentAgent", _MockAgent, critical=True, strategies=linear_strategies))
-    reg.register(AgentSpec("ResumeParseAgent", _MockAgent, critical=True, strategies=linear_strategies))
-    reg.register(AgentSpec("JDParseAgent", _MockAgent, critical=True, strategies=linear_strategies))
-    reg.register(AgentSpec("MatchAnalysisAgent", _MockAgent, critical=True, strategies=linear_strategies))
-    reg.register(AgentSpec("ResumeOptimizeAgent", _MockAgent, critical=True, strategies=linear_strategies))
-    reg.register(AgentSpec("InterviewQuestionAgent", _MockAgent, critical=False, strategies=linear_strategies))
-    reg.register(AgentSpec("SummaryAgent", _MockAgent, critical=True, strategies=linear_strategies))
+    for name in (
+        "IntentAgent",
+        "ResumeParseAgent",
+        "JDParseAgent",
+        "MatchAnalysisAgent",
+        "ResumeOptimizeAgent",
+        "InterviewQuestionAgent",
+        "SummaryAgent",
+    ):
+        critical = name != "InterviewQuestionAgent"
+        reg.register(AgentSpec(name, _mock_class(name), critical=critical, strategies=linear_strategies))
 
     layered_strategies = ["layered", "langgraph_layered"]
-    reg.register(AgentSpec("ResumeAgent", _MockAgent, critical=True, strategies=layered_strategies))
-    reg.register(AgentSpec("JobAgent", _MockAgent, critical=True, strategies=layered_strategies))
-    reg.register(AgentSpec("MatchAgent", _MockAgent, critical=True, strategies=layered_strategies))
-    reg.register(AgentSpec("InterviewAgent", _MockAgent, critical=False, strategies=layered_strategies))
-    reg.register(AgentSpec("CareerAgent", _MockAgent, critical=True, strategies=layered_strategies))
-    reg.register(AgentSpec("SummaryAgent", _MockAgent, critical=True, strategies=layered_strategies))
+    for name in ("ResumeAgent", "JobAgent", "MatchAgent", "InterviewAgent", "CareerAgent", "SummaryAgent"):
+        critical = name != "InterviewAgent"
+        existing = reg._agents.get(name)
+        strategies = sorted({*linear_strategies, *layered_strategies}) if existing else list(layered_strategies)
+        reg.register(AgentSpec(name, _mock_class(name), critical=critical, strategies=strategies))
 
     return reg
+
+
+def _failing(registry: UnifiedRegistry, name: str, strategies: list[str], critical: bool = True) -> None:
+    """把某个节点换成一直失败的版本，其余保持不变。"""
+    registry._agents[name] = AgentSpec(name, _mock_class(name, _MockFailAgent), critical=critical, strategies=strategies)
 
 
 @pytest.fixture
@@ -155,6 +117,14 @@ def default_settings():
     settings.RAG_TOP_K = 3
     yield
     settings.RAG_TOP_K = original
+
+
+@pytest.fixture(autouse=True)
+def no_node_backoff(monkeypatch):
+    """失败路径要跑满 3 次尝试，退避在测试里不真等。"""
+    import app.agents.base_agent as base_agent
+
+    monkeypatch.setattr(base_agent, "RETRY_BACKOFF_SECONDS", 0)
 
 
 # ==================== LinearStrategy Tests ====================
@@ -214,12 +184,7 @@ class TestLinearStrategy:
         task_id = self._create_task(db_session, resume_id, jd_id)
 
         # 把 IntentAgent 替换为会失败的版本
-        mock_registry._agents["IntentAgent"] = AgentSpec(
-            "IntentAgent",
-            _MockFailAgent,
-            critical=True,
-            strategies=["linear", "langgraph_linear"],
-        )
+        _failing(mock_registry, "IntentAgent", ["linear", "langgraph_linear"])
 
         result = self._run_strategy(db_session, task_id, resume_id, jd_id, registry=mock_registry)
 
@@ -238,12 +203,7 @@ class TestLinearStrategy:
         task_id = self._create_task(db_session, resume_id, jd_id)
 
         # InterviewQuestionAgent 是非关键的（critical=False）
-        mock_registry._agents["InterviewQuestionAgent"] = AgentSpec(
-            "InterviewQuestionAgent",
-            _MockFailAgent,
-            critical=False,
-            strategies=["linear", "langgraph_linear"],
-        )
+        _failing(mock_registry, "InterviewQuestionAgent", ["linear", "langgraph_linear"], critical=False)
 
         result = self._run_strategy(db_session, task_id, resume_id, jd_id, registry=mock_registry)
 
@@ -268,7 +228,6 @@ class TestLinearStrategy:
             critical=True,
             strategies=["linear", "langgraph_linear"],
         )
-
         result = self._run_strategy(db_session, task_id, resume_id, jd_id, registry=mock_registry)
 
         assert result["status"] == "completed"
@@ -309,18 +268,15 @@ class TestLinearStrategy:
             db_session.commit()
 
             # 用新的 IntentAgent mock
-            class _IntentForTest:
-                _intent = intent_name
-
-                def __init__(self, db=None):
-                    pass
-
-                def run_impl(self, ctx):
-                    return {"intent": self._intent, "intent_confidence": 0.9, "required_steps": []}
+            intent_agent = _mock_class(
+                "IntentAgent",
+                _MockAgent,
+                result={"intent": intent_name, "intent_confidence": 0.9, "required_steps": []},
+            )
 
             mock_registry._agents["IntentAgent"] = AgentSpec(
                 "IntentAgent",
-                _IntentForTest,
+                intent_agent,
                 critical=True,
                 strategies=["linear", "langgraph_linear"],
             )
@@ -391,12 +347,7 @@ class TestLayeredParallelStrategy:
         task_id = task.id
 
         # 把核心的 MatchAgent 替换为会失败的
-        mock_registry._agents["MatchAgent"] = AgentSpec(
-            "MatchAgent",
-            _MockFailAgent,
-            critical=True,
-            strategies=["layered", "langgraph_layered"],
-        )
+        _failing(mock_registry, "MatchAgent", ["layered", "langgraph_layered"])
 
         strategy = LayeredParallelStrategy(mock_registry)
         result = strategy.run(task_id, resume_id, jd_id, user_id=1, db=db_session)

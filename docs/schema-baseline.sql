@@ -3,6 +3,7 @@
 -- 变更纪律：任何表结构变更必须先走 Alembic 迁移（backend/migrations/versions/），
 --           再重新生成本快照并连同迁移脚本一并提交；CI 会对本文件做漂移检测。
 
+CREATE INDEX ix_agent_run_task_id ON agent_run (task_id);
 CREATE INDEX ix_ai_release_created_at ON ai_release (created_at);
 CREATE INDEX ix_ai_release_status ON ai_release (status);
 CREATE INDEX ix_api_bill_api_key_id ON api_bill (api_key_id);
@@ -160,6 +161,7 @@ CREATE TABLE agent_task (
 
 CREATE TABLE agent_run (
 	id BIGINT NOT NULL, 
+	task_id BIGINT, 
 	resume_id BIGINT NOT NULL, 
 	jd_id BIGINT NOT NULL, 
 	user_request TEXT, 

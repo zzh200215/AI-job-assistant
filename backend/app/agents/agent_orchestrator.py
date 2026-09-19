@@ -36,8 +36,8 @@ def run_multi_agents(resume_id: int, jd_id: int, user_id: int | None = None) -> 
         DeprecationWarning,
         stacklevel=2,
     )
-    run_id = create_legacy_run(resume_id, jd_id, "run_multi_agents")
     task_id = create_task(resume_id, jd_id, user_id=user_id)
+    run_id = create_legacy_run(resume_id, jd_id, "run_multi_agents", task_id)
     _update_run_metadata(
         run_id,
         intent="full_analysis",
@@ -60,25 +60,11 @@ def run_auto_agents(
         DeprecationWarning,
         stacklevel=2,
     )
-    run_id = create_legacy_run(resume_id or 0, jd_id or 0, user_request)
     task_id = create_task(resume_id or 0, jd_id or 0, user_id=user_id)
+    run_id = create_legacy_run(resume_id or 0, jd_id or 0, user_request, task_id)
 
     try:
-        db = SessionLocal()
-        try:
-            from app.agents.intent_agent import IntentAgent
-
-            decision = IntentAgent(db=db).run_impl(
-                AgentContext.for_analysis(
-                    resume_id or 0,
-                    jd_id or 0,
-                    user_id=user_id,
-                    db=db,
-                    user_request=user_request,
-                )
-            )
-        finally:
-            db.close()
+        decision = _dispatch_intent(run_id, task_id, resume_id or 0, jd_id or 0, user_id, user_request)
     except Exception as exc:
         _mark_legacy_failed(run_id, task_id, str(exc))
         raise
@@ -91,6 +77,39 @@ def run_auto_agents(
     )
     start_legacy_layered_thread(run_id, task_id, resume_id or 0, jd_id or 0, user_id=user_id)
     return run_id
+
+
+def _dispatch_intent(
+    run_id: int,
+    task_id: int,
+    resume_id: int,
+    jd_id: int,
+    user_id: int | None,
+    user_request: str,
+) -> dict:
+    """意图识别也走节点入口：调度决策本身要留在 agent_message 里，否则明细里
+    看不到"为什么选了这几个智能体"。"""
+    from app.agents.intent_agent import IntentAgent
+
+    db = SessionLocal()
+    try:
+        outcome = IntentAgent(db=db).execute(
+            run_id,
+            AgentContext.for_analysis(
+                resume_id,
+                jd_id,
+                user_id=user_id,
+                db=db,
+                user_request=user_request,
+                task_id=task_id,
+                run_id=run_id,
+            ),
+        )
+        if not outcome.succeeded:
+            raise RuntimeError(outcome.error or "意图识别失败")
+        return outcome.result
+    finally:
+        db.close()
 
 
 def _update_run_metadata(
