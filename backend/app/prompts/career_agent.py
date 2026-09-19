@@ -98,7 +98,7 @@ CAREER_AGENT_PROMPT = """你是一名资深职业规划师。请根据用户的�
     "current_trends": ["行业当前趋势"],
     "demanded_skills": ["热门需求技能"],
     "career_alternatives": ["可考虑的其它岗位方向"],
-    "salary_range": "该方向薪资范围参考"
+    "salary_range": "仅当【行业参考知识】中明确给出薪资数据时原样引用；参考知识缺失或为『暂无行业参考数据』时省略该字段，不要凭印象给出"
   }},
   "short_term_plan": {{
     "timeline": "1-3个月",

@@ -92,7 +92,7 @@
       </div>
     </section>
 
-    <!-- 今日待办 + AI建议 -->
+    <!-- 今日待办 + 下一步建议 -->
     <section class="top-row">
       <div class="panel today-panel">
         <div class="panel-header">
@@ -141,25 +141,25 @@
         </div>
       </div>
 
-      <div class="panel ai-panel">
+      <div class="panel actions-panel">
         <div class="panel-header">
           <div class="panel-title-row">
             <el-icon :size="18" color="var(--app-violet)"><MagicStick /></el-icon>
-            <h3>AI 建议</h3>
+            <h3>下一步建议</h3>
           </div>
           <el-tag size="small" type="info">智能推荐</el-tag>
         </div>
         <div class="panel-body">
-          <div v-if="aiLoading" class="loading-state">
+          <div v-if="actionsLoading" class="loading-state">
             <el-icon class="is-loading"><Loading /></el-icon> 分析中...
           </div>
-          <div v-else-if="aiError" class="error-state">
-            <p>AI 建议暂时不可用</p>
+          <div v-else-if="actionsError" class="error-state">
+            <p>当前没有明确的下一步动作，说明近期节奏正常。</p>
             <el-button size="small" type="primary" plain @click="loadDashboard">重新加载</el-button>
           </div>
           <div v-else class="suggestion-list">
             <div
-              v-for="(sug, idx) in aiSuggestions"
+              v-for="(sug, idx) in nextActions"
               :key="idx"
               class="suggestion-item"
               @click="go(sug.link)"
@@ -337,7 +337,7 @@ import {
 } from '@element-plus/icons-vue'
 
 import { useAuthStore } from '@/stores/auth'
-import { getDashboardOverview, getTodayTasks, getAiSuggestions } from '@/api/dashboard'
+import { getDashboardOverview, getTodayTasks, getNextActions } from '@/api/dashboard'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -361,9 +361,9 @@ const overviewError = ref(false)
 const tasks = ref({ tasks: [], high_priority: 0 })
 const tasksLoading = ref(true)
 const tasksError = ref(false)
-const aiSuggestions = ref([])
-const aiLoading = ref(true)
-const aiError = ref(false)
+const nextActions = ref([])
+const actionsLoading = ref(true)
+const actionsError = ref(false)
 
 // 后端关键指标统一放在 data.summary 下（total_resumes/active_applications 等），
 // 模板统一经 dashSummary 读取，避免读顶层字段永远 0/--。
@@ -412,14 +412,14 @@ function trendHeight(count) {
 async function loadDashboard() {
   overviewError.value = false
   tasksError.value = false
-  aiError.value = false
+  actionsError.value = false
   tasksLoading.value = true
-  aiLoading.value = true
+  actionsLoading.value = true
   try {
-    const [ov, tk, ai] = await Promise.allSettled([
+    const [ov, tk, actions] = await Promise.allSettled([
       getDashboardOverview(),
       getTodayTasks(),
-      getAiSuggestions(),
+      getNextActions(),
     ])
     if (ov.status === 'fulfilled') {
       overview.value = ov.value
@@ -432,14 +432,14 @@ async function loadDashboard() {
     } else {
       tasksError.value = true
     }
-    if (ai.status === 'fulfilled') {
-      aiSuggestions.value = ai.value?.suggestions || []
+    if (actions.status === 'fulfilled') {
+      nextActions.value = actions.value?.suggestions || []
     } else {
-      aiError.value = true
+      actionsError.value = true
     }
   } finally {
     tasksLoading.value = false
-    aiLoading.value = false
+    actionsLoading.value = false
   }
 }
 

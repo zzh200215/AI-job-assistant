@@ -556,12 +556,14 @@
             <div class="direction-list">
               <article
                 v-for="item in careerPaths"
-                :key="item.path || item.position"
+                :key="item.title || item.path || item.position"
                 class="direction-item"
               >
                 <div class="direction-top">
                   <strong>{{ item.path || item.position || item.title || '岗位方向' }}</strong>
-                  <span>{{ item.match_score || item.score || '--' }}</span>
+                  <!-- 匹配度不再展示数值：agent 只拿到简历摘要，没有岗位库或
+                       市场数据，任何 0-100 分数都是编造的。顺序即匹配度排名。 -->
+                  <el-tag v-if="item.category" size="small" type="info">{{ item.category }}</el-tag>
                 </div>
                 <p>{{ item.reason || item.summary || '根据简历现状给出的方向建议。' }}</p>
               </article>
@@ -571,36 +573,30 @@
           <el-card class="salary-card" shadow="never">
             <template #header>
               <div class="card-header">
-                <span>薪资成长预测</span>
-                <el-tag size="small" type="success"
-                  >{{ salaryPrediction.growthRate }}% 年增长率</el-tag
-                >
+                <span>薪资行情（岗位库实测）</span>
+                <el-tag v-if="salaryMarket" size="small" type="info">
+                  样本 {{ salaryMarket.parsed_count }} 条岗位
+                </el-tag>
               </div>
             </template>
-            <div class="salary-body">
+            <div v-if="salaryMarketLoading" class="salary-empty">加载中…</div>
+            <div v-else-if="salaryMarket" class="salary-body">
               <div class="salary-current">
-                <span class="salary-label">当前预估</span>
-                <strong>{{ salaryPrediction.currentSalary }}K</strong>
-                <small>{{ salaryPrediction.benchmark }}</small>
+                <span class="salary-label">岗位方向</span>
+                <strong>{{ salaryMarket.filters?.position || '—' }}</strong>
               </div>
-              <div class="salary-arrow">
-                <el-icon><ArrowRight /></el-icon>
+              <div class="salary-percentiles">
+                <div v-for="band in salaryBands" :key="band.key" class="salary-band">
+                  <span class="salary-band-label">{{ band.label }}</span>
+                  <strong class="salary-band-value">{{ band.value }}K</strong>
+                </div>
               </div>
-              <div class="salary-current">
-                <span class="salary-label">5年后预估</span>
-                <strong class="salary-future">{{ salaryPrediction.fiveYearSalary }}K</strong>
-                <small>{{ salaryPrediction.level }}</small>
-              </div>
+              <small class="salary-note">
+                分位数来自岗位库中已解析出薪资区间的记录，不代表个人 offer 报价。
+              </small>
             </div>
-            <div class="salary-chart">
-              <div v-for="p in salaryPrediction.predictions" :key="p.year" class="salary-bar-col">
-                <div
-                  class="salary-bar"
-                  :style="{ height: (p.salary / salaryPrediction.fiveYearSalary) * 100 + '%' }"
-                />
-                <span class="salary-bar-label">{{ p.year }}</span>
-                <span class="salary-bar-val">{{ p.salary }}K</span>
-              </div>
+            <div v-else class="salary-empty">
+              当前岗位方向在岗位库中暂无足够的薪资样本，因此不提供数字。
             </div>
           </el-card>
 
@@ -680,7 +676,6 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
 import {
-  ArrowRight,
   CircleCloseFilled,
   Loading,
   SuccessFilled,
@@ -691,6 +686,7 @@ import { getResumeList } from '@/api/resume'
 import { createJD, getJDList } from '@/api/jd'
 import { runFullAnalysis, getAnalysis } from '@/api/analysis'
 import { recommendCareerPaths } from '@/api/jobs'
+import { getSalaryOverview } from '@/api/salary'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
 import { localizeSentence, normalizeLocalizedTextList } from '@/utils/analysisLocalization'
 
@@ -861,38 +857,38 @@ const localizedLongTermGoals = computed(() =>
   normalizeLocalizedTextList(careerResult.value?.long_term_plan?.goals)
 )
 
-// 薪资成长预测
-const salaryPrediction = computed(() => {
-  const stage = currentStage.value
-  const score = latestMatchScore.value
-  const yearsExp = selectedResume.value?.years_exp || 3
-  const currentTitle = selectedResume.value?.parsed?.current_title || ''
+// 薪资行情：来自岗位库真实分位数统计（GET /salary/overview）。
+// 这里不做任何推算——此前该卡片用 `yearsExp * 5 + 8` 和一组魔法增长率
+// 生成五年薪资曲线并画成柱状图，看起来像预测，实际与数据无关。
+const salaryMarket = ref(null)
+const salaryMarketLoading = ref(false)
 
-  const baseSalary = Math.max(10, yearsExp * 5 + 8)
-  const growthRate = score >= 80 ? 0.35 : score >= 60 ? 0.25 : 0.15
-  const stageMultiplier =
-    stage === 'entry' ? 1.5 : stage === 'growth' ? 1.3 : stage === 'mature' ? 1.1 : 1.2
+async function loadSalaryMarket() {
+  const position = (targetRole.value || selectedResume.value?.parsed?.current_title || '').trim()
+  if (!position) {
+    salaryMarket.value = null
+    return
+  }
+  salaryMarketLoading.value = true
+  try {
+    const data = await getSalaryOverview({ position }, { notifyError: false })
+    salaryMarket.value = data?.has_data ? data : null
+  } catch {
+    salaryMarket.value = null
+  } finally {
+    salaryMarketLoading.value = false
+  }
+}
 
-  const predictions = []
-  for (let i = 0; i < 5; i++) {
-    const year = new Date().getFullYear() + i
-    const salary = Math.round(
-      baseSalary * Math.pow(1 + growthRate, i) * (i === 0 ? 1 : stageMultiplier)
-    )
-    predictions.push({
-      year,
-      salary,
-      growth: i === 0 ? 0 : Math.round((salary / predictions[i - 1]?.salary - 1) * 100),
-    })
-  }
-  return {
-    currentSalary: predictions[0]?.salary || baseSalary,
-    fiveYearSalary: predictions[4]?.salary || baseSalary * 2,
-    growthRate: Math.round(growthRate * 100),
-    predictions,
-    benchmark: yearsExp >= 5 ? '高级工程师/专家' : yearsExp >= 3 ? '中级工程师' : '初级工程师',
-    level: currentTitle ? '对标' + currentTitle.replace(/.*?(\w+)/, '$1') : '行业平均水平',
-  }
+const salaryBands = computed(() => {
+  const stats = salaryMarket.value?.statistics
+  if (!stats) return []
+  return [
+    { key: 'p25', label: '25 分位', value: stats.p25 },
+    { key: 'p50', label: '中位数', value: stats.p50 },
+    { key: 'p75', label: '75 分位', value: stats.p75 },
+    { key: 'p90', label: '90 分位', value: stats.p90 },
+  ].filter((band) => Number.isFinite(band.value))
 })
 
 // 学习资源推荐
@@ -1001,6 +997,7 @@ watch(selectedResumeId, async (value) => {
     targetRole.value = selectedResume.value.parsed.current_title
   }
   await loadCareerPaths()
+  await loadSalaryMarket()
 })
 
 watch(selectedJDId, (value) => {
@@ -1137,6 +1134,7 @@ async function startCareerPlanning() {
 
     if (analysisRecordId.value) {
       await loadCareerPaths()
+      await loadSalaryMarket()
     }
   } catch (error) {
     taskStatus.value = error?.code === 'task_cancelled' ? 'cancelled' : 'failed'
@@ -1511,14 +1509,12 @@ function stepIcon(status) {
 /* 薪资预测 */
 .salary-body {
   display: flex;
-  align-items: center;
-  justify-content: space-around;
-  gap: 16px;
-  margin-bottom: 20px;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .salary-current {
-  text-align: center;
+  text-align: left;
 }
 
 .salary-label {
@@ -1529,62 +1525,50 @@ function stepIcon(status) {
 
 .salary-current strong {
   display: block;
-  font-size: 32px;
-  font-weight: 800;
-  color: var(--app-primary);
-  margin: 8px 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--app-text);
+  margin-top: 4px;
 }
 
-.salary-future {
-  color: var(--app-success) !important;
+.salary-percentiles {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.salary-current small {
+.salary-band {
+  flex: 1;
+  text-align: center;
+}
+
+.salary-band-label {
   display: block;
   font-size: 12px;
   color: var(--app-muted);
 }
 
-.salary-arrow {
-  color: var(--app-muted);
-  font-size: 24px;
-}
-
-.salary-chart {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  height: 80px;
-  padding: 0 8px;
-}
-
-.salary-bar-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 100%;
-  justify-content: flex-end;
-}
-
-.salary-bar {
-  width: 100%;
-  max-width: 32px;
-  border-radius: 6px 6px 0 0;
-  background: linear-gradient(180deg, var(--app-primary), #7db0ee);
-  transition: height 0.4s;
-}
-
-.salary-bar-label {
+.salary-band-value {
+  display: block;
   margin-top: 4px;
-  font-size: 10px;
+  font-size: 20px;
+  font-weight: 800;
+  font-family: var(--app-font-mono);
+  color: var(--app-primary);
+}
+
+.salary-note,
+.salary-empty {
+  display: block;
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--app-muted);
 }
 
-.salary-bar-val {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--app-primary);
+.salary-empty {
+  padding: 18px 0;
+  text-align: center;
 }
 
 /* 学习资源 */

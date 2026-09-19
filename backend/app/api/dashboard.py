@@ -413,12 +413,17 @@ async def today_tasks(
     )
 
 
-@router.get("/ai-suggestions", summary="AI下一步建议")
-async def ai_suggestions(
+@router.get("/next-actions", summary="下一步建议（基于投递数据规则）")
+async def next_actions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """基于用户求职数据，生成3条最该做的AI建议"""
+    """从用户自己的求职数据推导下一步动作。
+
+    这是确定性规则，不调用 LLM——面试临近、投递沉默、回复率偏低这些信号本来就
+    来自结构化数据，规则比模型猜测更可靠也免费。响应带 `mode: "rules"`，前端据此
+    不使用 AI 措辞。
+    """
     uid = current_user.id
     now = utc_now()
     week_ago = now - timedelta(days=7)
@@ -559,20 +564,11 @@ async def ai_suggestions(
             }
         )
 
-    # 确保至少返回3条建议
-    if len(suggestions) < 3:
-        suggestions.append(
-            {
-                "action": "browse_jobs",
-                "title": "浏览推荐岗位",
-                "description": "查看AI根据你的求职目标推荐的最新岗位",
-                "priority": "low",
-                "link": "/jobs/recommend",
-            }
-        )
-
+    # 不再补齐到固定 3 条：规则没命中就说明当前没有明确该做的事，
+    # 硬塞一条"去逛推荐岗位"会把空状态伪装成建议。
     return ok(
         {
+            "mode": "rules",
             "context": {
                 "total_applications": total_apps,
                 "weekly_applications": weekly_apps,

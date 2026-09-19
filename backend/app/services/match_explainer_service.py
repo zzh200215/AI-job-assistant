@@ -22,6 +22,18 @@ from app.services.scoring_config import ScoringWeights, get_weights_for_job
 
 logger = logging.getLogger(__name__)
 
+# Dimension display name -> machine key used by the LLM explanation contract.
+# Previously inlined four times; an unmapped name fell through to "" and every
+# such dimension silently overwrote each other under that single empty key.
+_DIMENSION_KEYS = {
+    "技能匹配": "skill",
+    "项目经历": "project",
+    "工作经验": "experience",
+    "学历要求": "education",
+    "关键词覆盖": "keyword",
+    "加分项": "bonus",
+}
+
 
 # ==================== 数据结构 ====================
 
@@ -50,6 +62,7 @@ class ExplainResult:
     optimization_suggestions: list[str] = field(default_factory=list)
     recommendation: str = ""  # 强烈推荐 / 可以投递 / 谨慎投递 / 不建议投递
     weights_used: dict = field(default_factory=dict)
+    explain_mode: str = "llm"  # llm | rules
 
     def to_dict(self) -> dict:
         return {
@@ -71,6 +84,7 @@ class ExplainResult:
             "optimization_suggestions": self.optimization_suggestions,
             "recommendation": self.recommendation,
             "weights_used": self.weights_used,
+            "explain_mode": self.explain_mode,
         }
 
 
@@ -152,14 +166,9 @@ class MatchExplainer:
 
         # 合并 LLM 结果到 dims
         for d in dims:
-            d_key = {
-                "技能匹配": "skill",
-                "项目经历": "project",
-                "工作经验": "experience",
-                "学历要求": "education",
-                "关键词覆盖": "keyword",
-                "加分项": "bonus",
-            }.get(d.name, "")
+            d_key = _DIMENSION_KEYS.get(d.name)
+            if d_key is None:
+                continue
             d.reason = llm_explain.get("reasons", {}).get(d_key, "")
 
         # 推荐等级
@@ -174,6 +183,7 @@ class MatchExplainer:
             optimization_suggestions=llm_explain.get("suggestions", []),
             recommendation=rec,
             weights_used=self.weights.as_dict(),
+            explain_mode=llm_explain.get("explain_mode", "llm"),
         )
 
     # ==================== 规则评分（6 维）====================
@@ -419,48 +429,29 @@ class MatchExplainer:
         return chat_json(prompt)
 
     def _fallback_explain(self, dims: list[DimensionScore], overall: float) -> dict:
-        """LLM 失败时的纯规则兜底"""
+        """LLM 失败时的纯规则兜底。
+
+        只陈述分数区间这一事实，不伪装成模型给出的分析；`explain_mode` 让调用方
+        能把这一区别带到响应里。
+        """
         reasons = {}
         for d in dims:
+            key = _DIMENSION_KEYS.get(d.name)
+            if key is None:
+                continue
             if d.score >= 80:
-                reasons[
-                    {
-                        "技能匹配": "skill",
-                        "项目经历": "project",
-                        "工作经验": "experience",
-                        "学历要求": "education",
-                        "关键词覆盖": "keyword",
-                        "加分项": "bonus",
-                    }.get(d.name, "")
-                ] = f"{d.name}表现良好"
+                reasons[key] = f"{d.name}得分 {d.score:.0f}，表现良好"
             elif d.score >= 60:
-                reasons[
-                    {
-                        "技能匹配": "skill",
-                        "项目经历": "project",
-                        "工作经验": "experience",
-                        "学历要求": "education",
-                        "关键词覆盖": "keyword",
-                        "加分项": "bonus",
-                    }.get(d.name, "")
-                ] = f"{d.name}基本达标"
+                reasons[key] = f"{d.name}得分 {d.score:.0f}，基本达标"
             else:
-                reasons[
-                    {
-                        "技能匹配": "skill",
-                        "项目经历": "project",
-                        "工作经验": "experience",
-                        "学历要求": "education",
-                        "关键词覆盖": "keyword",
-                        "加分项": "bonus",
-                    }.get(d.name, "")
-                ] = f"{d.name}需提升"
+                reasons[key] = f"{d.name}得分 {d.score:.0f}，相对偏弱"
 
         return {
-            "overall": f"综合匹配度 {overall:.0f}分",
+            "explain_mode": "rules",
+            "overall": f"综合匹配度 {overall:.0f}分（规则兜底，非模型生成）",
             "reasons": reasons,
-            "risk_points": ["详细分析请重新请求"],
-            "suggestions": ["完善技能栈", "优化项目描述", "补充量化成果"],
+            "risk_points": ["模型解释未生成，以上为规则输出，建议重新请求以获得详细分析"],
+            "suggestions": [],
         }
 
     # ==================== 推荐等级 ====================
