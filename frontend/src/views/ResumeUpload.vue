@@ -38,7 +38,7 @@
           <div>
             <b>检查可投递性</b
             ><small>{{
-              scoredResumeCount ? `${scoredResumeCount} 份已有 ATS 评分` : '等待评分'
+              scoredResumeCount ? `${scoredResumeCount} 份已完成度检查` : '待检查'
             }}</small>
           </div>
         </div>
@@ -146,6 +146,7 @@
       <div v-if="diagnosisLoading" class="loading-state">
         <el-icon class="is-loading"><Loading /></el-icon> AI 诊断中...
       </div>
+      <el-alert v-else-if="diagnosisError" type="error" :closable="false" show-icon :title="diagnosisError" />
       <div v-else-if="currentDiagnosis" class="diagnosis-body">
         <!-- 综合评分 -->
         <div class="diag-score-row">
@@ -165,7 +166,8 @@
                   transform="rotate(-90 60 60)"
                 />
               </svg>
-              <span class="gauge-text">{{ currentDiagnosis.total_score || 0 }}</span>
+              <!-- 0 would read as a terrible score; say we do not know instead -->
+              <span class="gauge-text">{{ currentDiagnosis.total_score ?? '未评分' }}</span>
             </div>
             <div class="diag-score-label">综合评分</div>
           </div>
@@ -242,18 +244,24 @@
             <el-empty v-else :image-size="60" description="未指定对比岗位" />
           </el-collapse-item>
           <el-collapse-item title="🤖 ATS 友好度" name="ats">
-            <div v-if="currentDiagnosis.ats_issues?.length">
-              <p v-for="(item, i) in currentDiagnosis.ats_issues" :key="i" class="diag-issue">
+            <div v-if="currentDiagnosis.ats_score">
+              <p class="diag-note">
+                模型评分 {{ currentDiagnosis.ats_score }}，用于估计格式与关键词的可解析性。
+              </p>
+            </div>
+            <el-empty v-else :image-size="60" description="本次分析未给出 ATS 维度评分" />
+          </el-collapse-item>
+          <el-collapse-item title="模块完整度（规则检查，非 AI）" name="completeness">
+            <div v-if="currentDiagnosis.completeness_issues?.length">
+              <p
+                v-for="(item, i) in currentDiagnosis.completeness_issues"
+                :key="i"
+                class="diag-issue"
+              >
                 <el-icon><WarningFilled /></el-icon> {{ item }}
               </p>
             </div>
-            <div v-else-if="currentDiagnosis.ats_score">
-              <el-empty
-                :image-size="60"
-                :description="'ATS评分 ' + currentDiagnosis.ats_score + '，格式兼容性良好'"
-              />
-            </div>
-            <el-empty v-else :image-size="60" description="暂无ATS数据" />
+            <el-empty v-else :image-size="60" description="未检出缺失模块" />
           </el-collapse-item>
           <el-collapse-item title="📈 改进路线图" name="roadmap">
             <div v-if="currentDiagnosis.improvement_roadmap?.length">
@@ -375,22 +383,22 @@
         </div>
 
         <!-- ATS 评分 -->
-        <div v-if="r._score" class="card-score">
+        <div v-if="r._completeness" class="card-score">
           <div class="score-bar">
             <div
               class="score-fill"
-              :style="{ width: r._score.total + '%' }"
-              :class="scoreLevel(r._score.total)"
+              :style="{ width: r._completeness.completeness_score + '%' }"
+              :class="scoreLevel(r._completeness.completeness_score)"
             />
           </div>
           <div class="score-label">
-            <span>ATS 评分</span>
-            <strong :class="scoreLevel(r._score.total)">{{ r._score.total }}</strong>
+            <span>完整度</span>
+            <strong :class="scoreLevel(r._completeness.completeness_score)">{{ r._completeness.completeness_score }}</strong>
           </div>
         </div>
         <div v-else class="card-score">
           <el-button text size="small" @click="quickScore(r)" :loading="r._scoring">
-            查看ATS评分
+            查看完整度
           </el-button>
         </div>
 
@@ -459,6 +467,7 @@ const currentShareResume = ref(null)
 
 // 诊断
 const diagnosisLoading = ref(false)
+const diagnosisError = ref('')
 const currentDiagnosis = ref(null)
 const diagActivePanels = ref(['structure', 'expression', 'keywords', 'highlights'])
 
@@ -471,7 +480,7 @@ const activeResume = computed(
   () => resumes.value.find((item) => item.id === defaultResumeId.value) || resumes.value[0] || null
 )
 const scoredResumeCount = computed(
-  () => resumes.value.filter((item) => item._score?.total !== undefined).length
+  () => resumes.value.filter((item) => item._completeness?.completeness_score !== undefined).length
 )
 
 onMounted(() => {
@@ -532,7 +541,7 @@ async function loadList() {
     const items = data?.items || []
     // attach local state
     items.forEach((r) => {
-      r._score = null
+      r._completeness = null
       r._scoring = false
       r._desensitized = false
       r._versionCount = undefined
@@ -563,12 +572,12 @@ async function loadVersionCount(r) {
 }
 
 async function quickScore(r) {
-  if (r._score || r._scoring) return
+  if (r._completeness || r._scoring) return
   r._scoring = true
   try {
     const score = await getResumeQuickScore(r.id, { notifyError: false })
-    if (score?.total !== undefined) {
-      r._score = score
+    if (score?.completeness_score !== undefined) {
+      r._completeness = score
     }
   } catch {
     // 列表仍可使用，评分卡保留为空。
@@ -725,92 +734,53 @@ async function copyShareUrl() {
 async function showDiagnosisDialog(r) {
   showDiagnosis.value = true
   diagnosisLoading.value = true
+  diagnosisError.value = ''
   currentDiagnosis.value = null
 
-  // 优先从后端获取诊断数据
+  let d = null
   try {
-    const d = await diagnoseResume(
+    d = await diagnoseResume(
       r.id,
       { target_position: r.parsed?.current_title || '' },
       { notifyError: false }
     )
-    if (d) {
-      currentDiagnosis.value = {
-        total_score: d.total_score || 60,
-        structure_score: d.structure_score || 0,
-        expression_score: d.expression_score || 0,
-        keyword_score: d.keyword_score || 0,
-        highlight_score: d.highlight_score || 0,
-        ats_score: d.ats_score || 0,
-        structure_issues: d.structure_issues || [],
-        expression_issues: d.expression_issues || [],
-        missing_keywords: d.missing_keywords || [],
-        highlights: d.highlights || [],
-        match_analysis: d.match_analysis || '',
-        ats_issues: d.ats_issues || [],
-        improvement_roadmap: d.improvement_roadmap || [],
-        jd_id: null,
-      }
-      diagnosisDims.forEach((dim) => {
-        dim.score = d[dim.key] || 0
-      })
-      r._diagnosisScore = d.total_score
-      diagnosisLoading.value = false
-      return
-    }
   } catch {
-    // 后端不可用时使用前端计算
+    d = null
   }
 
-  // 前端 fallback
-  try {
-    const parsed = r.parsed || {}
-    const scoreData = r._score || { total: 60 }
-    const totalScore = scoreData.total || 60
-
-    currentDiagnosis.value = {
-      total_score: totalScore,
-      structure_score: Math.min(100, totalScore + Math.floor(Math.random() * 20 - 10)),
-      expression_score: Math.min(100, totalScore + Math.floor(Math.random() * 15 - 5)),
-      keyword_score: Math.min(100, totalScore + Math.floor(Math.random() * 25 - 15)),
-      highlight_score: Math.min(100, totalScore + Math.floor(Math.random() * 30 - 10)),
-      ats_score: Math.min(100, totalScore + Math.floor(Math.random() * 10 - 5)),
-      structure_issues: [],
-      expression_issues: [],
-      missing_keywords: [],
-      highlights: [],
-      match_analysis: '',
-      ats_issues: [],
-      improvement_roadmap: [],
-      jd_id: null,
-    }
-
-    const d = currentDiagnosis.value
-    if (!parsed.education) d.structure_issues.push('缺少教育背景信息')
-    if (!parsed.work_experience?.length) d.structure_issues.push('缺少工作经历')
-    if (!parsed.skills?.length) d.structure_issues.push('缺少技能标签')
-    if (!parsed.current_company) d.structure_issues.push('未标注当前公司')
-    if (!parsed.current_title) d.structure_issues.push('未标注当前职位')
-    if (parsed.work_experience) {
-      const weakDesc = parsed.work_experience.filter((w) => !w.desc || w.desc.length < 20)
-      if (weakDesc.length > 0) d.expression_issues.push(weakDesc.length + ' 段工作经历描述过于简略')
-    }
-    d.expression_issues.push('建议使用 STAR 法则量化工作成果')
-    d.expression_issues.push('建议增加具体数据指标')
-    d.missing_keywords = ['项目管理', '数据分析', '跨部门协作', '团队管理']
-    if (parsed.skills?.length > 5) d.highlights.push('技能覆盖全面，具备多领域能力')
-    if (parsed.work_experience?.length > 2) d.highlights.push('工作经历丰富，稳定性好')
-    if (parsed.years_exp >= 5) d.highlights.push('资深经验，具备中高级岗位竞争力')
-
-    diagnosisDims.forEach((dim) => {
-      dim.score = d[dim.key] || 0
-    })
-    r._diagnosisScore = d.total_score
-  } catch {
-    ElMessage.error('诊断失败')
-  } finally {
+  if (!d) {
+    // A diagnosis we could not compute must not be replaced with invented
+    // numbers. The previous fallback derived five dimension scores from
+    // `totalScore + Math.random()` and pushed a fixed keyword list, so a failed
+    // request rendered as a confident, entirely fabricated report.
+    diagnosisError.value = '诊断服务暂时不可用，未能获取该简历的分析结果。'
     diagnosisLoading.value = false
+    return
   }
+
+  currentDiagnosis.value = {
+    total_score: d.total_score ?? null,
+    structure_score: d.structure_score || 0,
+    expression_score: d.expression_score || 0,
+    keyword_score: d.keyword_score || 0,
+    highlight_score: d.highlight_score || 0,
+    ats_score: d.ats_score || 0,
+    structure_issues: d.structure_issues || [],
+    expression_issues: d.expression_issues || [],
+    missing_keywords: d.missing_keywords || [],
+    highlights: d.highlights || [],
+    match_analysis: d.match_analysis || '',
+    completeness_issues: d.completeness_issues || [],
+    completeness_score: d.completeness_score ?? null,
+    module_check: d.module_check || {},
+    improvement_roadmap: d.improvement_roadmap || [],
+    jd_id: null,
+  }
+  diagnosisDims.forEach((dim) => {
+    dim.score = d[dim.key] || 0
+  })
+  r._diagnosisScore = d.total_score
+  diagnosisLoading.value = false
 }
 function goAnalysisFromDiag() {
   if (currentDiagnosis.value?.jd_id) {
@@ -1264,6 +1234,13 @@ function goAnalysisFromDiag() {
 
 .diag-issue:last-child {
   border-bottom: none;
+}
+
+.diag-note {
+  margin: 0;
+  padding: 6px 0;
+  font-size: 14px;
+  color: var(--app-muted);
 }
 
 .diag-issue .el-icon {

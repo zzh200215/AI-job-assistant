@@ -82,8 +82,11 @@ def quick_score_resume(
     user_id: int | None = None,
 ) -> dict[str, Any]:
     """
-    快速简历评分（不调用LLM，基于规则计算）。
-    适用于列表页快速展示评分。
+    简历完整度检查（不调用LLM，基于规则计算）。适用于列表页快速展示。
+
+    这是"有多少模块被填了"，不是"写得好不好"：各段分值由条目数量驱动，
+    因此条目多而空的简历会拿到比条目少而实的简历更高的分。
+    质量评价只能来自 analyze_resume 的模型输出。
     """
     if user_id is not None:
         resume = get_owned_resume(db, resume_id, user_id)
@@ -156,8 +159,9 @@ def quick_score_resume(
 
     return {
         "resume_id": resume_id,
-        "quick_score": min(100, score),
-        "grade": _score_to_grade(score),
+        "measure": "completeness",
+        "completeness_score": min(100, score),
+        "completeness_grade": _score_to_grade(score),
         "issues": issues[:5],
         "module_check": {
             "basic_info": filled_basic >= 2,

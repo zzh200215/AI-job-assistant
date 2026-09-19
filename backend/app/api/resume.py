@@ -941,15 +941,17 @@ async def tailor_resume(
 # ============================================================
 
 
-@router.get("/{resume_id}/quick-score", summary="简历快速评分（基于规则）")
+@router.get("/{resume_id}/quick-score", summary="简历完整度检查（基于规则）")
 async def get_resume_quick_score(
     resume_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    基于规则的快速评分，不调用LLM。
-    适用于列表页快速展示简历质量等级。
+    基于规则的完整度检查，不调用LLM。
+
+    返回的是"有多少模块被填了"，不是简历质量或 ATS 兼容性评价；
+    质量评价见 POST /resume/{id}/analyze。
     """
     try:
         result = quick_score_resume(db, resume_id, user_id=current_user.id)
@@ -1042,21 +1044,28 @@ async def diagnose_resume(
         roadmap = analysis_result.get("improvement_roadmap", [])
         target_match = analysis_result.get("target_position_match", "")
 
-        total_score = analysis_result.get("overall_score", quick_result.get("quick_score", 60))
+        # `analyze_resume` returns whatever the model emitted with no schema, so
+        # overall_score can legitimately be absent. It must not be backfilled
+        # from quick_score_resume: that number counts how many resume sections
+        # are populated, which is a completeness measure, not a quality one.
+        overall_score = analysis_result.get("overall_score")
+        total_score = overall_score if isinstance(overall_score, (int, float)) else None
 
-        # 提取结构问题
+        # Keyword-classifying the model's free-text issues is best-effort
+        # grouping, so an empty bucket means "not identified" rather than
+        # "nothing wrong". The previous hardcoded defaults presented stock
+        # advice as if it had been derived from this resume.
         structure_issues = [
             issue
             for issue in issues
             if any(kw in issue.lower() for kw in ["结构", "格式", "布局", "顺序", "section", "缺少", "缺失"])
-        ] or ["简历结构基本完整，建议进一步优化模块顺序"]
+        ]
 
-        # 提取表达问题
         expression_issues = [
             issue
             for issue in issues
             if any(kw in issue.lower() for kw in ["表达", "描述", "语言", "措辞", "啰嗦", "模糊", "简略"])
-        ] or ["建议使用 STAR 法则量化工作成果", "建议增加具体数据指标"]
+        ]
 
         # 提取缺失关键词（从 improvement_roadmap 中）
         missing_keywords = []
@@ -1071,7 +1080,10 @@ async def diagnose_resume(
 
         # ATS 评分
         ats_score = dimensions.get("ats_friendly", 0)
-        ats_issues = quick_result.get("issues", []) if isinstance(quick_result.get("issues"), list) else []
+        # These come from the rule-based completeness check ("缺少工作经历"), so
+        # they are not ATS parseability findings and are no longer labelled as
+        # such. The ATS score itself is the model's `ats_friendly` dimension.
+        completeness_issues = quick_result.get("issues", []) if isinstance(quick_result.get("issues"), list) else []
 
         result = {
             "total_score": total_score,
@@ -1085,7 +1097,9 @@ async def diagnose_resume(
             "missing_keywords": missing_keywords[:10],
             "highlights": highlights,
             "match_analysis": target_match,
-            "ats_issues": ats_issues,
+            "completeness_issues": completeness_issues,
+            "completeness_score": quick_result.get("completeness_score"),
+            "module_check": quick_result.get("module_check", {}),
             "improvement_roadmap": roadmap if isinstance(roadmap, list) else [],
         }
         return ok(result, message="简历诊断完成")
