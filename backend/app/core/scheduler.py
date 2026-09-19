@@ -90,6 +90,15 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
+    # ---- 岗位向量补齐：每 30 分钟一次，让候选人那次请求不必为全库付 embedding ----
+    scheduler.add_job(
+        _run_job_embedding_sync,
+        trigger=IntervalTrigger(minutes=30),
+        id="job_embedding_sync",
+        name="岗位向量增量同步",
+        replace_existing=True,
+    )
+
     scheduler.start()
     logger.info("Scheduler started with %d jobs", len(scheduler.get_jobs()))
 
@@ -167,6 +176,28 @@ def _run_target_stats_refresh():
         logger.info("Target stats refresh completed: %d targets", len(targets))
     except Exception as e:
         logger.error("Target stats refresh job failed: %s", e)
+    finally:
+        db.close()
+
+
+def _run_job_embedding_sync():
+    """Embed new or edited postings ahead of any candidate asking for them."""
+    from app.core.database import SessionLocal
+    from app.services.jd_embedding_service import sync_active_job_embeddings
+
+    db = SessionLocal()
+    try:
+        stats = sync_active_job_embeddings(db)
+        if stats["embedded"] or stats["failed"]:
+            logger.info(
+                "Job embedding sync: scanned=%d reused=%d embedded=%d failed=%d",
+                stats["scanned"],
+                stats["reused"],
+                stats["embedded"],
+                stats["failed"],
+            )
+    except Exception as e:
+        logger.error("Job embedding sync failed: %s", e)
     finally:
         db.close()
 

@@ -50,6 +50,13 @@ llm_degraded_responses_total = Counter(
     registry=REGISTRY,
 )
 
+recommend_vector_degraded_total = Counter(
+    "recommend_vector_degraded_total",
+    "Recommendation requests where the embedding channel was unavailable and ranking fell back to rules",
+    ["reason"],
+    registry=REGISTRY,
+)
+
 prompt_trace_write_failures_total = Counter(
     "prompt_trace_write_failures_total",
     "Prompt trace writes that failed; while these are non-zero the trace table is NOT a reliable audit trail",
@@ -133,6 +140,10 @@ def record_llm_degraded_response(provider: str, model: str, response_source: str
     llm_degraded_responses_total.labels(
         provider=provider, model=model, response_source=response_source
     ).inc()
+
+
+def record_recommend_vector_degraded(reason: str) -> None:
+    recommend_vector_degraded_total.labels(reason=reason).inc()
 
 
 def record_prompt_trace_write_failure(stage: str) -> None:

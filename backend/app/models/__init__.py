@@ -17,6 +17,7 @@ from app.models.interview_session import InterviewSession
 from app.models.job_journal import JobJournal
 from app.models.job_pipeline import JobApplicationPipeline
 from app.models.job_recommend import JobBookmark, JobRecommendationFeedback
+from app.models.jd_embedding import JobEmbedding
 from app.models.job_target import JobTarget
 from app.models.match_score import MatchScore
 from app.models.knowledge import KnowledgeDocument
@@ -44,6 +45,7 @@ __all__ = [
     "AuditLog",
     "EmbeddingUsageDaily",
     "JobBookmark",
+    "JobEmbedding",
     "InterviewQuestionBank",
     "InterviewReportTemplate",
     "InterviewScoringRule",

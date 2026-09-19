@@ -29,9 +29,11 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.chroma_client import get_knowledge_collection
+from app.core.prometheus_metrics import record_recommend_vector_degraded
 from app.core.tenant_context import current_tenant_id
 from app.models.history import JobDescription, Resume
 from app.services.embedding_service import embed_texts
+from app.services.jd_embedding_service import vectors_for_jobs
 from app.services.recommendation_tuning import DEFAULT_RECOMMENDATION_TUNING_CONFIG
 from app.services.scoring_config import SCORE_METHOD
 from app.services.skill_gap import build_skill_gap, canonical_skill, jd_skill_union, resume_skill_names
@@ -44,6 +46,8 @@ _RECOMMEND_CACHE_LOCK = threading.Lock()
 _CACHE_TTL = 86400  # 24 灏忔椂
 # 只对粗排后的短名单跑 canonical rubric：对全库跑代价不成比例。
 _RERANK_MIN_POOL = 20
+# 同一家公司在截断前的可见列表里最多占几个名额（B3 多样性打散）。
+_MAX_PER_COMPANY = 2
 
 
 def _visible_job_filter(owner_id: int | None, tenant_id: int | None = None):
@@ -192,10 +196,11 @@ class RecommendResult:
     salary_range: str
     industry: str
     match_score: float  # 0-100 展示分：来自 canonical rubric，封顶后
-    vector_score: float  # 0-100 向量相似度分
+    vector_score: float | None  # 0-100 向量相似度分；None = 向量通道不可用
     rule_score: float  # 0-100 规则匹配分
     retrieval_score: float = 0.0  # 0-100 混合召回分，仅用于粗排，不展示
     match_score_method: str = SCORE_METHOD
+    retrieval_basis: str = "vector+rule"  # rule_only 表示向量通道不可用
     skill_overlap: list[str] = field(default_factory=list)  # 重合技能
     skill_gap: list[str] = field(default_factory=list)  # 缺失技能
     salary_match: bool = True  # 薪资是否匹配
@@ -217,9 +222,10 @@ class RecommendResult:
             "industry": self.industry,
             "match_score": round(self.match_score),
             "match_score_method": self.match_score_method,
-            "vector_score": round(self.vector_score),
+            "vector_score": None if self.vector_score is None else round(self.vector_score),
             "rule_score": round(self.rule_score),
             "retrieval_score": round(self.retrieval_score),
+            "retrieval_basis": self.retrieval_basis,
             "skill_overlap": self.skill_overlap,
             "skill_gap": self.skill_gap,
             "salary_match": self.salary_match,
@@ -320,23 +326,34 @@ class JobRecommendationEngine:
         resume_data = resume.parsed_json
         results: list[RecommendResult] = []
 
-        # 简历文本在整个循环中是固定的，只需 embedding 一次；
-        # 所有 JD 文本一次性批量 embedding（内部按 10 条/批自动分批），
-        # 避免旧实现里"每个 JD 都重新嵌入一遍简历"的 O(N) 重复调用。
-        resume_text = self._build_vector_text(resume_data)
-        jd_texts = [(jd.raw_text or self._build_vector_text(jd.parsed_json or {})) for jd in jd_query]
-        try:
-            all_embs = embed_texts([resume_text] + jd_texts)
-            resume_emb, jd_embs = all_embs[0], all_embs[1:]
-        except Exception:
-            resume_emb, jd_embs = None, [None] * len(jd_query)
+        # 岗位向量走持久表：只有新增或文本变过的岗位才真的重新嵌。
+        jd_vectors, embedding_stats = vectors_for_jobs(self.db, jd_query)
 
-        for idx, jd in enumerate(jd_query):
+        # 简历只有一条文本，单独嵌；失败就整个通道显式降级为 rule_only，
+        # 不再用 50 分冒充"中等相似度"。
+        resume_emb: list[float] | None = None
+        try:
+            resume_emb = embed_texts([self._build_vector_text(resume_data)])[0]
+        except Exception as exc:
+            resume_emb = None
+            logger.warning("resume embedding failed for resume=%s, ranking on rules: %s", resume_id, exc)
+            record_recommend_vector_degraded("resume_embed_failed")
+
+        vector_gaps = sum(1 for jd in jd_query if jd.id not in jd_vectors)
+        if vector_gaps:
+            record_recommend_vector_degraded("posting_vectors_missing")
+
+        for jd in jd_query:
             jd_data = jd.parsed_json or {}
 
-            vector_score = self._vector_score(resume_emb, jd_embs[idx])
+            vector_score = self._vector_score(resume_emb, jd_vectors.get(jd.id))
             rule_score = self._rule_score(resume_data, jd, jd_data)
-            combined = vector_score * self._vector_weight + rule_score * self._rule_weight
+            if vector_score is None:
+                combined = rule_score
+                retrieval_basis = "rule_only"
+            else:
+                combined = vector_score * self._vector_weight + rule_score * self._rule_weight
+                retrieval_basis = "vector+rule"
 
             # 技能分析：缺口只认 skill_gap 这一个权威实现
             gap_graph = build_skill_gap(
@@ -378,9 +395,21 @@ class JobRecommendationEngine:
                 match_reason=self._generate_reason(combined, overlap, gap, salary_ok, location_ok),
                 recommendation_type=self._recommend_type(combined),
                 source=jd.source or "",
+                retrieval_basis=retrieval_basis,
                 experience_requirement=(jd_data.get("experience_requirement") or jd.experience_requirement or ""),
             )
             results.append(result)
+
+        if embedding_stats.embedded or embedding_stats.failed:
+            # 成本与降级都要留痕，否则"每次请求重嵌全库"这种账没人看得见。
+            logger.info(
+                "recommend embedding work for resume=%s: scanned=%d reused=%d embedded=%d failed=%d",
+                resume_id,
+                embedding_stats.scanned,
+                embedding_stats.reused,
+                embedding_stats.embedded,
+                embedding_stats.failed,
+            )
 
         # --- 3) 粗排（混合召回分）---
         results.sort(key=lambda r: r.retrieval_score, reverse=True)
@@ -395,12 +424,38 @@ class JobRecommendationEngine:
         shortlist = results[: max(limit * 4, _RERANK_MIN_POOL)]
         shortlist = self._apply_canonical_scores(shortlist, resume)
         shortlist.sort(key=lambda r: (r.match_score, r.retrieval_score), reverse=True)
+        shortlist = self._spread_by_company(shortlist)
         tail = results[len(shortlist) :]
 
         # --- 6) 截断 + 缓存 ---
         output = [r.to_dict() for r in shortlist] + [r.to_dict() for r in tail]
         _set_cached_recommendations(cache_key, now, _CACHE_TTL, output)
         return output[:limit]
+
+    @staticmethod
+    def _spread_by_company(results: list[RecommendResult], per_company: int = _MAX_PER_COMPANY) -> list[RecommendResult]:
+        """Cap how many postings from one employer appear before the cut.
+
+        Ranking purely by score made the page a wall of one company's openings:
+        they share wording, so they score alike and crowd everything else out.
+        Overflow is kept in score order at the tail, so nothing is dropped.
+        """
+        picked: list[RecommendResult] = []
+        overflow: list[RecommendResult] = []
+        seen: dict[str, int] = {}
+
+        for result in results:
+            company = (result.company or "").strip().lower()
+            if not company:
+                picked.append(result)
+                continue
+            if seen.get(company, 0) < per_company:
+                seen[company] = seen.get(company, 0) + 1
+                picked.append(result)
+            else:
+                overflow.append(result)
+
+        return picked + overflow
 
     def _apply_canonical_scores(self, candidates: list[RecommendResult], resume: Resume) -> list[RecommendResult]:
         """Attach the single authoritative match score to a shortlist."""
@@ -424,15 +479,14 @@ class JobRecommendationEngine:
 
     # ==================== 向量相似度（通道1）====================
 
-    def _vector_score(self, resume_emb: list[float] | None, jd_emb: list[float] | None) -> float:
-        """基于预计算好的简历 / JD 向量算余弦相似度 → 0-100。
+    def _vector_score(self, resume_emb: list[float] | None, jd_emb: list[float] | None) -> float | None:
+        """余弦相似度 → 0-100，向量缺失时返回 None。
 
-        向量在 recommend() 中已对简历（1 次）和全部 JD（批量）统一算好，
-        这里只做纯计算，不再触发任何 embedding 调用。
-        embedding 缺失（如网络失败）时降级返回中等分 50。
+        None 和 50 是不同的话：50 会被当成"中等相似度"参与加权，把一次
+        embedding 故障伪装成一条真实的匹配结论；None 让调用方明确退回规则通道。
         """
         if not resume_emb or not jd_emb:
-            return 50.0
+            return None
         cos_sim = self._cosine_similarity(resume_emb, jd_emb)
         return max(0, min(100, cos_sim * 100))
 
@@ -791,6 +845,14 @@ def batch_import_jobs(
         ids.append(jd.id)
     db.commit()
     JobRecommendationEngine.clear_cache()
+    # Embed now rather than making the next candidate's first request pay for the
+    # whole import; a failure here is not an import failure.
+    try:
+        from app.services.jd_embedding_service import sync_active_job_embeddings
+
+        sync_active_job_embeddings(db)
+    except Exception:
+        logger.exception("post-import embedding sync failed; recommendations will embed on demand")
     return ids
 
 

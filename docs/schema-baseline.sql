@@ -32,6 +32,7 @@ CREATE INDEX ix_interview_session_tenant_user ON interview_session (tenant_id, u
 CREATE INDEX ix_interview_session_user_id ON interview_session (user_id);
 CREATE INDEX ix_interview_turn_evaluation_session_id ON interview_turn_evaluation (session_id);
 CREATE INDEX ix_interview_turn_evaluation_status ON interview_turn_evaluation (status);
+CREATE INDEX ix_jd_embedding_jd_id ON jd_embedding (jd_id);
 CREATE INDEX ix_job_application_pipeline_company ON job_application_pipeline (company);
 CREATE INDEX ix_job_application_pipeline_create_time ON job_application_pipeline (create_time);
 CREATE INDEX ix_job_application_pipeline_jd_id ON job_application_pipeline (jd_id);
@@ -896,6 +897,23 @@ CREATE TABLE job_bookmark (
 	tenant_id BIGINT DEFAULT '1' NOT NULL, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(user_id) REFERENCES tb_user (id) ON DELETE CASCADE, 
+	FOREIGN KEY(jd_id) REFERENCES tb_jd (id) ON DELETE CASCADE
+)
+
+;
+
+CREATE TABLE jd_embedding (
+	id BIGINT NOT NULL, 
+	jd_id BIGINT NOT NULL, 
+	provider VARCHAR(32) NOT NULL, 
+	model VARCHAR(64) NOT NULL, 
+	text_hash VARCHAR(32) NOT NULL, 
+	dimension INTEGER NOT NULL, 
+	vector TEXT NOT NULL, 
+	create_time DATETIME, 
+	update_time DATETIME, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_jd_embedding_jd_provider_model UNIQUE (jd_id, provider, model), 
 	FOREIGN KEY(jd_id) REFERENCES tb_jd (id) ON DELETE CASCADE
 )
 
