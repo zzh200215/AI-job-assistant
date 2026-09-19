@@ -205,6 +205,19 @@
 
 **验收**：规划给出的每个 `match_score` 与 `salary_range` 都能反查到支撑它的 JD 样本集合。
 
+#### 已交付：B2.1–B2.4（提交 `d0cc34c`、`a7161de`、`eb539a6`、`a8e5e00`）
+
+| # | 内容 | 证据 |
+|---|---|---|
+| B2.1 | `skill_gap.py` 成为"这个技能算不算已具备"的唯一口径：normalize + 保守 alias + 按角色读取字段 + `SkillGap` 带岗位 id 与原始拼写作证据。接手四处旧实现（引擎集合差、rubric 技能/项目/加分维、分析报告 missing_skills、面试题 required_skills）。评分语义变化 → `SCORE_METHOD` 升 v2 并收成一个常量 | `test_skill_gap_authority.py` 16 例（含 rubric 与缺口图同题一致） |
+| B2.2 | `salary_evidence.py`：单一分位实现（最近秩，不插值出没人报过的薪数）、样本下限标注 `low_confidence`、每个数字带 `sample_jd_ids`。解析改严格配对（`12薪 15-25K` 原被读成 12–15K） | `test_salary_evidence.py` 26 例 |
+| B2.3 | 方向由岗位库统计（按 role 归组、忽略职级）：覆盖率、缺口按"几条岗位必备"排序、该方向自身样本的薪资分位、每条带 jd_ids。模型只在给定方向里排序写理由；幻觉方向/重复/假 category 拒绝；非真实应答时理由回落规则句 | `test_career_evidence.py` 28 例 + 真实模型跑通（4 岗位→3 方向，coverage 0.5，P25/P50/P75=25/25/37.5，mysql 2 条必备） |
+| B2.4 | 规划页：方向/薪资两卡从 `v-if="careerResult"` 里搬出（不需要跑完整规划）；学习资源不再按关键词硬编码书名 + `'#'` 假链接；投递策略去掉 65/25/10 无来源比例 | 浏览器实测：分析状态仍"待启动"时两卡正常渲染且数字可反查；债务棘轮把该文件字面量 29→27 收紧 |
+
+顺带修掉：**薪资洞察页此前从未工作过**——它读的是接口从未返回的字段（`overview.p25`、`distribution[]`、`city_breakdown`），每张卡都显示 `--`，分布图还在对象上 `.map` 抛错。现按真实契约渲染，城市对比走 `/compare`，无数据时直说而不是显示 0。
+
+口径记录：`/career-path` 用 `accessible_job_query`（本人 + 平台共享），与推荐一致；`/salary` 面向整库市场语料（`salary_evidence` 顶部写明是决策而非疏漏）。因此方向卡内的薪资（自身样本）与薪资页（全库）可能不同，两者各自标注样本数。
+
 ### B3 推荐召回升级（1 周，依赖 A4）
 
 - 把 `multi_recall.py:315-417` 的 BM25+RRF+query-rewrite 从"只服务知识库"扩展到岗位召回
