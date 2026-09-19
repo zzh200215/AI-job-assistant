@@ -28,7 +28,7 @@ class MatchScore(TenantScopedMixin, Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("tb_user.id", ondelete="CASCADE"), nullable=False, index=True)
     resume_id = Column(BigInteger, ForeignKey("tb_resume.id", ondelete="CASCADE"), nullable=False, index=True)
-    resume_version = Column(String(64), nullable=False, comment="Resume timestamp used as the version identity")
+    resume_version = Column(String(64), nullable=False, comment="Hash of the parsed resume the score was computed from")
     jd_id = Column(BigInteger, ForeignKey("tb_jd.id", ondelete="CASCADE"), nullable=False, index=True)
 
     score = Column(Float, nullable=False, comment="Canonical 0-100 match score, after any cap")

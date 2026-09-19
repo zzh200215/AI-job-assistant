@@ -12,6 +12,7 @@ actually see.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from typing import Any
@@ -28,13 +29,20 @@ METHOD = "rubric_6dim"
 
 
 def resume_version_of(resume: Resume) -> str:
-    """Version identity for a resume.
+    """Version identity for a resume: a hash of the text scoring actually reads.
 
-    Deliberately identical to the expression in JobRecommendEngine so the two
-    cache layers cannot disagree about when a resume changed.
+    `Resume.update_time` is MySQL DATETIME(0), so a timestamp version collides for
+    any two writes inside the same second — an applied rewrite would keep serving
+    cached scores for the pre-edit resume. `parsed_json` is the only input the
+    rubric and the recommender read (see MatchExplainer and
+    JobRecommendEngine._build_vector_text), so hashing it both tracks every real
+    change and ignores edits that cannot move a score.
+
+    Single source of truth: the recommendation cache imports this instead of
+    restating it, so the two cache layers cannot disagree.
     """
-    stamp = resume.update_time or resume.create_time
-    return stamp.isoformat() if stamp else "unknown"
+    payload = json.dumps(resume.parsed_json or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
 
 
 def _serialize(value: Any) -> str:

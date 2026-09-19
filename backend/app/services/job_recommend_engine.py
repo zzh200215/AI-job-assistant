@@ -279,11 +279,9 @@ class JobRecommendationEngine:
 
         # --- 缓存键 ---
         normalized_filters = _normalize_filters(filters)
-        resume_version = (
-            (resume.update_time or resume.create_time or "").isoformat()
-            if (resume.update_time or resume.create_time)
-            else "unknown"
-        )
+        from app.services.match_score_service import resume_version_of
+
+        resume_version = resume_version_of(resume)
         # --- 抑制集：不感兴趣 / 点踩过的岗位不再出现 ---
         suppressed, suppression_version = load_suppressed_jd_ids(self.db, resume.user_id)
 
