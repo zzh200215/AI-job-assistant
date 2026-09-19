@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import traceback
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -84,6 +85,76 @@ def _get_resume_version(db: Session, resume_id: int, version_id: int) -> ResumeV
         )
         .first()
     )
+
+
+def _as_text_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if isinstance(item, (str, int, float)) and str(item).strip()]
+
+
+def _number_or_none(value: Any) -> int | float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return value
+
+
+def _dimension(dimensions: Any, key: str) -> dict[str, Any]:
+    """Read one analysis dimension whatever shape the model emitted.
+
+    The analysis prompt asks for {score, issues, suggestions} per dimension and
+    the response is never schema-checked, so a bare number must also work. Reading
+    `dimensions.get(key, 0)` directly handed the whole dict to the UI as a "score",
+    which rendered as a JSON blob beside a 0-width progress bar.
+    """
+    value = dimensions.get(key) if isinstance(dimensions, dict) else None
+    if isinstance(value, dict):
+        return {
+            "score": _number_or_none(value.get("score")),
+            "issues": _as_text_list(value.get("issues")),
+            "suggestions": _as_text_list(value.get("suggestions")),
+            "missing_keywords": _as_text_list(value.get("missing_keywords")),
+        }
+    return {"score": _number_or_none(value), "issues": [], "suggestions": [], "missing_keywords": []}
+
+
+def _roadmap_items(value: Any) -> list[str]:
+    """Flatten quick_wins / medium_effort / major_rework into one list.
+
+    A dict-shaped roadmap used to fail an `isinstance(value, list)` check and be
+    discarded, so the roadmap panel read "暂无改进建议" for every report that
+    actually followed the schema.
+    """
+    if isinstance(value, dict):
+        items = [item for track in ("quick_wins", "medium_effort", "major_rework") for item in _as_text_list(value.get(track))]
+        if items:
+            return items
+        return [str(v).strip() for v in value.values() if isinstance(v, str) and str(v).strip()]
+    return _as_text_list(value)
+
+
+def _match_summary(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if not isinstance(value, dict):
+        return ""
+
+    def _join(items: list[str]) -> str:
+        # Model-emitted items often already end in a full stop, which reads badly
+        # once they are joined with "；".
+        return "；".join(item.rstrip("。；; ") for item in items if item.rstrip("。；; "))
+
+    parts = []
+    level = value.get("match_level")
+    if level:
+        parts.append(f"匹配度：{level}")
+    gaps = _as_text_list(value.get("gap_analysis"))
+    if gaps:
+        parts.append("差距：" + _join(gaps))
+    bridge = _as_text_list(value.get("bridge_strategies"))
+    if bridge:
+        parts.append("弥补方式：" + _join(bridge))
+    return "。".join(parts)
 
 
 @router.post("/upload", summary="Upload resume")
@@ -1097,47 +1168,40 @@ async def diagnose_resume(
 
         # 3. 聚合诊断报告
         dimensions = analysis_result.get("dimensions", {})
-        issues = analysis_result.get("critical_issues", [])
-        strengths = analysis_result.get("strengths", [])
-        roadmap = analysis_result.get("improvement_roadmap", [])
-        target_match = analysis_result.get("target_position_match", "")
+        issues = _as_text_list(analysis_result.get("critical_issues"))
+        strengths = _as_text_list(analysis_result.get("strengths"))
+        roadmap = _roadmap_items(analysis_result.get("improvement_roadmap"))
+        target_match = _match_summary(analysis_result.get("target_position_match", ""))
+
+        structure = _dimension(dimensions, "structure")
+        content = _dimension(dimensions, "content_quality")
+        keyword = _dimension(dimensions, "keyword_density")
+        differentiation = _dimension(dimensions, "differentiation")
+        ats = _dimension(dimensions, "ats_friendly")
 
         # `analyze_resume` returns whatever the model emitted with no schema, so
         # overall_score can legitimately be absent. It must not be backfilled
         # from quick_score_resume: that number counts how many resume sections
         # are populated, which is a completeness measure, not a quality one.
-        overall_score = analysis_result.get("overall_score")
-        total_score = overall_score if isinstance(overall_score, (int, float)) else None
+        total_score = _number_or_none(analysis_result.get("overall_score"))
 
-        # Keyword-classifying the model's free-text issues is best-effort
-        # grouping, so an empty bucket means "not identified" rather than
-        # "nothing wrong". The previous hardcoded defaults presented stock
-        # advice as if it had been derived from this resume.
-        structure_issues = [
+        # The model attributes issues to dimensions itself; keyword-classifying
+        # the free-text critical_issues list is only the fallback. An empty bucket
+        # means "not identified", never "nothing wrong" — the previous hardcoded
+        # defaults presented stock advice as if it came from this resume.
+        structure_issues = structure["issues"] or [
             issue
             for issue in issues
             if any(kw in issue.lower() for kw in ["结构", "格式", "布局", "顺序", "section", "缺少", "缺失"])
         ]
-
-        expression_issues = [
+        expression_issues = content["issues"] or [
             issue
             for issue in issues
             if any(kw in issue.lower() for kw in ["表达", "描述", "语言", "措辞", "啰嗦", "模糊", "简略"])
         ]
+        missing_keywords = keyword["missing_keywords"]
+        highlights = strengths[:5]
 
-        # 提取缺失关键词（从 improvement_roadmap 中）
-        missing_keywords = []
-        for item in roadmap:
-            if isinstance(item, dict):
-                kw = item.get("keyword") or item.get("title", "")
-                if kw and kw not in missing_keywords:
-                    missing_keywords.append(kw)
-
-        # 提取亮点
-        highlights = strengths[:5] if strengths else []
-
-        # ATS 评分
-        ats_score = dimensions.get("ats_friendly", 0)
         # These come from the rule-based completeness check ("缺少工作经历"), so
         # they are not ATS parseability findings and are no longer labelled as
         # such. The ATS score itself is the model's `ats_friendly` dimension.
@@ -1145,11 +1209,11 @@ async def diagnose_resume(
 
         result = {
             "total_score": total_score,
-            "structure_score": dimensions.get("structure", 0),
-            "expression_score": dimensions.get("content_quality", 0),
-            "keyword_score": dimensions.get("keyword_density", 0),
-            "highlight_score": dimensions.get("differentiation", 0),
-            "ats_score": ats_score,
+            "structure_score": structure["score"],
+            "expression_score": content["score"],
+            "keyword_score": keyword["score"],
+            "highlight_score": differentiation["score"],
+            "ats_score": ats["score"],
             "structure_issues": structure_issues,
             "expression_issues": expression_issues,
             "missing_keywords": missing_keywords[:10],
@@ -1158,7 +1222,7 @@ async def diagnose_resume(
             "completeness_issues": completeness_issues,
             "completeness_score": quick_result.get("completeness_score"),
             "module_check": quick_result.get("module_check", {}),
-            "improvement_roadmap": roadmap if isinstance(roadmap, list) else [],
+            "improvement_roadmap": roadmap,
         }
         return ok(result, message="简历诊断完成")
     except ValueError as exc:
