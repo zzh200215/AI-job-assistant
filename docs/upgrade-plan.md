@@ -556,6 +556,26 @@ agent.SummaryAgent           real  tokens=3215
 
 **验证**：backend **675 passed**（+3：全异常时 scored=0 且指标 None、一条炸一条中时只按测出的算、门槛先报异常再报未测出）；`ruff check .` clean、`ruff format --check .` 336 files already formatted；`npm run lint` exit 0。**仍然没验的**：`npm run format:check` 在本机不可信（检出是 CRLF 而仓库对象是 LF），CI 上什么结果我不知道；`gh` 查远端运行记录被会话策略拦，见 [[local-dev-environment]] 的替代做法。
 
+#### 已交付：E5 BM25 关键词索引跟着语料变（提交 `aa9d64b`）
+
+**死在哪**：`_BM25Index` 是单例，`__init__` 里全量扫一遍 Chroma 建好就永久复用；`_dirty = True` 声明了却**没有任何一处读它或改它**（全仓 grep 只命中声明那一行），`knowledge_service` 的入库/删除/重建路径也没有一行碰过索引。所以进程启动之后入库的文档，关键词这一路**永远召不到**；反过来被删掉的切片还会继续被打分。向量那路是实时查 Chroma 的，所以症状只在"报错码、产品名、法规名"这类关键词本该赢的查询上。
+
+**新旧对照（同一份假 collection，只换代码版本）**
+
+| 语料 2 条 → 3 条之后，索引里的条数 | 改前 | 改后 |
+|---|---|---|
+| `_BM25Index.get().doc_ids` | 2 → **2**（死的） | 2 → **3**（跟着变） |
+| 有没有 `invalidate_bm25_index()` 这个出口 | 无 | 有 |
+
+**做法与两处刻意的取舍**
+- `get()` 比较"建这份索引时的条数"与 `collection.count()`，不一致就**整份重建后换指针**（单次赋值，读侧不会看到半份索引）。代价是每次检索多一个 `count()`，本地 413 切片量级下是毫秒级；`_bm25_score` 每次 `multi_recall` 只调一次，不是每路调一次。
+- **失败时保留旧索引，不清空**：`count()` 取不到（返回 -1）或重建过程抛异常（`build_failed`）时沿用上一份好索引。以前 `_build()` 的 `except` 会把 `doc_ids` 清成空表，等于"Chroma 抖一下 → 关键词召回静默变 0"，而 `_bm25_score` 外层还有一个吞异常的 `except`，根本看不见。
+- 计数只看得见"条数变了"。**条数一样的改写**（重切片、整库重建）由 `reprocess_document` / `rebuild_all` 显式调 `invalidate_bm25_index()` 兜住——这个出口有真实调用方，不是又一个装饰性钩子。
+
+**测试**：`tests/test_bm25_index_refresh.py` 4 条（新入库可召回、删除后不再计分、同计数改写必须靠 invalidate、计数异常不得清空好索引）。第一条在改前必红（上表的对照就是证据）。全量 **679 passed**，`ruff check .` 与 `ruff format --check .` 均 clean。
+
+**没做真机端到端**：要现场证明"跑着的进程里入库即可召回"，得往共享开发库塞一篇真文档再删（上一轮删除数据被安全策略拦过），收益不超过上面的单元级对照，所以没做。另外 8010 上那个实例是 E4 之前起的，**不含本次改动**。
+
 **其余：**
 
 | 项 | 证据 |
@@ -567,7 +587,7 @@ agent.SummaryAgent           real  tokens=3215
 | 测试覆盖真实路径为零 | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错，但 `backend/.coverage`(122KB) 被提交进了工作树 |
 | 队列无 ack/retry/DLQ | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py:76-79`）；Redis 队列存在（`:93-141`）但 `mark_stale_running_tasks_failed`（`orchestration_runner.py:236-259`）启动时把 30 分钟以上任务**一律置失败**，多副本重启会误杀正常长任务；`run_strategy_async` 构造两个 `TaskPayload` 后丢弃（`:126-132,317-323`） |
 | 限流粒度 | slowapi + Redis（`core/rate_limiter.py:38-49`）仅按 IP → NAT 后用户共享额度，单用户可耗尽 LLM 花费 |
-| RAG 索引陈旧 | `multi_recall.py:158-217` 的 BM25 是手写内存索引，首次调用全量扫 Chroma，`_dirty` 标志（`:140`）**从未被读** → 入库后静默返回旧 chunk；`score()` 为 O(terms×docs) 纯 Python（`:238-250`） |
+| ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`） | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。**仍然在的是性能那半句**：`score()` 为 O(terms×docs) 纯 Python 遍历，语料再大一个量级就要换实现 |
 | Rerank 生产用启发式 | `rerank_service.py:125-159` 可选本地 cross-encoder，否则 jieba 词重叠 + 硬编码 0.5/0.3/0.2 权重；`RERANKER_MODEL_PATH` 默认未设 |
 | 死代码 | `api/tracking.py` 定义了 router 但**从未被 include**；`agents/agent_orchestrator.py`、`services/smart_orchestrator.py`、`services/agent_workflow.py` 是 `DeprecationWarning` 垫片层，靠 import 维持存活 |
 | 缺少 router 级鉴权 | 31 个 router / 218 端点，无一处使用 `dependencies=[...]`，鉴权靠每端点 `Depends(get_current_user)`，**保护是 opt-in 而非构造保证** |
