@@ -530,6 +530,24 @@ agent.SummaryAgent           real  tokens=3215
 
 **一处值得记住的连锁反应**：给 `app/models/__init__.py` 排 import 顺序，改变了模型注册顺序；SQLAlchemy 用注册顺序决定"彼此无依赖"的表在 DDL 里的先后；于是 `docs/schema-baseline.sql` 的 179 条语句换了顺序，被 `test_schema_baseline` 判成"schema 漂移"。修法是让 `render_ddl()` 像它已经对 `CREATE INDEX` 做的那样对 `CREATE TABLE` 排序（这份快照没有任何消费方按顺序执行），并用"排序前语句集合 == 排序后"证明**schema 一个字没变**，只有 17 行换了位置。
 
+#### 已交付：E3 RAG 评估门第一次真的量了检索
+
+**查出来的根因比"CI 红"更难看**：`scripts/eval_rag.py` 调的是 `multi_recall(query, top_k=k)`——**不带 db**。而 `multi_recall` 是 fail-closed 的（`app/services/multi_recall.py:460-468`：没有会话就没法做可见性过滤，直接 `return []`）。所以每一条 query 都拿到空结果，recall 恒为 0.0：不是库里没内容，也不是权限不对，是**这道门从来没调用过检索**。本机用真 provider + 今天重建的 413 切片库跑 50 条，也一样是 0.0。
+
+**同时，报告把三种完全不同的事写成同一个数**：`except Exception → results=[]` 然后照旧计入平均。于是"数据库连不上""库是空的""检索到了但不相关"都长成 `recall@5 0.0`。
+
+**改法**：
+- 检索抛异常的 query **不进指标**，单独计数；报告新增 `retrieved / retrieval_errors / empty_results / error_samples(≤3，带 query 与异常类型)`。
+- 一条都没测出来时指标是 `None`（没测出），不再是 `0.0`（测了，很差）；门槛检查遇到 `None` 明确说"无从比较"，不会因为跳过就变成通过。
+- 新增 `--max-retrieval-errors`（默认 0）：只要有异常，先报这条，再谈阈值。
+- 评估必须带会话与身份：默认取 `ADMIN_USERNAMES`，没有管理员就按 id 找一个"真的看得到知识文档"的用户，并把口径写进 `run_meta` 和摘要行——评估用的是谁的权限，不能是隐变量。库连不上时退出码 2 说清原因，不再交一份 0.0 的报告。
+
+**第一次真数据**（本机真 provider，5 条样本）：口径 `testu(id=1) 可见 22 篇知识文档`，检索成功 5 条 / 异常 0 / 空结果 0，**recall@5 = 0.9，MRR 0.533，keyword hit 1.0**，退出码 0（门槛 0.5 第一次是真的在比大小）。`transition_guide` 这一类召回 0.0，样本太少先不下结论。全量 50 条大约要打 50 次 LLM + 140 次 embedding（按 5 条样本外推），我没有擅自跑。
+
+**同样的形状还留在别处（没动）**：`scripts/eval_agent.py:110-112` 出错时写 `predicted = 0`，会污染 MAE/Spearman 两道门，性质与这里一样；要不要一起按"错误不进指标"改，等确认。CI 侧的结构性问题也还在：`ci.yml` 没有 MySQL service、`backend/chroma_db` 里只跟踪了一个 `.gitkeep`，所以这道门在 CI 里现在会以"数据库不可用"退出码 2 失败——**明确地红，而不是假装测过**。
+
+**测试**：`tests/test_eval_thresholds.py` +4（异常单独计数且指标为 None、空结果仍是可测的 0.0、一条炸一条中时只按测出的算、门槛先报异常再报未测出）；原有 hybrid-recall 测试改为断言 `db/user_id` 确实被透传。该文件 11 passed，全量 672 passed。
+
 **其余：**
 
 | 项 | 证据 |
