@@ -424,6 +424,37 @@ agent.SummaryAgent           real  tokens=3215
 
 **顺带**：`strategy._run_level()` 现在只服务原生分层实现，langgraph 侧不再需要它；`LayeredGraphState` 补了 `branch/log_ids/level` 三个字段，线程归属写进了模块 docstring，免得下次有人以为在节点里写库是安全的。
 
+#### 已交付：C7 重复 agent 与 critical 标志（提交 `fd1272b`、`1d4e16a`）
+
+**计划里的两条，实测一条是错的**
+
+| 计划说法 | 实测 |
+|---|---|
+| 五对重复 agent 待清理 | **不是重复**。每对是两个不同实现的节点：`ResumeAgent` 问模型要诊断报告（真机 1293 tok），`ResumeParseAgent` 用规则解析文件（0 tok）——分层流水线用前者，线性用后者。第五对 `SummaryReportAgent` 已在 C4 删掉。真正的 bug 是 registry 用 alias 把两个名字缝合，`get("ResumeParseAgent")` 可能返回另一个 agent，于是 `agent_message` 里的执行者名字和步骤日志里请求的名字不一致。处理：删 alias、把分工写进 registry docstring（两个实现都保留）、未知名字抛带已知清单的 `KeyError` |
+| `is_critical` 恒为 True 属无效标志 | 成立，但后果比"无效"重：`partial` 状态因此**永远不可达**。优化/面试节点挂掉会把已经做完的匹配分析一起判废（真机发生过一次）。现在这两个节点 `critical=False`，任务落 `partial`、已完成结果照常入库，前端两张状态表补上 `partial` 标签 |
+
+**顺带查出 A4 的漏网——这条才是 C7 真正的收获**
+
+默认编排路径写进 `analysis_record.match_score` 的一直是**模型在 JSON 里自报的数**。A4 定了唯一权威，但只管住推荐页与解释页，落库这一路没接上。开发库只读实测（70 条带 resume+jd 双 id 的记录，配对全部仍可解析）：
+
+| 实测 | 值 |
+|---|---|
+| 存储值 == 权威算法值 | **0 / 70** |
+| 存储值 > 权威值 | 66（另 4 条存的是 0） |
+| 虚高 | 平均 **+36.5** 分，最大 +69 |
+| 权威值 < 40（弱匹配）却显示 ≥80 | 14 条 |
+| 66 条里出现过的不同取值 | **只有 3 个：82（35 次）、85（31 次）、0（4 次）** |
+
+最后一行是决定性的：候选人看到的"匹配分"与简历内容基本无关，它是模型的习惯输出。
+
+现在 `_save_analysis_record` 按 `canonical_match_score` 重算后落库，并把 `score_method` / `cap_applied` / `skill_gap` 写进 `match_report`；模型自报数保留为 `model_reported_score`，作为对照证据而不是显示分。简历或 JD 已不可见时写 `score_unavailable_reason`、分数记 0，**不回退**成模型自报数。
+
+**历史数据没有回算**：那 70 条旧记录仍是模型自报分。回算会改动候选人已经看过的历史分数，属于产品决策，没有擅自动手。
+
+**验收**：backend 657 passed；`test_orchestration_plan.py` +2（critical 策略表；非关键失败 → `partial` 且 `AnalysisRecord.match_score` 等于权威分、后续节点仍跑完）；`test_match_score_single_source.py` +2（canonical 落库、不可见时标 unavailable）；frontend `vitest` 24 passed，`eslint` 对改动文件 0 error 0 warning。
+
+**同时暴露的一条工程债（已记进 §8）**：CI 每次 push 都跑 `ruff check .` 与 `ruff format --check .`，而仓库当前基线是 **48 个 lint 错误 + 64 个文件待重排**（15 `I001` / 10 `F401` / 7 `UP038` / 5 `B904` / 5 `F841` / 4 `E402` / 1 `B009` / 1 `UP035`）。没有顺手全量重排（爆炸半径太大、会污染后续 diff），只把本次动过的文件修到 clean。
+
 
 
 
@@ -461,7 +492,9 @@ agent.SummaryAgent           real  tokens=3215
 **建议立刻顺手修的两项（一行级）：**
 
 - `GET /api/system/metrics` **无鉴权**（`api/system.py:510-513`，router 裸挂在 `:37`）→ 泄露内部模型名、队列深度、失败计数
-- `orchestration/registry.py:138-141` 用裸 `except Exception` 包裹 registry 构造，异常时静默重置为**空**registry → 之后每次 `registry.get()` 抛 `KeyError` 且无诊断信息
+- ~~`orchestration/registry.py:138-141` 用裸 `except Exception` 包裹 registry 构造，异常时静默重置为**空**registry~~ → 已在 C7a（`fd1272b`）修掉：构造失败现在 `logger.exception` 出真实 import error
+
+**CI 基线已经红了（2026-09-20 实测，未处理）**：`.github/workflows/ci.yml:41,44` 声明每次 push 跑 `ruff check .` 与 `ruff format --check .`，而当前仓库基线是 **48 个 lint 错误 + 64 个文件待重排**（15 `I001` / 10 `F401` / 7 `UP038` / 5 `F841` / 1 `B009` / 1 `UP035` 共 39 个可 `--fix`；5 `B904` + 4 `E402` 共 9 个要人工判断）。远端 Actions 是否真的在跑、跑成什么颜色，本次**没有验证**（未查远端运行记录）。全量重排一次的 diff 会盖过真实改动，建议按文件分批收敛并让棘轮记住基线数字。
 
 **其余：**
 
