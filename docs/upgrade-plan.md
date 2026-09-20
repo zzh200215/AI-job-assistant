@@ -506,7 +506,16 @@ agent.SummaryAgent           real  tokens=3215
 
 **验收**：backend 664 passed（新增 7：匿名 401、候选人会话 403、管理员 200、令牌 200、错令牌匿名仍 401，加清单三条）；`ruff check` + `ruff format --check` 对本次 3 个文件均 clean。
 
-**一个待你执行的收尾**：本机 8010 上那个 `uvicorn app.main:app`（PID 27400，无 `--reload`）还在跑改动前的代码，我没有动它（按进程名批量结束的旧约束，且这一轮自动模式下重启/新起实例被策略拦了）。要现场确认收口生效，重启该实例后再匿名 `curl http://127.0.0.1:8010/api/system/metrics`，应得到 401。
+**真机验证（另起一台一次性实例，不动 8010）**：在 8011 上用改动后的代码起服务、`METRICS_TOKEN` 设成一次性值，同库同机、只差代码版本：
+
+| 请求 | 8011（改后） | 8010（旧代码，对照） |
+|---|---|---|
+| 匿名 `GET /api/system/metrics` | **401** `{"code":-6,"message":"未提供认证 Token"}` | 200 + 计数器转储 |
+| `Bearer wrong-token` | 401 | — |
+| `Bearer ${METRICS_TOKEN}` | **200**，正文首行 `# HELP http_requests_total` | — |
+| 匿名 `GET /api/system/health`（对照：探活必须仍然公开） | 200 | 200 |
+
+验完 8011 已停（`netstat` 再查为 0 监听）。**8010 上那台 `uvicorn app.main:app`（PID 27400，无 `--reload`）仍跑改动前的代码**，我没有重启它；它一重启，匿名读 metrics 就会变成 401。
 
 **CI 基线已经红了（2026-09-20 实测，未处理）**：`.github/workflows/ci.yml:41,44` 声明每次 push 跑 `ruff check .` 与 `ruff format --check .`，而当前仓库基线是 **48 个 lint 错误 + 64 个文件待重排**（15 `I001` / 10 `F401` / 7 `UP038` / 5 `F841` / 1 `B009` / 1 `UP035` 共 39 个可 `--fix`；5 `B904` + 4 `E402` 共 9 个要人工判断）。远端 Actions 是否真的在跑、跑成什么颜色，本次**没有验证**（未查远端运行记录）。全量重排一次的 diff 会盖过真实改动，建议按文件分批收敛并让棘轮记住基线数字。
 
