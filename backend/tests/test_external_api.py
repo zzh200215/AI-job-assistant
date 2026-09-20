@@ -555,6 +555,32 @@ def test_webhook_subscribe_rejects_private_url(factory):
     assert "内网" in resp.json()["detail"]
 
 
+def test_private_ip_literal_is_rejected_without_a_dns_round_trip(monkeypatch):
+    """IP 字面量必须在"字面量"这一支就被拒。
+
+    这句 raise 曾经写在 try 里、被同一个 `except ValueError: pass` 吞掉，绕到 DNS 解析
+    分支才拦下——结论一样，但 `"内网" in detail` 两条消息都能满足，测试看不出走错了路。
+    """
+    from app.services import webhook_service
+
+    def _no_dns(*args, **kwargs):
+        raise AssertionError("IP 字面量不该去解析域名")
+
+    monkeypatch.setattr(webhook_service.socket, "getaddrinfo", _no_dns)
+    with pytest.raises(ValueError, match="指向内网/保留地址"):
+        webhook_service._validate_delivery_url("http://169.254.169.254/latest/meta-data/")
+
+
+def test_public_ip_literal_passes_without_a_dns_round_trip(monkeypatch):
+    from app.services import webhook_service
+
+    def _no_dns(*args, **kwargs):
+        raise AssertionError("IP 字面量不该去解析域名")
+
+    monkeypatch.setattr(webhook_service.socket, "getaddrinfo", _no_dns)
+    assert webhook_service._validate_delivery_url("https://8.8.8.8/hook") is None
+
+
 def test_webhook_includes_replay_protection_headers(factory):
     """投递应携带唯一 event_id/timestamp（签名 body + 头），供订阅方防重放（#17）。"""
     _HookHandler.received = []
