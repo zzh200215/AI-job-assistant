@@ -515,9 +515,13 @@ agent.SummaryAgent           real  tokens=3215
 | `Bearer ${METRICS_TOKEN}` | **200**，正文首行 `# HELP http_requests_total` | — |
 | 匿名 `GET /api/system/health`（对照：探活必须仍然公开） | 200 | 200 |
 
-验完 8011 已停（`netstat` 再查为 0 监听）。**8010 上那台 `uvicorn app.main:app`（PID 27400，无 `--reload`）仍跑改动前的代码**，我没有重启它；它一重启，匿名读 metrics 就会变成 401。
+验完 8011 已停（`netstat` 再查为 0 监听）。**随后按要求重启了 8010 那台开发实例**（先用 `Get-CimInstance` 核对命令行确为本项目 `uvicorn app.main:app --port 8010`，再按 PID 定点重启，新监听 PID 9228），在它上面复测同一组：匿名 metrics **401**、`Bearer nonsense` 401、`/health` 与 `/jobs/cities` 仍 200。因为 `backend/.env` 里没有 `METRICS_TOKEN`，这台跑的是"仅管理员会话"模式。
 
-**CI 基线已经红了（2026-09-20 实测，未处理）**：`.github/workflows/ci.yml:41,44` 声明每次 push 跑 `ruff check .` 与 `ruff format --check .`，而当前仓库基线是 **48 个 lint 错误 + 64 个文件待重排**（15 `I001` / 10 `F401` / 7 `UP038` / 5 `F841` / 1 `B009` / 1 `UP035` 共 39 个可 `--fix`；5 `B904` + 4 `E402` 共 9 个要人工判断）。远端 Actions 是否真的在跑、跑成什么颜色，本次**没有验证**（未查远端运行记录）。全量重排一次的 diff 会盖过真实改动，建议按文件分批收敛并让棘轮记住基线数字。
+**~~CI 基线已经红了~~ → 已清零（E2，提交 `0496c54` + `bc882cd`）**：`.github/workflows/ci.yml:41,44` 声明每次 push 跑 `ruff check .` 与 `ruff format --check .`，接手时基线是 **48 个 lint 错误 + 64 个文件待重排**。现在两条都 clean（`All checks passed!` / `336 files already formatted`），backend 664 passed 在改动前后都成立。
+
+不是 `--fix` 一键过的：35 个可自动修的里面，只有 28 个属于 ruff 认定的"安全修复"，其余按规则逐个处理——5 处 `B904` 补 `from exc`（400 响应不再吞掉真正的 ValueError）；6 处 `F841` 里 4 处那个**调用本身就是测试目的**（账单重跑幂等、租户/岗位 fixture 需要多一行对照数据），所以只删绑定、保留调用；`scripts/export_schema_baseline.py` 的两行 import 必须在 `sys.path` 插入之后，标 `noqa: E402` 而不是搬走。顺带在 `webhook_service` 里发现一处真 bug：私网 IP 的拒绝异常被同一个 `except ValueError: pass` 吞掉，绕到 DNS 分支才拦下（结论正确、报的却是另一句），已挪进 `else`。
+
+**一处值得记住的连锁反应**：给 `app/models/__init__.py` 排 import 顺序，改变了模型注册顺序；SQLAlchemy 用注册顺序决定"彼此无依赖"的表在 DDL 里的先后；于是 `docs/schema-baseline.sql` 的 179 条语句换了顺序，被 `test_schema_baseline` 判成"schema 漂移"。修法是让 `render_ddl()` 像它已经对 `CREATE INDEX` 做的那样对 `CREATE TABLE` 排序（这份快照没有任何消费方按顺序执行），并用"排序前语句集合 == 排序后"证明**schema 一个字没变**，只有 17 行换了位置。
 
 **其余：**
 
