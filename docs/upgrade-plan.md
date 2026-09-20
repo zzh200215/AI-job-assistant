@@ -431,7 +431,7 @@ agent.SummaryAgent           real  tokens=3215
 | 计划说法 | 实测 |
 |---|---|
 | 五对重复 agent 待清理 | **不是重复**。每对是两个不同实现的节点：`ResumeAgent` 问模型要诊断报告（真机 1293 tok），`ResumeParseAgent` 用规则解析文件（0 tok）——分层流水线用前者，线性用后者。第五对 `SummaryReportAgent` 已在 C4 删掉。真正的 bug 是 registry 用 alias 把两个名字缝合，`get("ResumeParseAgent")` 可能返回另一个 agent，于是 `agent_message` 里的执行者名字和步骤日志里请求的名字不一致。处理：删 alias、把分工写进 registry docstring（两个实现都保留）、未知名字抛带已知清单的 `KeyError` |
-| `is_critical` 恒为 True 属无效标志 | 成立，但后果比"无效"重：`partial` 状态因此**永远不可达**。优化/面试节点挂掉会把已经做完的匹配分析一起判废（真机发生过一次）。现在这两个节点 `critical=False`，任务落 `partial`、已完成结果照常入库，前端两张状态表补上 `partial` 标签 |
+| `is_critical` 恒为 True 属无效标志 | 成立，但后果比"无效"重：`partial` 状态因此**永远不可达**。优化/面试节点挂掉会把已经做完的匹配分析一起判废（真机发生过一次）。把 `ResumeOptimizeAgent`/`InterviewQuestionAgent` 改成 `critical=False` 之后才发现更深一层：**这个标志只有两条线性路径在读**——原生分层是"任何一步失败就整单 failed"，分层 LangGraph 的汇聚节点也只看"有没有失败"，两者都不查 `is_critical`。所以 `1f3a953` 把四条路径统一成"非关键失败 → 继续跑、落 `partial`、结果照入库"，并把分层侧 `InterviewAgent` 也改为非关键；取消仍然停图（那时"停下"才是目的）。前端两张状态表补上 `partial` 标签 |
 
 **顺带查出 A4 的漏网——这条才是 C7 真正的收获**
 
@@ -451,9 +451,9 @@ agent.SummaryAgent           real  tokens=3215
 
 **历史数据没有回算**：那 70 条旧记录仍是模型自报分。回算会改动候选人已经看过的历史分数，属于产品决策，没有擅自动手。
 
-**验收**：backend 657 passed；`test_orchestration_plan.py` +2（critical 策略表；非关键失败 → `partial` 且 `AnalysisRecord.match_score` 等于权威分、后续节点仍跑完）；`test_match_score_single_source.py` +2（canonical 落库、不可见时标 unavailable）；frontend `vitest` 24 passed，`eslint` 对改动文件 0 error 0 warning。
+**验收**：backend 668 passed；`test_orchestration_plan.py` +2（critical 策略表；非关键失败 → `partial` 且 `AnalysisRecord.match_score` 等于权威分、后续节点仍跑完，两条线性路径都跑）；`test_langgraph_topology.py` +2（同一件事在 `layered` 与 `langgraph_layered` 上各自成立）；`test_match_score_single_source.py` +2（canonical 落库、不可见时标 unavailable）；frontend `vitest` 24 passed，`eslint` 对改动文件 0 error 0 warning。
 
-**同时暴露的一条工程债（已记进 §8）**：CI 每次 push 都跑 `ruff check .` 与 `ruff format --check .`，而仓库当前基线是 **48 个 lint 错误 + 64 个文件待重排**（15 `I001` / 10 `F401` / 7 `UP038` / 5 `B904` / 5 `F841` / 4 `E402` / 1 `B009` / 1 `UP035`）。没有顺手全量重排（爆炸半径太大、会污染后续 diff），只把本次动过的文件修到 clean。
+**同时暴露的一条工程债（后来在 E2 清零）**：当时 `ruff check .` 有 **48 个错误 + 64 个文件待重排**（15 `I001` / 10 `F401` / 7 `UP038` / 5 `B904` / 5 `F841` / 4 `E402` / 1 `B009` / 1 `UP035`）。C7 当时只把动过的文件修到 clean，没有顺手全量重排（爆炸半径太大、会污染后续 diff）；这批基线后来由 `0496c54` + `bc882cd` 清完，细节见 §8 的 E2 记录。
 
 
 
