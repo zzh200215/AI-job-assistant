@@ -283,19 +283,69 @@ def _fallback_questions(
     skills = "、".join(required_skills[:3]) or "岗位核心能力"
     templates_by_type = {
         "tech": [
-            ("basic", f"请用 2 分钟介绍一下你与「{role}」最相关的经历。", "表达与岗位匹配", "按背景、关键项目、岗位契合度组织回答。"),
-            ("tech", f"围绕 {skills}，你最熟悉的一个技术难点是什么？如何定位并解决？", "技术深度", "说明问题边界、方案取舍、结果与复盘。"),
-            ("project", "挑选一个最有挑战的项目，说明你的职责、关键决策和量化结果。", "项目影响力", "使用 STAR 结构，突出本人贡献。"),
-            ("tech", "当系统出现性能或稳定性问题时，你会如何定位、止损和复盘？", "工程方法", "从监控、定位、修复、预防四步回答。"),
-            ("scenario", "如果需求目标不清晰且时间有限，你会如何推进交付？", "协作与判断", "说明澄清优先级、风险同步和分阶段交付。"),
-            ("tech", f"你会如何验证 {skills} 相关方案在生产环境中的效果？", "验证能力", "覆盖指标、灰度、回滚和长期监控。"),
-            ("project", "描述一次你与产品、测试或其他工程角色意见不一致的经历。", "跨团队协作", "说明分歧、依据、决策和最终结果。"),
-            ("scenario", "面对线上紧急故障，你会如何组织沟通并安排后续动作？", "应急处理", "先恢复服务，再同步影响并形成复盘。"),
+            (
+                "basic",
+                f"请用 2 分钟介绍一下你与「{role}」最相关的经历。",
+                "表达与岗位匹配",
+                "按背景、关键项目、岗位契合度组织回答。",
+            ),
+            (
+                "tech",
+                f"围绕 {skills}，你最熟悉的一个技术难点是什么？如何定位并解决？",
+                "技术深度",
+                "说明问题边界、方案取舍、结果与复盘。",
+            ),
+            (
+                "project",
+                "挑选一个最有挑战的项目，说明你的职责、关键决策和量化结果。",
+                "项目影响力",
+                "使用 STAR 结构，突出本人贡献。",
+            ),
+            (
+                "tech",
+                "当系统出现性能或稳定性问题时，你会如何定位、止损和复盘？",
+                "工程方法",
+                "从监控、定位、修复、预防四步回答。",
+            ),
+            (
+                "scenario",
+                "如果需求目标不清晰且时间有限，你会如何推进交付？",
+                "协作与判断",
+                "说明澄清优先级、风险同步和分阶段交付。",
+            ),
+            (
+                "tech",
+                f"你会如何验证 {skills} 相关方案在生产环境中的效果？",
+                "验证能力",
+                "覆盖指标、灰度、回滚和长期监控。",
+            ),
+            (
+                "project",
+                "描述一次你与产品、测试或其他工程角色意见不一致的经历。",
+                "跨团队协作",
+                "说明分歧、依据、决策和最终结果。",
+            ),
+            (
+                "scenario",
+                "面对线上紧急故障，你会如何组织沟通并安排后续动作？",
+                "应急处理",
+                "先恢复服务，再同步影响并形成复盘。",
+            ),
             ("basic", f"你为什么选择「{role}」这个机会？", "求职动机", "结合岗位价值、能力积累和长期方向。"),
-            ("scenario", "入职后的前 90 天，你会如何建立业务理解并产出成果？", "成长计划", "给出可衡量的学习、协作和交付计划。"),
+            (
+                "scenario",
+                "入职后的前 90 天，你会如何建立业务理解并产出成果？",
+                "成长计划",
+                "给出可衡量的学习、协作和交付计划。",
+            ),
         ],
         "hr": [
-            ("basic", "请用 2 分钟做自我介绍，并说明下一份工作的核心期待。", "表达与动机", "突出经历主线与岗位匹配点。"),
+            (
+                "basic",
+                "请用 2 分钟做自我介绍，并说明下一份工作的核心期待。",
+                "表达与动机",
+                "突出经历主线与岗位匹配点。",
+            ),
             ("basic", f"你为什么对「{role}」感兴趣？", "求职动机", "结合业务理解与个人目标回答。"),
             ("project", "讲一次你推动他人接受新方案或改变协作方式的经历。", "影响力", "说明阻力、沟通方法和结果。"),
             ("scenario", "当优先级频繁变化时，你如何保证工作质量和预期管理？", "适应能力", "说明取舍标准和同步机制。"),
@@ -849,6 +899,7 @@ def _build_preparation_suggestions(title, required_skills, performance):
 
     return suggestions
 
+
 # ============================================================
 # T3-2 面试配置：题型配置查询 + 管理端配置
 # ============================================================
@@ -879,7 +930,9 @@ def upsert_interview_config(
     config_type = payload.get("config_type", "")
     tenant_id = payload.get("tenant_id")
     if not tenant_id or config_type not in ("question_bank", "scoring_rules", "report_template"):
-        return fail(message="config_type(question_bank/scoring_rules/report_template) 与 tenant_id 必填", code=ERR_PARAM)
+        return fail(
+            message="config_type(question_bank/scoring_rules/report_template) 与 tenant_id 必填", code=ERR_PARAM
+        )
 
     if config_type == "question_bank":
         bank_type = payload.get("type", "")
@@ -942,11 +995,7 @@ def upsert_interview_config(
         return ok({"tenant_id": tenant_id, "rule_count": len(rules)})
 
     # report_template
-    row = (
-        db.query(InterviewReportTemplate)
-        .filter(InterviewReportTemplate.tenant_id == tenant_id)
-        .first()
-    )
+    row = db.query(InterviewReportTemplate).filter(InterviewReportTemplate.tenant_id == tenant_id).first()
     if row is None:
         row = InterviewReportTemplate(tenant_id=tenant_id)
         db.add(row)

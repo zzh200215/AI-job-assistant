@@ -137,9 +137,7 @@ def record_llm_error(provider: str, model: str, error_type: str) -> None:
 
 
 def record_llm_degraded_response(provider: str, model: str, response_source: str) -> None:
-    llm_degraded_responses_total.labels(
-        provider=provider, model=model, response_source=response_source
-    ).inc()
+    llm_degraded_responses_total.labels(provider=provider, model=model, response_source=response_source).inc()
 
 
 def record_recommend_vector_degraded(reason: str) -> None:

@@ -20,7 +20,9 @@ def _owner(db) -> User:
 
 
 def _headers(user: User) -> dict:
-    return {"Authorization": f"Bearer {create_access_token({'sub': str(user.id), 'email': user.email, 'username': user.username})}"}
+    return {
+        "Authorization": f"Bearer {create_access_token({'sub': str(user.id), 'email': user.email, 'username': user.username})}"
+    }
 
 
 def test_feishu_sso_start_and_callback_provisions_member(db_session, monkeypatch):
@@ -47,13 +49,23 @@ def test_feishu_sso_start_and_callback_provisions_member(db_session, monkeypatch
         def json(self):
             return {"data": self.data}
 
-    monkeypatch.setattr(organization_api.requests, "post", lambda *args, **kwargs: FakeResponse({"access_token": "token"}))
-    monkeypatch.setattr(organization_api.requests, "get", lambda *args, **kwargs: FakeResponse({"union_id": "union-user-1", "email": "new.feishu@example.com"}))
+    monkeypatch.setattr(
+        organization_api.requests, "post", lambda *args, **kwargs: FakeResponse({"access_token": "token"})
+    )
+    monkeypatch.setattr(
+        organization_api.requests,
+        "get",
+        lambda *args, **kwargs: FakeResponse({"union_id": "union-user-1", "email": "new.feishu@example.com"}),
+    )
     owner = _owner(db_session)
 
     with TestClient(app) as client:
-        organization = client.post("/organizations", json={"name": "Feishu Team", "slug": "feishu-team"}, headers=_headers(owner)).json()["data"]
-        configured = client.put(f"/organizations/{organization['id']}/sso", json={"provider": "feishu"}, headers=_headers(owner))
+        organization = client.post(
+            "/organizations", json={"name": "Feishu Team", "slug": "feishu-team"}, headers=_headers(owner)
+        ).json()["data"]
+        configured = client.put(
+            f"/organizations/{organization['id']}/sso", json={"provider": "feishu"}, headers=_headers(owner)
+        )
         assert configured.status_code == 200
 
         start = client.get("/organizations/sso/feishu/feishu-team/start", follow_redirects=False)

@@ -34,6 +34,7 @@ from app.models.organization import Organization
 
 # ===== 单元：stamp_tenant / tenant_filter（conftest db_session） =====
 
+
 def test_stamp_tenant_sets_current_tenant(db_session):
     token = set_current_tenant(TenantContext(tenant_id=42, name="租户A"))
     try:
@@ -70,6 +71,7 @@ def test_tenant_filter_returns_only_current_tenant_rows(db_session):
 
 
 # ===== 端到端：独立 StaticPool 引擎 + 真实中间件 =====
+
 
 @pytest.fixture
 def tenant_engine():

@@ -17,7 +17,9 @@ from app.models.user import User
 
 
 def _headers(user: User) -> dict:
-    token = create_access_token({"sub": str(user.id), "email": user.email, "username": user.username, "role": user.role})
+    token = create_access_token(
+        {"sub": str(user.id), "email": user.email, "username": user.username, "role": user.role}
+    )
     return {"Authorization": f"Bearer {token}"}
 
 

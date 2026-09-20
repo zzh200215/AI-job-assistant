@@ -62,7 +62,9 @@ def _organization_scope(db: Session, user: User, organization_id: int | None) ->
     """Resolve an explicitly requested workspace without changing personal defaults."""
     if organization_id is None:
         return None
-    organization = db.query(Organization).filter(Organization.id == organization_id, Organization.status == "active").first()
+    organization = (
+        db.query(Organization).filter(Organization.id == organization_id, Organization.status == "active").first()
+    )
     if organization is None or _organization_membership(db, organization.id, user.id) is None:
         return None
     return organization

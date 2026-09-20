@@ -75,9 +75,7 @@ def _upsert_brand_config(db: Session, tenant_id: int, updates: dict) -> None:
     for short, value in updates.items():
         full = _BRAND_CONFIG_KEYS[short]
         row = (
-            db.query(TenantConfig)
-            .filter(TenantConfig.tenant_id == tenant_id, TenantConfig.config_key == full)
-            .first()
+            db.query(TenantConfig).filter(TenantConfig.tenant_id == tenant_id, TenantConfig.config_key == full).first()
         )
         if row is None:
             db.add(TenantConfig(tenant_id=tenant_id, config_key=full, config_value=value))
@@ -137,12 +135,7 @@ def list_tenants(
         # 前端「状态筛选」此前被忽略：补上 Organization.status 过滤
         q = q.filter(Organization.status == status.strip())
     total = q.count()
-    items = (
-        q.order_by(Organization.created_at.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
-    )
+    items = q.order_by(Organization.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
     return ok({"total": total, "page": page, "page_size": page_size, "items": [o.to_dict() for o in items]})
 
 
@@ -181,7 +174,9 @@ def create_tenant(
     db.add(org)
     db.commit()
     db.refresh(org)
-    write_audit_log(db, current_user, "tenant.create", "tenant", str(org.id), {"name": org.name, "slug": org.slug}, request)
+    write_audit_log(
+        db, current_user, "tenant.create", "tenant", str(org.id), {"name": org.name, "slug": org.slug}, request
+    )
     return ok(org.to_dict(), message="租户已创建")
 
 
@@ -284,7 +279,10 @@ def assign_tenant_admin(
         {"user_id": user.id, "username": user.username},
         request,
     )
-    return ok({"tenant_id": org.id, "admin_user_id": user.id, "username": user.username}, message=f"已分配 {user.username} 为租户管理员")
+    return ok(
+        {"tenant_id": org.id, "admin_user_id": user.id, "username": user.username},
+        message=f"已分配 {user.username} 为租户管理员",
+    )
 
 
 @admin_router.post("/{tenant_id}/renew", summary="管理员：租户续费")
@@ -391,7 +389,9 @@ def bind_tenant_domain(
     db.add(row)
     db.commit()
     db.refresh(row)
-    write_audit_log(db, _admin, "tenant.bind_domain", "tenant", str(org.id), {"domain": domain, "is_primary": is_primary}, request)
+    write_audit_log(
+        db, _admin, "tenant.bind_domain", "tenant", str(org.id), {"domain": domain, "is_primary": is_primary}, request
+    )
     return ok(row.to_dict(), message=f"域名 {domain} 已绑定")
 
 
@@ -498,9 +498,7 @@ def import_tenant_jobs(
             }
         )
 
-    ids = job_recommend_engine.batch_import_jobs(
-        db, jobs, source="tenant-import", tenant_id=org.id
-    )
+    ids = job_recommend_engine.batch_import_jobs(db, jobs, source="tenant-import", tenant_id=org.id)
     write_audit_log(
         db,
         _admin,

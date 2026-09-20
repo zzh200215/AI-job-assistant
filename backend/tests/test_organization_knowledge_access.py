@@ -104,7 +104,9 @@ def test_organization_knowledge_isolated_from_personal_and_other_workspaces(db_s
         listed = client.get("/knowledge/list", headers=_headers(member, organization.id))
         assert [item["title"] for item in listed.json()["data"]["items"]] == ["team-doc"]
 
-        searched = client.post("/knowledge/search", headers=_headers(member, organization.id), json={"query": "test", "top_k": 5})
+        searched = client.post(
+            "/knowledge/search", headers=_headers(member, organization.id), json={"query": "test", "top_k": 5}
+        )
         assert [item["doc_title"] for item in searched.json()["data"]["results"]] == ["team-doc", "platform-doc"]
 
         denied_detail = client.get(f"/knowledge/{docs[0].id}", headers=_headers(outsider))

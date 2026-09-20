@@ -14,9 +14,7 @@ class JobEmbedding(Base):
     """
 
     __tablename__ = "jd_embedding"
-    __table_args__ = (
-        UniqueConstraint("jd_id", "provider", "model", name="uq_jd_embedding_jd_provider_model"),
-    )
+    __table_args__ = (UniqueConstraint("jd_id", "provider", "model", name="uq_jd_embedding_jd_provider_model"),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     jd_id = Column(BigInteger, ForeignKey("tb_jd.id", ondelete="CASCADE"), nullable=False, index=True)

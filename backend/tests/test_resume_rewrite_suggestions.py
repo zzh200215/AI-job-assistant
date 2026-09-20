@@ -40,7 +40,9 @@ def _blocks():
     return build_resume_blocks(PARSED)
 
 
-def _suggestion(block_id="self_evaluation", original="三年后端开发经验", proposed="三年后端开发经验，专注订单链路", **extra):
+def _suggestion(
+    block_id="self_evaluation", original="三年后端开发经验", proposed="三年后端开发经验，专注订单链路", **extra
+):
     return {"block_id": block_id, "original": original, "proposed_text": proposed, "reason": "把已有事实写清楚"} | extra
 
 
@@ -105,7 +107,10 @@ def test_over_limit_across_distinct_anchors_is_marked():
     blocks = build_resume_blocks(
         {
             "self_evaluation": "评价",
-            "work_experience": [{"company": "A", "title": "T", "desc": "描述一"}, {"company": "B", "title": "U", "desc": "描述二"}],
+            "work_experience": [
+                {"company": "A", "title": "T", "desc": "描述一"},
+                {"company": "B", "title": "U", "desc": "描述二"},
+            ],
         }
     )
     payload = {
@@ -130,7 +135,9 @@ def test_a_response_that_is_not_a_list_is_refused_wholesale():
 
 
 def test_a_bare_array_is_accepted_so_no_suggestion_is_lost_to_shape():
-    accepted, rejected = svc.validate_rewrite_suggestions(_blocks(), [_suggestion(proposed="三年后端开发经验，专注订单链路")])
+    accepted, rejected = svc.validate_rewrite_suggestions(
+        _blocks(), [_suggestion(proposed="三年后端开发经验，专注订单链路")]
+    )
 
     assert [s["block_id"] for s in accepted] == ["self_evaluation"]
     assert rejected == []
@@ -141,8 +148,12 @@ def test_a_bare_array_is_accepted_so_no_suggestion_is_lost_to_shape():
 
 @pytest.fixture
 def actor(db_session):
-    user = User(username="rw_user", email="rw_user@example.com", password=hash_password("StrongP@ssw0rd"), role="candidate")
-    other = User(username="rw_other", email="rw_other@example.com", password=hash_password("StrongP@ssw0rd"), role="candidate")
+    user = User(
+        username="rw_user", email="rw_user@example.com", password=hash_password("StrongP@ssw0rd"), role="candidate"
+    )
+    other = User(
+        username="rw_other", email="rw_other@example.com", password=hash_password("StrongP@ssw0rd"), role="candidate"
+    )
     db_session.add_all([user, other])
     db_session.commit()
     return user, other
@@ -290,7 +301,13 @@ def test_apply_writes_the_new_text_back_and_moves_the_version(db_session, actor)
     result = svc.apply_rewrite_suggestions(
         db_session,
         resume.id,
-        [{"block_id": "self_evaluation", "proposed_text": "三年后端开发经验，专注订单链路", "expected_original": "三年后端开发经验"}],
+        [
+            {
+                "block_id": "self_evaluation",
+                "proposed_text": "三年后端开发经验，专注订单链路",
+                "expected_original": "三年后端开发经验",
+            }
+        ],
         user_id=user.id,
     )
     db_session.expire_all()

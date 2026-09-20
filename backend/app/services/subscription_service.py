@@ -537,9 +537,7 @@ def run_tenant_billing_check(db: Session) -> dict:
     return {"expired": expired_count, "restored": restored_count}
 
 
-def _activate_subscription(
-    db: Session, user_id: int, plan_tier: str, tenant_id: int | None = None
-) -> UserSubscription:
+def _activate_subscription(db: Session, user_id: int, plan_tier: str, tenant_id: int | None = None) -> UserSubscription:
     """
     激活用户订阅。如果已有有效订阅则延长，否则创建新订阅。
 

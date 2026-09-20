@@ -58,7 +58,11 @@ async def kanban_view(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    items = db.query(JobApplicationPipeline).filter(tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id).all()
+    items = (
+        db.query(JobApplicationPipeline)
+        .filter(tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id)
+        .all()
+    )
 
     stages: dict[str, list[dict]] = {s: [] for s in ACTIVE_STAGES}
     stages.update({s: [] for s in TERMINAL_STAGES})
@@ -106,7 +110,8 @@ async def upcoming_interviews(
     entries = (
         db.query(JobApplicationPipeline)
         .filter(
-            tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id,
+            tenant_filter(JobApplicationPipeline),
+            JobApplicationPipeline.user_id == current_user.id,
             JobApplicationPipeline.stage == "interview",
             JobApplicationPipeline.interview_at.isnot(None),
         )
@@ -138,7 +143,8 @@ async def list_offers(
     entries = (
         db.query(JobApplicationPipeline)
         .filter(
-            tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id,
+            tenant_filter(JobApplicationPipeline),
+            JobApplicationPipeline.user_id == current_user.id,
             JobApplicationPipeline.stage.in_(["offer", "accepted"]),
         )
         .order_by(JobApplicationPipeline.update_time.desc())
@@ -169,7 +175,9 @@ async def list_pipeline_entries(
     if stage and stage not in PIPELINE_STAGES:
         return fail(message=f"非法的流程阶段，可选值: {', '.join(sorted(PIPELINE_STAGES))}", code=ERR_PARAM)
 
-    q = db.query(JobApplicationPipeline).filter(tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id)
+    q = db.query(JobApplicationPipeline).filter(
+        tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id
+    )
     if stage:
         q = q.filter(JobApplicationPipeline.stage == stage)
     if resume_id is not None:
@@ -249,7 +257,8 @@ async def pipeline_resume_version_stats(
     entries = (
         db.query(JobApplicationPipeline)
         .filter(
-            tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id,
+            tenant_filter(JobApplicationPipeline),
+            JobApplicationPipeline.user_id == current_user.id,
             JobApplicationPipeline.resume_version_id.isnot(None),
         )
         .all()
@@ -313,7 +322,11 @@ async def recommend_pipeline_resume_version(
         .filter(Resume.user_id == current_user.id, Resume.is_deleted == 0, ResumeVersion.format == "md")
         .all()
     )
-    entries = db.query(JobApplicationPipeline).filter(tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id).all()
+    entries = (
+        db.query(JobApplicationPipeline)
+        .filter(tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id)
+        .all()
+    )
     items = []
     for version in versions:
         matched = [keyword for keyword in keywords if keyword.lower() in (version.content or "").lower()]
@@ -377,7 +390,8 @@ async def create_pipeline_entry(
         duplicate = (
             db.query(JobApplicationPipeline)
             .filter(
-                tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id,
+                tenant_filter(JobApplicationPipeline),
+                JobApplicationPipeline.user_id == current_user.id,
                 JobApplicationPipeline.jd_id == payload.jd_id,
                 JobApplicationPipeline.resume_id == payload.resume_id,
                 JobApplicationPipeline.resume_version_id == payload.resume_version_id,
@@ -388,7 +402,8 @@ async def create_pipeline_entry(
         duplicate = (
             db.query(JobApplicationPipeline)
             .filter(
-                tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id,
+                tenant_filter(JobApplicationPipeline),
+                JobApplicationPipeline.user_id == current_user.id,
                 JobApplicationPipeline.source_url == payload.source_url,
                 JobApplicationPipeline.title == payload.title,
                 JobApplicationPipeline.company == payload.company,
@@ -412,44 +427,44 @@ async def create_pipeline_entry(
 
     entry = stamp_tenant(
         JobApplicationPipeline(
-        user_id=current_user.id,
-        resume_id=resume.id if resume else payload.resume_id,
-        resume_version_id=resume_version.id if resume_version else None,
-        resume_version_label=(resume_version.label or resume_version.version_type) if resume_version else "",
-        feedback_type=payload.feedback_type,
-        feedback_score=payload.feedback_score,
-        feedback_tags=_unique_skill_tags(payload.feedback_tags),
-        feedback_note=payload.feedback_note,
-        feedback_at=utc_now() if payload.feedback_type or payload.feedback_note else None,
-        jd_id=jd.id if jd else payload.jd_id,
-        title=payload.title or (jd.title if jd else ""),
-        company=payload.company or (jd.company if jd else ""),
-        location=payload.location or (jd.location if jd else ""),
-        salary_range=payload.salary_range or (jd.salary_range if jd else ""),
-        source=payload.source or (jd.source if jd else "manual"),
-        source_url=payload.source_url or (jd.external_url if jd else ""),
-        summary=payload.summary,
-        raw_text=payload.raw_text or (jd.raw_text if jd else ""),
-        experience_requirement=payload.experience_requirement or (jd.experience_requirement if jd else ""),
-        education_requirement=payload.education_requirement or (jd.education_requirement if jd else ""),
-        industry=payload.industry or (jd.industry if jd else ""),
-        skill_tags=_unique_skill_tags(payload.skill_tags or (jd.skill_tags if jd else [])),
-        priority_score=payload.priority_score,
-        priority_label=payload.priority_label,
-        stage=payload.stage,
-        note=payload.note,
-        next_action=payload.next_action,
-        follow_up_at=follow_up_at,
-        resume_name=payload.resume_name or (resume.file_name if resume else ""),
-        stage_history=history,
-        interview_at=interview_at,
-        interview_type=payload.interview_type,
-        interview_round=payload.interview_round,
-        interview_location=payload.interview_location,
-        interview_contact=payload.interview_contact,
-        offer_salary=payload.offer_salary,
-        offer_details=payload.offer_details,
-        offer_deadline=offer_deadline,
+            user_id=current_user.id,
+            resume_id=resume.id if resume else payload.resume_id,
+            resume_version_id=resume_version.id if resume_version else None,
+            resume_version_label=(resume_version.label or resume_version.version_type) if resume_version else "",
+            feedback_type=payload.feedback_type,
+            feedback_score=payload.feedback_score,
+            feedback_tags=_unique_skill_tags(payload.feedback_tags),
+            feedback_note=payload.feedback_note,
+            feedback_at=utc_now() if payload.feedback_type or payload.feedback_note else None,
+            jd_id=jd.id if jd else payload.jd_id,
+            title=payload.title or (jd.title if jd else ""),
+            company=payload.company or (jd.company if jd else ""),
+            location=payload.location or (jd.location if jd else ""),
+            salary_range=payload.salary_range or (jd.salary_range if jd else ""),
+            source=payload.source or (jd.source if jd else "manual"),
+            source_url=payload.source_url or (jd.external_url if jd else ""),
+            summary=payload.summary,
+            raw_text=payload.raw_text or (jd.raw_text if jd else ""),
+            experience_requirement=payload.experience_requirement or (jd.experience_requirement if jd else ""),
+            education_requirement=payload.education_requirement or (jd.education_requirement if jd else ""),
+            industry=payload.industry or (jd.industry if jd else ""),
+            skill_tags=_unique_skill_tags(payload.skill_tags or (jd.skill_tags if jd else [])),
+            priority_score=payload.priority_score,
+            priority_label=payload.priority_label,
+            stage=payload.stage,
+            note=payload.note,
+            next_action=payload.next_action,
+            follow_up_at=follow_up_at,
+            resume_name=payload.resume_name or (resume.file_name if resume else ""),
+            stage_history=history,
+            interview_at=interview_at,
+            interview_type=payload.interview_type,
+            interview_round=payload.interview_round,
+            interview_location=payload.interview_location,
+            interview_contact=payload.interview_contact,
+            offer_salary=payload.offer_salary,
+            offer_details=payload.offer_details,
+            offer_deadline=offer_deadline,
         )
     )
     db.add(entry)
@@ -474,7 +489,8 @@ async def transition_stage(
         db.query(JobApplicationPipeline)
         .filter(
             JobApplicationPipeline.id == entry_id,
-            tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id,
+            tenant_filter(JobApplicationPipeline),
+            JobApplicationPipeline.user_id == current_user.id,
         )
         .first()
     )
@@ -552,7 +568,8 @@ async def update_pipeline_entry(
         db.query(JobApplicationPipeline)
         .filter(
             JobApplicationPipeline.id == entry_id,
-            tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id,
+            tenant_filter(JobApplicationPipeline),
+            JobApplicationPipeline.user_id == current_user.id,
         )
         .first()
     )
@@ -620,10 +637,10 @@ async def update_pipeline_entry(
         "interview_round",
         "interview_location",
         "interview_contact",
-            "offer_salary",
-            "feedback_type",
-            "feedback_score",
-            "feedback_note",
+        "offer_salary",
+        "feedback_type",
+        "feedback_score",
+        "feedback_note",
     )
     for field in _simple_fields:
         if field in data:
@@ -666,7 +683,8 @@ async def clear_terminal_pipeline(
     items = (
         db.query(JobApplicationPipeline)
         .filter(
-            tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id,
+            tenant_filter(JobApplicationPipeline),
+            JobApplicationPipeline.user_id == current_user.id,
             JobApplicationPipeline.stage.in_(TERMINAL_STAGES),
         )
         .all()
@@ -688,7 +706,8 @@ async def delete_pipeline_entry(
         db.query(JobApplicationPipeline)
         .filter(
             JobApplicationPipeline.id == entry_id,
-            tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id,
+            tenant_filter(JobApplicationPipeline),
+            JobApplicationPipeline.user_id == current_user.id,
         )
         .first()
     )
@@ -728,7 +747,8 @@ async def pipeline_stats(
     weekly_new = (
         db.query(func.count(JobApplicationPipeline.id))
         .filter(
-            tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id,
+            tenant_filter(JobApplicationPipeline),
+            JobApplicationPipeline.user_id == current_user.id,
             JobApplicationPipeline.create_time >= week_ago,
         )
         .scalar()
@@ -738,7 +758,8 @@ async def pipeline_stats(
     upcoming_interviews_count = (
         db.query(func.count(JobApplicationPipeline.id))
         .filter(
-            tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id,
+            tenant_filter(JobApplicationPipeline),
+            JobApplicationPipeline.user_id == current_user.id,
             JobApplicationPipeline.stage == "interview",
             JobApplicationPipeline.interview_at.isnot(None),
             JobApplicationPipeline.interview_at >= utc_now(),
@@ -750,7 +771,8 @@ async def pipeline_stats(
     pending_offers = (
         db.query(func.count(JobApplicationPipeline.id))
         .filter(
-            tenant_filter(JobApplicationPipeline), JobApplicationPipeline.user_id == current_user.id,
+            tenant_filter(JobApplicationPipeline),
+            JobApplicationPipeline.user_id == current_user.id,
             JobApplicationPipeline.stage == "offer",
         )
         .scalar()

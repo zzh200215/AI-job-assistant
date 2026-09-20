@@ -126,7 +126,11 @@ def _roadmap_items(value: Any) -> list[str]:
     actually followed the schema.
     """
     if isinstance(value, dict):
-        items = [item for track in ("quick_wins", "medium_effort", "major_rework") for item in _as_text_list(value.get(track))]
+        items = [
+            item
+            for track in ("quick_wins", "medium_effort", "major_rework")
+            for item in _as_text_list(value.get(track))
+        ]
         if items:
             return items
         return [str(v).strip() for v in value.values() if isinstance(v, str) and str(v).strip()]
@@ -1052,11 +1056,7 @@ async def apply_rewrites(
         result = apply_rewrite_suggestions(
             db, resume_id, edits, jd_id=int(jd_id) if jd_id else None, user_id=current_user.id
         )
-        message = (
-            f"已应用 {len(result['applied'])} 处改写"
-            if result["changed"]
-            else "没有改动被应用"
-        )
+        message = f"已应用 {len(result['applied'])} 处改写" if result["changed"] else "没有改动被应用"
         return ok(result, message=message)
     except ValueError as exc:
         return fail(message=str(exc), code=ERR_PARAM)

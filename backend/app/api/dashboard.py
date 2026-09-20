@@ -61,9 +61,7 @@ async def dashboard_overview(
         .scalar()
     )
 
-    total_interviews = (
-        db.query(func.count(InterviewSession.id)).filter(InterviewSession.user_id == uid).scalar() or 0
-    )
+    total_interviews = db.query(func.count(InterviewSession.id)).filter(InterviewSession.user_id == uid).scalar() or 0
 
     # --- 简历数据 ---
     total_resumes = db.query(func.count(Resume.id)).filter(Resume.user_id == uid, Resume.is_deleted == 0).scalar()

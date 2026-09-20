@@ -191,12 +191,16 @@ class TestInterviewEngineInit:
             answered_count=1,
             messages=[
                 {
-                    "role": "ai", "type": "question", "content": "第一题",
+                    "role": "ai",
+                    "type": "question",
+                    "content": "第一题",
                     "metadata": {"round": 1, "total": 3, "category": "project"},
                     "timestamp": utc_now().isoformat(),
                 },
                 {
-                    "role": "user", "type": "answer", "content": "回答一",
+                    "role": "user",
+                    "type": "answer",
+                    "content": "回答一",
                     "metadata": {"round": 1, "category": "project"},
                     "timestamp": utc_now().isoformat(),
                 },
@@ -221,17 +225,23 @@ class TestInterviewEngineInit:
             answered_count=1,
             messages=[
                 {
-                    "role": "ai", "type": "question", "content": "第一题",
+                    "role": "ai",
+                    "type": "question",
+                    "content": "第一题",
                     "metadata": {"round": 1, "total": 3, "category": "project"},
                     "timestamp": utc_now().isoformat(),
                 },
                 {
-                    "role": "user", "type": "answer", "content": "回答一",
+                    "role": "user",
+                    "type": "answer",
+                    "content": "回答一",
                     "metadata": {"round": 1, "category": "project"},
                     "timestamp": utc_now().isoformat(),
                 },
                 {
-                    "role": "ai", "type": "question", "content": "再深入一点？",
+                    "role": "ai",
+                    "type": "question",
+                    "content": "再深入一点？",
                     "metadata": {"round": 1, "total": 3, "category": "project", "is_follow_up": True},
                     "timestamp": utc_now().isoformat(),
                 },
@@ -541,9 +551,16 @@ class TestReportGeneration:
         engine.question_count = 2
         engine.evaluations = [
             {
-                "question_index": i, "question": f"q{i}", "category": "tech",
-                "completeness": 100, "accuracy": 0, "depth": 0, "expression": 80,
-                "overall_score": 90, "feedback": "f", "improvement": "i",
+                "question_index": i,
+                "question": f"q{i}",
+                "category": "tech",
+                "completeness": 100,
+                "accuracy": 0,
+                "depth": 0,
+                "expression": 80,
+                "overall_score": 90,
+                "feedback": "f",
+                "improvement": "i",
             }
             for i in range(2)
         ]

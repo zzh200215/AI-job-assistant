@@ -118,12 +118,7 @@ def derive_directions(
     min_samples: int = MIN_DIRECTION_SAMPLES,
 ) -> tuple[list[CareerDirection], dict[str, Any]]:
     """Group the candidate's visible postings into directions and measure them."""
-    jobs = (
-        accessible_job_query(db, user)
-        .filter(JobDescription.is_active == 1)
-        .order_by(JobDescription.id.asc())
-        .all()
-    )
+    jobs = accessible_job_query(db, user).filter(JobDescription.is_active == 1).order_by(JobDescription.id.asc()).all()
     parsed_resume = resume_parsed or {}
 
     groups: dict[str, list[JobDescription]] = {}

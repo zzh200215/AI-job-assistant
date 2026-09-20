@@ -8,7 +8,9 @@ from typing import Any
 from app.core.config import settings
 
 
-def evaluate_release_gate(report_details: list[tuple[dict[str, Any], dict[str, Any]]]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def evaluate_release_gate(
+    report_details: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Validate selected offline evaluation reports and return immutable evidence."""
     required_types = set(settings.ai_release_required_evaluation_types)
     now = datetime.now(timezone.utc)
@@ -21,7 +23,14 @@ def evaluate_release_gate(report_details: list[tuple[dict[str, Any], dict[str, A
         report_type = str(summary.get("report_type") or "")
         seen_types.add(report_type)
         report_failures = _check_report(summary, raw, now)
-        checks.append({"report_id": summary["report_id"], "report_type": report_type, "passed": not report_failures, "failures": report_failures})
+        checks.append(
+            {
+                "report_id": summary["report_id"],
+                "report_type": report_type,
+                "passed": not report_failures,
+                "failures": report_failures,
+            }
+        )
         failures.extend(f"{summary['report_id']}: {failure}" for failure in report_failures)
         evidence.append(
             {

@@ -86,30 +86,22 @@ def get_conversion_funnel(
 
     # 上传过简历的用户数
     uploaded_f = _append_cond([Resume.create_time >= since], _tenant_cond(Resume, tenant_id))
-    uploaded = (
-        db.query(func.count(func.distinct(Resume.user_id))).filter(*uploaded_f).scalar() or 0
-    )
+    uploaded = db.query(func.count(func.distinct(Resume.user_id))).filter(*uploaded_f).scalar() or 0
 
     # 生成过分析的用户数
     analyzed_f = _append_cond([AnalysisRecord.create_time >= since], _tenant_cond(AnalysisRecord, tenant_id))
-    analyzed = (
-        db.query(func.count(func.distinct(AnalysisRecord.user_id))).filter(*analyzed_f).scalar() or 0
-    )
+    analyzed = db.query(func.count(func.distinct(AnalysisRecord.user_id))).filter(*analyzed_f).scalar() or 0
 
     # 有过面试会话的用户数
     interviewed_f = _append_cond([InterviewSession.created_at >= since], _tenant_cond(InterviewSession, tenant_id))
-    interviewed = (
-        db.query(func.count(func.distinct(InterviewSession.user_id))).filter(*interviewed_f).scalar() or 0
-    )
+    interviewed = db.query(func.count(func.distinct(InterviewSession.user_id))).filter(*interviewed_f).scalar() or 0
 
     # 有订阅订单的用户数
     subscribed_f = _append_cond(
         [SubscriptionOrder.created_at >= since, SubscriptionOrder.status == "paid"],
         _tenant_cond(SubscriptionOrder, tenant_id),
     )
-    subscribed = (
-        db.query(func.count(func.distinct(SubscriptionOrder.user_id))).filter(*subscribed_f).scalar() or 0
-    )
+    subscribed = db.query(func.count(func.distinct(SubscriptionOrder.user_id))).filter(*subscribed_f).scalar() or 0
 
     steps = [
         {"key": "registered", "label": "注册", "count": registered},
@@ -164,9 +156,7 @@ def get_retention(
             [AnalysisRecord.create_time >= day_start_utc, AnalysisRecord.create_time < day_end_utc],
             _tenant_cond(AnalysisRecord, tenant_id),
         )
-        active = (
-            db.query(func.count(func.distinct(AnalysisRecord.user_id))).filter(*active_f).scalar() or 0
-        )
+        active = db.query(func.count(func.distinct(AnalysisRecord.user_id))).filter(*active_f).scalar() or 0
 
         daily_active.append(
             {
@@ -180,11 +170,7 @@ def get_retention(
     def _cohort_user_ids(start: datetime, end: datetime) -> set:
         """队列用户 id 集合：平台级按注册时间；租户级按业务表活跃时间。"""
         if tenant_id is None:
-            rows = (
-                db.query(func.distinct(User.id))
-                .filter(User.created_at >= start, User.created_at < end)
-                .all()
-            )
+            rows = db.query(func.distinct(User.id)).filter(User.created_at >= start, User.created_at < end).all()
             return {row[0] for row in rows}
         return _tenant_active_user_ids(db, tenant_id, since=start, until=end)
 
@@ -236,9 +222,7 @@ def get_summary_metrics(db: Session, tenant_id: int | None = None) -> dict:
         [UserSubscription.plan_tier == "pro", UserSubscription.status == "active"],
         _tenant_cond(UserSubscription, tenant_id),
     )
-    pro_users = (
-        db.query(func.count(func.distinct(UserSubscription.user_id))).filter(*pro_users_f).scalar() or 0
-    )
+    pro_users = db.query(func.count(func.distinct(UserSubscription.user_id))).filter(*pro_users_f).scalar() or 0
 
     paid_orders_f = _append_cond(
         [SubscriptionOrder.status == "paid"],
@@ -299,10 +283,7 @@ def get_revenue_summary(db: Session, tenant_id: int | None = None, days: int | N
         .group_by(SubscriptionOrder.tenant_id)
         .all()
     )
-    items = [
-        {"tenant_id": tid, "amount": float(amount), "order_count": cnt}
-        for tid, amount, cnt in rows
-    ]
+    items = [{"tenant_id": tid, "amount": float(amount), "order_count": cnt} for tid, amount, cnt in rows]
     return {
         "items": items,
         "total_amount": sum(item["amount"] for item in items),

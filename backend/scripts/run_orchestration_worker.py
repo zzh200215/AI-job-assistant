@@ -1,6 +1,6 @@
 """Standalone orchestration worker for redis_queue backend.
 
-    cd backend && ./.venv/Scripts/python.exe -m scripts.run_orchestration_worker
+cd backend && ./.venv/Scripts/python.exe -m scripts.run_orchestration_worker
 """
 
 from __future__ import annotations

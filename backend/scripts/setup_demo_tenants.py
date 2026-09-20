@@ -13,6 +13,7 @@ T5-1 双租户白标演示环境准备脚本。
 前置：数据库迁移已完成（alembic upgrade head）；知识库种子已导入（可选，见 --seed-knowledge）。
 脚本幂等：同 slug 已存在则跳过创建，直接复用。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -105,10 +106,7 @@ def _get_password(args: argparse.Namespace) -> str:
 def _ensure_admin(db, password: str) -> User:
     existing = (
         db.query(User)
-        .filter(
-            (func.lower(User.username) == ADMIN_USERNAME.lower())
-            | (func.lower(User.email) == ADMIN_EMAIL.lower())
-        )
+        .filter((func.lower(User.username) == ADMIN_USERNAME.lower()) | (func.lower(User.email) == ADMIN_EMAIL.lower()))
         .first()
     )
     if existing:
@@ -177,11 +175,7 @@ def _ensure_tenant(db, spec: dict, admin: User) -> Organization:
 
     # 绑定演示域名（仅主租户）
     if spec["domain"]:
-        existing_domain = (
-            db.query(TenantDomainBinding)
-            .filter(TenantDomainBinding.domain == spec["domain"])
-            .first()
-        )
+        existing_domain = db.query(TenantDomainBinding).filter(TenantDomainBinding.domain == spec["domain"]).first()
         if not existing_domain:
             db.add(
                 TenantDomainBinding(
@@ -235,10 +229,14 @@ def main() -> int:
 
     print("\n===== 双租户演示环境就绪 =====")
     print(f"平台管理员: {ADMIN_USERNAME}@{ADMIN_EMAIL}")
-    print(f"  A 租户（客户白标视角）: {TENANT_A['name']} slug={TENANT_A['slug']} id={tenant_a.id} plan={tenant_a.plan_tier}")
+    print(
+        f"  A 租户（客户白标视角）: {TENANT_A['name']} slug={TENANT_A['slug']} id={tenant_a.id} plan={tenant_a.plan_tier}"
+    )
     if TENANT_A["domain"]:
         print(f"    演示域名: {TENANT_A['domain']}（需配置 DNS 解析到前端；未解析则用前端地址 + 租户切换）")
-    print(f"  B 租户（默认视角）: {TENANT_B['name']} slug={TENANT_B['slug']} id={tenant_b.id} plan={tenant_b.plan_tier}")
+    print(
+        f"  B 租户（默认视角）: {TENANT_B['name']} slug={TENANT_B['slug']} id={tenant_b.id} plan={tenant_b.plan_tier}"
+    )
 
     if args.seed_knowledge:
         print("\n[知识库] 请按 docs/演示脚本.md 运行 import_knowledge_seeds.py 导入种子知识。")

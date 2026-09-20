@@ -40,9 +40,24 @@ _admin_user = User(id=1, username="admin", email="admin@example.com", role=ADMIN
 _normal_user = User(id=2, username="candidate", email="c@example.com", role=CANDIDATE_ROLE)
 
 CUSTOM_QUESTIONS = [
-    {"type": "tech", "question": "请解释 Vue 3 响应式系统的实现原理。", "intent": "前端框架理解", "ref_answer": "Proxy + effect 依赖收集。"},
-    {"type": "tech", "question": "讲一次你用 TypeScript 重构遗留代码的经历。", "intent": "前端工程化", "ref_answer": "类型边界、渐进迁移、回归验证。"},
-    {"type": "project", "question": "描述一个你负责的前端性能优化案例。", "intent": "前端性能", "ref_answer": "指标、瓶颈定位、优化措施与收益。"},
+    {
+        "type": "tech",
+        "question": "请解释 Vue 3 响应式系统的实现原理。",
+        "intent": "前端框架理解",
+        "ref_answer": "Proxy + effect 依赖收集。",
+    },
+    {
+        "type": "tech",
+        "question": "讲一次你用 TypeScript 重构遗留代码的经历。",
+        "intent": "前端工程化",
+        "ref_answer": "类型边界、渐进迁移、回归验证。",
+    },
+    {
+        "type": "project",
+        "question": "描述一个你负责的前端性能优化案例。",
+        "intent": "前端性能",
+        "ref_answer": "指标、瓶颈定位、优化措施与收益。",
+    },
 ]
 
 
@@ -341,8 +356,18 @@ def test_create_session_uses_tenant_question_bank(tenant_session, mocker):
 
     def _seed_user_data(org_id: int):
         session = tenant_session()
-        resume = Resume(user_id=_normal_user.id, file_name=f"r{org_id}.pdf", file_path=f"uploads/r{org_id}.pdf", parsed_json={"name": "张三", "skills": ["Vue"]})
-        jd = JobDescription(user_id=_normal_user.id, title="前端工程师", raw_text="招聘前端工程师", parsed_json={"title": "前端工程师", "required_skills": ["Vue"]})
+        resume = Resume(
+            user_id=_normal_user.id,
+            file_name=f"r{org_id}.pdf",
+            file_path=f"uploads/r{org_id}.pdf",
+            parsed_json={"name": "张三", "skills": ["Vue"]},
+        )
+        jd = JobDescription(
+            user_id=_normal_user.id,
+            title="前端工程师",
+            raw_text="招聘前端工程师",
+            parsed_json={"title": "前端工程师", "required_skills": ["Vue"]},
+        )
         session.add_all([resume, jd])
         session.commit()
         session.refresh(resume)
@@ -392,11 +417,15 @@ def test_background_personalization_does_not_override_custom_bank(tenant_session
 
     session = tenant_session()
     resume = Resume(
-        user_id=_normal_user.id, file_name="r.pdf", file_path="uploads/r.pdf",
+        user_id=_normal_user.id,
+        file_name="r.pdf",
+        file_path="uploads/r.pdf",
         parsed_json={"name": "张三", "skills": ["Vue"]},
     )
     jd = JobDescription(
-        user_id=_normal_user.id, title="前端工程师", raw_text="招聘前端工程师",
+        user_id=_normal_user.id,
+        title="前端工程师",
+        raw_text="招聘前端工程师",
         parsed_json={"title": "前端工程师", "required_skills": ["Vue"]},
     )
     session.add_all([resume, jd])

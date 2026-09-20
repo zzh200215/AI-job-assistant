@@ -25,7 +25,9 @@ FIXED_STAMP = datetime(2026, 9, 19, 3, 4, 5, tzinfo=timezone.utc)
 
 @pytest.fixture
 def user(db_session):
-    row = User(username="ver_user", email="ver_user@example.com", password=hash_password("StrongP@ssw0rd"), role="candidate")
+    row = User(
+        username="ver_user", email="ver_user@example.com", password=hash_password("StrongP@ssw0rd"), role="candidate"
+    )
     db_session.add(row)
     db_session.commit()
     db_session.refresh(row)

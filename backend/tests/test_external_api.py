@@ -108,6 +108,7 @@ def _seed_key(factory, *, name="客户A", tenant_id=1, daily_quota=1000, status=
 
 # ===== T6-1 鉴权与限流 =====
 
+
 def test_no_key_returns_401(factory):
     app = _build_app(factory)
     with TestClient(app) as client:
@@ -248,6 +249,7 @@ def test_interview_simulate_rejects_excessive_answers(factory):
 
 # ===== T6-2 计费与账单 =====
 
+
 def test_billing_generates_correct_amounts(factory):
     plain, key_id = _seed_key(factory, name="计费客户")
     app = _build_app(factory)
@@ -333,6 +335,7 @@ def test_admin_key_management(factory):
 
 # ===== T6-3 Webhook =====
 
+
 def test_webhook_subscribe_and_list(factory):
     _seed_org(factory, 1)
     plain, key_id = _seed_key(factory)
@@ -341,7 +344,12 @@ def test_webhook_subscribe_and_list(factory):
     with TestClient(app) as client:
         resp = client.post(
             "/api/v1/admin/external/webhooks",
-            json={"api_key_id": key_id, "event": "resume.parsed", "url": "https://example.com/hook", "secret": "s3cret"},
+            json={
+                "api_key_id": key_id,
+                "event": "resume.parsed",
+                "url": "https://example.com/hook",
+                "secret": "s3cret",
+            },
             headers=headers,
         )
         assert resp.status_code == 200
@@ -453,9 +461,7 @@ def test_publish_event_matches_subscriptions(factory):
         )
         # 只匹配 resume.parsed 订阅
         assert fired == 1
-        fired_other = webhook_service.publish_event(
-            session, api_key_id=key_id, event="interview.completed", payload={}
-        )
+        fired_other = webhook_service.publish_event(session, api_key_id=key_id, event="interview.completed", payload={})
         assert fired_other == 0
     finally:
         session.close()
@@ -471,9 +477,7 @@ def test_failed_calls_count_toward_daily_quota(factory):
     with TestClient(app) as client:
         headers = {"X-API-Key": plain}
         # 第 1 次成功
-        r1 = client.post(
-            "/api/v1/external/resume/parse", json={"content": "测试简历"}, headers=headers
-        )
+        r1 = client.post("/api/v1/external/resume/parse", json={"content": "测试简历"}, headers=headers)
         assert r1.status_code == 200
         # 第 2 次业务失败（answers 超限）→ 仍占 1 个配额
         r2 = client.post(
@@ -487,9 +491,7 @@ def test_failed_calls_count_toward_daily_quota(factory):
         )
         assert r2.status_code == 400
         # 第 3 次：成功+失败共 2 次 → 额度用尽 → 429
-        r3 = client.post(
-            "/api/v1/external/resume/parse", json={"content": "测试简历"}, headers=headers
-        )
+        r3 = client.post("/api/v1/external/resume/parse", json={"content": "测试简历"}, headers=headers)
     assert r3.status_code == 429
 
 

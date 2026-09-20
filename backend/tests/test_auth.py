@@ -85,17 +85,29 @@ class TestAccountDeletion:
         from app.models.history import AnalysisRecord, JobDescription, Resume
 
         resume = Resume(
-            user_id=user.id, file_name="r.pdf", file_path="uploads/r.pdf",
-            file_type="pdf", file_size=1, parsed_json={"name": "张三"}, is_deleted=0,
+            user_id=user.id,
+            file_name="r.pdf",
+            file_path="uploads/r.pdf",
+            file_type="pdf",
+            file_size=1,
+            parsed_json={"name": "张三"},
+            is_deleted=0,
         )
-        jd = JobDescription(user_id=user.id, title="后端工程师", company="X", raw_text="jd", source="manual", is_active=1)
+        jd = JobDescription(
+            user_id=user.id, title="后端工程师", company="X", raw_text="jd", source="manual", is_active=1
+        )
         db_session.add_all([resume, jd])
         db_session.commit()
         db_session.refresh(resume)
         db_session.refresh(jd)
         analysis = AnalysisRecord(
-            user_id=user.id, resume_id=resume.id, jd_id=jd.id,
-            match_score=80, match_report={}, optimize_suggestions={}, interview_questions={},
+            user_id=user.id,
+            resume_id=resume.id,
+            jd_id=jd.id,
+            match_score=80,
+            match_report={},
+            optimize_suggestions={},
+            interview_questions={},
         )
         db_session.add(analysis)
         db_session.commit()

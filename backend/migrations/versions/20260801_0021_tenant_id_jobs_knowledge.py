@@ -55,8 +55,7 @@ def upgrade() -> None:
         op.create_index("ix_kb_document_tenant_id", "kb_document", ["tenant_id"])
     # 组织工作区文档归属对应组织（tenant = organization）；个人文档归属默认租户；平台共享保持 NULL
     op.execute(
-        "UPDATE kb_document SET tenant_id = organization_id "
-        "WHERE tenant_id IS NULL AND organization_id IS NOT NULL"
+        "UPDATE kb_document SET tenant_id = organization_id " "WHERE tenant_id IS NULL AND organization_id IS NOT NULL"
     )
     op.execute(
         "UPDATE kb_document SET tenant_id = 1 "

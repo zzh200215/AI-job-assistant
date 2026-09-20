@@ -135,9 +135,7 @@ def build_rewrite_suggestions(
 
     jd: JobDescription | None = None
     if jd_id is not None:
-        jd = (
-            get_accessible_job_for_user(db, jd_id, user_id) if user_id is not None else db.get(JobDescription, jd_id)
-        )
+        jd = get_accessible_job_for_user(db, jd_id, user_id) if user_id is not None else db.get(JobDescription, jd_id)
         if not jd:
             raise ValueError("目标岗位不存在或无权限")
     jd_text = (
@@ -173,7 +171,9 @@ def build_rewrite_suggestions(
     }
 
 
-def _load_pair(db: Session, resume_id: int, jd_id: int | None, user_id: int | None) -> tuple[Resume, JobDescription | None]:
+def _load_pair(
+    db: Session, resume_id: int, jd_id: int | None, user_id: int | None
+) -> tuple[Resume, JobDescription | None]:
     resume: Resume | None = (
         get_owned_resume(db, resume_id, user_id) if user_id is not None else db.get(Resume, resume_id)
     )
@@ -181,9 +181,7 @@ def _load_pair(db: Session, resume_id: int, jd_id: int | None, user_id: int | No
         raise ValueError("简历不存在或无权限")
     jd: JobDescription | None = None
     if jd_id is not None:
-        jd = (
-            get_accessible_job_for_user(db, jd_id, user_id) if user_id is not None else db.get(JobDescription, jd_id)
-        )
+        jd = get_accessible_job_for_user(db, jd_id, user_id) if user_id is not None else db.get(JobDescription, jd_id)
         if not jd:
             raise ValueError("目标岗位不存在或无权限")
     return resume, jd

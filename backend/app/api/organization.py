@@ -64,7 +64,9 @@ def get_active_organization(
     organization_id = x_organization_id or current_user.active_organization_id
     if not organization_id:
         raise api_error(400, "请先选择组织工作区", ERR_PARAM)
-    organization = db.query(Organization).filter(Organization.id == organization_id, Organization.status == "active").first()
+    organization = (
+        db.query(Organization).filter(Organization.id == organization_id, Organization.status == "active").first()
+    )
     if not organization or not _membership(db, organization.id, current_user.id):
         raise api_error(403, "无权访问该组织工作区", ERR_AUTH)
     return organization
@@ -88,7 +90,9 @@ async def list_organizations(db: Session = Depends(get_db), current_user: User =
 
 
 @router.post("", summary="Create an organization workspace")
-async def create_organization(payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_organization(
+    payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     name = str(payload.get("name") or "").strip()
     slug = re.sub(r"[^a-z0-9-]+", "-", str(payload.get("slug") or name).strip().lower()).strip("-")
     if not name or not slug or len(name) > 100 or len(slug) > 80:
@@ -103,12 +107,16 @@ async def create_organization(payload: dict, db: Session = Depends(get_db), curr
     current_user.active_organization_id = organization.id
     db.commit()
     db.refresh(organization)
-    write_audit_log(db, current_user, "organization.create", resource_type="organization", resource_id=str(organization.id))
+    write_audit_log(
+        db, current_user, "organization.create", resource_type="organization", resource_id=str(organization.id)
+    )
     return ok({**organization.to_dict(), "member_role": "owner"}, message="组织工作区已创建")
 
 
 @router.put("/current", summary="Switch current organization workspace")
-async def switch_organization(payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def switch_organization(
+    payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     organization_id = int(payload.get("organization_id") or 0)
     if not _membership(db, organization_id, current_user.id):
         raise api_error(403, "无权切换至该组织", ERR_AUTH)
@@ -118,7 +126,9 @@ async def switch_organization(payload: dict, db: Session = Depends(get_db), curr
 
 
 @router.get("/{organization_id}/members", summary="List organization members")
-async def list_members(organization_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def list_members(
+    organization_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     _require_manager(db, organization_id, current_user)
     rows = (
         db.query(OrganizationMembership, User)
@@ -127,11 +137,20 @@ async def list_members(organization_id: int, db: Session = Depends(get_db), curr
         .order_by(OrganizationMembership.joined_at.asc())
         .all()
     )
-    return ok({"items": [{"user_id": user.id, "username": user.username, "email": user.email, "role": member.role} for member, user in rows]})
+    return ok(
+        {
+            "items": [
+                {"user_id": user.id, "username": user.username, "email": user.email, "role": member.role}
+                for member, user in rows
+            ]
+        }
+    )
 
 
 @router.post("/{organization_id}/members", summary="Add an existing user to organization")
-async def add_member(organization_id: int, payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def add_member(
+    organization_id: int, payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     _require_manager(db, organization_id, current_user)
     email = str(payload.get("email") or "").strip().lower()
     role = str(payload.get("role") or "member").strip().lower()
@@ -143,7 +162,14 @@ async def add_member(organization_id: int, payload: dict, db: Session = Depends(
         raise api_error(409, "该用户已是组织成员", ERR_PARAM)
     db.add(OrganizationMembership(organization_id=organization_id, user_id=user.id, role=role))
     db.commit()
-    write_audit_log(db, current_user, "organization.member_add", resource_type="organization", resource_id=str(organization_id), detail={"user_id": user.id, "role": role})
+    write_audit_log(
+        db,
+        current_user,
+        "organization.member_add",
+        resource_type="organization",
+        resource_id=str(organization_id),
+        detail={"user_id": user.id, "role": role},
+    )
     return ok({"user_id": user.id, "role": role}, message="组织成员已添加")
 
 
@@ -206,7 +232,9 @@ async def remove_member(
 
 
 @router.put("/{organization_id}/sso", summary="Configure organization SSO provider")
-async def configure_sso(organization_id: int, payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def configure_sso(
+    organization_id: int, payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
     _require_manager(db, organization_id, current_user)
     provider = str(payload.get("provider") or "").strip().lower()
     if provider not in {"", "feishu"}:
@@ -216,7 +244,14 @@ async def configure_sso(organization_id: int, payload: dict, db: Session = Depen
         raise api_error(404, "组织不存在", ERR_PARAM)
     organization.sso_provider = provider or None
     db.commit()
-    write_audit_log(db, current_user, "organization.sso_configure", resource_type="organization", resource_id=str(organization_id), detail={"provider": provider or None})
+    write_audit_log(
+        db,
+        current_user,
+        "organization.sso_configure",
+        resource_type="organization",
+        resource_id=str(organization_id),
+        detail={"provider": provider or None},
+    )
     return ok(organization.to_dict())
 
 
@@ -228,37 +263,69 @@ async def start_feishu_sso(slug: str, db: Session = Depends(get_db)):
     if not organization or organization.sso_provider != "feishu":
         raise api_error(404, "该组织未启用飞书 SSO", ERR_PARAM)
     nonce = secrets.token_urlsafe(24)
-    state = create_access_token({"type": "feishu_sso", "organization_id": organization.id, "nonce": nonce}, expires_delta=timedelta(minutes=10))
-    db.add(OrganizationSSOState(state_hash=hashlib.sha256(nonce.encode()).hexdigest(), organization_id=organization.id, provider="feishu", expires_at=utc_now() + timedelta(minutes=10)))
+    state = create_access_token(
+        {"type": "feishu_sso", "organization_id": organization.id, "nonce": nonce}, expires_delta=timedelta(minutes=10)
+    )
+    db.add(
+        OrganizationSSOState(
+            state_hash=hashlib.sha256(nonce.encode()).hexdigest(),
+            organization_id=organization.id,
+            provider="feishu",
+            expires_at=utc_now() + timedelta(minutes=10),
+        )
+    )
     db.commit()
     query = urlencode({"app_id": settings.FEISHU_APP_ID, "redirect_uri": settings.FEISHU_REDIRECT_URI, "state": state})
     return RedirectResponse(url=f"https://accounts.feishu.cn/open-apis/authen/v1/index?{query}", status_code=302)
 
 
 @router.get("/sso/feishu/callback", summary="Complete Feishu SSO")
-async def complete_feishu_sso(code: str = Query(..., min_length=1), state: str = Query(..., min_length=1), db: Session = Depends(get_db)):
+async def complete_feishu_sso(
+    code: str = Query(..., min_length=1), state: str = Query(..., min_length=1), db: Session = Depends(get_db)
+):
     state_data = decode_access_token(state)
     if not state_data or state_data.get("type") != "feishu_sso":
         raise api_error(400, "飞书 SSO 状态无效或已过期", ERR_PARAM)
     organization_id = int(state_data.get("organization_id") or 0)
     nonce = str(state_data.get("nonce") or "")
-    state_record = db.query(OrganizationSSOState).filter(OrganizationSSOState.state_hash == hashlib.sha256(nonce.encode()).hexdigest(), OrganizationSSOState.organization_id == organization_id, OrganizationSSOState.provider == "feishu", OrganizationSSOState.expires_at >= utc_now()).first()
+    state_record = (
+        db.query(OrganizationSSOState)
+        .filter(
+            OrganizationSSOState.state_hash == hashlib.sha256(nonce.encode()).hexdigest(),
+            OrganizationSSOState.organization_id == organization_id,
+            OrganizationSSOState.provider == "feishu",
+            OrganizationSSOState.expires_at >= utc_now(),
+        )
+        .first()
+    )
     if not nonce or state_record is None:
         raise api_error(400, "飞书 SSO 状态已被使用或已过期", ERR_PARAM)
     db.delete(state_record)
     db.commit()
-    organization = db.query(Organization).filter(Organization.id == organization_id, Organization.sso_provider == "feishu").first()
+    organization = (
+        db.query(Organization).filter(Organization.id == organization_id, Organization.sso_provider == "feishu").first()
+    )
     if organization is None:
         raise api_error(404, "组织未启用飞书 SSO", ERR_PARAM)
     try:
         token_response = requests.post(
             "https://open.feishu.cn/open-apis/authen/v1/oidc/access_token",
-            json={"grant_type": "authorization_code", "code": code, "client_id": settings.FEISHU_APP_ID, "client_secret": settings.FEISHU_APP_SECRET, "redirect_uri": settings.FEISHU_REDIRECT_URI},
+            json={
+                "grant_type": "authorization_code",
+                "code": code,
+                "client_id": settings.FEISHU_APP_ID,
+                "client_secret": settings.FEISHU_APP_SECRET,
+                "redirect_uri": settings.FEISHU_REDIRECT_URI,
+            },
             timeout=10,
         )
         token_response.raise_for_status()
         access_token = (token_response.json().get("data") or {}).get("access_token")
-        profile_response = requests.get("https://open.feishu.cn/open-apis/authen/v1/user_info", headers={"Authorization": f"Bearer {access_token}"}, timeout=10)
+        profile_response = requests.get(
+            "https://open.feishu.cn/open-apis/authen/v1/user_info",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10,
+        )
         profile_response.raise_for_status()
         profile = profile_response.json().get("data") or {}
     except (requests.RequestException, ValueError, AttributeError) as exc:
@@ -266,17 +333,34 @@ async def complete_feishu_sso(code: str = Query(..., min_length=1), state: str =
     subject = str(profile.get("union_id") or profile.get("open_id") or profile.get("user_id") or "")
     if not subject:
         raise api_error(400, "飞书未返回可用的用户标识", ERR_PARAM)
-    identity = db.query(OrganizationSSOIdentity).filter(OrganizationSSOIdentity.organization_id == organization.id, OrganizationSSOIdentity.provider == "feishu", OrganizationSSOIdentity.subject == subject).first()
+    identity = (
+        db.query(OrganizationSSOIdentity)
+        .filter(
+            OrganizationSSOIdentity.organization_id == organization.id,
+            OrganizationSSOIdentity.provider == "feishu",
+            OrganizationSSOIdentity.subject == subject,
+        )
+        .first()
+    )
     user = db.get(User, identity.user_id) if identity else None
     if user is None:
         email = str(profile.get("email") or "").strip().lower()
         user = db.query(User).filter(User.email == email).first() if email else None
         if user is None:
             username = f"feishu-{subject[-12:]}".replace("_", "-")
-            user = User(username=username[:50], email=email or f"{subject[:32]}@feishu.sso", password=hash_password(secrets.token_urlsafe(32)), email_verified=1)
+            user = User(
+                username=username[:50],
+                email=email or f"{subject[:32]}@feishu.sso",
+                password=hash_password(secrets.token_urlsafe(32)),
+                email_verified=1,
+            )
             db.add(user)
             db.flush()
-        db.add(OrganizationSSOIdentity(organization_id=organization.id, provider="feishu", subject=subject, user_id=user.id))
+        db.add(
+            OrganizationSSOIdentity(
+                organization_id=organization.id, provider="feishu", subject=subject, user_id=user.id
+            )
+        )
     if not _membership(db, organization.id, user.id):
         db.add(OrganizationMembership(organization_id=organization.id, user_id=user.id, role="member"))
     user.active_organization_id = organization.id

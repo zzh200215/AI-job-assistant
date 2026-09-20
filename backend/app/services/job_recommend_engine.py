@@ -111,9 +111,10 @@ def load_suppressed_jd_ids(db: Session, user_id: int) -> tuple[set[int], str]:
     suppressed = dismissed | disliked
 
     marker = db.query(func.count(JobBookmark.id)).filter(JobBookmark.user_id == user_id).scalar() or 0
-    marker_fb = db.query(func.count(JobRecommendationFeedback.id)).filter(
-        JobRecommendationFeedback.user_id == user_id
-    ).scalar() or 0
+    marker_fb = (
+        db.query(func.count(JobRecommendationFeedback.id)).filter(JobRecommendationFeedback.user_id == user_id).scalar()
+        or 0
+    )
     return suppressed, f"{marker}-{marker_fb}"
 
 
@@ -122,9 +123,9 @@ def _load_suppression_sets(db: Session, user_id: int) -> tuple[set[int], set[int
 
     dismissed = {
         row.jd_id
-        for row in db.query(JobBookmark.jd_id).filter(
-            JobBookmark.user_id == user_id, JobBookmark.action == "dismiss"
-        ).all()
+        for row in db.query(JobBookmark.jd_id)
+        .filter(JobBookmark.user_id == user_id, JobBookmark.action == "dismiss")
+        .all()
     }
     disliked = {
         row.jd_id
@@ -433,7 +434,9 @@ class JobRecommendationEngine:
         return output[:limit]
 
     @staticmethod
-    def _spread_by_company(results: list[RecommendResult], per_company: int = _MAX_PER_COMPANY) -> list[RecommendResult]:
+    def _spread_by_company(
+        results: list[RecommendResult], per_company: int = _MAX_PER_COMPANY
+    ) -> list[RecommendResult]:
         """Cap how many postings from one employer appear before the cut.
 
         Ranking purely by score made the page a wall of one company's openings:

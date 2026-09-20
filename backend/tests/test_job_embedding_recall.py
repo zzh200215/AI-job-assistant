@@ -156,9 +156,7 @@ def test_a_vector_from_another_model_is_not_reused(db_session, monkeypatch, resu
 # ---------------------------------------------------------------- degradation
 
 
-def test_an_embedding_outage_falls_back_to_rules_without_a_fake_50(
-    db_session, monkeypatch, resume_id
-):
+def test_an_embedding_outage_falls_back_to_rules_without_a_fake_50(db_session, monkeypatch, resume_id):
     from app.services import job_recommend_engine as engine_mod
 
     _job(db_session, "岗位A", company="甲公司")
@@ -200,10 +198,18 @@ def test_one_employer_cannot_fill_the_recommended_page(db_session, monkeypatch, 
     monkeypatch.setattr(jd_embedding_service, "embed_texts", EmbedRecorder())
     monkeypatch.setattr(engine_mod, "embed_texts", lambda texts: [[1.0, 0.5] for _ in texts])
     # Same score for every posting, so only company can break the tie.
-    monkeypatch.setattr(match_score_service, "compute_canonical_score", lambda resume, jd: {
-        "score": 70.0, "raw_score": 70.0, "cap_applied": None, "method": "test",
-        "dimensions": [], "skill_gap": [],
-    })
+    monkeypatch.setattr(
+        match_score_service,
+        "compute_canonical_score",
+        lambda resume, jd: {
+            "score": 70.0,
+            "raw_score": 70.0,
+            "cap_applied": None,
+            "method": "test",
+            "dimensions": [],
+            "skill_gap": [],
+        },
+    )
     jobs = [_job(db_session, f"大厂岗位{i}", company="同一家") for i in range(5)]
     others = [_job(db_session, f"其他岗位{i}", company=f"公司{i}") for i in range(3)]
 

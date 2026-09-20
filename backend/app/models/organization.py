@@ -42,12 +42,21 @@ class Organization(Base):
     logo_url = Column(String(500), nullable=True, comment="品牌 logo")
     primary_color = Column(String(20), nullable=True, comment="品牌主色 #RRGGBB")
     plan_tier = Column(
-        String(20), nullable=False, default="free", server_default="free", index=True, comment="套餐: free/pro/enterprise"
+        String(20),
+        nullable=False,
+        default="free",
+        server_default="free",
+        index=True,
+        comment="套餐: free/pro/enterprise",
     )
     admin_user_id = Column(BigInteger, nullable=True, comment="租户管理员用户 ID（创建时回填 owner_id）")
     expires_at = Column(DateTime, nullable=True, index=True, comment="订阅到期时间（过期 → expired，T4-3）")
     isolation_mode = Column(
-        String(20), nullable=False, default=ISOLATION_MODE_SHARED, server_default=ISOLATION_MODE_SHARED, comment="隔离模式: shared/schema"
+        String(20),
+        nullable=False,
+        default=ISOLATION_MODE_SHARED,
+        server_default=ISOLATION_MODE_SHARED,
+        comment="隔离模式: shared/schema",
     )
 
     created_at = Column(DateTime, nullable=False, default=utc_now)

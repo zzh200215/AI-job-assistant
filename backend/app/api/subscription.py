@@ -218,9 +218,7 @@ def mock_pay(
 
     # 校验订单归属
     order = (
-        db.query(SubscriptionOrder)
-        .filter(tenant_filter(SubscriptionOrder), SubscriptionOrder.id == order_id)
-        .first()
+        db.query(SubscriptionOrder).filter(tenant_filter(SubscriptionOrder), SubscriptionOrder.id == order_id).first()
     )
     if not order:
         return fail(message="订单不存在", code=ERR_PARAM)

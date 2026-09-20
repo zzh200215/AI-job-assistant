@@ -32,7 +32,9 @@ def upgrade() -> None:
     with op.batch_alter_table("subscription_plan") as batch_op:
         if "tenant_id" not in columns:
             batch_op.add_column(
-                sa.Column("tenant_id", sa.BigInteger(), nullable=True, comment="归属租户 organization.id；NULL=平台默认套餐")
+                sa.Column(
+                    "tenant_id", sa.BigInteger(), nullable=True, comment="归属租户 organization.id；NULL=平台默认套餐"
+                )
             )
             batch_op.create_index("ix_subscription_plan_tenant_id", ["tenant_id"])
         if "is_custom" not in columns:

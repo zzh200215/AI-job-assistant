@@ -29,7 +29,9 @@ def upgrade() -> None:
     if not _has_column("job_application_pipeline", "resume_version_id"):
         op.add_column("job_application_pipeline", sa.Column("resume_version_id", sa.BigInteger(), nullable=True))
     if not _has_column("job_application_pipeline", "resume_version_label"):
-        op.add_column("job_application_pipeline", sa.Column("resume_version_label", sa.String(length=120), nullable=True))
+        op.add_column(
+            "job_application_pipeline", sa.Column("resume_version_label", sa.String(length=120), nullable=True)
+        )
     indexes = {index["name"] for index in sa.inspect(op.get_bind()).get_indexes("job_application_pipeline")}
     if "ix_job_application_pipeline_resume_version_id" not in indexes:
         op.create_index(

@@ -184,8 +184,6 @@ def test_degraded_and_trace_failure_counters_exist():
         "llm_degraded_responses_total",
         {"provider": "qwen", "model": "qwen-turbo", "response_source": "mock"},
     )
-    failures = REGISTRY.get_sample_value(
-        "prompt_trace_write_failures_total", {"stage": "chat_json"}
-    )
+    failures = REGISTRY.get_sample_value("prompt_trace_write_failures_total", {"stage": "chat_json"})
     assert degraded is not None and degraded >= 1
     assert failures is not None and failures >= 1

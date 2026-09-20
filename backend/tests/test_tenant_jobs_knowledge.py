@@ -466,9 +466,7 @@ def test_tenant_import_apis_require_admin_role(tenant_session):
     app = _build_app(tenant_session, user=_normal_user)
     with TestClient(app) as client:
         assert (
-            client.post(
-                f"/admin/tenants/{org_id}/jobs", json={"items": [{"title": "x", "raw_text": "y"}]}
-            ).status_code
+            client.post(f"/admin/tenants/{org_id}/jobs", json={"items": [{"title": "x", "raw_text": "y"}]}).status_code
             == 403
         )
         assert (

@@ -53,7 +53,9 @@ def build_ats_snapshot(content: str, jd: JobDescription | None = None) -> dict[s
     word_count = len(re.findall(r"[A-Za-z0-9+#.]+|[\u4e00-\u9fff]", text))
 
     structure_score = min(30, sum(found_sections.values()) * 6 + (6 if has_contact else 0))
-    content_score = min(30, (12 if has_metrics else 0) + (10 if word_count >= 180 else 5 if word_count >= 80 else 0) + 8)
+    content_score = min(
+        30, (12 if has_metrics else 0) + (10 if word_count >= 180 else 5 if word_count >= 80 else 0) + 8
+    )
 
     keywords = _jd_keywords(jd)
     matched_keywords = [keyword for keyword in keywords if keyword.lower() in normalized]

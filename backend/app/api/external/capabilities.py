@@ -88,7 +88,11 @@ def external_match_evaluate(
         if payload.get("use_rag"):
             from app.services.rag_service import build_rag_context_multi
 
-            query = str(payload.get("jd") or {}).get("title") if isinstance(payload.get("jd"), dict) else str(payload.get("jd") or "")
+            query = (
+                str(payload.get("jd") or {}).get("title")
+                if isinstance(payload.get("jd"), dict)
+                else str(payload.get("jd") or "")
+            )
             ctx = build_rag_context_multi(query or "岗位匹配", db, user_id=None, intent="match")
             rag_context = ctx.get("all", "")
         return external_service.evaluate_match(payload.get("resume"), payload.get("jd"), rag_context=rag_context, db=db)
@@ -111,18 +115,14 @@ def external_interview_simulate(
         MAX_ANSWERS = 20
         if isinstance(answers, list) and len(answers) > MAX_ANSWERS:
             raise ValueError(f"answers 数量超出上限（最多 {MAX_ANSWERS} 条）")
-        result = external_service.generate_interview_questions(
-            payload.get("resume"), payload.get("jd"), db=db
-        )
+        result = external_service.generate_interview_questions(payload.get("resume"), payload.get("jd"), db=db)
         if isinstance(answers, list) and answers:
             evaluations = []
             for item in answers:
                 question = str(item.get("question") or "")
                 ref_answer = str(item.get("ref_answer") or "")
                 user_answer = str(item.get("answer") or "")
-                evaluation = external_service.evaluate_answer(
-                    question, ref_answer, user_answer, db=db
-                )
+                evaluation = external_service.evaluate_answer(question, ref_answer, user_answer, db=db)
                 evaluations.append(
                     {
                         "question": question,

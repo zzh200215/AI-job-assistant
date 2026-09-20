@@ -27,9 +27,7 @@ class SubscriptionPlan(Base):
     """套餐定义表（tenant_id=NULL=平台默认；租户自定义行覆盖对应 tier 的默认套餐）"""
 
     __tablename__ = "subscription_plan"
-    __table_args__ = (
-        Index("uq_subscription_plan_tenant_tier", "tenant_id", "tier", unique=True),
-    )
+    __table_args__ = (Index("uq_subscription_plan_tenant_tier", "tenant_id", "tier", unique=True),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     tier = Column(String(20), nullable=False, comment="套餐标识: free/pro/enterprise")

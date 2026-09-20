@@ -76,9 +76,7 @@ async def recommend_career_paths(
                 "rejected": result.get("rejected", []),
                 "corpus": corpus,
             },
-            message=f"推荐 {len(paths)} 个岗位方向"
-            if paths
-            else "岗位库里没有可统计的岗位，先导入或搜索岗位再试",
+            message=f"推荐 {len(paths)} 个岗位方向" if paths else "岗位库里没有可统计的岗位，先导入或搜索岗位再试",
         )
     except Exception as e:
         traceback.print_exc()

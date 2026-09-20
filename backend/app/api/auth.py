@@ -395,7 +395,9 @@ async def get_user_data_summary(
             "resume_versions": db.query(ResumeVersion).filter(ResumeVersion.resume_id.in_(resume_ids)).count(),
             "analyses": db.query(AnalysisRecord).filter(AnalysisRecord.user_id == current_user.id).count(),
             "interviews": db.query(InterviewSession).filter(InterviewSession.user_id == current_user.id).count(),
-            "applications": db.query(JobApplicationPipeline).filter(JobApplicationPipeline.user_id == current_user.id).count(),
+            "applications": db.query(JobApplicationPipeline)
+            .filter(JobApplicationPipeline.user_id == current_user.id)
+            .count(),
         }
     )
 
@@ -478,7 +480,9 @@ async def delete_account(db: Session = Depends(get_db), current_user: User = Dep
     db.query(ResumeVersion).filter(ResumeVersion.resume_id.in_(my_resume_ids)).delete(synchronize_session=False)
     db.query(AnalysisRecord).filter(AnalysisRecord.resume_id.in_(my_resume_ids)).delete(synchronize_session=False)
     db.query(AnalysisRecord).filter(AnalysisRecord.jd_id.in_(my_jd_ids)).delete(synchronize_session=False)
-    db.query(InterviewTurnEvaluation).filter(InterviewTurnEvaluation.session_id.in_(my_session_ids)).delete(synchronize_session=False)
+    db.query(InterviewTurnEvaluation).filter(InterviewTurnEvaluation.session_id.in_(my_session_ids)).delete(
+        synchronize_session=False
+    )
     db.query(AgentStepLog).filter(AgentStepLog.task_id.in_(my_task_ids)).delete(synchronize_session=False)
     db.query(RetrievalLog).filter(RetrievalLog.task_id.in_(my_task_ids)).delete(synchronize_session=False)
     db.query(SelfCheckLog).filter(SelfCheckLog.task_id.in_(my_task_ids)).delete(synchronize_session=False)
@@ -490,7 +494,9 @@ async def delete_account(db: Session = Depends(get_db), current_user: User = Dep
 
     # 2) 主业务数据
     db.query(JobBookmark).filter(JobBookmark.user_id == uid).delete(synchronize_session=False)
-    db.query(JobRecommendationFeedback).filter(JobRecommendationFeedback.user_id == uid).delete(synchronize_session=False)
+    db.query(JobRecommendationFeedback).filter(JobRecommendationFeedback.user_id == uid).delete(
+        synchronize_session=False
+    )
     db.query(JobApplicationPipeline).filter(JobApplicationPipeline.user_id == uid).delete(synchronize_session=False)
     db.query(InterviewSession).filter(InterviewSession.user_id == uid).delete(synchronize_session=False)
     db.query(SubscriptionOrder).filter(SubscriptionOrder.user_id == uid).delete(synchronize_session=False)

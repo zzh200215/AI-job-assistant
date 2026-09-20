@@ -101,7 +101,9 @@ def test_chat_json_falls_back_to_configured_model(monkeypatch):
 def test_chat_json_records_failed_trace_when_provider_raises(monkeypatch):
     recorded = {}
     monkeypatch.setattr(llm_service.settings, "LLM_PROVIDER", "mock")
-    monkeypatch.setattr(llm_service, "_mock_chat", lambda prompt: (_ for _ in ()).throw(RuntimeError("provider offline")))
+    monkeypatch.setattr(
+        llm_service, "_mock_chat", lambda prompt: (_ for _ in ()).throw(RuntimeError("provider offline"))
+    )
     monkeypatch.setattr(prompt_trace_service, "record_prompt_trace", lambda **kwargs: recorded.update(kwargs))
     llm_service.clear_llm_cache()
 

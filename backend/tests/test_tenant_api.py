@@ -54,7 +54,15 @@ def tenant_session(tenant_engine):
     reset_tenant_session_factory()
 
 
-def _seed(factory, *, name: str, slug: str, logo_url: str | None = None, primary_color: str | None = None, configs: dict | None = None) -> int:
+def _seed(
+    factory,
+    *,
+    name: str,
+    slug: str,
+    logo_url: str | None = None,
+    primary_color: str | None = None,
+    configs: dict | None = None,
+) -> int:
     session = factory()
     org = Organization(name=name, slug=slug, owner_id=1, status="active")
     if logo_url is not None:
@@ -92,6 +100,7 @@ def _build_app(factory, *, user: User):
 
 # ---- 未配置 → 回落默认 ----
 
+
 def test_brand_falls_back_to_default(tenant_session):
     org_id = _seed(tenant_session, name="客户A", slug="customer-a")
     app = _build_app(tenant_session, user=_admin_user)
@@ -109,6 +118,7 @@ def test_brand_falls_back_to_default(tenant_session):
 
 
 # ---- 已配置 → 返回配置值 ----
+
 
 def test_brand_returns_configured_values(tenant_session):
     org_id = _seed(
@@ -139,6 +149,7 @@ def test_brand_returns_configured_values(tenant_session):
 
 
 # ---- 管理员更新品牌 → 配置持久化 ----
+
 
 def test_admin_update_brand_writes_config(tenant_session):
     org_id = _seed(tenant_session, name="客户A", slug="customer-a")
@@ -172,6 +183,7 @@ def test_admin_update_brand_writes_config(tenant_session):
 
 # ---- 管理员创建租户 ----
 
+
 def test_admin_create_tenant(tenant_session):
     app = _build_app(tenant_session, user=_admin_user)
     with TestClient(app) as client:
@@ -188,6 +200,7 @@ def test_admin_create_tenant(tenant_session):
 
 
 # ---- 权限校验：非管理员访问 admin 接口 → 403 ----
+
 
 def test_admin_endpoints_require_admin_role(tenant_session):
     app = _build_app(tenant_session, user=_normal_user)
@@ -388,7 +401,9 @@ def _seed_expiring_org_and_sub(factory, *, org_id: int, past: bool) -> None:
     session.query(Organization).filter(Organization.id == org_id).update(
         {
             Organization.status: "active",
-            Organization.expires_at: utc_now_naive() - timedelta(days=1) if past else utc_now_naive() + timedelta(days=30),
+            Organization.expires_at: utc_now_naive() - timedelta(days=1)
+            if past
+            else utc_now_naive() + timedelta(days=30),
         }
     )
     session.commit()

@@ -22,9 +22,7 @@ class InterviewQuestionBank(Base):
     """
 
     __tablename__ = "interview_question_bank"
-    __table_args__ = (
-        Index("uq_interview_question_bank_tenant_type", "tenant_id", "type", unique=True),
-    )
+    __table_args__ = (Index("uq_interview_question_bank_tenant_type", "tenant_id", "type", unique=True),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     type = Column(String(30), nullable=False, comment="题型: tech/hr/comprehensive/stress/group")
@@ -51,9 +49,7 @@ class InterviewScoringRule(Base):
     """
 
     __tablename__ = "interview_scoring_rule"
-    __table_args__ = (
-        Index("uq_interview_scoring_rule_tenant_dim", "tenant_id", "dimension", unique=True),
-    )
+    __table_args__ = (Index("uq_interview_scoring_rule_tenant_dim", "tenant_id", "dimension", unique=True),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     dimension = Column(String(30), nullable=False, comment="维度 key: completeness/accuracy/depth/expression")
@@ -75,9 +71,7 @@ class InterviewReportTemplate(Base):
     """面试报告模板（租户可配置，Markdown 模板文本）。"""
 
     __tablename__ = "interview_report_template"
-    __table_args__ = (
-        Index("uq_interview_report_template_tenant", "tenant_id", unique=True),
-    )
+    __table_args__ = (Index("uq_interview_report_template_tenant", "tenant_id", unique=True),)
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     template = Column(Text, nullable=False, default="", comment="报告模板（Markdown）")

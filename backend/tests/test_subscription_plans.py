@@ -122,7 +122,9 @@ def test_get_plans_default_fallback(tenant_session):
 
 def test_get_plans_tenant_custom_overrides(tenant_session):
     org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    _seed_custom_plan(tenant_session, tenant_id=org_a, tier="pro", name="高级版", price_monthly=12800, price_yearly=128000)
+    _seed_custom_plan(
+        tenant_session, tenant_id=org_a, tier="pro", name="高级版", price_monthly=12800, price_yearly=128000
+    )
 
     db = tenant_session()
     try:
@@ -144,7 +146,9 @@ def test_get_plans_tenant_custom_overrides(tenant_session):
 def test_get_plans_other_tenant_untouched(tenant_session):
     org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
     org_b = _seed_org(tenant_session, name="客户B", slug="customer-b")
-    _seed_custom_plan(tenant_session, tenant_id=org_a, tier="pro", name="高级版", price_monthly=12800, price_yearly=128000)
+    _seed_custom_plan(
+        tenant_session, tenant_id=org_a, tier="pro", name="高级版", price_monthly=12800, price_yearly=128000
+    )
 
     db = tenant_session()
     try:
@@ -158,7 +162,9 @@ def test_get_plans_other_tenant_untouched(tenant_session):
 
 def test_get_plan_price_custom_and_fallback(tenant_session):
     org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    _seed_custom_plan(tenant_session, tenant_id=org_a, tier="pro", name="高级版", price_monthly=12800, price_yearly=128000)
+    _seed_custom_plan(
+        tenant_session, tenant_id=org_a, tier="pro", name="高级版", price_monthly=12800, price_yearly=128000
+    )
 
     db = tenant_session()
     try:
@@ -174,7 +180,9 @@ def test_get_plan_price_custom_and_fallback(tenant_session):
 
 def test_api_plans_tenant_scoped(tenant_session):
     org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    _seed_custom_plan(tenant_session, tenant_id=org_a, tier="pro", name="高级版", price_monthly=12800, price_yearly=128000)
+    _seed_custom_plan(
+        tenant_session, tenant_id=org_a, tier="pro", name="高级版", price_monthly=12800, price_yearly=128000
+    )
 
     app = _build_app(tenant_session, user=_normal_user)
     with TestClient(app) as client:
@@ -243,7 +251,9 @@ def test_api_admin_upsert_forbidden_for_normal_user(tenant_session):
 
 def test_api_create_order_uses_tenant_price(tenant_session):
     org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    _seed_custom_plan(tenant_session, tenant_id=org_a, tier="pro", name="高级版", price_monthly=12800, price_yearly=128000)
+    _seed_custom_plan(
+        tenant_session, tenant_id=org_a, tier="pro", name="高级版", price_monthly=12800, price_yearly=128000
+    )
 
     app = _build_app(tenant_session, user=_normal_user)
     with TestClient(app) as client:

@@ -41,14 +41,7 @@ def _is_private_ip(ip_str: str) -> bool:
         ip = ipaddress.ip_address(str(ip_str).split("%")[0])
     except ValueError:
         return True  # 解析失败按危险地址处理
-    return (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_multicast
-        or ip.is_reserved
-        or ip.is_unspecified
-    )
+    return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified
 
 
 def _validate_delivery_url(url: str) -> None:

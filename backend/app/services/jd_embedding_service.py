@@ -166,11 +166,7 @@ def sync_active_job_embeddings(db: Session, *, limit: int | None = None) -> dict
     that pays for it. Called by the scheduler and after bulk imports."""
     from app.models.history import JobDescription
 
-    query = (
-        db.query(JobDescription)
-        .filter(JobDescription.is_active == 1)
-        .order_by(JobDescription.id.asc())
-    )
+    query = db.query(JobDescription).filter(JobDescription.is_active == 1).order_by(JobDescription.id.asc())
     if limit:
         query = query.limit(limit)
     _, stats = vectors_for_jobs(db, query.all())
@@ -181,8 +177,4 @@ def drop_vectors_for_jobs(db: Session, jd_ids: list[int]) -> int:
     """Used when a posting is deleted or its text changes and the row must go."""
     if not jd_ids:
         return 0
-    return (
-        db.query(JobEmbedding)
-        .filter(JobEmbedding.jd_id.in_(jd_ids))
-        .delete(synchronize_session=False)
-    )
+    return db.query(JobEmbedding).filter(JobEmbedding.jd_id.in_(jd_ids)).delete(synchronize_session=False)

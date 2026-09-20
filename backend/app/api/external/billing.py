@@ -41,9 +41,7 @@ def admin_create_api_key(
     if payload.get("expires_at"):
         try:
             # DB DATETIME 读回 naive，统一存 naive（截断 tzinfo 避免比较 TypeError）
-            expires_at = datetime.fromisoformat(
-                str(payload["expires_at"]).replace("Z", "+00:00")
-            ).replace(tzinfo=None)
+            expires_at = datetime.fromisoformat(str(payload["expires_at"]).replace("Z", "+00:00")).replace(tzinfo=None)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="expires_at 格式错误，示例 2027-01-01T00:00:00") from exc
     key, plain = create_api_key(

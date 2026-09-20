@@ -67,11 +67,7 @@ def save_and_process(
     # ---- 2) 创建 DB 记录 ----
     # 租户归属优先级：显式 tenant_id > organization_id（Organization 即租户）> 当前上下文
     doc_tenant_id = (
-        tenant_id
-        if tenant_id is not None
-        else organization_id
-        if organization_id is not None
-        else current_tenant_id()
+        tenant_id if tenant_id is not None else organization_id if organization_id is not None else current_tenant_id()
     )
     doc = KnowledgeDocument(
         user_id=user_id,

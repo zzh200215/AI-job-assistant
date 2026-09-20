@@ -60,7 +60,10 @@ def _summary_of(resume_data: dict[str, Any]) -> str:
         skills = [s if isinstance(s, str) else s.get("skill", "") for s in skills]
 
     exp_desc = "\n".join(
-        [f"- {w.get('company', '')} {w.get('title', '')}: {(w.get('desc') or '')[:100]}" for w in (resume_data.get("work_experience") or [])[:3]]
+        [
+            f"- {w.get('company', '')} {w.get('title', '')}: {(w.get('desc') or '')[:100]}"
+            for w in (resume_data.get("work_experience") or [])[:3]
+        ]
     )
     proj_desc = "\n".join(
         [
@@ -85,7 +88,9 @@ def rule_reason(direction: CareerDirection) -> str:
         parts.append(f"岗位库里有 {direction.sample_count} 条「{direction.label}」类岗位，未列出可核对的硬性要求")
     else:
         percent = int(round(direction.coverage * 100))
-        parts.append(f"该方向的明确要求你已覆盖 {len(direction.matched_skills)}/{direction.required_total}（约 {percent}%）")
+        parts.append(
+            f"该方向的明确要求你已覆盖 {len(direction.matched_skills)}/{direction.required_total}（约 {percent}%）"
+        )
     gaps = [row["skill"] for row in direction.gap_skills[:3]]
     if gaps:
         parts.append("主要缺口：" + "、".join(gaps))
@@ -188,9 +193,11 @@ class CareerPathAgent:
 
         summary = str(result.get("summary") or "").strip() if real_model_output else ""
         if not summary:
-            summary = (
-                f"岗位库里共 {len(directions)} 个方向可按你的技能覆盖度排序；"
-                "优先看覆盖度高且样本充足的类目。"
-            )
+            summary = f"岗位库里共 {len(directions)} 个方向可按你的技能覆盖度排序；" "优先看覆盖度高且样本充足的类目。"
 
-        return {"career_paths": paths, "summary": summary, "reason_source": "model" if real_model_output else "rules", "rejected": rejected}
+        return {
+            "career_paths": paths,
+            "summary": summary,
+            "reason_source": "model" if real_model_output else "rules",
+            "rejected": rejected,
+        }

@@ -124,9 +124,7 @@ def test_match_service_allows_owned_resume_with_public_jd(db_session, monkeypatc
     # .match_score is an Integer column, so compare within one point rather than
     # depending on whether the database truncates or rounds.
     assert record.match_score != 90
-    canonical = canonical_match_score(
-        db_session, resume, public_job, user_id=owner.id, persist=False
-    )["score"]
+    canonical = canonical_match_score(db_session, resume, public_job, user_id=owner.id, persist=False)["score"]
     assert abs(record.match_score - canonical) < 1
 
 

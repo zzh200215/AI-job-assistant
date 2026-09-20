@@ -18,7 +18,9 @@ class WebhookSubscription(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     api_key_id = Column(BigInteger, nullable=False, index=True)
     tenant_id = Column(BigInteger, nullable=False, default=1, index=True)
-    event = Column(String(80), nullable=False, comment="事件类型: resume.parsed / match.evaluated / interview.completed")
+    event = Column(
+        String(80), nullable=False, comment="事件类型: resume.parsed / match.evaluated / interview.completed"
+    )
     url = Column(String(500), nullable=False, comment="回调 URL")
     secret = Column(String(64), nullable=False, default="", comment="签名密钥")
     status = Column(String(20), nullable=False, default="active", comment="active/disabled")

@@ -51,7 +51,12 @@ SCHEMA_ANALYSIS = {
 
 
 def _user(db):
-    user = User(username="diag_owner", email="diag_owner@example.com", password=hash_password("StrongP@ssw0rd"), role="candidate")
+    user = User(
+        username="diag_owner",
+        email="diag_owner@example.com",
+        password=hash_password("StrongP@ssw0rd"),
+        role="candidate",
+    )
     db.add(user)
     db.commit()
     db.refresh(user)

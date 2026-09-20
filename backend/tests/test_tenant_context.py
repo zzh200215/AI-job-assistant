@@ -90,6 +90,7 @@ def _seed_domain(factory, tenant_id: int, domain: str) -> None:
 
 # ---- 场景 1：无租户头 → 默认租户 ----
 
+
 def test_no_tenant_header_falls_back_to_default(client):
     resp = client.get("/tenant")
     assert resp.status_code == 200
@@ -97,6 +98,7 @@ def test_no_tenant_header_falls_back_to_default(client):
 
 
 # ---- 场景 2：无效租户 → 403 ----
+
 
 def test_nonexistent_tenant_returns_403(client):
     resp = client.get("/tenant", headers={"X-Tenant-Id": "999999"})
@@ -114,6 +116,7 @@ def test_malformed_tenant_header_returns_403(client):
 
 # ---- 场景 3：停用租户 → 403 ----
 
+
 def test_suspended_tenant_returns_403(client, tenant_session):
     org_id = _seed_org(tenant_session, slug="suspended-a", status=ORGANIZATION_STATUS_SUSPENDED)
     resp = client.get("/tenant", headers={"X-Tenant-Id": str(org_id)})
@@ -122,6 +125,7 @@ def test_suspended_tenant_returns_403(client, tenant_session):
 
 
 # ---- 场景 4：跨租户，Header 优先于 Host ----
+
 
 def test_cross_tenant_header_wins_over_host(tenant_app, tenant_session):
     host_org_id = _seed_org(tenant_session, name="Host租户", slug="host-b")
@@ -136,6 +140,7 @@ def test_cross_tenant_header_wins_over_host(tenant_app, tenant_session):
 
 
 # ---- 额外：Host 域名绑定解析 ----
+
 
 def test_host_binding_resolves_tenant(tenant_app, tenant_session):
     org_id = _seed_org(tenant_session, name="客户A", slug="host-a")

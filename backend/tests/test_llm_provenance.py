@@ -35,9 +35,7 @@ class FakeResponse:
 def trace_kwargs(monkeypatch):
     """Capture what chat_json would have persisted, without touching a DB."""
     captured: list[dict] = []
-    monkeypatch.setattr(
-        prompt_trace_service, "record_prompt_trace", lambda **kw: captured.append(kw)
-    )
+    monkeypatch.setattr(prompt_trace_service, "record_prompt_trace", lambda **kw: captured.append(kw))
     llm_service.clear_llm_cache()
     llm_service.reset_llm_provenance()
     yield captured

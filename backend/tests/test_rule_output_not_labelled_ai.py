@@ -110,10 +110,9 @@ def _call_diagnose(db_session, resume_id, user):
 # ------------------------------------------------------------- explain fallback
 def test_explain_fallback_declares_itself_rules_and_has_no_key_collision():
     explainer = MatchExplainer()
+
     def dim(name, score, weight):
-        return DimensionScore(
-            name=name, score=score, weight=weight, weighted_score=score * weight, reason=""
-        )
+        return DimensionScore(name=name, score=score, weight=weight, weighted_score=score * weight, reason="")
 
     dims = [dim("技能匹配", 40, 0.3), dim("项目经历", 90, 0.2), dim("一个未登记的维度", 10, 0.1)]
 

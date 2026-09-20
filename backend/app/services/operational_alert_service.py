@@ -34,7 +34,10 @@ def collect_operational_alerts(
                 "critical",
                 "模型运行配置不可用",
                 "LLM 或 Embedding 服务配置不完整，AI 相关请求可能无法完成。",
-                {"llm_mode": model_runtime.get("llm", {}).get("mode"), "embedding_mode": model_runtime.get("embedding", {}).get("mode")},
+                {
+                    "llm_mode": model_runtime.get("llm", {}).get("mode"),
+                    "embedding_mode": model_runtime.get("embedding", {}).get("mode"),
+                },
             )
         )
 
@@ -69,11 +72,17 @@ def collect_operational_alerts(
                 "warning",
                 "工作流任务失败率异常",
                 "近期失败的工作流任务数量超过阈值，请检查任务日志和模型依赖。",
-                {"failed_tasks": failed_tasks, "window_minutes": settings.OPERATIONS_ALERT_WINDOW_MINUTES, "threshold": settings.OPERATIONS_ALERT_TASK_FAILURE_THRESHOLD},
+                {
+                    "failed_tasks": failed_tasks,
+                    "window_minutes": settings.OPERATIONS_ALERT_WINDOW_MINUTES,
+                    "threshold": settings.OPERATIONS_ALERT_TASK_FAILURE_THRESHOLD,
+                },
             )
         )
 
-    failed_llm_calls = db.query(PromptTrace).filter(PromptTrace.status != "success", PromptTrace.created_at >= since).count()
+    failed_llm_calls = (
+        db.query(PromptTrace).filter(PromptTrace.status != "success", PromptTrace.created_at >= since).count()
+    )
     if failed_llm_calls >= settings.OPERATIONS_ALERT_LLM_FAILURE_THRESHOLD:
         alerts.append(
             _alert(
@@ -81,7 +90,11 @@ def collect_operational_alerts(
                 "warning",
                 "模型调用失败激增",
                 "近期模型调用失败数量超过阈值，请检查供应商状态、限流和提示词追踪。",
-                {"failed_calls": failed_llm_calls, "window_minutes": settings.OPERATIONS_ALERT_WINDOW_MINUTES, "threshold": settings.OPERATIONS_ALERT_LLM_FAILURE_THRESHOLD},
+                {
+                    "failed_calls": failed_llm_calls,
+                    "window_minutes": settings.OPERATIONS_ALERT_WINDOW_MINUTES,
+                    "threshold": settings.OPERATIONS_ALERT_LLM_FAILURE_THRESHOLD,
+                },
             )
         )
 
@@ -135,14 +148,22 @@ def collect_operational_alerts(
     total_requests = int(runtime_metrics.get("total_requests") or 0)
     error_requests = int(runtime_metrics.get("error_requests") or 0)
     error_rate = error_requests / total_requests if total_requests else 0.0
-    if total_requests >= settings.OPERATIONS_ALERT_MIN_REQUESTS and error_rate >= settings.OPERATIONS_ALERT_HTTP_ERROR_RATE_THRESHOLD:
+    if (
+        total_requests >= settings.OPERATIONS_ALERT_MIN_REQUESTS
+        and error_rate >= settings.OPERATIONS_ALERT_HTTP_ERROR_RATE_THRESHOLD
+    ):
         alerts.append(
             _alert(
                 "http_error_rate_high",
                 "warning",
                 "接口错误率异常",
                 "进程内 HTTP 错误率超过阈值，请结合请求日志定位异常接口。",
-                {"total_requests": total_requests, "error_requests": error_requests, "error_rate": round(error_rate, 4), "threshold": settings.OPERATIONS_ALERT_HTTP_ERROR_RATE_THRESHOLD},
+                {
+                    "total_requests": total_requests,
+                    "error_requests": error_requests,
+                    "error_rate": round(error_rate, 4),
+                    "threshold": settings.OPERATIONS_ALERT_HTTP_ERROR_RATE_THRESHOLD,
+                },
             )
         )
     return alerts
@@ -178,7 +199,12 @@ def evaluate_operational_alerts(db: Session, **snapshot: dict[str, Any]) -> list
             alert.resolved_at = now
 
     db.commit()
-    return db.query(OperationalAlert).filter(OperationalAlert.resolved_at.is_(None)).order_by(OperationalAlert.last_seen_at.desc()).all()
+    return (
+        db.query(OperationalAlert)
+        .filter(OperationalAlert.resolved_at.is_(None))
+        .order_by(OperationalAlert.last_seen_at.desc())
+        .all()
+    )
 
 
 def _alert(alert_key: str, severity: str, title: str, description: str, context: dict[str, Any]) -> dict[str, Any]:

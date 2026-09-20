@@ -1663,10 +1663,7 @@ async def list_dismissed(
 ):
     reasons = load_suppressed_reasons(db, current_user.id)
     jobs = (
-        db.query(JobDescription)
-        .filter(JobDescription.id.in_(sorted(reasons)))
-        .order_by(JobDescription.id.desc())
-        .all()
+        db.query(JobDescription).filter(JobDescription.id.in_(sorted(reasons))).order_by(JobDescription.id.desc()).all()
         if reasons
         else []
     )

@@ -105,6 +105,14 @@ def downgrade() -> None:
         if inspector.has_table(table_name):
             op.drop_table(table_name)
 
-    for column_name in ("industry", "logo_url", "primary_color", "plan_tier", "admin_user_id", "expires_at", "isolation_mode"):
+    for column_name in (
+        "industry",
+        "logo_url",
+        "primary_color",
+        "plan_tier",
+        "admin_user_id",
+        "expires_at",
+        "isolation_mode",
+    ):
         if _has_column("organization", column_name):
             op.drop_column("organization", column_name)

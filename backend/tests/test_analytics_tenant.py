@@ -81,9 +81,7 @@ def _seed_business(factory, tenant_a: int, tenant_b: int):
     session.refresh(r_a)
     session.add(AnalysisRecord(user_id=u1.id, resume_id=r_a.id, jd_id=jd_a.id, tenant_id=tenant_a))
     session.add(InterviewSession(user_id=u1.id, tenant_id=tenant_a, status="completed"))
-    session.add(
-        SubscriptionOrder(user_id=u1.id, plan_tier="pro", amount=1000, status="paid", tenant_id=tenant_a)
-    )
+    session.add(SubscriptionOrder(user_id=u1.id, plan_tier="pro", amount=1000, status="paid", tenant_id=tenant_a))
     session.add(UserSubscription(user_id=u1.id, plan_tier="pro", status="active", tenant_id=tenant_a))
 
     # 租户 B：1 简历 + 1 分析 + 1 面试 + 1 订单(2000 分, paid)
@@ -121,6 +119,7 @@ def _build_app(factory, *, user: User):
 
 
 # ---- 漏斗按租户隔离 ----
+
 
 def test_funnel_scoped_by_tenant(tenant_session):
     a = _seed_org(tenant_session, name="客户A", slug="customer-a")
@@ -182,14 +181,19 @@ def test_retention_scoped_by_tenant(tenant_session):
     session = tenant_session()
     try:
         u_cohort = User(
-            username="cohort_a", password="x", role=CANDIDATE_ROLE,
+            username="cohort_a",
+            password="x",
+            role=CANDIDATE_ROLE,
             created_at=now - timedelta(days=10),
         )
         session.add(u_cohort)
         session.commit()
         session.refresh(u_cohort)
         r = Resume(
-            user_id=u_cohort.id, tenant_id=a, file_name="ca.pdf", file_path="/ca.pdf",
+            user_id=u_cohort.id,
+            tenant_id=a,
+            file_name="ca.pdf",
+            file_path="/ca.pdf",
             create_time=now - timedelta(days=10),  # 队列窗口内的业务行为
         )
         jd = JobDescription(title="JD-C", raw_text="desc", tenant_id=a)
@@ -199,7 +203,10 @@ def test_retention_scoped_by_tenant(tenant_session):
         session.refresh(jd)
         session.add(
             AnalysisRecord(
-                user_id=u_cohort.id, resume_id=r.id, jd_id=jd.id, tenant_id=a,
+                user_id=u_cohort.id,
+                resume_id=r.id,
+                jd_id=jd.id,
+                tenant_id=a,
                 create_time=now - timedelta(days=3),  # 活跃窗口内的分析行为
             )
         )
@@ -228,6 +235,7 @@ def test_retention_scoped_by_tenant(tenant_session):
 
 # ---- 收入汇总 ----
 
+
 def test_revenue_scoped_and_grouped(tenant_session):
     a = _seed_org(tenant_session, name="客户A", slug="customer-a")
     b = _seed_org(tenant_session, name="客户B", slug="customer-b")
@@ -251,14 +259,13 @@ def test_revenue_scoped_and_grouped(tenant_session):
 
 # ---- 校验与权限 ----
 
+
 def test_analytics_tenant_not_found_404(tenant_session):
     app = _build_app(tenant_session, user=_admin_user)
     with TestClient(app) as client:
         assert client.get("/analytics/summary", params={"tenant_id": 99999}).status_code == 404
         assert client.get("/analytics/funnel", params={"tenant_id": 99999}).status_code == 404
-        assert (
-            client.get("/admin/analytics/revenue", params={"tenant_id": 99999}).status_code == 404
-        )
+        assert client.get("/admin/analytics/revenue", params={"tenant_id": 99999}).status_code == 404
 
 
 def test_analytics_require_admin_role(tenant_session):

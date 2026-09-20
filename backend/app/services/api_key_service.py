@@ -80,9 +80,7 @@ def is_key_valid(key: ApiKey) -> tuple[bool, str | None]:
 # ===== 限流（按日） =====
 
 
-def count_usage_since(
-    db: Session, key_id: int, since: datetime, status: str | None = None
-) -> int:
+def count_usage_since(db: Session, key_id: int, since: datetime, status: str | None = None) -> int:
     """统计某 Key 自 since 起的调用数；status 给定时仅统计该状态。"""
     query = db.query(func.count(ApiUsage.id)).filter(
         ApiUsage.api_key_id == key_id,
@@ -108,11 +106,7 @@ def check_daily_quota(db: Session, key: ApiKey) -> bool:
 
 
 def get_unit_price(db: Session, endpoint: str) -> int:
-    row = (
-        db.query(ApiPricing)
-        .filter(ApiPricing.endpoint == endpoint, ApiPricing.is_active == 1)
-        .first()
-    )
+    row = db.query(ApiPricing).filter(ApiPricing.endpoint == endpoint, ApiPricing.is_active == 1).first()
     if row is not None:
         return int(row.unit_price)
     return int(DEFAULT_API_PRICING.get(endpoint, 0))
@@ -154,9 +148,7 @@ def _month_range(year: int, month: int) -> tuple[datetime, datetime]:
     return datetime(year, month, 1), datetime(year, month + 1, 1)
 
 
-def compute_monthly_bill(
-    db: Session, *, api_key_id: int, year: int, month: int
-) -> ApiBill | None:
+def compute_monthly_bill(db: Session, *, api_key_id: int, year: int, month: int) -> ApiBill | None:
     """聚合某个 Key 在指定月份的成功调用，生成/更新账单。无调用返回 None。"""
     start, end = _month_range(year, month)
     rows = (

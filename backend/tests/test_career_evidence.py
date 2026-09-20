@@ -33,7 +33,9 @@ RESUME_PARSED = {
 
 @pytest.fixture
 def user(db_session):
-    row = User(username="ce_user", email="ce_user@example.com", password=hash_password("StrongP@ssw0rd"), role="candidate")
+    row = User(
+        username="ce_user", email="ce_user@example.com", password=hash_password("StrongP@ssw0rd"), role="candidate"
+    )
     db_session.add(row)
     db_session.commit()
     db_session.refresh(row)
@@ -42,7 +44,9 @@ def user(db_session):
 
 @pytest.fixture
 def other_user(db_session):
-    row = User(username="ce_other", email="ce_other@example.com", password=hash_password("StrongP@ssw0rd"), role="candidate")
+    row = User(
+        username="ce_other", email="ce_other@example.com", password=hash_password("StrongP@ssw0rd"), role="candidate"
+    )
     db_session.add(row)
     db_session.commit()
     db_session.refresh(row)
@@ -105,7 +109,7 @@ def test_grouping_ignores_seniority_not_direction(title, expected):
 
 
 def test_role_nouns_are_not_stripped():
-    """"经理" is a modifier in "研发经理" but the whole role in "产品经理";
+    """ "经理" is a modifier in "研发经理" but the whole role in "产品经理";
     stripping it would merge unrelated directions, so it never is."""
     assert direction_key("高级产品经理") == direction_key("产品经理")
     assert direction_key("产品经理") != direction_key("产品")
@@ -265,7 +269,14 @@ def test_rule_reason_states_the_evidence_and_the_weakness():
 
 def test_mocked_model_output_is_replaced_by_rule_reason(db_session, user, monkeypatch):
     directions = [_direction("后端工程师"), _direction("算法工程师", coverage=0.3)]
-    monkeypatch.setattr(agent_mod, "chat_json", lambda prompt: {"career_paths": [{"direction_key": "后端工程师", "category": "高度匹配", "reason": "模型编的理由"}], "summary": "模型总结"})
+    monkeypatch.setattr(
+        agent_mod,
+        "chat_json",
+        lambda prompt: {
+            "career_paths": [{"direction_key": "后端工程师", "category": "高度匹配", "reason": "模型编的理由"}],
+            "summary": "模型总结",
+        },
+    )
     monkeypatch.setattr(agent_mod, "get_llm_provenance", lambda: {"source": "mock"})
 
     result = agent_mod.CareerPathAgent().recommend(RESUME_PARSED, directions)
@@ -277,7 +288,16 @@ def test_mocked_model_output_is_replaced_by_rule_reason(db_session, user, monkey
 
 def test_real_model_reasons_are_kept(db_session, user, monkeypatch):
     directions = [_direction("后端工程师")]
-    monkeypatch.setattr(agent_mod, "chat_json", lambda prompt: {"career_paths": [{"direction_key": "后端工程师", "category": "高度匹配", "reason": "已覆盖核心栈", "seniority": "高级"}], "summary": "先投覆盖度高的"})
+    monkeypatch.setattr(
+        agent_mod,
+        "chat_json",
+        lambda prompt: {
+            "career_paths": [
+                {"direction_key": "后端工程师", "category": "高度匹配", "reason": "已覆盖核心栈", "seniority": "高级"}
+            ],
+            "summary": "先投覆盖度高的",
+        },
+    )
     monkeypatch.setattr(agent_mod, "get_llm_provenance", lambda: {"source": "real"})
 
     result = agent_mod.CareerPathAgent().recommend(RESUME_PARSED, directions)
@@ -319,7 +339,10 @@ def test_endpoint_returns_evidence_per_direction(client, db_session, user, monke
     monkeypatch.setattr(
         agent_mod,
         "chat_json",
-        lambda prompt: {"career_paths": [{"direction_key": "后端开发工程师", "category": "高度匹配", "reason": "栈重合"}], "summary": "先投后端"},
+        lambda prompt: {
+            "career_paths": [{"direction_key": "后端开发工程师", "category": "高度匹配", "reason": "栈重合"}],
+            "summary": "先投后端",
+        },
     )
 
     body = client.post("/career-path/recommend", params={"resume_id": resume.id}).json()

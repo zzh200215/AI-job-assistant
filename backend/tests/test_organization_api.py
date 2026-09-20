@@ -20,7 +20,9 @@ def _user(db, username: str) -> User:
 
 
 def _headers(user: User) -> dict:
-    return {"Authorization": f"Bearer {create_access_token({'sub': str(user.id), 'email': user.email, 'username': user.username})}"}
+    return {
+        "Authorization": f"Bearer {create_access_token({'sub': str(user.id), 'email': user.email, 'username': user.username})}"
+    }
 
 
 def test_organization_owner_controls_membership_and_workspace(db_session):
@@ -36,7 +38,9 @@ def test_organization_owner_controls_membership_and_workspace(db_session):
     outsider = _user(db_session, "org_outsider")
 
     with TestClient(app) as client:
-        created = client.post("/organizations", json={"name": "Career Team", "slug": "career-team"}, headers=_headers(owner))
+        created = client.post(
+            "/organizations", json={"name": "Career Team", "slug": "career-team"}, headers=_headers(owner)
+        )
         assert created.status_code == 200
         organization = created.json()["data"]
         assert organization["member_role"] == "owner"
@@ -54,7 +58,9 @@ def test_organization_owner_controls_membership_and_workspace(db_session):
         member_orgs = client.get("/organizations", headers=_headers(member))
         assert member_orgs.json()["data"]["items"][0]["id"] == organization["id"]
 
-        switched = client.put("/organizations/current", json={"organization_id": organization["id"]}, headers=_headers(member))
+        switched = client.put(
+            "/organizations/current", json={"organization_id": organization["id"]}, headers=_headers(member)
+        )
         assert switched.status_code == 200
         assert switched.json()["data"]["active_organization_id"] == organization["id"]
 

@@ -54,11 +54,11 @@ def render_ddl() -> str:
     Base.metadata.create_all(engine)
 
     tables = sorted(s for s in statements if s.startswith("CREATE TABLE"))
-    indexes = sorted(
-        s for s in statements if s.startswith(("CREATE INDEX", "CREATE UNIQUE INDEX"))
-    )
+    indexes = sorted(s for s in statements if s.startswith(("CREATE INDEX", "CREATE UNIQUE INDEX")))
     others = [
-        s for s in statements if not s.startswith("CREATE TABLE") and not s.startswith(("CREATE INDEX", "CREATE UNIQUE INDEX"))
+        s
+        for s in statements
+        if not s.startswith("CREATE TABLE") and not s.startswith(("CREATE INDEX", "CREATE UNIQUE INDEX"))
     ]
 
     ordered = tables + indexes + others
