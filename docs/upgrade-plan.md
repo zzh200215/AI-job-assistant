@@ -298,7 +298,31 @@
 - "`prompt_trace` 还原每个节点" → ✅ 部分：覆盖节点的**首个** LLM 调用（`chat_json` 取用一次即清空 trace 上下文）。多调用节点要等 C6 一起改。
 - "两条编排路径结果一致" → ✅ 4 条路径断言同一份事实。
 
-**阻塞项（环境，非本次改动引入）**：嵌入式 Chroma 的知识库索引在本机已损坏——`chromadb/segment/impl/metadata/sqlite.py:668 _decode_seq_id` 抛 `TypeError: object of type 'int' has no len()`，`get_knowledge_collection().count()` 单句即复现。凡走 RAG 检索的节点（ResumeOptimize / MatchAnalysis / Match / Interview / Career）真机必挂，编排端到端跑不完；上述证据里 `tokens_used=0` 的失败节点都是**在调模型之前**就死在检索层，不是模型问题。恢复需要重建知识库（`scripts/import_knowledge.py`），C2/C3/C5 的端到端验证依赖它。
+**阻塞项已解除：知识库向量库重建（2026-09-20）**
+
+C1 记录里那条"嵌入式 Chroma 索引损坏"已经查明并修好，根因不是数据坏了，是**版本不匹配**：
+
+- 仓库钉的是 `chromadb==0.5.0`，它读 `embeddings_queue.seq_id` 时期望 BLOB（`_decode_seq_id` 拿 `len()`）；而本机 `backend/chroma_db/chroma.sqlite3` 最后一次写入是 2026-07-18，那一版把 `seq_id` 建成了 `INTEGER PRIMARY KEY`——0.5.0 一打开就 `TypeError: object of type 'int' has no len()`。所以**任何**触碰 collection 的调用都炸，连 `count()` 都不行。
+- 先在临时目录用同一版 0.5.0 建库→add→count→query 全通，确认"新库能用"，再动手。
+- 库里 393 个切片全部是可再生的派生数据：28 篇文档的源文件 `os.path.exists` 全真，`kb_document` 才是真源。
+- 做法是**改名而不是删除**：旧库移到仓库外 `D:\AI\llmXM\_chroma_store_written_by_newer_chroma_20260920\`，然后跑 `knowledge_service.rebuild_all(db)`（清空 collection → 逐篇重解析 → 重切片 → 重嵌）。
+- 结果：28 篇全部 `ready`，新库 413 个切片，与 `SUM(kb_document.chunk_count)=413` **逐条相等**（旧的 393 里那 5 篇当时就是 failed）。普通候选人（非管理员、非文档属主）走 `build_rag_context` 拿到 902 字符的真实知识上下文，不再是空串。
+
+**修好后第一次跑通的端到端编排**（linear，真机 qwen，task 93）：`completed`，7 个节点全部落库——
+
+| 节点 | tokens | 耗时 | 说明 |
+|---|---|---|---|
+| IntentAgent | 607 | 1.4s | 真模型 |
+| ResumeParseAgent | 0 | 1ms | 规则解析，不冒充 AI（A3 口径） |
+| JDParseAgent | 0 | 0ms | 同上 |
+| MatchAnalysisAgent | 729 | 2.1s | 工具调用路径 |
+| ResumeOptimizeAgent | 1772 | 5.1s | C1 时它死在检索层，现在通了 |
+| InterviewQuestionAgent | 2101 | 6.0s | 同上 |
+| SummaryAgent | 3102 | 6.6s | — |
+
+任务中心 `GET /api/agent/task/93` → `usage.tokens_used = 8311`（= 各节点之和，走 `agent_run.task_id` 新 join）。验证账号与它的全部行已删除，库回到 9 用户 / 20 简历 / 72 岗位。
+
+**仍然遗留**：`cost_cents` 恒为 0，因为 `LLM_INPUT_COST_PER_1K_CENTS` / `LLM_OUTPUT_COST_PER_1K_CENTS` 在本环境是 0.0——要看到钱，得先把价格配置填上（这不是代码问题）。
 
 #### 已交付：C4（保守版）删掉第三条流水线（提交 `5d404da`，净 −1417/+95 行）
 
