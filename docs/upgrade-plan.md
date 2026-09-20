@@ -521,6 +521,13 @@ agent.SummaryAgent           real  tokens=3215
 
 不是 `--fix` 一键过的：35 个可自动修的里面，只有 28 个属于 ruff 认定的"安全修复"，其余按规则逐个处理——5 处 `B904` 补 `from exc`（400 响应不再吞掉真正的 ValueError）；6 处 `F841` 里 4 处那个**调用本身就是测试目的**（账单重跑幂等、租户/岗位 fixture 需要多一行对照数据），所以只删绑定、保留调用；`scripts/export_schema_baseline.py` 的两行 import 必须在 `sys.path` 插入之后，标 `noqa: E402` 而不是搬走。顺带在 `webhook_service` 里发现一处真 bug：私网 IP 的拒绝异常被同一个 `except ValueError: pass` 吞掉，绕到 DNS 分支才拦下（结论正确、报的却是另一句），已挪进 `else`。
 
+这条 bug 之所以能活着，是因为**原有测试看不出走错了路**：`test_webhook_subscribe_rejects_private_url` 只断言 `"内网" in detail`，而"指向内网/保留地址"和"解析到内网地址"两条消息都含"内网"。补的两条测试把路堵死：把 `socket.getaddrinfo` 换成"一旦被调用就 fail"，于是私网字面量必须在字面量分支就被拒（`getaddrinfo` 调用次数为 0），同时公网字面量 `8.8.8.8` 仍然放行（不许过度拦截）。改动前后各跑一次同一探针：
+
+| 同一输入 `http://169.254.169.254/latest/meta-data/` | `getaddrinfo` 是否被调用 | 结果 |
+|---|---|---|
+| 修复前（`git show 1742bd5:…webhook_service.py` 单独加载） | **被调用**（`['169.254.169.254']`） | 异常被自己的 except 吞掉，落到 DNS 分支 |
+| 修复后 | **0 次** | `ValueError: url 指向内网/保留地址 169.254.169.254，禁止投递` |
+
 **一处值得记住的连锁反应**：给 `app/models/__init__.py` 排 import 顺序，改变了模型注册顺序；SQLAlchemy 用注册顺序决定"彼此无依赖"的表在 DDL 里的先后；于是 `docs/schema-baseline.sql` 的 179 条语句换了顺序，被 `test_schema_baseline` 判成"schema 漂移"。修法是让 `render_ddl()` 像它已经对 `CREATE INDEX` 做的那样对 `CREATE TABLE` 排序（这份快照没有任何消费方按顺序执行），并用"排序前语句集合 == 排序后"证明**schema 一个字没变**，只有 17 行换了位置。
 
 **其余：**
