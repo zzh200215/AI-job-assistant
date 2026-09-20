@@ -155,3 +155,49 @@ def test_langgraph_and_native_layered_agree(db_session, registry, task):
 
     assert native["status"] == graphed["status"] == "completed"
     assert native_nodes == graphed_nodes == set(ALL_AGENTS)
+
+
+# ===================== 非关键节点失败：分层路径也要落 partial =====================
+
+
+def _registry_with_broken_interview() -> UnifiedRegistry:
+    """面试题节点抛错、其余正常，关键性沿用生产注册表的判断。"""
+    from app.orchestration.registry import DEFAULT_REGISTRY
+
+    class _Broken(BaseAgent):
+        name = "InterviewAgent"
+        result_type = "interview_practice"
+
+        def run_impl(self, context: AgentContext) -> dict[str, Any]:
+            raise RuntimeError("面试题节点挂了")
+
+    reg = UnifiedRegistry()
+    for name in ALL_AGENTS:
+        cls = _Broken if name == "InterviewAgent" else _agent_class(name)
+        reg.register(
+            AgentSpec(
+                name,
+                cls,
+                critical=DEFAULT_REGISTRY.is_critical(name),
+                strategies=["layered", "langgraph_layered"],
+            )
+        )
+    return reg
+
+
+@pytest.mark.parametrize("strategy_name", ["layered", "langgraph_layered"])
+def test_soft_node_failure_yields_partial_in_both_layered_paths(db_session, task, strategy_name):
+    """is_critical 必须在四条编排路径上都说得通：面试题挂掉时后续节点照跑、结果照入库。"""
+    from app.models.history import AnalysisRecord
+
+    result = _run(db_session, _registry_with_broken_interview(), task, strategy_name)
+    row = db_session.get(AgentTask, task["task_id"])
+    db_session.refresh(row)
+
+    assert result["status"] == "partial"
+    assert row.status == "partial"
+    statuses = {step["agent_name"]: step["status"] for step in result["steps"]}
+    assert statuses["InterviewAgent"] == "failed"
+    assert statuses["SummaryAgent"] == "success", "非关键失败截断了后续节点"
+    assert row.analysis_record_id is not None, "已完成的部分必须留得住"
+    assert db_session.get(AnalysisRecord, row.analysis_record_id) is not None

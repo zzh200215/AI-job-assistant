@@ -572,14 +572,23 @@ class LayeredParallelStrategy(ExecutionStrategy):
                 if outcome.succeeded:
                     context.record_agent_output(name, outcome.result)
 
-            failed = next(
-                (item for item in step_results if item["agent_name"] in agent_names and item["status"] == "failed"),
+            # 只有关键节点失败才作废整单；非关键失败继续往下跑，最后落 partial
+            critical_failure = next(
+                (
+                    item
+                    for item in step_results
+                    if item["agent_name"] in agent_names
+                    and item["status"] == "failed"
+                    and self.registry.is_critical(item["agent_name"])
+                ),
                 None,
             )
-            if failed:
-                error = f"{failed['agent_name']} 执行失败: {failed['error'] or '未知错误'}"
+            if critical_failure:
+                error = f"{critical_failure['agent_name']} 执行失败: {critical_failure['error'] or '未知错误'}"
                 self._finish_run(db, run, "failed", error)
                 return _orchestrator_result("failed", task_id, steps=step_results, error=error)
+
+        failed_steps = [item for item in step_results if item["status"] == "failed"]
 
         run.summary_report = context.final_report or {}
         db.add(run)
@@ -588,7 +597,12 @@ class LayeredParallelStrategy(ExecutionStrategy):
         record_id = self._save_analysis_record(db, resume_id, jd_id, user_id, context)
 
         # 同步更新 AgentTask（供前端轮询）
-        task.status = "completed"
+        task.status = "partial" if failed_steps else "completed"
+        task.error_msg = (
+            f"{failed_steps[0]['agent_name']} 执行失败: {failed_steps[0]['error'] or '未知错误'}"
+            if failed_steps
+            else None
+        )
         task.end_time = utc_now()
         task.final_report = context.final_report
         task.analysis_record_id = record_id
@@ -597,7 +611,7 @@ class LayeredParallelStrategy(ExecutionStrategy):
         self._finish_run(db, run, "completed")
 
         return _orchestrator_result(
-            "completed",
+            task.status,
             task_id,
             record_id=record_id,
             steps=step_results,

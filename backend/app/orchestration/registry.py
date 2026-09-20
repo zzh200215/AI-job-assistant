@@ -95,14 +95,15 @@ def _build_default_registry() -> UnifiedRegistry:
     from app.agents.match_agent import MatchAgent
     from app.agents.resume_agent import ResumeAgent
 
-    for name, cls in (
-        ("ResumeAgent", ResumeAgent),
-        ("JobAgent", JobAgent),
-        ("MatchAgent", MatchAgent),
-        ("InterviewAgent", InterviewAgent),
-        ("CareerAgent", CareerAgent),
+    for name, cls, critical in (
+        ("ResumeAgent", ResumeAgent, True),
+        ("JobAgent", JobAgent, True),
+        ("MatchAgent", MatchAgent, True),
+        # 与线性侧的 InterviewQuestionAgent 同一个判断：面试题挂掉不该废掉已完成的分析
+        ("InterviewAgent", InterviewAgent, False),
+        ("CareerAgent", CareerAgent, True),
     ):
-        reg.register(AgentSpec(name, cls, strategies=layered))
+        reg.register(AgentSpec(name, cls, critical=critical, strategies=layered))
 
     return reg
 

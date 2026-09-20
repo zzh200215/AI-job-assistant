@@ -61,6 +61,9 @@ class LayeredGraphState(TypedDict):
 
     `branch` 是并发通道（每个扇出分支各写一次，必须用 reducer 累加），
     `steps` 只由汇聚节点整体重写，所以不需要 reducer。
+
+    两个失败位是分开的：`failed` 表示"这一层里有节点失败"（用来决定任务是
+    completed 还是 partial），`failed_critical` 才让图提前收尾。
     """
 
     task_id: int
@@ -72,6 +75,7 @@ class LayeredGraphState(TypedDict):
     level: int
     step_index: int
     failed: bool
+    failed_critical: bool
     error: str
 
 
@@ -143,6 +147,7 @@ def run_layered_graph(
             "level": 0,
             "step_index": 0,
             "failed": False,
+            "failed_critical": False,
             "error": "",
         }
     )
@@ -198,7 +203,8 @@ def _make_level_router(strategy: LangGraphLayeredStrategy, db: Session, agent_na
         context = state["context"]
 
         if _is_task_cancelled(db, state["task_id"]):
-            return {"failed": True, "error": "Cancelled by user", "log_ids": {}}
+            # 取消要真的停下：两个位一起置，扇出才会走 END
+            return {"failed": True, "failed_critical": True, "error": "Cancelled by user", "log_ids": {}}
 
         step_index = state["step_index"]
         log_ids = {}
@@ -214,7 +220,7 @@ def _make_level_router(strategy: LangGraphLayeredStrategy, db: Session, agent_na
 
 def _make_fanout(work_node: str, join_node: str):
     def _route(state: LayeredGraphState):
-        if state["failed"]:
+        if state["failed_critical"]:
             return END
         log_ids = state["log_ids"]
         if not log_ids:
@@ -273,6 +279,7 @@ def _make_level_join(strategy: LangGraphLayeredStrategy, db: Session):
         context = state["context"]
         steps = list(state["steps"])
         failed = state["failed"]
+        failed_critical = state["failed_critical"]
         error = state["error"]
 
         for record in state["branch"]:
@@ -289,15 +296,24 @@ def _make_level_join(strategy: LangGraphLayeredStrategy, db: Session):
             elif not failed:
                 failed = True
                 error = outcome.error or f"{agent_name} failed"
+            if not outcome.succeeded and strategy.registry.is_critical(agent_name):
+                failed_critical = True
 
-        return {"steps": steps, "failed": failed, "error": error, "log_ids": {}, "branch": Overwrite([])}
+        return {
+            "steps": steps,
+            "failed": failed,
+            "failed_critical": failed_critical,
+            "error": error,
+            "log_ids": {},
+            "branch": Overwrite([]),
+        }
 
     return _run
 
 
 def _make_next_level(next_node: str):
     def _route(state: LayeredGraphState) -> str:
-        return END if state["failed"] else next_node
+        return END if state["failed_critical"] else next_node
 
     return _route
 
@@ -469,18 +485,20 @@ def _finalize_layered_run(
         run.error_msg = "Cancelled by user"
         task.error_msg = "Cancelled by user"
         record_id = None
-    elif state["failed"]:
+    elif state["failed_critical"]:
         run.status = "failed"
         run.error_msg = state["error"] or "Layer execution failed"
         task.status = "failed"
         task.error_msg = run.error_msg
         record_id = None
     else:
+        # 非关键节点失败时仍然出结果：已完成的部分要留给候选人，状态说 partial 而不是 completed
+        failed_steps = [step for step in step_results if step["status"] == "failed"]
         run.status = "completed"
         run.error_msg = None
         record_id = strategy._save_analysis_record(db, resume_id, jd_id, user_id, context)
-        task.status = "completed"
-        task.error_msg = None
+        task.status = "partial" if failed_steps else "completed"
+        task.error_msg = state["error"] if failed_steps else None
         task.analysis_record_id = record_id
 
     run.summary_report = context.final_report or {}
