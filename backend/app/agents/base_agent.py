@@ -203,14 +203,19 @@ def record_node_outcome(
     agent: BaseAgent,
     context: AgentContext,
     outcome: NodeOutcome,
+    input_data: dict[str, Any] | None = None,
 ) -> NodeOutcome:
-    """把一次节点执行写成 AgentMessage；成功时再写 AgentResult。"""
+    """把一次节点执行写成 AgentMessage；成功时再写 AgentResult。
+
+    `input_data` 给分层并行用：节点在工作线程里跑，它看到的上下文由那边快照，
+    主线程只负责写行。
+    """
     msg = AgentMessage(
         run_id=run_id,
         agent_name=outcome.agent_name,
         status="completed" if outcome.succeeded else "failed",
         depends_on=list(agent.depends_on),
-        input_data=context.to_log_dict(),
+        input_data=input_data if input_data is not None else context.to_log_dict(),
         output_data=outcome.result,
         error_msg=outcome.error or None,
         started_at=outcome.started_at,
