@@ -23,8 +23,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.models.agent import RetrievalLog
 from app.models.agent_run import AgentMessage, AgentResult
 from app.orchestration.context import AgentContext
+from app.services import retrieval_log
 from app.services.llm_service import (
     get_llm_usage,
     reset_llm_provenance,
@@ -55,6 +57,7 @@ class NodeOutcome:
     result: dict[str, Any] = field(default_factory=dict)
     error: str = ""
     usage: dict[str, float] = field(default_factory=_zero_usage)
+    retrievals: list[dict[str, Any]] = field(default_factory=list)
     duration_ms: int = 0
     attempts: int = 1
     started_at: datetime | None = None
@@ -101,6 +104,7 @@ class BaseAgent(ABC):
             context = context.with_db(self._db)
 
         usage_total = _zero_usage()
+        retrievals: list[dict[str, Any]] = []
         attempts = 0
         started_at = utc_now()
         t0 = time.time()
@@ -111,12 +115,14 @@ class BaseAgent(ABC):
             # 每次尝试都重置用量与来源，再让节点内的 LLM 调用累加进去
             reset_llm_usage()
             reset_llm_provenance()
+            retrieval_log.begin()
             _seed_trace_context(self.name, context)
             try:
                 return self.run_impl(context)
             finally:
-                # 失败的尝试同样花掉了 token：先归集成本，再向上抛
+                # 失败的尝试同样花掉了 token、同样查过知识库：先归集，再向上抛
                 _accumulate(usage_total, get_llm_usage())
+                retrievals.extend(retrieval_log.finish())
 
         def _on_retry(exc, attempt, max_retries):
             traceback.print_exc()
@@ -137,6 +143,7 @@ class BaseAgent(ABC):
                 status="success",
                 result=result if isinstance(result, dict) else {},
                 usage=usage_total,
+                retrievals=retrievals,
                 duration_ms=int((time.time() - t0) * 1000),
                 attempts=attempts,
                 started_at=started_at,
@@ -150,6 +157,7 @@ class BaseAgent(ABC):
                 status="failed",
                 error=str(exc)[:500] or exc.__class__.__name__,
                 usage=usage_total,
+                retrievals=retrievals,
                 duration_ms=int((time.time() - t0) * 1000),
                 attempts=max(1, attempts),
                 started_at=started_at,
@@ -228,4 +236,30 @@ def record_node_outcome(
         db.add(res)
         db.commit()
 
+    _record_retrieval_logs(db, context, outcome)
+
     return outcome
+
+
+def _record_retrieval_logs(db: Session, context: AgentContext, outcome: NodeOutcome) -> None:
+    """节点在期间发起的每一次知识库读取落成一行 `retrieval_log`（取证）。
+
+    0 命中也写行——"查了 5 次、次次空手而归"是结论而不是缺数据。
+    没有 task 归属（不在编排里跑）时无处可挂，直接跳过。
+    """
+    if context.task_id is None or not outcome.retrievals:
+        return
+
+    for call in outcome.retrievals:
+        db.add(
+            RetrievalLog(
+                task_id=context.task_id,
+                query_text=call.get("query_text") or "",
+                doc_type_filter=call.get("doc_type_filter"),
+                top_k=call.get("top_k") or 0,
+                result_count=call.get("result_count") or 0,
+                results=call.get("results") or [],
+                duration_ms=call.get("duration_ms") or 0,
+            )
+        )
+    db.commit()

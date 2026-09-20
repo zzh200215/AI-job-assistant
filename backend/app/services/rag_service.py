@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from sqlalchemy.orm import Session
 
 from app.core.chroma_client import get_knowledge_collection
 from app.core.config import settings
+from app.services import retrieval_log
 from app.services.embedding_service import embed_text
 from app.services.query_rewrite_service import RewrittenQuery
 from app.services.rerank_service import rerank_results
@@ -106,20 +108,35 @@ def search_knowledge(
     # 置于 Chroma 访问之前，无 db 时完全不触碰知识库。
     if db is None:
         logger.warning(
-            "search_knowledge called without db session; refusing unqualified retrieval "
-            "(query=%r, doc_type=%r)",
+            "search_knowledge called without db session; refusing unqualified retrieval " "(query=%r, doc_type=%r)",
             query[:50],
             doc_type,
         )
         return []
 
+    started = time.time()
+
+    def _log(results: list[dict]) -> list[dict]:
+        """把这次读取记进节点的收集器（不在节点里时是空操作）。
+
+        空结果与查询失败同样要留行：一次分析里"查了 6 次、次次 0 命中"本身就是结论。
+        """
+        retrieval_log.record(
+            query=query,
+            doc_type=doc_type,
+            top_k=top_k,
+            results=results,
+            duration_ms=int((time.time() - started) * 1000),
+        )
+        return results
+
     collection = get_knowledge_collection()
     if collection.count() == 0:
-        return []
+        return _log([])
 
     visible_doc_ids = get_visible_knowledge_doc_ids(db, user_id=user_id, organization_id=organization_id)
     if visible_doc_ids == set():
-        return []
+        return _log([])
 
     where_filter = {"doc_type": doc_type} if doc_type else None
 
@@ -138,9 +155,9 @@ def search_knowledge(
             query[:50],
             doc_type,
         )
-        return []
+        return _log([])
 
-    return _filter_visible_results(results, visible_doc_ids=visible_doc_ids, top_k=top_k)
+    return _log(_filter_visible_results(results, visible_doc_ids=visible_doc_ids, top_k=top_k))
 
 
 def build_rag_context(query: str, db: Session, user_id: int | None = None) -> str:

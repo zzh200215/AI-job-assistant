@@ -16,10 +16,12 @@ RAG 检索的三种召回路径：
 
 import logging
 import math
+import time
 from collections import defaultdict
 
 from app.core.chroma_client import get_knowledge_collection
 from app.core.config import settings
+from app.services import retrieval_log
 from app.services.embedding_service import embed_text
 from app.services.rerank_service import rerank_results
 from app.utils.knowledge_access import get_visible_knowledge_doc_ids
@@ -453,13 +455,13 @@ def multi_recall(
     """
     if top_k is None:
         top_k = settings.RAG_TOP_K
+    started = time.time()
 
     # 安全底线：没有 DB 会话就无法做租户/用户可见性过滤。
     # 宁可不检索（返回空）也不允许跨租户/跨用户泄漏（fail-closed）。
     if db is None:
         logger.warning(
-            "multi_recall called without db session; refusing unqualified retrieval "
-            "(query=%r, doc_type=%r)",
+            "multi_recall called without db session; refusing unqualified retrieval " "(query=%r, doc_type=%r)",
             query[:50],
             doc_type,
         )
@@ -519,6 +521,13 @@ def multi_recall(
         if not r.get("text") and vector_by_cid.get(cid):
             r["text"] = vector_by_cid[cid][:300]
 
+    retrieval_log.record(
+        query=query,
+        doc_type=doc_type,
+        top_k=top_k,
+        results=reranked,
+        duration_ms=int((time.time() - started) * 1000),
+    )
     return reranked
 
 

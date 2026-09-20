@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
-from app.models.agent import AgentStepLog, AgentTask
+from app.models.agent import AgentStepLog, AgentTask, RetrievalLog
 from app.models.history import AnalysisRecord, Resume
 from app.models.user import User
 from app.orchestration.protocol import normalize_step_name
@@ -16,6 +16,7 @@ from app.schemas.analysis import ExplainMatchReq, FullAnalysisReq, MatchReq
 from app.services import interview_service, match_service, optimize_service
 from app.services.analysis_service import run_smart_analysis
 from app.services.match_explainer_service import MatchExplainer
+from app.services.rag_confidence_service import confidence_from_flat_results
 from app.services.rag_service import get_knowledge_references
 from app.services.skill_gap import build_skill_gap, jd_skill_union, resume_skill_names
 from app.utils.http_errors import api_error
@@ -122,15 +123,12 @@ def _load_task_outputs(db: Session, user_id: int, record_id: int):
         return {}, {}, {}
 
     career_planning = {}
-    rag_confidence = {}
     steps = (
         db.query(AgentStepLog).filter(AgentStepLog.task_id == task.id).order_by(AgentStepLog.step_index.desc()).all()
     )
     for step in steps:
         step_norm = normalize_step_name(step.step_name)
         parsed = _deep_parse_json(step.output_data)
-        if step_norm == "knowledge_retrieval" and isinstance(parsed, dict) and parsed.get("rag_confidence"):
-            rag_confidence = parsed["rag_confidence"]
         if step_norm == "career_planning":
             career_planning = parsed
             break
@@ -139,8 +137,30 @@ def _load_task_outputs(db: Session, user_id: int, record_id: int):
             career_planning = parsed["career_planning"]
             break
 
+    rag_confidence = _rag_confidence_from_retrievals(db, task.id)
     final_report = _deep_parse_json(task.final_report)
     return final_report, career_planning, rag_confidence
+
+
+def _rag_confidence_from_retrievals(db: Session, task_id: int) -> dict:
+    """从 `retrieval_log` 反推这次分析的知识取证置信度。
+
+    这里原先读的是 `knowledge_retrieval` 步骤日志——只有 `step_by_step` 那条已删除
+    的流水线会写它，所以主线任务上这个字段永远是空的。现在改为按真实发生过的检索
+    计算，并且复用同一个实现（`confidence_from_flat_results`），不另造一套口径；
+    没有任何检索记录时返回空字典——那是"没查过"，不是"查了没信心"。
+    """
+    rows = db.query(RetrievalLog).filter(RetrievalLog.task_id == task_id).order_by(RetrievalLog.id).all()
+    if not rows:
+        return {}
+
+    hits: list[dict] = []
+    for row in rows:
+        for item in row.results or []:
+            hits.append({**item, "doc_type": item.get("doc_type") or row.doc_type_filter or "general"})
+
+    representative_query = next((r.query_text for r in rows if r.query_text), "")
+    return confidence_from_flat_results(representative_query, hits)
 
 
 def _get_owned_resume(db: Session, user: User, resume_id: int | None) -> Resume | None:
