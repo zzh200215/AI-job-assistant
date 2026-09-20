@@ -90,11 +90,11 @@ def _get_resume_version(db: Session, resume_id: int, version_id: int) -> ResumeV
 def _as_text_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
-    return [str(item).strip() for item in value if isinstance(item, (str, int, float)) and str(item).strip()]
+    return [str(item).strip() for item in value if isinstance(item, str | int | float) and str(item).strip()]
 
 
 def _number_or_none(value: Any) -> int | float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         return None
     return value
 

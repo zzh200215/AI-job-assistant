@@ -15,10 +15,9 @@ import logging
 import socket
 import threading
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 import uuid
-from typing import Any
 from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
@@ -63,12 +62,14 @@ def _validate_delivery_url(url: str) -> None:
     if not host:
         raise ValueError("url 缺少有效主机名")
     try:
-        ip = ipaddress.ip_address(host)
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass  # 非 IP 字面量，按域名解析后校验
+    else:
+        # 这里不能放进上面的 try：私网地址抛的 ValueError 会被同一个 except 吞掉
         if _is_private_ip(host):
             raise ValueError(f"url 指向内网/保留地址 {host}，禁止投递")
         return
-    except ValueError:
-        pass  # 非 IP 字面量，按域名解析后校验
     try:
         infos = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80))
     except socket.gaierror as exc:

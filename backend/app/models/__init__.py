@@ -14,13 +14,13 @@ from app.models.interview_config import InterviewQuestionBank, InterviewReportTe
 from app.models.interview_evaluation import InterviewTurnEvaluation
 from app.models.interview_question import InterviewQuestion
 from app.models.interview_session import InterviewSession
+from app.models.jd_embedding import JobEmbedding
 from app.models.job_journal import JobJournal
 from app.models.job_pipeline import JobApplicationPipeline
 from app.models.job_recommend import JobBookmark, JobRecommendationFeedback
-from app.models.jd_embedding import JobEmbedding
 from app.models.job_target import JobTarget
-from app.models.match_score import MatchScore
 from app.models.knowledge import KnowledgeDocument
+from app.models.match_score import MatchScore
 from app.models.notification import Notification
 from app.models.operational_alert import OperationalAlert
 from app.models.organization import Organization, OrganizationMembership, OrganizationSSOIdentity, OrganizationSSOState

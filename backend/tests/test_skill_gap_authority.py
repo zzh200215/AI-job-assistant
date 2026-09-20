@@ -19,7 +19,6 @@ from app.services.skill_gap import (
     skill_spellings,
 )
 
-
 # ---------------------------------------------------------------- naming
 
 

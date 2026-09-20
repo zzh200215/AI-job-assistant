@@ -325,7 +325,7 @@ class MatchExplainer:
         """
         if value is None or isinstance(value, bool):
             return None
-        if isinstance(value, (int, float)):
+        if isinstance(value, int | float):
             return float(value)
         match = re.search(r"\d+", str(value))
         return float(match.group()) if match else None

@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from app.core.security import hash_password
 from app.core.prometheus_metrics import REGISTRY
+from app.core.security import hash_password
 from app.models.prompt_trace import PromptTrace
 from app.models.user import User
 from app.services import prompt_trace_service

@@ -15,8 +15,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.api.auth import get_current_user
 from app.api import subscription as subscription_api
+from app.api.auth import get_current_user
 from app.core.database import Base, get_db
 from app.core.tenant_context import (
     reset_tenant_session_factory,
@@ -328,7 +328,6 @@ def test_payment_callback_requires_paid_amount(tenant_session):
 
 def test_pay_callback_requires_configured_secret(tenant_session, monkeypatch):
     """未配置 PAYMENT_WEBHOOK_SECRET 时支付回调拒绝处理（fail-closed）。"""
-    import os
 
     from app.models.subscription import SubscriptionOrder
 

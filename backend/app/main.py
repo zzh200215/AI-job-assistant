@@ -25,7 +25,6 @@ from app.core.prometheus_metrics import record_http_request, record_rate_limited
 from app.core.rate_limiter import get_limiter
 from app.core.request_context import set_request_id
 from app.core.runtime_metrics import record_request
-from app.core.tenant_context import tenant_context_middleware
 from app.core.scheduler import shutdown_scheduler, start_scheduler
 from app.core.schema_bootstrap import (
     ensure_agent_message_usage_columns,
@@ -43,6 +42,7 @@ from app.core.schema_bootstrap import (
     ensure_user_profile_columns,
     ensure_user_role_column,
 )
+from app.core.tenant_context import tenant_context_middleware
 from app.services.interview_evaluation_service import shutdown_interview_evaluation_executor
 from app.services.orchestration_runner import mark_stale_running_tasks_failed, shutdown_orchestration_executor
 from app.utils.response import ERR_AUTH, ERR_COMMON, ERR_PARAM, fail, ok

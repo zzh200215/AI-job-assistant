@@ -14,16 +14,16 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.api.auth import get_current_user
 from app.api.resume import router as resume_router
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.models.history import JobDescription, Resume, ResumeVersion
 from app.models.user import User
-from app.api.auth import get_current_user
 from app.services import resume_rewrite_service as svc
-from app.services.scoring_config import SCORE_METHOD
 from app.services.match_score_service import canonical_match_score, resume_version_of
 from app.services.resume_blocks import build_resume_blocks
+from app.services.scoring_config import SCORE_METHOD
 
 PARSED = {
     "name": "张三",

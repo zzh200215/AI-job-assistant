@@ -12,8 +12,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.agents import career_path_agent as agent_mod
-from app.api.career_path import router as career_router
 from app.api.auth import get_current_user
+from app.api.career_path import router as career_router
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.models.history import JobDescription, Resume

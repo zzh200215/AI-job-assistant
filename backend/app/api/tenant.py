@@ -238,8 +238,8 @@ def update_tenant(
         else:
             try:
                 org.expires_at = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
-            except ValueError:
-                raise api_error(400, "expires_at 不是合法 ISO 时间", ERR_PARAM)
+            except ValueError as exc:
+                raise api_error(400, "expires_at 不是合法 ISO 时间", ERR_PARAM) from exc
 
     if "primary_color" in payload:
         color = str(payload["primary_color"]).strip()
@@ -307,7 +307,7 @@ def renew_tenant(
     if months < 1 or months > 36:
         raise api_error(400, "续费月数不合法: 1-36", ERR_PARAM)
     amount = payload.get("amount")
-    if amount is not None and (not isinstance(amount, (int, float)) or amount < 0):
+    if amount is not None and (not isinstance(amount, int | float) or amount < 0):
         raise api_error(400, "金额不合法", ERR_PARAM)
 
     now = utc_now_naive()  # 与 DB 读回的 naive DateTime 一致
@@ -566,7 +566,7 @@ async def import_tenant_knowledge(
             tenant_id=org.id,
         )
     except Exception as exc:
-        raise api_error(500, f"文档处理失败: {exc}", ERR_PARAM)
+        raise api_error(500, f"文档处理失败: {exc}", ERR_PARAM) from exc
 
     write_audit_log(
         db,

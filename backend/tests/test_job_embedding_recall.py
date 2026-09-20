@@ -9,11 +9,9 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.config import settings
-from app.models.jd_embedding import JobEmbedding
 from app.models.history import JobDescription
+from app.models.jd_embedding import JobEmbedding
 from app.services import jd_embedding_service
-from app.services.job_recommend_engine import JobRecommendationEngine
 from app.services.jd_embedding_service import (
     current_provider_model,
     retrieval_text,
@@ -21,6 +19,7 @@ from app.services.jd_embedding_service import (
     text_fingerprint,
     vectors_for_jobs,
 )
+from app.services.job_recommend_engine import JobRecommendationEngine
 
 
 @pytest.fixture(autouse=True)
@@ -220,7 +219,7 @@ def test_one_employer_cannot_fill_the_recommended_page(db_session, monkeypatch, 
 
 
 def test_spilling_does_not_drop_any_candidate():
-    from app.services.job_recommend_engine import RecommendResult, JobRecommendationEngine
+    from app.services.job_recommend_engine import JobRecommendationEngine, RecommendResult
 
     def result(company, score):
         return RecommendResult(

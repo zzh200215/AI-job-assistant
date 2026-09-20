@@ -13,7 +13,7 @@ from app.api.auth import require_admin
 from app.core.database import get_db
 from app.models.user import User
 from app.models.webhook import WebhookSubscription
-from app.services.webhook_service import VALID_EVENTS, subscribe_webhook
+from app.services.webhook_service import subscribe_webhook
 
 router = APIRouter(prefix="/admin/external/webhooks", tags=["external-webhook"])
 
@@ -40,7 +40,7 @@ def admin_subscribe_webhook(
             secret=secret,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
         "id": sub.id,
         "api_key_id": sub.api_key_id,

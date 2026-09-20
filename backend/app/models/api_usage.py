@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, Column, DateTime, Integer, Numeric, String
+from sqlalchemy import BigInteger, Column, DateTime, Numeric, String
 
 from app.core.database import Base
 from app.utils.time_helper import utc_now

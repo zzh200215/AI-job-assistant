@@ -94,10 +94,10 @@ def _skill_strings(container: Any, keys: tuple[str, ...]) -> list[str]:
             if isinstance(item, dict):
                 for name_key in ("skill", "name", "requirement"):
                     value = item.get(name_key)
-                    if isinstance(value, (str, int, float)) and str(value).strip():
+                    if isinstance(value, str | int | float) and str(value).strip():
                         out.append(str(value))
                         break
-            elif isinstance(item, (str, int, float)) and str(item).strip():
+            elif isinstance(item, str | int | float) and str(item).strip():
                 out.append(str(item))
         if out:
             break

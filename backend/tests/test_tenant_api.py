@@ -8,10 +8,10 @@ T4-3 验收：「把租户 expires_at 设为过去时间 → 1 个调度周期�
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import pytest
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -29,7 +29,7 @@ from app.core.user_roles import ADMIN_ROLE, CANDIDATE_ROLE
 from app.models.audit_log import AuditLog
 from app.models.organization import Organization
 from app.models.subscription import SubscriptionOrder, UserSubscription
-from app.models.tenant import TenantConfig, TenantDomainBinding
+from app.models.tenant import TenantConfig
 from app.models.user import User
 from app.services.subscription_service import run_tenant_billing_check
 from app.utils.time_helper import utc_now_naive

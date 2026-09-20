@@ -189,7 +189,7 @@ def test_dismissed_endpoint_counts_orphaned_rows(client, db_session, job_client_
 def job_client_headers(db_session):
     user = _user(db_session, "rc_list_user")
     resume = _resume(db_session, user)
-    keep = _job(db_session, user, "正常岗位")
+    _job(db_session, user, "正常岗位")  # 库里要有对照岗位，才能证明"被隐藏"确实被过滤掉了
     hidden = _job(db_session, user, "被隐藏岗位")
     db_session.add(JobBookmark(user_id=user.id, jd_id=hidden.id, action="dismiss", note=""))
     db_session.commit()

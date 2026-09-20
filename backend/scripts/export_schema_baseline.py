@@ -27,9 +27,9 @@ SNAPSHOT_PATH = REPO_ROOT / "docs" / "schema-baseline.sql"
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-# 注册全部模型到 Base.metadata
-import app.models  # noqa: F401
-from app.core.database import Base
+# 注册全部模型到 Base.metadata（这两行必须在 sys.path 之后，故豁免 E402）
+import app.models  # noqa: E402,F401
+from app.core.database import Base  # noqa: E402
 
 HEADER = """-- 数据库 Schema 基线快照（T1-2 冻结数据模型基线）
 -- 生成方式：backend/scripts/export_schema_baseline.py（离线编译，MySQL 8.0 方言）
@@ -41,9 +41,9 @@ HEADER = """-- 数据库 Schema 基线快照（T1-2 冻结数据模型基线）
 def render_ddl() -> str:
     """将 Base.metadata 编译为稳定的 MySQL DDL 文本。
 
-    - CREATE TABLE 保持 sorted_tables 的外键依赖顺序；
-    - CREATE INDEX / CREATE UNIQUE INDEX 统一排序输出，避免依赖
-      SQLAlchemy 内部集合遍历顺序（不同进程间可能不一致）。
+    - CREATE TABLE 与 CREATE INDEX 都按语句文本排序：这份快照只用于 CI 漂移检测，
+      没有任何消费方按顺序执行它，而 SQLAlchemy 对"无依赖关系"的表只按注册顺序排，
+      那个顺序等于 `app/models/__init__.py` 的 import 顺序——排序调整就会伪装成 schema 漂移。
     """
     statements: list[str] = []
 
@@ -53,7 +53,7 @@ def render_ddl() -> str:
     engine = create_mock_engine("mysql+pymysql://", executor=executor)
     Base.metadata.create_all(engine)
 
-    tables = [s for s in statements if s.startswith("CREATE TABLE")]
+    tables = sorted(s for s in statements if s.startswith("CREATE TABLE"))
     indexes = sorted(
         s for s in statements if s.startswith(("CREATE INDEX", "CREATE UNIQUE INDEX"))
     )

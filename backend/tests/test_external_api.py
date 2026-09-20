@@ -525,7 +525,7 @@ def test_monthly_billing_includes_inactive_keys_and_skips_paid(factory):
         db.commit()
         bill_id = bill.id
 
-        rerun_ids = run_monthly_billing(db, now.year, now.month)
+        run_monthly_billing(db, now.year, now.month)  # 重跑一次，验证不覆盖已付账单
         again = db.get(ApiBill, bill_id)
         assert again.status == "paid"  # 已付账单未被重跑覆盖
         assert int(again.total_amount) == 30

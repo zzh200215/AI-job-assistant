@@ -16,10 +16,10 @@ JobRecommendationEngine — 岗位推荐引擎
 import copy
 import hashlib
 import json
+import logging
 import math
 import re
 import threading
-import logging
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field

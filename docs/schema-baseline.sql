@@ -819,6 +819,23 @@ CREATE TABLE interview_session (
 
 ;
 
+CREATE TABLE jd_embedding (
+	id BIGINT NOT NULL, 
+	jd_id BIGINT NOT NULL, 
+	provider VARCHAR(32) NOT NULL, 
+	model VARCHAR(64) NOT NULL, 
+	text_hash VARCHAR(32) NOT NULL, 
+	dimension INTEGER NOT NULL, 
+	vector TEXT NOT NULL, 
+	create_time DATETIME, 
+	update_time DATETIME, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_jd_embedding_jd_provider_model UNIQUE (jd_id, provider, model), 
+	FOREIGN KEY(jd_id) REFERENCES tb_jd (id) ON DELETE CASCADE
+)
+
+;
+
 CREATE TABLE job_application_pipeline (
 	id BIGINT NOT NULL, 
 	user_id BIGINT NOT NULL, 
@@ -899,23 +916,6 @@ CREATE TABLE job_bookmark (
 	tenant_id BIGINT DEFAULT '1' NOT NULL, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(user_id) REFERENCES tb_user (id) ON DELETE CASCADE, 
-	FOREIGN KEY(jd_id) REFERENCES tb_jd (id) ON DELETE CASCADE
-)
-
-;
-
-CREATE TABLE jd_embedding (
-	id BIGINT NOT NULL, 
-	jd_id BIGINT NOT NULL, 
-	provider VARCHAR(32) NOT NULL, 
-	model VARCHAR(64) NOT NULL, 
-	text_hash VARCHAR(32) NOT NULL, 
-	dimension INTEGER NOT NULL, 
-	vector TEXT NOT NULL, 
-	create_time DATETIME, 
-	update_time DATETIME, 
-	PRIMARY KEY (id), 
-	CONSTRAINT uq_jd_embedding_jd_provider_model UNIQUE (jd_id, provider, model), 
 	FOREIGN KEY(jd_id) REFERENCES tb_jd (id) ON DELETE CASCADE
 )
 

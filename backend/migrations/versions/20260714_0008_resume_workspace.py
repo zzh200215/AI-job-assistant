@@ -47,7 +47,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    inspector = sa.inspect(op.get_bind())
     with contextlib.suppress(Exception):
         op.drop_index("ix_resume_version_parent_version_id", table_name="resume_version")
     with contextlib.suppress(Exception):

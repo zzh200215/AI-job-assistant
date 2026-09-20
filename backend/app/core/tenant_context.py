@@ -88,7 +88,7 @@ def tenant_filter(model):
         db.query(Resume).filter(tenant_filter(Resume), ...)
     未注入租户上下文（如单测）时按默认租户 1 过滤，保证存量单租户行为不变。
     """
-    return getattr(model, "tenant_id") == current_tenant_id()
+    return model.tenant_id == current_tenant_id()
 
 
 def stamp_tenant(instance) -> object:

@@ -24,10 +24,10 @@ os.environ["RUN_SCHEDULER"] = "false"
 # database.py 已为内存 sqlite 启用 StaticPool，此处建表后所有连接共享同一库。
 os.environ["DATABASE_URL"] = "sqlite://"
 
-from app.core.database import Base, SessionLocal, engine as _app_engine
-
 # 注册全部模型并给 app 引擎建表，使后台任务（SessionLocal 直连 app 引擎）可查询。
 import app.models  # noqa: F401
+from app.core.database import Base, SessionLocal
+from app.core.database import engine as _app_engine
 
 Base.metadata.create_all(bind=_app_engine)
 

@@ -8,9 +8,12 @@ weekly report as plain "suggestions". These tests pin the four that were not.
 
 from __future__ import annotations
 
-from app.api import dashboard, resume as resume_api
+from app.api import dashboard
+from app.api import resume as resume_api
 from app.core.security import hash_password
 from app.models.user import User
+from app.services.match_explainer_service import DimensionScore, MatchExplainer
+from app.services.resume_analysis_service import quick_score_resume
 
 
 def _user(db):
@@ -25,8 +28,6 @@ def _user(db):
     db.commit()
     db.refresh(user)
     return user
-from app.services.match_explainer_service import DimensionScore, MatchExplainer
-from app.services.resume_analysis_service import quick_score_resume
 
 
 # ------------------------------------------------------- completeness vs quality

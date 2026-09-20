@@ -23,8 +23,8 @@ from app.core.database import Base
 from app.core.tenant_context import (
     DEFAULT_TENANT_ID,
     TenantContext,
-    reset_tenant_session_factory,
     require_tenant,
+    reset_tenant_session_factory,
     set_tenant_session_factory,
     tenant_context_middleware,
 )

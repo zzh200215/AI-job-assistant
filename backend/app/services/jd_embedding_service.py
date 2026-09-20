@@ -18,8 +18,9 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -76,7 +77,7 @@ def retrieval_text(jd: Any) -> str:
     for key in ("required_skills", "nice_to_have", "responsibilities", "keywords"):
         value = data.get(key)
         if isinstance(value, list):
-            parts.extend(str(item) for item in value if isinstance(item, (str, int, float)))
+            parts.extend(str(item) for item in value if isinstance(item, str | int | float))
     return " ".join(part for part in parts if part)[:RAWS_TEXT_LIMIT]
 
 

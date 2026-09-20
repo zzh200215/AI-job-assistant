@@ -32,7 +32,6 @@ from app.core.tenant_context import (
 from app.models.history import Resume
 from app.models.organization import Organization
 
-
 # ===== 单元：stamp_tenant / tenant_filter（conftest db_session） =====
 
 def test_stamp_tenant_sets_current_tenant(db_session):
@@ -164,7 +163,7 @@ def test_cross_tenant_read_isolation(tenant_session):
 
 def test_cross_tenant_write_stamps_tenant(tenant_session):
     tenant_a = _seed_org(tenant_session, slug="write-a", org_id=100)
-    tenant_b = _seed_org(tenant_session, slug="write-b", org_id=200)
+    _seed_org(tenant_session, slug="write-b", org_id=200)  # 存在另一个租户，写请求才谈得上"盖对了租户"
 
     app = _build_iso_app(tenant_session)
     with TestClient(app) as client:

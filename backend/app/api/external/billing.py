@@ -16,7 +16,6 @@ from app.api.auth import require_admin
 from app.core.database import get_db
 from app.models.api_bill import ApiBill
 from app.models.api_key import ApiKey
-from app.models.api_usage import ApiUsage
 from app.models.user import User
 from app.services.api_key_service import create_api_key, run_monthly_billing
 from app.utils.time_helper import utc_now_naive
@@ -45,8 +44,8 @@ def admin_create_api_key(
             expires_at = datetime.fromisoformat(
                 str(payload["expires_at"]).replace("Z", "+00:00")
             ).replace(tzinfo=None)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="expires_at 格式错误，示例 2027-01-01T00:00:00")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="expires_at 格式错误，示例 2027-01-01T00:00:00") from exc
     key, plain = create_api_key(
         db,
         name=name,
@@ -124,8 +123,8 @@ def admin_run_billing(
         month = int(payload.get("month") or 0)
         if not (2000 <= year <= 2100 and 1 <= month <= 12):
             raise ValueError
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="year/month 必填且合法")
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail="year/month 必填且合法") from exc
     bill_ids = run_monthly_billing(db, year, month)
     return {"period": f"{year:04d}-{month:02d}", "bills_generated": len(bill_ids), "bill_ids": bill_ids}
 
