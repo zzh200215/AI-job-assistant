@@ -544,9 +544,17 @@ agent.SummaryAgent           real  tokens=3215
 
 **第一次真数据**（本机真 provider，5 条样本）：口径 `testu(id=1) 可见 22 篇知识文档`，检索成功 5 条 / 异常 0 / 空结果 0，**recall@5 = 0.9，MRR 0.533，keyword hit 1.0**，退出码 0（门槛 0.5 第一次是真的在比大小）。`transition_guide` 这一类召回 0.0，样本太少先不下结论。全量 50 条大约要打 50 次 LLM + 140 次 embedding（按 5 条样本外推），我没有擅自跑。
 
-**同样的形状还留在别处（没动）**：`scripts/eval_agent.py:110-112` 出错时写 `predicted = 0`，会污染 MAE/Spearman 两道门，性质与这里一样；要不要一起按"错误不进指标"改，等确认。CI 侧的结构性问题也还在：`ci.yml` 没有 MySQL service、`backend/chroma_db` 里只跟踪了一个 `.gitkeep`，所以这道门在 CI 里现在会以"数据库不可用"退出码 2 失败——**明确地红，而不是假装测过**。
+**同样的形状还留在别处（随后在 E4 一起改了）**：`scripts/eval_agent.py:110-112` 出错时写 `predicted = 0`，会污染 MAE/Spearman 两道门，性质与这里一样。CI 侧的结构性问题也还在：`ci.yml` 没有 MySQL service、`backend/chroma_db` 里只跟踪了一个 `.gitkeep`，所以这道门在 CI 里现在会以"数据库不可用"退出码 2 失败——**明确地红，而不是假装测过**。
 
 **测试**：`tests/test_eval_thresholds.py` +4（异常单独计数且指标为 None、空结果仍是可测的 0.0、一条炸一条中时只按测出的算、门槛先报异常再报未测出）；原有 hybrid-recall 测试改为断言 `db/user_id` 确实被透传。该文件 11 passed，全量 672 passed。
+
+#### 已交付：E4 剩下那两条 CI 小事（提交 `bd0b986`、`889be6b`）
+
+**前端 lint 的唯一那条 error**（`bd0b986`）：`vite.config.js` 读 `process.env.VITE_PROXY_TARGET`，而 flat config 的 `globals` 里从来没声明过 `process` → `no-undef` → `eslint .` exit 1，CI 的 "Lint frontend" 步骤一直红。改法是加一个只对 `vite.config.js` / `*.config.mjs` 生效的 config 块，**不给 `src/**`**——否则组件里谁都能顺手读 `process.env` 而没人拦。实测：`npx eslint .` 从 1 error 变成 **0 error**，`npm run lint` **exit 0**（两万六千条 warning 是本机 CRLF，CI 的 LF 检出不会有）。
+
+**`eval_agent` 的空转门**（`889be6b`）：出错写 `predicted = 0`，于是"provider 超时/JSON 解析失败"被当成"模型给这段匹配打了 0 分"——MAE 凭空吃进 60–85 的误差、Spearman 多出一个假数据点、`hit_tol10` 把它记成 `under`。现在与 RAG 门同一套：异常单独计数并带样例、不进指标；`scored < 1` 时 `mae=None`、`scored < 2` 时 `spearman_rho=None`（顺带堵掉 `compute_spearman` 在 n<2 时返回 0.0 占位值这条暗路）；`--max-errors` 默认 0，先报异常再谈阈值。CLI 冒烟（mock provider，不花钱）：2 条全部打分成功，`mae 22.5 / ρ 0.5 / hit=1 over=1`——mock 对两条都吐 82，又一次印证"模型自报分与内容无关"。
+
+**验证**：backend **675 passed**（+3：全异常时 scored=0 且指标 None、一条炸一条中时只按测出的算、门槛先报异常再报未测出）；`ruff check .` clean、`ruff format --check .` 336 files already formatted；`npm run lint` exit 0。**仍然没验的**：`npm run format:check` 在本机不可信（检出是 CRLF 而仓库对象是 LF），CI 上什么结果我不知道；`gh` 查远端运行记录被会话策略拦，见 [[local-dev-environment]] 的替代做法。
 
 **其余：**
 
