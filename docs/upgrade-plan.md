@@ -300,6 +300,27 @@
 
 **阻塞项（环境，非本次改动引入）**：嵌入式 Chroma 的知识库索引在本机已损坏——`chromadb/segment/impl/metadata/sqlite.py:668 _decode_seq_id` 抛 `TypeError: object of type 'int' has no len()`，`get_knowledge_collection().count()` 单句即复现。凡走 RAG 检索的节点（ResumeOptimize / MatchAnalysis / Match / Interview / Career）真机必挂，编排端到端跑不完；上述证据里 `tokens_used=0` 的失败节点都是**在调模型之前**就死在检索层，不是模型问题。恢复需要重建知识库（`scripts/import_knowledge.py`），C2/C3/C5 的端到端验证依赖它。
 
+#### 已交付：C4（保守版）删掉第三条流水线（提交 `5d404da`，净 −1417/+95 行）
+
+计划原文是"6 个编排实现收敛到 2 个"。实测三条流水线都有活的后台入口，"收敛到 2"等于删掉两个页面的后端——所以按用户定的保守范围做：**只删 `step_by_step`**，`linear` 与 `layered` 各留 native + langgraph 两份实现（4 个），C1 刚拿到的多智能体消息序列不动。
+
+| 删掉的东西 | 为什么它是重复而非能力 |
+|---|---|
+| `StepByStepStrategy` + `LangGraphStepByStepStrategy`（285 + 163 行） | 11 个 `step_*` 函数绕过 agent 类，把 linear 的 7 个节点重做一遍：解析、匹配、优化、面试题、汇总全部有两份实现，两份的重试/日志/意图裁剪各不相同 |
+| `app/services/agent_steps.py`（532 行） | 只服务上面那条流水线。其中只有 `_build_resume_summary` / `_build_jd_summary` 被 IntentAgent 与 SummaryAgent 复用 → 移到 `app/services/analysis_summaries.py`，改名 `resume_digest` / `jd_digest`（跨模块引用私有名下划线函数本身就是味道） |
+| `agents/interview_coach_agent.py`、`agents/summary_report_agent.py` | 全项目零 import，且各自定义的类名与 `interview_agent.py` / `summary_agent.py` 里的真实现**同名**（`InterviewAgent` / `SummaryAgent`），留着就是撞名风险 |
+| `AgentContext.record_step_output` + `_STEP_RESULT_FIELD_MAP` + `retrieval_results` / `rag_confidence` / `self_checks` 三个字段 + `__getitem__`/`__setitem__` | 只有裸步骤读写它们；`strategies.MAX_RETRIES` 同理（重试已住进 `base_agent`） |
+| `analysis_service` 里 `"step_by_step": "langgraph_step_by_step"` 别名 | 指向已删的类；配置里残留该值的部署现在会明确报"未知策略"，不静默换路 |
+
+`/api/agent/start`（`run_workflow`）改为按 `ORCHESTRATION_STRATEGY` 启动，与 `run_smart_analysis` 同一条路——它的 deprecation 提示一直写着"请使用 run_smart_analysis"，现在才成立。
+
+**两处随之暴露的空洞（诚实记录，C3 处理）**
+
+1. `app/api/analysis.py:132` 从 `knowledge_retrieval` 步骤日志里读 `rag_confidence` 给"参考来源"面板——**默认策略 linear 从来不产生这个步骤**，所以该字段在主线任务上一直是 `{}`。删掉 step_by_step 后连唯一的（空）生产者也没了：C3 要把检索日志的写端放到真正发生检索的地方（工具层 / 节点结果），再把这个读端指过去。
+2. `agent_task.plan` 自此**没有任何写入方**（原先只 `step_task_planning` 写）——这正好是 C2 的前提：plan 必须由 surviving 路径产出并真正驱动执行，而不是继续存一份没人读的 JSON。
+3. `prompts/agent_planning.py`、`prompts/agent_self_check.py` 现在零引用：前者是 C2 的原料，后者等 C3 决定"自检"要不要活下来（原实现每目标一次 LLM 调用、`retry_needed` 算了但没人执行）。
+
+
 
 ---
 
