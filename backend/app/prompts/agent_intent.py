@@ -19,16 +19,10 @@ AGENT_INTENT_PROMPT = """你是一名智能招聘助手的意图识别专家。�
   "analysis_type": "full_analysis",
   "reason": "用户上传了简历和JD，需要全链路分析",
   "required_steps": [
-    "intent_recognition",
-    "resume_parse",
-    "jd_parse",
-    "task_planning",
-    "knowledge_retrieval",
-    "matching_analysis",
+    "match_analysis",
     "resume_optimization",
-    "interview_question_generation",
-    "self_check",
-    "final_report"
+    "interview_questions",
+    "summary_report"
   ],
   "focus_points": ["技能匹配", "项目经验", "学历要求", "职业发展"]
 }}
@@ -38,6 +32,14 @@ AGENT_INTENT_PROMPT = """你是一名智能招聘助手的意图识别专家。�
 - optimize_only: 仅需要简历优化
 - interview_only: 仅需要面试题
 - full_analysis: 需要全链路分析（匹配+优化+面试）
+
+required_steps 只能从这份名单里选（其他节点系统不认）：
+- match_analysis        匹配度分析
+- resume_optimization   简历优化
+- interview_questions   面试题生成
+- career_planning       职业规划
+- summary_report        汇总报告
+简历/JD 解析与意图识别是前置步骤，系统一定会跑，不需要你写；写了也不会改变执行。
 
 请输出 JSON，不要其他文字。
 """

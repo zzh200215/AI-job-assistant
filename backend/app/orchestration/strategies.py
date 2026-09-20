@@ -16,6 +16,7 @@ Agent 节点只有一个入口：BaseAgent.execute()（内部 = run_node + 落 A
 线程里 run_node()，主线程 record_node_outcome()。
 """
 
+import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
@@ -28,8 +29,11 @@ from app.models.agent import AgentStepLog, AgentTask
 from app.models.agent_run import AgentRun
 from app.models.history import AnalysisRecord
 from app.orchestration.context import AgentContext
+from app.orchestration.plan import as_plan_rows, plan_from_intent
 from app.orchestration.registry import DEFAULT_REGISTRY, UnifiedRegistry
 from app.utils.time_helper import utc_now
+
+logger = logging.getLogger(__name__)
 
 # ===================== 通用辅助 =====================
 
@@ -256,8 +260,34 @@ class ExecutionStrategy(ABC):
 
     # -------------------- 意图裁剪 --------------------
 
+    def _apply_plan(self, context: AgentContext, agent_order: list[str]) -> dict[str, Any]:
+        """意图识别一出结果就把计划定下来：后面跑哪些节点由它决定，不再各处猜。
+
+        模型写了系统里不存在的节点名会被丢掉并计数——这份名单在 C2 之前还留着
+        C4 删掉的步骤，静默丢弃等于让坏词汇表一直活着。
+        """
+        info = plan_from_intent(context.intent_detail, available_agents=agent_order)
+        context.plan = as_plan_rows(info["steps"], info["agents"])
+        context.required_steps = info["steps"]
+        if info["dropped"]:
+            logger.warning(
+                "plan dropped unknown steps=%s (source=%s, intent=%s)",
+                info["dropped"],
+                info["source"],
+                info["intent"],
+            )
+        return info
+
     def _should_execute(self, context: AgentContext, agent_name: str) -> bool:
-        """默认意图裁剪逻辑（子类可重写）"""
+        """计划里有的节点才跑；没有计划时退回意图硬编码表（C2 之前的行为）。
+
+        `context.plan` 是 `plan_from_intent()` 规约出来的结果，已经是"本次真能执行"
+        的节点集合，所以这里不再做二次猜测。
+        """
+        planned = {row.get("agent") for row in (context.plan or []) if isinstance(row, dict)}
+        if planned:
+            return agent_name in planned
+
         intent_data = context.intent_detail or {}
         intent = intent_data.get("intent", "full_analysis")
 
@@ -367,7 +397,8 @@ class LinearStrategy(ExecutionStrategy):
                 return self._cancelled_result(task_id, step_results, context)
 
             if not self._should_execute(context, agent_name):
-                step_results.append(_agent_result(agent_name, "skipped", {"reason": "根据意图识别结果跳过"}))
+                reason = "不在本次计划里" if context.plan else "根据意图识别结果跳过"
+                step_results.append(_agent_result(agent_name, "skipped", {"reason": reason}))
                 self._create_step_log(db, task_id, agent_name, step_index, "skipped", {"skipped": True}, context)
                 continue
 
@@ -383,6 +414,8 @@ class LinearStrategy(ExecutionStrategy):
 
             if agent_result["status"] == "success":
                 context.record_agent_output(agent_name, agent_result["result"])
+                if agent_name == "IntentAgent":
+                    self._apply_plan(context, self.AGENT_ORDER)
             else:
                 if critical:
                     failed_critical = True
@@ -402,6 +435,7 @@ class LinearStrategy(ExecutionStrategy):
         task.end_time = utc_now()
         task.intent = context.intent
         task.intent_detail = context.intent_detail
+        task.plan = context.plan
         task.final_report = context.final_report
         task.analysis_record_id = record_id
         db.add(task)

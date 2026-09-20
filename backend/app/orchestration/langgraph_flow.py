@@ -206,6 +206,8 @@ def _make_linear_agent_node(
         error = state["error"]
         if result["status"] == "success":
             context.record_agent_output(agent_name, result["result"])
+            if agent_name == "IntentAgent":
+                strategy._apply_plan(context, strategy.AGENT_ORDER)
         elif critical:
             failed_critical = True
             error = result.get("error", "") or f"{agent_name} failed"
@@ -318,6 +320,7 @@ def _finalize_linear_run(
     task.end_time = utc_now()
     task.intent = context.intent
     task.intent_detail = context.intent_detail
+    task.plan = context.plan
     task.final_report = context.final_report
     task.analysis_record_id = record_id
     db.add(task)
