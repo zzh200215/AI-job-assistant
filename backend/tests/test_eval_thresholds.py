@@ -1,4 +1,5 @@
 from scripts.eval_agent import check_thresholds as check_agent_thresholds
+from scripts.eval_agent import run_eval as run_agent_eval
 from scripts.eval_rag import check_thresholds as check_rag_thresholds
 from scripts.eval_rag import run_eval as run_rag_eval
 from scripts.eval_recommend import check_thresholds as check_recommend_thresholds
@@ -193,6 +194,82 @@ def test_agent_thresholds_report_all_failed_metrics():
         "spearman_rho 0.79 < 0.8",
         "hit_tol10 6 < 7",
     ]
+
+
+# ===== eval_agent：没跑出预测分 ≠ 模型给了 0 分 =====
+
+
+def _agent_pair(pid: str, expected: int) -> dict:
+    return {
+        "id": pid,
+        "resume_profile": {"skills": ["Python"]},
+        "jd_profile": {"required_skills": ["Python"]},
+        "expected_match_score": expected,
+    }
+
+
+def test_agent_eval_keeps_unscored_pairs_out_of_the_metrics(monkeypatch):
+    def timeout_chat_json(*args, **kwargs):
+        raise RuntimeError("provider 超时")
+
+    monkeypatch.setattr("app.services.llm_service.chat_json", timeout_chat_json)
+
+    report = run_agent_eval([_agent_pair("p1", 60), _agent_pair("p2", 70)])
+
+    assert report["total"] == 2
+    assert report["scored"] == 0
+    assert report["eval_errors"] == 2
+    # 以前这里会是 mae≈65、hit_tol10=0 —— 看着像模型很差，其实是两条都没测出来
+    assert report["mae"] is None
+    assert report["spearman_rho"] is None
+    assert [d["label"] for d in report["details"]] == ["errored", "errored"]
+    assert report["score_dist"]["errored"] == 2
+    assert report["error_samples"][0].startswith("p1: RuntimeError")
+
+
+def test_agent_eval_measures_only_the_pairs_that_returned_a_score(monkeypatch):
+    monkeypatch.setattr("app.services.match_score_calibration.apply_match_score_cap", lambda *args, **kwargs: None)
+
+    calls: list[int] = []
+
+    def flaky_chat_json(prompt, **kwargs):
+        calls.append(len(calls))
+        if len(calls) == 1:
+            raise RuntimeError("解析失败")
+        return {"match_score": 70}
+
+    monkeypatch.setattr("app.services.llm_service.chat_json", flaky_chat_json)
+
+    report = run_agent_eval([_agent_pair("p1", 60), _agent_pair("p2", 70)])
+
+    # p1 没跑出来就不能记成 0 分：那样 mae 会变成 30，看着像模型差，其实是解析失败
+    assert (report["scored"], report["eval_errors"]) == (1, 1)
+    assert report["mae"] == 0.0
+    assert report["spearman_rho"] is None  # 只剩一个点，秩相关无从谈起
+    assert report["details"][0]["label"] == "errored"
+    assert report["details"][1]["label"] == "hit"
+
+
+def test_agent_gate_reports_unscored_pairs_before_thresholds():
+    report = {
+        "total": 2,
+        "scored": 0,
+        "eval_errors": 2,
+        "error_samples": ["p1: RuntimeError: provider 超时"],
+        "mae": None,
+        "spearman_rho": None,
+        "score_dist": {"hit_tol10": 0, "over": 0, "under": 0, "errored": 2},
+    }
+
+    failures = check_agent_thresholds(report, max_mae=12.0, min_spearman=0.8)
+
+    assert failures[0].startswith("eval_errors 2 > 0")
+    assert failures[1] == "mae 未测出（跑出预测分的 pair 只有 0 条，至少 1 条）门槛 12.0 无从比较"
+    assert failures[2] == "spearman_rho 未测出（跑出预测分的 pair 只有 0 条，至少 2 条）门槛 0.8 无从比较"
+
+    # 显式允许时，仍然不能因为"跳过"就变成通过
+    without_gate = check_agent_thresholds(report, max_mae=12.0, min_spearman=0.8, max_errors=None)
+    assert without_gate == failures[1:]
 
 
 def test_recommend_thresholds_pass_when_metrics_meet_gate():

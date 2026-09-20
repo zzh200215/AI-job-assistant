@@ -90,6 +90,7 @@ def run_eval(eval_set: list[dict]) -> dict:
     predicted_scores = []
     actual_scores = []
     details = []
+    errors: list[tuple[str, str]] = []
 
     for idx, item in enumerate(eval_set):
         pair_id = item.get("id", f"pair_{idx}")
@@ -98,6 +99,8 @@ def run_eval(eval_set: list[dict]) -> dict:
         expected_score = item["expected_match_score"]
 
         # MATCH_AGENT_PROMPT 用 {resume_report}/{job_report}/{rag_context} 占位
+        error = None
+        predicted = None
         try:
             prompt = MATCH_AGENT_PROMPT.format(
                 resume_report=json.dumps({"summary": resume_profile}, ensure_ascii=False),
@@ -108,28 +111,45 @@ def run_eval(eval_set: list[dict]) -> dict:
             apply_match_score_cap(result, resume_profile, jd_profile)
             predicted = int(result.get("match_score", 0))
         except Exception as exc:
+            error = f"{type(exc).__name__}: {str(exc)[:160]}"
+            errors.append((pair_id, error))
             logger.warning("pair=%s 评估失败: %s", pair_id, exc)
-            predicted = 0
 
-        predicted_scores.append(float(predicted))
-        actual_scores.append(float(expected_score))
-
-        diff = predicted - expected_score
-        details.append(
-            {
-                "id": pair_id,
-                "predicted": predicted,
-                "expected": expected_score,
-                "diff": diff,
-                "label": "hit" if abs(diff) <= 10 else ("over" if diff > 0 else "under"),
-            }
-        )
+        if error is None:
+            predicted_scores.append(float(predicted))
+            actual_scores.append(float(expected_score))
+            diff = predicted - expected_score
+            details.append(
+                {
+                    "id": pair_id,
+                    "error": None,
+                    "predicted": predicted,
+                    "expected": expected_score,
+                    "diff": diff,
+                    "label": "hit" if abs(diff) <= 10 else ("over" if diff > 0 else "under"),
+                }
+            )
+        else:
+            # 失败的那条不进 MAE/Spearman：以前写 predicted=0，等于把"没测出来"
+            # 当成"模型给了 0 分"，误差与秩相关都被污染
+            details.append(
+                {
+                    "id": pair_id,
+                    "error": error,
+                    "predicted": None,
+                    "expected": expected_score,
+                    "diff": None,
+                    "label": "errored",
+                }
+            )
 
         if (idx + 1) % 5 == 0:
             logger.info("已评估 %d/%d ...", idx + 1, len(eval_set))
 
-    mae = compute_mae(predicted_scores, actual_scores)
-    rho = compute_spearman(predicted_scores, actual_scores)
+    scored = len(predicted_scores)
+    mae = compute_mae(predicted_scores, actual_scores) if scored else None
+    # 秩相关至少要有两个点，否则 compute_spearman 只会返回它自己的 0.0 占位值
+    rho = compute_spearman(predicted_scores, actual_scores) if scored >= 2 else None
 
     over = sum(1 for d in details if d["label"] == "over")
     under = sum(1 for d in details if d["label"] == "under")
@@ -137,9 +157,12 @@ def run_eval(eval_set: list[dict]) -> dict:
 
     report = {
         "total": len(eval_set),
-        "mae": round(mae, 2),
-        "spearman_rho": round(rho, 3),
-        "score_dist": {"hit_tol10": hit, "over": over, "under": under},
+        "scored": scored,
+        "eval_errors": len(errors),
+        "error_samples": [f"{pid}: {e}" for pid, e in errors][:3],
+        "mae": round(mae, 2) if mae is not None else None,
+        "spearman_rho": round(rho, 3) if rho is not None else None,
+        "score_dist": {"hit_tol10": hit, "over": over, "under": under, "errored": len(errors)},
         "details": details,
     }
     return report
@@ -151,13 +174,34 @@ def check_thresholds(
     max_mae: float | None = None,
     min_spearman: float | None = None,
     min_hit_tol10: int | None = None,
+    max_errors: int | None = 0,
 ) -> list[str]:
-    """Return human-readable threshold failures for a completed Agent report."""
+    """Return human-readable failure reasons for a completed Agent report.
+
+    `max_errors` 默认 0：有 pair 根本没跑出分数时，MAE/ρ 是残缺样本上的数字，
+    先把这条报出来再谈阈值。
+    """
     failed = []
-    if max_mae is not None and report["mae"] > max_mae:
-        failed.append(f"mae {report['mae']} > {max_mae}")
-    if min_spearman is not None and report["spearman_rho"] < min_spearman:
-        failed.append(f"spearman_rho {report['spearman_rho']} < {min_spearman}")
+    errors = report.get("eval_errors", 0)
+    if max_errors is not None and errors > max_errors:
+        samples = "; ".join(report.get("error_samples", []))
+        failed.append(
+            f"eval_errors {errors} > {max_errors}（{report['total']} 条里 {errors} 条没跑出预测分，"
+            f"指标是在残缺样本上算的。样例：{samples or '无'}）"
+        )
+
+    scored = report.get("scored", report["total"])
+    for key, floor, above_is_bad in (("mae", max_mae, True), ("spearman_rho", min_spearman, False)):
+        if floor is None:
+            continue
+        value = report.get(key)
+        if value is None:
+            need = "至少 2 条" if key == "spearman_rho" else "至少 1 条"
+            failed.append(f"{key} 未测出（跑出预测分的 pair 只有 {scored} 条，{need}）门槛 {floor} 无从比较")
+        elif (value > floor) if above_is_bad else (value < floor):
+            unit = ">" if above_is_bad else "<"
+            failed.append(f"{key} {value} {unit} {floor}")
+
     hit_tol10 = report["score_dist"]["hit_tol10"]
     if min_hit_tol10 is not None and hit_tol10 < min_hit_tol10:
         failed.append(f"hit_tol10 {hit_tol10} < {min_hit_tol10}")
@@ -175,6 +219,12 @@ def main():
     parser.add_argument("--min-spearman", type=float, default=None, help="Fail if Spearman rho is below this threshold")
     parser.add_argument(
         "--min-hit-tol10", type=int, default=None, help="Fail if hit count within +/-10 is below this threshold"
+    )
+    parser.add_argument(
+        "--max-errors",
+        type=int,
+        default=0,
+        help="允许多少条 pair 没跑出预测分（默认 0：一条都不允许，否则指标是残缺样本）",
     )
     args = parser.parse_args()
 
@@ -195,11 +245,14 @@ def main():
             "max_mae": args.max_mae,
             "min_spearman": args.min_spearman,
             "min_hit_tol10": args.min_hit_tol10,
+            "max_errors": args.max_errors,
         },
     }
 
     print("\n" + "=" * 50)
-    print(f"Agent 匹配评估报告  (共 {report['total']} 条)")
+    print(
+        f"Agent 匹配评估报告  (共 {report['total']} 条，实际打分 {report['scored']} 条，未跑出 {report['eval_errors']} 条)"
+    )
     print("=" * 50)
     print(f"  MAE (平均绝对误差) : {report['mae']}")
     print(f"  Spearman ρ         : {report['spearman_rho']}")
@@ -209,6 +262,9 @@ def main():
     )
     print()
     for d in report["details"]:
+        if d["error"] is not None:
+            print(f"  {d['id']:10s}  未跑出预测分：{d['error']}")
+            continue
         sign = "+" if d["diff"] > 0 else ""
         print(
             f"  {d['id']:10s}  预测={d['predicted']:3d}  期望={d['expected']:3d}  "
@@ -228,10 +284,11 @@ def main():
         max_mae=args.max_mae,
         min_spearman=args.min_spearman,
         min_hit_tol10=args.min_hit_tol10,
+        max_errors=args.max_errors,
     )
 
     if failed:
-        print("[FAIL] Agent eval thresholds not met:")
+        print("[FAIL] Agent eval 未通过：")
         for item in failed:
             print(f"  - {item}")
         return 3
