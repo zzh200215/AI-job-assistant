@@ -344,6 +344,23 @@ C1 记录里那条"嵌入式 Chroma 索引损坏"已经查明并修好，根因�
 2. `agent_task.plan` 自此**没有任何写入方**（原先只 `step_task_planning` 写）——这正好是 C2 的前提：plan 必须由 surviving 路径产出并真正驱动执行，而不是继续存一份没人读的 JSON。
 3. `prompts/agent_planning.py`、`prompts/agent_self_check.py` 现在零引用：前者是 C2 的原料，后者等 C3 决定"自检"要不要活下来（原实现每目标一次 LLM 调用、`retry_needed` 算了但没人执行）。
 
+#### 已交付：C3 检索取证回到节点路径（提交 `8c251d3`）
+
+**先纠正计划里一条错前提**：C3 原话是 `RetrievalLog`/`SelfCheckLog` "**从未被插入**"。查 dev 库——`retrieval_log` 有 25 行、`self_check_log` 有 15 行，**全部产在 2026-06-06~06-07，之后一行没有**。也就是说写端不是"从来没写"，而是和 `agent_message` 一样，在同一次把智能体改成"策略直打 `run_impl`"的重构里被弄丢了（旧行里 `query_text` 形如 `type=resume_template query=…`，正是当年那套写法）。
+
+| 项 | 结果 |
+|---|---|
+| 写端位置 | `app/services/retrieval_log.py`：contextvar 收集器，节点入口 `run_node` 每次尝试 `begin()`，`record_node_outcome` 统一落行。住在**真正发查询的** `rag_service.search_knowledge()` / `multi_recall()` 里，而不是 agent 里——agent 只拿到一段拼好的上下文，看不见自己查了几次 |
+| 0 命中也留行 | 空集合、可见集为空、Chroma 抛异常三条返回路径都记一行 `result_count=0`。"查了 4 次次次空手而归"是结论，不是缺数据 |
+| 不污染 | 收集器只在节点执行期间装载，知识库页自己的搜索、外部 API 的检索一行都不写 |
+| 重试取证 | 三次尝试各查过的，三次都落行（测试钉住 `尝试 1/2/3` 三行且 `result_count=0`） |
+| 上限 | 单节点 `MAX_TRACKED_PER_NODE=12` 行、命中正文只存 160 字符摘要——日志不变成语料库副本 |
+| 读端 | `/api/agent/task/{id}/steps` 的 `retrievals` 从恒空变成真数组；分析详情/参考来源面板的 `rag_confidence` 不再读那条已删除的步骤日志，改为**用现有的唯一实现** `confidence_from_flat_results` 从取证行反推；一行都没有时返回 `{}`（"没查过"不等于"查了没信心"） |
+
+真机验证（task 94，linear，provider=qwen）：4 行取证、9 次命中——`resume_template` 1、`skill_model` 3、`interview_q` 2、`skill_model` 3（两个节点各查一次同一类型，符合预期）；`GET /api/agent/task/94/steps` → `retrievals` 长度 4；参考来源面板 → 4 条来源 + `rag_confidence = {level: medium, score: 73, total_chunks: 9}`。
+
+**`SelfCheckLog` 故意仍然没有写端**（测试把这条决定钉住）。唯一现成的"自检"是 `SummaryAgent` 报告里的 `quality_assurance.self_check_score`——那是模型给自己的输出打分：没有核验方，也没有通过线。把这种分数写进 `self_check_log.passed` 等于给意见盖上测量的章，跟 A3 刚清掉的六处同类是一回事。要做独立校验，得先定"谁验、验什么、过线是多少"，那是产品决策不是清理。
+
 
 
 ---
