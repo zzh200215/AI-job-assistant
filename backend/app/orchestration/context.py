@@ -21,24 +21,10 @@ _AGENT_RESULT_FIELD_MAP = {
     "SummaryAgent": "final_report",
 }
 
-_STEP_RESULT_FIELD_MAP = {
-    "intent_recognition": "intent_detail",
-    "resume_parse": "resume_parsed",
-    "jd_parse": "jd_parsed",
-    "task_planning": "plan",
-    "knowledge_retrieval": "retrieval_results",
-    "matching_analysis": "match_result",
-    "resume_optimization": "optimize_result",
-    "interview_question_generation": "interview_result",
-    "career_planning": "career_result",
-    "self_check": "self_checks",
-    "final_report": "final_report",
-}
-
 
 @dataclass
 class AgentContext:
-    """Structured execution context for agents and step-based workflows."""
+    """Structured execution context for the agent pipelines."""
 
     resume_id: int = 0
     jd_id: int = 0
@@ -55,14 +41,11 @@ class AgentContext:
 
     resume_parsed: dict[str, Any] | None = None
     jd_parsed: dict[str, Any] | None = None
-    retrieval_results: dict[str, Any] = field(default_factory=dict)
-    rag_confidence: dict[str, Any] | None = None
 
     match_result: dict[str, Any] | None = None
     optimize_result: dict[str, Any] | None = None
     interview_result: dict[str, Any] | None = None
     career_result: dict[str, Any] | None = None
-    self_checks: list[dict[str, Any]] = field(default_factory=list)
     final_report: dict[str, Any] | None = None
 
     agent_outputs: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -118,26 +101,6 @@ class AgentContext:
         elif field_name:
             setattr(self, field_name, result)
 
-    def record_step_output(self, step_name: str, result: dict[str, Any]):
-        field_name = _STEP_RESULT_FIELD_MAP.get(step_name)
-        if field_name == "intent_detail":
-            self.intent_detail = result
-            self.intent = result.get("intent", self.intent)
-            self.required_steps = result.get("required_steps", self.required_steps)
-        elif field_name == "resume_parsed":
-            self.resume_parsed = result.get("parsed", result)
-        elif field_name == "jd_parsed":
-            self.jd_parsed = result.get("parsed", result)
-        elif field_name == "plan":
-            self.plan = result.get("plan", []) if isinstance(result, dict) else []
-        elif field_name == "retrieval_results":
-            self.retrieval_results = result.get("retrievals", {}) if isinstance(result, dict) else {}
-            self.rag_confidence = result.get("rag_confidence") if isinstance(result, dict) else None
-        elif field_name == "self_checks":
-            self.self_checks = result.get("checks", []) if isinstance(result, dict) else []
-        elif field_name:
-            setattr(self, field_name, result)
-
     def get_agent_output(self, agent_name: str, default: Any = None) -> Any:
         return self.agent_outputs.get(agent_name, default)
 
@@ -158,18 +121,6 @@ class AgentContext:
 
     def set_extra(self, key: str, value: Any):
         self.extras[key] = value
-
-    def __getitem__(self, key: str) -> Any:
-        value = self.get(key)
-        if value is None:
-            raise KeyError(key)
-        return value
-
-    def __setitem__(self, key: str, value: Any):
-        if hasattr(self, key):
-            setattr(self, key, value)
-        else:
-            self.extras[key] = value
 
     def to_log_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {}

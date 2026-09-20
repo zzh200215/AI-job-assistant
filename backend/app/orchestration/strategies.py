@@ -1,19 +1,21 @@
-"""执行策略抽象与三种具体实现
+"""执行策略抽象与两种具体实现
 
-- LinearStrategy:          线性流水线（smart_orchestrator 主线）
-- LayeredParallelStrategy: 分层并行（agent_orchestrator）
-- StepByStepStrategy:      细粒度步骤（agent_workflow）
+- LinearStrategy:          线性流水线（smart_orchestrator 主线，`/api/analysis/full`）
+- LayeredParallelStrategy: 分层并行（legacy `/api/multi-agent/*`）
 
-三种策略共用 orchestration.registry.UnifiedRegistry 中的 Agent 注册表，
-并继承 ExecutionStrategy 提供的通用辅助方法（日志、重试、保存记录等）。
+每种流水线各有一个 LangGraph 孪生实现（`langgraph_flow.py`），由
+`ORCHESTRATION_ENGINE` 切换；曾经还有第三条 `step_by_step`（11 个绕过 agent 类的
+裸步骤），它与前两条重复且是 `RetrievalLog`/`SelfCheckLog` 唯一的（空）写入点，
+已删除。
+
+两种策略共用 orchestration.registry.UnifiedRegistry 中的 Agent 注册表，
+并继承 ExecutionStrategy 提供的通用辅助方法（日志、落库、保存记录等）。
 
 Agent 节点只有一个入口：BaseAgent.execute()（内部 = run_node + 落 AgentMessage）。
 分层并行策略因为工作线程不能共用 session，改走同一条路径的两个半段：
 线程里 run_node()，主线程 record_node_outcome()。
 """
 
-import time
-import traceback
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
@@ -27,11 +29,7 @@ from app.models.agent_run import AgentRun
 from app.models.history import AnalysisRecord
 from app.orchestration.context import AgentContext
 from app.orchestration.registry import DEFAULT_REGISTRY, UnifiedRegistry
-from app.services.llm_service import get_llm_usage, reset_llm_usage
 from app.utils.time_helper import utc_now
-
-MAX_RETRIES = 2
-
 
 # ===================== 通用辅助 =====================
 
@@ -85,7 +83,7 @@ class ExecutionStrategy(ABC):
     @property
     @abstractmethod
     def name(self) -> str:
-        """策略标识名（如 'linear' / 'layered' / 'step_by_step'）"""
+        """策略标识名（如 'linear' / 'langgraph_linear' / 'layered'）"""
         pass
 
     @abstractmethod
@@ -592,265 +590,6 @@ class LangGraphLayeredStrategy(LayeredParallelStrategy):
         return run_layered_graph(self, task_id, resume_id, jd_id, user_id, db, run_id)
 
 
-# ===================== 3) 细粒度步骤策略 =====================
-
-
-class StepByStepStrategy(ExecutionStrategy):
-    """细粒度步骤策略
-
-    将分析流程拆分为 11 个可观测步骤，每一步独立记录日志，
-    支持 RAG 检索日志和自我校验日志。
-    对应原 agent_workflow 的实现。
-    """
-
-    # (step_name, step_func_name, critical)
-    STEP_REGISTRY: list[tuple] = [
-        ("intent_recognition", "step_intent_recognition", True),
-        ("resume_parse", "step_resume_parse", True),
-        ("jd_parse", "step_jd_parse", True),
-        ("task_planning", "step_task_planning", True),
-        ("knowledge_retrieval", "step_knowledge_retrieval", True),
-        ("matching_analysis", "step_matching_analysis", True),
-        ("resume_optimization", "step_resume_optimization", True),
-        ("interview_question_generation", "step_interview_question_gen", False),
-        ("career_planning", "step_career_planning", True),
-        ("self_check", "step_self_check", True),
-        ("final_report", "step_final_report", True),
-    ]
-
-    @property
-    def name(self) -> str:
-        return "step_by_step"
-
-    def run(
-        self,
-        task_id: int,
-        resume_id: int,
-        jd_id: int,
-        user_id: int,
-        db: Session,
-        run_id: int | None = None,
-    ) -> dict[str, Any]:
-        task = db.get(AgentTask, task_id)
-        if not task:
-            return _orchestrator_result("failed", task_id, error="任务不存在")
-
-        ctx = self._new_context(task_id, run_id, resume_id, jd_id, user_id, db)
-
-        step_results: list[dict[str, Any]] = []
-
-        for step_index, (step_name, step_func_name, critical) in enumerate(self.STEP_REGISTRY, start=1):
-            if self._is_task_cancelled(db, task_id):
-                self._mark_task_cancelled(db, task)
-                return self._cancelled_result(task_id, step_results, ctx)
-
-            log = self._create_step_log(db, task_id, step_name, step_index, "running", context=ctx)
-
-            if not self._should_execute_step(ctx, step_name):
-                self._complete_step_log(db, log, {"skipped": True, "reason": "根据意图识别结果跳过此步骤"}, 0)
-                step_results.append(_agent_result(step_name, "skipped", {"reason": "根据意图识别结果跳过此步骤"}))
-                continue
-
-            success = self._execute_step_with_retry(db, task_id, log, step_func_name, ctx, step_name, critical)
-            if success:
-                step_results.append(_agent_result(step_name, "success", ctx.get(self._ctx_key(step_name))))
-                if self._is_task_cancelled(db, task_id):
-                    self._mark_task_cancelled(db, task)
-                    return self._cancelled_result(task_id, step_results, ctx)
-            else:
-                step_results.append(_agent_result(step_name, "failed", error=log.error_msg))
-                if critical:
-                    task.status = "failed"
-                    task.error_msg = f"关键步骤 {step_name} 失败"
-                    task.end_time = utc_now()
-                    db.add(task)
-                    db.commit()
-                    return _orchestrator_result(
-                        "failed",
-                        task_id,
-                        steps=step_results,
-                        error=task.error_msg,
-                    )
-
-        record_id = self._save_analysis_record(db, resume_id, jd_id, user_id, ctx)
-
-        task.status = "completed"
-        task.end_time = utc_now()
-        task.intent = ctx.intent
-        task.intent_detail = ctx.intent_detail
-        task.plan = ctx.plan
-        task.final_report = ctx.final_report
-        task.analysis_record_id = record_id
-        db.add(task)
-        db.commit()
-
-        return _orchestrator_result(
-            "completed",
-            task_id,
-            record_id=record_id,
-            steps=step_results,
-            final_report=ctx.final_report or {},
-        )
-
-    # -------------------- 步骤专用方法 --------------------
-
-    def _should_execute_step(self, ctx: AgentContext, step_name: str) -> bool:
-        intent = ctx.intent
-        if not intent or intent == "full_analysis":
-            return True
-        if intent == "resume_match_only" and step_name in ("matching_analysis", "knowledge_retrieval"):
-            return True
-        if intent == "optimize_only" and step_name in ("resume_optimization", "knowledge_retrieval"):
-            return True
-        if intent == "interview_only" and step_name in ("interview_question_generation", "knowledge_retrieval"):
-            return True
-        return step_name in (
-            "intent_recognition",
-            "resume_parse",
-            "jd_parse",
-            "task_planning",
-            "self_check",
-            "final_report",
-        )
-
-    def _ctx_key(self, step_name: str) -> str:
-        mapping = {
-            "intent_recognition": "intent_detail",
-            "resume_parse": "resume_parsed",
-            "jd_parse": "jd_parsed",
-            "task_planning": "plan",
-            "knowledge_retrieval": "retrieval_results",
-            "matching_analysis": "match_result",
-            "resume_optimization": "optimize_result",
-            "interview_question_generation": "interview_result",
-            "career_planning": "career_result",
-            "self_check": "self_checks",
-            "final_report": "final_report",
-        }
-        return mapping.get(step_name, step_name)
-
-    def _execute_step_with_retry(
-        self,
-        db: Session,
-        task_id: int,
-        log: AgentStepLog,
-        step_func_name: str,
-        ctx: AgentContext,
-        step_name: str,
-        critical: bool,
-    ) -> bool:
-        """执行单个步骤（带重试），成功返回 True"""
-        # 延迟导入 agent_steps，避免循环依赖
-        from app.services import agent_steps
-
-        step_func = getattr(agent_steps, step_func_name, None)
-        if step_func is None:
-            log.error_msg = f"步骤函数 {step_func_name} 不存在"
-            log.status = "failed"
-            log.completed_at = utc_now()
-            db.add(log)
-            db.commit()
-            return False
-
-        for attempt in range(1 + MAX_RETRIES):
-            try:
-                if self._is_task_cancelled(db, task_id):
-                    log.status = "failed"
-                    log.error_msg = "Cancelled before step execution"
-                    log.completed_at = utc_now()
-                    db.add(log)
-                    db.commit()
-                    return False
-
-                log.status = "running"
-                log.started_at = utc_now()
-                log.retry_count = attempt
-                db.add(log)
-                db.commit()
-
-                t0 = time.time()
-                reset_llm_usage()
-                result = step_func(ctx, db)
-                usage = get_llm_usage()
-                if isinstance(result, dict):
-                    # 步骤不是 agent 节点，没有 AgentMessage 可记，用量只能挂在
-                    # output_data 上；C4 收编排时这条路会连 _usage 一起消失。
-                    result.setdefault("_usage", usage)
-                ctx.record_step_output(step_name, result)
-                elapsed_ms = int((time.time() - t0) * 1000)
-
-                log.status = "completed"
-                log.output_data = result
-                log.completed_at = utc_now()
-                log.duration_ms = elapsed_ms
-                db.add(log)
-                db.commit()
-
-                # 记录检索日志
-                if step_name == "knowledge_retrieval":
-                    self._save_retrieval_log(db, task_id, log.id, ctx)
-                # 记录校验日志
-                if step_name == "self_check":
-                    self._save_self_check_log(db, task_id, ctx)
-
-                return True
-
-            except Exception as e:
-                traceback.print_exc()
-                log.error_msg = f"第{attempt + 1}次重试失败: {str(e)}"
-                log.retry_count = attempt + 1
-                db.add(log)
-                db.commit()
-
-                if attempt < MAX_RETRIES:
-                    continue
-                else:
-                    log.status = "failed"
-                    log.completed_at = utc_now()
-                    db.add(log)
-                    db.commit()
-                    return False
-
-    def _complete_step_log(self, db: Session, log: AgentStepLog, output_data: dict, elapsed_ms: int):
-        log.status = "completed"
-        log.output_data = output_data
-        log.completed_at = utc_now()
-        log.duration_ms = elapsed_ms
-        db.add(log)
-        db.commit()
-
-    def _save_retrieval_log(self, db: Session, task_id: int, step_log_id: int, ctx: AgentContext):
-        """记录 RAG 知识检索日志（子类可重写或扩展）"""
-        # 保持与 agent_workflow 相同的行为
-        pass
-
-    def _save_self_check_log(self, db: Session, task_id: int, ctx: AgentContext):
-        """记录自我校验日志（子类可重写或扩展）"""
-        # 保持与 agent_workflow 相同的行为
-        pass
-
-
-class LangGraphStepByStepStrategy(StepByStepStrategy):
-    """LangGraph-backed step-by-step orchestration."""
-
-    @property
-    def name(self) -> str:
-        return "langgraph_step_by_step"
-
-    def run(
-        self,
-        task_id: int,
-        resume_id: int,
-        jd_id: int,
-        user_id: int,
-        db: Session,
-        run_id: int | None = None,
-    ) -> dict[str, Any]:
-        from app.orchestration.langgraph_flow import run_step_by_step_graph
-
-        return run_step_by_step_graph(self, task_id, resume_id, jd_id, user_id, db, run_id)
-
-
 # ===================== 策略工厂 =====================
 
 
@@ -862,8 +601,6 @@ class StrategyFactory:
         "langgraph_linear": LangGraphLinearStrategy,
         "layered": LayeredParallelStrategy,
         "langgraph_layered": LangGraphLayeredStrategy,
-        "step_by_step": StepByStepStrategy,
-        "langgraph_step_by_step": LangGraphStepByStepStrategy,
     }
 
     @classmethod

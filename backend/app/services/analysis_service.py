@@ -10,7 +10,6 @@ def _resolve_strategy_name() -> str:
     langgraph_strategy_map = {
         "linear": "langgraph_linear",
         "layered": "langgraph_layered",
-        "step_by_step": "langgraph_step_by_step",
     }
 
     if engine_name == "langgraph":

@@ -11,7 +11,7 @@ from app.agents.base_agent import BaseAgent
 from app.orchestration.context import AgentContext
 from app.prompts.agent_report import AGENT_REPORT_PROMPT
 from app.prompts.rendering import render_prompt
-from app.services.agent_steps import _build_jd_summary, _build_resume_summary
+from app.services.analysis_summaries import jd_digest, resume_digest
 from app.services.llm_service import chat_json
 
 
@@ -33,8 +33,8 @@ class SummaryAgent(BaseAgent):
 
         prompt = render_prompt(
             AGENT_REPORT_PROMPT,
-            resume_summary=_build_resume_summary(resume),
-            jd_summary=_build_jd_summary(jd),
+            resume_summary=resume_digest(resume),
+            jd_summary=jd_digest(jd),
             match_result=json.dumps(context.match_result or {}, ensure_ascii=False, indent=2),
             optimize_result=json.dumps(context.optimize_result or {}, ensure_ascii=False, indent=2),
             interview_result=json.dumps(context.interview_result or {}, ensure_ascii=False, indent=2),

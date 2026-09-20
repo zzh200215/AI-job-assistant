@@ -3,7 +3,7 @@
 .. note::
     本模块现为 orchestration.strategies.LinearStrategy 的薄包装，
     保留原有 API 入口 `run_orchestrator_sync` 以兼容现有调用方。
-    新增策略支持：可通过 analysis_service 配置切换为 layered / step_by_step。
+    新增策略支持：可通过 analysis_service 配置切换为 layered，或把引擎切到 langgraph。
 """
 
 import traceback

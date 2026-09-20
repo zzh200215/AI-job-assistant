@@ -10,7 +10,7 @@ from app.agents.base_agent import BaseAgent
 from app.orchestration.context import AgentContext
 from app.prompts.agent_intent import AGENT_INTENT_PROMPT
 from app.prompts.rendering import render_prompt
-from app.services.agent_steps import _build_jd_summary, _build_resume_summary
+from app.services.analysis_summaries import jd_digest, resume_digest
 from app.services.llm_service import chat_json
 
 
@@ -30,8 +30,8 @@ class IntentAgent(BaseAgent):
         resume: Resume = db.get(Resume, resume_id)
         jd: JobDescription = db.get(JobDescription, jd_id)
 
-        resume_summary = _build_resume_summary(resume)
-        jd_summary = _build_jd_summary(jd)
+        resume_summary = resume_digest(resume)
+        jd_summary = jd_digest(jd)
 
         prompt = render_prompt(
             AGENT_INTENT_PROMPT,

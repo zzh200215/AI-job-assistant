@@ -10,14 +10,13 @@ from app.agents.base_agent import record_node_outcome
 from app.models.agent import AgentTask
 from app.models.agent_run import AgentRun
 from app.orchestration.context import AgentContext
-from app.orchestration.strategies import _agent_result, _orchestrator_result, _result_from_outcome
+from app.orchestration.strategies import _orchestrator_result, _result_from_outcome
 from app.utils.time_helper import utc_now
 
 if TYPE_CHECKING:
     from app.orchestration.strategies import (
         LangGraphLayeredStrategy,
         LangGraphLinearStrategy,
-        LangGraphStepByStepStrategy,
     )
 
 try:
@@ -46,14 +45,6 @@ class LayeredGraphState(TypedDict):
     steps: list[dict[str, Any]]
     step_index: int
     failed: bool
-    error: str
-
-
-class StepGraphState(TypedDict):
-    task_id: int
-    context: AgentContext
-    steps: list[dict[str, Any]]
-    failed_critical: bool
     error: str
 
 
@@ -128,37 +119,6 @@ def run_layered_graph(
     return _finalize_layered_run(strategy, db, task, run, resume_id, jd_id, user_id, final_state)
 
 
-def run_step_by_step_graph(
-    strategy: LangGraphStepByStepStrategy,
-    task_id: int,
-    resume_id: int,
-    jd_id: int,
-    user_id: int | None,
-    db: Session,
-    run_id: int | None = None,
-) -> dict[str, Any]:
-    """Execute the step-by-step workflow with a LangGraph state graph."""
-    _ensure_langgraph_available("langgraph_step_by_step")
-
-    task = db.get(AgentTask, task_id)
-    if not task:
-        return _task_not_found(task_id)
-
-    context = strategy._new_context(task_id, run_id, resume_id, jd_id, user_id, db)
-    graph = _build_step_graph(strategy, db)
-    app = graph.compile()
-    final_state = app.invoke(
-        {
-            "task_id": task_id,
-            "context": context,
-            "steps": [],
-            "failed_critical": False,
-            "error": "",
-        }
-    )
-    return _finalize_step_run(strategy, db, task, resume_id, jd_id, user_id, final_state)
-
-
 def _build_linear_graph(strategy: LangGraphLinearStrategy, db: Session) -> StateGraph:
     graph = StateGraph(LinearGraphState)
 
@@ -178,21 +138,6 @@ def _build_layered_graph(strategy: LangGraphLayeredStrategy, db: Session) -> Sta
         graph.add_node(node_name, _make_layer_node(strategy, db, agent_names))
 
     return _wire_sequential_graph(graph, node_names, "failed")
-
-
-def _build_step_graph(strategy: LangGraphStepByStepStrategy, db: Session) -> StateGraph:
-    graph = StateGraph(StepGraphState)
-    node_names: list[str] = []
-
-    for step_index, (step_name, step_func_name, critical) in enumerate(strategy.STEP_REGISTRY, start=1):
-        node_name = f"step_{step_name}"
-        node_names.append(node_name)
-        graph.add_node(
-            node_name,
-            _make_step_node(strategy, db, step_name, step_func_name, step_index, critical),
-        )
-
-    return _wire_sequential_graph(graph, node_names, "failed_critical")
 
 
 def _wire_sequential_graph(graph: StateGraph, node_names: list[str], failure_key: str) -> StateGraph:
@@ -333,69 +278,6 @@ def _make_layer_node(
     return _run
 
 
-def _make_step_node(
-    strategy: LangGraphStepByStepStrategy,
-    db: Session,
-    step_name: str,
-    step_func_name: str,
-    step_index: int,
-    critical: bool,
-):
-    def _run(state: StepGraphState) -> StepGraphState:
-        context = state["context"]
-        steps = list(state["steps"])
-
-        if _is_task_cancelled(db, state["task_id"]):
-            return {
-                **state,
-                "context": context,
-                "steps": steps,
-                "failed_critical": True,
-                "error": "Cancelled by user",
-            }
-
-        log = strategy._create_step_log(db, state["task_id"], step_name, step_index, "running", context=context)
-
-        if not strategy._should_execute_step(context, step_name):
-            reason = "Skipped by intent routing"
-            strategy._complete_step_log(db, log, {"skipped": True, "reason": reason}, 0)
-            steps.append(_agent_result(step_name, "skipped", {"reason": reason}))
-            return {
-                **state,
-                "context": context,
-                "steps": steps,
-            }
-
-        success = strategy._execute_step_with_retry(
-            db,
-            state["task_id"],
-            log,
-            step_func_name,
-            context,
-            step_name,
-            critical,
-        )
-        if success:
-            steps.append(_agent_result(step_name, "success", context.get(strategy._ctx_key(step_name))))
-            return {
-                **state,
-                "context": context,
-                "steps": steps,
-            }
-
-        error = log.error_msg or f"{step_name} failed"
-        steps.append(_agent_result(step_name, "failed", error=error))
-        return {
-            **state,
-            "context": context,
-            "steps": steps,
-            "failed_critical": state["failed_critical"] or critical,
-            "error": error if critical else state["error"],
-        }
-
-    return _run
-
-
 def _make_next_edge(next_node: str, failure_key: str):
     def _route(state: dict[str, Any]) -> str:
         return END if state[failure_key] else next_node
@@ -498,49 +380,6 @@ def _finalize_layered_run(
     db.add(run)
 
     task.end_time = utc_now()
-    task.final_report = context.final_report
-    db.add(task)
-    db.commit()
-
-    return _orchestrator_result(
-        status=task.status,
-        task_id=task.id,
-        record_id=task.analysis_record_id,
-        steps=step_results,
-        final_report=context.final_report or {},
-        error=task.error_msg or "",
-    )
-
-
-def _finalize_step_run(
-    strategy: LangGraphStepByStepStrategy,
-    db: Session,
-    task: AgentTask,
-    resume_id: int,
-    jd_id: int,
-    user_id: int | None,
-    state: StepGraphState,
-) -> dict[str, Any]:
-    context = state["context"]
-    step_results = state["steps"]
-
-    if task.status == "cancelled":
-        task.error_msg = "Cancelled by user"
-        record_id = None
-    elif state["failed_critical"]:
-        task.status = "failed"
-        task.error_msg = state["error"] or "Critical step failed"
-        record_id = None
-    else:
-        record_id = strategy._save_analysis_record(db, resume_id, jd_id, user_id, context)
-        task.status = "completed"
-        task.error_msg = None
-        task.analysis_record_id = record_id
-
-    task.end_time = utc_now()
-    task.intent = context.intent
-    task.intent_detail = context.intent_detail
-    task.plan = context.plan
     task.final_report = context.final_report
     db.add(task)
     db.commit()
