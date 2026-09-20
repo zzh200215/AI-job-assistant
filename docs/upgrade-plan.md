@@ -384,6 +384,24 @@ agent.SummaryAgent           real  tokens=3215
 
 同一任务的取证行：`resume_template` 1、`skill_model` 3、`interview_q` 2、`skill_model` 3——检索取证与节点账对得上。`ResumeParseAgent`/`JDParseAgent` 是 0 token 且**不该**有 trace 行：它们是规则解析，不挂 AI 名头（A3 口径）。
 
+#### 已交付：C2（保守版）计划真的决定跑哪些节点（提交 `ac21af6`）
+
+范围是和用户对齐后的"保守版"（原计划"按 depends_on 生成任务图"会改变每次请求实际跑哪些节点、跑几轮，属于更大的行为变更，未做）。
+
+**实测到的三个事实，其中一个纠正了我自己上一轮的判断**
+
+1. `required_steps` 一路写进 `agent_task.intent_detail`，但 `_should_execute()` 从不读它——它按一张硬编码"意图→agent"表裁剪。计划是个装饰品。
+2. 意图提示词教的名单还留着 C4 删掉的 `task_planning` / `knowledge_retrieval` / `self_check`：**模型在按一份不存在的词汇表做计划**（2026-06 真实落库行里就是这个 10 项名单）。
+3. 我上一轮说"置信度没被填出来"是**我查错了键**（用了 `intent_confidence`，真名是 `confidence`，值一直是 0.95）。真正的发现反而更值得记：它每个任务都恰好等于提示词里的示例值，所以是抄的，**不能参与决策**——`plan_from_intent()` 明确不读它，测试钉住"高置信与低置信给出同一份计划"。
+
+**做法**：新增 `app/orchestration/plan.py`，把模型输出规约成可执行计划——别名归一（`matching_analysis`→`match_analysis`）、只保留真实存在的节点、**解析类前置节点模型没写也必须跑**、执行顺序按流水线而不是按模型给的顺序（乱序计划会让下游读不到上游结果）、无法识别的名字进 `dropped` 并 `logger.warning`（不静默丢弃）。`_should_execute()` 改为优先看 `context.plan`，没有计划时退回原硬编码表（等价旧行为）。`agent_task.plan` 恢复写入方。提示词名单换成现存 5 个可选节点并写明"解析与意图识别系统一定跑"。
+
+**真机对照（task 96）**：模型返回的名单已经是新词汇 `['match_analysis','resume_optimization','interview_questions','summary_report']`（`dropped` 为空），`agent_task.plan` 有 7 个节点，**计划集合与实际执行集合完全相等**。
+
+**这条要说白**：今天唯一的编排入口是"一键分析"，模型几乎必然返回 `full_analysis`，所以**裁剪这半段在真机上不会触发**——它的价值是把"计划"从装饰变成事实，未来加意图入口（只要优化/只要面试）时不必再改执行层。测试覆盖了触发路径（`optimize_only` 时计划里没有 Match/Interview，且 `task.plan` 与步骤日志逐一对齐）。
+
+
+
 
 
 
