@@ -36,6 +36,17 @@ def _get_upload_dir() -> tuple:
     return kb_dir, now.year, now.month
 
 
+def _invalidate_bm25() -> None:
+    """Chroma 里的切片变了，就要让内存里的关键词索引跟着失效。
+
+    条数会变的增删，`_BM25Index.get()` 自己能发现；重切片与整库重建后条数可能一模
+    一样，只能靠这个调用。延迟 import 是因为 knowledge_service 平时不依赖召回层。
+    """
+    from app.services.multi_recall import invalidate_bm25_index
+
+    invalidate_bm25_index()
+
+
 def save_and_process(
     db: Session,
     file_bytes: bytes,
@@ -135,6 +146,7 @@ def save_and_process(
     db.add(doc)
     db.commit()
     db.refresh(doc)
+    _invalidate_bm25()
     return doc
 
 
@@ -167,6 +179,7 @@ def delete_document(db: Session, doc_id: int) -> bool:
 
     db.delete(doc)
     db.commit()
+    _invalidate_bm25()
     return True
 
 
@@ -283,6 +296,7 @@ def reprocess_document(db: Session, doc_id: int) -> KnowledgeDocument | None:
     db.add(doc)
     db.commit()
     db.refresh(doc)
+    _invalidate_bm25()
     return doc
 
 
@@ -337,3 +351,4 @@ def rebuild_all(db: Session):
         db.add(doc)
 
     db.commit()
+    _invalidate_bm25()

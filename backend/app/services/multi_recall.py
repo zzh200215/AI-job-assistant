@@ -16,6 +16,7 @@ RAG 检索的三种召回路径：
 
 import logging
 import math
+import threading
 import time
 from collections import defaultdict
 
@@ -138,14 +139,30 @@ class _BM25Index:
     其中 k=1.2, b=0.75（BM25 标准参数）
     """
 
-    _instance = None
-    _dirty = True
+    _instance: "_BM25Index | None" = None
+    _lock = threading.Lock()
 
     @classmethod
     def get(cls) -> "_BM25Index":
-        if cls._instance is None:
-            cls._instance = _BM25Index()
-        return cls._instance
+        """取索引；语料条数一变就整份换掉。
+
+        以前是"第一个用的人建，之后永久复用"，于是进程启动后入库的文档在关键词这一路
+        永远召不到（`_dirty` 声明了却从没被读过）。重建失败时继续用旧的那份——
+        Chroma 抖一下不该把好索引换成空的。换指针是单次赋值，读侧不会看到半份索引。
+        """
+        current = cls._instance
+        if current is not None:
+            live = _collection_count()
+            if live < 0 or live == current._corpus_count:
+                return current
+
+        with cls._lock:
+            rebuilt = _BM25Index()
+            if rebuilt.build_failed and cls._instance is not None:
+                logger.warning("BM25 索引重建失败，继续沿用旧的一份（可能已陈旧）")
+                return cls._instance
+            cls._instance = rebuilt
+            return rebuilt
 
     def __init__(self):
         self.doc_ids: list[str] = []  # chunk_id
@@ -155,6 +172,8 @@ class _BM25Index:
         self.idf: dict[str, float] = {}  # idf[term]
         self.doc_freq: dict[str, int] = {}  # df[term] = #docs containing term
         self.avg_dl = 0.0
+        self._corpus_count = -1  # 建这份索引时语料有多少条；-1 = 没建成
+        self.build_failed = False
         self._build()
 
     def _build(self):
@@ -162,11 +181,15 @@ class _BM25Index:
         try:
             collection = get_knowledge_collection()
             total = collection.count()
+            self._corpus_count = total
             if total == 0:
                 return
 
             data = collection.get(include=["documents", "metadatas"])
             if not data or not data.get("ids"):
+                # count()>0 却读不到内容：当作没建成，保留上一份好索引而不是换成空的
+                self.build_failed = True
+                self._corpus_count = -1
                 return
 
             ids_list = data["ids"]
@@ -218,6 +241,9 @@ class _BM25Index:
         except Exception as e:
             logger.warning("BM25 索引构建失败: %s", e)
             self.doc_ids = []
+            self.idf = {}
+            self._corpus_count = -1
+            self.build_failed = True
 
     def score(self, query_tokens: list[str], doc_type: str | None = None, top_k: int = None) -> list[tuple[str, float]]:
         """
@@ -254,6 +280,27 @@ class _BM25Index:
         # 排序取 top_k
         sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
         return sorted_scores[: top_k * 2]
+
+
+# ===================== BM25 索引的失效入口 =====================
+
+
+def _collection_count() -> int:
+    """当前语料条数；取不到返回 -1，让 `_BM25Index.get()` 沿用现有索引而不是重建/清空。"""
+    try:
+        return int(get_knowledge_collection().count())
+    except Exception as exc:
+        logger.warning("读取知识 collection 条数失败，BM25 沿用现有索引: %s", exc)
+        return -1
+
+
+def invalidate_bm25_index() -> None:
+    """知识变更后丢掉 BM25 索引，下次检索重建。
+
+    条数会变的增删 `get()` 自己能发现；这个入口是给"条数一样但内容变了"的路径用的
+    （重切片、整库重建后 chunk 数完全可能不变）。
+    """
+    _BM25Index._instance = None
 
 
 # ===================== 3) Query 改写召回 =====================
