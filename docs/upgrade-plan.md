@@ -400,6 +400,32 @@ agent.SummaryAgent           real  tokens=3215
 
 **这条要说白**：今天唯一的编排入口是"一键分析"，模型几乎必然返回 `full_analysis`，所以**裁剪这半段在真机上不会触发**——它的价值是把"计划"从装饰变成事实，未来加意图入口（只要优化/只要面试）时不必再改执行层。测试覆盖了触发路径（`optimize_only` 时计划里没有 Match/Interview，且 `task.plan` 与步骤日志逐一对齐）。
 
+#### 已交付：C5（半件）分层图换成真扇出；checkpointer / interrupt 明确不做（提交 `7d4e981`）
+
+**改之前的真相**：`_build_layered_graph` 给每层画一个节点，节点内部自己开 `ThreadPoolExecutor` —— 图是链、跑的是链，并行度全在 Python 里，LangGraph 只是把 for 循环换了个写法。计划里"`_wire_sequential_graph` 只画线性链"这句是对的，但根因不在连线，在于"并行被藏进节点体内"。
+
+**先量后改（langgraph 1.2.10 实测）**
+
+| 测的东西 | 结果 |
+|---|---|
+| 普通节点跑在哪个线程 | 与调用方**同一线程**（所以今天节点内直接写 `db` 是安全的） |
+| `Send` 分支跑在哪个线程 | **别的工作线程**；4 个各睡 0.5s 的分支总墙钟 0.51s、4 个不同线程 id ⇒ 扇出是真并发 |
+| 汇聚节点 | 回到调用方线程 |
+| 状态里的 `AgentContext`（带 SQLAlchemy Session）能否被 checkpoint 序列化 | **不能**：`TypeError: Type is not msgpack serializable: AgentContext`；去掉 session 也只是走"unregistered type"的 msgpack 兜底，langgraph 自己警告"未来版本会直接拦掉" |
+
+**做了什么**：每层变成 `route_i ──Send──▶ work_i ×N ──▶ join_i`。分工按线程归属来定——分支**只读**（自己开 session 跑 `run_node`，返回结果），所有落库集中在 `join_i`（调用方线程），这样 `record_node_outcome` / `_update_step_log` 永远只有一个线程在用同一个 Session。扇出通道用 `Annotated[list, operator.add]` + `Overwrite([])` 在每次汇聚后清空，否则上一级的结果会被下一级重复消费。linear **保持链状**：它本来就没有可并行的节点，不为了"看起来 agentic"加假分支。
+
+**测试怎么证明不是自欺**：不拿墙钟当证据（CI 上一抖就假阳/假阴）。每个分支把 `started/ended/thread` 写进自己的结果，断言 ①同层两节点线程 id 不同、②**时间区间真的重叠**、③层间仍然有序（MatchAgent 必须晚于第一层全部结束）、④行数严格等于节点数（分支若偷写库就会出现重复行）、⑤与原生分层实现给出同一批节点。
+
+**明确没做的两件（附证据，不是"忘了"）**
+
+1. **checkpointer**：前提是状态可序列化，而我们的 state 里装着 `AgentContext`（含活动 Session）。要上就得把图状态改成纯数据（`resume_parsed`/`match_result`… 平铺进 TypedDict），约 500 行节点函数与两份策略都要重写；且 `langgraph-checkpoint-sqlite` 不在依赖里，只有 `InMemorySaver` 的话**跨进程重启仍然不能续跑**——那样"启用 checkpointer"就只是句空话。
+2. **`interrupt` 人工介入**：依赖 checkpointer，被上一条卡住；而且我们的编排是**异步任务 + 前端轮询**，不是交互式会话，插进去等人点按钮需要一条"暂停-恢复"的产品路径（谁批、超时怎么办、恢复时 Session 怎么重建），这是产品设计不是清理。
+
+**顺带**：`strategy._run_level()` 现在只服务原生分层实现，langgraph 侧不再需要它；`LayeredGraphState` 补了 `branch/log_ids/level` 三个字段，线程归属写进了模块 docstring，免得下次有人以为在节点里写库是安全的。
+
+
+
 
 
 
