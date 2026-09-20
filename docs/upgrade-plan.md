@@ -361,6 +361,30 @@ C1 记录里那条"嵌入式 Chroma 索引损坏"已经查明并修好，根因�
 
 **`SelfCheckLog` 故意仍然没有写端**（测试把这条决定钉住）。唯一现成的"自检"是 `SummaryAgent` 报告里的 `quality_assurance.self_check_score`——那是模型给自己的输出打分：没有核验方，也没有通过线。把这种分数写进 `self_check_log.passed` 等于给意见盖上测量的章，跟 A3 刚清掉的六处同类是一回事。要做独立校验，得先定"谁验、验什么、过线是多少"，那是产品决策不是清理。
 
+#### 已交付：C6 工具调用路径进入审计链（提交 `fdd9c4e`）
+
+计划原话有两条已经不成立，实测后各归各位：
+
+- "**线性策略最关键一步完全不计费**" → 用量在 A 阶段就修好了（`llm_service.py:1117` 有 `_record_usage`）。真正缺的是**取证与指标**：`chat_with_tools` 一行 `prompt_trace` 都不写，也没有 `record_llm_request/error/degraded`——所以 `MatchAnalysisAgent` 在审计里等于没发生过。
+- "`:1084` 是一句被丢弃的表达式" → 那已经是修好的注释，不是待办。
+
+做法：把 `chat_json` 里那个 60 行的 `persist_trace` 闭包提成 `LLMTraceScope`（begin / persist / record_metrics / record_failure），两条调用路径共用一份。这一步顺带消掉一个复发性结构问题——同一段落盘逻辑写两份，早晚会出现"只有一份带这个参数"（C1 的 `retry_call.on_retry` 就是这么坏掉的）。
+
+工具路径现在每次调用留一行，带 `tool_rounds` / `tools_used` / `tools_offered` / `max_tool_rounds`；四种出口各有归属：模型作答=`real`、轮次耗尽兜底=**`tool_output` 且 degraded**（延续 A1 的口径：不冒充模型分析）、provider 报错=`failed`、空内容=`failed`。**缓存仍不加**：工具循环有状态，这是原设计注释里写明的取舍，不是遗漏。
+
+真机对照（task 95，五个调模型的节点全部有取证行）：
+
+```
+agent.IntentAgent            real  tokens= 608
+agent.MatchAnalysisAgent     real  tokens= 730   rounds=1 tools=[]   ← 以前完全没有这一行
+agent.ResumeOptimizeAgent    real  tokens=1772
+agent.InterviewQuestionAgent real  tokens=2097
+agent.SummaryAgent           real  tokens=3215
+```
+
+同一任务的取证行：`resume_template` 1、`skill_model` 3、`interview_q` 2、`skill_model` 3——检索取证与节点账对得上。`ResumeParseAgent`/`JDParseAgent` 是 0 token 且**不该**有 trace 行：它们是规则解析，不挂 AI 名头（A3 口径）。
+
+
 
 
 ---
