@@ -14,6 +14,7 @@ import time
 from collections import OrderedDict
 from collections.abc import Callable
 from contextvars import ContextVar
+from dataclasses import dataclass, field
 from typing import Any
 
 import requests
@@ -123,6 +124,175 @@ def get_llm_provenance() -> dict[str, Any]:
 
 def reset_llm_provenance() -> None:
     _LLM_PROVENANCE_CONTEXT.set(None)
+
+
+@dataclass
+class LLMTraceScope:
+    """一次 LLM 调用的审计落盘：成功、失败、降级都写同一份 prompt_trace。
+
+    `chat_json` 曾经自带这段逻辑（一个 60 行闭包），`chat_with_tools` 一行都没有——
+    工具调用节点的输入输出因此完全不在取证链里。两份调用现在共用这个 scope，
+    免得又一个"只有一份带这个参数"的 bug。
+    """
+
+    prompt: str
+    provider: str
+    writer: str
+    started_at: float
+    usage_before: dict[str, float]
+    context: dict[str, Any]
+    source: str
+    prompt_version: str
+    prompt_name: str | None
+    prompt_family: str | None
+    prompt_metadata: dict[str, Any]
+    request_id: str | None
+    trace_enabled: bool
+    db: Any = None
+    user_id: int | None = None
+    resume_id: int | None = None
+    jd_id: int | None = None
+    task_id: int | None = None
+    analysis_record_id: int | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def begin(cls, *, prompt: str, provider: str, writer: str) -> "LLMTraceScope":
+        """消费当前 trace 上下文并记下调用前的用量（用量差值即本次调用花费）。"""
+        context = _consume_llm_trace_context()
+        prompt_metadata = dict(context.get("prompt_metadata") or {})
+        reserved = {
+            "source",
+            "prompt_version",
+            "prompt_name",
+            "prompt_family",
+            "request_id",
+            "trace_enabled",
+            "db",
+            "user_id",
+            "resume_id",
+            "jd_id",
+            "task_id",
+            "analysis_record_id",
+            "prompt_metadata",
+        }
+        return cls(
+            prompt=prompt,
+            provider=provider,
+            writer=writer,
+            started_at=time.time(),
+            usage_before=get_llm_usage(),
+            context=context,
+            source=context.get("source") or writer,
+            prompt_version=prompt_metadata.get("prompt_version") or context.get("prompt_version") or "unknown",
+            prompt_name=prompt_metadata.get("prompt_name") or context.get("prompt_name"),
+            prompt_family=prompt_metadata.get("prompt_family") or context.get("prompt_family"),
+            prompt_metadata=prompt_metadata,
+            request_id=context.get("request_id") or get_request_id(),
+            trace_enabled=bool(context.get("trace_enabled", True)),
+            db=context.get("db"),
+            user_id=context.get("user_id"),
+            resume_id=context.get("resume_id"),
+            jd_id=context.get("jd_id"),
+            task_id=context.get("task_id"),
+            analysis_record_id=context.get("analysis_record_id"),
+            extra={key: value for key, value in context.items() if key not in reserved},
+        )
+
+    def call_usage(self) -> dict[str, float]:
+        after = get_llm_usage()
+        return {
+            key: max(0.0, float(after.get(key, 0.0)) - float(self.usage_before.get(key, 0.0)))
+            for key in ("prompt_tokens", "completion_tokens", "total_tokens", "cost_cents")
+        }
+
+    def persist(
+        self,
+        *,
+        status: str,
+        response_text: str | None = None,
+        response_json: dict[str, Any] | None = None,
+        error_message: str | None = None,
+        provenance: dict[str, Any] | None = None,
+        cache_hit: bool = False,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        """写取证行；失败只报警不改变调用结果。"""
+        if not self.trace_enabled:
+            return
+        provenance = provenance or _provenance("unknown", cache_hit=cache_hit)
+        usage = self.call_usage()
+        try:
+            from app.services.prompt_trace_service import build_trace_context, record_prompt_trace
+
+            record_prompt_trace(
+                prompt=self.prompt,
+                response_text=response_text,
+                response_json=response_json,
+                provider=self.provider,
+                model=settings.LLM_MODEL,
+                response_source=str(provenance.get("source") or "unknown"),
+                degraded=bool(provenance.get("degraded")),
+                prompt_version=self.prompt_version,
+                source=self.source,
+                prompt_name=self.prompt_name,
+                prompt_family=self.prompt_family,
+                status=status,
+                cache_hit=cache_hit or bool(provenance.get("cache_hit")),
+                duration_ms=int((time.time() - self.started_at) * 1000),
+                prompt_tokens=int(usage["prompt_tokens"]),
+                completion_tokens=int(usage["completion_tokens"]),
+                total_tokens=int(usage["total_tokens"]),
+                cost_cents=usage["cost_cents"],
+                error_message=error_message[:2000] if error_message else None,
+                user_id=self.user_id,
+                resume_id=self.resume_id,
+                jd_id=self.jd_id,
+                task_id=self.task_id,
+                analysis_record_id=self.analysis_record_id,
+                trace_context=build_trace_context(
+                    source=self.source,
+                    prompt_name=self.prompt_name,
+                    prompt_family=self.prompt_family,
+                    request_id=self.request_id,
+                    user_id=self.user_id,
+                    resume_id=self.resume_id,
+                    jd_id=self.jd_id,
+                    task_id=self.task_id,
+                    analysis_record_id=self.analysis_record_id,
+                    extra={**self.extra, **(extra or {})},
+                ),
+                prompt_metadata=self.prompt_metadata,
+                db=self.db,
+            )
+        except Exception:
+            # A trace row that silently fails to write turns "queryable
+            # internally" into a fiction. Count it so the alerting layer can
+            # report when the audit trail itself is unreliable.
+            record_prompt_trace_write_failure(self.writer)
+            logger.exception("failed to persist prompt trace; audit trail is incomplete for this call")
+
+    def record_metrics(self, *, degraded: bool, provenance: dict[str, Any] | None = None) -> None:
+        duration_seconds = time.time() - self.started_at
+        record_llm_request(provider=self.provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
+        if degraded:
+            record_llm_degraded_response(
+                provider=self.provider,
+                model=settings.LLM_MODEL,
+                response_source=str((provenance or {}).get("source") or "unknown"),
+            )
+            logger.warning(
+                "LLM degraded response provider=%s source=%s reason=%s",
+                self.provider,
+                (provenance or {}).get("source"),
+                str((provenance or {}).get("reason") or "")[-200:],
+            )
+
+    def record_failure(self, *, error_type: str, error: BaseException, provenance: dict[str, Any] | None = None):
+        duration_seconds = time.time() - self.started_at
+        record_llm_error(provider=self.provider, model=settings.LLM_MODEL, error_type=error_type)
+        record_llm_request(provider=self.provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
+        self.persist(status="failed", error_message=str(error), provenance=provenance)
 
 
 def _cache_key(provider: str, prompt: str) -> str:
@@ -795,9 +965,7 @@ def _simplify_prompt(prompt: str) -> str:
     )
 
 
-def _call_with_fallbacks(
-    primary_call: Callable[[str, str | None], str], prompt: str
-) -> tuple[str, dict[str, Any]]:
+def _call_with_fallbacks(primary_call: Callable[[str, str | None], str], prompt: str) -> tuple[str, dict[str, Any]]:
     """LLM fallback chain: primary model -> fallback model -> simplified prompt -> mock (dev only).
 
     Returns (raw_text, provenance). Provenance reports which link in the chain
@@ -859,109 +1027,8 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
     - 返回内容非合法 JSON → 尝试提取，仍失败抛 ValueError
     """
     provider = (settings.LLM_PROVIDER or "mock").lower()
-    trace_context = _consume_llm_trace_context()
-    prompt_metadata = dict(trace_context.get("prompt_metadata") or {})
-    prompt_version = prompt_metadata.get("prompt_version") or trace_context.get("prompt_version") or "unknown"
-    prompt_name = prompt_metadata.get("prompt_name") or trace_context.get("prompt_name")
-    prompt_family = prompt_metadata.get("prompt_family") or trace_context.get("prompt_family")
-    source = trace_context.get("source") or "llm_service.chat_json"
-    request_id = trace_context.get("request_id") or get_request_id()
-    trace_enabled = bool(trace_context.get("trace_enabled", True))
-    trace_db = trace_context.get("db")
-    trace_user_id = trace_context.get("user_id")
-    trace_resume_id = trace_context.get("resume_id")
-    trace_jd_id = trace_context.get("jd_id")
-    trace_task_id = trace_context.get("task_id")
-    trace_analysis_record_id = trace_context.get("analysis_record_id")
-    trace_extra = {
-        key: value
-        for key, value in trace_context.items()
-        if key
-        not in {
-            "source",
-            "prompt_version",
-            "prompt_name",
-            "prompt_family",
-            "request_id",
-            "trace_enabled",
-            "db",
-            "user_id",
-            "resume_id",
-            "jd_id",
-            "task_id",
-            "analysis_record_id",
-            "prompt_metadata",
-        }
-    }
-    usage_before = get_llm_usage()
-
-    def persist_trace(
-        *,
-        status: str,
-        response_text: str | None = None,
-        response_json: dict[str, Any] | None = None,
-        error_message: str | None = None,
-        provenance: dict[str, Any] | None = None,
-        cache_hit: bool = False,
-    ) -> None:
-        """Persist success and failure traces without affecting the LLM request result."""
-        if not trace_enabled:
-            return
-        provenance = provenance or _provenance("unknown", cache_hit=cache_hit)
-        usage_after = get_llm_usage()
-        call_usage = {
-            key: max(0.0, float(usage_after.get(key, 0.0)) - float(usage_before.get(key, 0.0)))
-            for key in ("prompt_tokens", "completion_tokens", "total_tokens", "cost_cents")
-        }
-        try:
-            from app.services.prompt_trace_service import build_trace_context, record_prompt_trace
-
-            record_prompt_trace(
-                prompt=prompt,
-                response_text=response_text,
-                response_json=response_json,
-                provider=provider,
-                model=settings.LLM_MODEL,
-                response_source=str(provenance.get("source") or "unknown"),
-                degraded=bool(provenance.get("degraded")),
-                prompt_version=prompt_version,
-                source=source,
-                prompt_name=prompt_name,
-                prompt_family=prompt_family,
-                status=status,
-                cache_hit=cache_hit or bool(provenance.get("cache_hit")),
-                duration_ms=int((time.time() - start_ts) * 1000),
-                prompt_tokens=int(call_usage["prompt_tokens"]),
-                completion_tokens=int(call_usage["completion_tokens"]),
-                total_tokens=int(call_usage["total_tokens"]),
-                cost_cents=call_usage["cost_cents"],
-                error_message=error_message[:2000] if error_message else None,
-                user_id=trace_user_id,
-                resume_id=trace_resume_id,
-                jd_id=trace_jd_id,
-                task_id=trace_task_id,
-                analysis_record_id=trace_analysis_record_id,
-                trace_context=build_trace_context(
-                    source=source,
-                    prompt_name=prompt_name,
-                    prompt_family=prompt_family,
-                    request_id=request_id,
-                    user_id=trace_user_id,
-                    resume_id=trace_resume_id,
-                    jd_id=trace_jd_id,
-                    task_id=trace_task_id,
-                    analysis_record_id=trace_analysis_record_id,
-                    extra=trace_extra,
-                ),
-                prompt_metadata=prompt_metadata,
-                db=trace_db,
-            )
-        except Exception:
-            # A trace row that silently fails to write turns "queryable
-            # internally" into a fiction. Count it so the alerting layer can
-            # report when the audit trail itself is unreliable.
-            record_prompt_trace_write_failure("chat_json")
-            logger.exception("failed to persist prompt trace; audit trail is incomplete for this call")
+    scope = LLMTraceScope.begin(prompt=prompt, provider=provider, writer="chat_json")
+    persist_trace = scope.persist
 
     # ---- 0) 查缓存（命中则返回深拷贝，避免调用方改动污染缓存）----
     # 只有 source=real 的结果会被写入，所以命中必然等价于一次真实应答。
@@ -976,7 +1043,6 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
             set_llm_provenance(_provenance("real", cache_hit=True))
             return _validate_schema(copy.deepcopy(cached["result"]), schema)
 
-    start_ts = time.time()
     # Seed before calling so an exception path cannot leave the previous
     # call's provenance behind in the context.
     provenance = _provenance("unknown")
@@ -1006,38 +1072,17 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
             raise ValueError(f"unknown LLM_PROVIDER: {provider}")
         set_llm_provenance(provenance)
     except LLMProviderError as e:
-        error_type = type(e).__name__
-        duration_seconds = time.time() - start_ts
-        record_llm_error(provider=provider, model=settings.LLM_MODEL, error_type=error_type)
-        record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
-        persist_trace(status="failed", error_message=str(e), provenance=provenance)
+        scope.record_failure(error_type=type(e).__name__, error=e, provenance=provenance)
         raise  # 直接向上冒泡，保留类型化异常
     except RuntimeError as e:
-        duration_seconds = time.time() - start_ts
-        record_llm_error(provider=provider, model=settings.LLM_MODEL, error_type="RuntimeError")
-        record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
-        persist_trace(status="failed", error_message=str(e), provenance=provenance)
+        scope.record_failure(error_type="RuntimeError", error=e, provenance=provenance)
         raise LLMProviderError(f"AI 调用失败: {str(e)}") from e
     except Exception as e:
-        duration_seconds = time.time() - start_ts
-        record_llm_error(provider=provider, model=settings.LLM_MODEL, error_type=type(e).__name__)
-        record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
-        persist_trace(status="failed", error_message=str(e), provenance=provenance)
+        scope.record_failure(error_type=type(e).__name__, error=e, provenance=provenance)
         raise LLMProviderError(f"AI 调用异常: {str(e)}") from e
 
     # 成功时记录指标
-    duration_seconds = time.time() - start_ts
-    record_llm_request(provider=provider, model=settings.LLM_MODEL, duration_seconds=duration_seconds)
-    if provenance["degraded"]:
-        record_llm_degraded_response(
-            provider=provider, model=settings.LLM_MODEL, response_source=provenance["source"]
-        )
-        logger.warning(
-            "LLM degraded response provider=%s source=%s reason=%s",
-            provider,
-            provenance["source"],
-            (provenance.get("reason") or "")[-200:],
-        )
+    scope.record_metrics(degraded=bool(provenance["degraded"]), provenance=provenance)
 
     # ---- 2) 将 AI 返回文本解析为 JSON ----
     try:
@@ -1205,9 +1250,28 @@ def chat_with_tools(
         {"role": "user", "content": prompt},
     ]
 
+    # 工具路径过去一行取证都不写：唯一调用它的 MatchAnalysisAgent（线性策略最关键
+    # 一步）的输入输出因此完全不在审计链里。用量在 A 阶段已经记上了，缺的是这条。
+    scope = LLMTraceScope.begin(prompt=prompt, provider=provider, writer="chat_with_tools")
+    tools_used: set[str] = set()
+    provenance = _provenance("unknown")
+    set_llm_provenance(provenance)
+
+    def _trace_extra(round_index: int) -> dict[str, Any]:
+        return {
+            "tool_rounds": round_index,
+            "tools_used": sorted(tools_used),
+            "tools_offered": sorted(tool_map) or None,
+            "max_tool_rounds": max_tool_rounds,
+        }
+
     # ---- 主循环：工具调用 ↔ LLM 推理 ----
     for _round in range(max_tool_rounds):
-        response = _openai_compatible_chat_with_tools(messages, tools=tool_defs)
+        try:
+            response = _openai_compatible_chat_with_tools(messages, tools=tool_defs)
+        except Exception as exc:
+            scope.record_failure(error_type=type(exc).__name__, error=exc, provenance=provenance)
+            raise
         choice = response["choices"][0]
         msg = choice["message"]
 
@@ -1215,10 +1279,22 @@ def chat_with_tools(
         if not msg.get("tool_calls"):
             content = msg.get("content", "")
             if content and content.strip():
-                set_llm_provenance(_provenance("real", reason=f"含 {_round + 1} 轮工具调用后的模型应答"))
-                return extract_json(content)
+                provenance = _provenance("real", reason=f"含 {_round + 1} 轮工具调用后的模型应答")
+                set_llm_provenance(provenance)
+                result = extract_json(content)
+                scope.record_metrics(degraded=False, provenance=provenance)
+                scope.persist(
+                    status="success",
+                    response_text=content,
+                    response_json=result,
+                    provenance=provenance,
+                    extra=_trace_extra(_round + 1),
+                )
+                return result
             # content 为空但也没 tool_calls → 异常
-            raise ValueError(f"LLM 返回空内容且无工具调用 (finish_reason={choice.get('finish_reason')})")
+            error = ValueError(f"LLM 返回空内容且无工具调用 (finish_reason={choice.get('finish_reason')})")
+            scope.record_failure(error_type="ValueError", error=error, provenance=provenance)
+            raise error
 
         # 情况 B: LLM 请求调用工具
         assistant_msg = {"role": "assistant", "content": msg.get("content")}
@@ -1228,6 +1304,7 @@ def chat_with_tools(
 
         for tc in msg["tool_calls"]:
             fn_name = tc["function"]["name"]
+            tools_used.add(fn_name)
             try:
                 fn_args = json.loads(tc["function"]["arguments"])
             except json.JSONDecodeError:
@@ -1271,13 +1348,24 @@ def chat_with_tools(
     if isinstance(last_content, str) and last_content.strip():
         try:
             result = extract_json(last_content)
-            set_llm_provenance(
-                _provenance(
-                    "tool_output",
-                    reason=f"模型在 {max_tool_rounds} 轮工具调用内未给出最终答复，此处返回的是工具输出而非模型分析",
-                )
+        except ValueError:
+            result = None
+        if result is not None:
+            provenance = _provenance(
+                "tool_output",
+                reason=f"模型在 {max_tool_rounds} 轮工具调用内未给出最终答复，此处返回的是工具输出而非模型分析",
+            )
+            set_llm_provenance(provenance)
+            scope.record_metrics(degraded=True, provenance=provenance)
+            scope.persist(
+                status="success",
+                response_text=last_content,
+                response_json=result,
+                provenance=provenance,
+                extra=_trace_extra(max_tool_rounds),
             )
             return result
-        except ValueError:
-            pass
-    raise RuntimeError(f"工具调用超过 {max_tool_rounds} 轮仍未返回有效 JSON，请简化任务或重试")
+
+    error = RuntimeError(f"工具调用超过 {max_tool_rounds} 轮仍未返回有效 JSON，请简化任务或重试")
+    scope.record_failure(error_type="RuntimeError", error=error, provenance=provenance)
+    raise error
