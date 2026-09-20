@@ -1,6 +1,16 @@
-"""Unified agent registry shared by all orchestration strategies."""
+"""Unified agent registry shared by all orchestration strategies.
 
+这里不再有"别名"：曾经 `ResumeAgent` 别名挂着 `ResumeParseAgent`、`JobAgent` 挂着
+`JDParseAgent`，可它们根本不是同一件事——前者是调模型出的诊断报告，后者是纯规则解析
+（0 token）。别名让两个不同职责的类看起来可以互换，而按别名解析出来的对象会带着自己
+的 `name` 落库，步骤日志与节点消息就会对不上。两条流水线各自用自己的名字，别名的唯一
+作用是埋雷。
+"""
+
+import logging
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -10,29 +20,24 @@ class AgentSpec:
     name: str
     agent_class: type
     critical: bool = True
-    aliases: list[str] = field(default_factory=list)
     strategies: list[str] = field(default_factory=list)
 
 
 class UnifiedRegistry:
-    """Primary-name registry with a separate alias index."""
+    """Primary-name registry; an unknown name is an error, not a guess."""
 
     def __init__(self):
         self._agents: dict[str, AgentSpec] = {}
-        self._aliases: dict[str, AgentSpec] = {}
 
     def register(self, spec: AgentSpec) -> "UnifiedRegistry":
         self._agents[spec.name] = spec
-        for alias in spec.aliases:
-            self._aliases[alias] = spec
         return self
 
     def get(self, name: str) -> AgentSpec:
-        if name in self._agents:
-            return self._agents[name]
-        if name in self._aliases:
-            return self._aliases[name]
-        raise KeyError(f"Agent '{name}' is not registered")
+        spec = self._agents.get(name)
+        if spec is None:
+            raise KeyError(f"Agent '{name}' is not registered; known: {sorted(self._agents)}")
+        return spec
 
     def get_class(self, name: str) -> type:
         return self.get(name).agent_class
@@ -48,11 +53,7 @@ class UnifiedRegistry:
         return result
 
     def filter_by_strategy(self, strategy: str) -> list[AgentSpec]:
-        result = []
-        for spec in self._agents.values():
-            if strategy in spec.strategies:
-                result.append(spec)
-        return result
+        return [spec for spec in self._agents.values() if strategy in spec.strategies]
 
 
 DEFAULT_REGISTRY = UnifiedRegistry()
@@ -70,23 +71,21 @@ def _build_default_registry() -> UnifiedRegistry:
     from app.agents.resume_parse_agent import ResumeParseAgent
     from app.agents.summary_agent import SummaryAgent
 
-    linear_strategies = ["linear", "langgraph_linear"]
-    reg.register(AgentSpec("IntentAgent", IntentAgent, critical=True, strategies=linear_strategies))
-    reg.register(AgentSpec("ResumeParseAgent", ResumeParseAgent, critical=True, strategies=linear_strategies))
-    reg.register(AgentSpec("JDParseAgent", JDParseAgent, critical=True, strategies=linear_strategies))
-    reg.register(AgentSpec("MatchAnalysisAgent", MatchAnalysisAgent, critical=True, strategies=linear_strategies))
-    reg.register(AgentSpec("ResumeOptimizeAgent", ResumeOptimizeAgent, critical=True, strategies=linear_strategies))
-    reg.register(
-        AgentSpec("InterviewQuestionAgent", InterviewQuestionAgent, critical=True, strategies=linear_strategies)
-    )
-    reg.register(
-        AgentSpec(
-            "SummaryAgent",
-            SummaryAgent,
-            critical=True,
-            strategies=[*linear_strategies, "layered", "langgraph_layered"],
-        )
-    )
+    linear = ["linear", "langgraph_linear"]
+    layered = ["layered", "langgraph_layered"]
+
+    for name, cls in (
+        ("IntentAgent", IntentAgent),
+        ("ResumeParseAgent", ResumeParseAgent),
+        ("JDParseAgent", JDParseAgent),
+        ("MatchAnalysisAgent", MatchAnalysisAgent),
+        ("ResumeOptimizeAgent", ResumeOptimizeAgent),
+        ("InterviewQuestionAgent", InterviewQuestionAgent),
+    ):
+        reg.register(AgentSpec(name, cls, strategies=linear))
+
+    # 汇总节点两条流水线都用
+    reg.register(AgentSpec("SummaryAgent", SummaryAgent, strategies=[*linear, *layered]))
 
     from app.agents.career_agent import CareerAgent
     from app.agents.interview_agent import InterviewAgent
@@ -94,43 +93,14 @@ def _build_default_registry() -> UnifiedRegistry:
     from app.agents.match_agent import MatchAgent
     from app.agents.resume_agent import ResumeAgent
 
-    reg.register(
-        AgentSpec(
-            "ResumeAgent",
-            ResumeAgent,
-            critical=True,
-            aliases=["ResumeParseAgent"],
-            strategies=["layered", "langgraph_layered"],
-        )
-    )
-    reg.register(
-        AgentSpec(
-            "JobAgent",
-            JobAgent,
-            critical=True,
-            aliases=["JDParseAgent"],
-            strategies=["layered", "langgraph_layered"],
-        )
-    )
-    reg.register(
-        AgentSpec(
-            "MatchAgent",
-            MatchAgent,
-            critical=True,
-            aliases=["MatchAnalysisAgent"],
-            strategies=["layered", "langgraph_layered"],
-        )
-    )
-    reg.register(
-        AgentSpec(
-            "InterviewAgent",
-            InterviewAgent,
-            critical=True,
-            aliases=["InterviewQuestionAgent"],
-            strategies=["layered", "langgraph_layered"],
-        )
-    )
-    reg.register(AgentSpec("CareerAgent", CareerAgent, critical=True, strategies=["layered", "langgraph_layered"]))
+    for name, cls in (
+        ("ResumeAgent", ResumeAgent),
+        ("JobAgent", JobAgent),
+        ("MatchAgent", MatchAgent),
+        ("InterviewAgent", InterviewAgent),
+        ("CareerAgent", CareerAgent),
+    ):
+        reg.register(AgentSpec(name, cls, strategies=layered))
 
     return reg
 
@@ -138,4 +108,7 @@ def _build_default_registry() -> UnifiedRegistry:
 try:
     DEFAULT_REGISTRY = _build_default_registry()
 except Exception:
+    # 注册表建不起来时给一个空表，等于让每次编排都以"Agent 未注册"失败，
+    # 而真正的 import 错误被吞在这里 —— 至少要留在日志里。
+    logger.exception("默认 Agent 注册表构建失败，编排将以未注册报错")
     DEFAULT_REGISTRY = UnifiedRegistry()

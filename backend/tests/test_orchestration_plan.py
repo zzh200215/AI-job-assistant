@@ -223,3 +223,26 @@ def test_prompt_vocabulary_no_longer_names_deleted_steps():
     """提示词不能再教模型点名 C4 删掉的步骤。"""
     forbidden = ("task_planning", "knowledge_retrieval", "self_check", "final_report", "matching_analysis")
     assert not [name for name in forbidden if name in AGENT_INTENT_PROMPT]
+
+
+# ===================== C7：注册表不许再把不同职责的类当成同一个 =====================
+
+
+def test_registry_has_no_cross_pipeline_aliases():
+    """`ResumeAgent`(调模型的诊断报告) 与 `ResumeParseAgent`(纯规则解析，0 token)
+    不是同一件事；曾经注册表用别名把它们缝在一起，按别名解析出来的对象会带着自己的
+    name 落库，步骤日志与节点消息就对不上了。"""
+    from app.agents.resume_agent import ResumeAgent
+    from app.agents.resume_parse_agent import ResumeParseAgent
+    from app.orchestration.registry import DEFAULT_REGISTRY
+
+    assert DEFAULT_REGISTRY.get("ResumeParseAgent").agent_class is ResumeParseAgent
+    assert DEFAULT_REGISTRY.get("ResumeAgent").agent_class is ResumeAgent
+    assert not hasattr(DEFAULT_REGISTRY, "_aliases")
+
+
+def test_unknown_agent_fails_loudly_with_the_known_list():
+    from app.orchestration.registry import DEFAULT_REGISTRY
+
+    with pytest.raises(KeyError, match="not registered"):
+        DEFAULT_REGISTRY.get("ResumeParse")
