@@ -191,13 +191,20 @@ function formatDuration(ms) {
 }
 
 function statusType(s) {
-  const map = { completed: 'success', failed: 'danger', running: 'primary', pending: 'info' }
+  const map = {
+    completed: 'success',
+    partial: 'warning',
+    failed: 'danger',
+    running: 'primary',
+    pending: 'info',
+  }
   return map[s] || 'info'
 }
 
 function statusLabel(s) {
   const map = {
     completed: '已完成',
+    partial: '部分完成',
     failed: '失败',
     running: '运行中',
     pending: '等待中',

@@ -246,3 +246,70 @@ def test_unknown_agent_fails_loudly_with_the_known_list():
 
     with pytest.raises(KeyError, match="not registered"):
         DEFAULT_REGISTRY.get("ResumeParse")
+
+
+# ===================== C7：哪些节点失败该拖垮整单 =====================
+
+
+def test_optimize_and_interview_are_not_critical_but_matching_is():
+    """生产里 `is_critical` 曾经恒为 True ⇒ 任务中心的 `partial` 永远不可能出现。
+
+    真机上出过一次：优化节点挂掉，匹配分析已经完成的结果被一起判废。
+    """
+    from app.orchestration.registry import DEFAULT_REGISTRY
+
+    assert DEFAULT_REGISTRY.is_critical("IntentAgent") is True
+    assert DEFAULT_REGISTRY.is_critical("MatchAnalysisAgent") is True
+    assert DEFAULT_REGISTRY.is_critical("ResumeOptimizeAgent") is False
+    assert DEFAULT_REGISTRY.is_critical("InterviewQuestionAgent") is False
+
+
+@pytest.mark.parametrize("strategy_name", ["linear", "langgraph_linear"])
+def test_a_non_critical_failure_leaves_a_partial_task(strategy_name, db_session, make_resume, make_jd, monkeypatch):
+    """非关键节点失败后：后面的节点继续跑，任务落在 partial，已完成的结果仍入库。"""
+    from app.models.history import AnalysisRecord
+    from app.orchestration.registry import AgentSpec, UnifiedRegistry
+    from app.orchestration.strategies import StrategyFactory
+
+    class _Ok(BaseAgent):
+        result_type = "ok"
+
+        def run_impl(self, context: AgentContext) -> dict[str, Any]:
+            return {"ok": True}
+
+    class _Broken(BaseAgent):
+        name = "ResumeOptimizeAgent"
+        result_type = "optimize_suggestions"
+
+        def run_impl(self, context: AgentContext) -> dict[str, Any]:
+            raise RuntimeError("优化节点挂了")
+
+    reg = UnifiedRegistry()
+    for name in LinearStrategy.AGENT_ORDER:
+        cls = _Broken if name == "ResumeOptimizeAgent" else type(f"M{name}", (_Ok,), {"name": name})
+        reg.register(
+            AgentSpec(
+                name,
+                cls,
+                critical=name not in ("ResumeOptimizeAgent", "InterviewQuestionAgent"),
+                strategies=["linear", "langgraph_linear"],
+            )
+        )
+
+    resume_id, jd_id = make_resume(), make_jd()
+    task = AgentTask(user_id=1, resume_id=resume_id, jd_id=jd_id, status="pending")
+    db_session.add(task)
+    db_session.commit()
+    monkeypatch.setattr("app.orchestration.strategies.canonical_match_score", lambda *a, **k: {"score": 72.4})
+
+    result = StrategyFactory.create(strategy_name, reg).run(task.id, resume_id, jd_id, 1, db_session)
+
+    db_session.refresh(task)
+    assert result["status"] == "partial"
+    assert task.status == "partial"
+    assert task.analysis_record_id is not None, "已完成的部分必须留得住"
+    record = db_session.get(AnalysisRecord, task.analysis_record_id)
+    assert record.match_score == 72
+    statuses = {row["agent_name"]: row["status"] for row in result["steps"]}
+    assert statuses["ResumeOptimizeAgent"] == "failed"
+    assert statuses["SummaryAgent"] == "success", "非关键失败不该截断后续节点"

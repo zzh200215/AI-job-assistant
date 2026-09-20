@@ -74,15 +74,17 @@ def _build_default_registry() -> UnifiedRegistry:
     linear = ["linear", "langgraph_linear"]
     layered = ["layered", "langgraph_layered"]
 
-    for name, cls in (
-        ("IntentAgent", IntentAgent),
-        ("ResumeParseAgent", ResumeParseAgent),
-        ("JDParseAgent", JDParseAgent),
-        ("MatchAnalysisAgent", MatchAnalysisAgent),
-        ("ResumeOptimizeAgent", ResumeOptimizeAgent),
-        ("InterviewQuestionAgent", InterviewQuestionAgent),
+    for name, cls, critical in (
+        ("IntentAgent", IntentAgent, True),
+        ("ResumeParseAgent", ResumeParseAgent, True),
+        ("JDParseAgent", JDParseAgent, True),
+        ("MatchAnalysisAgent", MatchAnalysisAgent, True),
+        # 这两步失败不该把整单判死：匹配分析已经完成的结果要留给候选人。
+        # 真机上发生过一次——优化节点挂掉，整单 failed，已完成的匹配结果作废。
+        ("ResumeOptimizeAgent", ResumeOptimizeAgent, False),
+        ("InterviewQuestionAgent", InterviewQuestionAgent, False),
     ):
-        reg.register(AgentSpec(name, cls, strategies=linear))
+        reg.register(AgentSpec(name, cls, critical=critical, strategies=linear))
 
     # 汇总节点两条流水线都用
     reg.register(AgentSpec("SummaryAgent", SummaryAgent, strategies=[*linear, *layered]))

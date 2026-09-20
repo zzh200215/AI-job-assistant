@@ -27,10 +27,12 @@ from app.agents.base_agent import BaseAgent, NodeOutcome, record_node_outcome
 from app.core.database import SessionLocal
 from app.models.agent import AgentStepLog, AgentTask
 from app.models.agent_run import AgentRun
-from app.models.history import AnalysisRecord
+from app.models.history import AnalysisRecord, JobDescription, Resume
 from app.orchestration.context import AgentContext
 from app.orchestration.plan import as_plan_rows, plan_from_intent
 from app.orchestration.registry import DEFAULT_REGISTRY, UnifiedRegistry
+from app.services.match_score_service import canonical_match_score
+from app.services.scoring_config import SCORE_METHOD
 from app.utils.time_helper import utc_now
 
 logger = logging.getLogger(__name__)
@@ -238,16 +240,41 @@ class ExecutionStrategy(ABC):
         user_id: int,
         context: AgentContext,
     ) -> int:
-        """将编排结果写入 AnalysisRecord，返回 record_id"""
-        match_result = context.match_result or {}
+        """将编排结果写入 AnalysisRecord，返回 record_id。
+
+        匹配分只认 A4 定的那一个权威：模型在报告里自报的分数**不再直接落库**。
+        之前默认路径写的就是模型自报数（85 就是 85），而 `match_score_service`
+        那套评分规则只在推荐/解释页生效，等于同一份简历+JD 有两个"匹配分"。
+        模型自报数仍然保留在 match_report 里作为对照证据。
+        """
+        match_result = dict(context.match_result or {})
         optimize_result = context.optimize_result or {}
         interview_result = context.interview_result or {}
+        model_reported = match_result.get("match_score")
+
+        resume = db.get(Resume, resume_id)
+        jd = db.get(JobDescription, jd_id)
+        score = 0
+        if resume is not None and jd is not None:
+            try:
+                canonical = canonical_match_score(db, resume, jd, user_id=user_id)
+                score = int(round(float(canonical.get("score", 0.0))))
+                match_result["score_method"] = canonical.get("method") or SCORE_METHOD
+                match_result["cap_applied"] = bool(canonical.get("cap_applied"))
+                match_result["skill_gap"] = canonical.get("skill_gap") or []
+            except Exception as exc:
+                logger.warning("canonical match score unavailable for resume=%s jd=%s: %s", resume_id, jd_id, exc)
+                match_result["score_unavailable_reason"] = str(exc)[:200]
+        else:
+            match_result["score_unavailable_reason"] = "简历或 JD 已不可见，无法按权威算法重算"
+
+        match_result["model_reported_score"] = model_reported
 
         record = AnalysisRecord(
             user_id=user_id,
             resume_id=resume_id,
             jd_id=jd_id,
-            match_score=int(match_result.get("match_score", 0)),
+            match_score=score,
             match_report=match_result,
             optimize_suggestions=optimize_result,
             interview_questions=interview_result,

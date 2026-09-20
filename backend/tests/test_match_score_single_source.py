@@ -13,12 +13,12 @@ from app.models.history import JobDescription, Resume
 from app.models.match_score import MatchScore
 from app.models.user import User
 from app.services.match_explainer_service import MatchExplainer
-from app.services.scoring_config import SCORE_METHOD
 from app.services.match_score_service import (
     canonical_match_score,
     compute_canonical_score,
     resume_version_of,
 )
+from app.services.scoring_config import SCORE_METHOD
 
 
 def _user(db, name="a4_user"):
@@ -164,11 +164,7 @@ def test_canonical_score_is_persisted_once_per_pair(db_session):
     canonical_match_score(db_session, resume, jd, user_id=user.id)
     canonical_match_score(db_session, resume, jd, user_id=user.id)
 
-    rows = (
-        db_session.query(MatchScore)
-        .filter(MatchScore.resume_id == resume.id, MatchScore.jd_id == jd.id)
-        .all()
-    )
+    rows = db_session.query(MatchScore).filter(MatchScore.resume_id == resume.id, MatchScore.jd_id == jd.id).all()
     assert len(rows) == 1
     assert rows[0].method == SCORE_METHOD
     assert rows[0].resume_version == resume_version_of(resume)
@@ -222,3 +218,52 @@ def test_coerce_years_distinguishes_absent_from_zero():
     assert coerce(0) == 0.0
     assert coerce("3年") == 3.0
     assert coerce(3.5) == 3.5
+
+
+def test_orchestration_records_the_canonical_score_not_the_models_own_number(db_session):
+    """C7 查出来的漏网：默认编排路径把模型自报的 match_score 直接写进分析记录。
+
+    A4 说匹配分只有一个来源，但 `AnalysisRecord.match_score` 存的是模型在 JSON 里
+    随口报的数（85 就是 85），推荐页/解释页用的是另一套规则分——同一对简历+岗位
+    于是有两个"匹配分"。
+    """
+    from app.models.history import AnalysisRecord
+    from app.orchestration.context import AgentContext
+    from app.orchestration.strategies import LinearStrategy
+
+    user = _user(db_session, name="c7_score_user")
+    resume = _resume(db_session, user, ["Python", "FastAPI"])
+    jd = _job(db_session, user, ["Python", "FastAPI", "Kubernetes"])
+
+    context = AgentContext.for_analysis(resume.id, jd.id, user_id=user.id, db=db_session)
+    context.match_result = {"match_score": 99, "summary": "模型自评"}
+
+    record_id = LinearStrategy.__new__(LinearStrategy)._save_analysis_record(
+        db_session, resume.id, jd.id, user.id, context
+    )
+
+    record = db_session.get(AnalysisRecord, record_id)
+    canonical = compute_canonical_score(resume, jd)
+    assert record.match_score == int(round(canonical["score"]))
+    assert record.match_score != 99
+    # 模型自报数仍在，作为对照证据而不是显示分
+    assert record.match_report["model_reported_score"] == 99
+    assert record.match_report["score_method"] == SCORE_METHOD
+
+
+def test_orchestration_marks_the_score_unavailable_instead_of_borrowing_the_llm_number(db_session):
+    """简历/JD 不可见时宁可标"未算出"，也不回退成模型自报数。"""
+    from app.models.history import AnalysisRecord, JobDescription, Resume
+    from app.orchestration.context import AgentContext
+    from app.orchestration.strategies import LinearStrategy
+
+    context = AgentContext.for_analysis(9998, 9999, user_id=1, db=db_session)
+    context.match_result = {"match_score": 88}
+
+    record_id = LinearStrategy.__new__(LinearStrategy)._save_analysis_record(db_session, 9998, 9999, 1, context)
+
+    record = db_session.get(AnalysisRecord, record_id)
+    assert record.match_score == 0
+    assert record.match_report["model_reported_score"] == 88
+    assert "无法按权威算法重算" in record.match_report["score_unavailable_reason"]
+    assert db_session.get(Resume, 9998) is None and db_session.get(JobDescription, 9999) is None
