@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import secrets
 from datetime import datetime, timezone
 from time import perf_counter
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Header, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -47,6 +48,23 @@ def _feishu_sso_configured() -> bool:
 
 def _can_view_system_overview(user: User) -> bool:
     return user.role == ADMIN_ROLE or user.username in settings.admin_usernames_list
+
+
+def require_metrics_reader(authorization: str = Header(None), db: Session = Depends(get_db)) -> str:
+    """`/system/metrics` 的读权限：采集令牌或管理员会话，二者其一；任何时候都不接受匿名。
+
+    这条路径以前对任何调用方开放，而 `frontend/nginx.conf` 把 `/api/` 整段反代给后端，
+    所以按 `docker-compose.prod.yml` 部署时它是公网可读的——里面是 provider/model 名、
+    降级与错误计数，正是 A2 规定不能出现在候选人侧的那些信息。
+    """
+    configured = str(settings.METRICS_TOKEN or "").strip()
+    supplied = authorization[7:].strip() if authorization and authorization.startswith("Bearer ") else ""
+    if configured and supplied and secrets.compare_digest(supplied, configured):
+        return "metrics_token"
+    current_user = get_current_user(authorization=authorization, db=db)
+    if not _can_view_system_overview(current_user):
+        raise api_error(403, "仅管理员可读取运行指标", ERR_AUTH)
+    return "admin"
 
 
 def _provider_runtime_status(
@@ -508,6 +526,6 @@ async def readiness_check():
 
 
 @router.get("/metrics", summary="Prometheus metrics")
-async def metrics():
+async def metrics(_reader: str = Depends(require_metrics_reader)):
     data, status_code, headers = get_metrics_response()
     return Response(content=data, status_code=status_code, headers=headers)

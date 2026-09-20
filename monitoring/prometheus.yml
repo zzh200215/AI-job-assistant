@@ -8,6 +8,11 @@ scrape_configs:
   - job_name: 'recruitment-platform'
     scrape_interval: 15s
     metrics_path: '/api/system/metrics'
+    # /api/system/metrics 不再对匿名可读：采集端要带静态 Bearer 令牌（后端 METRICS_TOKEN）。
+    # 令牌经 --config.expand-env=true 从环境变量展开，见 docker-compose.prod.yml 的 prometheus 服务。
+    authorization:
+      type: 'Bearer'
+      credentials: '${METRICS_TOKEN}'
     static_configs:
       - targets: ['backend:8000']
         labels:

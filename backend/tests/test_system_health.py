@@ -6,7 +6,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import app.api.system as system_api
 from app.api.system import router as system_router
+from app.core.config import settings
 from app.core.database import get_db
 
 
@@ -45,8 +47,41 @@ class TestSystemHealth:
         assert "mysql" in body["data"]["checks"]
         assert "chroma" in body["data"]["checks"]
 
-    def test_metrics_returns_prometheus_format(self, client):
-        response = client.get("/system/metrics")
+
+class TestSystemMetricsAuth:
+    """E1: `/system/metrics` used to answer any caller with no credentials at all.
+
+    The payload carries provider/model names and degraded-answer counters, which is
+    what A2 keeps off the candidate side — and `frontend/nginx.conf` proxies all of
+    `/api/` to the backend, so under `docker-compose.prod.yml` the old behaviour was
+    readable from the public internet.
+    """
+
+    def test_anonymous_caller_is_rejected(self, client):
+        assert client.get("/system/metrics").status_code == 401
+
+    def test_signed_in_candidate_is_rejected(self, client, normal_user, monkeypatch):
+        monkeypatch.setattr(system_api, "get_current_user", lambda **kwargs: normal_user)
+        assert client.get("/system/metrics", headers=_any_token()).status_code == 403
+
+    def test_admin_session_gets_the_prometheus_payload(self, client, admin_user, monkeypatch):
+        monkeypatch.setattr(system_api, "get_current_user", lambda **kwargs: admin_user)
+        response = client.get("/system/metrics", headers=_any_token())
         assert response.status_code == 200
-        content = response.text
-        assert "http_requests_total" in content
+        assert "http_requests_total" in response.text
+
+    def test_scrape_token_replaces_a_session(self, client, monkeypatch):
+        """采集端没有会话可登，所以配了令牌就能凭令牌读。"""
+        monkeypatch.setattr(settings, "METRICS_TOKEN", "scrape-token-value")
+        response = client.get("/system/metrics", headers={"Authorization": "Bearer scrape-token-value"})
+        assert response.status_code == 200
+        assert "http_requests_total" in response.text
+
+    def test_wrong_scrape_token_does_not_open_the_endpoint(self, client, monkeypatch):
+        """令牌配好之后，拿错令牌的匿名调用方仍然进不来。"""
+        monkeypatch.setattr(settings, "METRICS_TOKEN", "scrape-token-value")
+        assert client.get("/system/metrics", headers={"Authorization": "Bearer nope"}).status_code == 401
+
+
+def _any_token() -> dict[str, str]:
+    return {"Authorization": "Bearer session-token"}

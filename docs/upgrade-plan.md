@@ -491,8 +491,22 @@ agent.SummaryAgent           real  tokens=3215
 
 **建议立刻顺手修的两项（一行级）：**
 
-- `GET /api/system/metrics` **无鉴权**（`api/system.py:510-513`，router 裸挂在 `:37`）→ 泄露内部模型名、队列深度、失败计数
+- ~~`GET /api/system/metrics` **无鉴权**（`api/system.py:510-513`，router 裸挂在 `:37`）→ 泄露内部模型名、队列深度、失败计数~~ → **已修（E1）**，见下方"已交付：E1"
 - ~~`orchestration/registry.py:138-141` 用裸 `except Exception` 包裹 registry 构造，异常时静默重置为**空**registry~~ → 已在 C7a（`fd1272b`）修掉：构造失败现在 `logger.exception` 出真实 import error
+
+#### 已交付：E1 指标端点收口 + 公开面变成一张有理由的清单
+
+**先把"泄露"量成事实**：改动前用只读脚本遍历真实路由图，232 条已声明操作中 15 条不带任何凭据依赖，其中 `GET /api/system/metrics` 是**唯一一个没有理由公开**的——其余分别是登录/注册/找回（6）、探活（2）、登录页要用的静态字典与品牌（4）、SSO 入口与回调（2）、支付回调（1，签名在处理体内校验）。`/v1/external/*` 三条走 `X-API-Key`（`app/api/external/auth.py`），不是漏洞。
+
+暴露面也不是理论问题：`frontend/nginx.conf:49-50` 把整段 `/api/` 反代给后端，而 `docker-compose.prod.yml` 只发布前端 80 端口——所以按仓库自带的生产编排，公网路径 `https://<site>/api/system/metrics` 可直接读到计数器。本机开发实例（127.0.0.1:8010，旧代码）匿名 `curl` 实测返回 200 + 计数器转储，里面连 `path="/api/auth/register"` 这样的调用路径与状态码都在。
+
+**做法**：`require_metrics_reader` 依赖，两种凭据任一即可——① `METRICS_TOKEN` 静态 Bearer 令牌（`secrets.compare_digest` 比较，给采集端用，它没有会话可登）；② 管理员会话（复用 `_can_view_system_overview`）。令牌没配就只剩第 ②，端点**不会退回公开**。配套改了仓库内唯一的消费方：`monitoring/prometheus.yml` 加 `authorization.credentials: '${METRICS_TOKEN}'`，`docker-compose.prod.yml` 的 prometheus 服务加 `--config.expand-env=true` 并透传该变量（两个 YAML 都过 `yaml.safe_load` 校验）；`backend/.env.example`、`.env.production.example`、`docs/setup-and-security.md` 同步口径（示例文件里只放占位值）。
+
+**公开面从"逐端点自觉"变成清单**：`tests/test_public_api_surface.py` 遍历真实路由图，把匿名可调集合与 `PUBLIC_OPERATIONS` 逐条比对——新加一条公开路由就失败，除非在清单里写出理由；同时有反向断言（清单里条目若已加凭据也要删掉），以及一条"遍历确实能看到 ≥200 条凭据依赖"的防空转断言。这条测试是 §8"缺少 router 级鉴权、保护是 opt-in"那一行针对读路径的最小构造保证，不是把 232 条都塞进 `dependencies=[...]` 的那件大事。
+
+**验收**：backend 664 passed（新增 7：匿名 401、候选人会话 403、管理员 200、令牌 200、错令牌匿名仍 401，加清单三条）；`ruff check` + `ruff format --check` 对本次 3 个文件均 clean。
+
+**一个待你执行的收尾**：本机 8010 上那个 `uvicorn app.main:app`（PID 27400，无 `--reload`）还在跑改动前的代码，我没有动它（按进程名批量结束的旧约束，且这一轮自动模式下重启/新起实例被策略拦了）。要现场确认收口生效，重启该实例后再匿名 `curl http://127.0.0.1:8010/api/system/metrics`，应得到 401。
 
 **CI 基线已经红了（2026-09-20 实测，未处理）**：`.github/workflows/ci.yml:41,44` 声明每次 push 跑 `ruff check .` 与 `ruff format --check .`，而当前仓库基线是 **48 个 lint 错误 + 64 个文件待重排**（15 `I001` / 10 `F401` / 7 `UP038` / 5 `F841` / 1 `B009` / 1 `UP035` 共 39 个可 `--fix`；5 `B904` + 4 `E402` 共 9 个要人工判断）。远端 Actions 是否真的在跑、跑成什么颜色，本次**没有验证**（未查远端运行记录）。全量重排一次的 diff 会盖过真实改动，建议按文件分批收敛并让棘轮记住基线数字。
 

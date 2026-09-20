@@ -22,6 +22,9 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str = ""
     ADMIN_USERNAMES: str = "admin"
+    # 采集端（Prometheus）读 /api/system/metrics 用的静态 Bearer 令牌。
+    # 留空时该端点退回"仅管理员会话可读"，但任何时候都不会对匿名开放。
+    METRICS_TOKEN: str = ""
 
     MYSQL_HOST: str = "127.0.0.1"
     MYSQL_PORT: int = 3306

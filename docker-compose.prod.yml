@@ -17,6 +17,8 @@ x-backend-environment: &backend-environment
   LOG_LEVEL: INFO
   CORS_ORIGINS: ""                    # 前端通过 nginx 同源代理，不暴露额外来源
   ADMIN_USERNAMES: ${ADMIN_USERNAMES:-admin}
+  # Prometheus 采集 /api/system/metrics 用的静态 Bearer 令牌；留空则该端点仅管理员会话可读
+  METRICS_TOKEN: ${METRICS_TOKEN:-}
   MYSQL_HOST: mysql
   MYSQL_PORT: 3306
   MYSQL_USER: root
@@ -200,8 +202,12 @@ services:
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
+      # prometheus.yml 里的 ${METRICS_TOKEN} 需要显式开启环境变量展开
+      - '--config.expand-env=true'
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time=30d'
+    environment:
+      - METRICS_TOKEN=${METRICS_TOKEN:-}
     networks:
       - recruit-net
     ports:

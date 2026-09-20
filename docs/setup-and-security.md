@@ -244,23 +244,32 @@ The backend exposes Prometheus metrics at `/api/system/metrics` for monitoring a
 
 ### Accessing Metrics
 
-```bash
-# From localhost
-curl http://localhost:8000/api/system/metrics
+`/api/system/metrics` 不接受匿名请求：它返回的是 provider/model 名与降级、错误计数，属于内部运维信息，而 `frontend/nginx.conf` 把整段 `/api/` 反代给后端，公网可达。
 
-# From Docker network
-curl http://backend:8000/api/system/metrics
+两种凭据，任一即可：
+
+```bash
+# 1) 采集令牌（给 Prometheus 用）：后端设置 METRICS_TOKEN
+curl -H "Authorization: Bearer $METRICS_TOKEN" http://localhost:8000/api/system/metrics
+
+# 2) 管理员会话（给人排障用）：ADMIN_USERNAMES 里的账号登录后拿 JWT
+curl -H "Authorization: Bearer $JWT" http://localhost:8000/api/system/metrics
 ```
+
+`METRICS_TOKEN` 留空时只剩第 2 条路（仅管理员会话可读），端点不会退回公开状态。
 
 ### Prometheus Configuration
 
-Example `prometheus.yml`:
+Example `prometheus.yml`（`monitoring/prometheus.yml` 就是这么配的；`--config.expand-env=true` 是让 `${METRICS_TOKEN}` 展开，见 `docker-compose.prod.yml`）：
 
 ```yaml
 scrape_configs:
   - job_name: 'recruitment-platform'
     scrape_interval: 15s
     metrics_path: '/api/system/metrics'
+    authorization:
+      type: 'Bearer'
+      credentials: '${METRICS_TOKEN}'
     static_configs:
       - targets: ['backend:8000']
 ```
