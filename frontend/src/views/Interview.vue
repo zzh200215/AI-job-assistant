@@ -170,7 +170,7 @@
           <div v-for="area in weakAreas" :key="area.name" class="weak-card">
             <div class="weak-header">
               <strong>{{ area.name }}</strong>
-              <el-tag :type="area.score < 50 ? 'danger' : 'warning'" size="small"
+              <el-tag :type="weakAreaTag(area.score)" size="small"
                 >{{ area.score }}分</el-tag
               >
             </div>
@@ -322,6 +322,7 @@ import { getInterviewList, getQuestionBank } from '@/api/interview'
 import { getAnalysis } from '@/api/analysis'
 import { getJobPipelineList } from '@/api/jobs'
 import { getInterviewGroupTitle, normalizeInterviewQuestions } from '@/utils/interviewQuestions'
+import { INTERVIEW_SCORE_BANDS, scoreToneAtLeast } from '@/utils/scoreTone'
 
 const router = useRouter()
 
@@ -436,6 +437,11 @@ async function refreshDaily() {
 // 薄弱知识点
 const weakLoading = ref(false)
 const weakAreas = ref([])
+
+// 薄弱项只分两档，但分界来自面试档位（warn 从 55 起），不再是本页自己抄的 50：
+// 50-54 在面试报告里是"偏弱"，这里就不能还显示成"只是警告"。
+const weakAreaTag = (score) =>
+  scoreToneAtLeast(score, 'warn', INTERVIEW_SCORE_BANDS) ? 'warning' : 'danger'
 
 async function loadWeakAreas() {
   weakLoading.value = true

@@ -168,7 +168,7 @@
                 summaryReport.summary?.target_position || '-'
               }}</el-descriptions-item>
               <el-descriptions-item label="匹配度">
-                <el-tag :type="scoreTag(summaryReport.summary?.match_score)">
+                <el-tag :type="scoreToneTagType(summaryReport.summary?.match_score)">
                   {{ summaryReport.summary?.match_score }}
                 </el-tag>
               </el-descriptions-item>
@@ -273,6 +273,7 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
 import { SuccessFilled, WarningFilled, Loading, Clock } from '@element-plus/icons-vue'
 import { startAutoAgent, getMultiAgentDetail } from '@/api/multi_agent'
+import { scoreToneTagType } from '@/utils/scoreTone'
 
 const starting = ref(false)
 const runId = ref(null)
@@ -462,12 +463,6 @@ const agentStatusText = (agent) => {
   return '等待'
 }
 
-const scoreTag = (s) => {
-  if (!s) return 'info'
-  if (s >= 80) return 'success'
-  if (s >= 60) return 'warning'
-  return 'danger'
-}
 
 // ---- lifecycle ----
 onMounted(fillLast)
