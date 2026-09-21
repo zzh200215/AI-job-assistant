@@ -291,31 +291,48 @@ def _agent_fixture() -> list[dict]:
 
 
 def test_agent_floors_must_beat_the_model_free_baseline():
-    """把"不用模型能刷到几分"钉住：旧默认门槛（MAE ≤ 12、hit ≥ 7）就是在这条线以下。"""
-    baselines = agent_trivial_baselines(_agent_fixture())
+    """把"不用模型能刷到几分"钉住，而且钉成比率不是条数——评估集还会继续长。"""
+    cases = _agent_fixture()
+    n = len(cases)
+    baselines = agent_trivial_baselines(cases)
 
-    assert baselines["mae"] <= 12.0, baselines
-    assert baselines["hit_tol10"] >= 7, baselines
-    assert baselines["spearman_rho"] < 0.85, baselines
+    # 空模型不该好用：常数猜测 MAE 不低于 14、命中率不过半、秩相关不过 0.7
+    assert baselines["mae"] >= 14, baselines
+    assert baselines["hit_tol10"] / n <= 0.5, baselines
+    assert baselines["spearman_rho"] <= 0.7, baselines
 
     good = {
-        "total": 10,
-        "scored": 10,
+        "total": n,
+        "scored": n,
         "eval_errors": 0,
         "mae": 5.0,
         "spearman_rho": 0.9,
-        "score_dist": {"hit_tol10": 10, "over": 0, "under": 0, "errored": 0},
+        "score_dist": {"hit_tol10": n, "over": 0, "under": 0, "errored": 0},
     }
 
-    old = check_agent_thresholds(good, max_mae=12.0, min_hit_tol10=7, min_spearman=0.8, trivial_baseline=baselines)
-    assert any(f.startswith(f"mae 门槛 12.0 赢不了不用模型的基线 {baselines['mae']}") for f in old), old
-    assert any(f.startswith(f"hit_tol10 门槛 7 赢不了不用模型的基线 {baselines['hit_tol10']}") for f in old), old
-    assert not any(f.startswith("spearman_rho") for f in old), old  # 0.8 > 基线，这条算门
-
-    # eval-quality.ps1 现在用的默认值（8 / 9 / 0.85）都在基线之上，不会因为"不是门"而红
+    # eval-quality.ps1 用的默认值（8 / 17 / 0.85）都在基线之上，才算三条门
     assert (
-        check_agent_thresholds(good, max_mae=8.0, min_hit_tol10=9, min_spearman=0.85, trivial_baseline=baselines) == []
+        check_agent_thresholds(good, max_mae=8.0, min_hit_tol10=17, min_spearman=0.85, trivial_baseline=baselines) == []
     )
+
+    # n=10 时代那条 hit ≥ 7 放到 25 条上就又不算门了（基线会随评估集一起长）
+    stale = check_agent_thresholds(good, min_hit_tol10=7, trivial_baseline=baselines)
+    assert stale == [
+        f"hit_tol10 门槛 7 赢不了不用模型的基线 {baselines['hit_tol10']}（常数猜测 + 确定性封顶在这套标注上"
+        "就能刷到）：这不是门，门槛要往更高调，或者加标注样本"
+    ]
+
+
+def test_agent_fixture_keeps_enough_score_resolution():
+    """标注集不能只堆在高分区，否则门槛读的是一个窄带。"""
+    scores = [item["expected_match_score"] for item in _agent_fixture()]
+
+    assert len(scores) >= 25
+    assert len(set(scores)) >= 20, "分数几乎重复，秩相关没有分辨率"
+    assert min(scores) <= 20 and max(scores) >= 90
+    for lo, hi in ((0, 40), (40, 60), (60, 80), (80, 101)):
+        in_band = sum(1 for s in scores if lo <= s < hi)
+        assert in_band >= 3, f"[{lo},{hi}) 分段只有 {in_band} 条"
 
 
 def test_agent_gate_reports_unscored_pairs_before_thresholds():

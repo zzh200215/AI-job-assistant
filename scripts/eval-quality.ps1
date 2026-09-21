@@ -1,8 +1,8 @@
-# Agent floors are set to beat the model-free baseline that scripts/eval_agent.py now prints
-# (best constant + deterministic cap on this 10-pair set: MAE 9.5, hit_tol10 8, rho 0.721).
-# The old defaults (12 / 7 / 0.80) were reachable with no language model at all. These new
-# defaults are a bar to clear, not a claim about the current model - if a real-provider run
-# goes red, that is information, not a broken gate.
+# Agent floors are set to beat the model-free baseline that scripts/eval_agent.py now prints.
+# On the current 25-pair set: best constant + deterministic cap = MAE 16.44, hit_tol10 11 (44%),
+# rho 0.554; the 95th percentile of a random ranking is 0.349. The floors below clear all three.
+# They are a bar to clear, not a claim about the current model - if a real-provider run goes red,
+# that is information, not a broken gate. hit_tol10 is a count, so it scales with the fixture.
 param(
     [switch]$ImportSeeds,
     [double]$MinRagRecall = 0.85,
@@ -10,7 +10,7 @@ param(
     [double]$MinRagKeywordHit = 0.75,
     [double]$MaxAgentMae = 8.0,
     [double]$MinAgentSpearman = 0.85,
-    [int]$MinAgentHitTol10 = 9
+    [int]$MinAgentHitTol10 = 17
 )
 
 $ErrorActionPreference = "Stop"

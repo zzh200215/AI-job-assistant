@@ -55,9 +55,10 @@ To rebuild bundled knowledge seeds before evaluation:
 Default thresholds:
 
 - RAG: `Recall@5 >= 0.85`, `MRR >= 0.85`, `Keyword Hit Rate >= 0.75`
-- Agent: `MAE <= 8.0`, `Spearman rho >= 0.85`, `hit_tol10 >= 9` — chosen to beat the model-free
-  baseline the script prints (see below), not to match whatever the current model scores. A red run
-  here is information, not a broken gate.
+- Agent: `MAE <= 8.0`, `Spearman rho >= 0.85`, `hit_tol10 >= 17` (of 25) — chosen to beat the
+  model-free baseline the script prints (see below), not to match whatever the current model scores.
+  A red run here is information, not a broken gate. `hit_tol10` is a **count**, so it has to be
+  revisited whenever the labeled set grows.
 
 The script writes JSON reports to `backend/reports/`, which is ignored by Git because reports are environment-specific artifacts.
 Each run now keeps timestamped history snapshots such as `rag_eval_20260626_153000.json` and refreshes `rag_eval.json` / `agent_eval.json` as the latest aliases.
@@ -91,24 +92,33 @@ The previous CI line was `--min-recall 0.5` on the fused number — a floor belo
 Both scripts compute their own null models on every run, print them, and **fail any floor that
 cannot beat them** — the same discipline the RAG gate got in E6.
 
-`eval_agent` over **10 labeled pairs** (measured 2026-09-21; the script prints these numbers live):
+`eval_agent` runs over **25 labeled pairs** — the original 10 plus 15 drafted on 2026-09-21 that are
+**awaiting review of their scores** (the pairs, not the format; `test_agent_fixture_keeps_enough_score_resolution`
+guards the spread). The script prints these null models on every run:
 
 | null model | MAE | hit ±10 | Spearman ρ |
 | --- | --- | --- | --- |
-| any constant (mean 66 / median 70 / best-MAE 65) | 18.0 | 2–3/10 | undefined¹ |
-| best constant + the deterministic cap rule (tuned on this set) | **9.5** | **8/10** | 0.721 |
-| `LLM_PROVIDER=mock` as actually run today | 9.7 | 8/10 | 0.721 |
-| uniform random 0–100 (500 draws) | median 31.2 (best 5% = 20.5) | median 2/10 | 95th pct **0.576**; P(ρ≥0.8) = 0.004 |
+| any constant (best tuned on this set) | 16.4 | ≤ 11/25 (44%) | undefined¹ |
+| constant + the deterministic cap rule | **16.44** | **11/25** | 0.554 |
+| `LLM_PROVIDER=mock` as actually run today | 19.2 | 11/25 | 0.543 |
+| uniform random 0–100 (500 draws) | median ~31 | — | 95th pct **0.349** |
+
+Compare with the same table at n=10 (before the new pairs): best model-free MAE was **9.5** with
+**8/10** hits and ρ **0.721** — i.e. the old `MAE <= 12` / `hit_tol10 >= 7` floors were *below* what a
+constant plus the cap rule could produce, so mock provider output passed them. Widening the labeled set
+is what made those numbers honest: the same trick now lands at MAE 16.4 and 44% hits, and
+`tests/test_eval_thresholds.py::test_agent_floors_must_beat_the_model_free_baseline` pins the
+relationship as ratios (MAE ≥ 14, hit rate ≤ 0.5, ρ ≤ 0.7) so it survives the set growing further.
 
 ¹ `compute_spearman` used to return **0.5** for a zero-variance prediction vector (ties are undefined
 for `1 - 6Σd²/n(n²-1)`), so "judge nothing" earned half a perfect rank score. It now returns `null` plus
 a `spearman_reason`. Same class of fix as E4's `predicted = 0`.
 
-So the old floors (`MAE <= 12`, `hit_tol10 >= 7`) were passable **with no language model at all**, and
-`eval-quality.ps1` now defaults above the baseline (8.0 / 9 / 0.85). CI runs `eval_agent` with
-`--max-errors 0` only: under a mock provider a quality floor would assert nothing about quality.
-Resolution caveat that no floor can fix: at n=10, relabeling one pair moves MAE by 1–4 points and ρ by
-~0.1, so digits finer than that are reading noise. Adding labeled pairs is the only cure.
+CI runs `eval_agent` with `--max-errors 0` only: under a mock provider any quality floor would assert
+nothing about quality. The floors live in `scripts/eval-quality.ps1` (real provider) and are checked
+against the printed baseline at every run. Resolution after widening the set: at n=25, relabeling one
+pair moves MAE by ~0.8 points instead of 1-4, so the floors are no longer reading single-row noise -
+but they are only as good as the labels, which is why the 15 new scores need a review pass.
 
 `eval_recommend` gates the **explanation layer against the `skill_gap` authority**, over a rebuilt
 16-case set (was 2). Labels are the documented set rule — `canonical(resume) ∩ (canonical(required) ∪
