@@ -481,7 +481,8 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useAsync` | 收掉 15 份日期函数副本、8 套状态色映射、**3 套互相矛盾的分数色板**（`ExplainMatch.vue:179`/`SmartAnalysis.vue:1743` 的 `#67C23A` 系 vs `SmartAnalysis.vue:1749` 的 `#1DB954` 系 vs `InterviewReport.vue:388` 第三套）、24 处手写 `loading`、150+ 个 `catch` |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useAsync` | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）。未收：15 份日期函数副本、24 处手写 `loading`、150+ 个 `catch`，以及 `AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦） |
+
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
 
@@ -729,6 +730,23 @@ agent.SummaryAgent           real  tokens=3215
 **棘轮的第三个盲区（已入账，未清偿，提交 `3bbc343`）**：`hardcodedColorLiterals` 数 `<style>`、`scriptColorLiterals` 数 `<script>`，而**模板属性里的色值两边都不算**——实测 **25 处分布在 6 个文件**（`Login.vue` 17、`DefaultLayout.vue` 3、`ExplainMatch.vue` 2、`CareerPlanning.vue`/`NotFound.vue`/`ResumeUpload.vue` 各 1）。已新增第三条预算 `templateColorLiterals`（同样"增长即红、还债必须调小"），三个维度改由同一对测试驱动：**抽取坏掉也无法蒙混**（template 取空会让 6 个文件全被"预算比现实松"那条点名）。用一次性探针验过三件事——预算数字与实测逐文件相等、多一处即红、未列进预算的文件里有 hex 也红。
 
 这 25 处里 17 处是 Login 的第三方登录品牌色（Google/GitHub 官方值，本就该写死）；其余 **8 处是真债**，和 D1 同源，且**没有一处等于最近的主题 token**：`DefaultLayout.vue:51-52` 导航菜单 `#4b5563` / `#196bdb`（主题里是 `--app-muted #697386` / `--app-primary #2563eb`）、`ExplainMatch.vue:131,140` 的"风险点/改进建议"标题吃 Element 默认橙 `#e6a23c` 与默认蓝 `#409eff`、`CareerPlanning.vue:523` 兜底 `#409EFF`、`NotFound.vue:4` 图标 `#667eea`（不是 `--app-violet #7147d9`）、`ResumeUpload.vue:156` 环形轨道 `#eee`。**本段一条都没换成 var()**：`stroke="var(--app-…)"` 这类 SVG 表现属性、以及 el-menu/el-icon 传色值 prop 的路径，必须真在浏览器里看结果才敢改，而 browser 工具被会话策略拦着——留待能验时逐条做，届时数字只会往下走。预算生成脚本 `scripts/style-budget.mjs` 同步改为三个维度都输出（此前只印 `<style>` 一条，谁照它重生成预算就会把另外两条写没了）。当前账本：`<style>` **510 处 / 34 文件**、`<script>` **0**、模板 **25 处 / 6 文件**。
+
+#### 已交付：D1（第三段）状态→颜色也收成一个口径（提交 `a4156f5`）
+
+**先把"8 套状态色映射"量成事实**：`<script>` 里手写 `状态: 'el-tag 类型'` 的地方实测 **17 份表 / 32 个键 / 85 条**。**重复本身不是缺陷**——KnowledgeBase 的文档类型、PipelineKanban 的阶段、CareerPlanning 的策略各是一套领域，同名不同义不该强行合并。真正的矛盾只有两个键：
+
+| 状态 | 之前 | 现在 |
+|---|---|---|
+| 任务 `running` | 任务中心蓝、两个 agent 页**橙**（而橙在这几页已表示 `partial`＝部分完成、要看一眼） | 全站蓝 |
+| 面试会话 `ongoing` | 房间页**绿**、设置页**橙**，而房间页的绿又同时表示 `completed` | 全站蓝 |
+
+**新口径（`utils/statusTone.js`）**：绿只代表"完成"；进行中的一律 primary；橙留给 `partial`；红留给失败；灰留给"未开始 / 已取消 / 不认识"。随之而来的可见变化共 4 处染色：`running`/`ongoing`/`connecting`/`evaluating` 变蓝，多智能体页的 `partial` 由"没命中→灰"改为橙。**未识别状态保持灰**，后端新增枚举不会把任务画成红色失败（这条写进测试）。
+
+**5 条契约测试**钉住形状：值必须是真实 el-tag 类型、两表共用的键只能有一种颜色、只有 `completed` 可以绿、进行中集合必须是 primary。**棘轮加第四维** `statusTagEntries`（数每条手写 `状态: 'tag'`，不数 `ElMessageBox` 的 `{type:'warning'}` 这类噪声）：**85 → 51**，分布在 11 个文件，后续每收一份领域表就得调小。
+
+**验证**：`npm run test:unit` **34 → 41 passed**；`npm test` 11 passed；`npm run lint` 0 error；`npm run build` 通过。**没验**：真浏览器里的标签颜色（工具被策略拦），但这次改的是 el-tag 的 `type` 属性值——它只有 5 个合法取值且由 Element 自己上色，不涉及 `var()` 解析，风险面比第二段小。
+
+**这一段没做的**：PipelineKanban 的 7 条阶段色、KnowledgeBase 的 12 条文档类型、CareerPlanning 的 9 条策略/优先级等，仍各留本地表（它们没有跨页矛盾，只是重复），由新维度按数字盯着。
 
 ---
 
