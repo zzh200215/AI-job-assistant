@@ -644,7 +644,15 @@ agent.SummaryAgent           real  tokens=3215
 
 **落地（他点的 1+2）**：两个读数 bug 修掉；带来源的指标（stability / explainability / skill_match / feedback）把说明写进控制台输出、报告 `run_meta.metric_notes`、`/api/eval-reports` 透传，以及**每一条红字**里。门槛数字本身没动（那是 3/4）。测试 +4：常数预测 ρ 未测出、有方差的 ρ 照常、两臂全错读 0.0、门槛设在未测出的指标上必须失败并带来源。全量 **694 passed**，`ruff check .` clean、`ruff format --check .` 338 files。
 
-**仍待他定**：(3) recommend 标签重做 + 扩到 n≥15（谁标）；(4) agent 门槛抬到基线之上（例如 MAE ≤ 6、hit ≥ 9）并考虑进 CI；(5) `eval_recommend` 那步在标签修好前先保持红着。
+**当时没动的三件，随后在同一天做完（提交 `fdf42a3`）**：
+
+- **(3) recommend 评估集重做**：2 → **16 个 case**，标签改成 `skill_gap` 权威定义下的集合运算（`canonical(简历) ∩ (canonical(要求) ∪ canonical(加分))` 与 `canonical(要求) − canonical(简历)`），不再等于"简历上的全部技能"。空模型立刻掉下去：**抄简历列表 1.000 → 0.676**，"永远说没有缺失" 的缺失一致性 0.188、"说全缺" 0.38。谁想把标签改成"用被测代码回生成"，`test_fixture_labels_are_the_documented_set_rule` 会红（它同时要求 ≥10 条有期望缺失、≥12 条简历带 JD 没要求的技能，即两个臂都得有分辨率）。
+- **(4) agent 门槛**：`trivial_baselines` 每次自己算"不用模型能刷到几分"（最优常数 + 确定性封顶：**MAE 9.5 / hit 8 / ρ 0.721**，随机秩 95 分位 0.576，封顶规则命中 3/10），并**拒绝赢不了基线的门槛**。`eval-quality.ps1` 默认从 12 / 7 / 0.80 抬到 **8 / 9 / 0.85**；跑真模型若红，那是信息不是门坏了。
+- **(5) recommend 在 CI 的崩溃**：线上反馈那一臂现在读不到就写 `linkage_status: db unavailable: …` 继续跑。**顺序是有意的**——先把门做成有区分度的（标签 + 1.0 精确一致），再谈降级；反过来就是把一道饱和的门从红改成假绿。
+
+**CI 现在跑三道评估门**（全部零外部服务、零 API 花费）：seed 一次性语料 → RAG 门窗法路与链路 → Recommend 门"解释层 == skill_gap 权威"（1.0）→ Agent 只门管道（`--max-errors 0`，mock 的分数不设质量门槛）。本地把 12 步 backend job 全跑过：`ruff check` clean、`ruff format --check` 338 files、**698 passed**、alembic upgrade+check、schema-baseline --check、seed / rag / recommend / agent 四步 exit 0；把两条标签改错 → recommend 0.969 / 0.962、exit 3；把门槛调回 `--min-skill-match-accuracy 0.4` → exit 3 报"门槛 0.4 ≤ 空模型基线 0.676"。
+
+**仍然没验/没做**：远端 CI 实跑（`gh` 被策略拦）；真 provider 下 agent 门的新门槛能不能过（要花钱，没跑）；`interview_score_stability` / `recommendation_explainability` / `feedback_agreement_rate` 三项**照旧不量系统**，只是现在每处都带着来源说明（前者是评估集样本离散度、中者拿去匹配 explainer 自己的兜底模板、后者需要 0 行的线上反馈表 + case 里的 `resume_id/jd_id`）；agent 标注仍只有 10 条，重标一条就能把 MAE 动 1–4 分，加样本是唯一解，而那要人来标。
 
 ---
 
