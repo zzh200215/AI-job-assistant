@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -86,3 +88,40 @@ def get_visible_knowledge_doc_ids(
 
     rows = db.query(KnowledgeDocument.id).filter(visibility).all()
     return {str(row[0]) for row in rows}
+
+
+# 可见集合下推进向量检索时，`$in` 会展开成同样多的查询参数；超过这个数就退回
+# "取回后再过滤"（本机/CI 的知识库都远在此之下：28 篇 / 91 切片）。
+VISIBLE_PUSHDOWN_LIMIT = 2048
+
+
+def knowledge_where_filter(
+    *,
+    doc_type: str | None = None,
+    visible_doc_ids: set[str] | None,
+) -> dict[str, Any] | None:
+    """把可见范围翻成 Chroma 的 `where` 条件，和 doc_type 一起返回。
+
+    必须下推：`n_results` 是**候选槽位数**，"先取 top-N 再按可见性过滤"会让一个明明
+    看得到文档的用户拿到 0 条。实测 16 篇 / 91 切片的语料上，只见 2 篇（11 个切片可查）
+    的用户 7 条查询里有 3 条召回为 0、7 条全部少于下推能给出的数量。
+
+    返回 None = 不需要下推（管理员全量可见），或可见集合大到不值得展开成 `$in`；
+    两种情况下调用方仍会做取回后过滤，行为与下推前一致，不会更差。
+    """
+    conditions: list[dict[str, Any]] = []
+    if doc_type:
+        conditions.append({"doc_type": doc_type})
+    if visible_doc_ids and len(visible_doc_ids) <= VISIBLE_PUSHDOWN_LIMIT:
+        conditions.append({"doc_id": {"$in": sorted(visible_doc_ids)}})
+    # 空集合不下推：Chroma 0.5.0 对 `$in: []` 是直接抛错（"non-empty list"），不是匹配空集。
+    # 空可见集由调用方的提前返回 + 取回后过滤兜住，方向仍是 fail-closed，不会漏出内容。
+
+    if not conditions:
+        return None
+    if len(conditions) == 1:
+        return conditions[0]
+    # Chroma 0.5.0 的 where 只接受"恰好一个操作符"，裸多键会抛
+    # `Expected where to have exactly one operator`；多条件必须包进 $and。
+    # 这条形状约束是拿真实 collection 试出来的，mock 出来的 collection 不会报。
+    return {"$and": conditions}

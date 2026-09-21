@@ -25,7 +25,7 @@ from app.core.config import settings
 from app.services import retrieval_log
 from app.services.embedding_service import embed_text
 from app.services.rerank_service import rerank_results
-from app.utils.knowledge_access import get_visible_knowledge_doc_ids
+from app.utils.knowledge_access import get_visible_knowledge_doc_ids, knowledge_where_filter
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +80,7 @@ def _vector_recall(
     if collection.count() == 0:
         return []
 
-    where_filter = None
-    if doc_type:
-        where_filter = {"doc_type": doc_type}
+    where_filter = knowledge_where_filter(doc_type=doc_type, visible_doc_ids=visible_doc_ids)
 
     try:
         if query_embedding is None:

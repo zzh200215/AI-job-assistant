@@ -14,7 +14,7 @@ from app.services.embedding_service import embed_text
 from app.services.query_rewrite_service import RewrittenQuery
 from app.services.rerank_service import rerank_results
 from app.services.retrieval_planner import RetrievalPlan, plan_retrieval
-from app.utils.knowledge_access import get_visible_knowledge_doc_ids
+from app.utils.knowledge_access import get_visible_knowledge_doc_ids, knowledge_where_filter
 
 # 8 类知识源 → 返回字典的展示 key（保持对外结构稳定）
 _DOC_TYPE_TO_KEY = {
@@ -138,7 +138,7 @@ def search_knowledge(
     if visible_doc_ids == set():
         return _log([])
 
-    where_filter = {"doc_type": doc_type} if doc_type else None
+    where_filter = knowledge_where_filter(doc_type=doc_type, visible_doc_ids=visible_doc_ids)
 
     try:
         if query_embedding is None:
