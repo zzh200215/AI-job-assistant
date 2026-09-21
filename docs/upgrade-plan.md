@@ -693,6 +693,22 @@ agent.SummaryAgent           real  tokens=3215
 
 ---
 
+#### 已交付：D1（第一段）分数色板收成一个口径（提交 `fd77d2a`）
+
+**为什么先做这个**：D 阶段 1 列了一堆（共享层、feature 重组、TS），但其中只有一条是**候选人能直接看到的自相矛盾**：分数→颜色有 **6 处实现、3 套阈值（85/70/55、80/60/40、80/60）、4 套色族**，而且**没有一套和后端推荐标签的档位一致**（`match_explainer_service.py:529-537` 是 85/70/50）。于是一张卡片可以左边写"可以投递"、右边把 72 分涂成警告橙。
+
+**做法**：`src/utils/scoreTone.js` 只出 tone（`high|good|warn|risk|unknown`，档位与标签对齐为 **85/70/50**；面试分另用 85/70/55 但同样从这里出）；`main.css` 的 `--app-score-*` 是唯一色源（复用既有 `--app-primary/success/warning/danger`，渐变用 `color-mix` 派生，不再新增 hex）；视图只挂 `.score-tone--*` / `.score-fill--*`，`el-progress :color` 那种必须传值的场景传 `var(--app-score-*)`。已迁的匹配分页面：ExplainMatch、SmartAnalysis（3 个函数 + `.sc-*` 规则）、OfferCompare、JobRecommend，另删掉 `.badge-high/medium/low` 三条**没有任何调用点**的死规则（同一文件里的第三套孤儿色板）。
+
+**看得见的变化**（都发生在"让颜色和标签对上"的方向）：80-84 从绿改判蓝（标签是"可以投递"，不是"强烈推荐"）；50-69 统一为警告橙；<50 才是红。ExplainMatch 的 40-49 由橙转红、SmartAnalysis/OfferCompare 的 50-59 由红转橙。`null/''` 不再是红色 0 分，而是灰的 `unknown`（OfferCompare 以前给 `''`，等于没色）。
+
+**棘轮补了一个盲区**：分数挑选此前藏在 `<script>` 的字符串里，`hardcodedColorLiterals` 只数 `<style>`，所以六套色板一起活着没人管。新增 `scriptColorLiterals` 维度（增长即红、还债必须调小），当前预算 `InterviewReport: 4`、`ResumeUpload: 3`。**同时给 CI 接上 `npm run test:unit`**：Vitest 那套（棘轮、路由守卫、新 scoreTone）此前没有任何一步执行——门写了却没接电。数字变化：SmartAnalysis `<style>` hex 27 → **15**、JobRecommend 26 → **20**、匹配分页面上 JS 侧分数 hex **10 → 0**。
+
+**验证**：`npm run test:unit` **30 passed**（新增 4 条 scoreTone 断言，含"这个模块不许产出 hex"）；`npm test` 11 passed；`npm run lint` **0 error**（两万六千条 warning 全是本机 CRLF，CI 的 LF 检出不出现）；`npm run build` 通过；`ci.yml` 过 `yaml.safe_load`，前端步骤现为 install → test → test:unit → lint → format:check → build → audit。**没验的**：真浏览器里的 computed-style（browser 工具被会话策略拦），所以"var() 在 el-progress/SVG stroke 上解析"是依据标准行为 + 构建产物里规则确实存在（`.score-tone--good{color:var(--app-score-good)}`）推定的，下一步该由看到页面的人复核一眼。
+
+**下一段**：面试分两页——InterviewReport（JS 里 4 个 hex）与 InterviewRoom（`.score-strong/good/warn/risk` 是**浅底 + 描边的胶囊**，不是实心渐变，需要 `--app-score-*-soft` 一组变体才能收）；再加 ResumeUpload 的简历完整度分（JS 3 个 hex，CSS 侧已经用 token）。这三处迁完就能把 `scriptColorLiterals` 预算清零。
+
+---
+
 ## 9. 里程碑
 
 | 里程碑 | 内容 | 出口判据 |
