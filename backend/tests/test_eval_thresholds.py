@@ -251,6 +251,36 @@ def test_agent_eval_measures_only_the_pairs_that_returned_a_score(monkeypatch):
     assert report["details"][1]["label"] == "hit"
 
 
+# ===== 秩相关：并列下 1-6Σd²/n(n²-1) 没有定义，不能返回一个"中等成绩" =====
+
+
+def test_constant_predictions_leave_rho_undefined_instead_of_half_credit(monkeypatch):
+    monkeypatch.setattr("app.services.match_score_calibration.apply_match_score_cap", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.services.llm_service.chat_json", lambda prompt, **kwargs: {"match_score": 82})
+
+    report = run_agent_eval([_agent_pair("p1", 60), _agent_pair("p2", 70), _agent_pair("p3", 66)])
+
+    assert report["mae"] == 16.67  # |82-60| + |82-70| + |82-66| = 22+12+16
+    assert report["spearman_rho"] is None
+    assert "零方差" in report["spearman_reason"]
+    # 改前这里会是 rho = 0.5：什么都不判断也能白拿一半满分
+    assert check_agent_thresholds(report, min_spearman=0.8) == [
+        "spearman_rho 未测出（预测分 3 条全为 82（零方差），排序无从衡量），门槛 0.8 无从比较"
+    ]
+
+
+def test_varying_predictions_still_produce_a_rank_correlation(monkeypatch):
+    monkeypatch.setattr("app.services.match_score_calibration.apply_match_score_cap", lambda *args, **kwargs: None)
+    answers = [{"match_score": 55}, {"match_score": 75}, {"match_score": 90}]
+    monkeypatch.setattr("app.services.llm_service.chat_json", lambda prompt, **kwargs: answers.pop(0))
+
+    report = run_agent_eval([_agent_pair("p1", 60), _agent_pair("p2", 70), _agent_pair("p3", 88)])
+
+    assert report["spearman_reason"] is None
+    assert report["spearman_rho"] == 1.0
+    assert check_agent_thresholds(report, min_spearman=0.8) == []
+
+
 def test_agent_gate_reports_unscored_pairs_before_thresholds():
     report = {
         "total": 2,
@@ -314,13 +344,19 @@ def test_recommend_thresholds_report_all_failed_metrics():
         min_feedback_agreement_rate=0.75,
     )
 
-    assert failures == [
+    assert [item.split("（")[0] for item in failures] == [
         "skill_match_accuracy 0.89 < 0.9",
         "jd_explanation_consistency 0.84 < 0.85",
         "recommendation_explainability 0.79 < 0.8",
         "interview_score_stability 0.88 < 0.9",
         "feedback_agreement_rate 0.74 < 0.75",
     ]
+    # 带来源的指标，红字里也必须带着来源，免得被人把数抄走
+    assert "原样抄一份简历技能列表就能拿 1.0" in failures[0]
+    assert failures[1] == "jd_explanation_consistency 0.84 < 0.85"  # 这项没有来源注记
+    assert "兜底模板文案" in failures[2]
+    assert "不随系统输出变化" in failures[3]
+    assert "job_recommend_feedback" in failures[4]
 
 
 # ===== 词法那一路：CI（mock 向量，无语义）里唯一能门住语义的数 =====
@@ -571,3 +607,35 @@ def test_seeder_refuses_a_non_sqlite_target(monkeypatch):
     # 显式 --force 才允许写非 SQLite
     monkeypatch.setattr(settings, "DATABASE_URL", "mysql+pymysql://root@127.0.0.1:3306/llmXM")
     assert guard_scratch_target(allow_non_scratch=True).startswith("mysql+pymysql://")
+
+
+# ===== recommend 门：设了门槛却没测出数，不能静默当成通过 =====
+
+
+def test_recommend_gate_reports_unmeasured_with_provenance():
+    report = {
+        "total": 2,
+        "skill_match_accuracy": None,
+        "interview_score_stability": None,
+        "feedback_agreement_rate": None,
+        "measured_cases": {
+            "skill_match_accuracy": 0,
+            "interview_score_stability": 0,
+            "feedback_agreement_rate": 0,
+        },
+    }
+
+    failures = check_recommend_thresholds(
+        report,
+        min_skill_match_accuracy=0.4,
+        min_interview_stability=0.9,
+        min_feedback_agreement_rate=0.75,
+    )
+
+    assert len(failures) == 3
+    # 抄简历技能列表就能拿 1.0 —— 这句话必须跟着数一起出现
+    assert failures[0].startswith("skill_match_accuracy 未测出（0/2 条有可比数据），门槛 0.4 无从比较")
+    assert "原样抄一份简历技能列表就能拿 1.0" in failures[0]
+    # 这两项一个量的是评估集自身的样本离散度，一个需要线上反馈数据
+    assert "不随系统输出变化" in failures[1]
+    assert "job_recommend_feedback" in failures[2]

@@ -134,8 +134,10 @@ def _normalize_report(path: Path, payload: dict[str, Any]) -> dict[str, Any] | N
         return {
             **base,
             "metrics": metrics,
-            "linked_feedback_count": int(linkage.get("linked_feedback_count") or 0),
+            # 有些指标量的是评估集自身或模板形状，不是系统输出；来源随数一起给到消费方。
+            "metric_notes": run_meta.get("metric_notes") if isinstance(run_meta.get("metric_notes"), dict) else {},
             "linked_pair_count": int(linkage.get("linked_pair_count") or 0),
+            "linked_feedback_count": int(linkage.get("linked_feedback_count") or 0),
             "details_count": len(payload.get("details") or []),
         }
 

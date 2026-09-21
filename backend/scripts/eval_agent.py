@@ -7,7 +7,9 @@
 
 输出指标：
   - mae            : Mean Absolute Error（预测分数 vs 人工标注）
-  - spearman_rho   : Spearman 等级相关系数（排序一致性）
+  - spearman_rho   : Spearman 等级相关系数（排序一致性）；无定义时为 null + spearman_reason
+                     （预测零方差、少于 2 条、或期望分全相同——并列下 1-6Σd²/n(n²-1) 没有定义，
+                     让它返回一个数会把"什么都没判断"读成中等成绩）
   - score_dist     : 分数偏差分布（偏高/偏低/命中）
   - per_pair_detail: 每对详情
 
@@ -54,11 +56,28 @@ def compute_mae(predicted: list[float], actual: list[float]) -> float:
     return sum(abs(p - a) for p, a in zip(predicted, actual, strict=False)) / n
 
 
-def compute_spearman(predicted: list[float], actual: list[float]) -> float:
-    """Spearman 等级相关系数（简化实现，无需 scipy）。"""
+def spearman_undefined_reason(predicted: list[float], actual: list[float]) -> str | None:
+    """秩相关在这个样本上是否无从谈起；是的话给出原因。
+
+    `compute_spearman` 用的是 `1 - 6Σd²/n(n²-1)`，它对**并列**没有定义：预测全为同一个数
+    （零方差，比如 mock provider 对十条都吐 82）时它返回 0.5，等于"什么都不判断"白拿一半
+    满分。这种情况下秩相关是未测出，不是一个中等的数。
+    """
+    if len(predicted) < 2:
+        return f"跑出预测分的 pair 只有 {len(predicted)} 条，秩相关至少需要 2 条"
+    if len(set(predicted)) == 1:
+        return f"预测分 {len(predicted)} 条全为 {int(predicted[0])}（零方差），排序无从衡量"
+    if len(set(actual)) == 1:
+        return f"期望分全为 {int(actual[0])}，没有可对照的排序"
+    return None
+
+
+def compute_spearman(predicted: list[float], actual: list[float]) -> float | None:
+    """Spearman 等级相关系数（简化实现，无需 scipy）。undefined 时返回 None。"""
+    if spearman_undefined_reason(predicted, actual) is not None:
+        return None
+
     n = len(predicted)
-    if n < 2:
-        return 0.0
 
     def rank(vals: list[float]) -> list[float]:
         indexed = sorted(enumerate(vals), key=lambda x: x[1])
@@ -148,8 +167,9 @@ def run_eval(eval_set: list[dict]) -> dict:
 
     scored = len(predicted_scores)
     mae = compute_mae(predicted_scores, actual_scores) if scored else None
-    # 秩相关至少要有两个点，否则 compute_spearman 只会返回它自己的 0.0 占位值
-    rho = compute_spearman(predicted_scores, actual_scores) if scored >= 2 else None
+    # 秩相关要么真的算出来，要么是 None + 原因；不能像以前那样让零方差预测拿到 0.5
+    rho_reason = spearman_undefined_reason(predicted_scores, actual_scores)
+    rho = None if rho_reason is not None else compute_spearman(predicted_scores, actual_scores)
 
     over = sum(1 for d in details if d["label"] == "over")
     under = sum(1 for d in details if d["label"] == "under")
@@ -162,6 +182,7 @@ def run_eval(eval_set: list[dict]) -> dict:
         "error_samples": [f"{pid}: {e}" for pid, e in errors][:3],
         "mae": round(mae, 2) if mae is not None else None,
         "spearman_rho": round(rho, 3) if rho is not None else None,
+        "spearman_reason": rho_reason,
         "score_dist": {"hit_tol10": hit, "over": over, "under": under, "errored": len(errors)},
         "details": details,
     }
@@ -196,6 +217,9 @@ def check_thresholds(
             continue
         value = report.get(key)
         if value is None:
+            if key == "spearman_rho" and report.get("spearman_reason"):
+                failed.append(f"spearman_rho 未测出（{report['spearman_reason']}），门槛 {floor} 无从比较")
+                continue
             need = "至少 2 条" if key == "spearman_rho" else "至少 1 条"
             failed.append(f"{key} 未测出（跑出预测分的 pair 只有 {scored} 条，{need}）门槛 {floor} 无从比较")
         elif (value > floor) if above_is_bad else (value < floor):
@@ -255,7 +279,10 @@ def main():
     )
     print("=" * 50)
     print(f"  MAE (平均绝对误差) : {report['mae']}")
-    print(f"  Spearman ρ         : {report['spearman_rho']}")
+    rho_text = (
+        report["spearman_rho"] if report["spearman_rho"] is not None else f"未测出（{report['spearman_reason']}）"
+    )
+    print(f"  Spearman ρ         : {rho_text}")
     print(
         f"  分数偏差分布       : 命中(±10)={report['score_dist']['hit_tol10']}  "
         f"偏高={report['score_dist']['over']}  偏低={report['score_dist']['under']}"

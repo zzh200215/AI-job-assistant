@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from app.models.job_recommend import JobRecommendationFeedback
+from scripts.eval_recommend import check_thresholds as check_recommend_thresholds
 from scripts.eval_recommend import run_eval
 
 
@@ -72,7 +73,10 @@ def test_recommend_eval_generates_metrics_and_feedback_linkage(db_session, make_
 
     assert report["total"] == 1
     assert report["skill_match_accuracy"] >= 0.75
-    assert report["jd_explanation_consistency"] >= 0.9
+    # 这个 case 的 expected_missing_skills 是空的，预测也没有缺失项 → 没有任何可比项。
+    # 以前 `_mean(parts) or 1.0` 会把它写成满分 1.0；现在如实是"未测出"。
+    assert report["jd_explanation_consistency"] is None
+    assert report["measured_cases"]["jd_explanation_consistency"] == 0
     assert report["recommendation_explainability"] > 0
     assert report["interview_score_stability"] >= 0.9
     assert report["feedback_agreement_rate"] == 1.0
@@ -80,3 +84,43 @@ def test_recommend_eval_generates_metrics_and_feedback_linkage(db_session, make_
     assert report["online_feedback_linkage"]["linked_feedback_count"] == 1
     assert report["online_feedback_linkage"]["feedback_summary"]["like_rate"] == 1.0
     assert report["details"][0]["id"] == "recommend_eval_case"
+
+
+def test_all_wrong_consistency_arms_read_zero_not_perfect(monkeypatch):
+    """改前的形状：两臂全错 → _mean 得 0.0 → `or 1.0` 把它读成"完全一致"。"""
+    from scripts import eval_recommend
+
+    def fake_explainer(_resume_profile, _jd_profile):
+        return {
+            "skill_match": {"matched": ["python"], "missing_required": ["kubernetes"]},
+            "recommendation": "强烈推荐",
+            "overall_score": 90,
+            "overall_reason": "只提到 python",
+            "dimensions": [{"reason": "python"}],
+            "risk_points": ["r"],
+            "optimization_suggestions": ["s"],
+        }
+
+    monkeypatch.setattr(eval_recommend, "_run_explainer", fake_explainer)
+
+    case = {
+        "id": "all_wrong",
+        "resume_profile": {"skills": ["Python"]},
+        "jd_profile": {"required_skills": ["Kubernetes"]},
+        "expected_skill_overlap": ["python"],
+        "expected_missing_skills": ["tableau"],  # 预测的是 kubernetes → Jaccard 0
+        "expected_recommendation": "不建议投递",  # 预测 强烈推荐 → 0
+        "expected_reason_keywords": ["tableau"],
+        "interview_score_samples": [70, 80],
+    }
+
+    detail = eval_recommend._evaluate_case(case)
+    assert detail["missing_skill_consistency"] == 0.0
+    assert detail["jd_explanation_consistency"] == 0.0
+
+    report = eval_recommend.run_eval([case], db=None)
+    assert report["jd_explanation_consistency"] == 0.0
+    assert report["measured_cases"]["jd_explanation_consistency"] == 1
+    assert check_recommend_thresholds(report, min_explanation_consistency=0.85) == [
+        "jd_explanation_consistency 0.0 < 0.85"
+    ]

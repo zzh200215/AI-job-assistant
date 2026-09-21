@@ -154,7 +154,9 @@ def _evaluate_case(item: dict[str, Any]) -> dict[str, Any]:
         consistency_parts.append(missing_consistency)
     if expected_recommendation:
         consistency_parts.append(1.0 if result.get("recommendation") == expected_recommendation else 0.0)
-    jd_explanation_consistency = round(_mean(consistency_parts, digits=3) or 1.0, 3)
+    # 以前是 `round(_mean(parts) or 1.0, 3)`：两臂全错时 _mean 返回 0.0，被 `or` 读成 1.0，
+    # "完全不一致"就报告成"完全一致"。没有可比项也不是满分，而是"没测出"。
+    jd_explanation_consistency = round(_mean(consistency_parts, digits=3), 3) if consistency_parts else None
 
     details_text = []
     for dimension in result.get("dimensions") or []:
@@ -274,20 +276,46 @@ def _build_online_feedback_linkage(eval_set: list[dict[str, Any]], details: list
     }
 
 
+def _count_measured(details: list[dict[str, Any]], key: str) -> int:
+    return sum(1 for item in details if item.get(key) is not None)
+
+
 def run_eval(eval_set: list[dict[str, Any]], db=None) -> dict[str, Any]:
     details = [_evaluate_case(item) for item in eval_set]
     linkage = _build_online_feedback_linkage(eval_set, details, db)
+    feedback_values = [linkage.get("feedback_agreement_rate")]
     return {
         "total": len(eval_set),
-        "skill_match_accuracy": _mean([item["skill_match_accuracy"] for item in details], digits=3) or 0.0,
-        "jd_explanation_consistency": _mean([item["jd_explanation_consistency"] for item in details], digits=3) or 0.0,
-        "recommendation_explainability": _mean([item["recommendation_explainability"] for item in details], digits=3)
-        or 0.0,
+        # 以前每项都写作 `_mean(...) or 0.0`：一条都没测出时会被写成 0.0，
+        # 看起来像"测了，很差"；现在 None 就是"没测出"，由 check_thresholds 明确报出。
+        "skill_match_accuracy": _mean([item["skill_match_accuracy"] for item in details], digits=3),
+        "jd_explanation_consistency": _mean([item["jd_explanation_consistency"] for item in details], digits=3),
+        "recommendation_explainability": _mean([item["recommendation_explainability"] for item in details], digits=3),
         "interview_score_stability": _mean([item["interview_score_stability"] for item in details], digits=3),
-        "feedback_agreement_rate": linkage.get("feedback_agreement_rate"),
+        "feedback_agreement_rate": _mean(feedback_values, digits=3),
+        "measured_cases": {
+            "skill_match_accuracy": _count_measured(details, "skill_match_accuracy"),
+            "jd_explanation_consistency": _count_measured(details, "jd_explanation_consistency"),
+            "recommendation_explainability": _count_measured(details, "recommendation_explainability"),
+            "interview_score_stability": _count_measured(details, "interview_score_stability"),
+            "feedback_agreement_rate": linkage.get("linked_pair_count", 0),
+        },
         "online_feedback_linkage": linkage,
         "details": details,
     }
+
+
+# 这些数的来源决定了它们能不能被当成"系统的质量"引用；门槛消息里会带上，免得被抄进材料。
+METRIC_NOTES = {
+    "interview_score_stability": "它是评估集里 interview_score_samples 自身的离散度（1 - pstdev/20），"
+    "不随系统输出变化；只有 1 个样本的案件恒为 1.0",
+    "feedback_agreement_rate": "它需要线上 job_recommend_feedback 里与评估集 resume_id x jd_id 配对的数据；"
+    "没有配对样本时是未测出，而不是 0",
+    "recommendation_explainability": "= (期望关键词命中率 + 结构完整度) / 2；关键词比对的是 explainer 自己的"
+    "兜底模板文案（本脚本把 _llm_explain 接成 _fallback_explain），结构那部分量的是模板形状，不是内容正确性",
+    "skill_match_accuracy": "Jaccard(预测 matched, expected_skill_overlap)；当前评估集把 overlap 标成了"
+    "简历上的全部技能，所以原样抄一份简历技能列表就能拿 1.0",
+}
 
 
 def check_thresholds(
@@ -299,28 +327,26 @@ def check_thresholds(
     min_interview_stability: float | None = None,
     min_feedback_agreement_rate: float | None = None,
 ) -> list[str]:
+    """门槛消息。设了门槛却没测出数=失败，不再静默跳过（跳过就等于"过")。"""
     failed: list[str] = []
-    if min_skill_match_accuracy is not None and float(report["skill_match_accuracy"]) < min_skill_match_accuracy:
-        failed.append(f"skill_match_accuracy {report['skill_match_accuracy']} < {min_skill_match_accuracy}")
-    if (
-        min_explanation_consistency is not None
-        and float(report["jd_explanation_consistency"]) < min_explanation_consistency
-    ):
-        failed.append(
-            f"jd_explanation_consistency {report['jd_explanation_consistency']} < {min_explanation_consistency}"
-        )
-    if min_explainability is not None and float(report["recommendation_explainability"]) < min_explainability:
-        failed.append(f"recommendation_explainability {report['recommendation_explainability']} < {min_explainability}")
-    stability = report.get("interview_score_stability")
-    if min_interview_stability is not None and stability is not None and float(stability) < min_interview_stability:
-        failed.append(f"interview_score_stability {stability} < {min_interview_stability}")
-    feedback_agreement = report.get("feedback_agreement_rate")
-    if (
-        min_feedback_agreement_rate is not None
-        and feedback_agreement is not None
-        and float(feedback_agreement) < min_feedback_agreement_rate
-    ):
-        failed.append(f"feedback_agreement_rate {feedback_agreement} < {min_feedback_agreement_rate}")
+    total = int(report.get("total") or 0)
+    measured = report.get("measured_cases") or {}
+    checks = (
+        ("skill_match_accuracy", min_skill_match_accuracy),
+        ("jd_explanation_consistency", min_explanation_consistency),
+        ("recommendation_explainability", min_explainability),
+        ("interview_score_stability", min_interview_stability),
+        ("feedback_agreement_rate", min_feedback_agreement_rate),
+    )
+    for key, floor in checks:
+        if floor is None:
+            continue
+        value = report.get(key)
+        note = f"（注意：{METRIC_NOTES[key]}）" if key in METRIC_NOTES else ""
+        if value is None:
+            failed.append(f"{key} 未测出（{measured.get(key, 0)}/{total} 条有可比数据），门槛 {floor} 无从比较{note}")
+        elif float(value) < floor:
+            failed.append(f"{key} {value} < {floor}{note}")
     return failed
 
 
@@ -368,15 +394,24 @@ def main():
         },
     }
 
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 62)
     print(f"Recommendation eval report (total {report['total']})")
-    print("=" * 50)
-    print(f"  skill_match_accuracy           : {report['skill_match_accuracy']}")
-    print(f"  jd_explanation_consistency     : {report['jd_explanation_consistency']}")
-    print(f"  recommendation_explainability  : {report['recommendation_explainability']}")
-    print(f"  interview_score_stability      : {report['interview_score_stability']}")
-    print(f"  feedback_agreement_rate        : {report['feedback_agreement_rate']}")
-    print("=" * 50)
+    print("=" * 62)
+    measured = report["measured_cases"]
+    for key in (
+        "skill_match_accuracy",
+        "jd_explanation_consistency",
+        "recommendation_explainability",
+        "interview_score_stability",
+        "feedback_agreement_rate",
+    ):
+        value = report[key] if report[key] is not None else "未测出"
+        print(f"  {key:28s}: {value}   （{measured.get(key, 0)}/{report['total']} 条有可比数据）")
+        if key in METRIC_NOTES:
+            print(f"  {'':28s}  来源：{METRIC_NOTES[key]}")
+    print("=" * 62)
+
+    report["run_meta"]["metric_notes"] = dict(METRIC_NOTES)
 
     if args.output:
         out_path = Path(args.output)
