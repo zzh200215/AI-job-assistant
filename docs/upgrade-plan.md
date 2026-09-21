@@ -726,6 +726,8 @@ agent.SummaryAgent           real  tokens=3215
 
 **这段没动的 80 分界**（是产品口径，不是颜色）：`JobRecommend.vue:380` 在 `match_score >= 80` 时挂"优先投递"徽章，而后端 `_recommendation` 要 85 且无必需技能缺口才给"强烈推荐"——同一张卡片可能一边写"可以投递"一边挂"优先投递"；同源的还有 `priorityJobCount`、`History.vue:318` 的"高匹配记录"、`Profile.vue:492` 的成就解锁、`CareerPlanning.vue:968` 的投递策略分档（80/70/60，还叠加缺口数）。见 §10。
 
+**棘轮的第三个盲区（本段只记录，未处理）**：`hardcodedColorLiterals` 数 `<style>`、`scriptColorLiterals` 数 `<script>`，而**模板属性里的色值两边都不算**——实测 **25 处分布在 6 个文件**（`Login.vue` 17、`DefaultLayout.vue` 3、`ExplainMatch.vue` 2、`CareerPlanning.vue`/`NotFound.vue`/`ResumeUpload.vue` 各 1）。Login 那 17 处是第三方登录按钮的品牌色（Google/GitHub 官方值），属"本来就该写死"的一类；剩下 8 处是内联 SVG 的 `stroke/fill` 与兜底色（如 `CareerPlanning.vue:523` 的 `phase.color || '#409EFF'`），可 token 化。`<script>` 侧当前为 0，所以这一族若继续增长，只能靠人工发现。
+
 ---
 
 ## 9. 里程碑
