@@ -47,6 +47,19 @@ const BUDGET = {
   // 各挑一套阈值与 hex。匹配分与面试分已全部交给 utils/scoreTone.js，此处清零：
   // 视图的 <script> 里再出现 hex，这条预算就会红。
   scriptColorLiterals: {},
+  /* 模板属性里的色值：上面两个预算都看不见它（一个数 <style>，一个数 <script>）。
+     这里的数字是现状记账，不是认可——Login 的 17 处是第三方登录按钮的品牌色
+     （Google / GitHub 官方值），本来就该写死；其余 6 处是 Element 默认蓝与内联 SVG
+     描边，等能在浏览器里复核颜色时再逐条换成 token（`stroke="var(--app-…)"` 这类
+     改动的渲染结果，本机验不了）。 */
+  templateColorLiterals: {
+    'src/views/Login.vue': 17,
+    'src/layouts/DefaultLayout.vue': 3,
+    'src/views/ExplainMatch.vue': 2,
+    'src/views/CareerPlanning.vue': 1,
+    'src/views/NotFound.vue': 1,
+    'src/views/ResumeUpload.vue': 1,
+  },
   themeCompatWildcards: 27,
   themeImportantOverrides: 56,
   pageShellRedeclarations: 22,
@@ -63,10 +76,14 @@ function vueFiles(dir) {
 
 const viewSources = [...vueFiles('src/views'), ...vueFiles('src/layouts')].map((full) => {
   const source = readFileSync(full, 'utf8')
+  // The template block is everything before <script: a lazy `</template>` match would
+  // stop at the first slot template (`<template #default>`), under-counting views.
+  const scriptAt = source.search(/<script/)
   return {
     rel: full.split(path.sep).join('/'),
     style: (source.match(/<style[\s\S]*?<\/style>/g) || []).join('\n'),
     script: (source.match(/<script[\s\S]*?<\/script>/g) || []).join('\n'),
+    template: scriptAt < 0 ? source : source.slice(0, scriptAt),
     source,
   }
 })
@@ -89,51 +106,44 @@ function staleBudgets(actual, budget) {
 }
 
 describe('style debt ratchet', () => {
-  it('keeps hardcoded colors within the per-file budget', () => {
-    const actual = colorCounts('style')
-    const grown = Object.entries(actual).filter(
-      ([file, n]) => n > (BUDGET.hardcodedColorLiterals[file] ?? 0)
-    )
-    expect(
-      grown,
-      `hardcoded colors added — use a var(--app-*) token instead: ${JSON.stringify(grown)}`
-    ).toEqual([])
-  })
+  /* 色值有三个藏身处：<style>、<script> 里的字符串、以及模板属性。前两处各吃过一次
+     "预算看不见"（六套分数色板活了很久；OfferCompare 删了规则却还在发 class），
+     模板是第三次。三条预算由同一对测试驱动，再加维度只要多一行。
 
-  it('forces the budget to be tightened once debt is paid down', () => {
-    const actual = colorCounts('style')
-    const stale = staleBudgets(actual, BUDGET.hardcodedColorLiterals).map(
-      ([file, allowed]) => `${file}: ${allowed} -> ${actual[file] || 0}`
-    )
-    expect(
-      stale,
-      `budget is looser than reality, lower these in BUDGET: ${stale.join(', ')}`
-    ).toEqual([])
-  })
+     成对测试也让"抽取坏了"无法蒙混过关：如果 template 块取空，增长那条会绿，
+     但"预算比现实松"那条会把 6 个文件全报出来。 */
+  const COLOR_BUDGETS = [
+    { block: 'style', key: 'hardcodedColorLiterals', hint: 'use a var(--app-*) token instead' },
+    {
+      block: 'script',
+      key: 'scriptColorLiterals',
+      hint: 'score colour belongs in utils/scoreTone',
+    },
+    {
+      block: 'template',
+      key: 'templateColorLiterals',
+      hint: 'colour hardcoded in a template attribute',
+    },
+  ]
 
-  // 分数→颜色的挑选曾经只存在于 <script> 的字符串里，style 预算看不见它，
-  // 于是同一档位在不同页面能长出四套 hex。这条预算补上那个盲区。
-  it('keeps hardcoded colors inside <script> within the per-file budget', () => {
-    const actual = colorCounts('script')
-    const grown = Object.entries(actual).filter(
-      ([file, n]) => n > (BUDGET.scriptColorLiterals[file] ?? 0)
-    )
-    expect(
-      grown,
-      `view code is picking its own palette again — use utils/scoreTone: ${JSON.stringify(grown)}`
-    ).toEqual([])
-  })
+  for (const { block, key, hint } of COLOR_BUDGETS) {
+    it(`keeps ${key} within the per-file budget`, () => {
+      const actual = colorCounts(block)
+      const grown = Object.entries(actual).filter(([file, n]) => n > (BUDGET[key][file] ?? 0))
+      expect(grown, `${hint} — budget exceeded: ${JSON.stringify(grown)}`).toEqual([])
+    })
 
-  it('forces the <script> color budget to be tightened once paid down', () => {
-    const actual = colorCounts('script')
-    const stale = staleBudgets(actual, BUDGET.scriptColorLiterals).map(
-      ([file, allowed]) => `${file}: ${allowed} -> ${actual[file] || 0}`
-    )
-    expect(
-      stale,
-      `script budget is looser than reality, lower these in BUDGET: ${stale.join(', ')}`
-    ).toEqual([])
-  })
+    it(`forces ${key} to be tightened once debt is paid down`, () => {
+      const actual = colorCounts(block)
+      const stale = staleBudgets(actual, BUDGET[key]).map(
+        ([file, allowed]) => `${file}: ${allowed} -> ${actual[file] || 0}`
+      )
+      expect(
+        stale,
+        `budget is looser than reality, lower these in BUDGET: ${stale.join(', ')}`
+      ).toEqual([])
+    })
+  }
 
   it('does not let the theme layer grow its class-name wildcards', () => {
     const n = (themeCss.match(/\[class\*=/g) || []).length
