@@ -12,20 +12,33 @@ import os
 import chromadb
 from chromadb.config import Settings
 
-# 持久化目录（项目根目录下的 chroma_db/）
-_CHROMA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "chroma_db")
+from app.core.config import settings
+
+# 默认持久化目录（backend/chroma_db/），可用 CHROMA_DIR 覆盖
+_DEFAULT_CHROMA_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "chroma_db"
+)
 
 _client = None
 _collection = None
+
+
+def resolve_chroma_dir() -> str:
+    """Chroma 持久化目录的绝对路径；CI 的语料评估会指到一个临时目录。"""
+    configured = (settings.CHROMA_DIR or "").strip()
+    if not configured:
+        return _DEFAULT_CHROMA_DIR
+    return os.path.abspath(os.path.expanduser(configured))
 
 
 def get_chroma_client() -> chromadb.PersistentClient:
     """获取 Chroma 持久化客户端（单例）"""
     global _client
     if _client is None:
-        os.makedirs(_CHROMA_DIR, exist_ok=True)
+        chroma_dir = resolve_chroma_dir()
+        os.makedirs(chroma_dir, exist_ok=True)
         _client = chromadb.PersistentClient(
-            path=_CHROMA_DIR,
+            path=chroma_dir,
             settings=Settings(anonymized_telemetry=False),
         )
     return _client

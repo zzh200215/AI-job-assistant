@@ -58,8 +58,27 @@ jobs:
       - name: Check schema baseline drift (T1-2)
         run: python scripts/export_schema_baseline.py --check
 
-      - name: Run RAG eval (min recall >= 0.5)
-        run: python scripts/eval_rag.py --min-recall 0.5
+      # 这道门要查检索，就得有个能查的库。CI 没有 MySQL，干净检出的 chroma_db 是空的，
+      # 所以先用仓库自带的 docs/knowledge-seeds 走一遍真实入库链路，把语料装进一次性
+      # SQLite + 临时 Chroma。embedding 仍是 mock：向量没有语义，语义门槛只能门窗法那一路。
+      - name: Seed scratch knowledge corpus for the RAG gate
+        env:
+          DATABASE_URL: sqlite:///./rag_ci.sqlite3
+          CHROMA_DIR: ./rag_ci_chroma
+        run: |
+          rm -f rag_ci.sqlite3
+          rm -rf rag_ci_chroma
+          python scripts/seed_rag_corpus.py
+
+      - name: Run RAG eval (lexical recall / keyword-hit >= 0.7, no empty retrieval)
+        env:
+          DATABASE_URL: sqlite:///./rag_ci.sqlite3
+          CHROMA_DIR: ./rag_ci_chroma
+        run: >
+          python scripts/eval_rag.py
+          --min-lexical-recall 0.7
+          --min-lexical-keyword-hit 0.7
+          --max-empty-results 0
 
       - name: Run Recommend eval (min skill match >= 0.4)
         run: python scripts/eval_recommend.py --min-skill-match-accuracy 0.4

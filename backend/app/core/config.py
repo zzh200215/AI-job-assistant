@@ -111,6 +111,8 @@ class Settings(BaseSettings):
     RAG_TOP_K: int = 5
     RAG_CHUNK_SIZE: int = 500
     RAG_CHUNK_OVERLAP: int = 50
+    # Chroma 持久化目录；留空 = backend/chroma_db（默认）。CI 的语料评估用临时目录。
+    CHROMA_DIR: str = ""
     # Chroma 距离阈值：score(=distance) > 该值的 chunk 视为低相关被过滤；0.0 表示禁用
     RAG_SCORE_THRESHOLD: float = 0.0
     # 是否启用 LLM 检索路由（关闭则走启发式回退，对 mock provider 也安全）

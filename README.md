@@ -231,7 +231,7 @@ User Query → Retrieval Planner (LLM 决策 / 启发式回退)
 
 | 评估维度 | 数据集 | 脚本 | 指标 |
 | --- | --- | --- | --- |
-| **RAG 检索** | `tests/eval/rag_eval.jsonl`（50 条） | `scripts/eval_rag.py` | recall@5、MRR、keyword_hit_rate、per_doc_type_recall |
+| **RAG 检索** | `tests/eval/rag_eval.jsonl`（50 条） | `scripts/eval_rag.py` | 融合路 / 词法路（BM25）各一组：recall@5、MRR、keyword_hit_rate、per_doc_type_recall；另报同语料的随机基线（CI 门词法路） |
 | **Agent 匹配** | `tests/eval/agent_eval.jsonl`（10 对简历×JD） | `scripts/eval_agent.py` | MAE（平均绝对误差）、Spearman ρ（排序一致性）、偏差分布 |
 
 ```bash
@@ -261,6 +261,8 @@ $env:LLM_PROVIDER="mock"; $env:EMBEDDING_PROVIDER="mock"; python scripts\eval_ag
 ```
 
 > 注意：mock embedding 只用于离线烟测。要得到可写入简历或答辩材料的真实质量指标，应先使用目标 `EMBEDDING_PROVIDER` 重新导入知识库种子数据，再运行 RAG 评估，避免本地 Chroma 由不同维度的 embedding 建库导致指标失真。
+> 现在这条纪律是脚本强制的：`EMBEDDING_PROVIDER=mock` 时给融合路设语义门槛（`--min-recall` / `--min-mrr` / `--min-keyword-hit`）会直接判失败，因为 mock 向量是按文本 hash 生成的伪向量——在同一份语料上"随机抓 5 个切片"就有 recall@5 ≈ 0.48，而旧 CI 的门槛是 0.5。mock 环境下要门语义，门窗法那一路：
+> `python scripts/eval_rag.py --min-lexical-recall 0.7 --min-lexical-keyword-hit 0.7 --max-empty-results 0`（CI 用 `scripts/seed_rag_corpus.py` 先把 `docs/knowledge-seeds` 装进一次性临时库，见 `docs/engineering-quality.md`）。
 
 > **面试价值**：这两个数字直接回答"检索质量怎么样？""匹配打分准不准？"——是简历上"匹配准确率 XX%"的来源。
 > 生成报告后，可在前端 `评测报表` 页面查看最新结果、历史快照和两次评测的对比差异。

@@ -61,6 +61,29 @@ The script writes JSON reports to `backend/reports/`, which is ignored by Git be
 Each run now keeps timestamped history snapshots such as `rag_eval_20260626_153000.json` and refreshes `rag_eval.json` / `agent_eval.json` as the latest aliases.
 The frontend `评测报表` page reads these files through `/api/eval-reports` for history browsing and version comparison.
 
+### What the CI RAG gate actually checks
+
+CI has no MySQL and no pre-built vector store, so `ci.yml` builds a throwaway corpus first
+(`backend/scripts/seed_rag_corpus.py` ingests the 16 bundled `docs/knowledge-seeds/*.md` files through the real
+ingestion path into a scratch SQLite + a scratch Chroma dir, ~3s), then runs:
+
+```
+python scripts/eval_rag.py --min-lexical-recall 0.7 --min-lexical-keyword-hit 0.7 --max-empty-results 0
+```
+
+Measured on that corpus (50 queries, mock embeddings): lexical `recall@5 0.813`, `keyword_hit 0.88`, `mrr 0.781`.
+The random-retriever baseline on the same corpus is `recall@5 0.479`, `keyword_hit 0.411` — the script computes and
+prints it, and fails any floor that sits at or below it.
+
+| claim | gate | why |
+| --- | --- | --- |
+| lexical retrieval still finds the right kind of document | `--min-lexical-recall` / `--min-lexical-keyword-hit` | BM25 doesn't depend on the embedding provider, so under `EMBEDDING_PROVIDER=mock` this is the only semantic signal available |
+| the fused pipeline is wired up (visibility, hydration, RRF, rerank) | `--max-empty-results 0` plus the default `--max-retrieval-errors 0` | an empty or throwing result means a broken path, not bad relevance — which is exactly how this gate used to fail |
+| semantic (vector) retrieval quality | **not gated in CI** | mock embeddings are hash-derived pseudo-vectors; setting `--min-recall` / `--min-mrr` / `--min-keyword-hit` on the fused numbers now fails outright under `EMBEDDING_PROVIDER=mock` instead of passing at chance level |
+
+The previous CI line was `--min-recall 0.5` on the fused number — a floor below the random baseline. Use
+`scripts/eval-quality.ps1` with a real embedding provider when you need a number worth quoting.
+
 ## Full verification
 
 Run:

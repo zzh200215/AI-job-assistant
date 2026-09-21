@@ -36,6 +36,8 @@ backend/uploads/**
 !backend/uploads/.gitkeep
 backend/chroma_db/*
 !backend/chroma_db/.gitkeep
+# CI/本地一次性 RAG 语料（scripts/seed_rag_corpus.py 的临时 Chroma 目录；sqlite 已被 *.sqlite3 覆盖）
+backend/rag_ci_chroma/
 backend/models/*
 !backend/models/.gitkeep
 backend/*.log

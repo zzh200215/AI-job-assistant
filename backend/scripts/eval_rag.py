@@ -6,6 +6,16 @@
     python scripts/eval_rag.py --sample 10          # 只跑前 10 条
     python scripts/eval_rag.py --output report.json # 输出 JSON 报告
 
+    CI（一次性语料 + mock provider，见 scripts/seed_rag_corpus.py）：
+    python scripts/eval_rag.py --min-lexical-recall 0.7 --min-lexical-keyword-hit 0.7 --max-empty-results 0
+    该语料实测：词法 recall@5 0.813 / keyword 0.88，随机基线 recall 0.479 / keyword 0.411。
+
+两组指标，别混着看：
+  - 融合路 recall@K / mrr / keyword_hit : 走完向量 + BM25 + 改写 + RRF + rerank 的最终结果
+  - 词法路 lexical_*                    : 只走 BM25 那一路（不碰向量、不碰改写）
+在 EMBEDDING_PROVIDER=mock 的环境里向量路没有语义（"随机取 5 个切片"和它的 recall 只差
+0.16 上下），所以那里**只能门词法路和"管道没断"**，语义召回分照旧报出但不设门槛。
+
 输出指标：
   - recall@K   : 期望 doc_type 在 top-K 结果中出现的比例
   - mrr        : Mean Reciprocal Rank（期望 doc_type 首次出现的倒数排名均值）
@@ -77,6 +87,18 @@ def keyword_hit_rate(texts: list[str], expected_keywords: list[str]) -> float:
     return hit / len(expected_keywords)
 
 
+def _per_type_recall(rows: list[tuple[list[str], list[str]]]) -> dict[str, float]:
+    """(检索到的 doc_type, 期望 doc_type) 列表 -> 每个 doc_type 的独立召回率。"""
+    hit: dict[str, int] = {}
+    total: dict[str, int] = {}
+    for retrieved_types, expected_types in rows:
+        for t in expected_types:
+            total[t] = total.get(t, 0) + 1
+            if t in retrieved_types:
+                hit[t] = hit.get(t, 0) + 1
+    return {t: round(hit.get(t, 0) / total[t], 3) for t in sorted(total)}
+
+
 # ===================== 主评估循环 =====================
 
 
@@ -113,8 +135,7 @@ def run_eval(eval_set: list[dict], top_k: int = 5, *, db=None, user_id: int | No
     khits = []
     errors: list[tuple[str, str]] = []
     empty_results = 0
-    type_hit_counts: dict[str, int] = {}
-    type_total_counts: dict[str, int] = {}
+    per_type_rows: list[tuple[list[str], list[str]]] = []
     details = []
 
     for idx, item in enumerate(eval_set):
@@ -145,11 +166,7 @@ def run_eval(eval_set: list[dict], top_k: int = 5, *, db=None, user_id: int | No
             recalls.append(r)
             rrs.append(rr)
             khits.append(kh)
-
-            for t in expected_types:
-                type_total_counts[t] = type_total_counts.get(t, 0) + 1
-                if t in retrieved_types:
-                    type_hit_counts[t] = type_hit_counts.get(t, 0) + 1
+            per_type_rows.append((retrieved_types, expected_types))
 
         details.append(
             {
@@ -166,10 +183,7 @@ def run_eval(eval_set: list[dict], top_k: int = 5, *, db=None, user_id: int | No
         if (idx + 1) % 10 == 0:
             logger.info("已评估 %d/%d ...", idx + 1, len(eval_set))
 
-    # per doc_type recall
-    per_type = {}
-    for t in sorted(type_total_counts):
-        per_type[t] = round(type_hit_counts.get(t, 0) / type_total_counts[t], 3)
+    per_type = _per_type_recall(per_type_rows)
 
     scored = len(recalls)
     report = {
@@ -187,6 +201,161 @@ def run_eval(eval_set: list[dict], top_k: int = 5, *, db=None, user_id: int | No
     return report
 
 
+# ===================== 词法（BM25）单独一路 + 随机基线 =====================
+
+
+def _lexical_hits(query: str, top_k: int, visible_doc_ids: set[str] | None) -> tuple[list[str], list[str]]:
+    """词法那一路的 top-K：BM25 排序 → 回 Chroma 取类型/文本 → 按可见集合裁剪。
+
+    `_bm25_score` 只给 chunk_id，类型和文本要补水——和 `_rrf_fuse` 里"给只有词法命中的
+    切片补水"是同一件事，只不过这里不需要融合。
+    """
+    from app.core.chroma_client import get_knowledge_collection
+    from app.services.multi_recall import _bm25_score
+
+    chunk_ids = [cid for cid, _score in _bm25_score(query, top_k=top_k)]
+    if not chunk_ids:
+        return [], []
+
+    data = get_knowledge_collection().get(ids=chunk_ids, include=["documents", "metadatas"])
+    ids = data.get("ids") or []
+    documents = data.get("documents") or []
+    metadatas = data.get("metadatas") or []
+    # Chroma 的 get(ids=...) 按它自己的顺序返回，不是请求顺序；必须按 id 回查，
+    # 否则词法排名会被打乱，recall/mrr 量的就不是 BM25 而是 collection 的存储顺序。
+    by_cid: dict[str, tuple[str, str]] = {}
+    for i, cid in enumerate(ids):
+        meta = metadatas[i] if i < len(metadatas) else {}
+        by_cid[cid] = (
+            str((meta or {}).get("doc_id", "")),
+            ((meta or {}).get("doc_type", ""), documents[i] if i < len(documents) else ""),
+        )
+
+    types: list[str] = []
+    texts: list[str] = []
+    for cid in chunk_ids:  # 保持 BM25 排名顺序
+        entry = by_cid.get(cid)
+        if entry is None:
+            continue
+        doc_id, (doc_type, text) = entry
+        # 与融合路同一条底线：不可见的文档连类型都不该漏出去
+        if visible_doc_ids is not None and doc_id not in visible_doc_ids:
+            continue
+        types.append(doc_type)
+        texts.append(text)
+        if len(types) >= top_k:
+            break
+    return types, texts
+
+
+def run_lexical_eval(eval_set: list[dict], *, db, user_id: int | None = None, top_k: int = 5) -> dict:
+    """只量词法召回，不碰向量、不碰改写。
+
+    为什么单列而不是只看融合结果：CI 里 EMBEDDING_PROVIDER=mock，向量路是按文本 hash 出的
+    伪向量——可复现，但没有语义。在这样的环境里融合分数被无语义的候选搅动，语义门槛既测不出
+    好坏也随时会被无关改动碰翻。词法那一路不受 provider 真假影响，是这份一次性语料上唯一
+    能真的门住语义的数。
+    """
+    from app.services.multi_recall import _BM25Index
+    from app.utils.knowledge_access import get_visible_knowledge_doc_ids
+
+    visible = get_visible_knowledge_doc_ids(db, user_id=user_id)
+
+    recalls, rrs, khits = [], [], []
+    errors: list[tuple[str, str]] = []
+    per_type_rows: list[tuple[list[str], list[str]]] = []
+    empty_results = 0
+
+    for item in eval_set:
+        query = item["query"]
+        expected_types = item.get("expected_doc_types", [])
+        expected_keywords = item.get("expected_keywords", [])
+
+        error = None
+        try:
+            types, texts = _lexical_hits(query, top_k, visible)
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {str(exc)[:160]}"
+            errors.append((query, error))
+            logger.warning("query=%r 词法检索失败: %s", query, exc)
+            types, texts = [], []
+
+        if error is None:
+            if not types:
+                empty_results += 1
+            recalls.append(recall_at_k(types, expected_types))
+            rrs.append(reciprocal_rank(types, expected_types))
+            khits.append(keyword_hit_rate(texts, expected_keywords))
+            per_type_rows.append((types, expected_types))
+
+    scored = len(recalls)
+    index = _BM25Index.get()
+    return {
+        "total": len(eval_set),
+        "retrieved": scored,
+        "retrieval_errors": len(errors),
+        "empty_results": empty_results,
+        "error_samples": [f"{query}: {error}" for query, error in errors][:3],
+        f"recall@{top_k}": round(sum(recalls) / scored, 3) if scored else None,
+        "mrr": round(sum(rrs) / scored, 3) if scored else None,
+        "keyword_hit_rate": round(sum(khits) / scored, 3) if scored else None,
+        "per_doc_type_recall": _per_type_recall(per_type_rows),
+        # 门失败时先分清"索引压根没建起来"还是"建起来了但召不准"
+        "bm25_corpus_chunks": index._corpus_count,
+        "bm25_build_failed": index.build_failed,
+    }
+
+
+def random_metric_baselines(
+    eval_set: list[dict], *, top_k: int, draws: int = 200, seed: int = 20260920
+) -> dict[str, float] | None:
+    """在这份语料上"随机抓 top_k 个切片"能拿到的 recall@K / mrr / keyword_hit。
+
+    门槛只有明显高于对应指标的基线才有意义。实测（CI 的 91 切片 / 8 种 doc_type 种子语料）：
+    随机 recall@5 = 0.487、keyword_hit = 0.413，而 ci.yml 里那句 "min recall >= 0.5" 从写下
+    起就没和这个数比过——随机检索也能"过"。语料读不到时返回 None（没有基线可比，不编一个数）。
+    """
+    import random
+
+    from app.core.chroma_client import get_knowledge_collection
+
+    if not eval_set:
+        return None
+    try:
+        data = get_knowledge_collection().get(include=["documents", "metadatas"])
+    except Exception as exc:
+        logger.warning("读语料失败，随机基线无从计算: %s", exc)
+        return None
+
+    pairs = [
+        ((m or {}).get("doc_type", ""), (t or ""))
+        for m, t in zip(data.get("metadatas") or [], data.get("documents") or [], strict=False)
+    ]
+    if not pairs:
+        return None
+
+    rng = random.Random(seed)
+    totals = {"recall": 0.0, "mrr": 0.0, "keyword_hit": 0.0}
+    for _ in range(draws):
+        for item in eval_set:
+            expected_types = item.get("expected_doc_types", [])
+            expected_keywords = item.get("expected_keywords", [])
+            types, texts = [], []
+            for t, text in rng.sample(pairs, min(top_k, len(pairs))):
+                types.append(t)
+                texts.append(text)
+            totals["recall"] += recall_at_k(types, expected_types)
+            totals["mrr"] += reciprocal_rank(types, expected_types)
+            totals["keyword_hit"] += keyword_hit_rate(texts, expected_keywords)
+
+    n = draws * len(eval_set)
+    return {
+        "recall": round(totals["recall"] / n, 3),
+        "mrr": round(totals["mrr"] / n, 3),
+        "keyword_hit": round(totals["keyword_hit"] / n, 3),
+    }
+
+
 def check_thresholds(
     report: dict,
     *,
@@ -195,11 +364,21 @@ def check_thresholds(
     min_mrr: float | None = None,
     min_keyword_hit: float | None = None,
     max_retrieval_errors: int | None = 0,
+    min_lexical_recall: float | None = None,
+    min_lexical_keyword_hit: float | None = None,
+    max_empty_results: int | None = None,
+    embedding_provider: str | None = None,
+    random_baselines: dict[str, float] | None = None,
 ) -> list[str]:
     """Return human-readable failure reasons for a completed RAG report.
 
     `max_retrieval_errors` 默认 0：只要有任何一条 query 是"检索直接抛异常"，
     这份报告就不能算测过——先报这条，再谈阈值。
+
+    融合路的三个门槛（recall/mrr/keyword_hit）在 `embedding_provider=mock` 下直接判失败：
+    那里的向量没有语义，过与不过都说明不了检索质量。要门语义，门词法路那两个。
+    `random_baselines` 是同一份语料上"随机抓 K 个切片"的各指标值：门槛不高于自己的基线
+    就等于没门槛，所以这里也一起检查。
     """
     failed = []
     errors = report.get("retrieval_errors", 0)
@@ -210,15 +389,65 @@ def check_thresholds(
             f"指标不算测出。样例：{samples or '无'}）"
         )
 
+    if max_empty_results is not None:
+        empty = report.get("empty_results", 0)
+        if empty > max_empty_results:
+            failed.append(
+                f"empty_results {empty} > {max_empty_results}（{report['total']} 条里 {empty} 条融合检索一条都没召回，"
+                f"该查链路/可见性而不是查相关性）"
+            )
+
     recall_key = f"recall@{top_k}"
-    for key, floor in ((recall_key, min_recall), ("mrr", min_mrr), ("keyword_hit_rate", min_keyword_hit)):
+    fused_floors = ((recall_key, min_recall), ("mrr", min_mrr), ("keyword_hit_rate", min_keyword_hit))
+    floors_set = [key for key, floor in fused_floors if floor is not None]
+    if floors_set and (embedding_provider or "").strip().lower() == "mock":
+        failed.append(
+            f"融合路门槛（{', '.join(floors_set)}）在 EMBEDDING_PROVIDER=mock 下不成立："
+            f"向量路是文本 hash 出的伪向量，这个数只反映语料里 doc_type 的密度"
+            f"（随机基线 recall={random_baselines.get('recall') if random_baselines else '未算出'}）。"
+            "要门语义请用 --min-lexical-recall / --min-lexical-keyword-hit，要看真召回请换真 embedding provider。"
+        )
+    else:
+        for key, floor in fused_floors:
+            if floor is None:
+                continue
+            value = report.get(key)
+            if value is None:
+                failed.append(f"{key} 未测出（没有一条 query 拿到可用检索结果），门槛 {floor} 无从比较")
+            elif value < floor:
+                failed.append(f"{key} {value} < {floor}")
+
+    lexical = report.get("lexical") or {}
+    for key, floor, label in (
+        (recall_key, min_lexical_recall, "词法"),
+        ("keyword_hit_rate", min_lexical_keyword_hit, "词法"),
+    ):
         if floor is None:
             continue
-        value = report.get(key)
+        value = lexical.get(key)
+        context = (
+            f"（{lexical.get('retrieved', 0)}/{lexical.get('total', 0)} 条测出，其中空结果 "
+            f"{lexical.get('empty_results', 0)} 条、异常 {lexical.get('retrieval_errors', 0)} 条，"
+            f"BM25 覆盖 {lexical.get('bm25_corpus_chunks', '未建')} 切片"
+            f"{'，且索引构建失败' if lexical.get('bm25_build_failed') else ''}）"
+        )
         if value is None:
-            failed.append(f"{key} 未测出（没有一条 query 拿到可用检索结果），门槛 {floor} 无从比较")
+            failed.append(f"{label} {key} 未测出{context}，门槛 {floor} 无从比较")
         elif value < floor:
-            failed.append(f"{key} {value} < {floor}")
+            failed.append(f"{label} {key} {value} < {floor}{context}")
+
+    if random_baselines:
+        for label, key, floor in (
+            (recall_key, "recall", min_recall),
+            ("mrr", "mrr", min_mrr),
+            ("keyword_hit_rate", "keyword_hit", min_keyword_hit),
+            (f"词法 {recall_key}", "recall", min_lexical_recall),
+            ("词法 keyword_hit_rate", "keyword_hit", min_lexical_keyword_hit),
+        ):
+            base = random_baselines.get(key)
+            if floor is not None and base is not None and floor <= base:
+                failed.append(f"{label} 门槛 {floor} ≤ 随机基线 {base}：这道门分不出好坏，抬门槛或换语料")
+
     return failed
 
 
@@ -306,6 +535,24 @@ def main():
         default=None,
         help="以哪个用户的可见范围检索；默认取 ADMIN_USERNAMES 里的管理员（全量可见）",
     )
+    parser.add_argument(
+        "--min-lexical-recall",
+        type=float,
+        default=None,
+        help="Fail if BM25-only recall@K is below this threshold（不受 embedding provider 真假影响）",
+    )
+    parser.add_argument(
+        "--min-lexical-keyword-hit",
+        type=float,
+        default=None,
+        help="Fail if BM25-only keyword hit rate is below this threshold（词法路里区分度最高的一个数）",
+    )
+    parser.add_argument(
+        "--max-empty-results",
+        type=int,
+        default=None,
+        help="允许多少条 query 的融合检索返回空（CI 传 0：空结果说明链路或可见性断了，不是相关性差）",
+    )
     args = parser.parse_args()
 
     eval_set = load_eval_set(args.eval_set)
@@ -315,6 +562,7 @@ def main():
         eval_set = eval_set[: args.sample]
         logger.info("截取前 %d 条", args.sample)
 
+    from app.core.config import settings
     from app.core.database import SessionLocal
 
     db = SessionLocal()
@@ -325,9 +573,13 @@ def main():
             return 2
         logger.info("检索可见范围按 %s (user_id=%s)", identity, user_id)
         report = run_eval(eval_set, top_k=args.top_k, db=db, user_id=user_id)
+        lexical = run_lexical_eval(eval_set, db=db, user_id=user_id, top_k=args.top_k)
+        baselines = random_metric_baselines(eval_set, top_k=args.top_k)
     finally:
         db.close()
 
+    provider = (settings.EMBEDDING_PROVIDER or "mock").strip().lower()
+    report["lexical"] = lexical
     report["report_type"] = "rag"
     report["run_meta"] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -335,34 +587,61 @@ def main():
         "top_k": args.top_k,
         "sample": args.sample,
         "retrieval_identity": identity,
+        "embedding_provider": provider,
+        "random_metric_baselines": baselines,
         "thresholds": {
             "min_recall": args.min_recall,
             "min_mrr": args.min_mrr,
             "min_keyword_hit": args.min_keyword_hit,
             "max_retrieval_errors": args.max_retrieval_errors,
+            "min_lexical_recall": args.min_lexical_recall,
+            "min_lexical_keyword_hit": args.min_lexical_keyword_hit,
+            "max_empty_results": args.max_empty_results,
         },
     }
 
+    recall_key = f"recall@{args.top_k}"
+
     # 打印摘要
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 58)
     print(f"RAG 评估报告  (共 {report['total']} 条, recall@{args.top_k}, 口径 {identity})")
-    print("=" * 50)
+    print("=" * 58)
+    print(f"  embedding provider : {provider}")
+    if provider == "mock":
+        print("                        ← 伪向量无语义，融合路只报数不门语义；语义看词法那一路")
+    if baselines:
+        print(
+            f"  随机基线（同语料随机抓 {args.top_k} 个切片）: "
+            f"recall={baselines['recall']}  mrr={baselines['mrr']}  keyword={baselines['keyword_hit']}"
+            "（门槛不高于对应基线就等于没门槛）"
+        )
+    else:
+        print("  随机基线             : 未算出（语料读不到？门槛无从校验）")
     print(
-        f"  检索成功        : {report['retrieved']} 条"
-        f"（异常 {report['retrieval_errors']} 条，空结果 {report['empty_results']} 条）"
+        f"  融合路             : {report['retrieved']} 条成功"
+        f"（异常 {report['retrieval_errors']}，空结果 {report['empty_results']}）"
+        f"  {recall_key}={report[recall_key]}  mrr={report['mrr']}  keyword={report['keyword_hit_rate']}"
     )
-    print(f"  Recall@{args.top_k}        : {report[f'recall@{args.top_k}']}")
-    print(f"  MRR              : {report['mrr']}")
-    print(f"  Keyword Hit Rate : {report['keyword_hit_rate']}")
+    print(
+        f"  词法路 BM25        : {lexical['retrieved']} 条成功"
+        f"（异常 {lexical['retrieval_errors']}，空结果 {lexical['empty_results']}，"
+        f"索引覆盖 {lexical['bm25_corpus_chunks']} 切片"
+        f"{'，索引构建失败' if lexical['bm25_build_failed'] else ''}）"
+        f"  {recall_key}={lexical[recall_key]}  mrr={lexical['mrr']}  keyword={lexical['keyword_hit_rate']}"
+    )
     print()
-    print("  Per Doc-Type Recall:")
-    for t, v in report["per_doc_type_recall"].items():
-        print(f"    {t:20s} : {v}")
-    if report["error_samples"]:
+    print(f"  Per Doc-Type Recall ({'融合 / 词法'}, 括号内是该类 query 数):")
+    for t in sorted(set(report["per_doc_type_recall"]) | set(lexical["per_doc_type_recall"])):
+        n = sum(1 for item in eval_set if t in item.get("expected_doc_types", []))
+        print(
+            f"    {t:20s} : {report['per_doc_type_recall'].get(t, '-')} / "
+            f"{lexical['per_doc_type_recall'].get(t, '-')}  ({n})"
+        )
+    if report["error_samples"] or lexical["error_samples"]:
         print("  检索异常样例:")
-        for sample in report["error_samples"]:
+        for sample in report["error_samples"] + lexical["error_samples"]:
             print(f"    {sample}")
-    print("=" * 50)
+    print("=" * 58)
 
     if args.output:
         out_path = Path(args.output)
@@ -378,6 +657,11 @@ def main():
         min_mrr=args.min_mrr,
         min_keyword_hit=args.min_keyword_hit,
         max_retrieval_errors=args.max_retrieval_errors,
+        min_lexical_recall=args.min_lexical_recall,
+        min_lexical_keyword_hit=args.min_lexical_keyword_hit,
+        max_empty_results=args.max_empty_results,
+        embedding_provider=provider,
+        random_baselines=baselines,
     )
 
     if failed:
