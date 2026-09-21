@@ -47,7 +47,7 @@
             </div>
           </div>
           <div class="summary-meta">
-            <span>{{ formatDate(latestRag.generated_at) }}</span>
+            <span>{{ utcStamp(latestRag.generated_at) }}</span>
             <span>{{ latestRag.total }} 条样本</span>
           </div>
         </template>
@@ -72,7 +72,7 @@
             </div>
           </div>
           <div class="summary-meta">
-            <span>{{ formatDate(latestAgent.generated_at) }}</span>
+            <span>{{ utcStamp(latestAgent.generated_at) }}</span>
             <span>{{ latestAgent.total }} 条样本</span>
           </div>
         </template>
@@ -110,7 +110,7 @@
             </template>
           </el-table-column>
           <el-table-column label="时间" min-width="170">
-            <template #default="{ row }">{{ formatDate(row.generated_at) }}</template>
+            <template #default="{ row }">{{ utcStamp(row.generated_at) }}</template>
           </el-table-column>
           <el-table-column label="操作" min-width="110" fixed="right">
             <template #default="{ row }">
@@ -166,12 +166,12 @@
         <div v-if="compareResult" class="compare-result">
           <div class="compare-card">
             <strong>{{ compareResult.report_a.summary.filename }}</strong>
-            <span>{{ formatDate(compareResult.report_a.summary.generated_at) }}</span>
+            <span>{{ utcStamp(compareResult.report_a.summary.generated_at) }}</span>
             <pre class="metric-pre">{{ compareMetricBlock(compareResult.report_a.summary) }}</pre>
           </div>
           <div class="compare-card">
             <strong>{{ compareResult.report_b.summary.filename }}</strong>
-            <span>{{ formatDate(compareResult.report_b.summary.generated_at) }}</span>
+            <span>{{ utcStamp(compareResult.report_b.summary.generated_at) }}</span>
             <pre class="metric-pre">{{ compareMetricBlock(compareResult.report_b.summary) }}</pre>
           </div>
           <div class="compare-card delta-card">
@@ -190,7 +190,7 @@
             detail.summary.report_type.toUpperCase()
           }}</el-descriptions-item>
           <el-descriptions-item label="时间">{{
-            formatDate(detail.summary.generated_at)
+            utcStamp(detail.summary.generated_at)
           }}</el-descriptions-item>
           <el-descriptions-item label="报告文件">{{
             detail.summary.filename
@@ -253,6 +253,7 @@ import {
   getEvalReportSummary,
 } from '@/api/evaluation'
 import { ElMessage } from '@/plugins/element-services'
+import { utcStamp } from '@/utils/format/date'
 
 const loading = reactive({
   list: false,
@@ -343,11 +344,6 @@ function metricText(value) {
   return Number(value)
     .toFixed(3)
     .replace(/\.?0+$/, '')
-}
-
-function formatDate(value) {
-  if (!value) return '-'
-  return String(value).replace('T', ' ').replace('+00:00', ' UTC').slice(0, 23)
 }
 
 function formatJson(value) {

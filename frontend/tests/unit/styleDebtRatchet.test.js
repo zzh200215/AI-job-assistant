@@ -198,6 +198,24 @@ describe('style debt ratchet', () => {
     ).toEqual([])
   })
 
+  /* 日期格式化：迁移前 18 份副本散在 16 个文件里，其中一份还漏掉了 locale（同一条时间戳
+     在英文浏览器上会变成美式排版）。现在视图与布局里不许再出现 Intl/toLocale*。 */
+  it('keeps date formatting out of views', () => {
+    const offenders = viewSources
+      .filter(({ script, template }) =>
+        /toLocaleDateString|toLocaleTimeString|toLocaleString|Intl\.DateTimeFormat/.test(
+          `${script}${template}`
+        )
+      )
+      .map(({ rel }) => rel)
+    expect(
+      offenders,
+      `use utils/format/date (monthDay / monthDayTime / dateTime / compactDateTime / utcStamp / rawStamp / isoMonthDay): ${offenders.join(
+        ', '
+      )}`
+    ).toEqual([])
+  })
+
   it('does not let the theme layer grow its class-name wildcards', () => {
     const n = (themeCss.match(/\[class\*=/g) || []).length
     expect(n).toBeLessThanOrEqual(BUDGET.themeCompatWildcards)

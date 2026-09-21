@@ -63,7 +63,9 @@
             }}</el-tag></template
           ></el-table-column
         ><el-table-column label="创建时间" min-width="170"
-          ><template #default="{ row }">{{ formatTime(row.created_at) }}</template></el-table-column
+          ><template #default="{ row }">{{
+            dateTime(row.created_at, '-')
+          }}</template></el-table-column
         ><el-table-column label="操作" width="84" fixed="right"
           ><template #default="{ row }"
             ><el-button text type="primary" @click="openDetail(row)">详情</el-button></template
@@ -105,10 +107,10 @@
             selectedOrder.transaction_id || '-'
           }}</el-descriptions-item
           ><el-descriptions-item label="创建时间">{{
-            formatTime(selectedOrder.created_at)
+            dateTime(selectedOrder.created_at, '-')
           }}</el-descriptions-item
           ><el-descriptions-item label="支付时间">{{
-            formatTime(selectedOrder.paid_at)
+            dateTime(selectedOrder.paid_at, '-')
           }}</el-descriptions-item></el-descriptions
         ></template
       ></el-drawer
@@ -121,6 +123,7 @@ import { computed, onMounted, ref } from 'vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage } from '@/plugins/element-services'
 import request from '@/api/request'
+import { dateTime } from '@/utils/format/date'
 
 const orders = ref([])
 const total = ref(0)
@@ -155,9 +158,6 @@ const paidRevenue = computed(() =>
 )
 function formatMoney(amount) {
   return `￥${Number(amount || 0).toFixed(2)}`
-}
-function formatTime(value) {
-  return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-'
 }
 function planLabel(plan) {
   return { free: '免费版', pro: 'Pro', enterprise: '企业版' }[plan] || plan || '-'

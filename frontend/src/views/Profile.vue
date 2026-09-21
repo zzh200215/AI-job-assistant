@@ -40,7 +40,7 @@
             </div>
             <div class="info-row">
               <dt>注册时间</dt>
-              <dd>{{ formatDate(authStore.user?.created_at) }}</dd>
+              <dd>{{ dateTime(authStore.user?.created_at, '--') }}</dd>
             </div>
             <div class="info-row">
               <dt>默认工作台</dt>
@@ -368,6 +368,7 @@ import {
   Star,
   Microphone,
 } from '@element-plus/icons-vue'
+import { dateTime } from '@/utils/format/date'
 
 const authStore = useAuthStore()
 const loading = ref(false)
@@ -602,12 +603,6 @@ const avatarText = computed(() => {
 
 function formatProvider(value) {
   return value ? String(value).toUpperCase() : '--'
-}
-
-function formatDate(value) {
-  if (!value) return '--'
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()
 }
 
 async function refreshAll() {

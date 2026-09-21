@@ -668,7 +668,7 @@
                       <div class="pipeline-meta">
                         <span>{{ entry.location || '地点待补充' }}</span>
                         <span v-if="entry.resumeName">{{ entry.resumeName }}</span>
-                        <span>更新于 {{ formatPipelineTime(entry.updatedAt) }}</span>
+                        <span>更新于 {{ compactDateTime(entry.updatedAt, '--') }}</span>
                       </div>
 
                       <el-input
@@ -1046,6 +1046,7 @@ import {
   deleteJobPipelineEntry,
   updateJobPipelineEntry,
 } from '@/api/jobs'
+import { compactDateTime } from '@/utils/format/date'
 
 const route = useRoute()
 const router = useRouter()
@@ -2119,25 +2120,11 @@ function comparePipelineEntries(a, b) {
   return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
 }
 
-function formatPipelineTime(value) {
-  if (!value) return '--'
-  try {
-    return new Date(value).toLocaleString('zh-CN', {
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return value
-  }
-}
-
 function pipelineHistoryText(history) {
   if (!Array.isArray(history) || !history.length) return ''
   return history
     .slice(-3)
-    .map((item) => `${pipelineStageLabel(item.stage)} ${formatPipelineTime(item.at)}`)
+    .map((item) => `${pipelineStageLabel(item.stage)} ${compactDateTime(item.at, '--')}`)
     .join(' / ')
 }
 

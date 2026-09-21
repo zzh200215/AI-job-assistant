@@ -38,7 +38,7 @@
             <div class="interview-dot violet" />
             <div class="interview-info">
               <strong>{{ item.company || '' }} - {{ item.title || '' }}</strong>
-              <span>第{{ item.interview_round || 1 }}轮 · {{ formatDate(item.interview_at) }}</span>
+              <span>第{{ item.interview_round || 1 }}轮 · {{ monthDayTime(item.interview_at) }}</span>
             </div>
             <div class="interview-actions">
               <el-button size="small" @click.stop="startPrep(item)">AI准备</el-button>
@@ -254,7 +254,7 @@
             <div class="interview-info">
               <strong>{{ s.jd_title || s.position || '模拟面试' }}</strong>
               <span
-                >{{ formatDate(s.created_at) }} ·
+                >{{ monthDayTime(s.created_at) }} ·
                 {{ s.status === 'completed' ? '已完成' : '进行中' }}</span
               >
             </div>
@@ -323,6 +323,7 @@ import { getAnalysis } from '@/api/analysis'
 import { getJobPipelineList } from '@/api/jobs'
 import { getInterviewGroupTitle, normalizeInterviewQuestions } from '@/utils/interviewQuestions'
 import { INTERVIEW_SCORE_BANDS, scoreToneAtLeast } from '@/utils/scoreTone'
+import { monthDayTime } from '@/utils/format/date'
 
 const router = useRouter()
 
@@ -519,20 +520,6 @@ async function copyIntro() {
     ElMessage.success('已复制到剪贴板')
   } catch {
     ElMessage.warning('复制失败，请手动复制')
-  }
-}
-
-function formatDate(d) {
-  if (!d) return ''
-  try {
-    return new Date(d).toLocaleDateString('zh-CN', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return d
   }
 }
 

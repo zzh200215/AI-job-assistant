@@ -21,7 +21,7 @@
         <span class="workflow-caption">
           {{
             activeResume
-              ? `更新于 ${formatDate(activeResume.create_time)}`
+              ? `更新于 ${monthDay(activeResume.create_time)}`
               : '上传后可进行诊断与匹配'
           }}
         </span>
@@ -493,7 +493,7 @@
         </div>
 
         <div class="card-footer">
-          <span class="card-date">版本记录 {{ formatDate(r.create_time) }}</span>
+          <span class="card-date">版本记录 {{ monthDay(r.create_time) }}</span>
           <div class="card-actions">
             <el-button size="small" type="primary" @click="goAnalysis(r)">
               {{ r.id === defaultResumeId ? '匹配岗位' : '去分析' }}
@@ -540,6 +540,7 @@ import {
   scoreToneColor,
   scoreToneFillClass,
 } from '@/utils/scoreTone'
+import { monthDay } from '@/utils/format/date'
 
 const router = useRouter()
 
@@ -700,16 +701,6 @@ function formatSize(n) {
   if (n < 1024) return n + ' B'
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB'
   return (n / 1024 / 1024).toFixed(2) + ' MB'
-}
-
-function formatDate(d) {
-  if (!d) return ''
-  try {
-    return new Date(d).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-  } catch {
-    // 保留后端返回的原始时间。
-    return d
-  }
 }
 
 // 诊断分标签只有两档：至少到 good 档才算 success，其余 warning。

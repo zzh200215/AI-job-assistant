@@ -68,7 +68,7 @@
           <div class="task-dot" :class="'dot-' + task.status" />
           <div class="task-info">
             <strong>{{ task.name || task.task_type || '分析任务' }}</strong>
-            <span>{{ formatDate(task.create_time) }}</span>
+            <span>{{ dateTime(task.create_time) }}</span>
           </div>
           <el-tag :type="statusType(task.status)" size="small">{{
             statusLabel(task.status)
@@ -131,6 +131,7 @@ import { Refresh, Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import request from '@/api/request'
 import { TASK_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
+import { dateTime } from '@/utils/format/date'
 
 const router = useRouter()
 const loading = ref(false)
@@ -173,16 +174,6 @@ const summaryCards = computed(() => {
     },
   ]
 })
-
-function formatDate(d) {
-  if (!d) return ''
-  try {
-    return new Date(d).toLocaleString('zh-CN')
-  } catch {
-    // 保留服务端返回的原始时间。
-    return d
-  }
-}
 
 function formatDuration(ms) {
   if (!ms) return '-'

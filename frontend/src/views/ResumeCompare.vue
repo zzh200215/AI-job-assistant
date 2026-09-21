@@ -45,7 +45,7 @@
       <div class="version-meta">
         <span v-if="selectedVersion.target_jd_id">已关联目标 JD</span>
         <span v-else>未关联目标 JD</span>
-        <span v-if="selectedVersion.created_at">{{ formatDate(selectedVersion.created_at) }}</span>
+        <span v-if="selectedVersion.created_at">{{ monthDay(selectedVersion.created_at) }}</span>
       </div>
     </section>
 
@@ -298,6 +298,7 @@ import {
   tailorResume,
   updateResumeVersion,
 } from '@/api/resume'
+import { monthDay } from '@/utils/format/date'
 
 const route = useRoute()
 const resumeId = ref(null)
@@ -572,7 +573,7 @@ async function onExport(format) {
 
 function versionLabel(version) {
   return (
-    version.label || `${versionTypeLabel(version.version_type)} ${formatDate(version.created_at)}`
+    version.label || `${versionTypeLabel(version.version_type)} ${monthDay(version.created_at)}`
   )
 }
 
@@ -590,11 +591,6 @@ function versionTagType(type) {
 
 function jobLabel(job) {
   return [job.title, job.company].filter(Boolean).join(' · ')
-}
-
-function formatDate(value) {
-  if (!value) return ''
-  return new Date(value).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
 function normalizeSuggestions(changeLog) {

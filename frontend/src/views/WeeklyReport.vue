@@ -172,7 +172,7 @@
                 <strong>{{ app.company || '未知' }} - {{ app.title || '未知岗位' }}</strong>
                 <span
                   >{{ stageLabel(app.stage) }} ·
-                  {{ formatDate(app.update_time || app.create_time) }}</span
+                  {{ monthDay(app.update_time || app.create_time) }}</span
                 >
               </div>
             </div>
@@ -211,6 +211,7 @@ import {
   Loading,
 } from '@element-plus/icons-vue'
 import { getWeeklyReport } from '@/api/dashboard'
+import { monthDay } from '@/utils/format/date'
 
 const loading = ref(false)
 const report = ref(null)
@@ -283,15 +284,6 @@ function stageLabel(stage) {
     abandoned: '已放弃',
   }
   return map[stage] || stage
-}
-
-function formatDate(d) {
-  if (!d) return ''
-  try {
-    return new Date(d).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-  } catch {
-    return d
-  }
 }
 
 async function loadReport() {

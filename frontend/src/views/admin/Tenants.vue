@@ -93,7 +93,7 @@
         <el-table-column label="到期时间" min-width="180">
           <template #default="{ row }">
             <div class="expiry-cell">
-              <span>{{ formatTime(row.expires_at) }}</span>
+              <span>{{ dateTime(row.expires_at, '-') }}</span>
               <el-tag v-if="expiryHint(row)" size="small" :type="expiryType(row)">{{
                 expiryHint(row)
               }}</el-tag>
@@ -101,7 +101,7 @@
           </template>
         </el-table-column>
         <el-table-column label="创建时间" min-width="170">
-          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+          <template #default="{ row }">{{ dateTime(row.created_at, '-') }}</template>
         </el-table-column>
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
@@ -271,6 +271,7 @@ import {
   unbindTenantDomain,
   updateTenant,
 } from '@/api/tenant'
+import { dateTime } from '@/utils/format/date'
 
 const tenants = ref([])
 const total = ref(0)
@@ -303,9 +304,6 @@ const currentDomains = computed(() => domains.value[currentTenant.value?.id] || 
 
 function initials(name) {
   return String(name || 'T').slice(0, 1).toUpperCase()
-}
-function formatTime(value) {
-  return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-'
 }
 function statusLabel(s) {
   return { active: '有效', suspended: '已暂停', expired: '已过期' }[s] || s || '-'

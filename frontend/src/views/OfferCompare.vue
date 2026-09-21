@@ -98,7 +98,7 @@
             </div>
             <div class="offer-meta">
               <span v-if="o.offer_deadline"
-                ><el-icon><Clock /></el-icon> {{ formatDate(o.offer_deadline) }} 到期</span
+                ><el-icon><Clock /></el-icon> {{ monthDay(o.offer_deadline) }} 到期</span
               >
               <span v-if="o.match_score"
                 ><el-icon><Histogram /></el-icon> 匹配 {{ Math.round(o.match_score) }}分</span
@@ -444,6 +444,7 @@ import { ElMessage } from '@/plugins/element-services'
 import { getJobPipelineList } from '@/api/jobs'
 import { getSalaryOverview } from '@/api/salary'
 import { scoreToneClass } from '@/utils/scoreTone'
+import { monthDay } from '@/utils/format/date'
 
 const router = useRouter()
 const loading = ref(true)
@@ -556,15 +557,6 @@ const checklistSections = reactive([
   },
 ])
 
-function formatDate(d) {
-  if (!d) return ''
-  try {
-    return new Date(d).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-  } catch {
-    return d
-  }
-}
-
 function formatK(v) {
   if (!v) return '-'
   return Number(v).toFixed(1) + 'K'
@@ -585,7 +577,6 @@ function deadlineLabel(d) {
   if (days === 0) return '今天到期'
   return `${days}天后到期`
 }
-
 
 // 加权评分
 function weightedScore(o) {

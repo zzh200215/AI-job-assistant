@@ -251,7 +251,7 @@
 
               <div v-if="card.interview_at && col.key === 'interview'" class="card-interview">
                 <el-icon><Clock /></el-icon>
-                {{ formatDate(card.interview_at) }}
+                {{ monthDay(card.interview_at) }}
               </div>
 
               <div class="card-footer">
@@ -262,7 +262,7 @@
                 >
                   <el-icon><WarningFilled /></el-icon> {{ followUpDays(card) }}天未回复
                 </div>
-                <span class="card-date">{{ formatDate(card.create_time) }}</span>
+                <span class="card-date">{{ monthDay(card.create_time) }}</span>
                 <el-tag v-if="card.source" size="small" type="info">{{ card.source }}</el-tag>
               </div>
             </div>
@@ -340,14 +340,14 @@
         <el-table-column label="面试时间" width="110">
           <template #default="{ row }">
             <span v-if="row.interview_at" class="follow-interview">{{
-              formatShortDate(row.interview_at)
+              monthDayTime(row.interview_at)
             }}</span>
             <span v-else class="follow-ok">-</span>
           </template>
         </el-table-column>
         <el-table-column prop="source" label="来源" width="80" />
         <el-table-column label="创建时间" width="90">
-          <template #default="{ row }">{{ formatShortDate(row.create_time) }}</template>
+          <template #default="{ row }">{{ monthDayTime(row.create_time) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
@@ -454,13 +454,13 @@
             detailCard.resume_version_label || '未记录'
           }}</el-descriptions-item>
           <el-descriptions-item label="创建时间" :span="2">{{
-            formatDateTime(detailCard.create_time)
+            monthDayTime(detailCard.create_time)
           }}</el-descriptions-item>
           <el-descriptions-item v-if="detailCard.note" label="备注" :span="2">{{
             detailCard.note
           }}</el-descriptions-item>
           <el-descriptions-item v-if="detailCard.interview_at" label="面试时间" :span="2">{{
-            formatDateTime(detailCard.interview_at)
+            monthDayTime(detailCard.interview_at)
           }}</el-descriptions-item>
           <el-descriptions-item v-if="detailCard.source_url" label="岗位链接" :span="2">
             <el-link :href="detailCard.source_url" target="_blank" type="primary">{{
@@ -551,6 +551,7 @@ import {
   getPipelineResumeVersionStats,
   updateJobPipelineEntry,
 } from '@/api/targets'
+import { monthDay, monthDayTime } from '@/utils/format/date'
 
 const router = useRouter()
 
@@ -714,44 +715,6 @@ const addForm = ref({
 
 const addRules = {
   title: [{ required: true, message: '请输入岗位名称', trigger: 'blur' }],
-}
-
-function formatShortDate(d) {
-  if (!d) return ''
-  try {
-    return new Date(d).toLocaleString('zh-CN', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    // 保留服务端返回的原始时间。
-    return d
-  }
-}
-
-function formatDate(d) {
-  if (!d) return ''
-  try {
-    return new Date(d).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-  } catch {
-    return d
-  }
-}
-
-function formatDateTime(d) {
-  if (!d) return ''
-  try {
-    return new Date(d).toLocaleString('zh-CN', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  } catch {
-    return d
-  }
 }
 
 function stageLabel(stage) {

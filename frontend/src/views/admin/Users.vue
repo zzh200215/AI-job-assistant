@@ -67,7 +67,9 @@
           ></el-table-column
         >
         <el-table-column label="注册时间" min-width="180"
-          ><template #default="{ row }">{{ formatTime(row.created_at) }}</template></el-table-column
+          ><template #default="{ row }">{{
+            dateTime(row.created_at, '-')
+          }}</template></el-table-column
         >
         <el-table-column label="操作" width="84" fixed="right"
           ><template #default="{ row }"
@@ -103,7 +105,7 @@
           ><el-descriptions-item label="用户 ID">{{ selectedUser.id }}</el-descriptions-item
           ><el-descriptions-item label="邮箱">{{ selectedUser.email || '-' }}</el-descriptions-item
           ><el-descriptions-item label="注册时间">{{
-            formatTime(selectedUser.created_at)
+            dateTime(selectedUser.created_at, '-')
           }}</el-descriptions-item></el-descriptions
         ></template
       >
@@ -116,6 +118,7 @@ import { computed, onMounted, ref } from 'vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage } from '@/plugins/element-services'
 import request from '@/api/request'
+import { dateTime } from '@/utils/format/date'
 
 const users = ref([])
 const total = ref(0)
@@ -154,9 +157,6 @@ function initials(name) {
   return String(name || 'U')
     .slice(0, 1)
     .toUpperCase()
-}
-function formatTime(value) {
-  return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-'
 }
 function openDetail(user) {
   selectedUser.value = user

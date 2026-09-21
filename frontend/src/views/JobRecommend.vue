@@ -151,7 +151,7 @@
             <div class="trend-list">
               <div v-for="point in feedbackStats.trend || []" :key="point.date" class="trend-item">
                 <div class="trend-head">
-                  <span>{{ formatShortDate(point.date) }}</span>
+                  <span>{{ isoMonthDay(point.date) }}</span>
                   <strong>{{ point.total }}</strong>
                 </div>
                 <div class="trend-bar">
@@ -602,6 +602,7 @@ import {
 import { OfficeBuilding } from '@element-plus/icons-vue'
 import { createJobPipelineEntry } from '@/api/targets'
 import { scoreToneFillClass } from '@/utils/scoreTone'
+import { isoMonthDay } from '@/utils/format/date'
 
 const router = useRouter()
 const route = useRoute()
@@ -961,11 +962,6 @@ function segmentStyle(value, total) {
   const safeTotal = Number(total) || 0
   const width = safeTotal > 0 ? Math.max(((Number(value) || 0) / safeTotal) * 100, 0) : 0
   return { width: `${width}%` }
-}
-
-function formatShortDate(dateText) {
-  if (!dateText || typeof dateText !== 'string') return '--'
-  return dateText.slice(5)
 }
 </script>
 

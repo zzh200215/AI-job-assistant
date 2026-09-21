@@ -275,7 +275,7 @@
       <div class="panel-body">
         <el-table :data="traceList.items" v-loading="loading.list" stripe class="trace-table">
           <el-table-column prop="created_at" label="时间" min-width="168">
-            <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+            <template #default="{ row }">{{ rawStamp(row.created_at) }}</template>
           </el-table-column>
           <el-table-column prop="source" label="来源" min-width="220" show-overflow-tooltip />
           <el-table-column prop="prompt_version" label="版本" min-width="120" />
@@ -361,6 +361,7 @@ import {
   getPromptTraceList,
   getPromptTraceSummary,
 } from '@/api/promptTrace'
+import { rawStamp } from '@/utils/format/date'
 
 const loading = reactive({
   summary: false,
@@ -645,10 +646,6 @@ function signed(value, percent = false) {
   return `${num >= 0 ? '+' : ''}${Number(num.toFixed(2))}`
 }
 
-function formatDate(value) {
-  if (!value) return '-'
-  return String(value).replace('T', ' ').slice(0, 19)
-}
 </script>
 
 <style scoped>

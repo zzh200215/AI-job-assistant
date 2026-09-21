@@ -109,7 +109,9 @@
           ></el-table-column
         >
         <el-table-column label="创建时间" min-width="170"
-          ><template #default="{ row }">{{ formatTime(row.created_at) }}</template></el-table-column
+          ><template #default="{ row }">{{
+            dateTime(row.created_at, '-')
+          }}</template></el-table-column
         >
       </el-table>
       <el-empty v-else-if="!loading" description="暂无可展示的订单" :image-size="80" />
@@ -123,6 +125,7 @@ import { useRouter } from 'vue-router'
 import { CreditCard, Refresh, Tickets, User, UserFilled } from '@element-plus/icons-vue'
 import request from '@/api/request'
 import { listTenants } from '@/api/tenant'
+import { dateTime } from '@/utils/format/date'
 
 const router = useRouter()
 const loading = ref(false)
@@ -207,9 +210,6 @@ const orderBreakdown = computed(() => {
 
 function formatMoney(amount) {
   return `￥${Number(amount || 0).toFixed(2)}`
-}
-function formatTime(value) {
-  return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '-'
 }
 function planLabel(plan) {
   return { free: '免费版', pro: 'Pro', enterprise: '企业版' }[plan] || plan || '-'
