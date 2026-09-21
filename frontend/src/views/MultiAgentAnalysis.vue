@@ -274,6 +274,7 @@ import { ElMessage } from '@/plugins/element-services'
 import { SuccessFilled, WarningFilled, Loading, Clock } from '@element-plus/icons-vue'
 import { startAutoAgent, getMultiAgentDetail } from '@/api/multi_agent'
 import { scoreToneTagType } from '@/utils/scoreTone'
+import { TASK_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
 
 const starting = ref(false)
 const runId = ref(null)
@@ -312,15 +313,7 @@ const statusLabel = computed(
     run.value?.status ||
     ''
 )
-const statusTag = computed(
-  () =>
-    ({
-      pending: 'info',
-      running: 'warning',
-      completed: 'success',
-      failed: 'danger',
-    })[run.value?.status] || 'info'
-)
+const statusTag = computed(() => tagTypeFor(TASK_STATUS_TAGS, run.value?.status))
 const summaryReport = computed(() => run.value?.summary_report || null)
 
 // Dispatch decision: prefer full output from Dispatcher message, fallback to run fields

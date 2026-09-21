@@ -289,6 +289,7 @@ import { ElMessage } from '@/plugins/element-services'
 import { getInterviewConfigTypes, getInterviewList } from '@/api/interview'
 import { getJDList } from '@/api/jd'
 import { getResumeList } from '@/api/resume'
+import { INTERVIEW_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
 import { useInterviewStore } from '@/stores/interview'
 import {
   Aim,
@@ -499,12 +500,7 @@ function statusLabel(status) {
 }
 
 function statusTagType(status) {
-  const mapping = {
-    created: 'info',
-    ongoing: 'warning',
-    completed: 'success',
-  }
-  return mapping[status] || 'info'
+  return tagTypeFor(INTERVIEW_STATUS_TAGS, status)
 }
 
 async function fetchResumes() {

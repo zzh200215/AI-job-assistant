@@ -61,6 +61,22 @@ const BUDGET = {
     'src/views/NotFound.vue': 1,
     'src/views/ResumeUpload.vue': 1,
   },
+  // 状态→el-tag 颜色此前和分数色板同病：17 份手写表、32 个键，其中 `running` 在任务中心
+  // 是蓝、两个 agent 页是橙，`ongoing` 在房间页是绿、设置页是橙。异步任务与面试会话两组
+  // 已收进 utils/statusTone.js；下面数的是**还剩多少条手写映射**，只能往下走。
+  statusTagEntries: {
+    'src/views/KnowledgeBase.vue': 12,
+    'src/views/CareerPlanning.vue': 9,
+    'src/views/SmartAnalysis.vue': 8,
+    'src/views/PipelineKanban.vue': 7,
+    'src/views/AnalysisResult.vue': 5,
+    'src/views/ExplainMatch.vue': 4,
+    'src/views/InterviewRoom.vue': 2,
+    'src/views/History.vue': 1,
+    'src/views/OrganizationWorkspace.vue': 1,
+    'src/views/Profile.vue': 1,
+    'src/views/Subscription.vue': 1,
+  },
   themeCompatWildcards: 27,
   themeImportantOverrides: 56,
   pageShellRedeclarations: 22,
@@ -101,6 +117,20 @@ function colorCounts(blockKey) {
 }
 
 const themeCss = readFileSync('src/styles/main.css', 'utf8')
+
+/* 手写"状态 → el-tag 颜色"的条目数。只认 `<script>` 里 `键: 'success'` 这种形状，
+   不数 ElMessageBox 的 { type: 'warning' } 之类——那不是状态色表。 */
+const STATUS_TAG_ENTRY =
+  /^\s*['"]?[\w一-龥]+['"]?:\s*'(primary|success|info|warning|danger)'\s*,?\s*$/gm
+
+function statusTagCounts() {
+  const actual = {}
+  for (const { rel, script } of viewSources) {
+    const n = (script.match(STATUS_TAG_ENTRY) || []).length
+    if (n) actual[rel] = n
+  }
+  return actual
+}
 
 function staleBudgets(actual, budget) {
   return Object.entries(budget).filter(([file, allowed]) => (actual[file] || 0) < allowed)
@@ -145,6 +175,28 @@ describe('style debt ratchet', () => {
       ).toEqual([])
     })
   }
+
+  it('keeps hand-written status -> tag colour maps within budget', () => {
+    const actual = statusTagCounts()
+    const grown = Object.entries(actual).filter(
+      ([file, n]) => n > (BUDGET.statusTagEntries[file] ?? 0)
+    )
+    expect(
+      grown,
+      `new status colour map — shared states belong in utils/statusTone: ${JSON.stringify(grown)}`
+    ).toEqual([])
+  })
+
+  it('forces the status colour budget to be tightened once paid down', () => {
+    const actual = statusTagCounts()
+    const stale = staleBudgets(actual, BUDGET.statusTagEntries).map(
+      ([file, allowed]) => `${file}: ${allowed} -> ${actual[file] || 0}`
+    )
+    expect(
+      stale,
+      `status budget is looser than reality, lower these in BUDGET: ${stale.join(', ')}`
+    ).toEqual([])
+  })
 
   it('does not let the theme layer grow its class-name wildcards', () => {
     const n = (themeCss.match(/\[class\*=/g) || []).length

@@ -420,6 +420,7 @@ import {
   normalizeLocalizedTextList,
 } from '@/utils/analysisLocalization'
 import { scoreToneAtLeast, scoreToneTagType } from '@/utils/scoreTone'
+import { TASK_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
 
 const route = useRoute()
 const router = useRouter()
@@ -442,15 +443,6 @@ const TASK_STATUS_LABELS = {
   cancelled: '已取消',
 }
 
-const TASK_STATUS_TAGS = {
-  pending: 'info',
-  running: 'warning',
-  completed: 'success',
-  partial: 'warning',
-  failed: 'danger',
-  cancelled: 'info',
-}
-
 const STEP_STATUS_TEXTS = {
   pending: '等待执行',
   running: '执行中',
@@ -463,7 +455,7 @@ const STEP_STATUS_TEXTS = {
 const taskStatusLabel = computed(
   () => TASK_STATUS_LABELS[task.value?.status] || task.value?.status || ''
 )
-const taskStatusTag = computed(() => TASK_STATUS_TAGS[task.value?.status] || 'info')
+const taskStatusTag = computed(() => tagTypeFor(TASK_STATUS_TAGS, task.value?.status))
 const isTerminalTask = computed(() =>
   ['completed', 'partial', 'failed', 'cancelled'].includes(task.value?.status)
 )

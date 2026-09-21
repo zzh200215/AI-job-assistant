@@ -130,6 +130,7 @@ import { useRouter } from 'vue-router'
 import { Refresh, Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import request from '@/api/request'
+import { TASK_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
 
 const router = useRouter()
 const loading = ref(false)
@@ -191,14 +192,7 @@ function formatDuration(ms) {
 }
 
 function statusType(s) {
-  const map = {
-    completed: 'success',
-    partial: 'warning',
-    failed: 'danger',
-    running: 'primary',
-    pending: 'info',
-  }
-  return map[s] || 'info'
+  return tagTypeFor(TASK_STATUS_TAGS, s)
 }
 
 function statusLabel(s) {

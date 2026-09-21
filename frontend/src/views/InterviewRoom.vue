@@ -295,6 +295,7 @@ import { Microphone } from '@element-plus/icons-vue'
 import { getInterviewDetail } from '@/api/interview'
 import { useInterviewStore } from '@/stores/interview'
 import { interviewScoreTone, interviewScoreToneClass } from '@/utils/scoreTone'
+import { INTERVIEW_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
 
 const route = useRoute()
 const router = useRouter()
@@ -443,17 +444,7 @@ const statusLabel = computed(() => {
   return mapping[store.status] || store.status
 })
 
-const statusTagType = computed(() => {
-  const mapping = {
-    connecting: 'warning',
-    ongoing: 'success',
-    evaluating: 'warning',
-    completed: 'success',
-    error: 'danger',
-    idle: 'info',
-  }
-  return mapping[store.status] || 'info'
-})
+const statusTagType = computed(() => tagTypeFor(INTERVIEW_STATUS_TAGS, store.status))
 
 function rowClass(msg) {
   return {
