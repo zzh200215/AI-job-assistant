@@ -360,7 +360,7 @@
         <div v-for="job in recommendations" :key="job.jd_id" class="panel job-card">
           <div class="panel-body">
             <!-- 匹配度徽标 -->
-            <div class="score-badge" :class="scoreLevel(job.match_score)">
+            <div class="score-badge" :class="scoreToneFillClass(job.match_score)">
               <span class="score-num">{{ job.match_score }}</span>
               <span class="score-unit">分</span>
             </div>
@@ -601,6 +601,7 @@ import {
 } from '@element-plus/icons-vue'
 import { OfficeBuilding } from '@element-plus/icons-vue'
 import { createJobPipelineEntry } from '@/api/targets'
+import { scoreToneFillClass } from '@/utils/scoreTone'
 
 const router = useRouter()
 const route = useRoute()
@@ -931,11 +932,6 @@ function resetFilters() {
 }
 
 // === 样式工具 ===
-function scoreLevel(score) {
-  if (score >= 80) return 'score-high'
-  if (score >= 60) return 'score-mid'
-  return 'score-low'
-}
 
 function recommendTagType(type) {
   if (type?.includes('高度推荐')) return 'success'
@@ -1392,15 +1388,6 @@ function formatShortDate(dateText) {
   justify-content: center;
   color: #fff;
   z-index: 1;
-}
-.score-high {
-  background: linear-gradient(135deg, #2ea866, #5cc084);
-}
-.score-mid {
-  background: linear-gradient(135deg, #dc9c3f, #e7b567);
-}
-.score-low {
-  background: linear-gradient(135deg, #d46e6e, #e18e8e);
 }
 .score-num {
   font-size: 18px;

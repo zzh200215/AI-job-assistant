@@ -126,6 +126,11 @@ jobs:
       - name: Run frontend tests
         run: npm test
 
+      # `npm test` 只跑 node --test 的冒烟集；Vitest 那套（样式债棘轮、scoreTone 等
+      # 单测）此前没有任何一步执行它——写了门却没接上。
+      - name: Run frontend unit tests (vitest)
+        run: npm run test:unit
+
       - name: Lint frontend
         run: npm run lint
 

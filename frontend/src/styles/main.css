@@ -37,6 +37,19 @@
   --app-cyan: #22b8e8;
   --app-danger: #d9534f;
 
+  /* 分数语义档的唯一色源：页面只出 tone，不再各自挑 hex。
+     档位与后端 MatchExplainer._recommendation 对齐（85/70/50），
+     免得同一张卡片一边写"可以投递"、一边把分数标成警告色。 */
+  --app-score-high: var(--app-success);
+  --app-score-good: var(--app-primary);
+  --app-score-warn: var(--app-warning);
+  --app-score-risk: var(--app-danger);
+  --app-score-unknown: var(--app-muted);
+  --app-score-high-fill: linear-gradient(135deg, var(--app-score-high), color-mix(in srgb, var(--app-score-high), white 24%));
+  --app-score-good-fill: linear-gradient(135deg, var(--app-score-good), color-mix(in srgb, var(--app-score-good), white 24%));
+  --app-score-warn-fill: linear-gradient(135deg, var(--app-score-warn), color-mix(in srgb, var(--app-score-warn), white 24%));
+  --app-score-risk-fill: linear-gradient(135deg, var(--app-score-risk), color-mix(in srgb, var(--app-score-risk), white 24%));
+
   --app-shadow: 0 10px 28px rgba(26, 35, 52, 0.08);
   --app-shadow-soft: 0 2px 8px rgba(26, 35, 52, 0.045);
   --app-shadow-lg: 0 18px 40px rgba(26, 35, 52, 0.14);
@@ -651,6 +664,43 @@ code,
 :focus-visible {
   outline: 3px solid rgba(37, 99, 235, 0.32);
   outline-offset: 2px;
+}
+
+/* ── 分数语义档：唯一一份色源，视图只挂 tone class，不再各自挑 hex ── */
+.score-tone {
+  color: var(--app-score-unknown);
+}
+
+.score-tone--high {
+  color: var(--app-score-high);
+}
+
+.score-tone--good {
+  color: var(--app-score-good);
+}
+
+.score-tone--warn {
+  color: var(--app-score-warn);
+}
+
+.score-tone--risk {
+  color: var(--app-score-risk);
+}
+
+.score-fill--high {
+  background: var(--app-score-high-fill);
+}
+
+.score-fill--good {
+  background: var(--app-score-good-fill);
+}
+
+.score-fill--warn {
+  background: var(--app-score-warn-fill);
+}
+
+.score-fill--risk {
+  background: var(--app-score-risk-fill);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -14,8 +14,8 @@ const BUDGET = {
     'src/layouts/DefaultLayout.vue': 34,
     'src/views/Profile.vue': 31,
     'src/views/CareerPlanning.vue': 27,
-    'src/views/SmartAnalysis.vue': 27,
-    'src/views/JobRecommend.vue': 26,
+    'src/views/SmartAnalysis.vue': 15,
+    'src/views/JobRecommend.vue': 20,
     'src/views/Register.vue': 26,
     'src/views/InterviewReport.vue': 22,
     'src/views/ResumeCompare.vue': 19,
@@ -43,6 +43,12 @@ const BUDGET = {
     'src/views/History.vue': 1,
     'src/views/JobTargets.vue': 1,
   },
+  // 分数→颜色的挑选此前藏在 <script> 的字符串里，style 预算数不到它，于是六处实现
+  // 各挑一套阈值与 hex。匹配分已全部交给 utils/scoreTone.js，只剩这两处待收。
+  scriptColorLiterals: {
+    'src/views/InterviewReport.vue': 4,
+    'src/views/ResumeUpload.vue': 3,
+  },
   themeCompatWildcards: 27,
   themeImportantOverrides: 56,
   pageShellRedeclarations: 22,
@@ -57,11 +63,26 @@ function vueFiles(dir) {
   })
 }
 
-const viewSources = [...vueFiles('src/views'), ...vueFiles('src/layouts')].map((full) => ({
-  rel: full.split(path.sep).join('/'),
-  style: (readFileSync(full, 'utf8').match(/<style[\s\S]*?<\/style>/g) || []).join('\n'),
-  source: readFileSync(full, 'utf8'),
-}))
+const viewSources = [...vueFiles('src/views'), ...vueFiles('src/layouts')].map((full) => {
+  const source = readFileSync(full, 'utf8')
+  return {
+    rel: full.split(path.sep).join('/'),
+    style: (source.match(/<style[\s\S]*?<\/style>/g) || []).join('\n'),
+    script: (source.match(/<script[\s\S]*?<\/script>/g) || []).join('\n'),
+    source,
+  }
+})
+
+function colorCounts(blockKey) {
+  const actual = {}
+  for (const block of viewSources) {
+    const text = block[blockKey] || ''
+    const n =
+      (text.match(/#[0-9a-fA-F]{3,8}\b/g) || []).length + (text.match(/\brgba?\(/g) || []).length
+    if (n) actual[block.rel] = n
+  }
+  return actual
+}
 
 const themeCss = readFileSync('src/styles/main.css', 'utf8')
 
@@ -71,27 +92,49 @@ function staleBudgets(actual, budget) {
 
 describe('style debt ratchet', () => {
   it('keeps hardcoded colors within the per-file budget', () => {
-    const actual = {}
-    for (const { rel, style } of viewSources) {
-      const n =
-        (style.match(/#[0-9a-fA-F]{3,8}\b/g) || []).length + (style.match(/\brgba?\(/g) || []).length
-      if (n) actual[rel] = n
-    }
-    const grown = Object.entries(actual).filter(([file, n]) => n > (BUDGET.hardcodedColorLiterals[file] ?? 0))
-    expect(grown, `hardcoded colors added — use a var(--app-*) token instead: ${JSON.stringify(grown)}`).toEqual([])
+    const actual = colorCounts('style')
+    const grown = Object.entries(actual).filter(
+      ([file, n]) => n > (BUDGET.hardcodedColorLiterals[file] ?? 0)
+    )
+    expect(
+      grown,
+      `hardcoded colors added — use a var(--app-*) token instead: ${JSON.stringify(grown)}`
+    ).toEqual([])
   })
 
   it('forces the budget to be tightened once debt is paid down', () => {
-    const actual = {}
-    for (const { rel, style } of viewSources) {
-      const n =
-        (style.match(/#[0-9a-fA-F]{3,8}\b/g) || []).length + (style.match(/\brgba?\(/g) || []).length
-      if (n) actual[rel] = n
-    }
+    const actual = colorCounts('style')
     const stale = staleBudgets(actual, BUDGET.hardcodedColorLiterals).map(
       ([file, allowed]) => `${file}: ${allowed} -> ${actual[file] || 0}`
     )
-    expect(stale, `budget is looser than reality, lower these in BUDGET: ${stale.join(', ')}`).toEqual([])
+    expect(
+      stale,
+      `budget is looser than reality, lower these in BUDGET: ${stale.join(', ')}`
+    ).toEqual([])
+  })
+
+  // 分数→颜色的挑选曾经只存在于 <script> 的字符串里，style 预算看不见它，
+  // 于是同一档位在不同页面能长出四套 hex。这条预算补上那个盲区。
+  it('keeps hardcoded colors inside <script> within the per-file budget', () => {
+    const actual = colorCounts('script')
+    const grown = Object.entries(actual).filter(
+      ([file, n]) => n > (BUDGET.scriptColorLiterals[file] ?? 0)
+    )
+    expect(
+      grown,
+      `view code is picking its own palette again — use utils/scoreTone: ${JSON.stringify(grown)}`
+    ).toEqual([])
+  })
+
+  it('forces the <script> color budget to be tightened once paid down', () => {
+    const actual = colorCounts('script')
+    const stale = staleBudgets(actual, BUDGET.scriptColorLiterals).map(
+      ([file, allowed]) => `${file}: ${allowed} -> ${actual[file] || 0}`
+    )
+    expect(
+      stale,
+      `script budget is looser than reality, lower these in BUDGET: ${stale.join(', ')}`
+    ).toEqual([])
   })
 
   it('does not let the theme layer grow its class-name wildcards', () => {

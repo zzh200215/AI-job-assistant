@@ -210,7 +210,7 @@
               <tr>
                 <td>匹配分</td>
                 <td v-for="o in selectedOffers" :key="o.id">
-                  <span :class="scoreClass(o.match_score)">{{
+                  <span :class="scoreToneClass(o.match_score)">{{
                     o.match_score ? Math.round(o.match_score) : '-'
                   }}</span>
                 </td>
@@ -441,6 +441,7 @@ import {
 import { ElMessage } from '@/plugins/element-services'
 import { getJobPipelineList } from '@/api/jobs'
 import { getSalaryOverview } from '@/api/salary'
+import { scoreToneClass } from '@/utils/scoreTone'
 
 const router = useRouter()
 const loading = ref(true)
@@ -583,12 +584,6 @@ function deadlineLabel(d) {
   return `${days}天后到期`
 }
 
-function scoreClass(v) {
-  if (!v) return ''
-  if (v >= 80) return 'score-high'
-  if (v >= 60) return 'score-mid'
-  return 'score-low'
-}
 
 // 加权评分
 function weightedScore(o) {
@@ -999,15 +994,6 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   margin-top: 16px;
-}
-.score-high {
-  color: var(--app-success);
-}
-.score-mid {
-  color: var(--app-warning);
-}
-.score-low {
-  color: var(--app-danger);
 }
 
 /* Salary stats */

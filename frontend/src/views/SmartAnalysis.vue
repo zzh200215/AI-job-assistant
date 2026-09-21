@@ -277,7 +277,7 @@
             <el-progress
               type="dashboard"
               :percentage="result.match_score"
-              :color="scoreColor(result.match_score)"
+              :color="scoreToneColor(result.match_score)"
               :width="140"
               :stroke-width="10"
             >
@@ -470,7 +470,7 @@
                       :percentage="explainResult.overall_score"
                       :stroke-width="8"
                       :size="120"
-                      :color="explainScoreColor(explainResult.overall_score)"
+                      :color="scoreToneColor(explainResult.overall_score)"
                     >
                       <template #default>
                         <div class="big-score data-value">{{ explainResult.overall_score }}</div>
@@ -504,14 +504,14 @@
                     <span class="dim-w">权重 {{ (dim.weight * 100).toFixed(0) }}%</span>
                     <span
                       class="dim-score data-value"
-                      :style="{ color: explainScoreColor(dim.score) }"
+                      :style="{ color: scoreToneColor(dim.score) }"
                       >{{ dim.score.toFixed(1) }}</span
                     >
                   </div>
                   <div class="dim-bar">
                     <div
                       class="dim-fill"
-                      :style="{ width: `${dim.score}%`, background: explainScoreColor(dim.score) }"
+                      :style="{ width: `${dim.score}%`, background: scoreToneColor(dim.score) }"
                     />
                   </div>
                   <p class="dim-reason">{{ localizeSentence(dim.reason) }}</p>
@@ -590,7 +590,7 @@
                   >
                     <div class="panel-body">
                       <div class="cp-header">
-                        <span class="cp-score data-value" :class="scoreClass(cp.match_score)">{{
+                        <span class="cp-score data-value" :class="scoreToneFillClass(cp.match_score)">{{
                           cp.match_score
                         }}</span>
                         <div class="cp-info">
@@ -1286,6 +1286,7 @@ import { createJD, parseJD } from '@/api/jd'
 import { runFullAnalysis, getAnalysis, getAnalysisReferences, explainMatch } from '@/api/analysis'
 import { generateOptimized } from '@/api/resume'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
+import { scoreToneColor, scoreToneFillClass } from '@/utils/scoreTone'
 import {
   localizeRecommendationText,
   localizeSentence,
@@ -1665,8 +1666,6 @@ const loadCareerPaths = async () => {
   }
 }
 
-const scoreClass = (s) => (s >= 80 ? 'sc-high' : s >= 60 ? 'sc-mid' : 'sc-low')
-
 const loadReferences = async (force = false) => {
   if ((!force && references.value.length > 0) || !result.value?.id) return
   referencesLoading.value = true
@@ -1739,18 +1738,6 @@ function statusText(status) {
   return (
     { pending: '等待中', running: '执行中', completed: '已完成', failed: '失败' }[status] || status
   )
-}
-function scoreColor(s) {
-  if (s >= 80) return [{ color: '#1DB954', percentage: 100 }]
-  if (s >= 60) return [{ color: '#F5A623', percentage: 100 }]
-  return [{ color: '#D4442F', percentage: 100 }]
-}
-
-function explainScoreColor(s) {
-  if (s >= 80) return '#1DB954'
-  if (s >= 60) return '#196BDB'
-  if (s >= 40) return '#F5A623'
-  return '#D4442F'
 }
 
 const onGenerateOptimized = async () => {
@@ -2311,16 +2298,6 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.badge-high {
-  background: linear-gradient(135deg, #1db954, #48c978);
-}
-.badge-medium {
-  background: linear-gradient(135deg, #f5a623, #f7b94d);
-}
-.badge-low {
-  background: linear-gradient(135deg, #d4442f, #dc6b5a);
-}
-
 .rag-confidence-copy {
   flex: 1;
   min-width: 0;
@@ -2578,15 +2555,6 @@ onMounted(() => {
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
-}
-.sc-high {
-  background: linear-gradient(135deg, #1db954, #48c978);
-}
-.sc-mid {
-  background: linear-gradient(135deg, #f5a623, #f7b94d);
-}
-.sc-low {
-  background: linear-gradient(135deg, #d4442f, #dc6b5a);
 }
 .cp-info {
   flex: 1;

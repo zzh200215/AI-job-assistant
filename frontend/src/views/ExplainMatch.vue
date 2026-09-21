@@ -153,6 +153,7 @@
 import { ref, reactive, computed } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
 import { explainMatch } from '@/api/analysis'
+import { scoreToneColor as scoreColor } from '@/utils/scoreTone'
 import { DataAnalysis, Loading } from '@element-plus/icons-vue'
 
 const form = reactive({ resume_id: null, jd_id: null })
@@ -174,13 +175,6 @@ async function doExplain() {
   } finally {
     loading.value = false
   }
-}
-
-function scoreColor(s) {
-  if (s >= 80) return '#67C23A'
-  if (s >= 60) return '#409EFF'
-  if (s >= 40) return '#E6A23C'
-  return '#F56C6C'
 }
 
 const recTag = computed(
