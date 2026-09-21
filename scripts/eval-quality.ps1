@@ -1,11 +1,16 @@
+# Agent floors are set to beat the model-free baseline that scripts/eval_agent.py now prints
+# (best constant + deterministic cap on this 10-pair set: MAE 9.5, hit_tol10 8, rho 0.721).
+# The old defaults (12 / 7 / 0.80) were reachable with no language model at all. These new
+# defaults are a bar to clear, not a claim about the current model - if a real-provider run
+# goes red, that is information, not a broken gate.
 param(
     [switch]$ImportSeeds,
     [double]$MinRagRecall = 0.85,
     [double]$MinRagMrr = 0.85,
     [double]$MinRagKeywordHit = 0.75,
-    [double]$MaxAgentMae = 12.0,
-    [double]$MinAgentSpearman = 0.80,
-    [int]$MinAgentHitTol10 = 7
+    [double]$MaxAgentMae = 8.0,
+    [double]$MinAgentSpearman = 0.85,
+    [int]$MinAgentHitTol10 = 9
 )
 
 $ErrorActionPreference = "Stop"

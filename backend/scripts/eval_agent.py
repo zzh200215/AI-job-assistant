@@ -189,6 +189,74 @@ def run_eval(eval_set: list[dict]) -> dict:
     return report
 
 
+def trivial_baselines(eval_set: list[dict]) -> dict[str, float] | None:
+    """完全不用模型，在这套标注上能刷到几分。门槛必须赢过它。
+
+    三种空模型，每种都允许在这套标注上挑对自己最有利的参数（"就说 82"比"就说 60"好，
+    这种挑选本身不需要任何语义能力）：
+      - 常数猜测：永远报同一个数；
+      - 常数 + 确定性封顶：先报常数，`infer_match_score_cap` 判定弱匹配时压到上限；
+      - 随机秩：0-100 均匀随机打分，取 ρ 的 95 分位（n=10 时秩相关的抽样噪声很大）。
+    MAE 越低越好，hit/ρ 越高越好，所以每个指标取这些策略里的最好成绩当基线。
+    """
+    import random
+
+    from app.services.match_score_calibration import infer_match_score_cap
+
+    actual = [float(item["expected_match_score"]) for item in eval_set]
+    n = len(actual)
+    if n == 0:
+        return None
+
+    def hit(preds: list[float]) -> int:
+        return sum(1 for p, a in zip(preds, actual, strict=True) if abs(p - a) <= 10)
+
+    caps = []
+    for item in eval_set:
+        try:
+            caps.append(infer_match_score_cap(str(item.get("resume_profile") or ""), str(item.get("jd_profile") or "")))
+        except Exception as exc:  # 规则读不动就不参与基线，别让整个评估挂掉
+            logger.warning("封顶规则评估失败，按无上限处理: %s", exc)
+            caps.append(None)
+
+    best_mae = float("inf")
+    best_hit = 0
+    rho_values: list[float] = []
+    for constant in range(0, 101):
+        for preds in (
+            [float(constant)] * n,
+            [float(cap if cap is not None else constant) for cap in caps],
+        ):
+            best_mae = min(best_mae, compute_mae(preds, actual))
+            best_hit = max(best_hit, hit(preds))
+            rho = compute_spearman(preds, actual)
+            if rho is not None:
+                rho_values.append(rho)
+
+    rng = random.Random(20260921)
+    draws = 500 if n >= 2 else 1
+    rhos = []
+    for _ in range(draws):
+        preds = [float(rng.randint(0, 100)) for _ in range(n)]
+        rho = compute_spearman(preds, actual)
+        if rho is not None:
+            rhos.append(rho)
+    rhos.sort()
+    random_p95 = round(rhos[int(len(rhos) * 0.95)], 3) if rhos else None
+
+    baseline_rho = max(rho_values) if rho_values else 0.0
+    if random_p95 is not None:
+        baseline_rho = max(baseline_rho, random_p95)
+
+    return {
+        "mae": round(best_mae, 2) if best_mae != float("inf") else None,
+        "hit_tol10": best_hit,
+        "spearman_rho": round(baseline_rho, 3),
+        "spearman_rho_random_p95": random_p95,
+        "capped_pairs": sum(1 for cap in caps if cap is not None),
+    }
+
+
 def check_thresholds(
     report: dict,
     *,
@@ -196,11 +264,15 @@ def check_thresholds(
     min_spearman: float | None = None,
     min_hit_tol10: int | None = None,
     max_errors: int | None = 0,
+    trivial_baseline: dict[str, float] | None = None,
 ) -> list[str]:
     """Return human-readable failure reasons for a completed Agent report.
 
     `max_errors` 默认 0：有 pair 根本没跑出分数时，MAE/ρ 是残缺样本上的数字，
     先把这条报出来再谈阈值。
+
+    `trivial_baseline`（见 `trivial_baselines`）是完全不用模型能刷到的分数。门槛赢不过它
+    就不是门：`max_mae` 必须低于基线 MAE，`min_hit_tol10` / `min_spearman` 必须高于基线。
     """
     failed = []
     errors = report.get("eval_errors", 0)
@@ -229,6 +301,22 @@ def check_thresholds(
     hit_tol10 = report["score_dist"]["hit_tol10"]
     if min_hit_tol10 is not None and hit_tol10 < min_hit_tol10:
         failed.append(f"hit_tol10 {hit_tol10} < {min_hit_tol10}")
+
+    if trivial_baseline:
+        for name, floor, base, lower_is_better in (
+            ("mae", max_mae, trivial_baseline.get("mae"), True),
+            ("hit_tol10", min_hit_tol10, trivial_baseline.get("hit_tol10"), False),
+            ("spearman_rho", min_spearman, trivial_baseline.get("spearman_rho"), False),
+        ):
+            if floor is None or base is None:
+                continue
+            beats = floor < base if lower_is_better else floor > base
+            if not beats:
+                failed.append(
+                    f"{name} 门槛 {floor} 赢不了不用模型的基线 {base}"
+                    f"（常数猜测 + 确定性封顶在这套标注上就能刷到）：这不是门，"
+                    f"门槛要往{'更低' if lower_is_better else '更高'}调，或者加标注样本"
+                )
     return failed
 
 
@@ -260,11 +348,16 @@ def main():
         logger.info("截取前 %d 条", args.sample)
 
     report = run_eval(eval_set)
+    baselines = trivial_baselines(eval_set)
+    from app.core.config import settings
+
     report["report_type"] = "agent"
     report["run_meta"] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "eval_set": str(Path(args.eval_set).resolve()),
         "sample": args.sample,
+        "trivial_baselines": baselines,
+        "llm_provider": (settings.LLM_PROVIDER or "mock").strip().lower(),
         "thresholds": {
             "max_mae": args.max_mae,
             "min_spearman": args.min_spearman,
@@ -273,11 +366,18 @@ def main():
         },
     }
 
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 58)
     print(
         f"Agent 匹配评估报告  (共 {report['total']} 条，实际打分 {report['scored']} 条，未跑出 {report['eval_errors']} 条)"
     )
-    print("=" * 50)
+    print("=" * 58)
+    if baselines:
+        print(
+            f"  不用模型的基线    : MAE 最低 {baselines['mae']} / 命中(±10) 最多 {baselines['hit_tol10']} / "
+            f"ρ 最高 {baselines['spearman_rho']}"
+            f"（随机秩 95 分位 {baselines['spearman_rho_random_p95']}；封顶规则命中 "
+            f"{baselines['capped_pairs']}/{report['total']} 条）"
+        )
     print(f"  MAE (平均绝对误差) : {report['mae']}")
     rho_text = (
         report["spearman_rho"] if report["spearman_rho"] is not None else f"未测出（{report['spearman_reason']}）"
@@ -312,6 +412,7 @@ def main():
         min_spearman=args.min_spearman,
         min_hit_tol10=args.min_hit_tol10,
         max_errors=args.max_errors,
+        trivial_baseline=baselines,
     )
 
     if failed:

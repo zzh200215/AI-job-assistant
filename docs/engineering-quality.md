@@ -55,7 +55,9 @@ To rebuild bundled knowledge seeds before evaluation:
 Default thresholds:
 
 - RAG: `Recall@5 >= 0.85`, `MRR >= 0.85`, `Keyword Hit Rate >= 0.75`
-- Agent: `MAE <= 12.0`, `Spearman rho >= 0.80`, `hit_tol10 >= 7`
+- Agent: `MAE <= 8.0`, `Spearman rho >= 0.85`, `hit_tol10 >= 9` — chosen to beat the model-free
+  baseline the script prints (see below), not to match whatever the current model scores. A red run
+  here is information, not a broken gate.
 
 The script writes JSON reports to `backend/reports/`, which is ignored by Git because reports are environment-specific artifacts.
 Each run now keeps timestamped history snapshots such as `rag_eval_20260626_153000.json` and refreshes `rag_eval.json` / `agent_eval.json` as the latest aliases.
@@ -84,48 +86,60 @@ prints it, and fails any floor that sits at or below it.
 The previous CI line was `--min-recall 0.5` on the fused number — a floor below the random baseline. Use
 `scripts/eval-quality.ps1` with a real embedding provider when you need a number worth quoting.
 
-### Agent / recommend gates: baselines measured 2026-09-21 (floors NOT yet retuned)
+### Agent / recommend gates: baselines, and what each floor now claims
 
-`eval_agent` is not run in CI at all; its floors live only in `scripts/eval-quality.ps1`
-(`MAE <= 12`, `rho >= 0.80`, `hit_tol10 >= 7`) over **10 labeled pairs**.
+Both scripts compute their own null models on every run, print them, and **fail any floor that
+cannot beat them** — the same discipline the RAG gate got in E6.
+
+`eval_agent` over **10 labeled pairs** (measured 2026-09-21; the script prints these numbers live):
 
 | null model | MAE | hit ±10 | Spearman ρ |
 | --- | --- | --- | --- |
 | any constant (mean 66 / median 70 / best-MAE 65) | 18.0 | 2–3/10 | undefined¹ |
-| constant 82 + the deterministic cap rule | **9.70** | **8/10** | 0.721 |
-| `LLM_PROVIDER=mock` as actually run today | **9.70** | **8/10** | 0.721 |
-| uniform random 0–100 (2000 draws) | median 31.2 (best 5% = 20.5) | median 2/10 | 95th pct 0.564; P(ρ≥0.8) = 0.004 |
+| best constant + the deterministic cap rule (tuned on this set) | **9.5** | **8/10** | 0.721 |
+| `LLM_PROVIDER=mock` as actually run today | 9.7 | 8/10 | 0.721 |
+| uniform random 0–100 (500 draws) | median 31.2 (best 5% = 20.5) | median 2/10 | 95th pct **0.576**; P(ρ≥0.8) = 0.004 |
 
-¹ The old `compute_spearman` returned **0.5** for a zero-variance prediction vector (ties are undefined for
-`1 - 6Σd²/n(n²-1)`), so "judge nothing" earned half of a perfect rank score. It now returns `null` plus a
-`spearman_reason`. Same class of fix as E4's `predicted = 0`.
+¹ `compute_spearman` used to return **0.5** for a zero-variance prediction vector (ties are undefined
+for `1 - 6Σd²/n(n²-1)`), so "judge nothing" earned half a perfect rank score. It now returns `null` plus
+a `spearman_reason`. Same class of fix as E4's `predicted = 0`.
 
-Read that table as: **`MAE <= 12` and `hit_tol10 >= 7` are currently passable with no language model at all**
-(mock literally scores 9.70 / 8). Only `rho >= 0.80` sits above the null models, and at n=10 a single relabeled
-pair moves MAE by 1–4 points and ρ by ~0.1, so floors finer than that are reading noise.
+So the old floors (`MAE <= 12`, `hit_tol10 >= 7`) were passable **with no language model at all**, and
+`eval-quality.ps1` now defaults above the baseline (8.0 / 9 / 0.85). CI runs `eval_agent` with
+`--max-errors 0` only: under a mock provider a quality floor would assert nothing about quality.
+Resolution caveat that no floor can fix: at n=10, relabeling one pair moves MAE by 1–4 points and ρ by
+~0.1, so digits finer than that are reading noise. Adding labeled pairs is the only cure.
 
-`eval_recommend` gates `skill_match_accuracy >= 0.4` in CI over **2 cases**, and none of its five metrics
-currently separates a working system from a copy-paste:
+`eval_recommend` gates the **explanation layer against the `skill_gap` authority**, over a rebuilt
+16-case set (was 2). Labels are the documented set rule — `canonical(resume) ∩ (canonical(required) ∪
+canonical(nice_to_have))` and `canonical(required) − canonical(resume)` — and
+`tests/test_recommend_eval.py::test_fixture_labels_are_the_documented_set_rule` recomputes them, so
+nobody can quietly regenerate the expectations from the code under test. The old labels defined
+`expected_skill_overlap` as *every skill on the resume*, which is why copying the resume list scored
+1.000; on the new labels:
 
-- `skill_match_accuracy`: the labels define `expected_skill_overlap` as *every skill on the resume* (pair 1 even
-  counts `docker`, which the JD doesn't ask for), so **copying the resume's skill list scores 1.000**. Predicting
-  nothing scores 0.0. The 0.4 floor cannot see the difference.
-- `jd_explanation_consistency` had a reading bug: `round(_mean(parts) or 1.0, 3)` turned "both arms completely
-  wrong" (0.0) into "perfectly consistent" (1.0). Verified old vs new on the same case: **1.0 → 0.0**. Cases with
-  nothing comparable now report `null` (未测出) instead of 1.0, and `measured_cases` says how many cases actually
-  contributed. The same `or 0.0` inversion was removed from the aggregate metrics.
-- `interview_score_stability` (0.938 today) is computed from the eval set's own `interview_score_samples`
-  — a fixture property that no system change can move; a case with one sample scores 1.0.
-- `recommendation_explainability` = (keyword hit + template structure)/2, and the keywords are matched against the
-  explainer's own fallback template, which this script forces (`_llm_explain` → `_fallback_explain`).
-- `feedback_agreement_rate` is structurally unavailable: `job_recommend_feedback` has 0 rows and the eval cases
-  carry no `resume_id`/`jd_id`, so the pairing set is always empty → `null`.
-- With no MySQL reachable (CI's condition) the script dies with an uncaught `OperationalError` (exit 1) before
-  printing anything. **Left red on purpose**: the obvious "degrade gracefully" patch would turn a proven-saturated
-  gate from red into falsely green. Fix it together with the labels.
+| null model (never looks at the system) | skill_match_accuracy | missing consistency |
+| --- | --- | --- |
+| copy the resume's skill list | **0.676** | — |
+| predict every JD requirement as hit | 0.484 | — |
+| predict nothing | 0.0 | 0.188 |
+| claim every requirement is missing | — | **0.38** |
+| the explainer's rule engine + fallback template (today) | 1.000 (16/16) | 1.000 (13/16 comparable) |
 
-Those provenance notes now travel with the numbers: the console report prints them, they are stored in
-`run_meta.metric_notes`, and `check_thresholds` appends them to any failing line.
+Because that arm is deterministic (no LLM, no DB), CI gates it at **1.0**: anything less is a real
+semantic change in `_calc_skill` / `skill_gap`. Verified: mutating two labels drops the run to
+0.969 / 0.962 and exits 3; setting the floor back to the old `0.4` exits 3 with
+"门槛 0.4 ≤ 空模型基线 0.676".
+
+Three of its metrics still do not measure the system, and now say so wherever the number appears
+(console, `run_meta.metric_notes`, the API summary, and every failing gate line):
+`interview_score_stability` is the dispersion of the eval set's own `interview_score_samples`;
+`recommendation_explainability` compares the text against the explainer's own fallback template
+(this script forces `_llm_explain` → `_fallback_explain`); `feedback_agreement_rate` needs real
+`job_recommend_feedback` rows paired by `resume_id`/`jd_id` (the table has 0 rows, so it is `null`).
+The DB is now optional: an unreachable database reports `linkage_status: db unavailable: …` instead of
+killing the run with an uncaught `OperationalError` — safe to soften only *after* the gate got real
+floors, which is why it was left red until this change.
 
 ## Full verification
 

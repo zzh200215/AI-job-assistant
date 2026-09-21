@@ -80,8 +80,26 @@ jobs:
           --min-lexical-keyword-hit 0.7
           --max-empty-results 0
 
-      - name: Run Recommend eval (min skill match >= 0.4)
-        run: python scripts/eval_recommend.py --min-skill-match-accuracy 0.4
+      # 推荐解释层与技能权威（skill_gap 的 canonical 集合运算）是否一致。标签由规则派生，
+      # 这一步又没有 LLM、没有线上数据参与，所以正确答案就是"完全一致"：门槛设 1.0，
+      # 任何偏离都是一次真实的语义变更。（脚本每次还会算出"不看系统的笨猜测最高只有
+      # 0.676 / 0.38"，门槛赢不了它就红。）
+      # 同一份一次性 SQLite（上面 seed 那步建的表）当会话库，让线上反馈那一臂有表可读。
+      - name: Run Recommend eval (explanation layer must equal the skill_gap rule)
+        env:
+          DATABASE_URL: sqlite:///./rag_ci.sqlite3
+        run: >
+          python scripts/eval_recommend.py
+          --min-skill-match-accuracy 1.0
+          --min-explanation-consistency 1.0
+
+      # mock provider 的分数没有语义，所以这里**不设质量门槛**，只门管道：每条 pair 都要
+      # 跑出预测分（--max-errors 0）。质量门槛在 scripts/eval-quality.ps1（真 provider）那边，
+      # 且必须先赢过脚本自己算出的"不用模型的基线"才算门槛。
+      - name: Run Agent eval (plumbing only - every pair must produce a score)
+        env:
+          DATABASE_URL: sqlite:///./rag_ci.sqlite3
+        run: python scripts/eval_agent.py --max-errors 0
 
       - name: Dependency vulnerability audit
         run: pip-audit --desc --requirement requirements.txt

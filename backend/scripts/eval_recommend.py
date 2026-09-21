@@ -192,19 +192,26 @@ def _evaluate_case(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _empty_linkage(status: str) -> dict[str, Any]:
+    return {
+        "linked_pair_count": 0,
+        "linked_feedback_count": 0,
+        "feedback_agreement_rate": None,
+        "linkage_status": status,
+        "feedback_summary": {
+            "total_feedback": 0,
+            "like_rate": 0.0,
+            "high_score_dislike_count": 0,
+            "low_score_like_count": 0,
+        },
+    }
+
+
 def _build_online_feedback_linkage(eval_set: list[dict[str, Any]], details: list[dict[str, Any]], db) -> dict[str, Any]:
     if db is None:
-        return {
-            "linked_pair_count": 0,
-            "linked_feedback_count": 0,
-            "feedback_agreement_rate": None,
-            "feedback_summary": {
-                "total_feedback": 0,
-                "like_rate": 0.0,
-                "high_score_dislike_count": 0,
-                "low_score_like_count": 0,
-            },
-        }
+        return _empty_linkage("no db session")
+
+    from sqlalchemy.exc import SQLAlchemyError
 
     from app.models.job_recommend import JobRecommendationFeedback
 
@@ -213,7 +220,15 @@ def _build_online_feedback_linkage(eval_set: list[dict[str, Any]], details: list
         for item in eval_set
         if item.get("resume_id") is not None and item.get("jd_id") is not None
     }
-    rows = db.query(JobRecommendationFeedback).all()
+    try:
+        rows = db.query(JobRecommendationFeedback).all()
+    except SQLAlchemyError as exc:
+        # 线上反馈只是"锦上添花"的一臂，读不到就明说读不到。
+        # 以前这里不捕获异常：CI 没有 MySQL 时整个脚本以未捕获的 OperationalError 崩掉。
+        reason = f"{type(exc).__name__}: {str(getattr(exc, 'orig', exc))[:120]}"
+        logger.warning("线上反馈数据不可读，feedback_agreement_rate 记为未测出：%s", reason)
+        return _empty_linkage(f"db unavailable: {reason}")
+
     pair_rows: dict[tuple[int, int], list[JobRecommendationFeedback]] = {}
     total_feedback = 0
     like_count = 0
@@ -266,6 +281,7 @@ def _build_online_feedback_linkage(eval_set: list[dict[str, Any]], details: list
         "linked_pair_count": linked_pair_count,
         "linked_feedback_count": total_feedback,
         "feedback_agreement_rate": round(agreement_count / linked_pair_count, 3) if linked_pair_count else None,
+        "linkage_status": "ok" if pairs else "eval set carries no resume_id/jd_id pairs",
         "feedback_summary": {
             "total_feedback": total_feedback,
             "like_rate": round(like_count / total_feedback, 3) if total_feedback else 0.0,
@@ -313,9 +329,63 @@ METRIC_NOTES = {
     "没有配对样本时是未测出，而不是 0",
     "recommendation_explainability": "= (期望关键词命中率 + 结构完整度) / 2；关键词比对的是 explainer 自己的"
     "兜底模板文案（本脚本把 _llm_explain 接成 _fallback_explain），结构那部分量的是模板形状，不是内容正确性",
-    "skill_match_accuracy": "Jaccard(预测 matched, expected_skill_overlap)；当前评估集把 overlap 标成了"
-    "简历上的全部技能，所以原样抄一份简历技能列表就能拿 1.0",
+    "skill_match_accuracy": "Jaccard(预测 matched, expected_skill_overlap)。标签按 app/services/skill_gap 的"
+    "权威定义派生（canonical 后的集合运算），所以这项量的是解释层与技能权威是否一致，"
+    "不是匹配质量本身；权威定义错了它看不见",
 }
+
+
+def trivial_baselines(eval_set: list[dict[str, Any]]) -> dict[str, float] | None:
+    """不看系统输出、只靠几种笨猜测在这套标签上能得几分。门槛必须明显赢过它。
+
+    旧标签（expected_skill_overlap = 简历上的全部技能）下，"原样抄简历技能列表"拿 1.000，
+    所以 `skill_match_accuracy >= 0.4` 那道门什么都分不出来。标签按 skill_gap 的权威定义
+    重做之后，同一个空模型应该明显掉下来；这里每次跑都把它算出来，而不是写在文档里等人信。
+    """
+    from app.services.skill_gap import canonical_skill
+
+    if not eval_set:
+        return None
+
+    def canon(values: Iterable[Any]) -> list[str]:
+        return [c for c in (canonical_skill(v) for v in values) if c]
+
+    overlap_strategies = {
+        "抄简历技能列表": lambda res, req, nice: res,
+        "什么都不预测": lambda res, req, nice: [],
+        "把 JD 要求全预测成命中": lambda res, req, nice: req,
+    }
+    missing_strategies = {
+        "永远说没有缺失": lambda res, req, nice: [],
+        "说 JD 要求全缺": lambda res, req, nice: req,
+    }
+
+    best_overlap = 0.0
+    best_missing = 0.0
+    per_case = []
+    for item in eval_set:
+        resume_profile = item.get("resume_profile") or {}
+        jd_profile = item.get("jd_profile") or {}
+        res = canon(resume_profile.get("skills") or [])
+        req = canon(jd_profile.get("required_skills") or jd_profile.get("skills") or [])
+        nice = canon(jd_profile.get("nice_to_have") or [])
+        per_case.append(
+            (res, req, nice, item.get("expected_skill_overlap") or [], item.get("expected_missing_skills") or [])
+        )
+
+    # 每个策略先整体取均值，再取最好的那个策略。逐案挑最大值等于给基线一个"每次都能猜对
+    # 该用哪个策略"的神谕，会把基线虚高到没法超越。
+    for fn in overlap_strategies.values():
+        vals = [_jaccard(fn(res, req, nice), expected_overlap) for res, req, nice, expected_overlap, _ in per_case]
+        best_overlap = max(best_overlap, sum(vals) / len(vals))
+    for fn in missing_strategies.values():
+        vals = [_jaccard(fn(res, req, nice), expected_missing) for res, req, nice, _, expected_missing in per_case]
+        best_missing = max(best_missing, sum(vals) / len(vals))
+
+    return {
+        "skill_match_accuracy": round(best_overlap, 3),
+        "jd_explanation_consistency": round(best_missing, 3),
+    }
 
 
 def check_thresholds(
@@ -326,8 +396,13 @@ def check_thresholds(
     min_explainability: float | None = None,
     min_interview_stability: float | None = None,
     min_feedback_agreement_rate: float | None = None,
+    trivial_baseline: dict[str, float] | None = None,
 ) -> list[str]:
-    """门槛消息。设了门槛却没测出数=失败，不再静默跳过（跳过就等于"过")。"""
+    """门槛消息。设了门槛却没测出数=失败，不再静默跳过（跳过就等于"过")。
+
+    `trivial_baseline` 是同标签下几种"不看系统输出的笨猜测"能得的最好成绩
+    （见 `trivial_baselines`）：门槛不高于它，这道门就分不出好坏。
+    """
     failed: list[str] = []
     total = int(report.get("total") or 0)
     measured = report.get("measured_cases") or {}
@@ -347,6 +422,12 @@ def check_thresholds(
             failed.append(f"{key} 未测出（{measured.get(key, 0)}/{total} 条有可比数据），门槛 {floor} 无从比较{note}")
         elif float(value) < floor:
             failed.append(f"{key} {value} < {floor}{note}")
+
+    if trivial_baseline:
+        for key, floor in checks:
+            base = trivial_baseline.get(key)
+            if floor is not None and base is not None and floor <= base:
+                failed.append(f"{key} 门槛 {floor} ≤ 空模型基线 {base}：不看系统输出的笨猜测也能过，抬门槛或改标签")
     return failed
 
 
@@ -380,11 +461,14 @@ def main():
         if db is not None:
             db.close()
 
+    baselines = trivial_baselines(eval_set)
+
     report["report_type"] = "recommend"
     report["run_meta"] = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "eval_set": str(Path(args.eval_set).resolve()),
         "sample": args.sample,
+        "trivial_baselines": baselines,
         "thresholds": {
             "min_skill_match_accuracy": args.min_skill_match_accuracy,
             "min_explanation_consistency": args.min_explanation_consistency,
@@ -406,9 +490,12 @@ def main():
         "feedback_agreement_rate",
     ):
         value = report[key] if report[key] is not None else "未测出"
-        print(f"  {key:28s}: {value}   （{measured.get(key, 0)}/{report['total']} 条有可比数据）")
+        base = (baselines or {}).get(key)
+        base_text = f"   空模型最好 {base}" if base is not None else ""
+        print(f"  {key:28s}: {value}   （{measured.get(key, 0)}/{report['total']} 条有可比数据）{base_text}")
         if key in METRIC_NOTES:
             print(f"  {'':28s}  来源：{METRIC_NOTES[key]}")
+    print(f"  线上反馈这一臂        : {report['online_feedback_linkage'].get('linkage_status')}")
     print("=" * 62)
 
     report["run_meta"]["metric_notes"] = dict(METRIC_NOTES)
@@ -427,6 +514,7 @@ def main():
         min_explainability=args.min_explainability,
         min_interview_stability=args.min_interview_stability,
         min_feedback_agreement_rate=args.min_feedback_agreement_rate,
+        trivial_baseline=baselines,
     )
     if failed:
         print("[FAIL] Recommendation eval thresholds not met:")

@@ -1,5 +1,9 @@
+import json
+from pathlib import Path
+
 from scripts.eval_agent import check_thresholds as check_agent_thresholds
 from scripts.eval_agent import run_eval as run_agent_eval
+from scripts.eval_agent import trivial_baselines as agent_trivial_baselines
 from scripts.eval_rag import check_thresholds as check_rag_thresholds
 from scripts.eval_rag import random_metric_baselines, run_lexical_eval
 from scripts.eval_rag import run_eval as run_rag_eval
@@ -281,6 +285,39 @@ def test_varying_predictions_still_produce_a_rank_correlation(monkeypatch):
     assert check_agent_thresholds(report, min_spearman=0.8) == []
 
 
+def _agent_fixture() -> list[dict]:
+    path = Path(__file__).resolve().parent.parent / "tests" / "eval" / "agent_eval.jsonl"
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def test_agent_floors_must_beat_the_model_free_baseline():
+    """把"不用模型能刷到几分"钉住：旧默认门槛（MAE ≤ 12、hit ≥ 7）就是在这条线以下。"""
+    baselines = agent_trivial_baselines(_agent_fixture())
+
+    assert baselines["mae"] <= 12.0, baselines
+    assert baselines["hit_tol10"] >= 7, baselines
+    assert baselines["spearman_rho"] < 0.85, baselines
+
+    good = {
+        "total": 10,
+        "scored": 10,
+        "eval_errors": 0,
+        "mae": 5.0,
+        "spearman_rho": 0.9,
+        "score_dist": {"hit_tol10": 10, "over": 0, "under": 0, "errored": 0},
+    }
+
+    old = check_agent_thresholds(good, max_mae=12.0, min_hit_tol10=7, min_spearman=0.8, trivial_baseline=baselines)
+    assert any(f.startswith(f"mae 门槛 12.0 赢不了不用模型的基线 {baselines['mae']}") for f in old), old
+    assert any(f.startswith(f"hit_tol10 门槛 7 赢不了不用模型的基线 {baselines['hit_tol10']}") for f in old), old
+    assert not any(f.startswith("spearman_rho") for f in old), old  # 0.8 > 基线，这条算门
+
+    # eval-quality.ps1 现在用的默认值（8 / 9 / 0.85）都在基线之上，不会因为"不是门"而红
+    assert (
+        check_agent_thresholds(good, max_mae=8.0, min_hit_tol10=9, min_spearman=0.85, trivial_baseline=baselines) == []
+    )
+
+
 def test_agent_gate_reports_unscored_pairs_before_thresholds():
     report = {
         "total": 2,
@@ -352,7 +389,7 @@ def test_recommend_thresholds_report_all_failed_metrics():
         "feedback_agreement_rate 0.74 < 0.75",
     ]
     # 带来源的指标，红字里也必须带着来源，免得被人把数抄走
-    assert "原样抄一份简历技能列表就能拿 1.0" in failures[0]
+    assert "量的是解释层与技能权威是否一致" in failures[0]
     assert failures[1] == "jd_explanation_consistency 0.84 < 0.85"  # 这项没有来源注记
     assert "兜底模板文案" in failures[2]
     assert "不随系统输出变化" in failures[3]
@@ -633,9 +670,9 @@ def test_recommend_gate_reports_unmeasured_with_provenance():
     )
 
     assert len(failures) == 3
-    # 抄简历技能列表就能拿 1.0 —— 这句话必须跟着数一起出现
+    # 这项只量"解释层与技能权威是否一致"——这句来源说明必须跟着数一起出现
     assert failures[0].startswith("skill_match_accuracy 未测出（0/2 条有可比数据），门槛 0.4 无从比较")
-    assert "原样抄一份简历技能列表就能拿 1.0" in failures[0]
+    assert "量的是解释层与技能权威是否一致" in failures[0]
     # 这两项一个量的是评估集自身的样本离散度，一个需要线上反馈数据
     assert "不随系统输出变化" in failures[1]
     assert "job_recommend_feedback" in failures[2]
