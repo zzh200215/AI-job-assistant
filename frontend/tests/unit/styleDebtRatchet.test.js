@@ -49,9 +49,10 @@ const BUDGET = {
   scriptColorLiterals: {},
   /* 模板属性里的色值：上面两个预算都看不见它（一个数 <style>，一个数 <script>）。
      这里的数字是现状记账，不是认可——Login 的 17 处是第三方登录按钮的品牌色
-     （Google / GitHub 官方值），本来就该写死；其余 6 处是 Element 默认蓝与内联 SVG
-     描边，等能在浏览器里复核颜色时再逐条换成 token（`stroke="var(--app-…)"` 这类
-     改动的渲染结果，本机验不了）。 */
+     （Google / GitHub 官方值），本来就该写死；其余 8 处是真债（导航菜单两个蓝、
+     风险点/改进建议两个 Element 默认色、两处内联 SVG 描边、一个兜底色），且都与
+     主题 token 不同值。本段一条都没换成 var()：`stroke="var(--app-…)"` 这类表现
+     属性必须能在浏览器里看结果才敢改，而 browser 工具被会话策略拦着。 */
   templateColorLiterals: {
     'src/views/Login.vue': 17,
     'src/layouts/DefaultLayout.vue': 3,

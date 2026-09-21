@@ -726,7 +726,9 @@ agent.SummaryAgent           real  tokens=3215
 
 **这段没动的 80 分界**（是产品口径，不是颜色）：`JobRecommend.vue:380` 在 `match_score >= 80` 时挂"优先投递"徽章，而后端 `_recommendation` 要 85 且无必需技能缺口才给"强烈推荐"——同一张卡片可能一边写"可以投递"一边挂"优先投递"；同源的还有 `priorityJobCount`、`History.vue:318` 的"高匹配记录"、`Profile.vue:492` 的成就解锁、`CareerPlanning.vue:968` 的投递策略分档（80/70/60，还叠加缺口数）。见 §10。
 
-**棘轮的第三个盲区（本段只记录，未处理）**：`hardcodedColorLiterals` 数 `<style>`、`scriptColorLiterals` 数 `<script>`，而**模板属性里的色值两边都不算**——实测 **25 处分布在 6 个文件**（`Login.vue` 17、`DefaultLayout.vue` 3、`ExplainMatch.vue` 2、`CareerPlanning.vue`/`NotFound.vue`/`ResumeUpload.vue` 各 1）。Login 那 17 处是第三方登录按钮的品牌色（Google/GitHub 官方值），属"本来就该写死"的一类；剩下 8 处是内联 SVG 的 `stroke/fill` 与兜底色（如 `CareerPlanning.vue:523` 的 `phase.color || '#409EFF'`），可 token 化。`<script>` 侧当前为 0，所以这一族若继续增长，只能靠人工发现。
+**棘轮的第三个盲区（已入账，未清偿，提交 `3bbc343`）**：`hardcodedColorLiterals` 数 `<style>`、`scriptColorLiterals` 数 `<script>`，而**模板属性里的色值两边都不算**——实测 **25 处分布在 6 个文件**（`Login.vue` 17、`DefaultLayout.vue` 3、`ExplainMatch.vue` 2、`CareerPlanning.vue`/`NotFound.vue`/`ResumeUpload.vue` 各 1）。已新增第三条预算 `templateColorLiterals`（同样"增长即红、还债必须调小"），三个维度改由同一对测试驱动：**抽取坏掉也无法蒙混**（template 取空会让 6 个文件全被"预算比现实松"那条点名）。用一次性探针验过三件事——预算数字与实测逐文件相等、多一处即红、未列进预算的文件里有 hex 也红。
+
+这 25 处里 17 处是 Login 的第三方登录品牌色（Google/GitHub 官方值，本就该写死）；其余 **8 处是真债**，和 D1 同源，且**没有一处等于最近的主题 token**：`DefaultLayout.vue:51-52` 导航菜单 `#4b5563` / `#196bdb`（主题里是 `--app-muted #697386` / `--app-primary #2563eb`）、`ExplainMatch.vue:131,140` 的"风险点/改进建议"标题吃 Element 默认橙 `#e6a23c` 与默认蓝 `#409eff`、`CareerPlanning.vue:523` 兜底 `#409EFF`、`NotFound.vue:4` 图标 `#667eea`（不是 `--app-violet #7147d9`）、`ResumeUpload.vue:156` 环形轨道 `#eee`。**本段一条都没换成 var()**：`stroke="var(--app-…)"` 这类 SVG 表现属性、以及 el-menu/el-icon 传色值 prop 的路径，必须真在浏览器里看结果才敢改，而 browser 工具被会话策略拦着——留待能验时逐条做，届时数字只会往下走。预算生成脚本 `scripts/style-budget.mjs` 同步改为三个维度都输出（此前只印 `<style>` 一条，谁照它重生成预算就会把另外两条写没了）。当前账本：`<style>` **510 处 / 34 文件**、`<script>` **0**、模板 **25 处 / 6 文件**。
 
 ---
 

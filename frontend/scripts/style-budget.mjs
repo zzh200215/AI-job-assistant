@@ -10,19 +10,28 @@ function walk(dir) {
 }
 
 const files = [...walk('src/views'), ...walk('src/layouts')]
-const rows = []
-for (const f of files) {
-  const src = readFileSync(f, 'utf8')
-  const body = (src.match(/<style[\s\S]*?<\/style>/g) || []).join('\n')
-  const hex = (body.match(/#[0-9a-fA-F]{3,8}\b/g) || []).length
-  const rgb = (body.match(/\brgba?\(/g) || []).length
-  const n = hex + rgb
-  if (n) rows.push([f.split(path.sep).join('/'), n])
+
+/* Colour literals hide in three places, and tests/unit/styleDebtRatchet.test.js budgets
+   each one separately. Print all three so regenerating a quota cannot quietly drop the
+   other two. The template block is everything before <script — a lazy `</template>`
+   match would stop at the first slot template and under-count. */
+const BLOCKS = {
+  hardcodedColorLiterals: (src) => (src.match(/<style[\s\S]*?<\/style>/g) || []).join('\n'),
+  scriptColorLiterals: (src) => (src.match(/<script[\s\S]*?<\/script>/g) || []).join('\n'),
+  templateColorLiterals: (src) => {
+    const at = src.search(/<script/)
+    return at < 0 ? src : src.slice(0, at)
+  },
 }
-rows.sort((a, b) => b[1] - a[1])
-console.log('files with literals:', rows.length)
-console.log(
-  'total literals:',
-  rows.reduce((s, r) => s + r[1], 0)
-)
-console.log(JSON.stringify(Object.fromEntries(rows), null, 2))
+
+const countIn = (text) =>
+  (text.match(/#[0-9a-fA-F]{3,8}\b/g) || []).length + (text.match(/\brgba?\(/g) || []).length
+
+for (const [budget, block] of Object.entries(BLOCKS)) {
+  const rows = files
+    .map((f) => [f.split(path.sep).join('/'), countIn(block(readFileSync(f, 'utf8')))])
+    .filter(([, n]) => n)
+    .sort((a, b) => b[1] - a[1])
+  console.log(`\n${budget}: ${rows.length} files, ${rows.reduce((s, r) => s + r[1], 0)} literals`)
+  console.log(JSON.stringify(Object.fromEntries(rows), null, 2))
+}
