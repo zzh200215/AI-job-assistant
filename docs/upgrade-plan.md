@@ -616,6 +616,38 @@ agent.SummaryAgent           real  tokens=3215
 
 ---
 
+#### 已交付：E7 量了 agent / recommend 两道门的基线，并修掉两个把"没测"读成"成功"的 bug（提交 `fb2c8a2`）
+
+**为什么先量**：E6 的判据是"门槛赢不过同语料的随机基线就不算门"。RAG 门照这条修完了，另外两道门从没量过。零 API 花费（纯算术 + mock + 只读 SQL）。
+
+**agent 门**（`eval_agent`，n=10；**CI 根本不跑它**，门槛只活在 `scripts/eval-quality.ps1`：MAE ≤ 12、ρ ≥ 0.80、hit_tol10 ≥ 7）
+
+| 空模型 | MAE | hit±10 | ρ |
+|---|---|---|---|
+| 任意常数（均值 66 / 中位 70 / 最优 65） | 18.0 | 2–3/10 | 未定义¹ |
+| 常数 82 + 确定性封顶规则 | **9.70** | **8/10** | 0.721 |
+| 今天 mock provider 实测 | **9.70** | **8/10** | 0.721 |
+| 0–100 均匀随机（2000 次） | 中位 31.2（最好 5% 才 20.5） | 中位 2/10 | 95 分位 0.564；P(ρ≥0.8)=0.004 |
+
+¹ 脚本自带的 `compute_spearman` 用 `1-6Σd²/n(n²-1)`，对**并列没有定义**却返回 **0.5** —— 什么都不判断也能白拿一半秩分。现在零方差返回 `null` + `spearman_reason`，门那边报"未测出"。新旧对照（同一组输入）：常数 0.5 → **None**；有方差 1.0 → 1.0（没碰坏能用的那半）；单条 0.0 → **None**。
+
+**结论**：`MAE ≤ 12` 和 `hit_tol10 ≥ 7` 这两条**现在不需要语言模型就能过**（mock  literal 就是 9.70 / 8）。有区分度的只有 ρ ≥ 0.80。n=10 的分辨率：重标一条，MAE 动 1–4 分、ρ 动 ~0.1。
+
+**recommend 门**（`eval_recommend`，n=**2**；CI 只门 `skill_match_accuracy ≥ 0.4`）——五项指标没有一项分得出好坏：
+
+- `skill_match_accuracy` 的标签把 `expected_skill_overlap` 定义成"简历上的全部技能"（pair_1 连 JD 没要求的 `docker` 都算 matched）→ **原样抄简历技能列表得 1.000**，预测空集 0.0。0.4 看不见这个差别。
+- `jd_explanation_consistency` 有读数 bug：`round(_mean(parts) or 1.0, 3)` 把"两臂全错(0.0)"读成"完全一致(1.0)"。同一份 case 新旧对照：**1.0 → 0.0**。没有可比项的案件现在如实 `null`，并新增 `measured_cases` 说清"几条真有可比数据"（今天那条 1.0 其实只有 1/2 条可比）。聚合项同样去掉 `or 0.0` 的反向伪装。
+- `interview_score_stability`（0.938）算的是**评估集自带样本的离散度**，系统输出不参与；单样本案件恒 1.0。
+- `recommendation_explainability`（0.875）= (关键词命中 + 模板结构)/2，而关键词是拿去匹配 explainer **自己的兜底模板**（脚本硬把 `_llm_explain` 接成 `_fallback_explain`）。
+- `feedback_agreement_rate` 结构性不存在：dev 库 `job_recommend_feedback` **0 行**，且 eval case 没有 `resume_id`/`jd_id` → 配对集合永远空 → `null`。
+- CI 条件下（连不上 MySQL）脚本**未捕获 `OperationalError` 直接崩**，exit 1。**这个崩故意留着**：按"优雅降级"改掉，等于把一道已被证明饱和的门从"红"改成"假绿"；要和标签一起修。
+
+**落地（他点的 1+2）**：两个读数 bug 修掉；带来源的指标（stability / explainability / skill_match / feedback）把说明写进控制台输出、报告 `run_meta.metric_notes`、`/api/eval-reports` 透传，以及**每一条红字**里。门槛数字本身没动（那是 3/4）。测试 +4：常数预测 ρ 未测出、有方差的 ρ 照常、两臂全错读 0.0、门槛设在未测出的指标上必须失败并带来源。全量 **694 passed**，`ruff check .` clean、`ruff format --check .` 338 files。
+
+**仍待他定**：(3) recommend 标签重做 + 扩到 n≥15（谁标）；(4) agent 门槛抬到基线之上（例如 MAE ≤ 6、hit ≥ 9）并考虑进 CI；(5) `eval_recommend` 那步在标签修好前先保持红着。
+
+---
+
 ## 9. 里程碑
 
 | 里程碑 | 内容 | 出口判据 |
