@@ -542,9 +542,9 @@ agent.SummaryAgent           real  tokens=3215
 - 新增 `--max-retrieval-errors`（默认 0）：只要有异常，先报这条，再谈阈值。
 - 评估必须带会话与身份：默认取 `ADMIN_USERNAMES`，没有管理员就按 id 找一个"真的看得到知识文档"的用户，并把口径写进 `run_meta` 和摘要行——评估用的是谁的权限，不能是隐变量。库连不上时退出码 2 说清原因，不再交一份 0.0 的报告。
 
-**第一次真数据**（本机真 provider，5 条样本）：口径 `testu(id=1) 可见 22 篇知识文档`，检索成功 5 条 / 异常 0 / 空结果 0，**recall@5 = 0.9，MRR 0.533，keyword hit 1.0**，退出码 0（门槛 0.5 第一次是真的在比大小）。`transition_guide` 这一类召回 0.0，样本太少先不下结论。全量 50 条大约要打 50 次 LLM + 140 次 embedding（按 5 条样本外推），我没有擅自跑。
+**第一次真数据**（本机真 provider，5 条样本）：口径 `testu(id=1) 可见 22 篇知识文档`，检索成功 5 条 / 异常 0 / 空结果 0，**recall@5 = 0.9，MRR 0.533，keyword hit 1.0**，退出码 0（门槛 0.5 第一次是真的在比大小）。`transition_guide` 这一类召回 0.0，样本太少先不下结论。全量 50 条大约要打 50 次 LLM + 140 次 embedding（按 5 条样本外推），我没有擅自跑。（**E6 补一刀**：同一份评估集上"随机抓 5 个切片"的 recall@5 就有 0.479，所以"门槛 0.5 真的在比大小"只对了一半——它在比，但赢不了抛硬币。）
 
-**同样的形状还留在别处（随后在 E4 一起改了）**：`scripts/eval_agent.py:110-112` 出错时写 `predicted = 0`，会污染 MAE/Spearman 两道门，性质与这里一样。CI 侧的结构性问题也还在：`ci.yml` 没有 MySQL service、`backend/chroma_db` 里只跟踪了一个 `.gitkeep`，所以这道门在 CI 里现在会以"数据库不可用"退出码 2 失败——**明确地红，而不是假装测过**。
+**同样的形状还留在别处（随后在 E4 一起改了）**：`scripts/eval_agent.py:110-112` 出错时写 `predicted = 0`，会污染 MAE/Spearman 两道门，性质与这里一样。CI 侧的结构性问题也还在（**E6 已解决**）：`ci.yml` 没有 MySQL service、`backend/chroma_db` 里只跟踪了一个 `.gitkeep`，所以这道门在 CI 里当时会以"数据库不可用"退出码 2 失败——**明确地红，而不是假装测过**。
 
 **测试**：`tests/test_eval_thresholds.py` +4（异常单独计数且指标为 None、空结果仍是可测的 0.0、一条炸一条中时只按测出的算、门槛先报异常再报未测出）；原有 hybrid-recall 测试改为断言 `db/user_id` 确实被透传。该文件 11 passed，全量 672 passed。
 
@@ -592,6 +592,27 @@ agent.SummaryAgent           real  tokens=3215
 | 死代码 | `api/tracking.py` 定义了 router 但**从未被 include**；`agents/agent_orchestrator.py`、`services/smart_orchestrator.py`、`services/agent_workflow.py` 是 `DeprecationWarning` 垫片层，靠 import 维持存活 |
 | 缺少 router 级鉴权 | 31 个 router / 218 端点，无一处使用 `dependencies=[...]`，鉴权靠每端点 `Depends(get_current_user)`，**保护是 opt-in 而非构造保证** |
 | 三个 router 共享 `/jobs` 前缀 | `api/router.py:54-56`；当前不冲突仅因 `job_recommend.py:1448` 的 `/{jd_id:int}` 是单段 |
+
+#### 已交付：E6 CI 的 RAG 门第一次有自己的语料可查（提交 `221b191`）
+
+**红在哪**：E3 把口径修对之后，这道门在 CI 里以"无法确定评估身份/数据库不可用"退出码 2 失败——没有 MySQL service，`backend/chroma_db` 干净检出是空的。明确地红，但依然什么都没测。这次按"备一份固定小语料"落地。
+
+**语料从哪来**：仓库本来就带着种子文档（`docs/knowledge-seeds/`，8 个 doc_type、**16 篇** md——之前记的"28 篇"不对，根目录那篇 README 不在 `SEED_MAPPINGS` 里）。新脚本 `backend/scripts/seed_rag_corpus.py` 走**真入库链路**（落盘→解析→切片→embedding→写 Chroma→建 `knowledge_document` 行），复用 `import_knowledge.py` 的同一套 helper，把它们装进一次性 SQLite + 临时 Chroma（`CHROMA_DIR` 成为可覆盖设置，默认仍是 `backend/chroma_db`）。实测 **16 篇 → 91 切片，seed 3.2s、gate 4.0s，零外部服务**。它默认**拒绝写非 SQLite 的 `DATABASE_URL`**（要 `--force`），否则手滑一次就把种子文档和一个机器人用户灌进共享开发库，而且没有清理入口。评估用户是 candidate 而不是管理员：可见性裁剪那一步要真的被执行。
+
+**门槛改成什么样**（重点是别把"能跑"变成"跑过一个假数"）
+
+| 断言 | 门 | 实测 / 同语料随机基线 |
+|---|---|---|
+| 词法召回还能找对文档类型 | `--min-lexical-recall 0.7` | 0.813 / 0.479 |
+| 词法召回的正文里真有关键词 | `--min-lexical-keyword-hit 0.7` | 0.88 / 0.411 |
+| 融合链路（可见性、补水、RRF、rerank）通 | `--max-empty-results 0` + 默认 `--max-retrieval-errors 0` | 50/50 有结果，异常 0 |
+| 语义向量质量 | **不门**，只报数 | mock 向量按文本 hash，无语义 |
+
+随机基线是脚本每次自己算的（同语料随机抓 5 个切片，200 次），并且**门槛 ≤ 对应基线就直接判失败**。两条纪律由此变成机器强制：旧 CI 那行 `--min-recall 0.5` 属于"门槛比随机还低"；`EMBEDDING_PROVIDER=mock` 下给融合路设语义门槛现在直接 exit 3，而不是报一个看起来像质量分的数。
+
+**顺手抓到的第二个 bug**：写 `_lexical_hits` 时才发现 `collection.get(ids=...)` **不保证按请求顺序返回**。按返回顺序截 top-5，量的就不是 BM25 排名而是 Chroma 的存储顺序。改成按 id 回查、保持 BM25 顺序后，词法 recall@5 从 0.703 → **0.813**、mrr 0.475 → **0.781**。（第一版报告里我给的"词法 0.903"是另一个错：按去重后的 doc_type 数 top-5，把指标放松了，作废。）
+
+**验证**：临时目录里照抄 job env 跑 CI 那两步（无 `.env`、无 MySQL、空 Chroma）→ seed exit 0、gate exit 0；把 `CHROMA_DIR` 指到空目录（模拟语料没了）三条门一起红、exit 3，失败信息带"BM25 覆盖 0 切片"。测试 +11（`tests/test_eval_thresholds.py`）：词法路只量 BM25 且排名用 BM25 顺序、不可见文档连 doc_type 都不外泄、索引没建起来时失败信息指到"索引"、mock 下融合语义门槛被拒、空结果按"链路断"报、门槛 ≤ 随机基线不成门、单类型语料基线就是 1.0、seeder 拒写 MySQL。backend **690 passed**，`ruff check .` clean，`ruff format --check .` 338 files formatted，`ci.yml` 过 `yaml.safe_load`。**仍然没验的**：远端 CI 实跑结果（`gh` 被会话策略拦，见 [[local-dev-environment]]）；真 provider + 真语料上的融合门槛（要花钱，仍旧没跑）。
 
 ---
 
