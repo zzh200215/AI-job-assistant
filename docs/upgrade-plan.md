@@ -457,13 +457,6 @@ agent.SummaryAgent           real  tokens=3215
 
 **同时暴露的一条工程债（后来在 E2 清零）**：当时 `ruff check .` 有 **48 个错误 + 64 个文件待重排**（15 `I001` / 10 `F401` / 7 `UP038` / 5 `B904` / 5 `F841` / 4 `E402` / 1 `B009` / 1 `UP035`）。C7 当时只把动过的文件修到 clean，没有顺手全量重排（爆炸半径太大、会污染后续 diff）；这批基线后来由 `0496c54` + `bc882cd` 清完，细节见 §8 的 E2 记录。
 
-
-
-
-
-
-
-
 ---
 
 ## 7. 阶段 D｜前端（已完成的阶段 0 + 后续）
@@ -481,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useAsync` | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）。未收：15 份日期函数副本、24 处手写 `loading`、150+ 个 `catch`，以及 `AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦） |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useAsync` | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）。未收：24 处手写 `loading`、150+ 个 `catch`，以及 `AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦） |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -747,6 +740,23 @@ agent.SummaryAgent           real  tokens=3215
 **验证**：`npm run test:unit` **34 → 41 passed**；`npm test` 11 passed；`npm run lint` 0 error；`npm run build` 通过。**没验**：真浏览器里的标签颜色（工具被策略拦），但这次改的是 el-tag 的 `type` 属性值——它只有 5 个合法取值且由 Element 自己上色，不涉及 `var()` 解析，风险面比第二段小。
 
 **这一段没做的**：PipelineKanban 的 7 条阶段色、KnowledgeBase 的 12 条文档类型、CareerPlanning 的 9 条策略/优先级等，仍各留本地表（它们没有跨页矛盾，只是重复），由新维度按数字盯着。
+
+#### 已交付：D2 日期格式化 18 份副本收进一个模块（提交 `df263d5`）
+
+**数量按行为数，不按函数名数**：按名字 grep 得到"15 份副本 / 14 个文件"，按行为（视图里出现 `toLocale*` / `Intl`）再数一遍是 **18 份 / 16 个文件**——漏掉的三份是 `PipelineKanban.formatShortDate`、`JobSearch.formatPipelineTime`、`JobRecommend.formatShortDate`，与上一段分数梯级漏两处是同一个盲区（**函数名是不可靠的索引**）。收进 `src/utils/format/date.js` 的 **7 个具名输出**：`monthDay`（9月21日）、`monthDayTime`（9月21日 18:05）、`dateTime`（2026/9/21 18:05:00）、`compactDateTime`（09/21 18:05）、`isoMonthDay`（09-21，图表轴，不经过 Date）、`utcStamp` / `rawStamp`（不本地化的服务端串），共 34 个调用点。
+
+**两对"看起来不一样其实完全一样"是量出来的，不是猜的**：`toLocaleDateString` 带 hour/minute 与 `toLocaleString` 带同样选项逐字节相同（Interview 与看板各写一份）；`toLocaleString('zh-CN')` 与带 `hour12:false` 也相同（中文默认 24 小时制，任务中心与 admin 四页共 5 份其实是同一份）。
+
+**三处故意不同，写成断言而不是藏起来**：
+1. `Profile.vue` 那份写的是**不带 locale** 的 `toLocaleString()` —— 同一条时间戳在英文浏览器上会变成 `9/21/2026, 6:30:05 PM`，而全站其他地方是中文格式；现在与全站一致（中文浏览器上输出不变）。
+2. 那些 `catch { return d }` 是**死代码**：`toLocaleXxx` 对坏值不抛异常，而是返回字符串 `Invalid Date`，所以注释承诺的"保留后端返回的原始时间"从未发生。现在坏值真的显示后端原文。
+3. 缺值占位符保持各页原样（`''` / `'-'` / `'--'`），不改任何列的宽度。
+
+**证明方式**：`tests/unit/dateFormat.test.js` 把迁移前的实现**逐字抄进去**当黄金对照，对 ISO / 带 Z / 带偏移 / 仅日期 / 毫秒数等 7 个输入逐个断言输出相同；上面三处不同则单独断言"旧的是那样、新的是这样"。对照跑在同一进程同一时区，所以不需要在测试里写死任何日期字符串（本机 `Asia/Shanghai`，CI 是 UTC，结论不变）。`locale` 相关那条按运行环境分支断言，避免在 en-US runner 上假失败。
+
+**棘轮第五道**：视图与布局里再出现 `toLocale*` / `Intl.DateTimeFormat` 直接红。数字：`test:unit` **41 → 51 passed**，smoke 11，lint 0 error，build 通过，本单元净 **-102 行**；顺手清掉 `fd77d2a` 在 OfferCompare 留下的空行。
+
+**没做的**：`Home.vue` 里 `new Date().getHours()` 那种"取小时做问候语"不是格式化，未动；`InterviewReport.formattedDuration`（秒→"x 分 y 秒"）是时长不是日期，也未动。
 
 ---
 

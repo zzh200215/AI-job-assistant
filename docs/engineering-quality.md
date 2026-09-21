@@ -36,6 +36,22 @@ This repository includes a lightweight delivery-quality baseline for demo, revie
   while `OfferCompare` kept emitting those class names, which silently left one
   score uncoloured.
 
+## Dates come from one module
+
+- `frontend/src/utils/format/date.js` owns every calendar-string render: `monthDay`,
+  `monthDayTime`, `dateTime`, `compactDateTime`, `isoMonthDay`, `utcStamp`,
+  `rawStamp`. Before it, 18 copies lived in 16 files (counted by behaviour —
+  `toLocale*`/`Intl` in a view — because counting by function name finds only 15 and
+  misses `formatShortDate` / `formatPipelineTime`).
+- `tests/unit/dateFormat.test.js` keeps the pre-migration bodies verbatim and asserts
+  per-input equality, so "output unchanged" is measured. The three places that
+  deliberately differ are asserted as different: a missing locale on
+  `Profile.vue`'s timestamps, dead `catch { return d }` blocks that could never fire
+  (`toLocaleString` returns the string `Invalid Date` rather than throwing), and each
+  page's own empty placeholder.
+- The ratchet's fifth check fails if any view or layout calls `toLocale*` /
+  `Intl.DateTimeFormat` again.
+
 ## Open: the frontend format gate cannot pass
 
 `npm run format:check` — CI step "Check frontend formatting" — fails on **95 files
