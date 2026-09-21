@@ -232,7 +232,7 @@ User Query → Retrieval Planner (LLM 决策 / 启发式回退)
 | 评估维度 | 数据集 | 脚本 | 指标 |
 | --- | --- | --- | --- |
 | **RAG 检索** | `tests/eval/rag_eval.jsonl`（50 条） | `scripts/eval_rag.py` | 融合路 / 词法路（BM25）各一组：recall@5、MRR、keyword_hit_rate、per_doc_type_recall；另报同语料的随机基线（CI 门词法路） |
-| **Agent 匹配** | `tests/eval/agent_eval.jsonl`（10 对简历×JD） | `scripts/eval_agent.py` | MAE（平均绝对误差）、Spearman ρ（排序一致性）、偏差分布 |
+| **Agent 匹配** | `tests/eval/agent_eval.jsonl`（25 对简历×JD） | `scripts/eval_agent.py` | MAE（平均绝对误差）、Spearman ρ（排序一致性）、偏差分布；同场报出**不用模型的基线**（常量/随机），门槛赢不过它就判红 |
 
 ```bash
 cd backend

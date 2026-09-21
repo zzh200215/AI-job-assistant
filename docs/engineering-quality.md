@@ -19,6 +19,40 @@ This repository includes a lightweight delivery-quality baseline for demo, revie
 - `npm run build` remains the production build check.
 - `/tasks` provides a unified task center for async analysis progress, recent tasks, result navigation, and retry entry points.
 
+## Score colour is one scale
+
+- `frontend/src/utils/scoreTone.js` is the only place a score becomes a display
+  band: 85/70/50 for match and resume scores — the bands the backend
+  recommendation label uses (`MatchExplainer._recommendation`) — 85/70/55 for
+  interview performance, and `unknown` when no score was computed.
+- Views attach `.score-tone--*` / `.score-fill--*` / `.score-chip--*` /
+  `.score-level--*`, call `scoreToneTagType` for `el-tag`, or pass
+  `var(--app-score-*)` where a colour value is required. No view or layout keeps
+  a hex literal in `<script>`; `scriptColorLiterals: {}` in
+  `frontend/tests/unit/styleDebtRatchet.test.js` locks that.
+- Two contract tests guard what a hex budget cannot see: every tone a view can
+  emit must have a rule, and the `--app-score-*` token set must be complete per
+  tone. They exist because an earlier pass deleted `.score-high/.score-mid/.score-low`
+  while `OfferCompare` kept emitting those class names, which silently left one
+  score uncoloured.
+
+## Open: the frontend format gate cannot pass
+
+`npm run format:check` — CI step "Check frontend formatting" — fails on **95 files
+in a CI-identical checkout of `origin/master`**, so the frontend job cannot be
+green regardless of the change under review. Reproduced without touching the
+working tree (`git archive origin/master frontend | tar -x`, then the prettier
+version `package-lock.json` pins, 3.9.5 — which is also what CI installs via
+`npm ci`); `Login.vue` alone moves 645 → 702 lines. `devDependencies` declares
+`^3.3.2`, so the drift is consistent with sources formatted under prettier 3.3
+and the lockfile floating to 3.9.
+
+Two ways out, and they need a decision rather than a default: run
+`npm run format` once (~95 files of whitespace churn in one commit, after which
+the step bites), or pin prettier to the 3.3 line (a dependency downgrade, no
+source churn). Until one lands, read a red "Check frontend formatting" step as
+this known gap, not as a regression introduced by the current change.
+
 ## Task operations
 
 - Async orchestration tasks expose normalized progress, current step, and duration metadata.

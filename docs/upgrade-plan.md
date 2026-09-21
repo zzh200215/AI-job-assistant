@@ -707,6 +707,25 @@ agent.SummaryAgent           real  tokens=3215
 
 **下一段**：面试分两页——InterviewReport（JS 里 4 个 hex）与 InterviewRoom（`.score-strong/good/warn/risk` 是**浅底 + 描边的胶囊**，不是实心渐变，需要 `--app-score-*-soft` 一组变体才能收）；再加 ResumeUpload 的简历完整度分（JS 3 个 hex，CSS 侧已经用 token）。这三处迁完就能把 `scriptColorLiterals` 预算清零。
 
+#### 已交付：D1（第二段）分数→显示的第 2～17 处收进同一口径（提交 `ff304b6`、`f7dcea2`）
+
+**这一段实际不止预告的三处**。按计划先收面试报告/房间/简历上传，量到一半发现同一族问题还有别的形状：除 hex 之外，页面还用**`el-tag` 的 type** 和**本地 class**表达分数（80/60 一组、70 一组、50 一组），而 hex 棘轮对这两族完全无感。按"输出的是色值 / 标签型 / class 名"重新盘一遍，本段共迁 **17 处**：报告 3（hex + 结论 + 维度点评）、房间 3（胶囊 class + 答题小结 + 最近信号）、ResumeUpload 3（`dimColor` hex + 完整度 class + 诊断标签 70）、History / ResumeCompare / PipelineKanban / OfferCompare 各 1、AgentAnalysis 2、MultiAgentAnalysis 1、Interview 1。**其中两处是第二轮才补上的**：第一次清点按"标识符里含 score"来 grep，于是 `const scoreTag = (s) => …`（MultiAgentAnalysis 的匹配分，80/60）和 `Interview.vue:173` 的 `area.score < 50 ? 'danger' : 'warning'` 都漏了——按输出 token 扫才抓得到。
+
+**看得见的变化**（方向都是"同一个分数只会有一种颜色/说法"）：
+- **78 分不再一会儿蓝一会儿橙**：推荐卡是蓝（good），历史页/对比页/看板/汇总页此前是橙（80/60 口径），现在同为蓝。代价是 **80-84 从绿转蓝**——那正是后端"可以投递"而非"强烈推荐"的区间。
+- **没算出分的地方不再显示成差评**：房间答题胶囊、历史页标签、"回答偏弱，容易触发追问"这三处的 `null` 改走 `unknown`（灰底/灰标签/"评分暂未生成"）。
+- **文案与颜色同读一个 tone**：报告 55-59 的结论由"当前风险较高"改为"可继续观察"（它自己的进度条早就是橙色，字色却写风险）；薄弱项标签分界从自抄的 50 改为面试档位的 55（50-54 现在与报告一致地算"偏弱"）。
+- 房间胶囊的浅底 + 描边改由 `--app-score-*-soft` / `-soft-line`（`color-mix` 派生）给出，替换 8 个手挑 hex；按 `color-mix` 计算，与旧值各通道差 ≤ 6/255，观感不变。
+- **修一个上一段留下的回归**：`OfferCompare` 的"加权综合评分"仍在发 `.score-high/.score-mid/.score-low`，而这三个规则已在 `fd77d2a` 被删——**那个数字自那次提交起就没有颜色**。
+
+**棘轮补的第二层**：hex 预算盯色值，盯不到"发了没人接的 class 名"。新增两条契约测试（`styleDebtRatchet.test.js`）：视图能发出的每个 tone 必须有对应规则（4 个前缀 × 5 档 = 20 条），`--app-score-*` token 集合必须完整（5 档 × 4 后缀 = 20 个）。非空性用假前缀验过（缺 5/5）。数字：视图与布局 `<script>` 的 hex **7 → 0**，`scriptColorLiterals` 预算清零（机制保留，再出现即红）；InterviewRoom `<style>` hex **77 → 69**。
+
+**验证**：`npm run test:unit` **32 passed**（+2 条契约）；`npm test` 11 passed；`npm run build` 通过；`npm run lint` **0 error**；构建产物逐条确认新规则确实落地（`.score-chip--high[data-v-…]`、`.score-level--unknown`、`--app-score-unknown-soft: color-mix(…)`）。**仍未验**：真浏览器 computed-style（browser 工具被会话策略拦），`var()` 套 `var()`（`--score-color: var(--app-score-high)` → `--app-success`）在描边/`el-progress :color` 上按标准应解析，需能看到页面的人复核一眼。
+
+**顺手量到一条与 D1 无关但更糟的**：`Interview.vue:464` 的"薄弱项"在没有可反查趋势时**用 `Math.random()*40+30` 造分数**，再配上颜色与"该维度需要加强训练"——A3 撤掉的是简历侧那批假诊断，这里还在。修法要么是按真实会话维度算，要么去掉这块改为显式空态，两种都会改变候选人所见，故按待决策项处理。
+
+**这段没动的 80 分界**（是产品口径，不是颜色）：`JobRecommend.vue:380` 在 `match_score >= 80` 时挂"优先投递"徽章，而后端 `_recommendation` 要 85 且无必需技能缺口才给"强烈推荐"——同一张卡片可能一边写"可以投递"一边挂"优先投递"；同源的还有 `priorityJobCount`、`History.vue:318` 的"高匹配记录"、`Profile.vue:492` 的成就解锁、`CareerPlanning.vue:968` 的投递策略分档（80/70/60，还叠加缺口数）。见 §10。
+
 ---
 
 ## 9. 里程碑
@@ -728,6 +747,9 @@ agent.SummaryAgent           real  tokens=3215
 2. **企业侧是冻结还是删除**。本方案建议冻结。若将来要真删，§2.3 两处地雷与 migration `0018`–`0021` 是前置。
 3. **是否引入服务端向量库**（Qdrant / pgvector）。当前 Chroma 是嵌入式 persistent client（`core/chroma_client.py:16,47-50`），每个 uvicorn worker/副本各持一份（`docker-compose.prod.yml:100` 挂 volume）——多副本部署下这是一致性隐患，与 B3 一并决策。
 4. **`docs/` 归档策略**（§2.5）。
+5. **"优先投递"这类产品口径是否跟随后端档位（85）**。D1 只统一颜色；下面几处 80 分界表达的是徽章、统计数与解锁，改了会改变候选人看到的数字与文案，需本人定：`JobRecommend.vue:380`（优先投递徽章，配 `:655` 的计数）、`History.vue:318`（"高匹配记录"）、`Profile.vue:492`（成就解锁）、`CareerPlanning.vue:968-990`（投递策略 80/70/60 分档）。徽章与卡片上后端给的推荐标签现已可能相反（82 分：徽章"优先投递" + 标签"可以投递"）。
+6. **`Interview.vue:464` 的随机"薄弱项"分数怎么处置**。当前无趋势数据时用 `Math.random()*40+30` 造分并配颜色与训练建议；选项是按真实会话维度聚合，或删掉该块改显式空态。两者都改变候选人所见。
+7. **前端 `format:check` 门走哪条路**（详见 `docs/engineering-quality.md` "Open: the frontend format gate cannot pass"）。CI 安装 prettier 3.9.5，而仓库代码按 3.3 书写：**CI 检出的 `origin/master` 上 95 个文件不过**。要么一次性 `npm run format`（约 95 文件纯排版），要么把 prettier 钉回 3.3（依赖降级）。本段已刻意避开这个岔口：没跑全局格式化，改动文件的既有格式未动。
 
 ---
 
