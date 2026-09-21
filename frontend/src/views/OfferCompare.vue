@@ -254,7 +254,9 @@
               <tr class="total-row">
                 <td><strong>加权综合评分</strong></td>
                 <td v-for="o in selectedOffers" :key="o.id">
-                  <strong class="total-score" :class="totalClass(o)">{{ weightedScore(o) }}</strong>
+                  <strong class="total-score" :class="scoreToneClass(weightedScore(o))">{{
+                    weightedScore(o)
+                  }}</strong>
                   <div class="score-breakdown" v-if="showBreakdown === o.id" @click.stop>
                     <div v-for="w in weightKeys" :key="w.key" class="br-item">
                       <span>{{ w.label }}</span
@@ -595,13 +597,6 @@ function weightedScore(o) {
     maxPossible += 5 * weights[w.key]
   })
   return maxPossible > 0 ? Math.round((total / maxPossible) * 100) : 0
-}
-
-function totalClass(o) {
-  const t = weightedScore(o)
-  if (t >= 80) return 'score-high'
-  if (t >= 60) return 'score-mid'
-  return 'score-low'
 }
 
 function toggleSelect(id) {

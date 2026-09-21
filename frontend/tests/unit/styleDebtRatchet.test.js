@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 // tells you the new value to write.
 const BUDGET = {
   hardcodedColorLiterals: {
-    'src/views/InterviewRoom.vue': 77,
+    'src/views/InterviewRoom.vue': 69,
     'src/views/Home.vue': 72,
     'src/views/JobSearch.vue': 46,
     'src/layouts/DefaultLayout.vue': 34,
@@ -44,11 +44,9 @@ const BUDGET = {
     'src/views/JobTargets.vue': 1,
   },
   // 分数→颜色的挑选此前藏在 <script> 的字符串里，style 预算数不到它，于是六处实现
-  // 各挑一套阈值与 hex。匹配分已全部交给 utils/scoreTone.js，只剩这两处待收。
-  scriptColorLiterals: {
-    'src/views/InterviewReport.vue': 4,
-    'src/views/ResumeUpload.vue': 3,
-  },
+  // 各挑一套阈值与 hex。匹配分与面试分已全部交给 utils/scoreTone.js，此处清零：
+  // 视图的 <script> 里再出现 hex，这条预算就会红。
+  scriptColorLiterals: {},
   themeCompatWildcards: 27,
   themeImportantOverrides: 56,
   pageShellRedeclarations: 22,
@@ -164,5 +162,49 @@ describe('style debt ratchet', () => {
       .filter(({ style }) => /background(?:-color)?:\s*(?:#fff|#ffffff|white)\s*;/.test(style))
       .map(({ rel }) => rel)
     expect(offenders, `use var(--app-surface-strong): ${offenders.join(', ')}`).toEqual([])
+  })
+
+  /* 上一版改动删掉了 .score-high/.score-mid/.score-low 的规则，却留下一个函数继续发
+     这些 class，于是"加权综合评分"就此失去颜色。hex 预算数不到这种事——它数的是色值，
+     不是"发了没人接的类名"。这里把视图实际发出的 tone 前缀和五个档位绑成契约。 */
+  const TONES = ['high', 'good', 'warn', 'risk', 'unknown']
+  const styleOf = (rel) => viewSources.find((v) => v.rel === rel)?.style ?? ''
+  const TONE_CLASS_SITES = [
+    { prefix: 'score-tone', css: themeCss, where: 'src/styles/main.css' },
+    { prefix: 'score-fill', css: themeCss, where: 'src/styles/main.css' },
+    {
+      prefix: 'score-chip',
+      css: styleOf('src/views/InterviewRoom.vue'),
+      where: 'InterviewRoom.vue',
+    },
+    {
+      prefix: 'score-level',
+      css: styleOf('src/views/PipelineKanban.vue'),
+      where: 'PipelineKanban.vue',
+    },
+  ]
+
+  it('gives every tone a rule for each class prefix a view emits', () => {
+    const missing = []
+    for (const { prefix, css, where } of TONE_CLASS_SITES) {
+      for (const tone of TONES) {
+        if (!new RegExp(`\\.${prefix}--${tone}\\b`).test(css)) {
+          missing.push(`${prefix}--${tone} (no rule in ${where})`)
+        }
+      }
+    }
+    expect(missing, `emitted tone class with no rule: ${missing.join(', ')}`).toEqual([])
+  })
+
+  it('defines the full token set the tone classes and helpers reference', () => {
+    const missing = []
+    for (const tone of TONES) {
+      for (const suffix of ['', '-fill', '-soft', '-soft-line']) {
+        if (!themeCss.includes(`--app-score-${tone}${suffix}:`)) {
+          missing.push(`--app-score-${tone}${suffix}`)
+        }
+      }
+    }
+    expect(missing, `main.css is missing score tokens: ${missing.join(', ')}`).toEqual([])
   })
 })

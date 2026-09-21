@@ -286,6 +286,7 @@ import {
   localizeSentence,
   normalizeLocalizedTextList,
 } from '@/utils/analysisLocalization'
+import { interviewScoreColor as scoreColor, interviewScoreTone } from '@/utils/scoreTone'
 
 const route = useRoute()
 const router = useRouter()
@@ -367,13 +368,27 @@ const fallbackWeaknesses = computed(() => [
   localizeSentence('部分回答可能还停留在结论层，缺少细节、数据或取舍支撑'),
 ])
 
-const verdictTitle = computed(() => {
-  const score = report.value?.overall_score || 0
-  if (score >= 85) return '可以积极推进'
-  if (score >= 70) return '值得继续面'
-  if (score >= 60) return '可继续观察'
-  return '当前风险较高'
-})
+const VERDICT_BY_TONE = {
+  high: '可以积极推进',
+  good: '值得继续面',
+  warn: '可继续观察',
+  risk: '当前风险较高',
+}
+
+const DIMENSION_COMMENT_BY_TONE = {
+  high: '已经具备较强说服力。',
+  good: '基本稳定，但还可以更锋利。',
+  warn: '达到基本线，但容易在追问中失分。',
+  risk: '偏弱，建议优先针对性训练。',
+}
+
+function dimensionComment(key, score) {
+  return `${dimLabels[key] || key} ${DIMENSION_COMMENT_BY_TONE[interviewScoreTone(score)]}`
+}
+
+const verdictTitle = computed(
+  () => VERDICT_BY_TONE[interviewScoreTone(report.value?.overall_score || 0)]
+)
 
 const trainingPlan = computed(() => {
   const suggestions = report.value?.improvement_suggestions || []
@@ -384,20 +399,6 @@ const trainingPlan = computed(() => {
     '按目标岗位技能标签再做一轮定向练习',
   ]
 })
-
-function scoreColor(score) {
-  if (score >= 85) return '#2d9b57'
-  if (score >= 70) return '#2f6fde'
-  if (score >= 55) return '#d08a20'
-  return '#cf4d36'
-}
-
-function dimensionComment(key, score) {
-  if (score >= 85) return `${dimLabels[key] || key} 已经具备较强说服力。`
-  if (score >= 70) return `${dimLabels[key] || key} 基本稳定，但还可以更锋利。`
-  if (score >= 55) return `${dimLabels[key] || key} 达到基本线，但容易在追问中失分。`
-  return `${dimLabels[key] || key} 偏弱，建议优先针对性训练。`
-}
 
 async function loadReport() {
   loading.value = true

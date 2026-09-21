@@ -76,7 +76,9 @@
           </el-table-column>
           <el-table-column label="匹配度" width="120">
             <template #default="{ row }">
-              <el-tag :type="scoreType(row.match_score)">{{ row.match_score ?? '-' }}</el-tag>
+              <el-tag :type="scoreToneTagType(row.match_score)">{{
+                row.match_score ?? '-'
+              }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="remark" label="备注" min-width="120" />
@@ -111,7 +113,7 @@
         <el-descriptions :column="3" border size="small">
           <el-descriptions-item label="记录 ID">{{ detail.id }}</el-descriptions-item>
           <el-descriptions-item label="匹配度">
-            <el-tag :type="scoreType(detail.match_score)" size="small">{{
+            <el-tag :type="scoreToneTagType(detail.match_score)" size="small">{{
               detail.match_score
             }}</el-tag>
           </el-descriptions-item>
@@ -280,6 +282,7 @@ import {
   normalizeLocalizedObjectList,
   normalizeLocalizedTextList,
 } from '@/utils/analysisLocalization'
+import { scoreToneTagType } from '@/utils/scoreTone'
 
 const router = useRouter()
 const loading = ref(false)
@@ -368,7 +371,6 @@ const onDelete = async (row) => {
 
 const goInterview = (row) => router.push(`/interview?record_id=${row.id}`)
 
-const scoreType = (s) => (s >= 80 ? 'success' : s >= 60 ? 'warning' : 'danger')
 const recommendType = (r) => (r === '推荐' ? 'success' : r === '备选' ? 'warning' : 'info')
 const groupTitle = getInterviewGroupTitle
 

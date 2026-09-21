@@ -108,7 +108,10 @@
                 </template>
 
                 <template v-else-if="msg.type === 'evaluation'">
-                  <div class="score-shell" :class="scoreClass(msg.metadata?.score)">
+                  <div
+                    class="score-shell"
+                    :class="interviewScoreToneClass(msg.metadata?.score, 'score-chip')"
+                  >
                     <div class="score-top">
                       <strong>本题评分 {{ msg.metadata?.score || 0 }}</strong>
                       <span>{{ performanceSummary(msg.metadata?.score) }}</span>
@@ -291,6 +294,7 @@ import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import { Microphone } from '@element-plus/icons-vue'
 import { getInterviewDetail } from '@/api/interview'
 import { useInterviewStore } from '@/stores/interview'
+import { interviewScoreTone, interviewScoreToneClass } from '@/utils/scoreTone'
 
 const route = useRoute()
 const router = useRouter()
@@ -417,14 +421,15 @@ const timeoutCount = computed(() => {
     .length
 })
 
-const recentSignal = computed(() => {
-  const score = store.lastScore?.score
-  if (score == null) return '待观察'
-  if (score >= 85) return '表现强'
-  if (score >= 70) return '较稳'
-  if (score >= 60) return '可继续'
-  return '风险偏高'
-})
+const SIGNAL_BY_TONE = {
+  high: '表现强',
+  good: '较稳',
+  warn: '可继续',
+  risk: '风险偏高',
+  unknown: '待观察',
+}
+
+const recentSignal = computed(() => SIGNAL_BY_TONE[interviewScoreTone(store.lastScore?.score)])
 
 const statusLabel = computed(() => {
   const mapping = {
@@ -458,18 +463,17 @@ function rowClass(msg) {
   }
 }
 
-function scoreClass(score) {
-  if (score >= 85) return 'score-strong'
-  if (score >= 70) return 'score-good'
-  if (score >= 55) return 'score-warn'
-  return 'score-risk'
+const PERFORMANCE_SUMMARY_BY_TONE = {
+  high: '回答有说服力',
+  good: '整体不错，但还能再深入',
+  warn: '基本覆盖，但说服力一般',
+  risk: '回答偏弱，容易触发追问',
+  // 没有分就不写"回答偏弱"——那是把缺数据说成了差评
+  unknown: '评分暂未生成',
 }
 
 function performanceSummary(score) {
-  if (score >= 85) return '回答有说服力'
-  if (score >= 70) return '整体不错，但还能再深入'
-  if (score >= 55) return '基本覆盖，但说服力一般'
-  return '回答偏弱，容易触发追问'
+  return PERFORMANCE_SUMMARY_BY_TONE[interviewScoreTone(score)]
 }
 
 function getSpeechRecognitionCtor() {
@@ -997,24 +1001,29 @@ onUnmounted(() => {
   border-radius: var(--app-radius-sm, 12px);
 }
 
-.score-strong {
-  background: #edf9ef;
-  border: 1px solid #cdebd2;
+.score-chip--high {
+  background: var(--app-score-high-soft);
+  border: 1px solid var(--app-score-high-soft-line);
 }
 
-.score-good {
-  background: #edf4ff;
-  border: 1px solid #d4e5ff;
+.score-chip--good {
+  background: var(--app-score-good-soft);
+  border: 1px solid var(--app-score-good-soft-line);
 }
 
-.score-warn {
-  background: #fff7eb;
-  border: 1px solid #f8e2be;
+.score-chip--warn {
+  background: var(--app-score-warn-soft);
+  border: 1px solid var(--app-score-warn-soft-line);
 }
 
-.score-risk {
-  background: #fff0ee;
-  border: 1px solid #f4c8bf;
+.score-chip--risk {
+  background: var(--app-score-risk-soft);
+  border: 1px solid var(--app-score-risk-soft-line);
+}
+
+.score-chip--unknown {
+  background: var(--app-score-unknown-soft);
+  border: 1px solid var(--app-score-unknown-soft-line);
 }
 
 .score-top {

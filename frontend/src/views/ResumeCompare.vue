@@ -285,6 +285,7 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue'
 import { getJDList } from '@/api/jd'
+import { scoreToneTagType } from '@/utils/scoreTone'
 import { recommendPipelineResumeVersion } from '@/api/targets'
 import {
   createResumeVersion,
@@ -335,10 +336,7 @@ const baseCandidates = computed(() =>
   persistedVersions.value.filter((version) => version.id !== selectedId.value)
 )
 const visibleDiffLines = computed(() => (diffResult.value?.lines || []).slice(0, 180))
-const atsTagType = computed(() => {
-  const score = atsResult.value?.score || 0
-  return score >= 80 ? 'success' : score >= 60 ? 'warning' : 'danger'
-})
+const atsTagType = computed(() => scoreToneTagType(atsResult.value?.score))
 const suggestions = computed(() => normalizeSuggestions(selectedVersion.value.change_log))
 
 watch(selectedId, () => setDraftsFromSelected())

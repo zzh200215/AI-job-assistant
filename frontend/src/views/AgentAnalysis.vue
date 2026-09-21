@@ -306,7 +306,7 @@
             finalReport.summary?.target_position || '-'
           }}</el-descriptions-item>
           <el-descriptions-item label="匹配度">
-            <el-tag :type="scoreTag(finalReport.summary?.match_score)">
+            <el-tag :type="scoreToneTagType(finalReport.summary?.match_score)">
               {{ finalReport.summary?.match_score ?? '-' }}
             </el-tag>
           </el-descriptions-item>
@@ -382,7 +382,9 @@
             <el-alert
               :title="`自我校验评分: ${finalReport.quality_assurance?.self_check_score || 0}`"
               :type="
-                (finalReport.quality_assurance?.self_check_score || 0) >= 70 ? 'success' : 'warning'
+                scoreToneAtLeast(finalReport.quality_assurance?.self_check_score, 'good')
+                  ? 'success'
+                  : 'warning'
               "
               :closable="false"
               show-icon
@@ -417,6 +419,7 @@ import {
   localizeSentence,
   normalizeLocalizedTextList,
 } from '@/utils/analysisLocalization'
+import { scoreToneAtLeast, scoreToneTagType } from '@/utils/scoreTone'
 
 const route = useRoute()
 const router = useRouter()
@@ -594,13 +597,6 @@ function stepStatusType(step) {
 
 function stepStatusText(status) {
   return STEP_STATUS_TEXTS[status] || status
-}
-
-function scoreTag(score) {
-  if (!score) return 'info'
-  if (score >= 80) return 'success'
-  if (score >= 60) return 'warning'
-  return 'danger'
 }
 
 function formatTokens(tokens) {

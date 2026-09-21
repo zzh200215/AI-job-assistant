@@ -49,6 +49,20 @@
   --app-score-good-fill: linear-gradient(135deg, var(--app-score-good), color-mix(in srgb, var(--app-score-good), white 24%));
   --app-score-warn-fill: linear-gradient(135deg, var(--app-score-warn), color-mix(in srgb, var(--app-score-warn), white 24%));
   --app-score-risk-fill: linear-gradient(135deg, var(--app-score-risk), color-mix(in srgb, var(--app-score-risk), white 24%));
+  /* 没跑过评分的简历也会走到这一档：条形不能空着，也不能显示成红色差评。 */
+  --app-score-unknown-fill: linear-gradient(135deg, var(--app-score-unknown), color-mix(in srgb, var(--app-score-unknown), white 24%));
+  /* 浅底 + 描边：面试房间的回答分数胶囊用。旧稿是 8 个手挑 hex，这里由同一份 tone 派生，
+     色差实测都在 ±5/255 以内，所以换过来的只是出处，不是观感。 */
+  --app-score-high-soft: color-mix(in srgb, var(--app-score-high), white 92%);
+  --app-score-good-soft: color-mix(in srgb, var(--app-score-good), white 92%);
+  --app-score-warn-soft: color-mix(in srgb, var(--app-score-warn), white 92%);
+  --app-score-risk-soft: color-mix(in srgb, var(--app-score-risk), white 92%);
+  --app-score-unknown-soft: color-mix(in srgb, var(--app-score-unknown), white 92%);
+  --app-score-high-soft-line: color-mix(in srgb, var(--app-score-high), white 78%);
+  --app-score-good-soft-line: color-mix(in srgb, var(--app-score-good), white 78%);
+  --app-score-warn-soft-line: color-mix(in srgb, var(--app-score-warn), white 78%);
+  --app-score-risk-soft-line: color-mix(in srgb, var(--app-score-risk), white 78%);
+  --app-score-unknown-soft-line: color-mix(in srgb, var(--app-score-unknown), white 78%);
 
   --app-shadow: 0 10px 28px rgba(26, 35, 52, 0.08);
   --app-shadow-soft: 0 2px 8px rgba(26, 35, 52, 0.045);
@@ -687,6 +701,10 @@ code,
   color: var(--app-score-risk);
 }
 
+.score-tone--unknown {
+  color: var(--app-score-unknown);
+}
+
 .score-fill--high {
   background: var(--app-score-high-fill);
 }
@@ -701,6 +719,10 @@ code,
 
 .score-fill--risk {
   background: var(--app-score-risk-fill);
+}
+
+.score-fill--unknown {
+  background: var(--app-score-unknown-fill);
 }
 
 @media (prefers-reduced-motion: reduce) {

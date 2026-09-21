@@ -329,7 +329,9 @@
         <el-table-column prop="salary_range" label="薪资" width="100" />
         <el-table-column label="匹配度" width="80" align="center">
           <template #default="{ row }">
-            <span v-if="row.match_score" :class="'score-level-' + scoreLevel(row.match_score)"
+            <span
+              v-if="row.match_score"
+              :class="scoreToneClass(row.match_score, MATCH_SCORE_BANDS, 'score-level')"
               >{{ Math.round(row.match_score) }}分</span
             >
             <span v-else class="follow-ok">-</span>
@@ -539,6 +541,7 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
+import { MATCH_SCORE_BANDS, scoreToneClass } from '@/utils/scoreTone'
 import {
   getKanban,
   movePipelineStage,
@@ -672,12 +675,6 @@ function stageTagType(stage) {
     withdrawn: 'info',
   }
   return map[stage] || 'info'
-}
-
-function scoreLevel(score) {
-  if (score >= 80) return 'high'
-  if (score >= 60) return 'mid'
-  return 'low'
 }
 
 // 跟进提醒
@@ -1569,17 +1566,23 @@ onMounted(() => {
   color: var(--app-violet);
   font-weight: 600;
 }
-.score-level-high {
-  color: var(--app-success);
+.score-level {
   font-weight: 600;
 }
-.score-level-mid {
-  color: var(--app-warning);
-  font-weight: 600;
+.score-level--high {
+  color: var(--app-score-high);
 }
-.score-level-low {
-  color: var(--app-danger);
-  font-weight: 600;
+.score-level--good {
+  color: var(--app-score-good);
+}
+.score-level--warn {
+  color: var(--app-score-warn);
+}
+.score-level--risk {
+  color: var(--app-score-risk);
+}
+.score-level--unknown {
+  color: var(--app-score-unknown);
 }
 
 /* 批量操作栏 */

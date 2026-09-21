@@ -44,3 +44,39 @@ export function scoreToneColor(value, bands = MATCH_SCORE_BANDS) {
 export function scoreToneFillClass(value, bands = MATCH_SCORE_BANDS) {
   return `score-fill--${scoreTone(value, bands)}`
 }
+
+/* el-tag 只有五个 type，正好和 tone 一一对上。历史上这里各处手写
+   `score >= 80 ? 'success' : ...`，于是同一个 78 分在推荐页是蓝、在历史页是黄。 */
+const TAG_TYPE_BY_TONE = {
+  high: 'success',
+  good: 'primary',
+  warn: 'warning',
+  risk: 'danger',
+  // 没有分数不是"很差"，是"不知道"——灰标签，别涂红
+  unknown: 'info',
+}
+
+export function scoreToneTagType(value, bands = MATCH_SCORE_BANDS) {
+  return TAG_TYPE_BY_TONE[scoreTone(value, bands)]
+}
+
+const TONE_ORDER = ['risk', 'warn', 'good', 'high']
+
+/** 只需要两档（"够好/其他"）的地方：是否至少到某个 tone。unknown 不算够好。 */
+export function scoreToneAtLeast(value, tone, bands = MATCH_SCORE_BANDS) {
+  return TONE_ORDER.indexOf(scoreTone(value, bands)) >= TONE_ORDER.indexOf(tone)
+}
+
+/* 面试表现分的三个出口。同一个页面里"颜色 / 文案 / 胶囊"必须走同一档位，
+   否则会出现芯片是警告黄、旁边文字写"风险偏高"的第 4 种分界。 */
+export function interviewScoreTone(value) {
+  return scoreTone(value, INTERVIEW_SCORE_BANDS)
+}
+
+export function interviewScoreColor(value) {
+  return scoreToneColor(value, INTERVIEW_SCORE_BANDS)
+}
+
+export function interviewScoreToneClass(value, prefix = 'score-tone') {
+  return scoreToneClass(value, INTERVIEW_SCORE_BANDS, prefix)
+}

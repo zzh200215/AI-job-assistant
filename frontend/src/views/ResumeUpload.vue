@@ -175,12 +175,14 @@
             <div v-for="dim in diagnosisDims" :key="dim.key" class="diag-dim-item">
               <div class="dim-label">
                 <span>{{ dim.label }}</span>
-                <strong :style="{ color: dimColor(dim.score) }">{{ dim.score ?? '—' }}</strong>
+                <strong :style="{ color: scoreToneColor(dim.score) }">{{
+                  dim.score ?? '—'
+                }}</strong>
               </div>
               <el-progress
                 v-if="typeof dim.score === 'number'"
                 :percentage="dim.score"
-                :color="dimColor(dim.score)"
+                :color="scoreToneColor(dim.score)"
                 :stroke-width="6"
               />
               <p v-else class="dim-none">本次分析未给出该维度评分</p>
@@ -451,7 +453,7 @@
           <el-tag
             v-if="r._diagnosisScore"
             size="small"
-            :type="r._diagnosisScore >= 70 ? 'success' : 'warning'"
+            :type="diagnosisTagType(r._diagnosisScore)"
             effect="plain"
           >
             诊断 {{ r._diagnosisScore }}分
@@ -474,12 +476,14 @@
             <div
               class="score-fill"
               :style="{ width: r._completeness.completeness_score + '%' }"
-              :class="scoreLevel(r._completeness.completeness_score)"
+              :class="scoreToneFillClass(r._completeness.completeness_score)"
             />
           </div>
           <div class="score-label">
             <span>完整度</span>
-            <strong :class="scoreLevel(r._completeness.completeness_score)">{{ r._completeness.completeness_score }}</strong>
+            <strong :class="scoreToneClass(r._completeness.completeness_score)">{{
+              r._completeness.completeness_score
+            }}</strong>
           </div>
         </div>
         <div v-else class="card-score">
@@ -530,6 +534,12 @@ import {
   exportResume,
   downloadResumeExport,
 } from '@/api/resume'
+import {
+  scoreToneAtLeast,
+  scoreToneClass,
+  scoreToneColor,
+  scoreToneFillClass,
+} from '@/utils/scoreTone'
 
 const router = useRouter()
 
@@ -702,18 +712,9 @@ function formatDate(d) {
   }
 }
 
-function scoreLevel(v) {
-  if (v >= 80) return 'score-high'
-  if (v >= 60) return 'score-mid'
-  return 'score-low'
-}
-
-function dimColor(v) {
-  if (typeof v !== 'number') return 'var(--app-muted)'
-  if (v >= 80) return '#67c23a'
-  if (v >= 60) return '#e6a23c'
-  return '#f56c6c'
-}
+// 诊断分标签只有两档：至少到 good 档才算 success，其余 warning。
+// 分界交给 scoreTone 的 85/70/50，不再在本页抄一份 70。
+const diagnosisTagType = (v) => (scoreToneAtLeast(v, 'good') ? 'success' : 'warning')
 
 const diagScoreColor = 'var(--app-primary)'
 
@@ -1252,16 +1253,6 @@ function goAnalysisFromDiag() {
   transition: width 0.5s;
 }
 
-.score-fill.score-high {
-  background: var(--app-success);
-}
-.score-fill.score-mid {
-  background: var(--app-warning);
-}
-.score-fill.score-low {
-  background: var(--app-danger);
-}
-
 .score-label {
   display: flex;
   justify-content: space-between;
@@ -1275,16 +1266,6 @@ function goAnalysisFromDiag() {
 .score-label strong {
   font-size: 16px;
 }
-.score-label strong.score-high {
-  color: var(--app-success);
-}
-.score-label strong.score-mid {
-  color: var(--app-warning);
-}
-.score-label strong.score-low {
-  color: var(--app-danger);
-}
-
 /* Footer */
 .card-footer {
   display: flex;
