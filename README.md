@@ -531,7 +531,7 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 - **生产模式**：`APP_ENV=production` 时拒绝弱密钥、默认密码、DEBUG 模式、mock LLM/Embedding
 - **密码策略**：强制复杂度校验 + 弱密码黑名单，bcrypt 轮数可配置
 - **管理员角色**：`role=admin` 用户拥有管理接口权限，通过 `backend/scripts/create_admin.py` 初始化
-- **限流防护**：基于 slowapi 的 IP 级限流，登录/注册/重置密码默认 `5/minute`，支持 Redis 后端
+- **限流防护**：基于 slowapi。带有效令牌的请求按**登录用户**计额度，匿名请求（登录/注册/重置密码等）仍按**来源地址**计，默认 `100/minute` / `5/minute`，支持 Redis 后端
 - **文件隔离**：简历和知识库文件不通过静态目录暴露，下载需登录 + 权限校验
 - **用户隔离**：JD 列表保持私有语义，公开 JD（`user_id = null`）可参与分析流程
 - **多租户隔离**：所有业务表注入 `tenant_id`，共享表通过 `tenant_filter()` / `stamp_tenant()` 强制行级过滤；租户上下文由中间件统一解析（`X-Tenant-Id` 头 > Host 域名 > 默认租户），业务代码不散写判断；岗位、知识库、订阅按租户隔离

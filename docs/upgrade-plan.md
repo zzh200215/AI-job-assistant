@@ -582,7 +582,7 @@ agent.SummaryAgent           real  tokens=3215
 | 连接池未配置 | `core/database.py:9-20` 未设 `pool_size`/`max_overflow`，默认 5+10 的 queuepool 面对线程池密集应用 |
 | 测试覆盖真实路径为零 | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错，但 `backend/.coverage`(122KB) 被提交进了工作树 |
 | 队列无 ack/retry/DLQ | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py:76-79`）；Redis 队列存在（`:93-141`）。~~但 `mark_stale_running_tasks_failed` 启动时把 30 分钟以上任务一律置失败，多副本重启会误杀正常长任务~~ → 已改为按"最后一次进度写入"判静默（E12，提交 `3ecbb96`）。~~`run_strategy_async` 构造两个 `TaskPayload` 后丢弃~~ → **这条已不成立**：`orchestration_runner` 里两处 `TaskPayload(...)`（`:156`、`:204`）都紧跟 `return _get_backend().submit(payload, _run_task_payload)`，没有构造后丢弃的路径。**仍在的是**：任务入队后没有任何 lease/心跳字段，所以"排在长 backlog 里没开工"与"执行进程已经死了"在数据上仍然无法区分——这正是 E12 只把误杀范围缩到"完全静默"而没有消灭它的那一半 |
-| 限流粒度 | slowapi + Redis（`core/rate_limiter.py:38-49`）仅按 IP → NAT 后用户共享额度，单用户可耗尽 LLM 花费 |
+| ~~限流粒度~~ → 有身份的请求已按用户计额度（E14，提交 `63537ab`） | 原来的事实：只有 `api/auth.py` 的 5 个匿名端点自带限流，其余 **228/233 条操作只受 `RATE_LIMIT_GENERAL`（100/分钟）按 IP 管** → 一个 NAT 出口下所有人共用一份额度。**仍在的两半**：① 昂贵端点（深度分析/多智能体）没有自己的额度，一个用户照样能一分钟发 100 次真金白银的 LLM 调用；② 登录流量的每 IP 总闸随 E14 消失了，要补就是 `application_limits` 按地址再挂一层。两个数都要人定，见 §10.10 |
 | ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`） | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。**仍然在的是性能那半句**：`score()` 为 O(terms×docs) 纯 Python 遍历，语料再大一个量级就要换实现 |
 | Rerank 生产用启发式 | `rerank_service.py:125-159` 可选本地 cross-encoder，否则 jieba 词重叠 + 硬编码 0.5/0.3/0.2 权重；`RERANKER_MODEL_PATH` 默认未设 |
 | 死代码 → ~~`api/tracking.py` 定义了 router 但**从未被 include**~~ 已挂载并修好整条链（E10，提交 `cb5a72b`）；**但 `track()` 调用方为 0，"要不要真埋点"回到 §10.8** | 仍在的是另一半：`agents/agent_orchestrator.py`、`services/smart_orchestrator.py`、`services/agent_workflow.py` 是 `DeprecationWarning` 垫片层，靠 import 维持存活 |
@@ -884,6 +884,20 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 
 **同一批里没动的**：`recruit.pendingAnalysis`（`JobSearch` → `SmartAnalysis` 的一次性载荷，3 处）仍是全局键。它装的正是用户刚点的那条 JD、且读完立刻 `removeItem`，跨账号存活窗口比上面那三个小得多——要不要一起进槽，等 §10.9 定"这些隐式握手最终归谁"时一并处理。
 
+#### 已交付：E14 限流额度改为"有身份算到人，没身份算到地址"（提交 `63537ab`）
+
+**先把接线量开**（不看注释看代码）：全仓只有 **5 个端点**自己声明了限流，全在 `api/auth.py`——`register` 用 `auth_limit()`(20/min)，`login`/`reset-password`/`forgot-password`/`send-verification-email` 用 `login_limit()`(5/min)；这 5 个**都是匿名路径**。也就是说 **233 条操作里剩下的 228 条只受 `default_limits = RATE_LIMIT_GENERAL`（默认 100/分钟）管**，而 key 是 `get_remote_address`。
+
+**症状**：一个校园网/咖啡馆/热点出口下所有候选人**共用同一个 IP 桶**——谁的页面轮询最勤就把额度吃光，同出口其他人**什么都没做就被 429**。这正是 E 表那行"NAT 后用户共享额度"。
+
+**改法**：`get_user_or_remote_address` 取代 key——`Bearer` 能解码且带 `sub` 的请求算到 `user:<sub>`，其余一律回落到地址桶。三点是有意为之：① `sub` 就是 `get_current_user` 唯一采信的那个 claim，两处口径一致；② **解不开的 token 不给独立额度**（伪造头刷不出预算），所以坏值/无 `sub` 都落回地址；③ 登录与注册**继续按地址**——还没有身份时地址是唯一能钉住人的东西，改了就等于削弱爆破防护。
+
+**没做的一半**（是"该填哪个数"的问题，不是 bug）：**昂贵端点仍然没有自己的限流**，一个登录用户照样能一分钟发 100 次深度分析（每次都是真金白银的 LLM 调用）——记为 §10.10。另一个方向也说明白：**登录流量的每 IP 总闸随这次改动没了**（现在是每人一份 100/分钟，同一出口叠加起来会比原来高）。要那个闸就得用 `application_limits` 按地址再挂一层，而它同样需要一个数，所以留给 §10.10 一起定。
+
+**测试 6 条，`pytest` 718 → 724 passed**：key 函数三种输入（有效 token→`user:42`；乱码 token、以及能解但没 `sub` 的 token→地址）；两个用户同一出口各自有额度（A 用满后 B 的第一次必须 200）；**对照组**——同一台 app 换回 `get_remote_address`，B 的第一次就是 429（没有这条，上一条绿了什么都证不了）；匿名流量仍然共用地址桶；以及一条"真实 app 上挂的 limiter 用的就是这个函数"的接线断言（把 `key_func` 改回旧值时唯一变红的就是它，所以这条也验了）。
+
+**过程中查清的一件测试基建事实**：行为用例最初共用 `get_limiter()` 这个进程级单例，结果第二个 app 里同名探针路由的额度被前一个用例吃掉。我先怀疑是 `conftest.reset_rate_limiter` 没生效，用 `--setup-plan` 核过：**它确实是 autouse 且 `MemoryStorage.reset()` 真会清计数**——串扰来自单例的**路由注册表**，不是计数。所以每条行为用例各自 `Limiter(storage_uri="memory://")`，把这件事写进文件 docstring，免得下次又去怀疑 fixture。`ruff check` + `format --check` clean。**没验**：Redis 存储下的真实 keying（测试跑在 memory://），也没有真出现"某个 NAT 用户被 429"的现场记录。
+
 ---
 
 ## 9. 里程碑
@@ -910,6 +924,7 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 7. **前端 `format:check` 门走哪条路**（详见 `docs/engineering-quality.md` "Open: the frontend format gate cannot pass"）。CI 安装 prettier 3.9.5，而仓库代码按 3.3 书写：**CI 检出的 `origin/master` 上 95 个文件不过**。要么一次性 `npm run format`（约 95 文件纯排版），要么把 prettier 钉回 3.3（依赖降级）。本段已刻意避开这个岔口：没跑全局格式化，改动文件的既有格式未动。
 8. **埋点：补上调用方，还是删掉 SDK**（E10 留下的）。管道两端已修好且各有测试锁住，但 `track()` 调用方仍为 0，所以今天没有任何事件在流动。埋哪些点是产品/隐私决定（服务端 stub 会把 `user_id` + `username` 写进日志文件，而 `db` 参数收了不用），不该由清理顺手替用户做；反之若决定不做分析，`utils/tracker.js` + `api/tracking.py` + 刚挂上的路由一起删。
 9. **跨页隐式握手的最终归属**（E13 只做了三个 id）。`recruit.lastX` 现在集中在 `utils/lastSelection` 并按用户分槽，但它仍是 localStorage；§7 原话是"应改由 Pinia 承载"。两件事需要你定：① 要不要把它再收成一个 Pinia store（则 `setSelectionOwner` 变成 store 内部细节，视图少一层 import）；② `recruit.pendingAnalysis`（`JobSearch`→`SmartAnalysis` 的一次性载荷）与 `recruit.defaultResumeId` 是否也进同一套——前者跨账号也会存活，只是窗口小得多。
+10. **昂贵端点要不要单独的额度，以及每 IP 还要不要总闸**（E14 留下的两个数）。现在 228 条操作仍共用 `RATE_LIMIT_GENERAL`（默认 100/分钟，已改为按用户计），意味着一个登录用户可以一分钟发 100 次深度分析，每次都打真 LLM；而 E14 之后**同一出口的每 IP 总闸自然消失了**（原来它天然存在，因为大家共用一桶）。要收口就得填两个数：① 昂贵端点（`/api/analysis/full`、`/api/multi-agent/*`、`/api/agent/start`）的每分钟额度；② 是否用 `application_limits` 按地址再挂一层总闸、阈值多少。接线与对照组都已在 `tests/test_rate_limit_key.py` 备好，填数即可。
 
 ---
 

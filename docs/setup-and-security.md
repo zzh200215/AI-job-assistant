@@ -63,6 +63,14 @@ The backend uses [slowapi](https://github.com/added-security/slowapi) for rate l
 - Authentication endpoints: `20/minute`
 - Login / register / reset-password: `5/minute`
 
+Who a request is charged to: a request carrying a valid Bearer token counts against **that user's**
+budget (`user:<id>`); anything without one — including the login/register/reset endpoints above,
+where no identity exists yet — counts against the **source address**. A token that fails to decode
+also falls back to the address bucket, so a forged header cannot buy extra budget. The consequence
+to know about: a shared egress (campus NAT, phone hotspot) no longer shares one `100/minute` bucket
+between its users, and there is therefore no per-address ceiling on logged-in traffic unless you add
+one via `application_limits`.
+
 Configure via environment variables:
 
 ```bash
