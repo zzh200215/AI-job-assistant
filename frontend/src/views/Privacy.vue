@@ -14,6 +14,14 @@
       </div>
     </section>
 
+    <!-- 拉不到就整块消失，等于对用户说"我们没有你的数据"：这块是合规面，必须显式失败 -->
+    <AppLoadError
+      v-else-if="summaryError"
+      title="个人数据概览加载失败"
+      :message="summaryError"
+      @retry="loadDataSummary"
+    />
+
     <div class="panel">
       <div class="panel-header"><h3>数据管理</h3></div>
       <div class="panel-body">
@@ -137,9 +145,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import request from '@/api/request'
+import AppLoadError from '@/components/ui/AppLoadError.vue'
 
 const exporting = ref(false)
 const dataSummary = ref(null)
+const summaryError = ref('')
 
 const summaryItems = computed(() => [
   { key: 'resumes', label: '简历', value: dataSummary.value?.resumes || 0 },
@@ -152,10 +162,12 @@ const summaryItems = computed(() => [
 onMounted(loadDataSummary)
 
 async function loadDataSummary() {
+  summaryError.value = ''
   try {
     dataSummary.value = await request.get('/auth/data-summary')
-  } catch {
+  } catch (e) {
     dataSummary.value = null
+    summaryError.value = e?.userMessage || e?.message || '未能获取你的数据概览'
   }
 }
 

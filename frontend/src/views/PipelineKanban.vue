@@ -419,6 +419,12 @@
               :value="version.id"
             />
           </el-select>
+          <AppLoadError
+            v-if="versionError"
+            title="简历版本拉取失败"
+            :message="versionError"
+            @retry="loadResumeVersions"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -552,6 +558,7 @@ import {
   updateJobPipelineEntry,
 } from '@/api/targets'
 import { monthDay, monthDayTime } from '@/utils/format/date'
+import AppLoadError from '@/components/ui/AppLoadError.vue'
 
 const router = useRouter()
 
@@ -573,6 +580,7 @@ const viewMode = ref('kanban')
 const showStats = ref(false)
 const selectedCards = ref(new Set())
 const resumeVersions = ref([])
+const versionError = ref('')
 const versionPerformance = ref([])
 const totalCards = computed(() =>
   columns.reduce((sum, col) => sum + (kanban.value[col.key] || []).length, 0)
@@ -747,11 +755,13 @@ async function loadKanban() {
 }
 
 async function loadResumeVersions() {
+  versionError.value = ''
   try {
     const data = await getPipelineResumeVersions()
     resumeVersions.value = data?.items || []
-  } catch {
+  } catch (e) {
     resumeVersions.value = []
+    versionError.value = e?.userMessage || e?.message || '暂时无法读取简历版本列表'
   }
 }
 

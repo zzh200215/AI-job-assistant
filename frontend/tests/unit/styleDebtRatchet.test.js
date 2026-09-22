@@ -77,6 +77,15 @@ const BUDGET = {
     'src/views/Profile.vue': 1,
     'src/views/Subscription.vue': 1,
   },
+  /* 失败被清成空态的存量（见 silentCatchCounts）。D5 把候选人侧 8 处接到了
+     components/ui/AppLoadError；剩下的每一条都是明知故留，理由写在行内：
+     - admin/*：企业侧已冻结（见 docs/upgrade-plan.md 的范围决定），不再投入；
+     - ResumeUpload 的 loadVersionCount 失败时把 `_versionCount` 设为 null（=不知道），
+       卡片因此不显示数字，也不再显示"0 个版本"——它没有作出假断言，只是少了一个按钮。 */
+  silentEmptyCatches: {
+    'src/views/admin/Overview.vue': 2,
+    'src/views/ResumeUpload.vue': 1,
+  },
   themeCompatWildcards: 27,
   themeImportantOverrides: 56,
   pageShellRedeclarations: 22,
@@ -117,6 +126,43 @@ function colorCounts(blockKey) {
 }
 
 const themeCss = readFileSync('src/styles/main.css', 'utf8')
+
+/* 失败被清成空态：`request.js` 只对非 GET 弹提示，所以 `catch { list.value = [] }`
+   这种写法会把一次 500 渲染成页面自己的"暂无数据"文案。数出来的每条都是待收的谎，
+   只能往下走；确实是有意为之（例如拿不到收藏状态就显示未收藏），就在预算里写明条数并
+   保留它，但别新增。 */
+const CATCH_HEAD = /^\s*\}\s*catch/
+const CLEARS_VALUE = /=\s*(\[\]|null|''|0)\s*;?\s*$/
+const REPORTS = /userMessage|loadError|\w*Error\.value\s*=|ElMessage|console\./
+
+function silentCatchCounts() {
+  const actual = {}
+  for (const { rel, source } of viewSources) {
+    const lines = source.split(/\r?\n/)
+    let n = 0
+    for (let i = 0; i < lines.length; i++) {
+      if (!CATCH_HEAD.test(lines[i])) continue
+      let depth = 1
+      const body = []
+      let j = i
+      for (j = i + 1; j < lines.length && depth > 0; j++) {
+        for (const ch of lines[j]) {
+          if (ch === '{') depth++
+          else if (ch === '}') depth--
+        }
+        if (depth > 0) body.push(lines[j])
+      }
+      const cleared = body.some((l) => CLEARS_VALUE.test(l))
+      // 报告可能写在 catch 之后（批量诊断就是那样），所以往后多看 12 行
+      const window = body.join('\n') + '\n' + lines.slice(j, j + 12).join('\n')
+      const reported = REPORTS.test(window)
+      const commented = body.length > 0 && body.every((l) => /^\s*(\/\/|\/\*|\*)/.test(l))
+      if (cleared && !reported && !commented) n++
+    }
+    if (n) actual[rel] = n
+  }
+  return actual
+}
 
 /* 手写"状态 → el-tag 颜色"的条目数。只认 `<script>` 里 `键: 'success'` 这种形状，
    不数 ElMessageBox 的 { type: 'warning' } 之类——那不是状态色表。 */
@@ -213,6 +259,28 @@ describe('style debt ratchet', () => {
       `use utils/format/date (monthDay / monthDayTime / dateTime / compactDateTime / utcStamp / rawStamp / isoMonthDay): ${offenders.join(
         ', '
       )}`
+    ).toEqual([])
+  })
+
+  it('keeps "failure cleared into an empty state" within budget', () => {
+    const actual = silentCatchCounts()
+    const grown = Object.entries(actual).filter(
+      ([file, n]) => n > (BUDGET.silentEmptyCatches[file] ?? 0)
+    )
+    expect(
+      grown,
+      `a failed load now reads as "no data" — GET failures are never toasted, render AppLoadError instead: ${JSON.stringify(grown)}`
+    ).toEqual([])
+  })
+
+  it('forces the silent-empty budget to be tightened once paid down', () => {
+    const actual = silentCatchCounts()
+    const stale = staleBudgets(actual, BUDGET.silentEmptyCatches).map(
+      ([file, allowed]) => `${file}: ${allowed} -> ${actual[file] || 0}`
+    )
+    expect(
+      stale,
+      `silent-empty budget is looser than reality, lower these in BUDGET: ${stale.join(', ')}`
     ).toEqual([])
   })
 

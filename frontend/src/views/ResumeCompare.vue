@@ -96,6 +96,12 @@
           >
             <el-option v-for="jd in jobs" :key="jd.id" :label="jobLabel(jd)" :value="jd.id" />
           </el-select>
+          <AppLoadError
+            v-if="jobsError"
+            title="岗位列表拉取失败"
+            :message="jobsError"
+            @retry="loadJobs"
+          />
           <el-button
             class="full-control"
             :loading="tailoring"
@@ -299,6 +305,7 @@ import {
   updateResumeVersion,
 } from '@/api/resume'
 import { monthDay } from '@/utils/format/date'
+import AppLoadError from '@/components/ui/AppLoadError.vue'
 
 const route = useRoute()
 const resumeId = ref(null)
@@ -321,6 +328,7 @@ const selectedId = ref('original')
 const contentDraft = ref('')
 const labelDraft = ref('原始简历')
 const jobs = ref([])
+const jobsError = ref('')
 const selectedJdId = ref(null)
 const atsResult = ref(null)
 const baseVersionId = ref('original')
@@ -379,11 +387,13 @@ async function loadWorkspace(preferredVersionId = null) {
 }
 
 async function loadJobs() {
+  jobsError.value = ''
   try {
     const data = await getJDList({ page: 1, page_size: 100 })
     jobs.value = data.items || []
-  } catch {
+  } catch (e) {
     jobs.value = []
+    jobsError.value = e?.userMessage || e?.message || '暂时无法读取岗位列表'
   }
 }
 

@@ -210,6 +210,20 @@
     </el-card>
 
     <!-- 岗位库实测的方向与薪资：只看简历和 JD 表，不需要先跑一次完整规划 -->
+    <!-- 证据面板拉不到时必须说"拉不到"，不能靠面板消失来表达 -->
+    <AppLoadError
+      v-if="careerPathError"
+      title="职业方向拉取失败"
+      :message="careerPathError"
+      @retry="loadCareerPaths"
+    />
+    <AppLoadError
+      v-if="salaryMarketError"
+      title="薪资行情拉取失败"
+      :message="salaryMarketError"
+      @retry="loadSalaryMarket"
+    />
+
     <el-row v-if="careerPaths.length || salaryMarket || !salaryMarketLoading" :gutter="18" class="result-grid">
       <el-col :md="12" :xs="24">
         <el-card v-if="careerPaths.length" class="direction-card" shadow="never">
@@ -732,6 +746,7 @@ import { recommendCareerPaths } from '@/api/jobs'
 import { getSalaryOverview } from '@/api/salary'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
 import { localizeSentence, normalizeLocalizedTextList } from '@/utils/analysisLocalization'
+import AppLoadError from '@/components/ui/AppLoadError.vue'
 
 const router = useRouter()
 
@@ -759,6 +774,8 @@ const agentSteps = ref([])
 const careerPathLoading = ref(false)
 const careerPaths = ref([])
 const careerPathMeta = ref({ summary: '', corpus: {}, message: '' })
+const careerPathError = ref('')
+const salaryMarketError = ref('')
 
 const analysisRecordId = ref(null)
 const analysisResult = ref(null)
@@ -914,11 +931,13 @@ async function loadSalaryMarket() {
     return
   }
   salaryMarketLoading.value = true
+  salaryMarketError.value = ''
   try {
     const data = await getSalaryOverview({ position }, { notifyError: false })
     salaryMarket.value = data?.has_data ? data : null
-  } catch {
+  } catch (e) {
     salaryMarket.value = null
+    salaryMarketError.value = e?.userMessage || e?.message || '暂时无法读取岗位库薪资样本'
   } finally {
     salaryMarketLoading.value = false
   }
@@ -1092,6 +1111,7 @@ async function refreshBaseOptions() {
 }
 
 async function loadCareerPaths() {
+  careerPathError.value = ''
   if (!selectedResumeId.value) return
   careerPathLoading.value = true
   try {
@@ -1102,9 +1122,10 @@ async function loadCareerPaths() {
       corpus: data?.corpus || {},
       message: data?.message || '',
     }
-  } catch {
+  } catch (e) {
     careerPaths.value = []
     careerPathMeta.value = { summary: '', corpus: {}, message: '' }
+    careerPathError.value = e?.userMessage || e?.message || '暂时无法基于岗位库给出职业方向'
   } finally {
     careerPathLoading.value = false
   }

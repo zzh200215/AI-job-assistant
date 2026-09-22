@@ -118,6 +118,13 @@
                   :value="resume.id"
                 />
               </el-select>
+              <!-- 拉不到简历不等于没有简历：这里不说出来，用户会以为自己没上传过 -->
+              <AppLoadError
+                v-if="resumesError"
+                title="简历列表拉取失败"
+                :message="resumesError"
+                @retry="loadResumes"
+              />
             </div>
           </div>
 
@@ -420,13 +427,13 @@
                 </div>
               </div>
 
-              <div v-else-if="localError" class="load-error">
-                <div>
-                  <strong>本地岗位仓库加载失败</strong>
-                  <span>{{ localError }}</span>
-                </div>
-                <el-button size="small" @click="loadLocalJobs">重试</el-button>
-              </div>
+    <!-- 失败态与"仓库是空的"是两回事 -->
+    <AppLoadError
+      v-else-if="localError"
+      title="本地岗位仓库加载失败"
+      :message="localError"
+      @retry="loadLocalJobs"
+    />
 
               <el-empty v-else description="岗位仓库还是空的，可以先搜索外部岗位或导入演示数据。" />
             </el-tab-pane>
@@ -749,8 +756,14 @@
                 </section>
               </div>
 
+              <AppLoadError
+                v-if="pipelineError"
+                title="跟进记录拉取失败"
+                :message="pipelineError"
+                @retry="loadPipelineEntries"
+              />
               <el-empty
-                v-if="!pipelineEntries.length"
+                v-else-if="!pipelineEntries.length"
                 description="先从实时搜索、岗位仓库或智能推荐里把岗位加入流程，页面会自动保存你的跟进记录。"
               />
             </el-tab-pane>
@@ -1056,6 +1069,7 @@ import {
 } from '@/api/jobs'
 import { compactDateTime } from '@/utils/format/date'
 import { useLatestCall } from '@/composables/useLatestCall'
+import AppLoadError from '@/components/ui/AppLoadError.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -1068,6 +1082,8 @@ const source = ref('boss')
 const cities = ref([])
 const selectedResumeId = ref(null)
 const resumeList = ref([])
+const resumesError = ref('')
+const pipelineError = ref('')
 const selectedResumeDetail = ref(null)
 
 const searching = ref(false)
@@ -1482,6 +1498,7 @@ async function loadCities() {
 }
 
 async function loadResumes() {
+  resumesError.value = ''
   try {
     const data = await getResumeList()
     resumeList.value = data?.items || (Array.isArray(data) ? data : [])
@@ -1491,8 +1508,9 @@ async function loadResumes() {
     if (selectedResumeId.value) {
       await loadResumeDetail(selectedResumeId.value)
     }
-  } catch {
+  } catch (e) {
     resumeList.value = []
+    resumesError.value = e?.userMessage || e?.message || '暂时无法读取你的简历列表'
   }
 }
 
@@ -1526,11 +1544,13 @@ async function loadLocalJobs() {
 }
 
 async function loadPipelineEntries() {
+  pipelineError.value = ''
   try {
     const data = await getJobPipelineList()
     pipelineEntries.value = (data?.items || []).map((item) => normalizePipelineEntry(item))
-  } catch {
+  } catch (e) {
     pipelineEntries.value = []
+    pipelineError.value = e?.userMessage || e?.message || '暂时无法读取你的跟进记录'
   }
 }
 
@@ -2683,29 +2703,6 @@ function saveLocalArray(key, value) {
   border-radius: var(--app-radius-sm, 12px);
   background: var(--app-bg);
   color: var(--app-muted);
-}
-.load-error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--app-danger), white 66%);
-  border-radius: 8px;
-  background: var(--app-accent-soft);
-}
-.load-error strong,
-.load-error span {
-  display: block;
-}
-.load-error strong {
-  color: var(--app-danger);
-  font-size: 13px;
-}
-.load-error span {
-  margin-top: 2px;
-  color: var(--app-muted);
-  font-size: 12px;
 }
 
 .result-grid,

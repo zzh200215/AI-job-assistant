@@ -749,7 +749,8 @@ async function loadVersionCount(r) {
     const versions = await getResumeVersions(r.id)
     r._versionCount = Array.isArray(versions?.versions) ? versions.versions.length : 0
   } catch {
-    r._versionCount = 0
+    // 数不出来是"不知道"，不是"0 个版本"：卡片上不写数字，也不写 0
+    r._versionCount = null
   }
 }
 

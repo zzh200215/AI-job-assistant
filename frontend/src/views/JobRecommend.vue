@@ -511,13 +511,12 @@
 
     <!-- 无结果 -->
     <!-- 失败态：和"没有推荐"分开，并且给出重试 -->
-    <div v-else-if="recommendError && !recommendations.length" class="load-error">
-      <div>
-        <strong>推荐加载失败</strong>
-        <span>{{ recommendError }}</span>
-      </div>
-      <el-button @click="loadRecommendations">重试</el-button>
-    </div>
+    <AppLoadError
+      v-else-if="recommendError && !recommendations.length"
+      title="推荐加载失败"
+      :message="recommendError"
+      @retry="loadRecommendations"
+    />
 
     <el-empty v-else-if="!loading.recommend && selectedResumeId" :image-size="120">
       <template #description>
@@ -611,6 +610,7 @@ import {
 import { OfficeBuilding } from '@element-plus/icons-vue'
 import { createJobPipelineEntry } from '@/api/targets'
 import { scoreToneFillClass } from '@/utils/scoreTone'
+import AppLoadError from '@/components/ui/AppLoadError.vue'
 import { isoMonthDay } from '@/utils/format/date'
 
 const router = useRouter()
@@ -1301,29 +1301,6 @@ function segmentStyle(value, total) {
 }
 .empty-hint {
   padding: 24px 0 8px;
-}
-.load-error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--app-danger), white 66%);
-  border-radius: 8px;
-  background: var(--app-accent-soft);
-}
-.load-error strong,
-.load-error span {
-  display: block;
-}
-.load-error strong {
-  color: var(--app-danger);
-  font-size: 13px;
-}
-.load-error span {
-  margin-top: 2px;
-  color: var(--app-muted);
-  font-size: 12px;
 }
 
 /* 筛选栏 */

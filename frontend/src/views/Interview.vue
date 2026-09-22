@@ -27,6 +27,12 @@
         <div v-if="upcomingLoading" class="loading-state">
           <el-icon class="is-loading"><Loading /></el-icon>
         </div>
+        <AppLoadError
+          v-else-if="upcomingError"
+          title="近期面试拉取失败"
+          :message="upcomingError"
+          retry-label=""
+        />
         <div v-else-if="!upcomingInterviews.length" class="empty-inline">暂无即将到来的面试</div>
         <div v-else class="interview-list">
           <div
@@ -240,6 +246,12 @@
         <div v-if="sessionsLoading" class="loading-state">
           <el-icon class="is-loading"><Loading /></el-icon>
         </div>
+        <AppLoadError
+          v-else-if="sessionsError"
+          title="面试记录拉取失败"
+          :message="sessionsError"
+          retry-label=""
+        />
         <div v-else-if="!sessions.length" class="empty-inline">
           还没有面试记录，开始一次模拟面试吧
         </div>
@@ -323,14 +335,17 @@ import { getAnalysis } from '@/api/analysis'
 import { getJobPipelineList } from '@/api/jobs'
 import { getInterviewGroupTitle, normalizeInterviewQuestions } from '@/utils/interviewQuestions'
 import { INTERVIEW_SCORE_BANDS, scoreToneAtLeast } from '@/utils/scoreTone'
+import AppLoadError from '@/components/ui/AppLoadError.vue'
 import { monthDayTime } from '@/utils/format/date'
 
 const router = useRouter()
 
 const upcomingLoading = ref(true)
 const upcomingInterviews = ref([])
+const upcomingError = ref('')
 const sessionsLoading = ref(true)
 const sessions = ref([])
+const sessionsError = ref('')
 
 const recordId = ref(null)
 const questionData = ref(null)
@@ -536,13 +551,15 @@ function startPrep(item) {
 
 async function loadUpcoming() {
   upcomingLoading.value = true
+  upcomingError.value = ''
   try {
     const data = await getJobPipelineList({ stage: 'interview', limit: 10 })
     upcomingInterviews.value = (data?.items || data || []).filter(
       (p) => p.interview_at && new Date(p.interview_at) >= new Date()
     )
-  } catch {
+  } catch (e) {
     upcomingInterviews.value = []
+    upcomingError.value = e?.userMessage || e?.message || '暂时无法读取你的面试安排'
   } finally {
     upcomingLoading.value = false
   }
@@ -550,11 +567,13 @@ async function loadUpcoming() {
 
 async function loadSessions() {
   sessionsLoading.value = true
+  sessionsError.value = ''
   try {
     const data = await getInterviewList()
     sessions.value = Array.isArray(data) ? data : data?.items || []
-  } catch {
+  } catch (e) {
     sessions.value = []
+    sessionsError.value = e?.userMessage || e?.message || '暂时无法读取你的面试记录'
   } finally {
     sessionsLoading.value = false
   }
