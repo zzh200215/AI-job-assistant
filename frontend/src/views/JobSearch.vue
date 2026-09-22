@@ -420,6 +420,14 @@
                 </div>
               </div>
 
+              <div v-else-if="localError" class="load-error">
+                <div>
+                  <strong>本地岗位仓库加载失败</strong>
+                  <span>{{ localError }}</span>
+                </div>
+                <el-button size="small" @click="loadLocalJobs">重试</el-button>
+              </div>
+
               <el-empty v-else description="岗位仓库还是空的，可以先搜索外部岗位或导入演示数据。" />
             </el-tab-pane>
 
@@ -1073,6 +1081,8 @@ const externalJobs = ref([])
 
 const localLoading = ref(false)
 const localJobs = ref([])
+// 与"仓库为空"分开：GET 失败不弹提示，只清空列表会让候选人以为岗位库是空的
+const localError = ref('')
 const latestCall = useLatestCall()
 
 const recommendLoading = ref(false)
@@ -1501,13 +1511,15 @@ async function loadResumeDetail(resumeId) {
 async function loadLocalJobs() {
   const isCurrent = latestCall()
   localLoading.value = true
+  localError.value = ''
   try {
     const data = await getJobList({ page: 1, page_size: 100 })
     if (!isCurrent()) return
     localJobs.value = (data?.items || []).map((item, index) => normalizeJob(item, `local-${index}`))
-  } catch {
+  } catch (e) {
     if (!isCurrent()) return
     localJobs.value = []
+    localError.value = e?.userMessage || e?.message || '本地岗位仓库加载失败，请稍后重试'
   } finally {
     if (isCurrent()) localLoading.value = false
   }
@@ -2671,6 +2683,29 @@ function saveLocalArray(key, value) {
   border-radius: var(--app-radius-sm, 12px);
   background: var(--app-bg);
   color: var(--app-muted);
+}
+.load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--app-danger), white 66%);
+  border-radius: 8px;
+  background: var(--app-accent-soft);
+}
+.load-error strong,
+.load-error span {
+  display: block;
+}
+.load-error strong {
+  color: var(--app-danger);
+  font-size: 13px;
+}
+.load-error span {
+  margin-top: 2px;
+  color: var(--app-muted);
+  font-size: 12px;
 }
 
 .result-grid,

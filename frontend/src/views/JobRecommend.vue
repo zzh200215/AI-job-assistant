@@ -510,6 +510,15 @@
     </template>
 
     <!-- 无结果 -->
+    <!-- 失败态：和"没有推荐"分开，并且给出重试 -->
+    <div v-else-if="recommendError && !recommendations.length" class="load-error">
+      <div>
+        <strong>推荐加载失败</strong>
+        <span>{{ recommendError }}</span>
+      </div>
+      <el-button @click="loadRecommendations">重试</el-button>
+    </div>
+
     <el-empty v-else-if="!loading.recommend && selectedResumeId" :image-size="120">
       <template #description>
         <span v-if="appliedFilters"
@@ -609,6 +618,9 @@ const route = useRoute()
 const selectedResumeId = ref(null)
 const resumeList = ref([])
 const recommendations = ref([])
+// 失败与"没有推荐"必须是两个状态：GET 失败不弹提示（request.js 只对非 GET 通知），
+// 若只清空列表，页面会对候选人说"请完善简历信息"，而实际是服务端错了。
+const recommendError = ref('')
 const analyzingId = ref(null)
 const feedbackStats = ref(null)
 
@@ -695,6 +707,7 @@ async function fetchResumes() {
 }
 
 async function loadRecommendations() {
+  recommendError.value = ''
   if (!selectedResumeId.value) return
   loading.recommend = true
   try {
@@ -734,6 +747,7 @@ async function loadRecommendations() {
   } catch (e) {
     console.error('获取推荐失败:', e)
     recommendations.value = []
+    recommendError.value = e?.userMessage || e?.message || '推荐加载失败，请稍后重试'
   } finally {
     loading.recommend = false
   }
@@ -1287,6 +1301,29 @@ function segmentStyle(value, total) {
 }
 .empty-hint {
   padding: 24px 0 8px;
+}
+.load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--app-danger), white 66%);
+  border-radius: 8px;
+  background: var(--app-accent-soft);
+}
+.load-error strong,
+.load-error span {
+  display: block;
+}
+.load-error strong {
+  color: var(--app-danger);
+  font-size: 13px;
+}
+.load-error span {
+  margin-top: 2px;
+  color: var(--app-muted);
+  font-size: 12px;
 }
 
 /* 筛选栏 */
