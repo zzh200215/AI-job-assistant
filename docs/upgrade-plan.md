@@ -474,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 4 个加载函数加令牌，其中 3 处有红→绿测试为证（见 D3）**；**推荐页的 GET 失败不再显示成"请完善简历信息"，改为失败态 + 重试（见 D4，另有 8 处同类待收，清单在 D4 末尾）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 4 个加载函数加令牌，其中 3 处有红→绿测试为证（见 D3）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，棘轮 `silentEmptyCatches` 11 → 3 盯着（见 D4、D5）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -789,6 +789,21 @@ agent.SummaryAgent           real  tokens=3215
 - **同类可见谎**：`JobSearch.vue:1484`（简历列表）、`:1496`（简历详情）、`:1520`（工作台条目）、`PipelineKanban.vue:753`（版本列表）、`JobRecommend.vue:745`（反馈统计面板 → 显示"暂无反馈分布"）、`History.vue:348`（详情抽屉）、`admin/Overview.vue:229,264`、`admin/Tenants.vue:343`（企业侧，冻结中）。
 - **看着像但不是**（有意降级或语义上等价，注释也写清了）：`JobRecommend.vue:721,731`（投递/收藏状态拿不到时宁可显示未投未收藏）、`InterviewSetup.vue:398`（接口失败保留内置面试类型配置）、`AgentAnalysis.vue:548`（轮询瞬断继续）、`MultiAgentAnalysis`/`AnalysisResult` 若干。
 - 另有一批注释写着"request.js 已提示"其实**只对非 GET 成立**（`History.vue:348,367`、`PipelineKanban.vue:816,841,849`、`JobSearch.vue:1903,2098,2107`），注释本身在误导后人；改注释可以顺手做，但要先逐个确认那一次调用到底是 GET 还是 POST。
+
+#### 已交付：D5 剩下 8 处"失败说成没有数据"收进 `AppLoadError`（提交 `bd7fa68`）
+
+**先把度量定准**：D4 末尾那份清单是按"渲染 el-empty 且 catch 清列表"粗扫的（18 条，含假阳性）。这轮把判据写进棘轮并**把 catch 之后 12 行一起看**（批量诊断就是先清值、后在函数里报告），得到基线 **11 处 / 8 个文件**——`admin/Overview` 2、`CareerPlanning` 2、`Interview` 1、`JobSearch` 2、`PipelineKanban` 1、`Privacy` 1、`ResumeCompare` 1、`ResumeUpload` 1。上面对 GET/POST 的那批注释判断也逐条查过：薪资那次确实带 `notifyError: false` 主动关掉了提示，所以"什么都不说"就是它唯一的对外表现。
+
+**候选人侧 8 处已接**到 `components/ui/AppLoadError.vue`（另有 1 处判据没数到但同病的 `Interview` 历史记录一并接了，所以数字降 8、分支加 9）：
+- `Privacy.vue` 个人数据概览：失败时整块消失＝对用户说"我们没存你的数据"，这是合规面，现在显式失败。
+- `CareerPlanning.vue` 薪资行情 + 职业方向：两个证据面板拉不到时不再靠"面板不见了"表达。
+- `Interview.vue` 近期面试 / 历史记录；`JobSearch.vue` 简历选择器 / 跟进记录；`PipelineKanban.vue` 简历版本下拉；`ResumeCompare.vue` 岗位下拉。
+
+**为什么新建组件**：这是第四个需要同一块视图，D4 手写的 `.load-error` 再复制 8 份就是 9 份；顺手把它做成阶段 1 计划的 `components/ui/` 第一个成员，并把 D4 的两处改用它（两份 scoped 复制删掉）。
+
+**剩 3 处**，每条的理由写在预算注释里：admin 两处随企业侧冻结不动；`ResumeUpload` 的版本计数失败改为存 `null`（"不知道"）而不是 `0`——卡片因此不显示数字，也不再作出"0 个版本"的断言，判据仍计它，属明知故留。
+
+**棘轮第六维** `silentEmptyCatches`：**11 → 3**，只降不升。非空性用对照组验过：合成一条静默 catch 计 1、该处开始报告后计 0、报告写在 catch 之后 12 行内也计 0（这条就是消除假阳性的 widening）。`test:unit` **62 → 64 passed**；smoke 11；lint 0 error；build 通过，`dist` 里有 `.app-load-error[data-v-*]`。**没验**：真机渲染（浏览器工具被策略拦）；`el-select` 下方插一条错误块的排版好不好看，需要人看一眼。
 
 ---
 
