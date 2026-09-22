@@ -585,7 +585,7 @@ agent.SummaryAgent           real  tokens=3215
 | 限流粒度 | slowapi + Redis（`core/rate_limiter.py:38-49`）仅按 IP → NAT 后用户共享额度，单用户可耗尽 LLM 花费 |
 | ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`） | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。**仍然在的是性能那半句**：`score()` 为 O(terms×docs) 纯 Python 遍历，语料再大一个量级就要换实现 |
 | Rerank 生产用启发式 | `rerank_service.py:125-159` 可选本地 cross-encoder，否则 jieba 词重叠 + 硬编码 0.5/0.3/0.2 权重；`RERANKER_MODEL_PATH` 默认未设 |
-| 死代码 | `api/tracking.py` 定义了 router 但**从未被 include**；`agents/agent_orchestrator.py`、`services/smart_orchestrator.py`、`services/agent_workflow.py` 是 `DeprecationWarning` 垫片层，靠 import 维持存活 |
+| 死代码 → ~~`api/tracking.py` 定义了 router 但**从未被 include**~~ 已挂载并修好整条链（E10，提交 `cb5a72b`）；**但 `track()` 调用方为 0，"要不要真埋点"回到 §10.8** | 仍在的是另一半：`agents/agent_orchestrator.py`、`services/smart_orchestrator.py`、`services/agent_workflow.py` 是 `DeprecationWarning` 垫片层，靠 import 维持存活 |
 | 缺少 router 级鉴权 | 31 个 router / 218 端点，无一处使用 `dependencies=[...]`，鉴权靠每端点 `Depends(get_current_user)`，**保护是 opt-in 而非构造保证** |
 | 三个 router 共享 `/jobs` 前缀 | `api/router.py:54-56`；当前不冲突仅因 `job_recommend.py:1448` 的 `/{jd_id:int}` 是单段 |
 
@@ -818,6 +818,19 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 
 **还有一类没动**：`Interview.vue:444`、`InterviewSetup.vue:398`、`JobRecommend.vue:721,731` 这些注释写的是**真实的有意降级**（拿不到收藏状态就显示未收藏、接口挂了用内置题库），不是假话，留在原处。
 
+#### 已交付：E10 埋点链路两端都是断的，而且第 4 个发现改变了这条的定性（提交 `cb5a72b`）
+
+**从 E 表里那行"死代码：`api/tracking.py` 定义了 router 却从未被 include"往下挖**，挖出四个事实，前三个是让这条链即使接上也不可信的缺陷：
+
+1. **服务端端点根本不存在**：router 没被 include，`POST /api/tracking/events` 是一个 404。现已挂进 `api_router`。
+2. **"断网不丢事件"是文件自己 docstring 里的假话**：客户端先把一批事件 `splice` 出队列再发，而 `fetch` **只对网络异常抛错**——404/500 是 fulfilled promise，原来那个 catch 永远等不到"服务端拒绝"，于是每次非 2xx 都静默销毁一批事件。现在按 `resp.ok` 判定，不成功就把这一批放回队头（队列上限 200，长期离线不会无限占 localStorage）。
+3. **未登录时也在发**：`Bearer null` 必定 401，又是白丢一批。现在没 token 就不发，事件留在队列里等登录后补传。
+4. **关页面时扔掉一批**：`navigator.sendBeacon` 带不上 `Authorization` 头（这个端点要登录），发完还无条件 `removeItem`。换成 `keepalive: true` 的 fetch（能带头），不确认送达就不删队列；监听从已不可靠的 `beforeunload` 换到 `pagehide`。
+
+**第 4 个发现把这条的定性改了**：`grep` 过 `frontend/src` 全部 `.js`/`.vue`，**没有任何视图或 store 导入 tracker，`track()` 的调用方是 0**。所以前三条今天**没有**产生候选人可见的 404、也**没有**真的丢过数据——我明确不这么声称。这轮做完的是"管道本身不再谎报成功"，而**要不要真的埋点仍然是一个产品决定**，不是清理：这些事件会变成个人数据（服务端 stub 现在把 `user_id` + `username` 写进日志），而隐私页正在对用户承诺我们存了什么。要么点名哪些事件值得收，要么把 SDK 删掉——两条都是他的，已记进 §10.8。
+
+**验证**：后端测试断言三件事——路由出现在**真实的 `api_router`** 里（HEAD 的 router 对 tracking 零提及，所以这条改前是红的；另配 `len(paths) > 200` 反证这个断言不是空转）、带鉴权的一次批量被接受（`received == 2`）、匿名调用拿到 **401 而不是 404**；E1 那张公开面清单仍然通过，说明新路由没被开成公开端点。前端 `tests/unit/tracker.test.js` 4 例各锁上面一条行为，**对着旧 tracker 跑是 4/4 红**。`test:unit` **66 → 70 passed**；smoke 11；后端 `pytest` 709 passed；`ruff check` / `ruff format --check` 干净；lint 0 error；build 通过。**没验**：真机网络行为（离线队列、`pagehide` 的 keepalive 是否真的送达）——没有调用方，端到端也就无从在 UI 里触发，这一层要等 §10.8 定下来才有意义。
+
 ---
 
 ## 9. 里程碑
@@ -842,6 +855,7 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 5. **"优先投递"这类产品口径是否跟随后端档位（85）**。D1 只统一颜色；下面几处 80 分界表达的是徽章、统计数与解锁，改了会改变候选人看到的数字与文案，需本人定：`JobRecommend.vue:380`（优先投递徽章，配 `:655` 的计数）、`History.vue:318`（"高匹配记录"）、`Profile.vue:492`（成就解锁）、`CareerPlanning.vue:968-990`（投递策略 80/70/60 分档）。徽章与卡片上后端给的推荐标签现已可能相反（82 分：徽章"优先投递" + 标签"可以投递"）。
 6. **`Interview.vue:464` 的随机"薄弱项"分数怎么处置**。当前无趋势数据时用 `Math.random()*40+30` 造分并配颜色与训练建议；选项是按真实会话维度聚合，或删掉该块改显式空态。两者都改变候选人所见。
 7. **前端 `format:check` 门走哪条路**（详见 `docs/engineering-quality.md` "Open: the frontend format gate cannot pass"）。CI 安装 prettier 3.9.5，而仓库代码按 3.3 书写：**CI 检出的 `origin/master` 上 95 个文件不过**。要么一次性 `npm run format`（约 95 文件纯排版），要么把 prettier 钉回 3.3（依赖降级）。本段已刻意避开这个岔口：没跑全局格式化，改动文件的既有格式未动。
+8. **埋点：补上调用方，还是删掉 SDK**（E10 留下的）。管道两端已修好且各有测试锁住，但 `track()` 调用方仍为 0，所以今天没有任何事件在流动。埋哪些点是产品/隐私决定（服务端 stub 会把 `user_id` + `username` 写进日志文件，而 `db` 参数收了不用），不该由清理顺手替用户做；反之若决定不做分析，`utils/tracker.js` + `api/tracking.py` + 刚挂上的路由一起删。
 
 ---
 
