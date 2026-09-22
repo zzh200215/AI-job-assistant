@@ -581,7 +581,7 @@ agent.SummaryAgent           real  tokens=3215
 | schema 有第四条路径 | Alembic（22 个 revision）+ `Base.metadata.create_all`（`main.py:61`）+ `core/schema_bootstrap.py`（453 行 / 13 个手写 MySQL DDL，`AUTO_CREATE_TABLES` 默认 True）+ 散落的 `add_columns.py`/`reset_kb.py`。已存在重复：`ensure_agent_message_usage_columns`(`:23-41`) vs `20260624_0003`；`ensure_user_role_column`(`:9-20`) vs `20260801_0017`。DDL 是 MySQL 方言而测试引擎是 SQLite |
 | 连接池未配置 | `core/database.py:9-20` 未设 `pool_size`/`max_overflow`，默认 5+10 的 queuepool 面对线程池密集应用 |
 | 测试覆盖真实路径为零 | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错，但 `backend/.coverage`(122KB) 被提交进了工作树 |
-| 队列无 ack/retry/DLQ | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py:76-79`）；Redis 队列存在（`:93-141`）但 `mark_stale_running_tasks_failed`（`orchestration_runner.py:236-259`）启动时把 30 分钟以上任务**一律置失败**，多副本重启会误杀正常长任务；`run_strategy_async` 构造两个 `TaskPayload` 后丢弃（`:126-132,317-323`） |
+| 队列无 ack/retry/DLQ | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py:76-79`）；Redis 队列存在（`:93-141`）。~~但 `mark_stale_running_tasks_failed` 启动时把 30 分钟以上任务一律置失败，多副本重启会误杀正常长任务~~ → 已改为按"最后一次进度写入"判静默（E12，提交 `3ecbb96`）。~~`run_strategy_async` 构造两个 `TaskPayload` 后丢弃~~ → **这条已不成立**：`orchestration_runner` 里两处 `TaskPayload(...)`（`:156`、`:204`）都紧跟 `return _get_backend().submit(payload, _run_task_payload)`，没有构造后丢弃的路径。**仍在的是**：任务入队后没有任何 lease/心跳字段，所以"排在长 backlog 里没开工"与"执行进程已经死了"在数据上仍然无法区分——这正是 E12 只把误杀范围缩到"完全静默"而没有消灭它的那一半 |
 | 限流粒度 | slowapi + Redis（`core/rate_limiter.py:38-49`）仅按 IP → NAT 后用户共享额度，单用户可耗尽 LLM 花费 |
 | ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`） | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。**仍然在的是性能那半句**：`score()` 为 O(terms×docs) 纯 Python 遍历，语料再大一个量级就要换实现 |
 | Rerank 生产用启发式 | `rerank_service.py:125-159` 可选本地 cross-encoder，否则 jieba 词重叠 + 硬编码 0.5/0.3/0.2 权重；`RERANKER_MODEL_PATH` 默认未设 |
@@ -846,6 +846,26 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 **装配后的真实 app 也过了一遍**（只读脚本，跑完删）：匿名 `GET /api/resume/list`、`/api/history` → 401，`POST /api/tracking/events` 无 token/坏 token → 401，而 `/api/jobs/cities`、`/api/interview/config/types`、`/api/system/health`、`/api/tenant/brand` 仍匿名 200，`/openapi.json` 仍能构建（214 条 path）。`ruff check` + `ruff format --check` 对 2 个文件 clean。
 
 **还剩什么**：那 8 段混合格式的 110 条操作仍靠逐端点声明 + 清单兜住。要把它们也变成构造保证，需要先做**端点级拆分**（把 `auth.py` 的 6 条公开、`system.py` 的 2 条探活等挂到不带守护的子 router 上），是一次跨 6 个文件的机械改动，收益是"新端点默认 401"覆盖面从 123/233 提到 218/233。这活没干的原因：它改的是登录/回调/探活路径，属于一旦弄错就锁死入口的那类，且 E1 的清单已经把当前漏保护的实际风险压到 0。
+
+#### 已交付：E12 启动清扫改判"静默"，不再按"多久以前开始"判死刑（提交 `3ecbb96`）
+
+**机制**：`app/main.py` 的 lifespan 每次 web 进程启动都调 `mark_stale_running_tasks_failed()`，旧判据只有一句 `status == "running" and start_time < now-30min`。而 `start_time` 是**建任务那一刻**写的，任务完全可能在**另一个进程**里跑（`ORCHESTRATION_BACKEND=redis_queue` 时 worker 独立），所以只重启 web（`--reload`、滚动发布、崩掉拉起）就会把 worker 手里的活任务判成 failed。落到候选人身上是一条链：`utils/agentTaskPolling.js:99` 一见到 failed 就 `stopPolling()` 并拿 `error_msg` 报错（`:102`），于是**分析页停在"失败"，而分析在几秒后正常完成并落库**——结果存在，人已经走了。
+
+**第二条是那句话本身在说谎**：旧文案 `Marked failed on startup because the previous worker stopped before completion` 断言"上一个 worker 停了"，可清扫只看得到"没进展"，看不到进程生死；而且它是英文，会原样出现在中文界面里。
+
+**改法**：
+- 判据变成"最后一次**进度写入**也超过窗口"：`max(coalesce(completed_at, started_at, create_time))` 取 `agent_step_log` 与（经 `agent_run.task_id` 关联的）`agent_message` 两路，和 `start_time` 一起取最大——任一路还在写就不收口。cutoff 用 `utc_now_naive()`，因为 DB 读回的 DateTime 是 naive（`app/utils/time_helper.py` 早就为这个坑写了 `utc_now_naive`，之前没人用）。
+- 新文案只说量得到的事：`任务超过 N 分钟没有新的步骤写入（最后一次活动 <ts>），按中断收口`。
+- 顺手关掉残留：`LinearStrategy.run` 是**三个策略收尾里唯一不动 `error_msg` 的那个**（`strategies.py:599` 与 `langgraph_flow.py:438/500` 都会清），所以"先被清扫、后被跑完"的任务会带着那条假失败原因变成 completed，并且经 `_finish_run(..., task.error_msg)` 传染到 `agent_run.error_msg`。
+
+**先量再改**（真 dev 库，只读脚本跑完删）：89 条任务，**中位耗时 0.5 分钟、p90 0.9 分钟**；带旧清扫文案的 **5 条**，逐条比"最后一条步骤日志 vs 清扫时刻"，间隔是 **12～18 天**——**这 5 条是真孤儿，新规则照样判它们失败**。所以：
+- **误杀这一半是测试证明的，不是数据里抓到的**，本机没有受害者；这也是我没动 30 分钟默认值的原因（窗口约是典型任务的 30 倍，真跑长的场景是队列积压，那属于"队列无 ack/DLQ"那条）。
+- 但那 5 条**确实证明**了文案在说谎：它对着 12～18 天没动的任务说"上一个 worker 停了"，这句话它无从知道。
+- 另外查了"完成任务身上还挂着旧失败原因"的存量：`completed/partial` 且 `error_msg` 非空 = **0 条**，即残留 bug 目前也是无受害者的存量代码路径。
+
+**测试**：4 条新断言，**全部红→绿**（把两个生产文件还原后确认 4 红）：步骤日志还在写 → 不判；节点消息还在写 → 不判（第二条证据源单独锁，防只接一路）；最后活动也超过窗口 → **仍判失败**（反证：不能改成"永远不收口"），且文案含阈值、不含 "worker"；策略成功清掉 inherited `error_msg`。`pytest` **714 → 718 passed**；`ruff check` + `format --check` 全库 298 文件 clean；原有的 `test_mark_stale_running_tasks_failed_only_updates_old_running_tasks`（零活动证据的老任务）仍通过。**没验**：真多进程场景（起了 web 再起 worker 去观察误杀）——`mark_stale` 只在 lifespan 跑，需要两个进程 + 一个 >30 分钟的任务才能复现，我用测试里的时间注入代替。
+
+**故意留着没改**：清扫仍写 `end_time = utc_now()`，所以那 5 条在任务中心显示 `耗时：18天`（`TaskCenter.vue:95` 渲染 `task.duration_ms`，服务端 `task_center_service.py:31` 就是 `end_time - start_time`）。把 `end_time` 挪到最后活动会让这个数字好看，但 `operational_alert_service.py:67` 按 `end_time >= since` 统计失败任务，挪了就等于"今天发现的失败不再进今天的告警"——宁可留一个难看但真实的跨度。
 
 ---
 
