@@ -474,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useAsync` | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）。未收：24 处手写 `loading`、150+ 个 `catch`，以及 `AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦） |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 4 个加载函数加令牌，其中 3 处有红→绿测试为证（见 D3）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -757,6 +757,20 @@ agent.SummaryAgent           real  tokens=3215
 **棘轮第五道**：视图与布局里再出现 `toLocale*` / `Intl.DateTimeFormat` 直接红。数字：`test:unit` **41 → 51 passed**，smoke 11，lint 0 error，build 通过，本单元净 **-102 行**；顺手清掉 `fd77d2a` 在 OfferCompare 留下的空行。
 
 **没做的**：`Home.vue` 里 `new Date().getHours()` 那种"取小时做问候语"不是格式化，未动；`InterviewReport.formattedDuration`（秒→"x 分 y 秒"）是时长不是日期，也未动。
+
+#### 已交付：D3 并发请求改为"新的一次赢"（提交 `630846c`）
+
+**先量再改**（这次仍按行为数，不按名字数）：视图里有 **95 个函数 `await` 之后直接写 ref，一个带请求序号的都没有**；`loading` 泄漏实测 **0 处**；我第一遍扫出的"98 个静默 catch"**绝大多数是设计如此**——`request.js` 对每个被拒请求都会弹 toast，安静 catch 才是正确形状，所以我不把它算作缺陷。**真正的缺陷是顺序**：`await` 之后谁后回来谁写，于是**最后完成的赢，而不是最后发起的赢**。
+
+**两处可达、先写成红测试再修**：
+1. `TaskCenter` 每 10 秒轮询（全项目唯一的 `setInterval`），概览卡片在 loading 期间仍可点（"刷新"按钮反而有 `:loading` 禁用，所以那条路径本来就安全）。后端一慢，两轮请求叠加，**用户看到的是上一轮的列表**。
+2. `KnowledgeBase` 的列表由 `watch([filterType, filterStatus, myOnly])` 触发。先改类型再改状态，两次请求同时在飞，慢的那次后回来时**表格显示的是旧筛选组合的结果，而下拉框显示的是新组合**。
+
+`src/composables/useLatestCall.js`（14 行）每次发起给一个令牌，写 `list/tasks`、写 `loading`、写错误前都先问"我还是最新那次吗"；过期那一次不动 spinner（转圈归更新的那次）。同样的接线用在了 `JobSearch` 的 `loadLocalJobs` / `loadRecommendations`（`watch(activeTab)` 触发），**这两处我没有单独写红测试证明**，只是同一形状，且 `/jobs/search` 已被路由冒烟挂载覆盖。
+
+**证明与数字**：`test:unit` **51 → 57 passed**（TaskCenter 2 例断言渲染出的 `.task-card`；KnowledgeBase 1 例断言 `el-table` 绑定的 `list`——jsdom 下 el-table 不渲染行，DOM 断言拿不到东西，这点写在测试注释里；composable 3 例）；smoke 11；lint 0 error；build 通过。三条红测试在改之前都实测为红（TaskCenter 显示 `任务1`、知识库显示 `最早那次的结果`）。
+
+**计划修正**：阶段 1 原写"`composables/useAsync` 收 24 处手写 loading、150+ 个 catch"。**量完不成立**：loading 没泄漏、catch 是拦截器契约下的正确写法，为它们做一层包装是"没有可见收益的重构"，所以这条从待做里撤下，改为按缺陷逐个取证（本次是竞态）。剩下 95−4 个未接线的 await-写-ref 仍是潜在竞态面，但**哪些真的可被用户并发触发需要逐点读代码或真浏览器验证**，我没有一个数字可以负责，故列为待查而不是待做。
 
 ---
 
