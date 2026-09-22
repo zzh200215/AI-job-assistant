@@ -1047,6 +1047,7 @@ import {
   updateJobPipelineEntry,
 } from '@/api/jobs'
 import { compactDateTime } from '@/utils/format/date'
+import { useLatestCall } from '@/composables/useLatestCall'
 
 const route = useRoute()
 const router = useRouter()
@@ -1072,6 +1073,7 @@ const externalJobs = ref([])
 
 const localLoading = ref(false)
 const localJobs = ref([])
+const latestCall = useLatestCall()
 
 const recommendLoading = ref(false)
 const recommendations = ref([])
@@ -1497,14 +1499,17 @@ async function loadResumeDetail(resumeId) {
 }
 
 async function loadLocalJobs() {
+  const isCurrent = latestCall()
   localLoading.value = true
   try {
     const data = await getJobList({ page: 1, page_size: 100 })
+    if (!isCurrent()) return
     localJobs.value = (data?.items || []).map((item, index) => normalizeJob(item, `local-${index}`))
   } catch {
+    if (!isCurrent()) return
     localJobs.value = []
   } finally {
-    localLoading.value = false
+    if (isCurrent()) localLoading.value = false
   }
 }
 
@@ -1518,6 +1523,8 @@ async function loadPipelineEntries() {
 }
 
 async function loadRecommendations() {
+  // 令牌在进入时领取：新一次的意图（含"没选简历所以清空"）都应作废仍在途的旧请求
+  const isCurrent = latestCall()
   if (!selectedResumeId.value) {
     recommendations.value = []
     return
@@ -1532,11 +1539,13 @@ async function loadRecommendations() {
     if (recommendFilters.value.industry) params.industry = recommendFilters.value.industry
 
     const data = await getJobRecommendations(params)
+    if (!isCurrent()) return
     recommendations.value = data?.recommendations || []
   } catch {
+    if (!isCurrent()) return
     recommendations.value = []
   } finally {
-    recommendLoading.value = false
+    if (isCurrent()) recommendLoading.value = false
   }
 }
 

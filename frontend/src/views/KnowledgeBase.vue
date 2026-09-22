@@ -617,6 +617,7 @@ import {
   searchKnowledge,
   uploadKnowledge,
 } from '@/api/knowledge'
+import { useLatestCall } from '@/composables/useLatestCall'
 
 const DOC_TYPE_OPTIONS = [
   { value: 'jd_lib', label: '岗位 JD 库' },
@@ -635,6 +636,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const loading = ref(false)
+const latestCall = useLatestCall()
 const list = ref([])
 const total = ref(0)
 const page = ref(1)
@@ -718,6 +720,7 @@ const modelStats = computed(() =>
 const dailyTrend = computed(() => embeddingStats.daily_trend || [])
 
 async function loadList() {
+  const isCurrent = latestCall()
   loading.value = true
   try {
     const params = {
@@ -728,10 +731,12 @@ async function loadList() {
     if (filterType.value) params.doc_type = filterType.value
     if (filterStatus.value) params.status = filterStatus.value
     const data = await listKnowledge(params)
+    if (!isCurrent()) return
     list.value = data.items || []
     total.value = data.total || 0
   } finally {
-    loading.value = false
+    // 过期那一次不动 loading：在更新的那一次结束前，转圈属于它
+    if (isCurrent()) loading.value = false
   }
 }
 

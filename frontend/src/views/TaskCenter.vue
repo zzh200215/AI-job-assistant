@@ -132,12 +132,14 @@ import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import request from '@/api/request'
 import { TASK_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
 import { dateTime } from '@/utils/format/date'
+import { useLatestCall } from '@/composables/useLatestCall'
 
 const router = useRouter()
 const loading = ref(false)
 const tasks = ref([])
 const summary = ref({ counts: {}, total: 0 })
 const statusFilter = ref('all')
+const latestCall = useLatestCall()
 const loadError = ref('')
 let pollTimer = null
 
@@ -199,6 +201,7 @@ function statusLabel(s) {
 }
 
 async function loadTasks() {
+  const isCurrent = latestCall()
   loading.value = true
   try {
     const params = { limit: 50 }
@@ -207,13 +210,16 @@ async function loadTasks() {
       request.get('/agent/tasks', { params }),
       request.get('/agent/tasks/summary'),
     ])
+    if (!isCurrent()) return
     tasks.value = taskData?.items || taskData || []
     summary.value = summaryData || { counts: {}, total: 0 }
     loadError.value = ''
   } catch (error) {
+    if (!isCurrent()) return
     loadError.value = error?.userMessage || '暂时无法获取任务列表，请检查网络后重试。'
   } finally {
-    loading.value = false
+    // 过期的那一次不动 loading：在更新的那一次结束前，转圈属于它
+    if (isCurrent()) loading.value = false
   }
 }
 
