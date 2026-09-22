@@ -474,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 7 个加载函数加令牌（5 个页面），其中 6 处有红→绿测试为证（见 D3、D7、D9）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，棘轮 `silentEmptyCatches` 11 → 3 盯着（见 D4、D5）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 8 个加载函数加令牌（5 个页面），其中 7 处有红→绿测试为证（见 D3、D7、D9、D10）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，棘轮 `silentEmptyCatches` 11 → 3 盯着（见 D4、D5；**这一维有已知漏数**，见 D10 末段）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -941,6 +941,19 @@ D7 之后接着量的第二页，症状比规划页更疼：**一轮 `loadRecomm
 **测试 4 条，`test:unit` 83 → 87 passed**：2 条改前是红的（列表被旧轮覆盖：DOM 已经渲染出 岗位-B 之后又变回 岗位-A；标记串台：`cardBadges()` 里冒出旧轮的 `已投递`/`已收藏`，「已加入看板」变成 1），2 条是双向都绿的对照组——**同一轮的回填必须照常打上**（把回填整个废掉就会红）、丢弃旧轮不许把 `loading.recommend` 卡成 true。lint 0 error、smoke 11、build 通过，新测试文件 prettier clean。**没验**：真浏览器观感（策略拦）。
 
 **下一处已经看见、这条里没动的**：`loadFeedbackStats` 同样没有令牌，而它是每次点"喜欢/不喜欢"之后重发的——连点两张卡片，先发的统计后回来，"反馈分布"就会显示**你刚那次操作之前**的计数。它比标记串台轻（数字短暂偏旧，不涉及身份错标），且我没为它写出可见断言（要先驱动卡片上的反馈按钮 + 面板形状），所以留在这里而不是顺手加一个未测的守卫。
+
+#### 已交付：D10 反馈统计面板的两种谎：退回的计数，和把失败演成"没有反馈"（提交 `919beb7`）
+
+D9 点名没动的那一个，量完发现它是**两个**可见问题，都在这 6 行里：
+
+- **没有序号守卫**：这个统计是**每次点喜欢/不喜欢之后重发**的。连点两张卡片 → 先发起的那次后回来 → 面板显示的是**用户刚才那次点击之前**的计数（测试里的现象：屏幕上已经是 `4`，被旧的 `3` 盖回去）。
+- **`catch { feedbackStats.value = null }` + 面板在 `v-if="feedbackStats"` 后面**：拉不到就把整块面板删掉且什么都不说。GET 失败从不弹提示，所以"消失"是它唯一的对外表现——而它表达的是"**你没有反馈历史**"，对的是一个正在这一页上点反馈的人。
+
+**做法**：一把**自己的** `useLatestCall()` 计数器（故意的：点反馈只重发统计、不重发列表，共用 D9 那把会让两件事互相作废），失败改成走 `feedbackStatsError` + `AppLoadError`（带可用的重试）。
+
+**测试 3 条，`test:unit` 87 → 90 passed**：2 条改前红（计数被退回、失败只留下消失的面板），1 条双向绿的对照组（成功那一轮照常出四个数字）。lint 0 error、smoke 11、build 通过，新文件 prettier clean。
+
+**顺带量到的一条测具粗处**：棘轮的 `silentEmptyCatches` **从来没数过这一处**——它的"报告可能写在后面"窗口会往 catch 之后看 12 行，而那 12 行伸进了下面的 `seedData()` 并在那里撞到 `ElMessage`，于是被当成"有报告"。也就是说剩下的预算 3 既没包含这个谎，也不会自动逮住同类的新谎；把窗口收到**函数作用域**是另一件事，改动面不小，单独立项。
 
 ---
 
