@@ -612,12 +612,14 @@ import { createJobPipelineEntry } from '@/api/targets'
 import { scoreToneFillClass } from '@/utils/scoreTone'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import { isoMonthDay } from '@/utils/format/date'
+import { useLatestCall } from '@/composables/useLatestCall'
 
 const router = useRouter()
 const route = useRoute()
 const selectedResumeId = ref(null)
 const resumeList = ref([])
 const recommendations = ref([])
+const latestCall = useLatestCall()
 // 失败与"没有推荐"必须是两个状态：GET 失败不弹提示（request.js 只对非 GET 通知），
 // 若只清空列表，页面会对候选人说"请完善简历信息"，而实际是服务端错了。
 const recommendError = ref('')
@@ -707,6 +709,9 @@ async function fetchResumes() {
 }
 
 async function loadRecommendations() {
+  // 一轮推荐是三个串联请求（列表 → 投递状态 → 收藏状态），换简历/改筛选都会重发；
+  // 不守序号的话，旧那一轮的回填会把它自己的投递/收藏标记打到新简历的卡片上。
+  const isCurrent = latestCall()
   recommendError.value = ''
   if (!selectedResumeId.value) return
   loading.recommend = true
@@ -718,6 +723,7 @@ async function loadRecommendations() {
     if (filters.salary_min !== null) params.salary_min = filters.salary_min
 
     const data = await getJobRecommendations(params)
+    if (!isCurrent()) return
     recommendations.value = (data?.recommendations || []).map((j) => ({
       ...j,
       _feedback: null,
@@ -727,6 +733,7 @@ async function loadRecommendations() {
     // Check which jobs are already in pipeline
     try {
       const pipeline = await getJobPipelineList({ limit: 200 })
+      if (!isCurrent()) return
       const applied = (pipeline?.items || pipeline || []).map((p) => p.jd_id).filter(Boolean)
       recommendations.value.forEach((j) => {
         if (applied.includes(j.jd_id)) j._applied = true
@@ -735,8 +742,10 @@ async function loadRecommendations() {
       // 投递状态加载失败时，推荐列表仍可继续浏览。
     }
     // 收藏状态由后端持久化，不回填的话刷新后卡片会显示"未收藏"的假状态
+    if (!isCurrent()) return
     try {
       const bookmarks = await getJobBookmarks()
+      if (!isCurrent()) return
       const saved = (bookmarks?.items || []).map((b) => b.jd_id).filter(Boolean)
       recommendations.value.forEach((j) => {
         j._bookmarked = saved.includes(j.jd_id)
@@ -745,11 +754,12 @@ async function loadRecommendations() {
       // 同上：拿不到就保持 false，不假装已收藏。
     }
   } catch (e) {
+    if (!isCurrent()) return
     console.error('获取推荐失败:', e)
     recommendations.value = []
     recommendError.value = e?.userMessage || e?.message || '推荐加载失败，请稍后重试'
   } finally {
-    loading.recommend = false
+    if (isCurrent()) loading.recommend = false
   }
 }
 
