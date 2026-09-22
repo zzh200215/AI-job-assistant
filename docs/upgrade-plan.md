@@ -479,7 +479,7 @@ agent.SummaryAgent           real  tokens=3215
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
 
-其他已知项：`localStorage` 9 个 key 分散在 64 个调用点，其中 `token`/`user` 在 `api/request.js:17` 与 `stores/auth.js:35` **两处读取**（双份真相源）；`recruit.lastResumeId`/`lastJDId`/`lastRecordId` 是跨页隐式握手（`AgentAnalysis.vue:512-513`、`AnalysisResult.vue:410-422`），应改由 Pinia 承载；`.vite-startup-error.log`、`dist/`、`backend/.coverage` 属被提交的构建产物。
+其他已知项：`localStorage` 9 个 key 分散在 64 个调用点，其中 `token`/`user` 在 `api/request.js:17` 与 `stores/auth.js:35` **两处读取**（双份真相源）；~~`recruit.lastResumeId`/`lastJDId`/`lastRecordId` 是跨页隐式握手，应改由 Pinia 承载~~ → 已收进 `utils/lastSelection` 并按登录用户分槽（E13，提交 `67688cd`；量的结果是**两套互不读取的键名**、25 处裸访问，详见 E13 那节），是否再升为 Pinia store 见 §10.9；`.vite-startup-error.log`、`dist/`、`backend/.coverage` 属被提交的构建产物。
 
 ---
 
@@ -867,6 +867,23 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 
 **故意留着没改**：清扫仍写 `end_time = utc_now()`，所以那 5 条在任务中心显示 `耗时：18天`（`TaskCenter.vue:95` 渲染 `task.duration_ms`，服务端 `task_center_service.py:31` 就是 `end_time - start_time`）。把 `end_time` 挪到最后活动会让这个数字好看，但 `operational_alert_service.py:67` 按 `end_time >= since` 统计失败任务，挪了就等于"今天发现的失败不再进今天的告警"——宁可留一个难看但真实的跨度。
 
+#### 已交付：E13 跨页"上一次选择"收成一个按登录用户分槽的模块（提交 `67688cd`）
+
+§7 那句"`recruit.lastResumeId/lastJDId/lastRecordId` 是跨页隐式握手，应改由 Pinia 承载"低估了它：量的时候发现**同一件事有两套键名，而且它们互不读取**。
+
+- **19 处**用全局键 `recruit.lastX`（`AgentAnalysis` / `AnalysisResult` / `CareerPlanning` / `Interview` / `JDInput` / `MultiAgentAnalysis` / `ResumeUpload` 读写），**6 处**用按用户键 `recruit.lastX.<uid>`（`SmartAnalysis` 自己私有的 `storageKey()` 5 处 + `JobSearch:1840` 1 处）。
+- 后果一：工作台里选的简历**永远传不到**规划/分析页——它写的是带 uid 的键，而那几页读全局键。
+- 后果二（真正会碰到候选人的那个）：全局键**跨账号存活**。换过账号的浏览器里，`AgentAnalysis`/`MultiAgentAnalysis` 的 `fillLast()` 会把**上一个账号**的 resume_id/jd_id 预填进表单，`CareerPlanning.restoreSelections()` 一样，`Interview.useLast()` 直接拿上一个账号的 record id 去 `getAnalysis()`。
+- **先查了是不是泄露**：不是。`api/analysis.py` 每条都带 `AnalysisRecord.user_id == current_user.id` / `_get_owned_resume`，所以症状是——候选人看到一个自己从没见过的记录报 `记录不存在，或无权限访问`，以及"检测到你最近用过：简历 ID=xxx"里出现别人的 id。是**假故障 + 假归属**，不是数据泄露。
+
+**做法**：`src/utils/lastSelection.js` 成为这三个值的唯一持有者——槽位 = 登录用户 id（没有就是 `guest`），**拿到真实 id 时顺手删掉旧的全局键与 guest 槽**：无主的 id 不会嫁给下一个登录的人，因此**不做数据迁移**，这次改动之后第一次进页面是"不预填"，用户选一次之后才有（这条是有意的，写在模块头注释里）。身份只由 `stores/auth.js` 通知它（store 初始化、`setAuth`、`clearAuth` 三处），所以 `user` 这个 localStorage 键没有多出第三个读取方。**25 处裸访问清零**，`SmartAnalysis` 的私有 `storageKey`/`uid`/`authStore` 一起删掉；`ResumeUpload` 原来靠 `|| ''` 表达的"说不清属于哪份简历就擦掉"改成显式 `forgetResume()`。
+
+**棘轮第七维**（`styleDebtRatchet`）：视图里不许再出现 `last(ResumeId|JDId|RecordId)`。**按字段名匹配而不是完整键名**，否则 `storageKey('lastResumeId')` 这种自己拼前缀的写法能躲过——把 9 个视图还原成 HEAD 后这条列出全部 9 个文件（新的 `SmartAnalysis` 也在里面），改完即绿。
+
+**验证**：`test:unit` **70 → 77 passed**（6 条模块用例：guest 槽在登录时被清、旧全局键被清、A 的选择 B 看不见且 A 回来还在、`forget*` 只影响当前槽、坏值不当成 id；+1 条棘轮）；smoke 11；lint 0 error；build 通过；新文件 prettier clean。**没验**：真浏览器里登出→换账号→进分析页的现场（`browser-use` 被策略拦），也没验真实多标签页共享 localStorage 的情形。
+
+**同一批里没动的**：`recruit.pendingAnalysis`（`JobSearch` → `SmartAnalysis` 的一次性载荷，3 处）仍是全局键。它装的正是用户刚点的那条 JD、且读完立刻 `removeItem`，跨账号存活窗口比上面那三个小得多——要不要一起进槽，等 §10.9 定"这些隐式握手最终归谁"时一并处理。
+
 ---
 
 ## 9. 里程碑
@@ -892,6 +909,7 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 6. **`Interview.vue:464` 的随机"薄弱项"分数怎么处置**。当前无趋势数据时用 `Math.random()*40+30` 造分并配颜色与训练建议；选项是按真实会话维度聚合，或删掉该块改显式空态。两者都改变候选人所见。
 7. **前端 `format:check` 门走哪条路**（详见 `docs/engineering-quality.md` "Open: the frontend format gate cannot pass"）。CI 安装 prettier 3.9.5，而仓库代码按 3.3 书写：**CI 检出的 `origin/master` 上 95 个文件不过**。要么一次性 `npm run format`（约 95 文件纯排版），要么把 prettier 钉回 3.3（依赖降级）。本段已刻意避开这个岔口：没跑全局格式化，改动文件的既有格式未动。
 8. **埋点：补上调用方，还是删掉 SDK**（E10 留下的）。管道两端已修好且各有测试锁住，但 `track()` 调用方仍为 0，所以今天没有任何事件在流动。埋哪些点是产品/隐私决定（服务端 stub 会把 `user_id` + `username` 写进日志文件，而 `db` 参数收了不用），不该由清理顺手替用户做；反之若决定不做分析，`utils/tracker.js` + `api/tracking.py` + 刚挂上的路由一起删。
+9. **跨页隐式握手的最终归属**（E13 只做了三个 id）。`recruit.lastX` 现在集中在 `utils/lastSelection` 并按用户分槽，但它仍是 localStorage；§7 原话是"应改由 Pinia 承载"。两件事需要你定：① 要不要把它再收成一个 Pinia store（则 `setSelectionOwner` 变成 store 内部细节，视图少一层 import）；② `recruit.pendingAnalysis`（`JobSearch`→`SmartAnalysis` 的一次性载荷）与 `recruit.defaultResumeId` 是否也进同一套——前者跨账号也会存活，只是窗口小得多。
 
 ---
 
