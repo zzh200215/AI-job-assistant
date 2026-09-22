@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   forgetJD,
-  forgetResume,
   readJDId,
   readRecordId,
   readResumeId,
@@ -66,21 +65,16 @@ describe('lastSelection 按登录用户分槽', () => {
     expect(readResumeId()).toBe(41) // CareerPlanning.restoreSelections 读的
   })
 
-  it('forget* 只影响当前账号的槽', () => {
+  it('forgetJD 只影响当前账号的槽', () => {
     setSelectionOwner(1)
     rememberJD(22)
-    rememberResume(11)
     setSelectionOwner(2)
     rememberJD(23)
-    rememberResume(13)
     forgetJD()
-    forgetResume()
     expect(readJDId()).toBeNull()
-    expect(readResumeId()).toBeNull()
 
     setSelectionOwner(1)
     expect(readJDId()).toBe(22)
-    expect(readResumeId()).toBe(11)
   })
 
   it('存进去的东西读回来是数字，坏值不当成 id', () => {

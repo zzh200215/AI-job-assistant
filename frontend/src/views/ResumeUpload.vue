@@ -240,14 +240,6 @@
           <el-collapse-item title="🎯 岗位匹配度" name="match">
             <div v-if="currentDiagnosis.match_analysis">
               <p>{{ currentDiagnosis.match_analysis }}</p>
-              <el-button
-                v-if="currentDiagnosis.jd_id"
-                text
-                type="primary"
-                @click="goAnalysisFromDiag"
-              >
-                查看完整匹配分析 →
-              </el-button>
             </div>
             <el-empty v-else :image-size="60" description="未指定对比岗位" />
           </el-collapse-item>
@@ -541,7 +533,7 @@ import {
   scoreToneFillClass,
 } from '@/utils/scoreTone'
 import { monthDay } from '@/utils/format/date'
-import { forgetResume, rememberResume } from '@/utils/lastSelection'
+import { rememberResume } from '@/utils/lastSelection'
 
 const router = useRouter()
 
@@ -967,8 +959,9 @@ async function showDiagnosisDialog(r) {
     completeness_score: d.completeness_score ?? null,
     module_check: d.module_check || {},
     improvement_roadmap: d.improvement_roadmap || [],
-    // /diagnose scores against a target *position string*, not a stored JD, so
-    // this is normally null and the jump-to-analysis action stays hidden.
+    // /diagnose 打分的是**一个岗位名称字符串**，不是库里存的 JD：响应里没有 jd_id，
+    // 也没有分析记录。这个字段只为行级改写接口保留"无目标 JD"的入参形状，
+    // 不能拿来跳分析详情页（那条路由要的是 AnalysisRecord 的 id）。
     jd_id: d.jd_id ?? null,
   }
   diagnosisDims.forEach((dim) => {
@@ -976,15 +969,6 @@ async function showDiagnosisDialog(r) {
   })
   r._diagnosisScore = d.total_score
   diagnosisLoading.value = false
-}
-function goAnalysisFromDiag() {
-  if (currentDiagnosis.value?.jd_id) {
-    // 说不清这份诊断属于哪份简历时，就把"上一次选择"擦掉而不是留一个旧 id 在表单里。
-    const target = resumes.value.find((r) => r.id === currentShareResume.value?.id)?.id
-    if (target) rememberResume(target)
-    else forgetResume()
-    router.push(`/analysis/${currentDiagnosis.value.jd_id}`)
-  }
 }
 </script>
 

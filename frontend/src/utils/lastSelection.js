@@ -39,10 +39,6 @@ export function readResumeId() {
   return readField('resume')
 }
 
-export function forgetResume() {
-  localStorage.removeItem(storageName('resume'))
-}
-
 export function rememberJD(id) {
   writeField('jd', id)
 }

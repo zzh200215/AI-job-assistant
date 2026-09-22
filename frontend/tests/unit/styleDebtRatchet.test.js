@@ -266,6 +266,21 @@ describe('style debt ratchet', () => {
     ).toEqual([])
   })
 
+  it('never hands a JD id to the analysis-detail route', () => {
+    // `/analysis/:id` 打开的是 `getAnalysis(id)` → 后端按 AnalysisRecord.id 取记录。
+    // 简历中心的诊断弹窗以前有个按钮往这条路由里塞 jd_id：诊断接口从不返回 jd_id，
+    // 所以它永远渲染不出来；而一旦返回，候选人看到的就是 id 恰好撞上的**另一条**分析记录。
+    const offenders = viewSources
+      .filter(({ script, template }) => /\/analysis\/\$\{[^}]*jd[^}]*\}/i.test(`${script}${template}`))
+      .map(({ rel }) => rel)
+    expect(
+      offenders,
+      `/analysis/:id wants an AnalysisRecord id, never a JD id — link to the record the action produced, or do not offer the jump: ${offenders.join(
+        ', '
+      )}`
+    ).toEqual([])
+  })
+
   it('keeps the cross-page "last selection" handoff inside utils/lastSelection', () => {
     // 匹配字段名而不是完整键名：`storageKey('lastResumeId')` 这种自己拼前缀的写法要一起抓到。
     const offenders = viewSources
