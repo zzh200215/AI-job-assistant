@@ -745,6 +745,7 @@ import { runFullAnalysis, getAnalysis } from '@/api/analysis'
 import { recommendCareerPaths } from '@/api/jobs'
 import { getSalaryOverview } from '@/api/salary'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
+import { useLatestCall } from '@/composables/useLatestCall'
 import { localizeSentence, normalizeLocalizedTextList } from '@/utils/analysisLocalization'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import {
@@ -782,6 +783,11 @@ const agentSteps = ref([])
 const careerPathLoading = ref(false)
 const careerPaths = ref([])
 const careerPathMeta = ref({ summary: '', corpus: {}, message: '' })
+// 换简历会让两个面板各发一次请求，而请求返回的先后不等于发起的先后（见 useLatestCall）。
+// 两个面板要各自一把令牌：换简历时它们是同一次意图下**一起**发出的，共用一把会让先发的方向
+// 被后发的薪资作废。
+const latestPathsCall = useLatestCall()
+const latestSalaryCall = useLatestCall()
 const careerPathError = ref('')
 const salaryMarketError = ref('')
 
@@ -933,6 +939,7 @@ const salaryMarket = ref(null)
 const salaryMarketLoading = ref(false)
 
 async function loadSalaryMarket() {
+  const isCurrent = latestSalaryCall()
   const position = (targetRole.value || selectedResume.value?.parsed?.current_title || '').trim()
   if (!position) {
     salaryMarket.value = null
@@ -940,14 +947,17 @@ async function loadSalaryMarket() {
   }
   salaryMarketLoading.value = true
   salaryMarketError.value = ''
+  salaryMarket.value = null // 同上：新的一次在飞时，不拿旧区间的数字顶着
   try {
     const data = await getSalaryOverview({ position }, { notifyError: false })
+    if (!isCurrent()) return
     salaryMarket.value = data?.has_data ? data : null
   } catch (e) {
+    if (!isCurrent()) return
     salaryMarket.value = null
     salaryMarketError.value = e?.userMessage || e?.message || '暂时无法读取岗位库薪资样本'
   } finally {
-    salaryMarketLoading.value = false
+    if (isCurrent()) salaryMarketLoading.value = false
   }
 }
 
@@ -1119,11 +1129,16 @@ async function refreshBaseOptions() {
 }
 
 async function loadCareerPaths() {
+  const isCurrent = latestPathsCall()
   careerPathError.value = ''
   if (!selectedResumeId.value) return
   careerPathLoading.value = true
+  // 新的一次开始，上一份简历的方向先撤下：留着就等于把旧简历的结论挂在新简历下面
+  careerPaths.value = []
+  careerPathMeta.value = { summary: '', corpus: {}, message: '' }
   try {
     const data = await recommendCareerPaths(selectedResumeId.value)
+    if (!isCurrent()) return
     careerPaths.value = data?.career_paths || []
     careerPathMeta.value = {
       summary: data?.summary || '',
@@ -1131,11 +1146,12 @@ async function loadCareerPaths() {
       message: data?.message || '',
     }
   } catch (e) {
+    if (!isCurrent()) return
     careerPaths.value = []
     careerPathMeta.value = { summary: '', corpus: {}, message: '' }
     careerPathError.value = e?.userMessage || e?.message || '暂时无法基于岗位库给出职业方向'
   } finally {
-    careerPathLoading.value = false
+    if (isCurrent()) careerPathLoading.value = false
   }
 }
 
