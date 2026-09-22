@@ -805,6 +805,20 @@ agent.SummaryAgent           real  tokens=3215
 
 **棘轮第六维** `silentEmptyCatches`：**11 → 3**，只降不升。非空性用对照组验过：合成一条静默 catch 计 1、该处开始报告后计 0、报告写在 catch 之后 12 行内也计 0（这条就是消除假阳性的 widening）。`test:unit` **62 → 64 passed**；smoke 11；lint 0 error；build 通过，`dist` 里有 `.app-load-error[data-v-*]`。**没验**：真机渲染（浏览器工具被策略拦）；`el-select` 下方插一条错误块的排版好不好看，需要人看一眼。
 
+#### 已交付：D6 注释里"请求层已提示"的假话与它盖住的 3 处（提交 `38eb6d4`）
+
+D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的盲区**（`silentEmptyCatches = 3` 因此是下限，不是"全修完"——这条已写进棘轮注释）。这轮把 20 条"注释声称 request.js/请求层已提示"的 catch 逐条对着 `src/api/*` 的 HTTP 动词核：6 条命中 GET，其中 **4 条是我自己 40 行回看窗口跨函数误判**（`deleteHistory` 是 DELETE；`AnalysisResult:580`/`SmartAnalysis:1620` 那两个 catch 包的是轮询 helper，失败本来会走 `onFailed/onCancelled/onTimeout` 回调弹提示），**真问题 3 条，全是 GET**：
+
+- `SalaryInsight.doSearch`：先 `overview.value = null` 再 await，注释却写"保留上一次查询结果"。真实行为是查询失败后**整页空白**，且因为 GET 不弹提示，没有任何地方说为什么。注释与代码相互矛盾，两个都错。
+- `SalaryInsight.checkExpectation`：**最有害的一条**。失败时旧结论原地留着，于是"算法工程师 35k 是否合理"的提问，屏幕上显示的是上一次那个岗位的"薪资期望合理"——**一个错误答案被当成新答案读走**。现在失败即撤旧结论 + 显式失败 + 重试。
+- `History.openDetail`：详情弹窗 GET 失败时 `detail` 保持 null，弹窗里什么都不渲染 = 空盒子。现在是"分析详情加载失败 + 重试"。
+
+**测试**：`tests/unit/salaryInsightFailure.test.js` 2 例，关键断言不是"有没有错误条"，而是**旧结论文本从 DOM 消失**（只加横幅证不到这一条）。`test:unit` 64 → **66 passed**，smoke 11，lint 0 error，build 通过。
+**过程自纠**：History 那次改动我先写坏了 `v-if/v-else-if` 链，是路由冒烟（`/history` 在 13 条挂载之列）第一次跑就报的——这也说明挂载清单保持宽是有用的。渲染层面（弹窗内、薪资面板里的排版）仍未在真浏览器验过。
+
+**还有一类没动**：`Interview.vue:444`、`InterviewSetup.vue:398`、`JobRecommend.vue:721,731` 这些注释写的是**真实的有意降级**（拿不到收藏状态就显示未收藏、接口挂了用内置题库），不是假话，留在原处。
+
+
 ---
 
 ## 9. 里程碑
