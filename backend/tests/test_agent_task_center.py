@@ -11,9 +11,10 @@ from app.api.auth import router as auth_router
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password
 from app.models.agent import AgentStepLog, AgentTask
+from app.models.agent_run import AgentMessage, AgentRun
 from app.models.user import User
 from app.services.orchestration_runner import mark_stale_running_tasks_failed
-from app.utils.time_helper import utc_now
+from app.utils.time_helper import utc_now, utc_now_naive
 
 
 @pytest.fixture
@@ -207,6 +208,65 @@ def test_mark_stale_running_tasks_failed_only_updates_old_running_tasks(db_sessi
     assert stale.end_time is not None
     assert fresh.status == "running"
     assert done.status == "completed"
+
+
+def _age(task: AgentTask, minutes: int) -> None:
+    task.start_time = utc_now_naive() - timedelta(minutes=minutes)
+
+
+def test_sweep_leaves_alone_a_task_whose_steps_are_still_being_written(db_session):
+    """跑在 45 分钟前的任务不是孤儿：只要步骤日志还在写，只重启 web 进程就判不了它死刑。"""
+    owner = _create_user(db_session, "live_steps_owner", "live_steps@example.com")
+    task = _create_task(db_session, user_id=owner.id, status="running")
+    _age(task, 45)
+    db_session.add(task)
+    db_session.commit()
+    _create_step(db_session, task_id=task.id, step_index=3, name="matching_analysis", status="running")
+
+    assert mark_stale_running_tasks_failed(older_than_minutes=30, db=db_session) == 0
+    db_session.refresh(task)
+    assert task.status == "running"
+    assert task.error_msg is None
+
+
+def test_sweep_leaves_alone_a_task_whose_node_messages_are_still_being_written(db_session):
+    """节点消息（AgentMessage）是另一条进度证据：LangGraph 路径靠它落每节点结果。"""
+    owner = _create_user(db_session, "live_msgs_owner", "live_msgs@example.com")
+    task = _create_task(db_session, user_id=owner.id, status="running")
+    _age(task, 45)
+    db_session.add(task)
+    db_session.commit()
+    run = AgentRun(task_id=task.id, resume_id=task.resume_id, jd_id=task.jd_id, status="running")
+    db_session.add(run)
+    db_session.commit()
+    db_session.add(AgentMessage(run_id=run.id, agent_name="MatchAgent", status="running", started_at=utc_now_naive()))
+    db_session.commit()
+
+    assert mark_stale_running_tasks_failed(older_than_minutes=30, db=db_session) == 0
+    db_session.refresh(task)
+    assert task.status == "running"
+
+
+def test_sweep_still_closes_a_task_that_stop_writing_progress(db_session):
+    """反证：活动证据不能变成"永远不收口"。最后一条步骤日志也停在 40 分钟前 → 仍然要失败。"""
+    owner = _create_user(db_session, "quiet_owner", "quiet@example.com")
+    task = _create_task(db_session, user_id=owner.id, status="running")
+    _age(task, 45)
+    db_session.add(task)
+    db_session.commit()
+    step = _create_step(db_session, task_id=task.id, step_index=1, name="intent_analysis", status="completed")
+    step.started_at = utc_now_naive() - timedelta(minutes=40)
+    step.completed_at = utc_now_naive() - timedelta(minutes=40)
+    db_session.add(step)
+    db_session.commit()
+
+    assert mark_stale_running_tasks_failed(older_than_minutes=30, db=db_session) == 1
+    db_session.refresh(task)
+    assert task.status == "failed"
+    # 旧文案断言的是"上一个 worker 停了"——redis_queue 下 worker 是独立进程，这句话无从成立，
+    # 而它会被 agentTaskPolling 原样显示给候选人。现在只说自己量得到的事。
+    assert "30 分钟" in task.error_msg
+    assert "worker" not in task.error_msg.lower()
 
 
 def test_task_list_includes_usage_from_step_outputs(agent_client, db_session):

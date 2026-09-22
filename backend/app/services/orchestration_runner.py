@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import logging
 import traceback
-from datetime import timedelta
+from datetime import datetime, timedelta
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.models.agent import AgentTask
-from app.models.agent_run import AgentRun
+from app.models.agent import AgentStepLog, AgentTask
+from app.models.agent_run import AgentMessage, AgentRun
 from app.orchestration.registry import DEFAULT_REGISTRY
 from app.orchestration.strategies import StrategyFactory
 from app.services.orchestration_backend import (
@@ -20,7 +21,7 @@ from app.services.orchestration_backend import (
     get_orchestration_backend,
     health_snapshot,
 )
-from app.utils.time_helper import utc_now
+from app.utils.time_helper import utc_now, utc_now_naive
 
 logger = logging.getLogger(__name__)
 
@@ -211,27 +212,84 @@ def start_legacy_layered_thread(
     return _get_backend().submit(payload, _run_task_payload)
 
 
+def _last_progress_times(session: Session, task_ids: list[int]) -> dict[int, datetime]:
+    """每个任务"最后一次被人写过"的时间：步骤日志行 + 节点消息行（经 agent_run 关联）。
+
+    取 coalesce(完成, 开始, 建行走) 是因为步骤跑完会回填 completed_at，而正在跑的步骤只有
+    started_at/create_time——两种都要算成活动，否则一个刚开工的长步骤会被看成静止。
+    """
+
+    def _merge(rows: list[tuple[int, datetime | None]]) -> None:
+        for task_id, when in rows:
+            if task_id is None or when is None:
+                continue
+            prev = found.get(task_id)
+            if prev is None or when > prev:
+                found[task_id] = when
+
+    found: dict[int, datetime] = {}
+    _merge(
+        session.query(
+            AgentStepLog.task_id,
+            func.max(func.coalesce(AgentStepLog.completed_at, AgentStepLog.started_at, AgentStepLog.create_time)),
+        )
+        .filter(AgentStepLog.task_id.in_(task_ids))
+        .group_by(AgentStepLog.task_id)
+        .all()
+    )
+    _merge(
+        session.query(
+            AgentRun.task_id,
+            func.max(func.coalesce(AgentMessage.completed_at, AgentMessage.started_at, AgentMessage.create_time)),
+        )
+        .join(AgentMessage, AgentMessage.run_id == AgentRun.id)
+        .filter(AgentRun.task_id.in_(task_ids))
+        .group_by(AgentRun.task_id)
+        .all()
+    )
+    return found
+
+
 def mark_stale_running_tasks_failed(
     *,
     older_than_minutes: int | None = None,
     db: Session | None = None,
 ) -> int:
-    """Fail tasks left running by a previous interrupted process."""
+    """Fail running tasks that stopped making progress.
+
+    判据是"最后一次活动"，不是"多久以前开始"。`AgentTask.start_time` 在建任务那一刻就写死了，
+    而任务完全可能正在**另一个进程**里跑：`ORCHESTRATION_BACKEND=redis_queue` 时 worker 是独立
+    进程，只重启 web（`--reload`、滚动发布、崩掉拉起）就会把 worker 手里跑了 30 分钟以上的任务
+    一律判成 failed——前端 `agentTaskPolling` 一见 failed 就停止轮询并报错，于是候选人拿到一个
+    "失败"，而分析在几秒后正常完成并落库。现在要求步骤日志与消息行也一起静默才收口。
+    """
     minutes = older_than_minutes if older_than_minutes is not None else settings.ORCHESTRATION_STALE_TASK_MINUTES
-    cutoff = utc_now() - timedelta(minutes=max(1, int(minutes or 30)))
+    cutoff = utc_now_naive() - timedelta(minutes=max(1, int(minutes or 30)))
     session = db or SessionLocal()
     owns_session = db is None
     try:
-        tasks = session.query(AgentTask).filter(AgentTask.status == "running", AgentTask.start_time < cutoff).all()
-        for task in tasks:
+        candidates = session.query(AgentTask).filter(AgentTask.status == "running", AgentTask.start_time < cutoff).all()
+        if not candidates:
+            return 0
+        # cutoff 用 naive：DB 读回的 DateTime 是 naive，与 aware 值比较会 TypeError。
+        last_progress = _last_progress_times(session, [task.id for task in candidates])
+        stale: list[AgentTask] = []
+        for task in candidates:
+            activity = max(when for when in (task.start_time, last_progress.get(task.id)) if when is not None)
+            if activity >= cutoff:
+                continue
             task.status = "failed"
-            task.error_msg = "Marked failed on startup because the previous worker stopped before completion"
+            task.error_msg = (
+                f"任务超过 {minutes} 分钟没有新的步骤写入"
+                f"（最后一次活动 {activity.isoformat(sep=' ', timespec='seconds')}），按中断收口"
+            )
             task.end_time = utc_now()
             session.add(task)
-        if tasks:
+            stale.append(task)
+        if stale:
             session.commit()
-            logger.warning("Marked %s stale running agent tasks as failed", len(tasks))
-        return len(tasks)
+            logger.warning("Marked %s stale running agent tasks as failed", len(stale))
+        return len(stale)
     finally:
         if owns_session:
             session.close()

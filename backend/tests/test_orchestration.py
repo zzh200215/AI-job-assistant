@@ -231,6 +231,26 @@ class TestLinearStrategy:
         skipped_log_names = [log.step_name for log in skipped_logs]
         assert "ResumeOptimizeAgent" in skipped_log_names
 
+    def test_success_clears_an_error_the_startup_sweep_wrote_first(
+        self, db_session, make_resume, make_jd, mock_registry
+    ):
+        """被启动清扫误判过的任务完成后不能继续带着那条失败原因：任务中心原样显示 error_msg。"""
+        resume_id = make_resume()
+        jd_id = make_jd()
+        task_id = self._create_task(
+            db_session,
+            resume_id,
+            jd_id,
+            error_msg="任务超过 30 分钟没有新的步骤写入（最后一次活动 2026-09-22 03:00:00），按中断收口",
+        )
+
+        result = self._run_strategy(db_session, task_id, resume_id, jd_id, registry=mock_registry)
+
+        assert result["status"] == "completed"
+        task = db_session.get(AgentTask, task_id)
+        assert task.status == "completed"
+        assert task.error_msg is None
+
     def test_task_not_found(self, db_session, mock_registry):
         """任务不存在时返回错误。"""
         strategy = LinearStrategy(mock_registry)

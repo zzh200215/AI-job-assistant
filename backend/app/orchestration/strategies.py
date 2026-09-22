@@ -458,6 +458,9 @@ class LinearStrategy(ExecutionStrategy):
         else:
             failed_steps = [s for s in step_results if s["status"] == "failed"]
             task.status = "partial" if failed_steps else "completed"
+            # 收尾成功也要清掉 error_msg：任务可能被启动清扫写过一条"worker 中断"的失败原因，
+            # 不清就会跟着 completed 状态一起留在任务中心里（另外两个策略实现都会清，只有这里漏了）。
+            task.error_msg = None
 
         task.end_time = utc_now()
         task.intent = context.intent
