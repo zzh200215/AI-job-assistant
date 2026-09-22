@@ -39,6 +39,14 @@
       <span class="quick-note">选择岗位后可按城市细化结果</span>
     </div>
 
+    <!-- 拉不到就说拉不到：GET 失败请求层不弹提示，而结果在发起时已被清空 -->
+    <AppLoadError
+      v-if="searchError"
+      title="薪资行情查询失败"
+      :message="searchError"
+      @retry="doSearch"
+    />
+
     <!-- 无市场数据：说清楚是"没数据"，不是"薪资为 0" -->
     <div v-if="overview && !overview.has_data" class="panel">
       <div class="panel-body">
@@ -182,6 +190,12 @@
           <el-input v-model="expectCity" placeholder="城市（可选）" style="max-width: 140px" />
           <el-button type="primary" @click="checkExpectation">评估</el-button>
         </div>
+        <AppLoadError
+          v-if="expectError"
+          title="期望薪资评估失败"
+          :message="expectError"
+          @retry="checkExpectation"
+        />
         <div v-if="expectResult" class="expect-result">
           <el-alert
             :title="
@@ -223,11 +237,14 @@
 import { ref, computed } from 'vue'
 import { Coin } from '@element-plus/icons-vue'
 import { getSalaryCompare, getSalaryOverview, checkSalaryExpectation } from '@/api/salary'
+import AppLoadError from '@/components/ui/AppLoadError.vue'
 
 const searchPosition = ref('')
 const searchCity = ref('')
 const loading = ref(false)
 const overview = ref(null)
+const searchError = ref('')
+const expectError = ref('')
 const cityComparison = ref([])
 
 const expectPosition = ref('')
@@ -263,6 +280,7 @@ function distHeight(count) {
 async function doSearch() {
   if (!searchPosition.value.trim()) return
   loading.value = true
+  searchError.value = ''
   overview.value = null
   cityComparison.value = []
   try {
@@ -270,8 +288,10 @@ async function doSearch() {
     overview.value = data
     const compare = await getSalaryCompare({ position: searchPosition.value })
     cityComparison.value = compare?.comparison || []
-  } catch {
-    // 请求层已反馈错误，保留上一次查询结果。
+  } catch (e) {
+    // 旧注释写"保留上一次查询结果"，但上面已经把 overview 清空了；GET 失败也不弹提示，
+    // 所以真实表现是一片空白 + 没有人告诉你为什么。现在显式失败。
+    searchError.value = e?.userMessage || e?.message || '暂时无法读取该岗位的薪资样本'
   } finally {
     loading.value = false
   }
@@ -290,6 +310,7 @@ function syncExpectation() {
 
 async function checkExpectation() {
   if (!expectPosition.value.trim() || !expectSalary.value) return
+  expectError.value = ''
   try {
     const data = await checkSalaryExpectation({
       position: expectPosition.value,
@@ -297,8 +318,11 @@ async function checkExpectation() {
       city: expectCity.value,
     })
     expectResult.value = data
-  } catch {
-    // 请求层已反馈错误，保留上一次评估结果。
+  } catch (e) {
+    // 不撤掉旧结果的话，页面上就是"用新岗位/新薪资提问、拿到上一次评估的结论"——
+    // GET 失败请求层不弹提示，这条错会被当成正确答案读走。
+    expectResult.value = null
+    expectError.value = e?.userMessage || e?.message || '暂时无法完成期望薪资评估'
   }
 }
 </script>

@@ -127,10 +127,14 @@ function colorCounts(blockKey) {
 
 const themeCss = readFileSync('src/styles/main.css', 'utf8')
 
-/* 失败被清成空态：`request.js` 只对非 GET 弹提示，所以 `catch { list.value = [] }`
-   这种写法会把一次 500 渲染成页面自己的"暂无数据"文案。数出来的每条都是待收的谎，
-   只能往下走；确实是有意为之（例如拿不到收藏状态就显示未收藏），就在预算里写明条数并
-   保留它，但别新增。 */
+/* 失败被清成空态：`request.js` 只对**非 GET** 弹提示（`notifyError !== false && method !== 'get'`），
+   所以 `catch { list.value = [] }` 这种写法会把一次 500 渲染成页面自己的"暂无数据"文案。
+   数出来的每条都是待收的谎，只能往下走。
+
+   已知盲区（不要把这个数字当"全部修完"）：它只看 catch 体里清值的写法，看不见两类同病——
+   1) try 之前先清值、catch 里只留注释（SalaryInsight 曾写"保留上一次结果"，其实既没保留也没提示，
+      D6 已修并有测试）；2) 值原样留着不删，于是新输入配旧答案。
+   所以这条预算是下限，不是全集；改注释型谎用时请连行为一起改。 */
 const CATCH_HEAD = /^\s*\}\s*catch/
 const CLEARS_VALUE = /=\s*(\[\]|null|''|0)\s*;?\s*$/
 const REPORTS = /userMessage|loadError|\w*Error\.value\s*=|ElMessage|console\./

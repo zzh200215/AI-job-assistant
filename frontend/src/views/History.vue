@@ -108,7 +108,13 @@
 
     <!-- 详情弹窗 -->
     <el-dialog v-model="showDetail" title="分析详情" width="900px" top="5vh">
-      <div v-if="detail" v-loading="detailLoading">
+      <AppLoadError
+        v-if="detailError"
+        title="分析详情加载失败"
+        :message="detailError"
+        @retry="openDetail({ id: detailId })"
+      />
+      <div v-else-if="detail" v-loading="detailLoading">
         <!-- 概要信息 -->
         <el-descriptions :column="3" border size="small">
           <el-descriptions-item label="记录 ID">{{ detail.id }}</el-descriptions-item>
@@ -283,6 +289,7 @@ import {
   normalizeLocalizedTextList,
 } from '@/utils/analysisLocalization'
 import { scoreToneTagType } from '@/utils/scoreTone'
+import AppLoadError from '@/components/ui/AppLoadError.vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -295,6 +302,8 @@ const pageSize = ref(10)
 
 const showDetail = ref(false)
 const detail = ref(null)
+const detailId = ref(null)
+const detailError = ref('')
 
 const interviewKeys = ['hr_questions', 'tech_questions', 'project_questions', 'scenario_questions']
 
@@ -339,14 +348,17 @@ const openDetail = async (row) => {
   showDetail.value = true
   detailLoading.value = true
   detail.value = null
+  detailError.value = ''
+  detailId.value = row.id
   try {
     const detailData = await getHistoryDetail(row.id)
     detail.value = {
       ...detailData,
       interview_questions: normalizeInterviewQuestions(detailData?.interview_questions),
     }
-  } catch {
-    // request.js 已提示
+  } catch (e) {
+    // 弹窗里此前什么都不渲染：GET 失败请求层不弹提示，用户只会看到一个空对话框
+    detailError.value = e?.userMessage || e?.message || '暂时无法读取这条分析的详情'
   } finally {
     detailLoading.value = false
   }
