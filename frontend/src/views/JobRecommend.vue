@@ -116,6 +116,14 @@
       </div>
     </div>
 
+    <!-- 反馈统计：拉不到时说明失败并给重试，不能让面板整块消失冒充"没有反馈数据" -->
+    <AppLoadError
+      v-if="!feedbackStats && feedbackStatsError"
+      title="反馈统计加载失败"
+      :message="feedbackStatsError"
+      @retry="loadFeedbackStats"
+    />
+
     <div class="panel" v-if="feedbackStats">
       <div class="panel-body">
         <div class="stats-row">
@@ -620,11 +628,14 @@ const selectedResumeId = ref(null)
 const resumeList = ref([])
 const recommendations = ref([])
 const latestCall = useLatestCall()
+// 统计与推荐列表各自一把令牌：点一下喜欢会重发统计，但不会重发列表，共用一把会让两件事互相作废。
+const latestStatsCall = useLatestCall()
 // 失败与"没有推荐"必须是两个状态：GET 失败不弹提示（request.js 只对非 GET 通知），
 // 若只清空列表，页面会对候选人说"请完善简历信息"，而实际是服务端错了。
 const recommendError = ref('')
 const analyzingId = ref(null)
 const feedbackStats = ref(null)
+const feedbackStatsError = ref('')
 
 // 被隐藏岗位的恢复面板：隐藏是双向操作，没有它"不感兴趣"就是单向陷阱
 const suppressed = reactive({
@@ -764,10 +775,18 @@ async function loadRecommendations() {
 }
 
 async function loadFeedbackStats() {
+  // 每次点喜欢/不喜欢都会重发统计；不守序号的话，先发起的那次后回来会把计数退回点之前。
+  const isCurrent = latestStatsCall()
+  feedbackStatsError.value = ''
   try {
-    feedbackStats.value = await getJobFeedbackStats()
-  } catch {
+    const data = await getJobFeedbackStats()
+    if (!isCurrent()) return
+    feedbackStats.value = data
+  } catch (e) {
+    if (!isCurrent()) return
     feedbackStats.value = null
+    // GET 失败不弹提示，所以"面板消失"曾是它唯一的对外表现——那等于说"你没有反馈数据"。
+    feedbackStatsError.value = e?.userMessage || e?.message || '反馈统计加载失败，请稍后重试'
   }
 }
 
