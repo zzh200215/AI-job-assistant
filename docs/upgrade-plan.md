@@ -917,6 +917,19 @@ D3 结尾留的那句"哪些加载函数真的可被用户并发触发，需要�
 
 **过程自纠（测具，不是产品）**：先在 api 模块层 `vi.mock('@/api/jobs')` 造 deferred，组件的 `await` 始终不返回，白跑四轮探针；这个仓库里已被证明可用的做法是像 `taskCenterRace.test.js` 那样**在 `@/api/request` 层造 deferred**，换过去一次就通。lint 0 error、smoke 11、build 通过；新测试文件 prettier clean，`CareerPlanning.vue` 自身的既有 prettier 债没被我碰（它有 19 行待重排，没有一行是我加的）。**没验**：真浏览器里连续换简历的观感（`browser-use` 被策略拦）。
 
+#### 已交付：D8 删掉一个永远渲染不出来的按钮——它如果被渲染出来，会打开错误的记录（提交 `02f0c04`）
+
+找下一个可证的竞态时撞上的。简历中心「AI 诊断」弹窗里有个 `查看完整匹配分析 →`，条件是 `v-if="currentDiagnosis.jd_id"`，点了执行 `router.push('/analysis/' + jd_id)`。两条事实让这段代码**既是死的、又是错的**：
+
+1. **死的**：`POST /resume/{id}/diagnose` 打分对象是**一个岗位名称字符串**（请求体只有 `target_position`），响应字典（`app/api/resume.py:1209-1223`）里**根本没有 `jd_id` 这个键** → 条件永远为假，从来没有候选人见过这个按钮。
+2. **错的**：`/analysis/:id` 打开的是 `getAnalysis(id)`，后端按 `AnalysisRecord.id` 取记录。**把 JD 的 id 塞进这条路由，渲染出来的是"恰好同号"的另一条分析记录**——另一份简历/JD 的结果，顶着"你刚诊断的这份"的语境显示。诊断本身也不产生分析记录，所以这里**没有正确的目标可链**。
+
+**做法**：按钮与 `goAnalysisFromDiag` 删除；`currentDiagnosis.jd_id` 字段保留（行级改写接口把它当"无目标 JD"的入参），注释改成说明它**不能**用来跳分析详情。棘轮加一条路由契约：**任何视图都不许用 jd 拼 `/analysis/${...}`**——把 HEAD 的 `ResumeUpload.vue` 放回去它就点名这个文件，删掉后为绿。
+
+**E13 的收尾**：`forgetResume` 是为这个处理器才加进 `utils/lastSelection` 的，处理器没了 → 导出也拿掉，测试用例回到只测 `forgetJD`，不留一个靠测试续命的未使用 API。
+
+`test:unit` **82 → 83 passed**（+1 契约规则，−1 断言）；lint 0 error；smoke 11；build 通过。净变化 **−31/+20 行**。**没验**：真浏览器里那个弹窗（按钮本就不显示，也就无从截到）。
+
 ---
 
 ## 9. 里程碑
