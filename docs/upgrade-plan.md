@@ -586,7 +586,7 @@ agent.SummaryAgent           real  tokens=3215
 | ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`） | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。**仍然在的是性能那半句**：`score()` 为 O(terms×docs) 纯 Python 遍历，语料再大一个量级就要换实现 |
 | Rerank 生产用启发式 | `rerank_service.py:125-159` 可选本地 cross-encoder，否则 jieba 词重叠 + 硬编码 0.5/0.3/0.2 权重；`RERANKER_MODEL_PATH` 默认未设 |
 | 死代码 → ~~`api/tracking.py` 定义了 router 但**从未被 include**~~ 已挂载并修好整条链（E10，提交 `cb5a72b`）；**但 `track()` 调用方为 0，"要不要真埋点"回到 §10.8** | 仍在的是另一半：`agents/agent_orchestrator.py`、`services/smart_orchestrator.py`、`services/agent_workflow.py` 是 `DeprecationWarning` 垫片层，靠 import 维持存活 |
-| 缺少 router 级鉴权 | 31 个 router / 218 端点，无一处使用 `dependencies=[...]`，鉴权靠每端点 `Depends(get_current_user)`，**保护是 opt-in 而非构造保证** |
+| ~~缺少 router 级鉴权~~ → 22 段纯会话前缀已改为 include 级守护（E11，提交 `21778e2`） | 原判断成立的方式：31 个 router / 218 端点无一处用 `dependencies=[...]`，鉴权靠每端点自己写。**已变**：123 条操作所在前缀"新端点默认 401"；**仍在**：混着公开端点的 8 段（110 条，含 `/jobs`、`/auth`、`/system`）仍是逐端点声明，公开面由 `PUBLIC_OPERATIONS` 清单钉住——要把它们也变成构造保证需先做端点级拆分，见 E11 末段 |
 | 三个 router 共享 `/jobs` 前缀 | `api/router.py:54-56`；当前不冲突仅因 `job_recommend.py:1448` 的 `/{jd_id:int}` 是单段 |
 
 #### 已交付：E6 CI 的 RAG 门第一次有自己的语料可查（提交 `221b191`）
@@ -830,6 +830,22 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 **第 4 个发现把这条的定性改了**：`grep` 过 `frontend/src` 全部 `.js`/`.vue`，**没有任何视图或 store 导入 tracker，`track()` 的调用方是 0**。所以前三条今天**没有**产生候选人可见的 404、也**没有**真的丢过数据——我明确不这么声称。这轮做完的是"管道本身不再谎报成功"，而**要不要真的埋点仍然是一个产品决定**，不是清理：这些事件会变成个人数据（服务端 stub 现在把 `user_id` + `username` 写进日志），而隐私页正在对用户承诺我们存了什么。要么点名哪些事件值得收，要么把 SDK 删掉——两条都是他的，已记进 §10.8。
 
 **验证**：后端测试断言三件事——路由出现在**真实的 `api_router`** 里（HEAD 的 router 对 tracking 零提及，所以这条改前是红的；另配 `len(paths) > 200` 反证这个断言不是空转）、带鉴权的一次批量被接受（`received == 2`）、匿名调用拿到 **401 而不是 404**；E1 那张公开面清单仍然通过，说明新路由没被开成公开端点。前端 `tests/unit/tracker.test.js` 4 例各锁上面一条行为，**对着旧 tracker 跑是 4/4 红**。`test:unit` **66 → 70 passed**；smoke 11；后端 `pytest` 709 passed；`ruff check` / `ruff format --check` 干净；lint 0 error；build 通过。**没验**：真机网络行为（离线队列、`pagehide` 的 keepalive 是否真的送达）——没有调用方，端到端也就无从在 UI 里触发，这一层要等 §10.8 定下来才有意义。
+
+#### 已交付：E11 会话鉴权从"每个端点自己记得写"变成"前缀默认要会话"（提交 `21778e2`）
+
+**先把"opt-in 而非构造保证"量成一张表**：遍历真实路由图，233 条操作里 15 条匿名、218 条带凭据；按前缀（30 个 `include_router`）分组后，**22 段前缀在改动前就已经 100% 带会话依赖**，覆盖 123 条操作；剩下 8 段混着公开端点（`auth` 6、`jobs` 1、`interview` 1、`system` 2、`organizations` 2、`subscription` 2、`tenant` 1 全公开、`v1` 走 `X-API-Key`），共 110 条。
+
+**做了什么**：给那 22 段挂 `dependencies=SESSION_GUARD`（就是 `Depends(get_current_user)`，定义在 `api/router.py` 一处）。因为这 123 条**本来就逐条写了同一个依赖**，所以**今天没有任何一条响应变化**——这一点要说明白，这条买的不是"现在更安全"，是"以后加一条忘了写凭据的端点，它出生就 401，而不是安静地对公网开放"。混着公开端点的 8 段**故意没挂**：挂上去 `GET /jobs/cities`（登录页在拿到 token 之前要用）会当场变 401，它们的公开面继续由 E1 那张 `PUBLIC_OPERATIONS` 清单逐条钉住。
+
+**棘轮加的是四道锁，不是一道**（`tests/test_public_api_surface.py`，709 → **714 passed**）：
+- 守护前缀下每条操作都能解析到会话凭据，且**覆盖数 ≥120**——防止前缀写错导致"守护了 0 条也算通过"；
+- **依赖必须在 include 级**：上一条测不出守护有没有真挂上（端点自己写的 `Depends` 长得一样），这条把 `route.dependencies` 单独拆开看。**把 `router.py` 还原后这条是红的**（连同下面两条运行时测，共 3 红）；
+- 公开清单里任何一条都不许落在守护前缀内——反向锁住"有人把 `/jobs` 顺手加进表里"；
+- **运行时证明**：一个自己不声明凭据的探针端点，挂上守护后匿名调用 401；不挂守护时同一个 router 必须 200（这条是对照组，防上一条空转）。另外一条证明**守护没有让 `get_current_user` 每请求跑两次**（FastAPI 的依赖缓存吃住了，否则会多一趟 DB 往返）。
+
+**装配后的真实 app 也过了一遍**（只读脚本，跑完删）：匿名 `GET /api/resume/list`、`/api/history` → 401，`POST /api/tracking/events` 无 token/坏 token → 401，而 `/api/jobs/cities`、`/api/interview/config/types`、`/api/system/health`、`/api/tenant/brand` 仍匿名 200，`/openapi.json` 仍能构建（214 条 path）。`ruff check` + `ruff format --check` 对 2 个文件 clean。
+
+**还剩什么**：那 8 段混合格式的 110 条操作仍靠逐端点声明 + 清单兜住。要把它们也变成构造保证，需要先做**端点级拆分**（把 `auth.py` 的 6 条公开、`system.py` 的 2 条探活等挂到不带守护的子 router 上），是一次跨 6 个文件的机械改动，收益是"新端点默认 401"覆盖面从 123/233 提到 218/233。这活没干的原因：它改的是登录/回调/探活路径，属于一旦弄错就锁死入口的那类，且 E1 的清单已经把当前漏保护的实际风险压到 0。
 
 ---
 

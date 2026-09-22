@@ -12,6 +12,21 @@ This repository includes a lightweight delivery-quality baseline for demo, revie
   - in-memory runtime request metrics
   - embedding usage metrics and daily aggregates
 
+## API auth is a property of the prefix
+
+- 22 of the 30 `include_router` calls in `backend/app/api/router.py` mount `SESSION_GUARD`
+  (`Depends(get_current_user)`) at include level. An endpoint added under one of those prefixes is
+  authenticated without the author writing anything; it answers 401 to anonymous callers.
+- The 8 remaining prefixes mix public and authenticated operations (`/auth`, `/system`, `/jobs`,
+  `/interview`, `/organizations`, `/subscription`, `/tenant`, and the `X-API-Key` `/v1` group), so
+  they still declare auth per endpoint. Adding `SESSION_GUARD` to one of them breaks a public
+  operation — `tests/test_public_api_surface.py` fails if that happens.
+- Whatever the prefix, keep declaring `Depends(get_current_user)` in the signature: the include-level
+  guard is a safety net, not the intent, and FastAPI resolves it once per request either way.
+- New anonymous operations are not allowed by omission. They have to be listed in
+  `PUBLIC_OPERATIONS` in `tests/test_public_api_surface.py` with a reason; that test walks the real
+  router graph and fails otherwise.
+
 ## Frontend verification
 
 - `npm run test` runs Node-based frontend unit tests for request tracing helpers.
