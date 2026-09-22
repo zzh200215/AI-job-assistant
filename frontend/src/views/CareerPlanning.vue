@@ -747,6 +747,14 @@ import { getSalaryOverview } from '@/api/salary'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
 import { localizeSentence, normalizeLocalizedTextList } from '@/utils/analysisLocalization'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
+import {
+  forgetJD,
+  readJDId,
+  readResumeId,
+  rememberJD,
+  rememberRecord,
+  rememberResume,
+} from '@/utils/lastSelection'
 
 const router = useRouter()
 
@@ -1036,7 +1044,7 @@ watch(selectedResumeId, async (value) => {
     careerPaths.value = []
     return
   }
-  localStorage.setItem('recruit.lastResumeId', String(value))
+  rememberResume(value)
   if (!targetRole.value && selectedResume.value?.parsed?.current_title) {
     targetRole.value = selectedResume.value.parsed.current_title
   }
@@ -1046,10 +1054,10 @@ watch(selectedResumeId, async (value) => {
 
 watch(selectedJDId, (value) => {
   if (value) {
-    localStorage.setItem('recruit.lastJDId', String(value))
+    rememberJD(value)
     return
   }
-  localStorage.removeItem('recruit.lastJDId')
+  forgetJD()
 })
 
 onMounted(async () => {
@@ -1069,10 +1077,10 @@ function jdOptionLabel(item) {
 }
 
 function restoreSelections() {
-  const resumeId = localStorage.getItem('recruit.lastResumeId')
-  const jdId = localStorage.getItem('recruit.lastJDId')
-  if (resumeId) selectedResumeId.value = Number(resumeId)
-  if (jdId) selectedJDId.value = Number(jdId)
+  const resumeId = readResumeId()
+  const jdId = readJDId()
+  if (resumeId) selectedResumeId.value = resumeId
+  if (jdId) selectedJDId.value = jdId
 }
 
 async function refreshBaseOptions() {
@@ -1190,7 +1198,7 @@ async function startCareerPlanning() {
           throw new Error('分析完成但没有生成记录')
         }
         analysisResult.value = await getAnalysis(analysisRecordId.value)
-        localStorage.setItem('recruit.lastRecordId', String(analysisRecordId.value))
+        rememberRecord(analysisRecordId.value)
       },
       onFailed() {
         taskStatus.value = 'failed'

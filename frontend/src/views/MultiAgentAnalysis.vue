@@ -275,6 +275,7 @@ import { SuccessFilled, WarningFilled, Loading, Clock } from '@element-plus/icon
 import { startAutoAgent, getMultiAgentDetail } from '@/api/multi_agent'
 import { scoreToneTagType } from '@/utils/scoreTone'
 import { TASK_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
+import { readJDId, readResumeId } from '@/utils/lastSelection'
 
 const starting = ref(false)
 const runId = ref(null)
@@ -363,10 +364,10 @@ const agents = computed(() => {
 
 // ---- methods ----
 const fillLast = () => {
-  const rid = localStorage.getItem('recruit.lastResumeId')
-  const jid = localStorage.getItem('recruit.lastJDId')
-  if (rid) form.resume_id = Number(rid)
-  if (jid) form.jd_id = Number(jid)
+  const rid = readResumeId()
+  const jid = readJDId()
+  if (rid) form.resume_id = rid
+  if (jid) form.jd_id = jid
 }
 
 const onStart = async () => {

@@ -266,6 +266,19 @@ describe('style debt ratchet', () => {
     ).toEqual([])
   })
 
+  it('keeps the cross-page "last selection" handoff inside utils/lastSelection', () => {
+    // 匹配字段名而不是完整键名：`storageKey('lastResumeId')` 这种自己拼前缀的写法要一起抓到。
+    const offenders = viewSources
+      .filter(({ script, template }) => /last(ResumeId|JDId|RecordId)/.test(`${script}${template}`))
+      .map(({ rel }) => rel)
+    expect(
+      offenders,
+      `read/write the last resume / JD / record id through @/utils/lastSelection — it slots these per logged-in user, which a raw localStorage key cannot, and a stale foreign id gets prefilled into a form: ${offenders.join(
+        ', '
+      )}`
+    ).toEqual([])
+  })
+
   it('keeps "failure cleared into an empty state" within budget', () => {
     const actual = silentCatchCounts()
     const grown = Object.entries(actual).filter(

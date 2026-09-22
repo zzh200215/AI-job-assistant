@@ -541,6 +541,7 @@ import {
   scoreToneFillClass,
 } from '@/utils/scoreTone'
 import { monthDay } from '@/utils/format/date'
+import { forgetResume, rememberResume } from '@/utils/lastSelection'
 
 const router = useRouter()
 
@@ -857,7 +858,7 @@ async function handleCmd(cmd, r) {
 }
 
 function goAnalysis(r) {
-  localStorage.setItem('recruit.lastResumeId', r.id)
+  rememberResume(r.id)
   router.push('/analysis')
 }
 
@@ -978,10 +979,10 @@ async function showDiagnosisDialog(r) {
 }
 function goAnalysisFromDiag() {
   if (currentDiagnosis.value?.jd_id) {
-    localStorage.setItem(
-      'recruit.lastResumeId',
-      resumes.value.find((r) => r.id === currentShareResume.value?.id)?.id || ''
-    )
+    // 说不清这份诊断属于哪份简历时，就把"上一次选择"擦掉而不是留一个旧 id 在表单里。
+    const target = resumes.value.find((r) => r.id === currentShareResume.value?.id)?.id
+    if (target) rememberResume(target)
+    else forgetResume()
     router.push(`/analysis/${currentDiagnosis.value.jd_id}`)
   }
 }

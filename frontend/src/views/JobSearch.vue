@@ -1068,6 +1068,7 @@ import {
   updateJobPipelineEntry,
 } from '@/api/jobs'
 import { compactDateTime } from '@/utils/format/date'
+import { rememberResume } from '@/utils/lastSelection'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 
@@ -1836,8 +1837,7 @@ async function startAnalysisForJob(job) {
 }
 
 function persistAnalysisContext(job) {
-  const userId = authStore.user?.id || 'guest'
-  localStorage.setItem(`recruit.lastResumeId.${userId}`, String(selectedResumeId.value))
+  rememberResume(selectedResumeId.value)
   localStorage.setItem(
     'recruit.pendingAnalysis',
     JSON.stringify({

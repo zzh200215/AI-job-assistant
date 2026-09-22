@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 
 import request from '@/api/request'
 import { getHomeRouteByRole, getRoleLabel, normalizeRole } from '@/constants/roles'
+import { setSelectionOwner } from '@/utils/lastSelection'
 
 function loadStoredUser() {
   try {
@@ -35,6 +36,9 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('token') || '')
   const user = ref(normalizeUser(loadStoredUser()))
 
+  // "上一次选了哪份简历/JD/记录"按登录用户分槽，所以身份一变就要通知它（见 utils/lastSelection）。
+  setSelectionOwner(user.value?.id ?? null)
+
   const isLoggedIn = computed(() => !!token.value)
   const role = computed(() => normalizeRole(user.value?.role))
   const roleLabel = computed(() => getRoleLabel(role.value))
@@ -45,6 +49,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = normalizeUser(currentUser)
     localStorage.setItem('token', accessToken)
     localStorage.setItem('user', JSON.stringify(user.value))
+    setSelectionOwner(user.value?.id ?? null)
   }
 
   function clearAuth() {
@@ -52,6 +57,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    setSelectionOwner(null)
   }
 
   window.addEventListener('auth:expired', clearAuth)

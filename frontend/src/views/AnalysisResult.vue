@@ -376,6 +376,7 @@ import {
   normalizeLocalizedObjectList,
   normalizeLocalizedTextList,
 } from '@/utils/analysisLocalization'
+import { readJDId, readResumeId, rememberRecord } from '@/utils/lastSelection'
 
 const router = useRouter()
 const route = useRoute()
@@ -407,10 +408,10 @@ watch(
 )
 
 function fillLast() {
-  const rid = localStorage.getItem('recruit.lastResumeId')
-  const jid = localStorage.getItem('recruit.lastJDId')
-  if (rid) form.resume_id = Number(rid)
-  if (jid) form.jd_id = Number(jid)
+  const rid = readResumeId()
+  const jid = readJDId()
+  if (rid) form.resume_id = rid
+  if (jid) form.jd_id = jid
   if (rid || jid) lastIdsTip.value = { rid, jid }
 }
 
@@ -419,7 +420,7 @@ async function loadAnalysisById(recordId) {
   try {
     const data = await getAnalysis(recordId)
     result.value = data
-    localStorage.setItem('recruit.lastRecordId', String(data.record_id || data.id || recordId))
+    rememberRecord(data.record_id || data.id || recordId)
     if (data?.record_id || data.id) {
       tab.value = 'match'
     }
@@ -563,7 +564,7 @@ const onAnalyze = async () => {
 
         const data = await getAnalysis(recordId)
         result.value = data
-        localStorage.setItem('recruit.lastRecordId', String(data.record_id || data.id || recordId))
+        rememberRecord(data.record_id || data.id || recordId)
         ElMessage.success(`分析完成，匹配度 ${data.match_score}`)
         tab.value = 'match'
       },

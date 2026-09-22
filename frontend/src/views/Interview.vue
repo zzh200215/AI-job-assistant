@@ -334,6 +334,7 @@ import { getInterviewList, getQuestionBank } from '@/api/interview'
 import { getAnalysis } from '@/api/analysis'
 import { getJobPipelineList } from '@/api/jobs'
 import { getInterviewGroupTitle, normalizeInterviewQuestions } from '@/utils/interviewQuestions'
+import { readRecordId, rememberRecord } from '@/utils/lastSelection'
 import { INTERVIEW_SCORE_BANDS, scoreToneAtLeast } from '@/utils/scoreTone'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import { monthDayTime } from '@/utils/format/date'
@@ -588,10 +589,7 @@ async function loadById() {
   try {
     const rec = await getAnalysis(recordId.value)
     questionData.value = rec
-    localStorage.setItem(
-      'recruit.lastRecordId',
-      String(rec?.record_id || rec?.id || recordId.value)
-    )
+    rememberRecord(rec?.record_id || rec?.id || recordId.value)
   } catch (e) {
     ElMessage.error(`加载失败：${e.message}`)
   } finally {
@@ -600,12 +598,12 @@ async function loadById() {
 }
 
 function useLast() {
-  const last = localStorage.getItem('recruit.lastRecordId')
+  const last = readRecordId()
   if (!last) {
     ElMessage.warning('暂无最近分析记录')
     return
   }
-  recordId.value = Number(last)
+  recordId.value = last
   loadById()
 }
 
