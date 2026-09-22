@@ -474,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 6 个加载函数加令牌（4 个页面），其中 5 处有红→绿测试为证（见 D3、D7）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，棘轮 `silentEmptyCatches` 11 → 3 盯着（见 D4、D5）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 7 个加载函数加令牌（5 个页面），其中 6 处有红→绿测试为证（见 D3、D7、D9）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，棘轮 `silentEmptyCatches` 11 → 3 盯着（见 D4、D5）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -929,6 +929,18 @@ D3 结尾留的那句"哪些加载函数真的可被用户并发触发，需要�
 **E13 的收尾**：`forgetResume` 是为这个处理器才加进 `utils/lastSelection` 的，处理器没了 → 导出也拿掉，测试用例回到只测 `forgetJD`，不留一个靠测试续命的未使用 API。
 
 `test:unit` **82 → 83 passed**（+1 契约规则，−1 断言）；lint 0 error；smoke 11；build 通过。净变化 **−31/+20 行**。**没验**：真浏览器里那个弹窗（按钮本就不显示，也就无从截到）。
+
+#### 已交付：D9 岗位推荐：旧那一轮不能把投递/收藏标记打到新简历的卡片上（提交 `25fc431`）
+
+D7 之后接着量的第二页，症状比规划页更疼：**一轮 `loadRecommendations` 是一个用户动作、三个串联请求**（推荐列表 → 哪些已进看板 → 哪些已收藏），三处都是 `await` 之后直接写，而后两处遍历的是 `recommendations.value`——也就是**它们落地那一刻屏幕上的那张列表**。换简历、改四个筛选中的任何一个都会重发整串，于是：
+- 旧那一轮的列表可以整块换掉新那一轮；
+- 更疼的是旧轮的**回填**会把新简历的卡片标成 `已投递` / `已收藏`，并把摘要条上的 **「已加入看板」「优先投递」两个数字一起带错**——页面告诉候选人"这个岗位你已经投过了"，而他没有。
+
+**做法**：整串一把令牌，三处写入前各查一次，`catch` 与 `finally` 也查。这一页**不需要**像 D7 那样"发起即撤下"：卡片网格在 `loading.recommend` 的骨架后面，飞行途中没有旧结果可看，风险只剩"晚到的写入"。
+
+**测试 4 条，`test:unit` 83 → 87 passed**：2 条改前是红的（列表被旧轮覆盖：DOM 已经渲染出 岗位-B 之后又变回 岗位-A；标记串台：`cardBadges()` 里冒出旧轮的 `已投递`/`已收藏`，「已加入看板」变成 1），2 条是双向都绿的对照组——**同一轮的回填必须照常打上**（把回填整个废掉就会红）、丢弃旧轮不许把 `loading.recommend` 卡成 true。lint 0 error、smoke 11、build 通过，新测试文件 prettier clean。**没验**：真浏览器观感（策略拦）。
+
+**下一处已经看见、这条里没动的**：`loadFeedbackStats` 同样没有令牌，而它是每次点"喜欢/不喜欢"之后重发的——连点两张卡片，先发的统计后回来，"反馈分布"就会显示**你刚那次操作之前**的计数。它比标记串台轻（数字短暂偏旧，不涉及身份错标），且我没为它写出可见断言（要先驱动卡片上的反馈按钮 + 面板形状），所以留在这里而不是顺手加一个未测的守卫。
 
 ---
 
