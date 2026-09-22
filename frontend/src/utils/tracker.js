@@ -12,8 +12,11 @@
  */
 
 const STORAGE_KEY = 'recruit.track_events'
+const TRACKING_ENDPOINT = '/api/tracking/events'
 const FLUSH_INTERVAL = 30000 // 30s 上报一次
 const MAX_BATCH_SIZE = 20 // 队列满 20 条立即上报
+// 失败重排队列的上限：反复离线时不无限占 localStorage
+const MAX_QUEUE_SIZE = 200
 let flushTimer = null
 let isFlushing = false
 
@@ -61,31 +64,41 @@ export function track(eventName, properties = {}) {
 }
 
 /**
- * 上报队列中所有事件
+ * 上报队列中所有事件。
+ *
+ * 两处以前是错的，都在悄悄丢数据：
+ * 1. `fetch` 只对**网络异常**抛错，404/500 是 fulfilled promise——原来的 catch
+ *    永远等不到"服务端拒绝"这种情况，批次已经从队列里 splice 走了，于是直接消失；
+ * 2. 没登录时也会发，`Bearer null` 必定 401，同样白丢。
+ * 现在按 `resp.ok` 判定，不成功就把这一批放回队头等下次。
  */
-async function flush() {
+export async function flush() {
   if (isFlushing) return
   const queue = getQueue()
   if (!queue.length) return
+
+  const token = localStorage.getItem('token')
+  if (!token) return // 未登录：留在队列里，登录后再补传
 
   isFlushing = true
   const batch = queue.splice(0, MAX_BATCH_SIZE)
   saveQueue(queue)
 
   try {
-    const token = localStorage.getItem('token')
-    await fetch('/api/tracking/events', {
+    const resp = await fetch(TRACKING_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: '[redacted] ' + token,
+        Authorization: 'Bearer ' + token,
       },
       body: JSON.stringify({ events: batch }),
     })
+    if (!resp.ok) throw new Error(`tracking rejected: ${resp.status}`)
   } catch {
-    // 上报失败，重新放回队列
+    // 上报失败（含 4xx/5xx），重新放回队列
     const remaining = getQueue()
-    saveQueue([...batch, ...remaining])
+    remaining.unshift(...batch)
+    saveQueue(remaining.slice(0, MAX_QUEUE_SIZE))
   } finally {
     isFlushing = false
     // 如果队列还有剩余，继续定时上报
@@ -99,11 +112,31 @@ async function flush() {
   }
 }
 
-// 页面卸载前尝试上报一次
-window.addEventListener('beforeunload', () => {
+/**
+ * 页面离开前尽量补一次。
+ *
+ * 原来用 `navigator.sendBeacon`：它带不上 Authorization 头（`tracking/events` 要登录），
+ * 而且发完就 `removeItem` 把队列删了——等于每次关页面都扔掉一批没人收下的事件。
+ * `fetch(..., { keepalive: true })` 是能带头的替代品；不确认送达就不删队列，
+ * 剩下的下一次打开页面由 flush() 补传。
+ */
+function flushOnLeave() {
   const queue = getQueue()
-  if (queue.length > 0) {
-    navigator.sendBeacon('/api/tracking/events', JSON.stringify({ events: queue }))
-    localStorage.removeItem(STORAGE_KEY)
-  }
-})
+  if (!queue.length) return
+  const token = localStorage.getItem('token')
+  if (!token) return
+  fetch(TRACKING_ENDPOINT, {
+    method: 'POST',
+    keepalive: true,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + token,
+    },
+    body: JSON.stringify({ events: queue.slice(0, MAX_BATCH_SIZE) }),
+  }).catch(() => {})
+}
+
+if (typeof window !== 'undefined') {
+  // pagehide 在现代浏览器里覆盖关标签页/切后台；beforeunload 已不可靠
+  window.addEventListener('pagehide', flushOnLeave)
+}

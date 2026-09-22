@@ -31,6 +31,7 @@ from app.api import (
     system,
     tenant,
     timeline,
+    tracking,
     user_preferences,
 )
 
@@ -59,6 +60,9 @@ api_router.include_router(job_journal.router, prefix="/journals", tags=["job-jou
 api_router.include_router(career_path.router, prefix="/career-path", tags=["career-path"])
 api_router.include_router(salary_insight.router, prefix="/salary", tags=["salary-insight"])
 api_router.include_router(timeline.router, prefix="/timeline", tags=["timeline"])
+# 前端 utils/tracker.js 一直在往 /api/tracking/events 发；这个 router 此前从未 include，
+# 所以每一条埋点都是 404，而且失败被 fetch 当成成功丢掉（见 tracker 的 resp.ok）。
+api_router.include_router(tracking.router, prefix="/tracking", tags=["tracking"])
 api_router.include_router(notification.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(organization.router, prefix="/organizations", tags=["organizations"])
 api_router.include_router(prompt_trace.router, prefix="/prompt-traces", tags=["prompt-traces"])
