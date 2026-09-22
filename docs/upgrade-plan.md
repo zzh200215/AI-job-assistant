@@ -474,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 4 个加载函数加令牌，其中 3 处有红→绿测试为证（见 D3）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，棘轮 `silentEmptyCatches` 11 → 3 盯着（见 D4、D5）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 6 个加载函数加令牌（4 个页面），其中 5 处有红→绿测试为证（见 D3、D7）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，棘轮 `silentEmptyCatches` 11 → 3 盯着（见 D4、D5）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -898,6 +898,25 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 
 **过程中查清的一件测试基建事实**：行为用例最初共用 `get_limiter()` 这个进程级单例，结果第二个 app 里同名探针路由的额度被前一个用例吃掉。我先怀疑是 `conftest.reset_rate_limiter` 没生效，用 `--setup-plan` 核过：**它确实是 autouse 且 `MemoryStorage.reset()` 真会清计数**——串扰来自单例的**路由注册表**，不是计数。所以每条行为用例各自 `Limiter(storage_uri="memory://")`，把这件事写进文件 docstring，免得下次又去怀疑 fixture。`ruff check` + `format --check` clean。**没验**：Redis 存储下的真实 keying（测试跑在 memory://），也没有真出现"某个 NAT 用户被 429"的现场记录。
 
+#### 已交付：D7 职业规划页：旧简历的慢响应不再顶到新简历下面（提交 `fb57d7e`）
+
+D3 结尾留的那句"哪些加载函数真的可被用户并发触发，需要逐点读代码"——这轮挑了一页去读，答案是**能**，而且症状就在候选人眼前。
+
+**机制**：`watch(selectedResumeId)` 一次触发两个面板——`/career-path/recommend`（职业方向，按简历算）和 `/salary/overview`（薪资样本，取的是**这份简历解析出的职称**）。两处都是 `await` 之后直接写 ref，于是**后完成的赢，而不是后发起的赢**：
+- 7→8 换简历：8 的方向先回来、7 的慢响应后到，屏幕上就成了**为一份已经没选中的简历算出来的方向**——而这一页对候选人的承诺恰恰是"给你这份简历的方向"；
+- 8 还在飞的时候，7 的方向**原样留在屏上**，看起来像是新简历的结果；
+- 薪资区间同形。
+
+**改法**：两个面板各自一把 `useLatestCall()` 令牌，并且新一发请求在 `await` 之前先把上一份简历的结果撤下。**两把令牌不是讲究**：先照 JobSearch 那样共用一把（那里两个加载函数是互斥标签页，共用才对）会让方向在薪资请求发出的那一刻就被判成"过期"，因为这两个请求是**同一意图下一起发的**——这一条是重读 composable 时抓到的，没跑测试之前它就已经是错的。
+
+**测试 5 条，`test:unit` 77 → 82 passed**：3 条对着 HEAD 是红的（旧响应覆盖、加载中残留旧结果、薪资被覆盖），2 条是**两条方向都绿的对照组**——丢弃旧响应不许把"加载中…"卡死；同一份简历点"刷新"必须还能显示新数据（要是把"清空"写成无条件，这条就红）。薪资那两条要先 resolve 掉方向的请求才会有第二次薪资请求，因为 watcher 里是 `await 方向; await 薪资` 的顺序——这是页面的真实性质，写进了测试注释。
+
+**顺手量到、故意没修的两件事**：
+- `targetRole` 只在为空时被第一份简历的职称填上，之后**换简历不会更新它**，所以薪资面板一直查第一份简历的职称。它显示的标签和数字自洽（写着"后端工程师"就给后端工程师的数），所以不是假话，只是没跟上选择；要改就得决定"自动填的字段能不能被下一次选择覆盖"——归 §10.11。
+- 两个请求串行等待，薪资面板必然比方向慢一个来回。改成并发是一行，但它改变的是候选人看到两块的先后，不在"静默错误"这次的范围内。
+
+**过程自纠（测具，不是产品）**：先在 api 模块层 `vi.mock('@/api/jobs')` 造 deferred，组件的 `await` 始终不返回，白跑四轮探针；这个仓库里已被证明可用的做法是像 `taskCenterRace.test.js` 那样**在 `@/api/request` 层造 deferred**，换过去一次就通。lint 0 error、smoke 11、build 通过；新测试文件 prettier clean，`CareerPlanning.vue` 自身的既有 prettier 债没被我碰（它有 19 行待重排，没有一行是我加的）。**没验**：真浏览器里连续换简历的观感（`browser-use` 被策略拦）。
+
 ---
 
 ## 9. 里程碑
@@ -925,6 +944,7 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 8. **埋点：补上调用方，还是删掉 SDK**（E10 留下的）。管道两端已修好且各有测试锁住，但 `track()` 调用方仍为 0，所以今天没有任何事件在流动。埋哪些点是产品/隐私决定（服务端 stub 会把 `user_id` + `username` 写进日志文件，而 `db` 参数收了不用），不该由清理顺手替用户做；反之若决定不做分析，`utils/tracker.js` + `api/tracking.py` + 刚挂上的路由一起删。
 9. **跨页隐式握手的最终归属**（E13 只做了三个 id）。`recruit.lastX` 现在集中在 `utils/lastSelection` 并按用户分槽，但它仍是 localStorage；§7 原话是"应改由 Pinia 承载"。两件事需要你定：① 要不要把它再收成一个 Pinia store（则 `setSelectionOwner` 变成 store 内部细节，视图少一层 import）；② `recruit.pendingAnalysis`（`JobSearch`→`SmartAnalysis` 的一次性载荷）与 `recruit.defaultResumeId` 是否也进同一套——前者跨账号也会存活，只是窗口小得多。
 10. **昂贵端点要不要单独的额度，以及每 IP 还要不要总闸**（E14 留下的两个数）。现在 228 条操作仍共用 `RATE_LIMIT_GENERAL`（默认 100/分钟，已改为按用户计），意味着一个登录用户可以一分钟发 100 次深度分析，每次都打真 LLM；而 E14 之后**同一出口的每 IP 总闸自然消失了**（原来它天然存在，因为大家共用一桶）。要收口就得填两个数：① 昂贵端点（`/api/analysis/full`、`/api/multi-agent/*`、`/api/agent/start`）的每分钟额度；② 是否用 `application_limits` 按地址再挂一层总闸、阈值多少。接线与对照组都已在 `tests/test_rate_limit_key.py` 备好，填数即可。
+11. **自动填的"目标岗位"该不该被下一次选择覆盖**（D7 量到的）。`CareerPlanning` 里 `targetRole` 只在为空时由简历职称填入，之后换简历不改它，于是薪资面板继续查第一份简历的职称——标签与数字自洽，所以不是假话，但它不再代表"当前这份简历"。要么"自动填入的值在用户没编辑过时跟随选择"（需要区分自动/手输），要么在换简历时把薪资面板标注成"按 目标岗位=<现值> 查询"。两条都改变候选人看到的数字，且第 ① 条要动输入框的状态模型。
 
 ---
 
