@@ -284,9 +284,10 @@ describe('style debt ratchet', () => {
   })
 
   it('ships no GBK-mis-decoded (mojibake) UI strings', () => {
-    // 判据不靠手写坏字清单：这类损坏产出的是一串正文里几乎不重复的生僻字，
-    // 所以"一行里出现 >=3 个全仓只出现一次的 CJK 字"就是它自己的指纹。
-    // 若哪天因正当生僻字（人名/地名）误报，把那个字加进 allowlist，别调低阈值。
+    // 判据不靠手写坏字清单，也不要求能复原（有的坏串已经吞掉字节，复原不出来）：只要有一段 3 字
+    // 的 CJK 连续窗口里连一个高频字（本仓出现 >=5 次）都没有，就不可能是人写的。
+    // 为什么不扩到 .md：散文里生僻字连排是合法的（实测本仓 2 处误报），而文档乱码到不了候选人眼前。
+    // 为什么后端守卫只看字符串字面量：整行口径的误报全在注释里（"撞车干扰""回落默认租户"）。
     const walk = (dir, out = []) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name)
@@ -296,25 +297,30 @@ describe('style debt ratchet', () => {
       }
       return out
     }
-    const files = walk('src')
+    // index.html 也算：它是浏览器标签与首屏文案，候选人第一眼看的就是它
+    const files = [...walk('src'), { rel: 'index.html', text: readFileSync('index.html', 'utf8') }]
     const freq = new Map()
     for (const { text } of files) {
       for (const ch of text) if (ch >= '一' && ch <= '鿿') freq.set(ch, (freq.get(ch) || 0) + 1)
     }
     const suspicious = (line) => {
       if (line.includes('€')) return true
-      // 乱码的指纹是一整段"正文里几乎不出现的字"连着出现：一段 CJK 连续串里连一个高频字
-      // （出现 >=5 次）都没有，就不可能是人写的句子。
-      // 已知漏报：乱码串里恰好混进一个高频字时看不见（`鐩镐技搴` 的"技"就是这样，本仓曾有一条
-      // 这样的损坏并已修）；想靠"罕见字比例"补这个洞会误伤"熟练掌握"这种正常词，已试过并放弃。
+      // 用 3 字**滑窗**而不是整串：乱码嵌在正常句子里时，整串会被周围的高频字（"的"这类）掩护过去
+      // ——这条是我把坏串种进 index.html 的 <title> 才发现的，整串口径当时放过了它。
+      // 已知漏报：乱码串里任意 3 字窗口都混进了高频字；想靠"罕见字比例"收紧会误伤"熟练掌握"，放弃。
       for (const run of line.match(/[㐀-鿿]{3,}/g) || []) {
-        if (![...run].some((ch) => (freq.get(ch) || 0) >= 5)) return true
+        const chars = [...run]
+        for (let i = 0; i + 3 <= chars.length; i++) {
+          if (!chars.slice(i, i + 3).some((ch) => (freq.get(ch) || 0) >= 5)) return true
+        }
       }
       return false
     }
+    const isComment = (line) => /^\s*(\/\/|\*|\/\*|<!--)/.test(line)
     const offenders = files
       .map(({ rel, text }) => {
-        const i = text.split(/\r?\n/).findIndex(suspicious)
+        // 注释里的生僻词（如"咖啡馆"）不是会到用户眼前的文案，跳过后误报面更小
+        const i = text.split(/\r?\n/).findIndex((l) => !isComment(l) && suspicious(l))
         return i < 0 ? null : `${rel}:${i + 1}`
       })
       .filter(Boolean)
@@ -322,6 +328,10 @@ describe('style debt ratchet', () => {
       offenders,
       `这些行的中文是被按 GBK 读回后另存的乱码，候选人看到的就是这串生僻字：${offenders.join(', ')}`
     ).toEqual([])
+    // 判据自身的非空性：嵌在正常句子里的乱码必须抓得到，正常文案必须放过
+    expect(suspicious('<title>AI 驱动的涓汉姹傛暀缁</title>')).toBe(true)
+    expect(suspicious('<title>AI 驱动的个人求职教练</title>')).toBe(false)
+    expect(suspicious('TIP = "熟练掌握"')).toBe(false)
   })
 
   it('keeps the cross-page "last selection" handoff inside utils/lastSelection', () => {
