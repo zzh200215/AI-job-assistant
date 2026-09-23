@@ -1004,7 +1004,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 顺带把文档里那个 **95 改判成 17**：`docs/engineering-quality.md` 原来写的"CI 检出 95 文件不过"复现不出来，它的成因正是本机噪音——`npm run format` 报了 66 个文件被改写，其中 **49 个只有行尾差异**（git 吸收掉了，`git diff` 看不见），17 个才有真实排版差异。66 与 17 之差就是"CRLF 记在 CI 账上"的那笔，和 [[edit-tool-crlf-breaks-prettier]] 是同一条坑的反方向。
 
 **棘轮的两把尺子被同一次格式化戳穿**（这是本条真正的收获，候选人看不见）：
-- **状态→el-tag 色表**那条按行锚定（`^\s*键: '颜色'\s*$`）。同一段代码换行就换数：`{ a: 'success', b: 'danger' }` 写在一行算 1 条，prettier 折开算 2 条。改成 **token 口径**后同一次测量给出 **99 条 vs 按行 52 条**——**47 条（47%）从来没进过任何预算**，包括 `admin/Tenants` 9 条、`JobTargets` 4 条、`Privacy`/`Orders`/`Overview`/`ResumeCompare` 各 3 条，其中 6 个文件此前根本不在这张表里。这就是该文件自己写过的"预算看不见"第四次复发。红→绿为证：往 `Profile.vue` 塞一行两入色表，计数 1→3、规则红；还原即绿（旧口径对这一行是 0，即完全隐形）。
+- **状态→el-tag 色表**那条按行锚定（`^\s*键: '颜色'\s*$`）。同一段代码换行就换数：`{ a: 'success', b: 'danger' }` 写在一行算 1 条，prettier 折开算 2 条。改成 **token 口径**后同一次测量给出 **99 条 vs 按行 52 条**——**47 条（47%）从来没进过任何预算**，包括 `admin/Tenants` 9 条、`JobTargets` 4 条、`Privacy`/`Orders`/`Overview`/`ResumeCompare` 各 3 条，其中 **10 个文件此前根本不在这张表里**（表里原来只有 11 个文件，现在是 21 个）。这就是该文件自己写过的"预算看不见"第四次复发。红→绿为证：往 `Profile.vue` 塞一行两入色表，计数 1→3、规则红；还原即绿（旧口径对这一行是 0，即完全隐形）。
 - **静默空态**那条往后看 12 行找"有没有提示"。格式化把 `submitCreate` 的 `ElMessage` 折出了窗口，于是 `admin/Tenants` 的 `loadDomains`（`notifyError: false` + `catch { domains[tid] = [] }`，域名列表失败演成"该租户没有域名"）现形。**代码一行没变，是尺子的视野变了**——D10 记下的那条盲区当场兑现。企业侧冻结，所以进预算不修。
 
 **门禁**：`prettier --check` 本机 clean 且 **CI 口径 0 不过**、`test:unit` **91 passed**（21 条棘轮全绿）、smoke 11、lint 0 error、build ok、后端乱码守卫 2 passed。**没验**：真浏览器观感（`browser-use` 被策略拦）——排版是纯文本改动，但"折行会不会改变模板里的插值显示"没有人在真页面上看过一眼。
