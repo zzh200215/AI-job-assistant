@@ -61,29 +61,54 @@ const BUDGET = {
     'src/views/NotFound.vue': 1,
     'src/views/ResumeUpload.vue': 1,
   },
-  // 状态→el-tag 颜色此前和分数色板同病：17 份手写表、32 个键，其中 `running` 在任务中心
-  // 是蓝、两个 agent 页是橙，`ongoing` 在房间页是绿、设置页是橙。异步任务与面试会话两组
-  // 已收进 utils/statusTone.js；下面数的是**还剩多少条手写映射**，只能往下走。
+  /* 状态→el-tag 颜色此前和分数色板同病：17 份手写表、32 个键，其中 `running` 在任务中心
+     是蓝、两个 agent 页是橙，`ongoing` 在房间页是绿、设置页是橙。异步任务与面试会话两组
+     已收进 utils/statusTone.js；下面数的是**还剩多少条手写映射**，只能往下走。
+
+     口径是 **token**（`键: '颜色'`），不是整行。按行数吃过两次亏：
+     `{ a: 'success', b: 'danger' }` 写在一行只算 1，被 prettier 折开又变 2，
+     所以同一份代码的计数会随换行漂。2026-09-23 一次性格式化把它戳穿：按行口径只看见 52 条，
+     换成 token 口径是 99 条，其中 47 条（admin/Tenants 9、JobTargets 4、Privacy 3…）从来没有
+     进入过任何预算——就是本文件上面那句"预算看不见"第四次复发。
+     已知噪声（不要把它当精确值）：99 条里 17 条是 `ElMessageBox.confirm(..., { type: 'warning' })`
+     的对话框图标色。它和 PromptTrace 的 `RESPONSE_SOURCES`（真色表，键也叫 `type`）在 token 层
+     无法区分，想区分要看数据流（这个值最终有没有喂给 `:type`），不值得为一把尺子上 AST。
+     所以这条预算是**上界**：数得多、漏不掉，只许往下走。 */
   statusTagEntries: {
-    'src/views/KnowledgeBase.vue': 12,
+    'src/views/KnowledgeBase.vue': 13,
+    'src/views/SmartAnalysis.vue': 13,
+    'src/views/admin/Tenants.vue': 9,
     'src/views/CareerPlanning.vue': 9,
-    'src/views/SmartAnalysis.vue': 8,
-    'src/views/PipelineKanban.vue': 7,
+    'src/views/PipelineKanban.vue': 9,
+    'src/views/PromptTrace.vue': 7,
     'src/views/AnalysisResult.vue': 5,
     'src/views/ExplainMatch.vue': 4,
+    'src/views/JobTargets.vue': 4,
+    'src/views/OrganizationWorkspace.vue': 4,
+    'src/views/admin/Orders.vue': 3,
+    'src/views/admin/Overview.vue': 3,
+    'src/views/Privacy.vue': 3,
+    'src/views/ResumeCompare.vue': 3,
+    'src/views/History.vue': 2,
     'src/views/InterviewRoom.vue': 2,
-    'src/views/History.vue': 1,
-    'src/views/OrganizationWorkspace.vue': 1,
+    'src/views/ResumeUpload.vue': 2,
+    'src/views/Interview.vue': 1,
     'src/views/Profile.vue': 1,
     'src/views/Subscription.vue': 1,
+    'src/views/TaskCenter.vue': 1,
   },
   /* 失败被清成空态的存量（见 silentCatchCounts）。D5 把候选人侧 8 处接到了
      components/ui/AppLoadError；剩下的每一条都是明知故留，理由写在行内：
      - admin/*：企业侧已冻结（见 docs/upgrade-plan.md 的范围决定），不再投入；
      - ResumeUpload 的 loadVersionCount 失败时把 `_versionCount` 设为 null（=不知道），
-       卡片因此不显示数字，也不再显示"0 个版本"——它没有作出假断言，只是少了一个按钮。 */
+       卡片因此不显示数字，也不再显示"0 个版本"——它没有作出假断言，只是少了一个按钮。
+     - admin/Tenants 的 loadDomains：`notifyError: false` 且 `catch { domains[tid] = [] }`，
+       展开某一行的租户域名列表失败会演成"该租户没有域名"。它是 D10 记下的那条盲区自己冒出来的：
+       这条尺子会往后看 12 行找"有没有提示"，2026-09-23 格式化把 submitCreate 的 ElMessage 折出
+       了窗口，它才现形（代码没变，是尺子的视野变了）。企业侧冻结，所以进预算不修。 */
   silentEmptyCatches: {
     'src/views/admin/Overview.vue': 2,
+    'src/views/admin/Tenants.vue': 1,
     'src/views/ResumeUpload.vue': 1,
   },
   themeCompatWildcards: 27,
@@ -168,10 +193,11 @@ function silentCatchCounts() {
   return actual
 }
 
-/* 手写"状态 → el-tag 颜色"的条目数。只认 `<script>` 里 `键: 'success'` 这种形状，
-   不数 ElMessageBox 的 { type: 'warning' } 之类——那不是状态色表。 */
+/* 手写"状态 → el-tag 颜色"的条目数，见 BUDGET.statusTagEntries 的口径说明。
+   键可以是中文（`高: 'danger'`）、可以带引号，颜色后面可以有逗号，但**整条不锚行**。
+   旧规则锚了行，于是同一个色表换行就换个数，而且有 47 条从来没被数到。 */
 const STATUS_TAG_ENTRY =
-  /^\s*['"]?[\w一-龥]+['"]?:\s*'(primary|success|info|warning|danger)'\s*,?\s*$/gm
+  /(?:'[^']+'|"[^"]+"|[\w$一-龥]+)\s*:\s*'(?:primary|success|info|warning|danger)'/g
 
 function statusTagCounts() {
   const actual = {}

@@ -474,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 51 条手写映射由棘轮 `statusTagEntries` 按数字盯着）；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 8 个加载函数加令牌（5 个页面），其中 7 处有红→绿测试为证（见 D3、D7、D9、D10）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，棘轮 `silentEmptyCatches` 11 → 3 盯着（见 D4、D5；**这一维有已知漏数**，见 D10 末段）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 8 个加载函数加令牌（5 个页面），其中 7 处有红→绿测试为证（见 D3、D7、D9、D10）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，棘轮 `silentEmptyCatches` 11 → 4 盯着（见 D4、D5；**这一维有已知漏数**，见 D10 末段；D13 的格式化让 `admin/Tenants` 那条自己冒出来，正是那条盲区兑现）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -735,7 +735,7 @@ agent.SummaryAgent           real  tokens=3215
 
 **新口径（`utils/statusTone.js`）**：绿只代表"完成"；进行中的一律 primary；橙留给 `partial`；红留给失败；灰留给"未开始 / 已取消 / 不认识"。随之而来的可见变化共 4 处染色：`running`/`ongoing`/`connecting`/`evaluating` 变蓝，多智能体页的 `partial` 由"没命中→灰"改为橙。**未识别状态保持灰**，后端新增枚举不会把任务画成红色失败（这条写进测试）。
 
-**5 条契约测试**钉住形状：值必须是真实 el-tag 类型、两表共用的键只能有一种颜色、只有 `completed` 可以绿、进行中集合必须是 primary。**棘轮加第四维** `statusTagEntries`（数每条手写 `状态: 'tag'`，不数 `ElMessageBox` 的 `{type:'warning'}` 这类噪声）：**85 → 51**，分布在 11 个文件，后续每收一份领域表就得调小。
+**5 条契约测试**钉住形状：值必须是真实 el-tag 类型、两表共用的键只能有一种颜色、只有 `completed` 可以绿、进行中集合必须是 primary。**棘轮加第四维** `statusTagEntries`（数每条手写 `状态: 'tag'`，不数 `ElMessageBox` 的 `{type:'warning'}` 这类噪声）：**85 → 51**，分布在 11 个文件，后续每收一份领域表就得调小。→ **这条口径在 D13 被换掉**：按行锚定既不认单行多入的色表（实测漏掉 47 条），也照样数进了 5 个 `ElMessageBox` 图标；现为 token 口径，存量 **99 条 / 21 个文件**。
 
 **验证**：`npm run test:unit` **34 → 41 passed**；`npm test` 11 passed；`npm run lint` 0 error；`npm run build` 通过。**没验**：真浏览器里的标签颜色（工具被策略拦），但这次改的是 el-tag 的 `type` 属性值——它只有 5 个合法取值且由 Element 自己上色，不涉及 `var()` 解析，风险面比第二段小。
 
@@ -997,6 +997,19 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 **复验**：再种一次 → 报 `index.html:6`；还原 → 21 passed。门禁：`test:unit` 91 passed、lint 0 error、smoke 11、build ok、`pytest` 726 passed、`ruff` 300 文件 clean、两个守卫文件 prettier clean。
 
+#### 已交付：D13 前端排版一次性收口，代价是发现两把尺子在数行数而不是数东西（提交 `5662916` + 本次）
+
+**§10.7 的岔口走完了**：选了"一次性 `npm run format`"，没选把 prettier 钉回 3.3。CI 的 `format:check` 现在应当真的变绿——这一条我不敢用本机结论说，因为本机检出是 CRLF。可复现的口径是：`git archive <ref> frontend | tar -x`，**再把解出来的文件 `\r\n` 换成 `\n`**（Windows 上 `core.autocrlf=true` 会让 `git archive` 按 CRLF 落盘，不解出来的是本机而不是 CI），然后跑 lockfile 里那份 prettier：`origin/master` **17 个文件不过**，`HEAD~1` 18 个，本次提交后 **0 个**。
+
+顺带把文档里那个 **95 改判成 17**：`docs/engineering-quality.md` 原来写的"CI 检出 95 文件不过"复现不出来，它的成因正是本机噪音——`npm run format` 报了 66 个文件被改写，其中 **49 个只有行尾差异**（git 吸收掉了，`git diff` 看不见），17 个才有真实排版差异。66 与 17 之差就是"CRLF 记在 CI 账上"的那笔，和 [[edit-tool-crlf-breaks-prettier]] 是同一条坑的反方向。
+
+**棘轮的两把尺子被同一次格式化戳穿**（这是本条真正的收获，候选人看不见）：
+- **状态→el-tag 色表**那条按行锚定（`^\s*键: '颜色'\s*$`）。同一段代码换行就换数：`{ a: 'success', b: 'danger' }` 写在一行算 1 条，prettier 折开算 2 条。改成 **token 口径**后同一次测量给出 **99 条 vs 按行 52 条**——**47 条（47%）从来没进过任何预算**，包括 `admin/Tenants` 9 条、`JobTargets` 4 条、`Privacy`/`Orders`/`Overview`/`ResumeCompare` 各 3 条，其中 6 个文件此前根本不在这张表里。这就是该文件自己写过的"预算看不见"第四次复发。红→绿为证：往 `Profile.vue` 塞一行两入色表，计数 1→3、规则红；还原即绿（旧口径对这一行是 0，即完全隐形）。
+- **静默空态**那条往后看 12 行找"有没有提示"。格式化把 `submitCreate` 的 `ElMessage` 折出了窗口，于是 `admin/Tenants` 的 `loadDomains`（`notifyError: false` + `catch { domains[tid] = [] }`，域名列表失败演成"该租户没有域名"）现形。**代码一行没变，是尺子的视野变了**——D10 记下的那条盲区当场兑现。企业侧冻结，所以进预算不修。
+
+**门禁**：`prettier --check` 本机 clean 且 **CI 口径 0 不过**、`test:unit` **91 passed**（21 条棘轮全绿）、smoke 11、lint 0 error、build ok、后端乱码守卫 2 passed。**没验**：真浏览器观感（`browser-use` 被策略拦）——排版是纯文本改动，但"折行会不会改变模板里的插值显示"没有人在真页面上看过一眼。
+
+
 ---
 
 ## 9. 里程碑
@@ -1020,7 +1033,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 4. **`docs/` 归档策略**（§2.5）。
 5. **"优先投递"这类产品口径是否跟随后端档位（85）**。D1 只统一颜色；下面几处 80 分界表达的是徽章、统计数与解锁，改了会改变候选人看到的数字与文案，需本人定：`JobRecommend.vue:380`（优先投递徽章，配 `:655` 的计数）、`History.vue:318`（"高匹配记录"）、`Profile.vue:492`（成就解锁）、`CareerPlanning.vue:968-990`（投递策略 80/70/60 分档）。徽章与卡片上后端给的推荐标签现已可能相反（82 分：徽章"优先投递" + 标签"可以投递"）。
 6. **`Interview.vue:464` 的随机"薄弱项"分数怎么处置**。当前无趋势数据时用 `Math.random()*40+30` 造分并配颜色与训练建议；选项是按真实会话维度聚合，或删掉该块改显式空态。两者都改变候选人所见。
-7. **前端 `format:check` 门走哪条路**（详见 `docs/engineering-quality.md` "Open: the frontend format gate cannot pass"）。CI 安装 prettier 3.9.5，而仓库代码按 3.3 书写：**CI 检出的 `origin/master` 上 95 个文件不过**。要么一次性 `npm run format`（约 95 文件纯排版），要么把 prettier 钉回 3.3（依赖降级）。本段已刻意避开这个岔口：没跑全局格式化，改动文件的既有格式未动。
+7. ~~**前端 `format:check` 门走哪条路**~~ —— **已定并落地（D13，`5662916`）**：选了"一次性 `npm run format`"而不是把 prettier 钉回 3.3。CI 口径的不过文件数从 **17 → 0**（原来记的 95 是本机 CRLF 噪音，见 `docs/engineering-quality.md` 同节）。附带代价与收获写在 D13：两把按行数数的棘轮尺子被这次折行戳穿。
 8. **埋点：补上调用方，还是删掉 SDK**（E10 留下的）。管道两端已修好且各有测试锁住，但 `track()` 调用方仍为 0，所以今天没有任何事件在流动。埋哪些点是产品/隐私决定（服务端 stub 会把 `user_id` + `username` 写进日志文件，而 `db` 参数收了不用），不该由清理顺手替用户做；反之若决定不做分析，`utils/tracker.js` + `api/tracking.py` + 刚挂上的路由一起删。
 9. **跨页隐式握手的最终归属**（E13 只做了三个 id）。`recruit.lastX` 现在集中在 `utils/lastSelection` 并按用户分槽，但它仍是 localStorage；§7 原话是"应改由 Pinia 承载"。两件事需要你定：① 要不要把它再收成一个 Pinia store（则 `setSelectionOwner` 变成 store 内部细节，视图少一层 import）；② `recruit.pendingAnalysis`（`JobSearch`→`SmartAnalysis` 的一次性载荷）与 `recruit.defaultResumeId` 是否也进同一套——前者跨账号也会存活，只是窗口小得多。
 10. **昂贵端点要不要单独的额度，以及每 IP 还要不要总闸**（E14 留下的两个数）。现在 228 条操作仍共用 `RATE_LIMIT_GENERAL`（默认 100/分钟，已改为按用户计），意味着一个登录用户可以一分钟发 100 次深度分析，每次都打真 LLM；而 E14 之后**同一出口的每 IP 总闸自然消失了**（原来它天然存在，因为大家共用一桶）。要收口就得填两个数：① 昂贵端点（`/api/analysis/full`、`/api/multi-agent/*`、`/api/agent/start`）的每分钟额度；② 是否用 `application_limits` 按地址再挂一层总闸、阈值多少。接线与对照组都已在 `tests/test_rate_limit_key.py` 备好，填数即可。

@@ -67,22 +67,33 @@ This repository includes a lightweight delivery-quality baseline for demo, revie
 - The ratchet's fifth check fails if any view or layout calls `toLocale*` /
   `Intl.DateTimeFormat` again.
 
-## Open: the frontend format gate cannot pass
+## Resolved: the frontend format gate (was "cannot pass")
 
-`npm run format:check` — CI step "Check frontend formatting" — fails on **95 files
-in a CI-identical checkout of `origin/master`**, so the frontend job cannot be
-green regardless of the change under review. Reproduced without touching the
-working tree (`git archive origin/master frontend | tar -x`, then the prettier
-version `package-lock.json` pins, 3.9.5 — which is also what CI installs via
-`npm ci`); `Login.vue` alone moves 645 → 702 lines. `devDependencies` declares
-`^3.3.2`, so the drift is consistent with sources formatted under prettier 3.3
-and the lockfile floating to 3.9.
+`npm run format:check` — CI step "Check frontend formatting" — used to fail no
+matter what the change under review did. It is now green: one `npm run format`
+commit (`5662916`, recorded in `docs/upgrade-plan.md` as D13) moved the tree to
+prettier 3.9.5 rather than pinning the dep back to the 3.3 line.
 
-Two ways out, and they need a decision rather than a default: run
-`npm run format` once (~95 files of whitespace churn in one commit, after which
-the step bites), or pin prettier to the 3.3 line (a dependency downgrade, no
-source churn). Until one lands, read a red "Check frontend formatting" step as
-this known gap, not as a regression introduced by the current change.
+**Correcting the number this section used to carry: it said 95 files. The
+reproducible figure is 17.** The 95 came from a local working tree, and a local
+tree lies twice over about line endings: `core.autocrlf=true` checks text files
+out as CRLF, so `prettier --write` rewrites files whose only real change is `\r\n`
+-> `\n`. That run reported 66 files; **49 of them have no diff at all**, because
+the repository objects were already LF. Only 17 had real style drift.
+
+The number that matches CI is measured like this, and `gh` is blocked here so
+this probe is the substitute:
+
+```
+git archive origin/master frontend | tar -x -C /tmp/probe
+python -c "...replace b'\r\n' with b'\n' in every file..."   # git archive applies
+                                                            # autocrlf on Windows
+cd /tmp/probe/frontend && node <repo>/frontend/node_modules/prettier/bin/prettier.cjs --check .
+```
+
+That probe reported 17 offenders on `origin/master`, 18 on `HEAD~1`, 0 on the
+formatting commit. A red "Check frontend formatting" step is no longer a known
+gap: read it as a regression from the change under review.
 
 ## Task operations
 

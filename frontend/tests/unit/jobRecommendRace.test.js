@@ -39,7 +39,6 @@ vi.mock('@/api/request', () => ({
 }))
 
 const lastOf = (url) => [...calls].reverse().find((c) => c.url === url)
-const allOf = (url) => calls.filter((c) => c.url === url)
 
 async function settle(record, value) {
   record.resolve(value)
