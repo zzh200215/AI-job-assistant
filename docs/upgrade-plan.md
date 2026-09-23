@@ -765,6 +765,20 @@ agent.SummaryAgent           real  tokens=3215
 
 **门禁**：`test:unit` **98 → 101 passed**（+3 条台账）、棘轮 **27** 全绿、smoke 11、lint **0 error**（既有那条 `admin/Overview` warning 未动）、build ok、`prettier --check .` 全树 clean、改动文件均为 LF。后端**无改动**。
 
+#### 已交付：D19 `#actions` 验掉了，顺带证明 slot 内容带着父组件的 scoped 作用域（提交 `e4b90fa`）
+
+**这一步只做一件事**：D18 的组件有 `#actions` 槽，但迁的 5 处都没有操作区，所以"槽里放东西会不会挤歪头部"是没验的。挑了 `OfferCompare.vue`——5 个头全部带 `panel-title-row`，其中 **4 个带操作区，而且是两种形状**：3 处 `<div class="header-actions">` 包着 `el-tag` + `el-button`，1 处是裸 `<el-button>`；它也不在那 6 个有本地 `.panel-header` 覆盖的视图里。
+
+**更要紧的一条是顺带证明的**：`.header-actions { display: flex; gap: 8px }` 写在 `OfferCompare.vue` 自己的 `<style>` 里（第 732 行），标记搬进 `AppPanel` 的 `#actions` 之后**仍然生效**——slot 内容带着**父组件**的 scoped 作用域。这条直接改变那 6 个被挡住视图的迁移成本：如果它们覆盖的只是操作区，就不用先把 CSS 搬进 `panels.css`。
+
+**数字**：同一份桩数据，迁移前后各抓一次整页逐元素计算样式快照，**1113 个元素 × 20 条属性 → 0 条样式差异**；台账 `handRolledPanelHeaders` **88 → 83**。
+
+**那一处 `textContent` 差异查清了，不是渲染差异**：prettier 把按钮重排成 `>查询市场薪资</el-button` 后，标签内那截换行+缩进消失，于是面板拼接出的 `textContent` 少了一个空格。按钮自身两边都是 `"查询市场薪资"`、宽 **95.3333px** 完全一致，面板盒 **302 × 166.385px** 也一致。另外第一次 A/B 是在页面还在填异步内容时抓的基线，所以又做了一遍干净对照（HEAD 版与工作版各重新加载并等 2.5s），结论不变。
+
+**没验**：第 5 个面板有 `v-if="adviceText"`，桩数据下它是空的，两次快照都没渲染出来——所以 5 处迁移只有 4 处进了真页面比对，剩下那 1 处只由脚本的形状断言（图标/标题/操作区/闭合逐行匹配，块数≠5 就中止）保证。
+
+**门禁**：`test:unit` **101 passed** / 18 files、棘轮 **27** 全绿、smoke 11、lint **0 error**、build ok、`prettier --check .` clean、改动文件均为 LF。后端**无改动**。
+
 预算生成脚本 `scripts/style-budget.mjs` 同步改为三个维度都输出（此前只印 `<style>` 一条，谁照它重生成预算就会把另外两条写没了）。当前账本：`<style>` **510 处 / 34 文件**、`<script>` **0**、模板 **25 处 / 6 文件**。
 
 #### 已交付：D1（第三段）状态→颜色也收成一个口径（提交 `a4156f5`）
