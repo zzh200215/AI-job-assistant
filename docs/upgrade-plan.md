@@ -474,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 8 个加载函数加令牌（5 个页面），其中 7 处有红→绿测试为证（见 D3、D7、D9、D10）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，棘轮 `silentEmptyCatches` 11 → 4 盯着（见 D4、D5；**这一维有已知漏数**，见 D10 末段；D13 的格式化让 `admin/Tenants` 那条自己冒出来，正是那条盲区兑现）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 8 个加载函数加令牌（5 个页面），其中 7 处有红→绿测试为证（见 D3、D7、D9、D10）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，D15 再补 2 处；棘轮 `silentEmptyCatches` 11 → 4 →（D15 把判据换成函数作用域）7 → **5** 盯着（见 D4、D5、D15。D10 记下的"这一维有已知漏数"随那次换口径**已关闭**：D13 的格式化让 `admin/Tenants` 先现形，剩下 3 处 D15 量到并修掉两处 GET）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -1036,6 +1036,36 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 **门禁**：`test:unit` **91 passed** / 17 files、smoke **11**、lint **0 error**（1 条既有 `no-unused-vars` warning 在 `admin/Overview`，企业侧）、build ok、`prettier --check` 对改动的 2 个前端文件 clean 且**三个改动文件工作树都是纯 LF**（本机口径 == CI 口径）；backend **726 passed**、`ruff check .` clean、`ruff format --check .` 342 files already formatted。**没验/边界**：① 真浏览器里那个抽屉（`navigate_page` 本次仍被策略拦，只有 `list_pages` 可用）——这次是把 3 个码位换成 2 个正字，显示宽度 6→4 列，方向和 D12 一致（只会变窄）；② **注释里的私用码位仍不判**（前端跳过注释行、后端只看 `ast` 字面量），与这条守卫一贯"只盯到用户眼前的东西"的口径一致，不是漏；③ 私用区这条只覆盖"误读落进 GBK `0xAA–0xF7` 自定义行"那一部分，落进普通 CJK 且游程 <3 字的短乱码仍看不见。它是第二条腿，不是全集。
 
 **D15 的靶子已经量好**（这次重读顺手做完的窗口实验）：`silentEmptyCatches` 从"catch 之后看 12 行"改成"**看到本函数结束、跳过嵌套函数体**"，站点 **4 → 7**，新增 3 处全在 `JobSearch.vue`：`:1525` 简历详情（GET）、`:1577` 推荐列表（GET）、`:1795` 投递解读（POST）。与 D10 的预测对上了（它当时说多出 4 处含 `admin/Tenants` 一处，那处已被 D13 的格式化先折现，所以这次只差 3）。三处被掩护的原因各不相同：前两处是 12 行窗口伸进了**下一个函数**的 `localError.value =` / `searchError.value = ''`，第三处伸进了 `prefillAnalysis` 的 `ElMessage.warning`。注意第三处是 POST，`request.js` 会弹提示，所以它不是"失败演成没有数据"那一类——修不修是产品口径，判据只负责不再放过它。
+
+#### 已交付：D15 那把尺子量的是行号，不是作用域（提交 `a9dcb7e`）
+
+**欠账的来历**：D10 写下"把窗口收到函数作用域是另一件事，改动面不小，单独立项"；D13 让 `admin/Tenants` 那处先现形了，但判据本身没动。这次动的是判据。
+
+**先量，再改**（一次性脚本，跑完删）：旧判据 **4 处**（`admin/Overview` 2、`admin/Tenants` 1、`ResumeUpload` 1）；换成"到本函数结束"之后 **7 处**，多出来的 3 处全在 `JobSearch.vue`——`:1525` 简历详情、`:1577` 推荐列表、`:1795` 投递解读。与 D10 的预测只差那处已被 D13 折现的 `admin/Tenants`。
+
+**三条掩护机制各不相同**，这是"往后看 N 行"这个设计本身的问题，不是 N 取错了：
+- `loadResumeDetail` 的 12 行伸进了下一个函数 `loadLocalJobs` 的 `localError.value =`；
+- `loadRecommendations` 的伸进了 `runSearch` 的 `searchError.value = ''`；
+- `explainCurrentJob` 的伸进了 `prefillAnalysis` 的 `ElMessage.warning`。
+
+也就是说**报告在不在，问的是作用域，行号只是它的糟糕代理**。D5 当年把窗口从 0 撑到 12 行是为了消掉"报告写在 catch 之后"的假阳性，代价就是这三处假阴性——同一把尺子按行数量，往哪边调都错一边。
+
+**新判据**：花括号配对给出函数区间 → 窗口 = catch 体 + catch 之后到**本函数结束**，并**跳过 catch 之后新开的嵌套函数体**（否则又会栽回 D10 记的那个邻居 `seedData()` 假阳性上）；没有外层函数时按模块作用域走到文件末尾。两处踩过的坑：`} catch (e) {` 要先剥掉行首的 `}` 才判得出"这不是函数"；CSS 的 `@media (max-width: …) {` 长得像函数头，但它包住的是样式，抓不到任何 catch，无害。
+
+**判据自己两方向自证**（合成源码，不依赖视图，`styleDebtRatchet` 新增 3 条）：
+1. 报告落在同函数第 21 行（远超 12）→ **不算**债（证明这次收窄没有顺手把它改成"什么都看不见"）；
+2. 报告在**下一个**函数里 → **算**（旧口径正是在这里放过了 `JobSearch.vue`）；
+3. 报告在 catch 之后新开的嵌套箭头函数里 → **算**。
+
+**修掉的两处都是候选人可见的，且症状不同**：
+- **推荐 tab**（`:1577`，GET `/jobs/recommend`）：以前失败即 `recommendations = []`，命中 `还没有足够贴合的推荐结果，可以先补充岗位池。`——**一次 500 被说成候选人简历与岗位池的问题**。现在 `recommendError` + `AppLoadError`，重试按钮真的再发一次（测试断言调用次数 +1）；**空态文案原样保留并写成断言**，防两个状态以后又并回一个。
+- **简历详情**（`:1525`，GET `/resume/{id}`）：这一处不是"演成空态"，是**静默丢输入**。`selectedResumeSummary` 只从详情算，详情读不到就是空串，而 `JobSearch.vue:1668-1670` 的守卫把"摘要为空"当成"没选简历"——于是页面**对一个已经选了简历的人说**"先输入岗位关键词，或先选择一份简历"，还有一次改写请求带着空 `resume_summary` 发出去。现在详情失败单独一条 `AppLoadError`，与列表失败走 `v-if` / `v-else-if` 一条链（D6 那次写坏过链，这次特意让冒烟与单测都覆盖）。
+
+**故意留的第 3 处**：`explainCurrentJob` 是 **POST**，`request.js` 对非 GET 会弹提示，所以它不属于这一维的谎；解读块不出来时"投递解读"按钮原地还能点，重试入口是存在的。判据按形状数、不看 HTTP 动词，所以它进预算（`JobSearch.vue: 1`）并把理由写在账上。**总数：4 →（换口径）7 →（修两处）5**，"只降不升"和"松了必须调小"两条测试把 5 钉成实测值。
+
+**顺带纠正一条 D4 的判断**：当时说"没为 `JobSearch` 写 DOM 测试，因为挂载该页要 mock 约 20 个 api 模块"。实数是 **4 个模块 / 16 个函数**（`resume` 2、`analysis` 1、`knowledge` 1、`jobs` 12），写得出——本次新增的 `tests/unit/jobSearchFailure.test.js` 就是这个页面上的第一个单元测试，2 条红→绿 + 2 条双向绿的对照组（对照组拿去 HEAD 版组件跑过：2 红 / 2 绿）。
+
+**门禁**：`test:unit` **91 → 98 passed** / 18 files（+3 判据方向、+4 站点行为）、smoke **11**、lint **0 error**（`admin/Overview` 那条既有 warning 未动）、build ok、`prettier --check .` 全树 clean 且改动文件工作树为纯 LF、backend **无改动**。没跑后端全量。**没验**：真浏览器里那两处新增错误块的排版（`navigate_page` 本次仍被策略拦）——尤其简历工具条里"列表失败/详情失败"连续两条 `AppLoadError` 好不好看；以及 `explainCurrentJob` 留在账上这件事，如果以后判据改成认动词，它会自然出账。
 
 
 ---
