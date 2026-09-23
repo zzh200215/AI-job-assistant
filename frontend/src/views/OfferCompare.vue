@@ -50,288 +50,263 @@
     </section>
 
     <!-- Offer 列表 -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-primary)"><Trophy /></el-icon>
-          <h3>我的 Offer</h3>
-        </div>
+    <AppPanel icon-color="var(--app-primary)">
+      <template #icon><Trophy /></template>
+      <template #title>我的 Offer</template>
+      <template #actions>
         <div class="header-actions">
           <el-tag v-if="offers.length" type="success">{{ offers.length }} 个 Offer</el-tag>
           <el-button size="small" @click="loadOffers">刷新</el-button>
         </div>
+      </template>
+      <div v-if="loading" class="empty-inline">
+        <el-icon class="is-loading"><Loading /></el-icon> 加载中...
       </div>
-      <div class="panel-body">
-        <div v-if="loading" class="empty-inline">
-          <el-icon class="is-loading"><Loading /></el-icon> 加载中...
+      <div v-else-if="loadError" class="load-error">
+        <div>
+          <strong>Offer 列表加载失败</strong><span>{{ loadError }}</span>
         </div>
-        <div v-else-if="loadError" class="load-error">
-          <div>
-            <strong>Offer 列表加载失败</strong><span>{{ loadError }}</span>
-          </div>
-          <el-button @click="loadOffers">重新加载</el-button>
-        </div>
-        <div v-else-if="!offers.length" class="empty-inline">
-          <el-empty :image-size="100" description="暂无 Offer，继续投递加油">
-            <el-button type="primary" @click="router.push('/jobs/pipeline/kanban')"
-              >查看投递看板</el-button
-            >
-            <el-button @click="router.push('/jobs/recommend')">去岗位推荐</el-button>
-          </el-empty>
-        </div>
-        <div v-else class="offer-list">
-          <div
-            v-for="o in offers"
-            :key="o.id"
-            class="offer-row"
-            :class="{ selected: selectedIds.includes(o.id) }"
-            @click="toggleSelect(o.id)"
+        <el-button @click="loadOffers">重新加载</el-button>
+      </div>
+      <div v-else-if="!offers.length" class="empty-inline">
+        <el-empty :image-size="100" description="暂无 Offer，继续投递加油">
+          <el-button type="primary" @click="router.push('/jobs/pipeline/kanban')"
+            >查看投递看板</el-button
           >
-            <el-checkbox
-              :model-value="selectedIds.includes(o.id)"
-              @click.stop
-              @change="toggleSelect(o.id)"
-            />
-            <div class="offer-info">
-              <strong>{{ o.company || '未知公司' }} - {{ o.title || '未知岗位' }}</strong>
-              <span>{{ o.salary_range || '薪资未定' }}</span>
-            </div>
-            <div class="offer-meta">
-              <span v-if="o.offer_deadline"
-                ><el-icon><Clock /></el-icon> {{ monthDay(o.offer_deadline) }} 到期</span
-              >
-              <span v-if="o.match_score"
-                ><el-icon><Histogram /></el-icon> 匹配 {{ Math.round(o.match_score) }}分</span
-              >
-            </div>
-            <el-tag :type="deadlineUrgency(o.offer_deadline)" size="small">{{
-              deadlineLabel(o.offer_deadline)
-            }}</el-tag>
-            <el-button size="small" text @click.stop="showEditOffer(o)"
-              ><el-icon><Edit /></el-icon
-            ></el-button>
+          <el-button @click="router.push('/jobs/recommend')">去岗位推荐</el-button>
+        </el-empty>
+      </div>
+      <div v-else class="offer-list">
+        <div
+          v-for="o in offers"
+          :key="o.id"
+          class="offer-row"
+          :class="{ selected: selectedIds.includes(o.id) }"
+          @click="toggleSelect(o.id)"
+        >
+          <el-checkbox
+            :model-value="selectedIds.includes(o.id)"
+            @click.stop
+            @change="toggleSelect(o.id)"
+          />
+          <div class="offer-info">
+            <strong>{{ o.company || '未知公司' }} - {{ o.title || '未知岗位' }}</strong>
+            <span>{{ o.salary_range || '薪资未定' }}</span>
           </div>
+          <div class="offer-meta">
+            <span v-if="o.offer_deadline"
+              ><el-icon><Clock /></el-icon> {{ monthDay(o.offer_deadline) }} 到期</span
+            >
+            <span v-if="o.match_score"
+              ><el-icon><Histogram /></el-icon> 匹配 {{ Math.round(o.match_score) }}分</span
+            >
+          </div>
+          <el-tag :type="deadlineUrgency(o.offer_deadline)" size="small">{{
+            deadlineLabel(o.offer_deadline)
+          }}</el-tag>
+          <el-button size="small" text @click.stop="showEditOffer(o)"
+            ><el-icon><Edit /></el-icon
+          ></el-button>
         </div>
       </div>
-    </div>
+    </AppPanel>
 
     <!-- 权重配置 -->
-    <div v-if="selectedOffers.length >= 2" class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-warning)"><Setting /></el-icon>
-          <h3>评分权重配置</h3>
-        </div>
+    <AppPanel v-if="selectedOffers.length >= 2" icon-color="var(--app-warning)">
+      <template #icon><Setting /></template>
+      <template #title>评分权重配置</template>
+      <template #actions>
         <el-button size="small" text @click="resetWeights">重置默认</el-button>
-      </div>
-      <div class="panel-body">
-        <div class="weight-grid">
-          <div v-for="w in weightKeys" :key="w.key" class="weight-item">
-            <div class="weight-label">
-              <span class="weight-dot" :class="'dot-' + w.color" /> {{ w.label }}
-            </div>
-            <el-slider
-              v-model="weights[w.key]"
-              :min="0"
-              :max="100"
-              :step="5"
-              show-input
-              size="small"
-              style="width: 160px"
-            />
+      </template>
+      <div class="weight-grid">
+        <div v-for="w in weightKeys" :key="w.key" class="weight-item">
+          <div class="weight-label">
+            <span class="weight-dot" :class="'dot-' + w.color" /> {{ w.label }}
           </div>
+          <el-slider
+            v-model="weights[w.key]"
+            :min="0"
+            :max="100"
+            :step="5"
+            show-input
+            size="small"
+            style="width: 160px"
+          />
         </div>
       </div>
-    </div>
+    </AppPanel>
 
     <!-- 对比表 -->
-    <div v-if="selectedOffers.length >= 2" class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-violet)"><DataLine /></el-icon>
-          <h3>Offer 对比</h3>
-        </div>
+    <AppPanel v-if="selectedOffers.length >= 2" icon-color="var(--app-violet)">
+      <template #icon><DataLine /></template>
+      <template #title>Offer 对比</template>
+      <template #actions>
         <div class="header-actions">
           <el-button size="small" @click="showNegotiation = true">谈薪资话术</el-button>
           <el-button size="small" @click="showChecklist = true">入职清单</el-button>
         </div>
-      </div>
-      <div class="panel-body">
-        <div class="compare-table-wrap">
-          <table class="compare-table">
-            <thead>
-              <tr>
-                <th class="dim-col">维度</th>
-                <th v-for="o in selectedOffers" :key="o.id">
-                  {{ o.company || '未知' }}
-                  <div class="offer-sub" v-if="o.offer_details?.total_package">
-                    {{ o.offer_details.total_package }}
+      </template>
+      <div class="compare-table-wrap">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th class="dim-col">维度</th>
+              <th v-for="o in selectedOffers" :key="o.id">
+                {{ o.company || '未知' }}
+                <div class="offer-sub" v-if="o.offer_details?.total_package">
+                  {{ o.offer_details.total_package }}
+                </div>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>岗位</td>
+              <td v-for="o in selectedOffers" :key="o.id">{{ o.title || '-' }}</td>
+            </tr>
+            <tr>
+              <td>公司</td>
+              <td v-for="o in selectedOffers" :key="o.id">{{ o.company || '-' }}</td>
+            </tr>
+            <tr>
+              <td>城市</td>
+              <td v-for="o in selectedOffers" :key="o.id">{{ o.city || o.location || '-' }}</td>
+            </tr>
+            <tr>
+              <td>底薪</td>
+              <td v-for="o in selectedOffers" :key="o.id">
+                <strong>{{ o.salary_range || '-' }}</strong>
+              </td>
+            </tr>
+            <tr>
+              <td>总包</td>
+              <td v-for="o in selectedOffers" :key="o.id">
+                {{ o.offer_details?.total_package || '-' }}
+              </td>
+            </tr>
+            <tr>
+              <td>股票/期权</td>
+              <td v-for="o in selectedOffers" :key="o.id">
+                {{ o.offer_details?.equity || '-' }}
+              </td>
+            </tr>
+            <tr>
+              <td>签字费</td>
+              <td v-for="o in selectedOffers" :key="o.id">
+                {{ o.offer_details?.signing_bonus || '-' }}
+              </td>
+            </tr>
+            <tr>
+              <td>匹配分</td>
+              <td v-for="o in selectedOffers" :key="o.id">
+                <span :class="scoreToneClass(o.match_score)">{{
+                  o.match_score ? Math.round(o.match_score) : '-'
+                }}</span>
+              </td>
+            </tr>
+            <tr>
+              <td>通勤</td>
+              <td v-for="o in selectedOffers" :key="o.id">
+                <el-rate v-model="o._scores.commute" :max="5" size="small" />
+              </td>
+            </tr>
+            <tr>
+              <td>成长空间</td>
+              <td v-for="o in selectedOffers" :key="o.id">
+                <el-rate v-model="o._scores.growth" :max="5" size="small" />
+              </td>
+            </tr>
+            <tr>
+              <td>稳定性</td>
+              <td v-for="o in selectedOffers" :key="o.id">
+                <el-rate v-model="o._scores.stability" :max="5" size="small" />
+              </td>
+            </tr>
+            <tr>
+              <td>技术栈</td>
+              <td v-for="o in selectedOffers" :key="o.id">
+                <el-rate v-model="o._scores.tech" :max="5" size="small" />
+              </td>
+            </tr>
+            <tr>
+              <td>公司发展</td>
+              <td v-for="o in selectedOffers" :key="o.id">
+                <el-rate v-model="o._scores.company_dev" :max="5" size="small" />
+              </td>
+            </tr>
+            <tr>
+              <td>文化氛围</td>
+              <td v-for="o in selectedOffers" :key="o.id">
+                <el-rate v-model="o._scores.culture" :max="5" size="small" />
+              </td>
+            </tr>
+            <tr class="total-row">
+              <td><strong>加权综合评分</strong></td>
+              <td v-for="o in selectedOffers" :key="o.id">
+                <strong class="total-score" :class="scoreToneClass(weightedScore(o))">{{
+                  weightedScore(o)
+                }}</strong>
+                <div class="score-breakdown" v-if="showBreakdown === o.id" @click.stop>
+                  <div v-for="w in weightKeys" :key="w.key" class="br-item">
+                    <span>{{ w.label }}</span
+                    ><span>{{ o._scores[w.key] * weights[w.key] }}%</span>
                   </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>岗位</td>
-                <td v-for="o in selectedOffers" :key="o.id">{{ o.title || '-' }}</td>
-              </tr>
-              <tr>
-                <td>公司</td>
-                <td v-for="o in selectedOffers" :key="o.id">{{ o.company || '-' }}</td>
-              </tr>
-              <tr>
-                <td>城市</td>
-                <td v-for="o in selectedOffers" :key="o.id">{{ o.city || o.location || '-' }}</td>
-              </tr>
-              <tr>
-                <td>底薪</td>
-                <td v-for="o in selectedOffers" :key="o.id">
-                  <strong>{{ o.salary_range || '-' }}</strong>
-                </td>
-              </tr>
-              <tr>
-                <td>总包</td>
-                <td v-for="o in selectedOffers" :key="o.id">
-                  {{ o.offer_details?.total_package || '-' }}
-                </td>
-              </tr>
-              <tr>
-                <td>股票/期权</td>
-                <td v-for="o in selectedOffers" :key="o.id">
-                  {{ o.offer_details?.equity || '-' }}
-                </td>
-              </tr>
-              <tr>
-                <td>签字费</td>
-                <td v-for="o in selectedOffers" :key="o.id">
-                  {{ o.offer_details?.signing_bonus || '-' }}
-                </td>
-              </tr>
-              <tr>
-                <td>匹配分</td>
-                <td v-for="o in selectedOffers" :key="o.id">
-                  <span :class="scoreToneClass(o.match_score)">{{
-                    o.match_score ? Math.round(o.match_score) : '-'
-                  }}</span>
-                </td>
-              </tr>
-              <tr>
-                <td>通勤</td>
-                <td v-for="o in selectedOffers" :key="o.id">
-                  <el-rate v-model="o._scores.commute" :max="5" size="small" />
-                </td>
-              </tr>
-              <tr>
-                <td>成长空间</td>
-                <td v-for="o in selectedOffers" :key="o.id">
-                  <el-rate v-model="o._scores.growth" :max="5" size="small" />
-                </td>
-              </tr>
-              <tr>
-                <td>稳定性</td>
-                <td v-for="o in selectedOffers" :key="o.id">
-                  <el-rate v-model="o._scores.stability" :max="5" size="small" />
-                </td>
-              </tr>
-              <tr>
-                <td>技术栈</td>
-                <td v-for="o in selectedOffers" :key="o.id">
-                  <el-rate v-model="o._scores.tech" :max="5" size="small" />
-                </td>
-              </tr>
-              <tr>
-                <td>公司发展</td>
-                <td v-for="o in selectedOffers" :key="o.id">
-                  <el-rate v-model="o._scores.company_dev" :max="5" size="small" />
-                </td>
-              </tr>
-              <tr>
-                <td>文化氛围</td>
-                <td v-for="o in selectedOffers" :key="o.id">
-                  <el-rate v-model="o._scores.culture" :max="5" size="small" />
-                </td>
-              </tr>
-              <tr class="total-row">
-                <td><strong>加权综合评分</strong></td>
-                <td v-for="o in selectedOffers" :key="o.id">
-                  <strong class="total-score" :class="scoreToneClass(weightedScore(o))">{{
-                    weightedScore(o)
-                  }}</strong>
-                  <div class="score-breakdown" v-if="showBreakdown === o.id" @click.stop>
-                    <div v-for="w in weightKeys" :key="w.key" class="br-item">
-                      <span>{{ w.label }}</span
-                      ><span>{{ o._scores[w.key] * weights[w.key] }}%</span>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="compare-actions">
-          <el-button type="primary" size="small" @click="generateAdvice" :loading="adviceLoading">
-            <el-icon><MagicStick /></el-icon> AI 决策建议
-          </el-button>
-          <el-button size="small" @click="showAllDetails" v-if="selectedOffers.length > 1"
-            >展开明细</el-button
-          >
-        </div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </div>
+      <div class="compare-actions">
+        <el-button type="primary" size="small" @click="generateAdvice" :loading="adviceLoading">
+          <el-icon><MagicStick /></el-icon> AI 决策建议
+        </el-button>
+        <el-button size="small" @click="showAllDetails" v-if="selectedOffers.length > 1"
+          >展开明细</el-button
+        >
+      </div>
+    </AppPanel>
 
     <!-- 薪资合理性 -->
-    <div v-if="selectedOffers.length >= 1" class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-success)"><Coin /></el-icon>
-          <h3>薪资合理性评估</h3>
-        </div>
+    <AppPanel v-if="selectedOffers.length >= 1" icon-color="var(--app-success)">
+      <template #icon><Coin /></template>
+      <template #title>薪资合理性评估</template>
+      <template #actions>
         <el-button size="small" @click="loadSalaryInsight" :loading="salaryLoading"
           >查询市场薪资</el-button
         >
-      </div>
-      <div class="panel-body">
-        <div v-if="!salaryData" class="empty-inline">
-          点击"查询市场薪资"查看该岗位的薪资分位数据
-        </div>
-        <div v-else>
-          <div class="salary-stats">
-            <div class="stat-card">
-              <span class="stat-label">P25</span><strong>{{ formatK(salaryData.p25) }}</strong>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">中位数</span
-              ><strong>{{ formatK(salaryData.median) }}</strong>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">P75</span><strong>{{ formatK(salaryData.p75) }}</strong>
-            </div>
-            <div class="stat-card">
-              <span class="stat-label">平均</span><strong>{{ formatK(salaryData.avg) }}</strong>
-            </div>
+      </template>
+      <div v-if="!salaryData" class="empty-inline">点击"查询市场薪资"查看该岗位的薪资分位数据</div>
+      <div v-else>
+        <div class="salary-stats">
+          <div class="stat-card">
+            <span class="stat-label">P25</span><strong>{{ formatK(salaryData.p25) }}</strong>
           </div>
-          <p v-if="salaryData.sample_count" class="salary-note">
-            基于 {{ salaryData.sample_count }} 条岗位数据
-          </p>
+          <div class="stat-card">
+            <span class="stat-label">中位数</span><strong>{{ formatK(salaryData.median) }}</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">P75</span><strong>{{ formatK(salaryData.p75) }}</strong>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">平均</span><strong>{{ formatK(salaryData.avg) }}</strong>
+          </div>
         </div>
+        <p v-if="salaryData.sample_count" class="salary-note">
+          基于 {{ salaryData.sample_count }} 条岗位数据
+        </p>
       </div>
-    </div>
+    </AppPanel>
 
     <!-- AI 建议 -->
-    <div v-if="adviceText" class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-violet)"><MagicStick /></el-icon>
-          <h3>AI 决策建议</h3>
-        </div>
+    <AppPanel v-if="adviceText" icon-color="var(--app-violet)">
+      <template #icon><MagicStick /></template>
+      <template #title>AI 决策建议</template>
+      <div class="advice-content" v-for="(line, idx) in adviceLines" :key="idx">
+        <p v-if="line.startsWith('【')" class="advice-section-title">{{ line }}</p>
+        <p v-else>{{ line }}</p>
       </div>
-      <div class="panel-body">
-        <div class="advice-content" v-for="(line, idx) in adviceLines" :key="idx">
-          <p v-if="line.startsWith('【')" class="advice-section-title">{{ line }}</p>
-          <p v-else>{{ line }}</p>
-        </div>
-      </div>
-    </div>
+    </AppPanel>
 
     <!-- Offer 编辑弹窗 -->
     <el-dialog v-model="showEditDialog" title="编辑 Offer 详情" width="520px">
@@ -427,6 +402,7 @@
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
