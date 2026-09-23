@@ -96,115 +96,99 @@
 
     <!-- 今日待办 + 下一步建议 -->
     <section class="top-row">
-      <div class="panel today-panel">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <el-icon :size="18" color="var(--app-primary)"><Bell /></el-icon>
-            <h3>今日待办</h3>
-          </div>
+      <AppPanel class="today-panel" icon-color="var(--app-primary)">
+        <template #icon><Bell /></template>
+        <template #title>今日待办</template>
+        <template #actions>
           <el-badge v-if="tasks.high_priority > 0" :value="tasks.high_priority" type="danger" />
+        </template>
+        <div v-if="tasksLoading" class="loading-state">
+          <el-icon class="is-loading"><Loading /></el-icon> 加载中...
         </div>
-        <div class="panel-body">
-          <div v-if="tasksLoading" class="loading-state">
-            <el-icon class="is-loading"><Loading /></el-icon> 加载中...
-          </div>
-          <div v-else-if="tasksError" class="error-state">
-            <p>今日待办加载失败</p>
-            <el-button size="small" type="primary" plain @click="loadDashboard">重新加载</el-button>
-          </div>
-          <div v-else-if="!tasks.tasks?.length" class="empty-state">
-            <p>今日暂无待办</p>
-            <span>建议浏览推荐岗位或跟进已有投递</span>
-            <div class="empty-actions">
-              <el-button size="small" type="primary" @click="go('/jobs/recommend')">
-                查看推荐岗位
-              </el-button>
-              <el-button size="small" @click="go('/jobs/pipeline/kanban')">
-                查看投递看板
-              </el-button>
-            </div>
-          </div>
-          <div v-else class="task-list">
-            <div
-              v-for="task in tasks.tasks"
-              :key="task.title"
-              class="task-item"
-              :class="'priority-' + task.priority"
-              @click="go(task.link)"
-            >
-              <div class="task-dot" :class="'dot-' + task.priority" />
-              <div class="task-info">
-                <strong>{{ task.title }}</strong>
-                <span>{{ task.subtitle }}</span>
-              </div>
-              <el-icon class="task-arrow"><ArrowRight /></el-icon>
-            </div>
+        <div v-else-if="tasksError" class="error-state">
+          <p>今日待办加载失败</p>
+          <el-button size="small" type="primary" plain @click="loadDashboard">重新加载</el-button>
+        </div>
+        <div v-else-if="!tasks.tasks?.length" class="empty-state">
+          <p>今日暂无待办</p>
+          <span>建议浏览推荐岗位或跟进已有投递</span>
+          <div class="empty-actions">
+            <el-button size="small" type="primary" @click="go('/jobs/recommend')">
+              查看推荐岗位
+            </el-button>
+            <el-button size="small" @click="go('/jobs/pipeline/kanban')"> 查看投递看板 </el-button>
           </div>
         </div>
-      </div>
+        <div v-else class="task-list">
+          <div
+            v-for="task in tasks.tasks"
+            :key="task.title"
+            class="task-item"
+            :class="'priority-' + task.priority"
+            @click="go(task.link)"
+          >
+            <div class="task-dot" :class="'dot-' + task.priority" />
+            <div class="task-info">
+              <strong>{{ task.title }}</strong>
+              <span>{{ task.subtitle }}</span>
+            </div>
+            <el-icon class="task-arrow"><ArrowRight /></el-icon>
+          </div>
+        </div>
+      </AppPanel>
 
-      <div class="panel actions-panel">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <el-icon :size="18" color="var(--app-violet)"><MagicStick /></el-icon>
-            <h3>下一步建议</h3>
-          </div>
+      <AppPanel class="actions-panel" icon-color="var(--app-violet)">
+        <template #icon><MagicStick /></template>
+        <template #title>下一步建议</template>
+        <template #actions>
           <el-tag size="small" type="info">智能推荐</el-tag>
+        </template>
+        <div v-if="actionsLoading" class="loading-state">
+          <el-icon class="is-loading"><Loading /></el-icon> 分析中...
         </div>
-        <div class="panel-body">
-          <div v-if="actionsLoading" class="loading-state">
-            <el-icon class="is-loading"><Loading /></el-icon> 分析中...
-          </div>
-          <div v-else-if="actionsError" class="error-state">
-            <p>当前没有明确的下一步动作，说明近期节奏正常。</p>
-            <el-button size="small" type="primary" plain @click="loadDashboard">重新加载</el-button>
-          </div>
-          <div v-else class="suggestion-list">
-            <div
-              v-for="(sug, idx) in nextActions"
-              :key="idx"
-              class="suggestion-item"
-              @click="go(sug.link)"
-            >
-              <div class="sug-index">{{ idx + 1 }}</div>
-              <div class="sug-body">
-                <strong>{{ sug.title }}</strong>
-                <p>{{ sug.description }}</p>
-              </div>
-              <el-icon class="sug-arrow"><ArrowRight /></el-icon>
+        <div v-else-if="actionsError" class="error-state">
+          <p>当前没有明确的下一步动作，说明近期节奏正常。</p>
+          <el-button size="small" type="primary" plain @click="loadDashboard">重新加载</el-button>
+        </div>
+        <div v-else class="suggestion-list">
+          <div
+            v-for="(sug, idx) in nextActions"
+            :key="idx"
+            class="suggestion-item"
+            @click="go(sug.link)"
+          >
+            <div class="sug-index">{{ idx + 1 }}</div>
+            <div class="sug-body">
+              <strong>{{ sug.title }}</strong>
+              <p>{{ sug.description }}</p>
             </div>
+            <el-icon class="sug-arrow"><ArrowRight /></el-icon>
           </div>
         </div>
-      </div>
+      </AppPanel>
     </section>
 
     <!-- 求职漏斗 + 关键指标 -->
     <section class="middle-row">
-      <div class="panel funnel-panel">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <el-icon :size="18" color="var(--app-primary)"><TrendCharts /></el-icon>
-            <h3>求职漏斗</h3>
+      <AppPanel class="funnel-panel" icon-color="var(--app-primary)">
+        <template #icon><TrendCharts /></template>
+        <template #title>求职漏斗</template>
+        <div v-if="overviewLoaded" class="funnel-bar">
+          <div
+            v-for="stage in funnelStages"
+            :key="stage.key"
+            class="funnel-step"
+            :class="{ 'has-count': stage.count > 0 }"
+          >
+            <div class="funnel-bar-fill" :style="{ height: funnelBarHeight(stage.count) }" />
+            <div class="funnel-count">{{ stage.count }}</div>
+            <div class="funnel-label">{{ stage.label }}</div>
           </div>
         </div>
-        <div class="panel-body">
-          <div v-if="overviewLoaded" class="funnel-bar">
-            <div
-              v-for="stage in funnelStages"
-              :key="stage.key"
-              class="funnel-step"
-              :class="{ 'has-count': stage.count > 0 }"
-            >
-              <div class="funnel-bar-fill" :style="{ height: funnelBarHeight(stage.count) }" />
-              <div class="funnel-count">{{ stage.count }}</div>
-              <div class="funnel-label">{{ stage.label }}</div>
-            </div>
-          </div>
-          <div v-else class="loading-state">
-            <el-icon class="is-loading"><Loading /></el-icon>
-          </div>
+        <div v-else class="loading-state">
+          <el-icon class="is-loading"><Loading /></el-icon>
         </div>
-      </div>
+      </AppPanel>
 
       <div class="metrics-grid">
         <div class="metric-card">
@@ -252,26 +236,20 @@
 
     <!-- 投递趋势 + 快捷入口 -->
     <section class="bottom-row">
-      <div class="panel trend-panel">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <el-icon :size="18" color="var(--app-success)"><TrendCharts /></el-icon>
-            <h3>7日投递趋势</h3>
+      <AppPanel class="trend-panel" icon-color="var(--app-success)">
+        <template #icon><TrendCharts /></template>
+        <template #title>7日投递趋势</template>
+        <div v-if="overviewLoaded" class="trend-chart">
+          <div v-for="(day, idx) in overview.trend" :key="idx" class="trend-bar-col">
+            <div class="trend-bar" :style="{ height: trendHeight(day.count) }" />
+            <span class="trend-count">{{ day.count }}</span>
+            <span class="trend-date">{{ day.date.slice(5) }}</span>
           </div>
         </div>
-        <div class="panel-body">
-          <div v-if="overviewLoaded" class="trend-chart">
-            <div v-for="(day, idx) in overview.trend" :key="idx" class="trend-bar-col">
-              <div class="trend-bar" :style="{ height: trendHeight(day.count) }" />
-              <span class="trend-count">{{ day.count }}</span>
-              <span class="trend-date">{{ day.date.slice(5) }}</span>
-            </div>
-          </div>
-          <div v-else class="loading-state">
-            <el-icon class="is-loading"><Loading /></el-icon>
-          </div>
+        <div v-else class="loading-state">
+          <el-icon class="is-loading"><Loading /></el-icon>
         </div>
-      </div>
+      </AppPanel>
 
       <div class="quick-entry-panel">
         <h3>快捷入口</h3>
@@ -319,6 +297,7 @@
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -1118,11 +1097,8 @@ onMounted(loadDashboard)
   box-shadow: none;
 }
 
-.dashboard-page .panel-header {
-  border-bottom-color: #2a2c38;
-}
-
-.dashboard-page .panel-header h3,
+/* `.dashboard-page .panel-header` 与它的 h3 两条已搬进 styles/panels.css：
+   这些节点即将进入 components/ui/AppPanel.vue，scoped 规则匹配不到子组件内部的节点。 */
 .quick-entry-panel h3,
 .dashboard-page .task-info strong,
 .dashboard-page .sug-body strong {

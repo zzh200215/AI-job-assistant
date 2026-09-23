@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 const BUDGET = {
   hardcodedColorLiterals: {
     'src/views/InterviewRoom.vue': 69,
-    'src/views/Home.vue': 72,
+    'src/views/Home.vue': 71,
     'src/views/JobSearch.vue': 46,
     'src/layouts/DefaultLayout.vue': 34,
     'src/views/Profile.vue': 31,
@@ -82,7 +82,7 @@ const BUDGET = {
      - 要先动手：Home / JobSearch / KnowledgeBase / Privacy / Register / OrganizationWorkspace
        这 6 个视图各自覆盖了 `.panel-header`，得先把覆盖搬进 panels.css 或改成 props。
      全仓 `:deep(.panel-header)` 为 0 处，所以没有第三种隐藏耦合。 */
-  handRolledPanelHeaders: 83,
+  handRolledPanelHeaders: 79,
   /* 状态→el-tag 颜色此前和分数色板同病：17 份手写表、32 个键，其中 `running` 在任务中心
      是蓝、两个 agent 页是橙，`ongoing` 在房间页是绿、设置页是橙。异步任务与面试会话两组
      已收进 utils/statusTone.js；下面数的是**还剩多少条手写映射**，只能往下走。
@@ -542,7 +542,6 @@ describe('style debt ratchet', () => {
     // 这条是 AppPanel 的真正约束：视图自己的 scoped `.panel-header` 规则匹配不到搬进子组件的节点，
     // 所以这些文件必须先解决覆盖才能迁移。清单只准缩短，且必须与实际一致。
     const LOCAL_OVERRIDE_FILES = [
-      'src/views/Home.vue',
       'src/views/JobSearch.vue',
       'src/views/KnowledgeBase.vue',
       'src/views/OrganizationWorkspace.vue',
@@ -550,7 +549,9 @@ describe('style debt ratchet', () => {
       'src/views/Register.vue',
     ]
     const overriding = viewSources
-      .filter(({ style }) => /\.panel-header\b/.test(style))
+      // 先剥掉 CSS 注释：一条"这条规则已搬走"的说明不该被当成还在覆盖（与后端乱码守卫
+      // 只看 ast 字面量、不看注释是同一个口径）
+      .filter(({ style }) => /\.panel-header\b/.test(style.replace(/\/\*[\s\S]*?\*\//g, '')))
       .map(({ rel }) => rel)
       .sort()
     expect(overriding, `视图里 .panel-header 的本地覆盖变了，台账要一起改：${overriding}`).toEqual(

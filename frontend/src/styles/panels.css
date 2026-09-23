@@ -71,6 +71,20 @@
   margin-top: 16px;
 }
 
+/* ---- 深色工作台变体（从 Home.vue 的 scoped 样式搬来） ----
+   搬的理由不是整洁：`.panel-header` 和它里面的 h3 一旦进 components/ui/AppPanel.vue，
+   Home 那条带 [data-v-*] 的 scoped 规则就再也匹配不到它们（scoped 只覆盖本组件模板里的
+   节点加子组件的根）。放在全局表里，匹配只取决于 DOM 结构，与组件边界无关。
+   特异性也没丢：`.dashboard-page .panel-header h3` 是 (0,2,1)，压得住上面
+   `.panel-title-row h3` 的 (0,1,1)。 */
+.dashboard-page .panel-header {
+  border-bottom-color: #2a2c38;
+}
+
+.dashboard-page .panel-header h3 {
+  color: #f1f2f6;
+}
+
 /* ---- Stat card (small metric box) ---- */
 .stat-card {
   display: flex;
