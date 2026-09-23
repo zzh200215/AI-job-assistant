@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ast
 import re
+import unicodedata
 from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
@@ -37,6 +38,47 @@ CJK_RUN = re.compile(r"[㐀-鿿]{3,}")
 # （硕士/博士/北京/封装/剩余/左右…），降窗口等于把守卫换成误报器。
 # 用 chr() 而不是 \u 转义：让这条判据的源码里只有 ASCII，不把私用码位本身写进仓库。
 PRIVATE_USE_LO, PRIVATE_USE_HI, REPLACEMENT_CHAR = chr(0xE000), chr(0xF8FF), chr(0xFFFD)
+# 最大 CJK 游程（不是滑窗）：只有 1-2 字的游程才归这条腿管，3 字以上交给上面的频率判据。
+CJK_ANY_RUN = re.compile(f"[{chr(0x3400)}-{chr(0x9fff)}]+")
+
+_WRITTEN: set[str] | None = None
+
+
+def _written_chars() -> set[str]:
+    """这个仓库"真写得出来"的字符集合。复原判据要用它兜一层：`说` 的 GBK 字节 CBB5 也是合法
+    UTF-8，解出来是 U+02F5——既不是字母也不是组合符号（类别 Sk），光靠类别会漏进来。而 U+02F5
+    在本仓出现 0 次、`·` 出现 85 次，用"有没有人这么写过"分得开，且不需要列任何清单。"""
+    global _WRITTEN
+    if _WRITTEN is None:
+        _WRITTEN = {ch for text in _basis_texts() for ch in text}
+    return _WRITTEN
+
+
+def _is_letter_or_mark(ch: str) -> bool:
+    return unicodedata.category(ch)[0] in {"L", "M"}
+
+
+def _short_run_misdecoded(text: str) -> bool:
+    """1-2 字游程的"可复原"判据：把游程按 GBK 编回字节，再严格按 UTF-8 解一次；解出来**不含字母
+    也不含组合符号**（只剩标点/符号/ASCII）才算一次误读。为什么需要它：`·` 的 UTF-8 字节 C2 B7
+    被按 GBK 读回就是高频字 U+8DEF，游程只有 1 字，频率法与私用区法都看不见（前端 2026-09-23
+    就是这么在界面上跑了很久"优先投递 路 83"）。为什么必须要求"不含字母"：只看"能复原"的话，
+    实测 1155 个 1-2 字游程命中 53 处、其中 46 处是正常词（状态/未知/专业/每页/硕士…，它们的
+    GBK 字节恰好也是合法 UTF-8）；加上这条后命中 7 处、误报 0，那 7 处全是同一个分隔符。
+    """
+    for run in CJK_ANY_RUN.findall(text):
+        if len(run) > 2:
+            continue
+        try:
+            back = run.encode("gbk").decode("utf-8")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            continue  # 编不回 GBK，或字节不是合法 UTF-8 —— 那就不是这条判据说的误读
+        if back == run or any(_is_letter_or_mark(ch) for ch in back):
+            continue
+        if not all(ch in _written_chars() for ch in back):
+            continue  # 复原出来的字符本仓从不写，那就不是"人写错了"，是巧合
+        return True
+    return False
 
 
 def _scanned_files() -> list[Path]:
@@ -74,6 +116,8 @@ def _string_literals(text: str) -> list[tuple[int, str]]:
 def _is_mojibake(text: str, freq: Counter) -> bool:
     if any(PRIVATE_USE_LO <= ch <= PRIVATE_USE_HI or ch == REPLACEMENT_CHAR for ch in text):
         return True  # 私用码位/替换符：不要求能复原，也不是清单，是编码族留下的结构性痕迹
+    if _short_run_misdecoded(text):
+        return True  # 1-2 字游程：频率法看不见，只能靠"能不能原样解回去"
     if "€" in text:  # U+20AC：UTF-8 续字节被 GBK 读成 '€'，正常中文串里不会出现
         return True
     # 3 字**滑窗**，不是整串判断：乱码嵌在正常中文里时（"AI 驱动的涓汉姹傛暀缁"），整串里那个
@@ -123,3 +167,13 @@ def test_the_rule_catches_the_old_corruption_and_skips_legitimate_comments():
     assert _suspicious_literals(f'MSG = "{garbled}"\n', freq) == [(1, garbled)]
     assert _suspicious_literals(f'MSG = "{restored}"\n', freq) == []
     assert _suspicious_literals(f'MSG = "对接上游{chr(0xFFFD)}服务"\n', freq), "替换符同样只来自一次误读"
+    # 第三条腿：分隔符被误读成高频字（`·` 的字节 C2 B7 按 GBK 读回就是 U+8DEF），必须判出；
+    # 而"能复原、但复原出来是字母"的正常词必须放过——这一条把 46 个误报挡在外面。
+    lu = chr(0x8DEF)
+    assert _suspicious_literals(f'TAG = "优先投递 {lu} 83"\n', freq)
+    assert _suspicious_literals('TAG = "优先投递 · 83"\n', freq) == []
+    assert _suspicious_literals('LABEL = "状态"\n', freq) == []
+    assert _suspicious_literals('LABEL = "每页"\n', freq) == []
+    # 这条是"复原出来的字符必须本仓真写得出来"那层存在的理由：`说` 复原成 U+02F5，
+    # 类别是 Sk（既非字母也非组合符号），只有"本仓写过 0 次"能把它挡在外面。
+    assert _suspicious_literals('LABEL = "说 JD 要求全缺"\n', freq) == []

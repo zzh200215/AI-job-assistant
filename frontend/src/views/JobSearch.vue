@@ -315,7 +315,7 @@
 
                   <div class="priority-row">
                     <el-tag :type="priorityTagType(job.priorityLabel)" effect="dark" size="small">
-                      {{ job.priorityLabel }} 路 {{ job.priorityScore }}
+                      {{ job.priorityLabel }} · {{ job.priorityScore }}
                     </el-tag>
                     <span class="priority-reason">{{ job.priorityReason }}</span>
                   </div>
@@ -684,7 +684,7 @@
                       <div class="pipeline-card-head">
                         <div>
                           <h3>{{ entry.title }}</h3>
-                          <p>{{ entry.company }} 路 {{ entry.salary }}</p>
+                          <p>{{ entry.company }} · {{ entry.salary }}</p>
                         </div>
                         <el-tag
                           :type="priorityTagType(entry.priorityLabel)"
@@ -848,7 +848,7 @@
                 @click="openPipelineJob(entry)"
               >
                 <strong>{{ entry.title }}</strong>
-                <span>{{ pipelineStageLabel(entry.stage) }} 路 {{ entry.company }}</span>
+                <span>{{ pipelineStageLabel(entry.stage) }} · {{ entry.company }}</span>
               </button>
             </div>
             <el-empty v-else :image-size="70" description="流程里还没有岗位" />
@@ -891,8 +891,8 @@
                 class="short-item"
                 @click="openJobDetail(job, 'priority')"
               >
-                <strong>{{ job.title }} 路 {{ job.priorityScore }}</strong>
-                <span>{{ job.priorityLabel }} 路 {{ job.company }}</span>
+                <strong>{{ job.title }} · {{ job.priorityScore }}</strong>
+                <span>{{ job.priorityLabel }} · {{ job.company }}</span>
               </button>
             </div>
             <el-empty v-else :image-size="70" description="当前视图还没有足够样本" />
@@ -1016,7 +1016,7 @@
           <div class="compare-head">
             <h3>{{ job.title }}</h3>
             <el-tag :type="priorityTagType(job.priorityLabel)" effect="dark" size="small">
-              {{ job.priorityLabel }} 路 {{ job.priorityScore }}
+              {{ job.priorityLabel }} · {{ job.priorityScore }}
             </el-tag>
           </div>
           <p class="compare-company">{{ job.company }}</p>
@@ -2294,7 +2294,8 @@ function calculateApplicationPriority(job) {
 
 function salaryMid(value) {
   if (!value) return 0
-  const normalized = String(value).replace(/\s/g, '').replace(/路/g, '').toLowerCase()
+  // 不按分隔符剥字符：任何非数字都是区间边界，剥掉反而会把 "20·30K" 读成 2030K
+  const normalized = String(value).replace(/\s/g, '').toLowerCase()
   const nums = normalized.match(/\d+(\.\d+)?/g)?.map(Number) || []
   if (!nums.length) return 0
 

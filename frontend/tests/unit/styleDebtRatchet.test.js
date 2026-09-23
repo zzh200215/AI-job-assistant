@@ -385,8 +385,68 @@ describe('style debt ratchet', () => {
     // 私用区码位（U+E000-U+F8FF）与替换符不可能出现在人写的中文文案里，它们只来自一次误读；
     // 这条腿不看频率、不要求能复原，专治"游程被私用字截短到 3 字以下"的那一类。
     const PRIVATE_USE = /[\uE000-\uF8FF\uFFFD]/
+    // 第三条腿：短游程的"可复原"判据。1-2 字的坏串频率法看不见——U+8DEF 这个字是全仓高频字，
+    // 而它正是 `·`（UTF-8 的 C2 B7）被按 GBK 读回的结果，游程又只有 1 字。做法：把每个字反查回
+    // GBK 字节，再严格按 UTF-8 解一次；解出来**不含任何字母或组合符号**（即只剩标点/符号/ASCII）才算误读。
+    // 为什么必须带"不含字母"这一条：同一批 1155 个 1-2 字游程里，只看"能复原"命中 53 处，其中 46 处
+    // 是正常词（状态/未知/专业/每页/硕士/平台… 它们的 GBK 字节恰好也是合法 UTF-8）；加上这一条之后
+    // 命中 7 处、误报 0，而那 7 处全是同一个分隔符。3 字以上仍交给频率那条腿。
+    const LETTER_OR_MARK = /\p{L}|\p{M}/u
+    const MAXIMAL_CJK_RUN = new RegExp(
+      `[${String.fromCharCode(0x3400)}-${String.fromCharCode(0x9fff)}]+`,
+      'g'
+    )
+    const GBK_BYTES = new Map()
+    {
+      const dec = new TextDecoder('gbk', { fatal: false })
+      const pair = new Uint8Array(2)
+      for (let lead = 0x81; lead <= 0xfe; lead++) {
+        for (let second = 0x40; second <= 0xfe; second++) {
+          if (second === 0x7f) continue
+          pair[0] = lead
+          pair[1] = second
+          const s = dec.decode(pair)
+          if (s.length === 1 && s.codePointAt(0) !== 0xfffd && !GBK_BYTES.has(s))
+            GBK_BYTES.set(s, [lead, second])
+        }
+      }
+    }
+    const UTF8_STRICT = new TextDecoder('utf-8', { fatal: true })
+    // 复原出来的字符必须是"这个仓库真写得出来的字符"：`说` 的 GBK 字节 CBB5 也是合法 UTF-8，
+    // 解出来是 U+02F5——它不是字母也不是组合符号（类别 Sk），光靠上一条会漏进来。而 U+02F5 在本仓
+    // 出现 0 次，`·` 出现 85 次，用"有没有人这么写过"分得开，且不需要列任何清单。
+    const WRITTEN = new Map()
+    for (const { text } of files) for (const ch of text) WRITTEN.set(ch, (WRITTEN.get(ch) || 0) + 1)
+
+    function shortRunMisDecoded(line) {
+      for (const run of line.match(MAXIMAL_CJK_RUN) || []) {
+        if (run.length > 2) continue
+        const bytes = []
+        let known = true
+        for (const ch of run) {
+          const b = GBK_BYTES.get(ch)
+          if (!b) {
+            known = false
+            break
+          }
+          bytes.push(b[0], b[1])
+        }
+        if (!known) continue
+        let back
+        try {
+          back = UTF8_STRICT.decode(new Uint8Array(bytes))
+        } catch {
+          continue // 解不出合法 UTF-8，就不是误读
+        }
+        if (back === run || LETTER_OR_MARK.test(back)) continue
+        if (![...back].every((c) => (WRITTEN.get(c) || 0) >= 1)) continue
+        return true
+      }
+      return false
+    }
     const suspicious = (line) => {
       if (PRIVATE_USE.test(line)) return true
+      if (shortRunMisDecoded(line)) return true
       if (line.includes('€')) return true
       // 用 3 字**滑窗**而不是整串：乱码嵌在正常句子里时，整串会被周围的高频字（"的"这类）掩护过去
       // ——这条是我把坏串种进 index.html 的 <title> 才发现的，整串口径当时放过了它。
@@ -423,6 +483,14 @@ describe('style debt ratchet', () => {
     expect(suspicious(`<span>${GARBLED}</span>`)).toBe(true)
     expect(suspicious(`<span>${RESTORED}</span>`)).toBe(false)
     expect(suspicious(`msg = "对接上游${String.fromCodePoint(0xfffd)}服务"`)).toBe(true)
+    // 第三条腿的两方向自证：分隔符被误读成高频字必须抓到；"能复原、但复原出来是字母"的正常词必须放过
+    const SEP = String.fromCharCode(0x8def) // 路 <- GBK 读回的 C2 B7，也就是 `·`
+    expect(suspicious(`<span>优先投递 ${SEP} 83</span>`)).toBe(true)
+    expect(suspicious('<span>优先投递 · 83</span>')).toBe(false)
+    expect(suspicious('<el-table-column label="状态" />')).toBe(false) // 能复原成字母串，放过
+    expect(suspicious('<span>每页 20 条</span>')).toBe(false) // 同上
+    // 这条是"复用"条件存在的理由：`说` 复原成 U+02F5，既不是字母也不是组合符号，但本仓从不写它
+    expect(suspicious(`TAG = "说 JD 要求全缺"`)).toBe(false)
   })
 
   it('keeps the cross-page "last selection" handoff inside utils/lastSelection', () => {
