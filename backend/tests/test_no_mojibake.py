@@ -11,6 +11,9 @@ CJK 连续窗口**里连一个高频字（字频基准里出现 >=5 次）都没
 ① 串里恰好混进一个高频字时看不见（如 `鐩镐技搴` 的"技"）。试过加"罕见字占比 >=60%"来补，
    结果误伤正常词"熟练掌握"，放弃。
 ② `.md` 文档不在覆盖面内：散文里生僻字连排是合法的（实测 2 处误报），而文档乱码不会到候选人眼前。
+③ 滑窗这条腿要求游程 >=3 字，所以坏串里只要有一个字落在私用区就会被截短到看不见——这正是
+   `JobSearch.vue:972` 的 `建议` 在 D11/D12 之后仍然活着的原因。补的是 PRIVATE_USE 那条结构判据，
+   不是把窗口降到 2 字（降到 2 字会误伤 14 个正常二字词，见该常量处的说明）。
 """
 
 from __future__ import annotations
@@ -26,6 +29,14 @@ FRONTEND_SRC = BACKEND.parent / "frontend" / "src"
 SCANNED_DIRS = ("app", "scripts", "migrations")
 COMMON_AT_LEAST = 5
 CJK_RUN = re.compile(r"[㐀-鿿]{3,}")
+
+# 第二条腿是结构性的，与字频无关：私用区码位（U+E000-U+F8FF）与替换符（U+FFFD）不可能出自人写的
+# 中文文案，只能来自一次误读——GBK 的用户自定义行 0xAA-0xF7 在 CP936 解码下正好落进私用区。
+# 为什么需要这条腿：坏串里只要有一个字落在私用区，下面的 CJK 游程就被截短到 3 字以下，滑窗看不见。
+# 为什么不能改成"把窗口降到 2 字"：前端那份实测有 14 个正常的二字游程两字都不在高频表里
+# （硕士/博士/北京/封装/剩余/左右…），降窗口等于把守卫换成误报器。
+# 用 chr() 而不是 \u 转义：让这条判据的源码里只有 ASCII，不把私用码位本身写进仓库。
+PRIVATE_USE_LO, PRIVATE_USE_HI, REPLACEMENT_CHAR = chr(0xE000), chr(0xF8FF), chr(0xFFFD)
 
 
 def _scanned_files() -> list[Path]:
@@ -61,6 +72,8 @@ def _string_literals(text: str) -> list[tuple[int, str]]:
 
 
 def _is_mojibake(text: str, freq: Counter) -> bool:
+    if any(PRIVATE_USE_LO <= ch <= PRIVATE_USE_HI or ch == REPLACEMENT_CHAR for ch in text):
+        return True  # 私用码位/替换符：不要求能复原，也不是清单，是编码族留下的结构性痕迹
     if "€" in text:  # U+20AC：UTF-8 续字节被 GBK 读成 '€'，正常中文串里不会出现
         return True
     # 3 字**滑窗**，不是整串判断：乱码嵌在正常中文里时（"AI 驱动的涓汉姹傛暀缁"），整串里那个
@@ -102,3 +115,11 @@ def test_the_rule_catches_the_old_corruption_and_skips_legitimate_comments():
     # 句中乱码：坏串嵌在正常中文里（周围都是高频字）也必须判得出——整串口径在这里放过它
     assert _suspicious_literals('TIP = "AI 驱动的涓汉姹傛暀缁"\n', freq)
     assert _suspicious_literals('TIP = "AI 驱动的个人求职教练"\n', freq) == []
+    # 私用区这条腿的两方向自证。正例是前端 JobSearch.vue:972 当年的实际码位序列：`建议` 的 UTF-8 字节
+    # 按 GBK 读回 = U+5BE4 U+9E3F U+E185，最后一个字落在私用区，于是 CJK 游程只剩 2 字、滑窗对它失明。
+    # 码位用 chr() 拼，免得把私用字符本身写进仓库（那正是这条判据要抓的东西）。
+    garbled = chr(0x5BE4) + chr(0x9E3F) + chr(0xE185)
+    restored = chr(0x5EFA) + chr(0x8BAE)
+    assert _suspicious_literals(f'MSG = "{garbled}"\n', freq) == [(1, garbled)]
+    assert _suspicious_literals(f'MSG = "{restored}"\n', freq) == []
+    assert _suspicious_literals(f'MSG = "对接上游{chr(0xFFFD)}服务"\n', freq), "替换符同样只来自一次误读"

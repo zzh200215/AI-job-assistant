@@ -314,6 +314,12 @@ describe('style debt ratchet', () => {
     // 的 CJK 连续窗口里连一个高频字（本仓出现 >=5 次）都没有，就不可能是人写的。
     // 为什么不扩到 .md：散文里生僻字连排是合法的（实测本仓 2 处误报），而文档乱码到不了候选人眼前。
     // 为什么后端守卫只看字符串字面量：整行口径的误报全在注释里（"撞车干扰""回落默认租户"）。
+    // 第二条腿是结构性的：串里出现私用区码位（U+E000-U+F8FF）或 U+FFFD 即判红。正常中文文案不可能
+    // 用到私用码位，而 GBK 的用户自定义行（0xAA-0xF7）在 CP936 解码下正好落到那里——`JobSearch.vue:972`
+    // 的 `建议` 坏成了 U+5BE4 U+9E3F U+E185，第三个字把 CJK 游程截断成 2 字，3 字滑窗从此看不见它。
+    // 为什么不能把窗口降到 2 字：实测本仓有 14 个正常的 2 字游程两字都不在高频表里（硕士/博士/北京/
+    // 封装/剩余/左右…），降窗口就是把守卫改成误报器。私用区这条没有误报面：全仓 550 个跟踪文件扫下来
+    // 只命中一处，而那一处正是滑窗漏掉的那一个。
     const walk = (dir, out = []) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name)
@@ -329,7 +335,11 @@ describe('style debt ratchet', () => {
     for (const { text } of files) {
       for (const ch of text) if (ch >= '一' && ch <= '鿿') freq.set(ch, (freq.get(ch) || 0) + 1)
     }
+    // 私用区码位（U+E000-U+F8FF）与替换符不可能出现在人写的中文文案里，它们只来自一次误读；
+    // 这条腿不看频率、不要求能复原，专治"游程被私用字截短到 3 字以下"的那一类。
+    const PRIVATE_USE = /[\uE000-\uF8FF\uFFFD]/
     const suspicious = (line) => {
+      if (PRIVATE_USE.test(line)) return true
       if (line.includes('€')) return true
       // 用 3 字**滑窗**而不是整串：乱码嵌在正常句子里时，整串会被周围的高频字（"的"这类）掩护过去
       // ——这条是我把坏串种进 index.html 的 <title> 才发现的，整串口径当时放过了它。
@@ -358,6 +368,14 @@ describe('style debt ratchet', () => {
     expect(suspicious('<title>AI 驱动的涓汉姹傛暀缁</title>')).toBe(true)
     expect(suspicious('<title>AI 驱动的个人求职教练</title>')).toBe(false)
     expect(suspicious('TIP = "熟练掌握"')).toBe(false)
+    // 私用区这条腿的两方向自证。正例就是 JobSearch.vue:972 当年的实际码位序列：三个字里最后那个
+    // 落在私用区，于是 CJK 游程只剩 2 字，滑窗这条腿从一开始就看不见它（频率窗口降到 2 字又会误伤
+    // 14 个正常词，所以补的不是窗口，是这条结构判据）。码位用 fromCodePoint 拼，避免把坏字符写进源码。
+    const GARBLED = String.fromCodePoint(0x5be4, 0x9e3f, 0xe185)
+    const RESTORED = String.fromCodePoint(0x5efa, 0x8bae)
+    expect(suspicious(`<span>${GARBLED}</span>`)).toBe(true)
+    expect(suspicious(`<span>${RESTORED}</span>`)).toBe(false)
+    expect(suspicious(`msg = "对接上游${String.fromCodePoint(0xfffd)}服务"`)).toBe(true)
   })
 
   it('keeps the cross-page "last selection" handoff inside utils/lastSelection', () => {

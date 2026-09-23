@@ -969,7 +969,7 @@
               </ul>
             </div>
             <div v-if="explainResult.optimization_suggestions?.length" class="explain-list">
-              <span>寤鸿</span>
+              <span>建议</span>
               <ul>
                 <li v-for="item in explainResult.optimization_suggestions.slice(0, 3)" :key="item">
                   {{ item }}
