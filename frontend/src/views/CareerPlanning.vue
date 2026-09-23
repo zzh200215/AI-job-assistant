@@ -540,7 +540,7 @@
                 v-for="phase in roadmapPhases"
                 :key="phase.id || phase.name"
                 :timestamp="`${phase.order || '-'} / ${phase.duration_months || '-'}个月`"
-                :color="phase.color || '#409EFF'"
+                :color="phase.color || 'var(--app-primary)'"
                 placement="top"
               >
                 <div class="phase-card">

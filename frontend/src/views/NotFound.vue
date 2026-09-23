@@ -1,7 +1,7 @@
 <template>
   <div class="not-found-page">
     <div class="not-found-card">
-      <el-icon class="icon" :size="80" color="#667eea">
+      <el-icon class="icon" :size="80" color="var(--app-violet)">
         <WarningFilled />
       </el-icon>
       <h1 class="code">404</h1>

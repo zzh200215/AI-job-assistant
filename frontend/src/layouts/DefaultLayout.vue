@@ -48,8 +48,6 @@
           router
           class="nav-menu"
           background-color="transparent"
-          text-color="#4b5563"
-          active-text-color="#196bdb"
         >
           <el-menu-item
             v-for="item in candidateNav"

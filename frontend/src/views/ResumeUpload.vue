@@ -157,7 +157,14 @@
           <div class="diag-score-gauge">
             <div class="gauge-ring">
               <svg viewBox="0 0 120 120" style="width: 100px; height: 100px">
-                <circle cx="60" cy="60" r="54" fill="none" stroke="#eee" stroke-width="8" />
+                <circle
+                  cx="60"
+                  cy="60"
+                  r="54"
+                  fill="none"
+                  stroke="var(--app-line)"
+                  stroke-width="8"
+                />
                 <circle
                   cx="60"
                   cy="60"

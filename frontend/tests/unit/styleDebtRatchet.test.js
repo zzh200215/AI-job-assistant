@@ -53,13 +53,21 @@ const BUDGET = {
      风险点/改进建议两个 Element 默认色、两处内联 SVG 描边、一个兜底色），且都与
      主题 token 不同值。本段一条都没换成 var()：`stroke="var(--app-…)"` 这类表现
      属性必须能在浏览器里看结果才敢改，而 browser 工具被会话策略拦着。 */
+  /* 模板属性里的色值。三个维度里只有这一维必须逐条在真浏览器里看过才敢动（D1 第三段）。
+     D17 动了 5 处，其中 2 处是**删掉**而不是换成 token：`el-menu` 的 `text-color` /
+     `active-text-color` 在本文件 `<style>` 里被 `.el-menu-item`、`:hover`、`.is-active`、
+     `.el-sub-menu__title` 四条 `color: … !important` 全覆盖，实测把属性值改成 #ff00ff/#00ffff
+     后 23 个导航项的计算色一个字节都没动（167,169,181 / 189,164,255）——它们从来不说真话，
+     留着只会误导下一个人。剩下 3 处各有各的理由不动：
+     - Login 17 处是 Google/GitHub 官方品牌色与雷达图描边，本就该写死；
+     - DefaultLayout 这 1 处是品牌标记的白描边，压在 #6d3ce8 的紫色块上，是刻意的对比色，
+       不是"忘了用 token"（它等于 --app-surface-strong 也是巧合）；
+     - ExplainMatch 2 处：D16 查到这个视图**没有路由可达**（`explain-match` 是 redirect），
+       改了没人看见，等 §7 阶段 3 决定删不删。 */
   templateColorLiterals: {
     'src/views/Login.vue': 17,
-    'src/layouts/DefaultLayout.vue': 3,
+    'src/layouts/DefaultLayout.vue': 1,
     'src/views/ExplainMatch.vue': 2,
-    'src/views/CareerPlanning.vue': 1,
-    'src/views/NotFound.vue': 1,
-    'src/views/ResumeUpload.vue': 1,
   },
   /* 状态→el-tag 颜色此前和分数色板同病：17 份手写表、32 个键，其中 `running` 在任务中心
      是蓝、两个 agent 页是橙，`ongoing` 在房间页是绿、设置页是橙。异步任务与面试会话两组
