@@ -271,13 +271,56 @@ describe('style debt ratchet', () => {
     // 简历中心的诊断弹窗以前有个按钮往这条路由里塞 jd_id：诊断接口从不返回 jd_id，
     // 所以它永远渲染不出来；而一旦返回，候选人看到的就是 id 恰好撞上的**另一条**分析记录。
     const offenders = viewSources
-      .filter(({ script, template }) => /\/analysis\/\$\{[^}]*jd[^}]*\}/i.test(`${script}${template}`))
+      .filter(({ script, template }) =>
+        /\/analysis\/\$\{[^}]*jd[^}]*\}/i.test(`${script}${template}`)
+      )
       .map(({ rel }) => rel)
     expect(
       offenders,
       `/analysis/:id wants an AnalysisRecord id, never a JD id — link to the record the action produced, or do not offer the jump: ${offenders.join(
         ', '
       )}`
+    ).toEqual([])
+  })
+
+  it('ships no GBK-mis-decoded (mojibake) UI strings', () => {
+    // 判据不靠手写坏字清单：这类损坏产出的是一串正文里几乎不重复的生僻字，
+    // 所以"一行里出现 >=3 个全仓只出现一次的 CJK 字"就是它自己的指纹。
+    // 若哪天因正当生僻字（人名/地名）误报，把那个字加进 allowlist，别调低阈值。
+    const walk = (dir, out = []) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory()) walk(full, out)
+        else if (/\.(vue|js)$/.test(entry.name))
+          out.push({ rel: full.split(path.sep).join('/'), text: readFileSync(full, 'utf8') })
+      }
+      return out
+    }
+    const files = walk('src')
+    const freq = new Map()
+    for (const { text } of files) {
+      for (const ch of text) if (ch >= '一' && ch <= '鿿') freq.set(ch, (freq.get(ch) || 0) + 1)
+    }
+    const suspicious = (line) => {
+      if (line.includes('€')) return true
+      // 乱码的指纹是一整段"正文里几乎不出现的字"连着出现：一段 CJK 连续串里连一个高频字
+      // （出现 >=5 次）都没有，就不可能是人写的句子。
+      // 已知漏报：乱码串里恰好混进一个高频字时看不见（`鐩镐技搴` 的"技"就是这样，本仓曾有一条
+      // 这样的损坏并已修）；想靠"罕见字比例"补这个洞会误伤"熟练掌握"这种正常词，已试过并放弃。
+      for (const run of line.match(/[㐀-鿿]{3,}/g) || []) {
+        if (![...run].some((ch) => (freq.get(ch) || 0) >= 5)) return true
+      }
+      return false
+    }
+    const offenders = files
+      .map(({ rel, text }) => {
+        const i = text.split(/\r?\n/).findIndex(suspicious)
+        return i < 0 ? null : `${rel}:${i + 1}`
+      })
+      .filter(Boolean)
+    expect(
+      offenders,
+      `这些行的中文是被按 GBK 读回后另存的乱码，候选人看到的就是这串生僻字：${offenders.join(', ')}`
     ).toEqual([])
   })
 

@@ -280,7 +280,7 @@
           <el-timeline-item
             v-for="(item, index) in searchResults"
             :key="index"
-            :timestamp="`${item.doc_title} 路 ${typeLabel(item.doc_type)} 路 鐩镐技搴?${formatScore(item.score)}`"
+            :timestamp="`${item.doc_title} · ${typeLabel(item.doc_type)} · 相似度 ${formatScore(item.score)}`"
           >
             <div class="search-text">
               {{ item.text?.slice(0, 320) }}{{ item.text?.length > 320 ? '...' : '' }}
@@ -529,7 +529,7 @@
       >
         <template #append>
           <el-button size="small" type="danger" :loading="retrying" @click="retryUpload">
-            閲嶆柊涓婁紶
+            重新上传
           </el-button>
         </template>
       </el-alert>
@@ -867,7 +867,7 @@ async function onReprocess(row) {
   reprocessingId.value = row.id
   try {
     await reprocessKnowledgeDoc(row.id)
-    ElMessage.success('宸叉彁浜ら噸澶勭悊')
+    ElMessage.success('已提交重处理')
     await loadList()
     if (detailDoc.value?.id === row.id) {
       await refreshDetail(row.id)

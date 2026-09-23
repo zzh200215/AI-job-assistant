@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 _RECOMMEND_CACHE: "OrderedDict[str, dict[str, Any]]" = OrderedDict()
 _RECOMMEND_CACHE_MAX = 128
 _RECOMMEND_CACHE_LOCK = threading.Lock()
-_CACHE_TTL = 86400  # 24 灏忔椂
+_CACHE_TTL = 86400  # 24 小时
 # 只对粗排后的短名单跑 canonical rubric：对全库跑代价不成比例。
 _RERANK_MIN_POOL = 20
 # 同一家公司在截断前的可见列表里最多占几个名额（B3 多样性打散）。

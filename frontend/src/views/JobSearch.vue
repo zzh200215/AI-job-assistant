@@ -45,7 +45,7 @@
         <div class="metric-card accent-dark">
           <span class="metric-label">流程中岗位</span>
           <strong>{{ pipelineActiveCount }}</strong>
-          <small>寰呮姇閫掑埌宸茬害闈㈢粺涓€璺熻釜</small>
+          <small>待投递到已约面统一跟踪</small>
         </div>
       </div>
     </section>
@@ -790,7 +790,7 @@
           </div>
 
           <div class="board-block">
-            <span class="board-label">甯傚満瑙傚療</span>
+            <span class="board-label">市场观察</span>
             <div class="insight-grid">
               <div class="insight-item">
                 <strong>{{ marketInsights.salaryBand }}</strong>
@@ -1089,7 +1089,7 @@ const selectedResumeDetail = ref(null)
 
 const searching = ref(false)
 const hasSearched = ref(false)
-const searchHint = ref('姝ｅ湪鎼滅储鏈€鏂板矖浣?..')
+const searchHint = ref('正在搜索最新岗位...')
 const searchError = ref('')
 const isDemo = ref(false)
 const resultMode = ref('')
@@ -1715,13 +1715,13 @@ function resetSearchFilters() {
 }
 
 function normalizeJob(item, seed) {
-  const salary = item.salary || item.salary_range || '钖祫闈㈣'
+  const salary = item.salary || item.salary_range || '薪资面议'
   const skillTags = uniqueList(item.skill_tags || item.skillTags || [])
   const normalized = {
     uid: `${seed}-${item.id || item.external_id || item.title || 'job'}`,
     id: item.id || null,
-    title: item.title || item.job_title || '鏈煡宀椾綅',
-    company: item.company || '鏈煡鍏徃',
+    title: item.title || item.job_title || '未知岗位',
+    company: item.company || '未知公司',
     location: item.location || '',
     salary,
     experience: item.experience || item.experience_requirement || '',
