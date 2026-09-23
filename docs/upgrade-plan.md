@@ -748,7 +748,7 @@ agent.SummaryAgent           real  tokens=3215
 
 **先量，量出来的和预想不一样**：`class="panel-header"` 在 31 个视图里出现 **93 处**，但样式**早就集中**在 `styles/panels.css`（`main.js:9` 全局引入）——重复的是**标记**（那四层 div），不是规则。只有 **6 个视图**自带 `.panel-header` scoped 规则，全仓 `:deep(.panel-header)` **0 处**。所以"抽 AppPanel 能删掉 93 份 CSS"这个预期是错的，能删的只有标记。
 
-**真正的约束**（写进组件注释，也写进台账）：Vue 的 scoped CSS 只作用于**本组件模板里的节点**外加子组件的**根元素**。标记一旦搬进 `AppPanel`，父视图那条 `.panel-header { … }` 就再也匹配不到它——迁移会把这 6 个视图的样式静默改掉。所以它们必须先解决覆盖（搬进 `panels.css` 或改成 props），不能直接迁。
+**真正的约束**（写进组件注释，也写进台账）：Vue 的 scoped CSS 只作用于**本组件模板里的节点**外加子组件的**根元素**。标记一旦搬进 `AppPanel`，父视图那条 `.panel-header { … }` 就再也匹配不到它——迁移会把这 6 个视图的样式静默改掉。所以它们必须先解决覆盖（搬进 `panels.css` 或改成 props），不能直接迁。→ **D20 更正**：机制成立，但"必须先解决覆盖"过强——Home 那两条覆盖在**未改动状态**下就从未到过屏幕（被主题层的 `!important` 与 token 压住）。正确做法是**逐个量覆盖是否真的生效**，别照这句直接开工。
 
 **做了什么**：新建 `src/components/ui/AppPanel.vue`（`.panel > .panel-header > .panel-title-row` + `.panel-body`，槽 `#icon` / `#title` / `#actions` / 默认，prop 只有 `iconColor`），迁掉 `WeeklyReport.vue` 的 **5 处**（其中 2 处带 `v-if`——`v-if` 挂在组件根上行为一致，属性原样带走）。
 
@@ -778,6 +778,26 @@ agent.SummaryAgent           real  tokens=3215
 **没验**：第 5 个面板有 `v-if="adviceText"`，桩数据下它是空的，两次快照都没渲染出来——所以 5 处迁移只有 4 处进了真页面比对，剩下那 1 处只由脚本的形状断言（图标/标题/操作区/闭合逐行匹配，块数≠5 就中止）保证。
 
 **门禁**：`test:unit` **101 passed** / 18 files、棘轮 **27** 全绿、smoke 11、lint **0 error**、build ok、`prettier --check .` clean、改动文件均为 LF。后端**无改动**。
+
+#### 已交付：D20 Home 的两条"覆盖"从来没到过屏幕——逐个量，而不是默认先解决（提交 `ad2a2c2`）
+
+**要解的是 D18 留下的账**：6 个视图自带 `.panel-header` scoped 规则，按 D18 的说法"必须先解决覆盖才能迁"。从 Home 开始做，第一件事就推翻了这个前提的强度。
+
+**Home 那两条规则是死的。** 在**未改动的 HEAD** 上实测：4 个面板头部的 `border-bottom-color` 是 `rgb(44,47,61)`（= `#2c2f3d` = `--app-line`），h3 是 `rgb(241,243,248)`（= `#f1f3f8` = 深色块里的 `--app-text`）。而 Home 的 scoped 规则写的是 `#2a2c38` 与 `#f1f2f6`——**这两个值从未出现在任何计算样式里**。边框那条被 `main.css:624-625` 的 `.workspace-theme .panel-header { border-bottom-color: var(--app-line) !important }` 压住；h3 那条被 token 化的主题色压住，且手挑值与 token 只差几个单位（和 D14、D17 是同一族"看着像样式其实是装饰"）。
+
+**那为什么还要搬进 `panels.css`？** 不是为了修渲染，是为了**让意图活过组件边界**：留在 scoped 里，这两条会在标记迁走的那一刻静默消失；而 §11 那张通配网（含 56 个 `!important`）按计划要收窄，撤掉之后它们会开始起作用。搬进全局表就是把这件事显式化，理由写在了 `panels.css` 的新注释里。特异性也没丢：`.dashboard-page .panel-header h3` 是 (0,2,1)，仍压得住 `.panel-title-row h3` 的 (0,1,1)。
+
+**迁了 Home 的 4 处**（`today-panel` / `actions-panel` / `funnel-panel` / `trend-panel`）：修饰类通过属性透传落在组件根上，而**子组件根带着父组件的 scope id**，所以 Home 自己的 `.today-panel` 等规则照常生效；其中 1 处带 `#actions`（一个裸 `el-tag`）。
+
+**三段快照分别归因**：A = HEAD、B = 只搬 CSS、C = 再迁标记。**A↔B 0 差异，B↔C 0 差异**（323 个元素 × 20 条计算属性，含文本）。这样"搬 CSS"和"迁标记"各自的后果是分开的，不是揉成一个"看起来没变"。
+
+**台账**：`handRolledPanelHeaders` 83 → **79**；`LOCAL_OVERRIDE_FILES` 6 → **5**；Home 的 `hardcodedColorLiterals` 72 → **71**（两条死 hex 出账）。
+
+**顺带修了判据自己的一个口径错误（第五次"尺子数了不该数的东西"）**：覆盖清单那条测试原先把 **CSS 注释里写到的 `.panel-header`** 也算成还在覆盖——我搬完规则留了一句说明，结果它把自己判红。改成先剥 `/* … */` 再匹配，与后端乱码守卫"只看 `ast` 字面量、不看注释"同口径。
+
+**对剩下 5 个视图的含义**（别照 D18 那句话执行）：不该默认"先解决覆盖"，要**逐个量覆盖是否真的到达屏幕**。已经看出来的三种不同阻塞：`JobSearch`(1) 与 `KnowledgeBase`(4) 用的是 **`h2` + `p` 描述型头部**，`AppPanel` 目前不支持副标题——这才是它们真正卡住的地方，与 scoped 无关；`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding，要先定哪个是权威；`Register`(1) 的"panel"是注册卡片的局部命名，不是同一个组件；`OrganizationWorkspace`(3) 随企业侧冻结。
+
+**门禁**：`test:unit` **101 passed** / 18 files、棘轮 **27** 全绿、smoke 11、lint **0 error**、build ok、`prettier --check .` clean、改动文件均为 LF。后端**无改动**。**没验**：Home 深色态在**撤掉通配网之后**的样子（那时这两条搬走的规则才第一次生效，现在无法验证）；`#actions` 在 Home 这一处只验了"渲染不变"，没验它换内容后的排版。
 
 预算生成脚本 `scripts/style-budget.mjs` 同步改为三个维度都输出（此前只印 `<style>` 一条，谁照它重生成预算就会把另外两条写没了）。当前账本：`<style>` **510 处 / 34 文件**、`<script>` **0**、模板 **25 处 / 6 文件**。
 
