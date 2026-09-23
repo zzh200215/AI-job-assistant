@@ -45,12 +45,32 @@
   --app-score-warn: var(--app-warning);
   --app-score-risk: var(--app-danger);
   --app-score-unknown: var(--app-muted);
-  --app-score-high-fill: linear-gradient(135deg, var(--app-score-high), color-mix(in srgb, var(--app-score-high), white 24%));
-  --app-score-good-fill: linear-gradient(135deg, var(--app-score-good), color-mix(in srgb, var(--app-score-good), white 24%));
-  --app-score-warn-fill: linear-gradient(135deg, var(--app-score-warn), color-mix(in srgb, var(--app-score-warn), white 24%));
-  --app-score-risk-fill: linear-gradient(135deg, var(--app-score-risk), color-mix(in srgb, var(--app-score-risk), white 24%));
+  --app-score-high-fill: linear-gradient(
+    135deg,
+    var(--app-score-high),
+    color-mix(in srgb, var(--app-score-high), white 24%)
+  );
+  --app-score-good-fill: linear-gradient(
+    135deg,
+    var(--app-score-good),
+    color-mix(in srgb, var(--app-score-good), white 24%)
+  );
+  --app-score-warn-fill: linear-gradient(
+    135deg,
+    var(--app-score-warn),
+    color-mix(in srgb, var(--app-score-warn), white 24%)
+  );
+  --app-score-risk-fill: linear-gradient(
+    135deg,
+    var(--app-score-risk),
+    color-mix(in srgb, var(--app-score-risk), white 24%)
+  );
   /* 没跑过评分的简历也会走到这一档：条形不能空着，也不能显示成红色差评。 */
-  --app-score-unknown-fill: linear-gradient(135deg, var(--app-score-unknown), color-mix(in srgb, var(--app-score-unknown), white 24%));
+  --app-score-unknown-fill: linear-gradient(
+    135deg,
+    var(--app-score-unknown),
+    color-mix(in srgb, var(--app-score-unknown), white 24%)
+  );
   /* 浅底 + 描边：面试房间的回答分数胶囊用。旧稿是 8 个手挑 hex，这里由同一份 tone 派生，
      色差实测都在 ±5/255 以内，所以换过来的只是出处，不是观感。 */
   --app-score-high-soft: color-mix(in srgb, var(--app-score-high), white 92%);
@@ -529,20 +549,22 @@ code,
 /* Page composition surfaces: these are intentionally explicit. Several of the
    original modules used `background` shorthands with light gradients, which
    cannot be corrected by a background-color compatibility rule. */
-.workspace-theme .main-shell :is(
-  .resume-workflow,
-  .analysis-hero,
-  .career-hero,
-  .agent-focus-strip,
-  .career-focus-strip,
-  .page-header,
-  .identity-card,
-  .status-card,
-  .summary-card,
-  .hm-item,
-  .trace-result-item,
-  .achievement-card.locked
-) {
+.workspace-theme
+  .main-shell
+  :is(
+    .resume-workflow,
+    .analysis-hero,
+    .career-hero,
+    .agent-focus-strip,
+    .career-focus-strip,
+    .page-header,
+    .identity-card,
+    .status-card,
+    .summary-card,
+    .hm-item,
+    .trace-result-item,
+    .achievement-card.locked
+  ) {
   background: var(--app-surface-strong) !important;
   border-color: var(--app-line) !important;
   box-shadow: none !important;
@@ -552,7 +574,9 @@ code,
   border-left-color: var(--app-primary) !important;
 }
 
-.workspace-theme .main-shell :is(.hero-copy, .workflow-index, .trace-stat-card, .trace-card, .step-output) {
+.workspace-theme
+  .main-shell
+  :is(.hero-copy, .workflow-index, .trace-stat-card, .trace-card, .step-output) {
   background: var(--app-bg) !important;
   border-color: var(--app-line) !important;
 }
@@ -573,7 +597,9 @@ code,
   background: #39345f !important;
 }
 
-.workspace-theme .main-shell :is(.hero-badges span, .identity-pills span, .hero-pills span, .hero-tags span) {
+.workspace-theme
+  .main-shell
+  :is(.hero-badges span, .identity-pills span, .hero-pills span, .hero-tags span) {
   background: #202538 !important;
   border-color: #34466e !important;
   color: #a9c5ff !important;

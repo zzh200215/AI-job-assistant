@@ -427,13 +427,13 @@
                 </div>
               </div>
 
-    <!-- 失败态与"仓库是空的"是两回事 -->
-    <AppLoadError
-      v-else-if="localError"
-      title="本地岗位仓库加载失败"
-      :message="localError"
-      @retry="loadLocalJobs"
-    />
+              <!-- 失败态与"仓库是空的"是两回事 -->
+              <AppLoadError
+                v-else-if="localError"
+                title="本地岗位仓库加载失败"
+                :message="localError"
+                @retry="loadLocalJobs"
+              />
 
               <el-empty v-else description="岗位仓库还是空的，可以先搜索外部岗位或导入演示数据。" />
             </el-tab-pane>

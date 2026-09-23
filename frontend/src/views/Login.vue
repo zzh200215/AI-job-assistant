@@ -328,7 +328,8 @@ const handleLogin = async () => {
   position: relative;
   overflow: hidden;
   /* T2-5：租户配置 login_bg 时用品牌背景图，否则回落默认渐变 */
-  background: var(--app-login-bg, linear-gradient(145deg, #0f1729 0%, #162544 100%)) center / cover no-repeat;
+  background: var(--app-login-bg, linear-gradient(145deg, #0f1729 0%, #162544 100%)) center / cover
+    no-repeat;
   color: #f0f4ff;
   padding: 44px 40px;
   display: flex;

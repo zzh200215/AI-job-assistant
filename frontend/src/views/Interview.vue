@@ -44,7 +44,9 @@
             <div class="interview-dot violet" />
             <div class="interview-info">
               <strong>{{ item.company || '' }} - {{ item.title || '' }}</strong>
-              <span>第{{ item.interview_round || 1 }}轮 · {{ monthDayTime(item.interview_at) }}</span>
+              <span
+                >第{{ item.interview_round || 1 }}轮 · {{ monthDayTime(item.interview_at) }}</span
+              >
             </div>
             <div class="interview-actions">
               <el-button size="small" @click.stop="startPrep(item)">AI准备</el-button>
@@ -176,9 +178,7 @@
           <div v-for="area in weakAreas" :key="area.name" class="weak-card">
             <div class="weak-header">
               <strong>{{ area.name }}</strong>
-              <el-tag :type="weakAreaTag(area.score)" size="small"
-                >{{ area.score }}分</el-tag
-              >
+              <el-tag :type="weakAreaTag(area.score)" size="small">{{ area.score }}分</el-tag>
             </div>
             <p class="weak-desc">{{ area.desc || '建议加强该方向训练' }}</p>
             <div class="weak-actions">

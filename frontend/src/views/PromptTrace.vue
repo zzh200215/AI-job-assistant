@@ -121,7 +121,9 @@
       <div class="stat-card" :class="{ 'stat-card-alert': degradedCount > 0 }">
         <div class="stat-value">{{ percentText(summary.degraded_rate || 0) }}</div>
         <div class="stat-label">
-          非主模型应答 {{ degradedCount }} 次<span v-if="degradedBreakdown">（{{ degradedBreakdown }}）</span>
+          非主模型应答 {{ degradedCount }} 次<span v-if="degradedBreakdown"
+            >（{{ degradedBreakdown }}）</span
+          >
         </div>
       </div>
       <div class="stat-card">
@@ -437,7 +439,12 @@ const RESPONSE_SOURCES = {
 }
 
 function sourceMeta(row) {
-  return RESPONSE_SOURCES[row?.response_source] || { label: row?.response_source || '未知', type: 'info' }
+  return (
+    RESPONSE_SOURCES[row?.response_source] || {
+      label: row?.response_source || '未知',
+      type: 'info',
+    }
+  )
 }
 
 function sourceLabel(row) {
@@ -645,7 +652,6 @@ function signed(value, percent = false) {
   if (percent) return `${num >= 0 ? '+' : ''}${Math.round(num * 100)}%`
   return `${num >= 0 ? '+' : ''}${Number(num.toFixed(2))}`
 }
-
 </script>
 
 <style scoped>

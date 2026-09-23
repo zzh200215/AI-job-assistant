@@ -55,7 +55,11 @@
             <em>{{ s.rate }}%</em>
           </div>
         </div>
-        <el-empty v-if="!funnelSteps.length && !loading" description="暂无漏斗数据" :image-size="72" />
+        <el-empty
+          v-if="!funnelSteps.length && !loading"
+          description="暂无漏斗数据"
+          :image-size="72"
+        />
       </el-card>
 
       <el-card shadow="never" class="panel action-panel">
@@ -77,7 +81,11 @@
             <b>{{ item.value }}</b>
           </div>
         </div>
-        <el-empty v-if="!filteredOrders.length && !loading" description="暂无订单数据" :image-size="72" />
+        <el-empty
+          v-if="!filteredOrders.length && !loading"
+          description="暂无订单数据"
+          :image-size="72"
+        />
       </el-card>
     </section>
 
@@ -91,7 +99,12 @@
           <el-button type="primary" plain @click="router.push('/admin/orders')">管理订单</el-button>
         </div>
       </template>
-      <el-table v-if="filteredOrders.length" :data="filteredOrders.slice(0, 6)" size="small" style="width: 100%">
+      <el-table
+        v-if="filteredOrders.length"
+        :data="filteredOrders.slice(0, 6)"
+        size="small"
+        style="width: 100%"
+      >
         <el-table-column prop="id" label="订单号" width="88"
           ><template #default="{ row }">#{{ row.id }}</template></el-table-column
         >

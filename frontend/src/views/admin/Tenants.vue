@@ -69,7 +69,9 @@
         </el-table-column>
         <el-table-column label="状态" width="96">
           <template #default="{ row }">
-            <el-tag size="small" :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
+            <el-tag size="small" :type="statusTagType(row.status)">{{
+              statusLabel(row.status)
+            }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="套餐" width="104">
@@ -80,7 +82,9 @@
           </template>
         </el-table-column>
         <el-table-column label="管理员" min-width="110">
-          <template #default="{ row }">{{ row.admin_user_id ? `用户 #${row.admin_user_id}` : '-' }}</template>
+          <template #default="{ row }">{{
+            row.admin_user_id ? `用户 #${row.admin_user_id}` : '-'
+          }}</template>
         </el-table-column>
         <el-table-column label="域名" width="86">
           <template #default="{ row }">
@@ -108,11 +112,7 @@
             <el-button text type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button text type="primary" @click="openAdmin(row)">管理员</el-button>
             <el-button text type="warning" @click="openRenew(row)">续费</el-button>
-            <el-button
-              v-if="row.status !== 'expired'"
-              text
-              type="danger"
-              @click="deactivate(row)"
+            <el-button v-if="row.status !== 'expired'" text type="danger" @click="deactivate(row)"
               >停用</el-button
             >
             <el-button v-else text type="success" @click="activate(row)">启用</el-button>
@@ -284,9 +284,23 @@ const statusFilter = ref('all')
 const domains = ref({}) // tenant_id -> [domain rows]
 
 const createVisible = ref(false)
-const createForm = reactive({ name: '', slug: '', industry: '', plan_tier: 'free', expires_at: '', domain: '' })
+const createForm = reactive({
+  name: '',
+  slug: '',
+  industry: '',
+  plan_tier: 'free',
+  expires_at: '',
+  domain: '',
+})
 const editVisible = ref(false)
-const editForm = reactive({ id: null, name: '', industry: '', plan_tier: 'free', status: 'active', expires_at: '' })
+const editForm = reactive({
+  id: null,
+  name: '',
+  industry: '',
+  plan_tier: 'free',
+  status: 'active',
+  expires_at: '',
+})
 const adminVisible = ref(false)
 const adminForm = reactive({ tenant_id: null, user_id: null })
 const renewVisible = ref(false)
@@ -298,12 +312,15 @@ const newDomain = ref('')
 const activeCount = computed(() => tenants.value.filter((t) => t.status === 'active').length)
 const expiringCount = computed(() => {
   const soon = Date.now() + 30 * 24 * 60 * 60 * 1000
-  return tenants.value.filter((t) => t.expires_at && new Date(t.expires_at).getTime() <= soon).length
+  return tenants.value.filter((t) => t.expires_at && new Date(t.expires_at).getTime() <= soon)
+    .length
 })
 const currentDomains = computed(() => domains.value[currentTenant.value?.id] || [])
 
 function initials(name) {
-  return String(name || 'T').slice(0, 1).toUpperCase()
+  return String(name || 'T')
+    .slice(0, 1)
+    .toUpperCase()
 }
 function statusLabel(s) {
   return { active: '有效', suspended: '已暂停', expired: '已过期' }[s] || s || '-'
@@ -346,7 +363,14 @@ async function loadDomains(tenantId) {
 }
 
 function openCreate() {
-  Object.assign(createForm, { name: '', slug: '', industry: '', plan_tier: 'free', expires_at: '', domain: '' })
+  Object.assign(createForm, {
+    name: '',
+    slug: '',
+    industry: '',
+    plan_tier: 'free',
+    expires_at: '',
+    domain: '',
+  })
   createVisible.value = true
 }
 

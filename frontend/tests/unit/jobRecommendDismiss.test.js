@@ -43,7 +43,11 @@ function job(jdId, title) {
 }
 
 async function renderRecommend() {
-  const route = { path: '/jobs/recommend', name: 'job-recommend', component: { template: '<div />' } }
+  const route = {
+    path: '/jobs/recommend',
+    name: 'job-recommend',
+    component: { template: '<div />' },
+  }
   const router = createRouter({ history: createMemoryHistory(), routes: [route] })
   router.push('/jobs/recommend?resume_id=7')
   await router.isReady()
@@ -71,7 +75,15 @@ beforeEach(() => {
   api.getSuppressedJobs.mockResolvedValue({
     total: 1,
     orphaned: 0,
-    items: [{ jd_id: 11, job_title: '后端工程师', company: '示例公司', location: '上海', reasons: ['dismiss'] }],
+    items: [
+      {
+        jd_id: 11,
+        job_title: '后端工程师',
+        company: '示例公司',
+        location: '上海',
+        reasons: ['dismiss'],
+      },
+    ],
   })
   api.bookmarkJob.mockResolvedValue({})
   api.submitJobFeedback.mockResolvedValue({})
@@ -119,9 +131,7 @@ describe('岗位推荐：隐藏与恢复', () => {
     const wrapper = await renderRecommend()
     expect(api.getSuppressedJobs).not.toHaveBeenCalled()
 
-    const button = wrapper
-      .findAll('button')
-      .find((b) => b.text().trim() === '已忽略的岗位')
+    const button = wrapper.findAll('button').find((b) => b.text().trim() === '已忽略的岗位')
     expect(button).toBeTruthy()
     await button.trigger('click')
     await flushPromises()

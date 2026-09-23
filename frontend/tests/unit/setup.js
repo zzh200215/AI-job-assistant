@@ -27,7 +27,14 @@ window.matchMedia ??= (query) => ({
   },
 })
 
-Range.prototype.getBoundingClientRect ??= () => ({ width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0 })
+Range.prototype.getBoundingClientRect ??= () => ({
+  width: 0,
+  height: 0,
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+})
 Element.prototype.scrollTo ??= () => {}
 
 // The response interceptor in src/api/request.js unwraps `{ code: 0, data }`,
@@ -50,14 +57,17 @@ function emptyPayload(url) {
   return EMPTY_LIST
 }
 
-const requestMock = Object.assign(vi.fn(async (config) => ({ data: emptyPayload(config?.url) })), {
-  get: vi.fn(async (url) => emptyPayload(url)),
-  post: vi.fn(async (url) => emptyPayload(url)),
-  put: vi.fn(async (url) => emptyPayload(url)),
-  patch: vi.fn(async (url) => emptyPayload(url)),
-  delete: vi.fn(async (url) => emptyPayload(url)),
-  interceptors: { request: { use() {} }, response: { use() {} } },
-})
+const requestMock = Object.assign(
+  vi.fn(async (config) => ({ data: emptyPayload(config?.url) })),
+  {
+    get: vi.fn(async (url) => emptyPayload(url)),
+    post: vi.fn(async (url) => emptyPayload(url)),
+    put: vi.fn(async (url) => emptyPayload(url)),
+    patch: vi.fn(async (url) => emptyPayload(url)),
+    delete: vi.fn(async (url) => emptyPayload(url)),
+    interceptors: { request: { use() {} }, response: { use() {} } },
+  }
+)
 
 vi.mock('@/api/request', () => ({ default: requestMock }))
 

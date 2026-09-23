@@ -590,9 +590,11 @@
                   >
                     <div class="panel-body">
                       <div class="cp-header">
-                        <span class="cp-score data-value" :class="scoreToneFillClass(cp.match_score)">{{
-                          cp.match_score
-                        }}</span>
+                        <span
+                          class="cp-score data-value"
+                          :class="scoreToneFillClass(cp.match_score)"
+                          >{{ cp.match_score }}</span
+                        >
                         <div class="cp-info">
                           <h4 class="cp-title">{{ cp.title }}</h4>
                           <el-tag

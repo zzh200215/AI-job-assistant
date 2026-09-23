@@ -575,7 +575,8 @@
           另有 {{ suppressed.orphaned }} 条记录对应的岗位已下架，无法恢复。
         </p>
         <p v-if="suppressed.truncated > 0" class="suppressed-note">
-          还有 {{ suppressed.truncated }} 个隐藏岗位未在此列出（单次最多展示 {{ suppressedMax }} 条）。
+          还有 {{ suppressed.truncated }} 个隐藏岗位未在此列出（单次最多展示
+          {{ suppressedMax }} 条）。
         </p>
       </template>
     </el-dialog>

@@ -58,7 +58,10 @@ export const useTenantStore = defineStore('tenant', () => {
   const loaded = ref(false)
 
   function apply(payload) {
-    const merged = payload && typeof payload === 'object' ? { ...DEFAULT_BRAND, ...payload } : { ...DEFAULT_BRAND }
+    const merged =
+      payload && typeof payload === 'object'
+        ? { ...DEFAULT_BRAND, ...payload }
+        : { ...DEFAULT_BRAND }
     brand.value = merged
     applyCssVariables(merged)
     try {

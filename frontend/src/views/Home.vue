@@ -7,7 +7,9 @@
         <h1><span>今天，</span><em>推进一份机会</em></h1>
         <p class="welcome-sub">
           {{ greeting }}，{{ username }}。{{
-            overviewLoaded ? `当前有 ${dashSummary.active_applications || 0} 个活跃投递` : '加载中...'
+            overviewLoaded
+              ? `当前有 ${dashSummary.active_applications || 0} 个活跃投递`
+              : '加载中...'
           }}
         </p>
       </div>

@@ -20,9 +20,7 @@
         <strong>{{ activeResume?.name || activeResume?.file_name || '选择一份简历开始' }}</strong>
         <span class="workflow-caption">
           {{
-            activeResume
-              ? `更新于 ${monthDay(activeResume.create_time)}`
-              : '上传后可进行诊断与匹配'
+            activeResume ? `更新于 ${monthDay(activeResume.create_time)}` : '上传后可进行诊断与匹配'
           }}
         </span>
       </div>
@@ -146,7 +144,13 @@
       <div v-if="diagnosisLoading" class="loading-state">
         <el-icon class="is-loading"><Loading /></el-icon> AI 诊断中...
       </div>
-      <el-alert v-else-if="diagnosisError" type="error" :closable="false" show-icon :title="diagnosisError" />
+      <el-alert
+        v-else-if="diagnosisError"
+        type="error"
+        :closable="false"
+        show-icon
+        :title="diagnosisError"
+      />
       <div v-else-if="currentDiagnosis" class="diagnosis-body">
         <!-- 综合评分 -->
         <div class="diag-score-row">
@@ -281,7 +285,9 @@
           <el-collapse-item name="rewrite">
             <template #title>
               <span>✏️ 行级改写（原文 → 改后）</span>
-              <span v-if="rewrite.items.length" class="rw-count">{{ rewrite.items.length }} 条待处理</span>
+              <span v-if="rewrite.items.length" class="rw-count"
+                >{{ rewrite.items.length }} 条待处理</span
+              >
             </template>
 
             <div class="rw-head">
@@ -293,10 +299,18 @@
               >
                 {{ rewrite.loaded ? '重新生成建议' : '生成改写建议' }}
               </el-button>
-              <span class="rw-hint">建议只覆盖你已写过的文字，逐条决定采纳哪几条；未采纳的不会写进简历。</span>
+              <span class="rw-hint"
+                >建议只覆盖你已写过的文字，逐条决定采纳哪几条；未采纳的不会写进简历。</span
+              >
             </div>
 
-            <el-alert v-if="rewrite.error" type="error" :closable="false" show-icon :title="rewrite.error" />
+            <el-alert
+              v-if="rewrite.error"
+              type="error"
+              :closable="false"
+              show-icon
+              :title="rewrite.error"
+            />
 
             <div v-if="rewrite.loading" class="rw-loading">
               <el-icon class="is-loading"><Loading /></el-icon> 正在逐条比对可改写的文本…
@@ -307,7 +321,11 @@
                 <div class="rw-item-head">
                   <el-checkbox v-model="item._accepted">采纳</el-checkbox>
                   <span class="rw-item-label">{{ item.label }}</span>
-                  <el-tag v-if="rewriteKindLabel(item.kind) !== item.label" size="small" effect="plain">
+                  <el-tag
+                    v-if="rewriteKindLabel(item.kind) !== item.label"
+                    size="small"
+                    effect="plain"
+                  >
                     {{ rewriteKindLabel(item.kind) }}
                   </el-tag>
                 </div>
@@ -596,7 +614,10 @@ function rejectLabel(reason) {
 }
 
 function rewriteKindLabel(kind) {
-  return { skills: '技能', self_evaluation: '自我评价', work: '工作经历', project: '项目经历' }[kind] || kind
+  return (
+    { skills: '技能', self_evaluation: '自我评价', work: '工作经历', project: '项目经历' }[kind] ||
+    kind
+  )
 }
 
 const acceptedRewrites = computed(() => rewrite.items.filter((item) => item._accepted))
@@ -621,7 +642,9 @@ async function generateRewrites() {
     rewrite.dropped = data?.rejected || []
     rewrite.loaded = true
     if (!rewrite.items.length) {
-      ElMessage.info(data?.note || '模型没有给出值得采纳的改写；不是错误，可能这份简历这几处已经写清楚了')
+      ElMessage.info(
+        data?.note || '模型没有给出值得采纳的改写；不是错误，可能这份简历这几处已经写清楚了'
+      )
     }
   } catch (e) {
     rewrite.items = []

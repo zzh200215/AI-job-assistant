@@ -85,7 +85,8 @@ export const getJobBookmarks = (pageSize = 100) =>
   request.get('/jobs/bookmarks/list', { params: { page: 1, page_size: pageSize } })
 
 // 一次调用清掉所有隐藏信号，避免出现"已恢复但仍不出现"的假成功
-export const restoreSuppressedJob = (jdId) => request.post('/jobs/bookmarks/restore', { jd_id: jdId })
+export const restoreSuppressedJob = (jdId) =>
+  request.post('/jobs/bookmarks/restore', { jd_id: jdId })
 
 export const startFullAnalysis = (resumeId, jdId) =>
   request.post('/analysis/full', { resume_id: resumeId, jd_id: jdId })

@@ -224,7 +224,11 @@
       @retry="loadSalaryMarket"
     />
 
-    <el-row v-if="careerPaths.length || salaryMarket || !salaryMarketLoading" :gutter="18" class="result-grid">
+    <el-row
+      v-if="careerPaths.length || salaryMarket || !salaryMarketLoading"
+      :gutter="18"
+      class="result-grid"
+    >
       <el-col :md="12" :xs="24">
         <el-card v-if="careerPaths.length" class="direction-card" shadow="never">
           <template #header>
@@ -258,7 +262,9 @@
                   >
                 </li>
                 <li v-if="item.salary?.has_data">
-                  薪资 P25/P50/P75 = {{ item.salary.p25 }}/{{ item.salary.p50 }}/{{ item.salary.p75 }}
+                  薪资 P25/P50/P75 = {{ item.salary.p25 }}/{{ item.salary.p50 }}/{{
+                    item.salary.p75
+                  }}
                   K（{{ item.salary.sample_size }} 条可解析）
                 </li>
                 <li v-else>薪资：样本岗位均未填写可解析区间</li>
@@ -732,12 +738,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
-import {
-  CircleCloseFilled,
-  Loading,
-  SuccessFilled,
-  WarningFilled,
-} from '@element-plus/icons-vue'
+import { CircleCloseFilled, Loading, SuccessFilled, WarningFilled } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { getResumeList } from '@/api/resume'
 import { createJD, getJDList } from '@/api/jd'
