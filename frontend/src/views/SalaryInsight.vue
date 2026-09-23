@@ -110,42 +110,34 @@
       </div>
 
       <!-- 薪资分布 -->
-      <div v-if="distBars.length" class="panel">
-        <div class="panel-header">
-          <h3>薪资分布</h3>
-        </div>
-        <div class="panel-body">
-          <div class="dist-chart">
-            <div v-for="(bin, idx) in distBars" :key="idx" class="dist-bar-col">
-              <div class="dist-bar" :style="{ height: distHeight(bin.count) }" />
-              <span class="dist-count">{{ bin.count }}</span>
-              <span class="dist-label">{{ bin.range }}</span>
-            </div>
+      <AppPanel v-if="distBars.length">
+        <template #title>薪资分布</template>
+        <div class="dist-chart">
+          <div v-for="(bin, idx) in distBars" :key="idx" class="dist-bar-col">
+            <div class="dist-bar" :style="{ height: distHeight(bin.count) }" />
+            <span class="dist-count">{{ bin.count }}</span>
+            <span class="dist-label">{{ bin.range }}</span>
           </div>
         </div>
-      </div>
+      </AppPanel>
 
       <!-- 城市对比 -->
-      <div v-if="cityRows.length" class="panel">
-        <div class="panel-header">
-          <h3>城市薪资对比</h3>
-        </div>
-        <div class="panel-body">
-          <el-table :data="cityRows" stripe>
-            <el-table-column prop="city" label="城市" width="120" />
-            <el-table-column prop="count" label="样本数" width="100" />
-            <el-table-column prop="p50" label="中位数(K)" width="120">
-              <template #default="{ row }">{{ formatK(row.p50) }}</template>
-            </el-table-column>
-            <el-table-column prop="p25" label="P25(K)" width="100">
-              <template #default="{ row }">{{ formatK(row.p25) }}</template>
-            </el-table-column>
-            <el-table-column prop="p75" label="P75(K)" width="100">
-              <template #default="{ row }">{{ formatK(row.p75) }}</template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </div>
+      <AppPanel v-if="cityRows.length">
+        <template #title>城市薪资对比</template>
+        <el-table :data="cityRows" stripe>
+          <el-table-column prop="city" label="城市" width="120" />
+          <el-table-column prop="count" label="样本数" width="100" />
+          <el-table-column prop="p50" label="中位数(K)" width="120">
+            <template #default="{ row }">{{ formatK(row.p50) }}</template>
+          </el-table-column>
+          <el-table-column prop="p25" label="P25(K)" width="100">
+            <template #default="{ row }">{{ formatK(row.p25) }}</template>
+          </el-table-column>
+          <el-table-column prop="p75" label="P75(K)" width="100">
+            <template #default="{ row }">{{ formatK(row.p75) }}</template>
+          </el-table-column>
+        </el-table>
+      </AppPanel>
     </div>
 
     <!-- 空状态 -->
@@ -174,66 +166,63 @@
     </div>
 
     <!-- 期望薪资评估 -->
-    <div class="panel expectation-panel">
-      <div class="panel-header">
-        <h3>期望薪资合理性评估</h3>
-      </div>
-      <div class="panel-body">
-        <div class="expect-form">
-          <el-input v-model="expectPosition" placeholder="岗位关键词" style="max-width: 200px" />
-          <el-input-number
-            v-model="expectSalary"
-            :min="1"
-            placeholder="期望月薪(K)"
-            style="max-width: 180px"
-          />
-          <el-input v-model="expectCity" placeholder="城市（可选）" style="max-width: 140px" />
-          <el-button type="primary" @click="checkExpectation">评估</el-button>
-        </div>
-        <AppLoadError
-          v-if="expectError"
-          title="期望薪资评估失败"
-          :message="expectError"
-          @retry="checkExpectation"
+    <AppPanel class="expectation-panel">
+      <template #title>期望薪资合理性评估</template>
+      <div class="expect-form">
+        <el-input v-model="expectPosition" placeholder="岗位关键词" style="max-width: 200px" />
+        <el-input-number
+          v-model="expectSalary"
+          :min="1"
+          placeholder="期望月薪(K)"
+          style="max-width: 180px"
         />
-        <div v-if="expectResult" class="expect-result">
-          <el-alert
-            :title="
-              expectResult.level === 'reasonable'
-                ? '薪资期望合理'
-                : expectResult.level === 'high'
-                  ? '期望偏高'
-                  : '期望偏低'
-            "
-            :type="
-              expectResult.level === 'reasonable'
-                ? 'success'
-                : expectResult.level === 'high'
-                  ? 'warning'
-                  : 'info'
-            "
-            :description="expectResult.message || ''"
-            show-icon
-            :closable="false"
-          />
-          <div v-if="expectResult.market" class="expect-details">
-            <span
-              >市场中位数：<strong>{{ formatK(expectResult.market.median) }}</strong></span
-            >
-            <span
-              >市场范围：<strong
-                >{{ formatK(expectResult.market.p25) }} -
-                {{ formatK(expectResult.market.p75) }}</strong
-              ></span
-            >
-          </div>
+        <el-input v-model="expectCity" placeholder="城市（可选）" style="max-width: 140px" />
+        <el-button type="primary" @click="checkExpectation">评估</el-button>
+      </div>
+      <AppLoadError
+        v-if="expectError"
+        title="期望薪资评估失败"
+        :message="expectError"
+        @retry="checkExpectation"
+      />
+      <div v-if="expectResult" class="expect-result">
+        <el-alert
+          :title="
+            expectResult.level === 'reasonable'
+              ? '薪资期望合理'
+              : expectResult.level === 'high'
+                ? '期望偏高'
+                : '期望偏低'
+          "
+          :type="
+            expectResult.level === 'reasonable'
+              ? 'success'
+              : expectResult.level === 'high'
+                ? 'warning'
+                : 'info'
+          "
+          :description="expectResult.message || ''"
+          show-icon
+          :closable="false"
+        />
+        <div v-if="expectResult.market" class="expect-details">
+          <span
+            >市场中位数：<strong>{{ formatK(expectResult.market.median) }}</strong></span
+          >
+          <span
+            >市场范围：<strong
+              >{{ formatK(expectResult.market.p25) }} -
+              {{ formatK(expectResult.market.p75) }}</strong
+            ></span
+          >
         </div>
       </div>
-    </div>
+    </AppPanel>
   </div>
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, computed } from 'vue'
 import { Coin } from '@element-plus/icons-vue'
 import { getSalaryCompare, getSalaryOverview, checkSalaryExpectation } from '@/api/salary'

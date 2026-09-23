@@ -77,36 +77,33 @@
     </div>
 
     <!-- 功能对比表 -->
-    <div class="panel">
-      <div class="panel-header">
-        <h3>完整功能对比</h3>
+    <AppPanel>
+      <template #title>完整功能对比</template>
+      <div class="comparison-scroll">
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th class="feat-col">功能</th>
+              <th v-for="p in plans" :key="p.id">{{ p.name }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in comparisonRows" :key="row.label">
+              <td class="feat-col">{{ row.label }}</td>
+              <td v-for="p in plans" :key="p.id">
+                <el-icon v-if="row.values[p.id]" class="cmp-yes"><CircleCheckFilled /></el-icon>
+                <el-icon v-else class="cmp-no"><Close /></el-icon>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <div class="panel-body">
-        <div class="comparison-scroll">
-          <table class="comparison-table">
-            <thead>
-              <tr>
-                <th class="feat-col">功能</th>
-                <th v-for="p in plans" :key="p.id">{{ p.name }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in comparisonRows" :key="row.label">
-                <td class="feat-col">{{ row.label }}</td>
-                <td v-for="p in plans" :key="p.id">
-                  <el-icon v-if="row.values[p.id]" class="cmp-yes"><CircleCheckFilled /></el-icon>
-                  <el-icon v-else class="cmp-no"><Close /></el-icon>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    </AppPanel>
   </div>
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import { CircleCheckFilled, Close } from '@element-plus/icons-vue'

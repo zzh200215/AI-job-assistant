@@ -19,48 +19,40 @@
     </header>
 
     <div class="grid-two">
-      <div class="panel">
-        <div class="panel-header">
-          <h3>主通道权重</h3>
-        </div>
-        <div class="panel-body">
-          <div class="slider-list">
-            <div class="slider-item">
-              <div class="slider-head">
-                <strong>向量通道</strong>
-                <span>{{ percentText(form.vector_weight) }}</span>
-              </div>
-              <el-slider v-model="vectorPercent" :min="0" :max="100" />
+      <AppPanel>
+        <template #title>主通道权重</template>
+        <div class="slider-list">
+          <div class="slider-item">
+            <div class="slider-head">
+              <strong>向量通道</strong>
+              <span>{{ percentText(form.vector_weight) }}</span>
             </div>
-            <div class="slider-item locked-item">
-              <div class="slider-head">
-                <strong>规则通道</strong>
-                <span>{{ percentText(form.rule_weight) }}</span>
-              </div>
-              <el-progress :percentage="rulePercent" :show-text="false" />
+            <el-slider v-model="vectorPercent" :min="0" :max="100" />
+          </div>
+          <div class="slider-item locked-item">
+            <div class="slider-head">
+              <strong>规则通道</strong>
+              <span>{{ percentText(form.rule_weight) }}</span>
             </div>
+            <el-progress :percentage="rulePercent" :show-text="false" />
           </div>
         </div>
-      </div>
+      </AppPanel>
 
-      <div class="panel">
-        <div class="panel-header">
-          <h3>推荐阈值</h3>
-        </div>
-        <div class="panel-body">
-          <div class="threshold-grid">
-            <div class="threshold-item">
-              <span>高度推荐</span>
-              <el-input-number v-model="form.thresholds.high" :min="1" :max="100" />
-            </div>
-            <div class="threshold-item">
-              <span>值得一试</span>
-              <el-input-number v-model="form.thresholds.medium" :min="0" :max="99" />
-            </div>
+      <AppPanel>
+        <template #title>推荐阈值</template>
+        <div class="threshold-grid">
+          <div class="threshold-item">
+            <span>高度推荐</span>
+            <el-input-number v-model="form.thresholds.high" :min="1" :max="100" />
           </div>
-          <div class="helper-text">要求 `高度推荐` 必须大于 `值得一试`。</div>
+          <div class="threshold-item">
+            <span>值得一试</span>
+            <el-input-number v-model="form.thresholds.medium" :min="0" :max="99" />
+          </div>
         </div>
-      </div>
+        <div class="helper-text">要求 `高度推荐` 必须大于 `值得一试`。</div>
+      </AppPanel>
     </div>
 
     <div class="panel">
@@ -104,14 +96,10 @@
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-header">
-        <h3>当前配置摘要</h3>
-      </div>
-      <div class="panel-body">
-        <pre class="code-block">{{ configPreview }}</pre>
-      </div>
-    </div>
+    <AppPanel>
+      <template #title>当前配置摘要</template>
+      <pre class="code-block">{{ configPreview }}</pre>
+    </AppPanel>
 
     <div v-if="compareResult" class="panel">
       <div class="panel-header">
@@ -173,6 +161,7 @@
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
