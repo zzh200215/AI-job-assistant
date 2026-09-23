@@ -45,140 +45,110 @@
       </section>
 
       <!-- 周报概览 -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <el-icon :size="18" color="var(--app-primary)"><Calendar /></el-icon>
-            <h3>{{ report.period || '本周' }}概览</h3>
+      <AppPanel icon-color="var(--app-primary)">
+        <template #icon><Calendar /></template>
+        <template #title>{{ report.period || '本周' }}概览</template>
+        <div class="stats-row">
+          <div class="stat-card accent-blue">
+            <strong>{{ report.applications_this_week || 0 }}</strong>
+            <span>本周投递</span>
+          </div>
+          <div class="stat-card accent-violet">
+            <strong>{{ report.interviews_this_week || 0 }}</strong>
+            <span>面试次数</span>
+          </div>
+          <div class="stat-card accent-green">
+            <strong>{{ report.offers_this_week || 0 }}</strong>
+            <span>新增 Offer</span>
+          </div>
+          <div class="stat-card accent-amber">
+            <strong>{{ report.rejections_this_week || 0 }}</strong>
+            <span>被拒绝</span>
           </div>
         </div>
-        <div class="panel-body">
-          <div class="stats-row">
-            <div class="stat-card accent-blue">
-              <strong>{{ report.applications_this_week || 0 }}</strong>
-              <span>本周投递</span>
-            </div>
-            <div class="stat-card accent-violet">
-              <strong>{{ report.interviews_this_week || 0 }}</strong>
-              <span>面试次数</span>
-            </div>
-            <div class="stat-card accent-green">
-              <strong>{{ report.offers_this_week || 0 }}</strong>
-              <span>新增 Offer</span>
-            </div>
-            <div class="stat-card accent-amber">
-              <strong>{{ report.rejections_this_week || 0 }}</strong>
-              <span>被拒绝</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      </AppPanel>
 
       <!-- 投递漏斗 -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <el-icon :size="18" color="var(--app-violet)"><DataLine /></el-icon>
-            <h3>投递漏斗</h3>
-          </div>
-        </div>
-        <div class="panel-body">
-          <div class="funnel-chart">
-            <div v-for="stage in funnelStages" :key="stage.key" class="funnel-row">
-              <span class="funnel-label">{{ stage.label }}</span>
-              <div class="funnel-bar-wrap">
-                <div
-                  class="funnel-bar"
-                  :class="stage.accent"
-                  :style="{ width: funnelWidth(stage.key) }"
-                />
-              </div>
-              <strong class="funnel-count">{{ report.pipeline_summary?.[stage.key] || 0 }}</strong>
+      <AppPanel icon-color="var(--app-violet)">
+        <template #icon><DataLine /></template>
+        <template #title>投递漏斗</template>
+        <div class="funnel-chart">
+          <div v-for="stage in funnelStages" :key="stage.key" class="funnel-row">
+            <span class="funnel-label">{{ stage.label }}</span>
+            <div class="funnel-bar-wrap">
+              <div
+                class="funnel-bar"
+                :class="stage.accent"
+                :style="{ width: funnelWidth(stage.key) }"
+              />
             </div>
+            <strong class="funnel-count">{{ report.pipeline_summary?.[stage.key] || 0 }}</strong>
           </div>
         </div>
-      </div>
+      </AppPanel>
 
       <!-- 关键指标变化 -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <el-icon :size="18" color="var(--app-success)"><TrendCharts /></el-icon>
-            <h3>关键指标</h3>
+      <AppPanel icon-color="var(--app-success)">
+        <template #icon><TrendCharts /></template>
+        <template #title>关键指标</template>
+        <div class="metrics-grid">
+          <div class="metric-item">
+            <span class="metric-label">面试率</span>
+            <strong class="metric-value">{{
+              report.interview_rate ? (report.interview_rate * 100).toFixed(1) + '%' : '-'
+            }}</strong>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">平均匹配分</span>
+            <strong class="metric-value">{{
+              report.avg_match_score ? Math.round(report.avg_match_score) : '-'
+            }}</strong>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">投递响应率</span>
+            <strong class="metric-value">{{
+              report.response_rate ? (report.response_rate * 100).toFixed(1) + '%' : '-'
+            }}</strong>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">总投递数</span>
+            <strong class="metric-value">{{ report.total_applications || 0 }}</strong>
           </div>
         </div>
-        <div class="panel-body">
-          <div class="metrics-grid">
-            <div class="metric-item">
-              <span class="metric-label">面试率</span>
-              <strong class="metric-value">{{
-                report.interview_rate ? (report.interview_rate * 100).toFixed(1) + '%' : '-'
-              }}</strong>
-            </div>
-            <div class="metric-item">
-              <span class="metric-label">平均匹配分</span>
-              <strong class="metric-value">{{
-                report.avg_match_score ? Math.round(report.avg_match_score) : '-'
-              }}</strong>
-            </div>
-            <div class="metric-item">
-              <span class="metric-label">投递响应率</span>
-              <strong class="metric-value">{{
-                report.response_rate ? (report.response_rate * 100).toFixed(1) + '%' : '-'
-              }}</strong>
-            </div>
-            <div class="metric-item">
-              <span class="metric-label">总投递数</span>
-              <strong class="metric-value">{{ report.total_applications || 0 }}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
+      </AppPanel>
 
       <!-- AI 建议 -->
-      <div class="panel" v-if="report.suggestions?.length">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <el-icon :size="18" color="var(--app-violet)"><MagicStick /></el-icon>
-            <h3>下周建议</h3>
-          </div>
-        </div>
-        <div class="panel-body">
-          <div class="suggestion-list">
-            <div v-for="(sug, idx) in report.suggestions" :key="idx" class="suggestion-item">
-              <div class="sug-index">{{ idx + 1 }}</div>
-              <div class="sug-body">
-                <strong>{{ sug.title }}</strong>
-                <p>{{ sug.description }}</p>
-              </div>
+      <AppPanel v-if="report.suggestions?.length" icon-color="var(--app-violet)">
+        <template #icon><MagicStick /></template>
+        <template #title>下周建议</template>
+        <div class="suggestion-list">
+          <div v-for="(sug, idx) in report.suggestions" :key="idx" class="suggestion-item">
+            <div class="sug-index">{{ idx + 1 }}</div>
+            <div class="sug-body">
+              <strong>{{ sug.title }}</strong>
+              <p>{{ sug.description }}</p>
             </div>
           </div>
         </div>
-      </div>
+      </AppPanel>
 
       <!-- 投递详情 -->
-      <div class="panel" v-if="report.recent_applications?.length">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <el-icon :size="18" color="var(--app-primary)"><List /></el-icon>
-            <h3>近期投递</h3>
-          </div>
-        </div>
-        <div class="panel-body">
-          <div class="app-list">
-            <div v-for="app in report.recent_applications" :key="app.id" class="app-row">
-              <div class="app-dot" :class="stageColor(app.stage)" />
-              <div class="app-info">
-                <strong>{{ app.company || '未知' }} - {{ app.title || '未知岗位' }}</strong>
-                <span
-                  >{{ stageLabel(app.stage) }} ·
-                  {{ monthDay(app.update_time || app.create_time) }}</span
-                >
-              </div>
+      <AppPanel v-if="report.recent_applications?.length" icon-color="var(--app-primary)">
+        <template #icon><List /></template>
+        <template #title>近期投递</template>
+        <div class="app-list">
+          <div v-for="app in report.recent_applications" :key="app.id" class="app-row">
+            <div class="app-dot" :class="stageColor(app.stage)" />
+            <div class="app-info">
+              <strong>{{ app.company || '未知' }} - {{ app.title || '未知岗位' }}</strong>
+              <span
+                >{{ stageLabel(app.stage) }} ·
+                {{ monthDay(app.update_time || app.create_time) }}</span
+              >
             </div>
           </div>
         </div>
-      </div>
+      </AppPanel>
     </template>
 
     <div v-else-if="loadError" class="load-error">
@@ -200,6 +170,7 @@
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { computed, ref, onMounted } from 'vue'
 import {
   Refresh,

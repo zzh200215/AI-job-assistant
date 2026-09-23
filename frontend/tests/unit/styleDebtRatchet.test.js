@@ -69,6 +69,17 @@ const BUDGET = {
     'src/layouts/DefaultLayout.vue': 1,
     'src/views/ExplainMatch.vue': 2,
   },
+  /* 手写的 `class="panel-header"` 标记数——AppPanel（components/ui/AppPanel.vue）的迁移台账。
+     样式早就集中在 styles/panels.css（main.js 全局引入），重复的只是那四层 div，所以这条数的是
+     "还有多少处标记没搬进组件"。D18 建组件并迁掉 WeeklyReport 的 5 处（逐路由 getComputedStyle
+     比对：241 个元素 × 20 条计算属性，0 差异）。
+     剩下的 88 处分两类，成本不同：
+     - 可以直接迁：该视图没有自己的 `.panel-header` scoped 规则（scoped CSS 匹配不到子组件内部
+       节点，标记搬走规则就失效——这是这条台账存在的真正约束）；
+     - 要先动手：Home / JobSearch / KnowledgeBase / Privacy / Register / OrganizationWorkspace
+       这 6 个视图各自覆盖了 `.panel-header`，得先把覆盖搬进 panels.css 或改成 props。
+     全仓 `:deep(.panel-header)` 为 0 处，所以没有第三种隐藏耦合。 */
+  handRolledPanelHeaders: 88,
   /* 状态→el-tag 颜色此前和分数色板同病：17 份手写表、32 个键，其中 `running` 在任务中心
      是蓝、两个 agent 页是橙，`ongoing` 在房间页是绿、设置页是橙。异步任务与面试会话两组
      已收进 utils/statusTone.js；下面数的是**还剩多少条手写映射**，只能往下走。
@@ -499,6 +510,49 @@ describe('style debt ratchet', () => {
     expect(suspicious('<span>每页 20 条</span>')).toBe(false) // 同上
     // 这条是"复用"条件存在的理由：`说` 复原成 U+02F5，既不是字母也不是组合符号，但本仓从不写它
     expect(suspicious(`TAG = "说 JD 要求全缺"`)).toBe(false)
+  })
+
+  const panelHeaderCount = () =>
+    viewSources.reduce(
+      (sum, { template, script }) =>
+        sum + (`${template}${script}`.match(/class="panel-header"/g) || []).length,
+      0
+    )
+
+  it('keeps hand-rolled panel markup from growing past the AppPanel ledger', () => {
+    const n = panelHeaderCount()
+    expect(
+      n,
+      `a new hand-written .panel-header appeared — use components/ui/AppPanel.vue, or lower this budget only with a reason: ${n} > ${BUDGET.handRolledPanelHeaders}`
+    ).toBeLessThanOrEqual(BUDGET.handRolledPanelHeaders)
+  })
+
+  it('forces the panel-markup ledger down as sites migrate', () => {
+    const n = panelHeaderCount()
+    expect(
+      n < BUDGET.handRolledPanelHeaders,
+      `panel markup was paid down — lower BUDGET.handRolledPanelHeaders to ${n}`
+    ).toBe(false)
+  })
+
+  it('never lets a view style .panel-header locally without saying so in the ledger', () => {
+    // 这条是 AppPanel 的真正约束：视图自己的 scoped `.panel-header` 规则匹配不到搬进子组件的节点，
+    // 所以这些文件必须先解决覆盖才能迁移。清单只准缩短，且必须与实际一致。
+    const LOCAL_OVERRIDE_FILES = [
+      'src/views/Home.vue',
+      'src/views/JobSearch.vue',
+      'src/views/KnowledgeBase.vue',
+      'src/views/OrganizationWorkspace.vue',
+      'src/views/Privacy.vue',
+      'src/views/Register.vue',
+    ]
+    const overriding = viewSources
+      .filter(({ style }) => /\.panel-header\b/.test(style))
+      .map(({ rel }) => rel)
+      .sort()
+    expect(overriding, `视图里 .panel-header 的本地覆盖变了，台账要一起改：${overriding}`).toEqual(
+      [...LOCAL_OVERRIDE_FILES].sort()
+    )
   })
 
   it('keeps the cross-page "last selection" handoff inside utils/lastSelection', () => {
