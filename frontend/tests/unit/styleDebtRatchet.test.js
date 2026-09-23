@@ -82,7 +82,7 @@ const BUDGET = {
      - 要先动手：Home / JobSearch / KnowledgeBase / Privacy / Register / OrganizationWorkspace
        这 6 个视图各自覆盖了 `.panel-header`，得先把覆盖搬进 panels.css 或改成 props。
      全仓 `:deep(.panel-header)` 为 0 处，所以没有第三种隐藏耦合。 */
-  handRolledPanelHeaders: 74,
+  handRolledPanelHeaders: 69,
   /* 状态→el-tag 颜色此前和分数色板同病：17 份手写表、32 个键，其中 `running` 在任务中心
      是蓝、两个 agent 页是橙，`ongoing` 在房间页是绿、设置页是橙。异步任务与面试会话两组
      已收进 utils/statusTone.js；下面数的是**还剩多少条手写映射**，只能往下走。

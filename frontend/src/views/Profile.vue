@@ -15,101 +15,95 @@
     </header>
 
     <section class="grid">
-      <div class="panel identity-panel">
-        <div class="panel-header">
-          <h3>账号信息</h3>
+      <AppPanel class="identity-panel">
+        <template #title>账号信息</template>
+        <template #actions>
           <el-button text @click="refreshAll" :loading="loading">刷新</el-button>
-        </div>
-        <div class="panel-body">
-          <div class="identity-card">
-            <div class="avatar">{{ avatarText }}</div>
-            <div class="identity-copy">
-              <strong>{{ authStore.user?.username || '--' }}</strong>
-              <span>{{ authStore.user?.email || '--' }}</span>
-              <div class="identity-pills">
-                <span>{{ authStore.roleLabel }}</span>
-                <span v-if="authStore.user?.is_admin">Admin</span>
-                <span v-else>Standard</span>
-              </div>
+        </template>
+        <div class="identity-card">
+          <div class="avatar">{{ avatarText }}</div>
+          <div class="identity-copy">
+            <strong>{{ authStore.user?.username || '--' }}</strong>
+            <span>{{ authStore.user?.email || '--' }}</span>
+            <div class="identity-pills">
+              <span>{{ authStore.roleLabel }}</span>
+              <span v-if="authStore.user?.is_admin">Admin</span>
+              <span v-else>Standard</span>
             </div>
           </div>
-          <dl class="info-list">
-            <div class="info-row">
-              <dt>用户 ID</dt>
-              <dd>{{ authStore.user?.id ?? '--' }}</dd>
-            </div>
-            <div class="info-row">
-              <dt>注册时间</dt>
-              <dd>{{ dateTime(authStore.user?.created_at, '--') }}</dd>
-            </div>
-            <div class="info-row">
-              <dt>默认工作台</dt>
-              <dd>{{ authStore.homeRoute }}</dd>
-            </div>
-          </dl>
         </div>
-      </div>
+        <dl class="info-list">
+          <div class="info-row">
+            <dt>用户 ID</dt>
+            <dd>{{ authStore.user?.id ?? '--' }}</dd>
+          </div>
+          <div class="info-row">
+            <dt>注册时间</dt>
+            <dd>{{ dateTime(authStore.user?.created_at, '--') }}</dd>
+          </div>
+          <div class="info-row">
+            <dt>默认工作台</dt>
+            <dd>{{ authStore.homeRoute }}</dd>
+          </div>
+        </dl>
+      </AppPanel>
 
-      <div class="panel">
-        <div class="panel-header">
-          <h3>系统模式</h3>
+      <AppPanel>
+        <template #title>系统模式</template>
+        <template #actions>
           <span class="panel-tip">运行时状态</span>
-        </div>
-        <div class="panel-body">
-          <div class="status-grid">
-            <div class="status-card" :class="{ alert: status.demo_mode }">
-              <span>当前模式</span>
-              <strong>{{ status.demo_mode ? '演示模式' : '正式模式' }}</strong>
-              <small>{{
-                status.demo_mode ? '仍有 mock 依赖，适合演示和联调。' : '核心依赖已切到真实模式。'
-              }}</small>
-            </div>
-            <div class="status-card">
-              <span>LLM</span>
-              <strong>{{ formatProvider(status.llm_provider) }}</strong>
-              <small>编排引擎：{{ status.orchestration_engine || '--' }}</small>
-            </div>
-            <div class="status-card">
-              <span>Embedding</span>
-              <strong>{{ formatProvider(status.embedding_provider) }}</strong>
-              <small>编排策略：{{ status.orchestration_strategy || '--' }}</small>
-            </div>
-            <div class="status-card">
-              <span>Reranker</span>
-              <strong>{{ formatProvider(status.reranker_provider) }}</strong>
-              <small>运行环境：{{ status.app_env || '--' }}</small>
-            </div>
+        </template>
+        <div class="status-grid">
+          <div class="status-card" :class="{ alert: status.demo_mode }">
+            <span>当前模式</span>
+            <strong>{{ status.demo_mode ? '演示模式' : '正式模式' }}</strong>
+            <small>{{
+              status.demo_mode ? '仍有 mock 依赖，适合演示和联调。' : '核心依赖已切到真实模式。'
+            }}</small>
+          </div>
+          <div class="status-card">
+            <span>LLM</span>
+            <strong>{{ formatProvider(status.llm_provider) }}</strong>
+            <small>编排引擎：{{ status.orchestration_engine || '--' }}</small>
+          </div>
+          <div class="status-card">
+            <span>Embedding</span>
+            <strong>{{ formatProvider(status.embedding_provider) }}</strong>
+            <small>编排策略：{{ status.orchestration_strategy || '--' }}</small>
+          </div>
+          <div class="status-card">
+            <span>Reranker</span>
+            <strong>{{ formatProvider(status.reranker_provider) }}</strong>
+            <small>运行环境：{{ status.app_env || '--' }}</small>
           </div>
         </div>
-      </div>
+      </AppPanel>
     </section>
 
-    <div class="panel capability-panel">
-      <div class="panel-header">
-        <h3>能力状态</h3>
+    <AppPanel class="capability-panel">
+      <template #title>能力状态</template>
+      <template #actions>
         <span class="panel-tip">按交付闭环检查</span>
-      </div>
-      <div class="panel-body">
-        <div class="capability-list">
-          <div class="capability-item" :class="{ done: status.capabilities?.tool_calling }">
-            <strong>LLM 工具调用</strong>
-            <span>{{ status.capabilities?.tool_calling ? '已开启' : '未开启' }}</span>
-          </div>
-          <div class="capability-item" :class="{ done: status.capabilities?.ocr_resume_parse }">
-            <strong>OCR 简历识别</strong>
-            <span>{{ status.capabilities?.ocr_resume_parse ? '已开启' : '未开启' }}</span>
-          </div>
-          <div class="capability-item" :class="{ done: status.capabilities?.password_reset }">
-            <strong>忘记密码</strong>
-            <span>{{ status.capabilities?.password_reset ? '已开启' : '未开启' }}</span>
-          </div>
-          <div class="capability-item" :class="{ done: status.capabilities?.social_login }">
-            <strong>第三方登录</strong>
-            <span>{{ status.capabilities?.social_login ? '已开启' : '未开启' }}</span>
-          </div>
+      </template>
+      <div class="capability-list">
+        <div class="capability-item" :class="{ done: status.capabilities?.tool_calling }">
+          <strong>LLM 工具调用</strong>
+          <span>{{ status.capabilities?.tool_calling ? '已开启' : '未开启' }}</span>
+        </div>
+        <div class="capability-item" :class="{ done: status.capabilities?.ocr_resume_parse }">
+          <strong>OCR 简历识别</strong>
+          <span>{{ status.capabilities?.ocr_resume_parse ? '已开启' : '未开启' }}</span>
+        </div>
+        <div class="capability-item" :class="{ done: status.capabilities?.password_reset }">
+          <strong>忘记密码</strong>
+          <span>{{ status.capabilities?.password_reset ? '已开启' : '未开启' }}</span>
+        </div>
+        <div class="capability-item" :class="{ done: status.capabilities?.social_login }">
+          <strong>第三方登录</strong>
+          <span>{{ status.capabilities?.social_login ? '已开启' : '未开启' }}</span>
         </div>
       </div>
-    </div>
+    </AppPanel>
 
     <!-- 求职成就里程碑 -->
     <div class="panel">
@@ -260,93 +254,83 @@
     </div>
 
     <!-- 账号安全与隐私 -->
-    <div class="panel">
-      <div class="panel-header">
-        <h3>账号安全与隐私</h3>
-      </div>
-      <div class="panel-body">
-        <div class="settings-list">
-          <div class="setting-row">
-            <div class="setting-info">
-              <strong>邮箱验证</strong>
-              <span>验证邮箱以提高账号安全性</span>
-            </div>
-            <div class="setting-action">
-              <el-tag v-if="authStore.user?.email_verified" type="success" size="small"
-                >已验证</el-tag
-              >
-              <el-button
-                v-else
-                size="small"
-                type="primary"
-                @click="verifyEmail"
-                :loading="verifying"
-                >发送验证邮件</el-button
-              >
-            </div>
+    <AppPanel>
+      <template #title>账号安全与隐私</template>
+      <div class="settings-list">
+        <div class="setting-row">
+          <div class="setting-info">
+            <strong>邮箱验证</strong>
+            <span>验证邮箱以提高账号安全性</span>
           </div>
-          <div class="setting-row">
-            <div class="setting-info">
-              <strong>修改密码</strong>
-              <span>定期更换密码保障账号安全</span>
-            </div>
-            <div class="setting-action">
-              <el-button size="small" @click="$router.push('/reset-password')">修改密码</el-button>
-            </div>
+          <div class="setting-action">
+            <el-tag v-if="authStore.user?.email_verified" type="success" size="small"
+              >已验证</el-tag
+            >
+            <el-button v-else size="small" type="primary" @click="verifyEmail" :loading="verifying"
+              >发送验证邮件</el-button
+            >
           </div>
-          <div class="setting-row">
-            <div class="setting-info">
-              <strong>数据导出</strong>
-              <span>导出您的所有数据（简历、投递记录、面试记录等）</span>
-            </div>
-            <div class="setting-action">
-              <el-button size="small" @click="exportData" :loading="exporting">导出数据</el-button>
-            </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <strong>修改密码</strong>
+            <span>定期更换密码保障账号安全</span>
           </div>
-          <div class="setting-row">
-            <div class="setting-info">
-              <strong>隐私设置</strong>
-              <span>控制简历和数据的可见范围</span>
-            </div>
-            <div class="setting-action">
-              <el-switch
-                v-model="privacySettings.resumePublic"
-                active-text="简历公开"
-                @change="savePrivacy"
-              />
-              <el-switch
-                v-model="privacySettings.allowRecommend"
-                active-text="允许推荐"
-                @change="savePrivacy"
-              />
-            </div>
+          <div class="setting-action">
+            <el-button size="small" @click="$router.push('/reset-password')">修改密码</el-button>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <strong>数据导出</strong>
+            <span>导出您的所有数据（简历、投递记录、面试记录等）</span>
+          </div>
+          <div class="setting-action">
+            <el-button size="small" @click="exportData" :loading="exporting">导出数据</el-button>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-info">
+            <strong>隐私设置</strong>
+            <span>控制简历和数据的可见范围</span>
+          </div>
+          <div class="setting-action">
+            <el-switch
+              v-model="privacySettings.resumePublic"
+              active-text="简历公开"
+              @change="savePrivacy"
+            />
+            <el-switch
+              v-model="privacySettings.allowRecommend"
+              active-text="允许推荐"
+              @change="savePrivacy"
+            />
           </div>
         </div>
       </div>
-    </div>
+    </AppPanel>
 
     <!-- 危险操作 -->
-    <div class="panel danger-zone">
-      <div class="panel-header">
-        <h3>危险操作</h3>
+    <AppPanel class="danger-zone">
+      <template #title>危险操作</template>
+      <template #actions>
         <span class="panel-tip danger-tip">以下操作不可逆</span>
-      </div>
-      <div class="panel-body">
-        <div class="danger-content">
-          <div class="danger-row">
-            <div>
-              <strong>注销账号</strong>
-              <p>永久删除账号和所有数据，此操作不可恢复</p>
-            </div>
-            <el-button type="danger" plain @click="deleteAccount">注销账号</el-button>
+      </template>
+      <div class="danger-content">
+        <div class="danger-row">
+          <div>
+            <strong>注销账号</strong>
+            <p>永久删除账号和所有数据，此操作不可恢复</p>
           </div>
+          <el-button type="danger" plain @click="deleteAccount">注销账号</el-button>
         </div>
       </div>
-    </div>
+    </AppPanel>
   </div>
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { getSystemStatus } from '@/api/system'
