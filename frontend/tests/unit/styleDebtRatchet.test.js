@@ -318,8 +318,8 @@ describe('style debt ratchet', () => {
     // 用到私用码位，而 GBK 的用户自定义行（0xAA-0xF7）在 CP936 解码下正好落到那里——`JobSearch.vue:972`
     // 的 `建议` 坏成了 U+5BE4 U+9E3F U+E185，第三个字把 CJK 游程截断成 2 字，3 字滑窗从此看不见它。
     // 为什么不能把窗口降到 2 字：实测本仓有 14 个正常的 2 字游程两字都不在高频表里（硕士/博士/北京/
-    // 封装/剩余/左右…），降窗口就是把守卫改成误报器。私用区这条没有误报面：全仓 550 个跟踪文件扫下来
-    // 只命中一处，而那一处正是滑窗漏掉的那一个。
+    // 封装/剩余/左右…），降窗口就是把守卫改成误报器。私用区这条没有误报面：`git grep -InP
+    // "[\x{e000}-\x{f8ff}\x{fffd}]"` 打到 551 个跟踪文件只命中一处，而那一处正是滑窗漏掉的（修复后 0 命中）。
     const walk = (dir, out = []) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name)

@@ -479,7 +479,7 @@ agent.SummaryAgent           real  tokens=3215
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
 
-其他已知项：`localStorage` 9 个 key 分散在 64 个调用点，其中 `token`/`user` 在 `api/request.js:17` 与 `stores/auth.js:35` **两处读取**（双份真相源）；~~`recruit.lastResumeId`/`lastJDId`/`lastRecordId` 是跨页隐式握手，应改由 Pinia 承载~~ → 已收进 `utils/lastSelection` 并按登录用户分槽（E13，提交 `67688cd`；量的结果是**两套互不读取的键名**、25 处裸访问，详见 E13 那节），是否再升为 Pinia store 见 §10.9；`.vite-startup-error.log`、`dist/`、`backend/.coverage` 属被提交的构建产物。
+其他已知项：`localStorage` 9 个 key 分散在 64 个调用点，其中 `token`/`user` 在 `api/request.js:17` 与 `stores/auth.js:35` **两处读取**（双份真相源）；~~`recruit.lastResumeId`/`lastJDId`/`lastRecordId` 是跨页隐式握手，应改由 Pinia 承载~~ → 已收进 `utils/lastSelection` 并按登录用户分槽（E13，提交 `67688cd`；量的结果是**两套互不读取的键名**、25 处裸访问，详见 E13 那节），是否再升为 Pinia store 见 §10.9；~~`.vite-startup-error.log`、`dist/`、`backend/.coverage` 属被提交的构建产物~~ → **这条不成立**（D14 查）：三者 `git ls-files` 均为 0 且都命中 `.gitignore`，全仓 `git ls-files` 里没有任何 `coverage`/`.log`/`dist/` 条目，这笔债不存在。
 
 ---
 
@@ -1008,6 +1008,34 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 - **静默空态**那条往后看 12 行找"有没有提示"。格式化把 `submitCreate` 的 `ElMessage` 折出了窗口，于是 `admin/Tenants` 的 `loadDomains`（`notifyError: false` + `catch { domains[tid] = [] }`，域名列表失败演成"该租户没有域名"）现形。**代码一行没变，是尺子的视野变了**——D10 记下的那条盲区当场兑现。企业侧冻结，所以进预算不修。
 
 **门禁**：`prettier --check` 本机 clean 且 **CI 口径 0 不过**、`test:unit` **91 passed**（21 条棘轮全绿）、smoke 11、lint 0 error、build ok、后端乱码守卫 2 passed。**没验**：真浏览器观感（`browser-use` 被策略拦）——排版是纯文本改动，但"折行会不会改变模板里的插值显示"没有人在真页面上看过一眼。
+
+#### 已交付：D14 守卫自己看不见的那类乱码：私用区码位把游程截短了（提交 `4623d67`）
+
+**怎么撞上的**：为了给 D15 找"下一个尺子看不见的东西"，我重读 `JobSearch.vue` 里那三处静默 catch，读到投递判断抽屉的小标题时又看见终端里那串不像话的字。这次没当终端问题（D11 的教训），直接 `JSON.stringify` + 码位表打出来：
+
+| 位置 | 文件里的码位 | 应该是 |
+|---|---|---|
+| `JobSearch.vue:972`（`v-if="explainResult"` 的"投递判断"块，与上一行"风险点"配对，数据是 `optimization_suggestions`） | **U+5BE4 U+9E3F U+E185** | **建议**（U+5EFA U+8BAE） |
+
+`git log -S` 查到它是 `989a0b4 初始化项目` 带进来的——**从第一天就在**，是 D11 那 10 处之外的第 11 处，也是唯一一个 D11/D12 两轮加固之后仍然漏着的。
+
+**为什么两轮加固都放过它**：守卫的 CJK 类是 `[㐀-鿿]`（U+3400–U+9FFF），而 `建议` 的 UTF-8 字节 `E5 BB BA E8 AE AE` 按 GBK 读回时，最后一对 `0xAEAE` 落在 GBK 用户自定义行、被解码成 **私用区码位 U+E185**。它不在那个类里 ⇒ 游程被截成 **2 字** ⇒ "3 字滑窗"一次都不成立。界面上它是"两个生僻字 + 一个没有字形的空格"（多数字体不含私用码位），看的人只会当成排版。
+
+**复原这条路对这一条也不通**：`'建议'.encode('utf-8').decode('gbk')` 在第 4 个字节直接抛 `UnicodeDecodeError`（strict gbk 不认 `0xAEAE`），换 `gb18030` 才得到 `U+5BE4 U+9E3F U+E185`。也就是说 D11 淘汰掉的第一次尝试（按 gb18030 复原）连这一条都要挑 codec 才行——所以补的**不是**复原法。
+
+**先量能不能把窗口降到 2 字：不能**。实测守卫覆盖面内有 **14 个正常的二字游程，两个字都不在高频表里**：`封装`、`剩余`、`硕士`×2、`博士`×2、`北京`×4、`南京`、`武汉`、`抱歉`、`左右`×2。降窗口等于把守卫换成误报器，和 D11 那次"罕见字占比 ≥60% 误伤熟练掌握"是同一类过度调优。
+
+**于是补的是第二条腿，结构性的**：串里出现**私用区码位（U+E000–U+F8FF）或 U+FFFD** 即判红。人写的中文文案不可能用到私用码位，它只可能来自一次误读——和守卫里早就有的那条 `€` 判据同族（都是单个码位，不是坏字清单）。误报面在 commit 上量，任何人可复现：`git grep -InP "[\x{e000}-\x{f8ff}\x{fffd}]" HEAD~1` 在 551 个跟踪文件里**只命中这一处**，同一命令打到 `HEAD` 是 **0 命中**。判据没有误报面，且它逮到的正是漏掉的那一个。两侧各补一份：
+- 前端 `styleDebtRatchet.test.js`：`PRIVATE_USE` 放在 `suspicious()` 第一行，不看频率、不要求能复原；
+- 后端 `tests/test_no_mojibake.py`：`_is_mojibake` 同一条，常量写成 `chr(0xE000)/chr(0xF8FF)/chr(0xFFFD)` 而不是 `\u` 转义——**判据的源码里不该出现私用字符本身**（那正是它要抓的东西；这一点是过程里踩到的：转义被写成真身后，测试文件自己就成了一个私用码位宿主）。
+
+**证据**：把当年那三个码位原样种回 972 行 → 前端守卫红并点名 `src/views/JobSearch.vue:972`；还原 → 21 passed。后端正例断到**精确**命中 `[(1, garbled)]`，反例三条放行（复原后的 `建议`、正常句 `AI 驱动的个人求职教练`、`熟练掌握`），`U+FFFD` 判红。构建产物侧另验一条：`dist/assets/JobSearch-*.js` 里 `风险点` 与 `建议` 同段、**私用/替换码位 0**（`dist` 未被 git 跟踪，所以这只是当次验证）。
+
+**顺带查到 §7 的一句话是错的**（已改）：那句"`.vite-startup-error.log`、`dist/`、`backend/.coverage` 属被提交的构建产物"三条全部不成立——`git ls-files` 对三者都是 **0**，且 `git check-ignore` 三个都命中忽略规则，`git ls-files | grep -E 'coverage|\.log$|dist/'` 整仓 0 命中。这条债不存在，别再照着它安排收尾工作。
+
+**门禁**：`test:unit` **91 passed** / 17 files、smoke **11**、lint **0 error**（1 条既有 `no-unused-vars` warning 在 `admin/Overview`，企业侧）、build ok、`prettier --check` 对改动的 2 个前端文件 clean 且**三个改动文件工作树都是纯 LF**（本机口径 == CI 口径）；backend **726 passed**、`ruff check .` clean、`ruff format --check .` 342 files already formatted。**没验/边界**：① 真浏览器里那个抽屉（`navigate_page` 本次仍被策略拦，只有 `list_pages` 可用）——这次是把 3 个码位换成 2 个正字，显示宽度 6→4 列，方向和 D12 一致（只会变窄）；② **注释里的私用码位仍不判**（前端跳过注释行、后端只看 `ast` 字面量），与这条守卫一贯"只盯到用户眼前的东西"的口径一致，不是漏；③ 私用区这条只覆盖"误读落进 GBK `0xAA–0xF7` 自定义行"那一部分，落进普通 CJK 且游程 <3 字的短乱码仍看不见。它是第二条腿，不是全集。
+
+**D15 的靶子已经量好**（这次重读顺手做完的窗口实验）：`silentEmptyCatches` 从"catch 之后看 12 行"改成"**看到本函数结束、跳过嵌套函数体**"，站点 **4 → 7**，新增 3 处全在 `JobSearch.vue`：`:1525` 简历详情（GET）、`:1577` 推荐列表（GET）、`:1795` 投递解读（POST）。与 D10 的预测对上了（它当时说多出 4 处含 `admin/Tenants` 一处，那处已被 D13 的格式化先折现，所以这次只差 3）。三处被掩护的原因各不相同：前两处是 12 行窗口伸进了**下一个函数**的 `localError.value =` / `searchError.value = ''`，第三处伸进了 `prefillAnalysis` 的 `ElMessage.warning`。注意第三处是 POST，`request.js` 会弹提示，所以它不是"失败演成没有数据"那一类——修不修是产品口径，判据只负责不再放过它。
 
 
 ---
