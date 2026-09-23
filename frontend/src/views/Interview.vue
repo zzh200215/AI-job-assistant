@@ -16,186 +16,171 @@
     </div>
 
     <!-- 即将到来的面试 -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-violet)"><Clock /></el-icon>
-          <h3>即将面试</h3>
-        </div>
+    <AppPanel icon-color="var(--app-violet)">
+      <template #icon><Clock /></template>
+      <template #title>即将面试</template>
+      <div v-if="upcomingLoading" class="loading-state">
+        <el-icon class="is-loading"><Loading /></el-icon>
       </div>
-      <div class="panel-body">
-        <div v-if="upcomingLoading" class="loading-state">
-          <el-icon class="is-loading"><Loading /></el-icon>
-        </div>
-        <AppLoadError
-          v-else-if="upcomingError"
-          title="近期面试拉取失败"
-          :message="upcomingError"
-          retry-label=""
-        />
-        <div v-else-if="!upcomingInterviews.length" class="empty-inline">暂无即将到来的面试</div>
-        <div v-else class="interview-list">
-          <div
-            v-for="item in upcomingInterviews"
-            :key="item.id"
-            class="interview-row upcoming"
-            @click="goToPipeline(item)"
-          >
-            <div class="interview-dot violet" />
-            <div class="interview-info">
-              <strong>{{ item.company || '' }} - {{ item.title || '' }}</strong>
-              <span
-                >第{{ item.interview_round || 1 }}轮 · {{ monthDayTime(item.interview_at) }}</span
-              >
-            </div>
-            <div class="interview-actions">
-              <el-button size="small" @click.stop="startPrep(item)">AI准备</el-button>
-              <el-button size="small" type="primary" @click.stop="$router.push('/interview/setup')"
-                >模拟面试</el-button
-              >
-            </div>
+      <AppLoadError
+        v-else-if="upcomingError"
+        title="近期面试拉取失败"
+        :message="upcomingError"
+        retry-label=""
+      />
+      <div v-else-if="!upcomingInterviews.length" class="empty-inline">暂无即将到来的面试</div>
+      <div v-else class="interview-list">
+        <div
+          v-for="item in upcomingInterviews"
+          :key="item.id"
+          class="interview-row upcoming"
+          @click="goToPipeline(item)"
+        >
+          <div class="interview-dot violet" />
+          <div class="interview-info">
+            <strong>{{ item.company || '' }} - {{ item.title || '' }}</strong>
+            <span>第{{ item.interview_round || 1 }}轮 · {{ monthDayTime(item.interview_at) }}</span>
+          </div>
+          <div class="interview-actions">
+            <el-button size="small" @click.stop="startPrep(item)">AI准备</el-button>
+            <el-button size="small" type="primary" @click.stop="$router.push('/interview/setup')"
+              >模拟面试</el-button
+            >
           </div>
         </div>
       </div>
-    </div>
+    </AppPanel>
 
     <!-- 每日一练 -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-warning)"><Star /></el-icon>
-          <h3>每日一练</h3>
-          <el-tag size="small" type="warning" effect="dark" v-if="dailyQuestion">今日推荐</el-tag>
-        </div>
+    <AppPanel icon-color="var(--app-warning)">
+      <template #icon><Star /></template>
+      <template #title>每日一练</template>
+      <template #badge>
+        <el-tag size="small" type="warning" effect="dark" v-if="dailyQuestion">今日推荐</el-tag>
+      </template>
+      <template #actions>
         <el-button size="small" @click="refreshDaily">换一题</el-button>
+      </template>
+      <div v-if="dailyLoading" class="loading-state">
+        <el-icon class="is-loading"><Loading /></el-icon>
       </div>
-      <div class="panel-body">
-        <div v-if="dailyLoading" class="loading-state">
-          <el-icon class="is-loading"><Loading /></el-icon>
-        </div>
-        <div v-else-if="dailyQuestion" class="daily-practice">
-          <div class="daily-question">
-            <div class="daily-badge">
-              <el-tag
-                size="small"
-                :type="
-                  dailyQuestion.difficulty === 'hard'
-                    ? 'danger'
-                    : dailyQuestion.difficulty === 'medium'
-                      ? 'warning'
-                      : 'info'
-                "
-              >
-                {{ difficultyLabel(dailyQuestion.difficulty) }}
-              </el-tag>
-              <el-tag size="small" type="success" effect="plain">{{
-                dailyQuestion.category || '通用'
-              }}</el-tag>
-            </div>
-            <h4 class="daily-title">{{ dailyQuestion.question }}</h4>
-            <div class="daily-hint">
-              <el-icon><WarningFilled /></el-icon>
-              <span>先尝试独立回答，然后再看参考答案</span>
-            </div>
-            <div v-if="showAnswer" class="daily-answer">
-              <div class="daily-section star-section">
-                <h5>📋 STAR 法则参考</h5>
-                <div class="star-grid">
-                  <div class="star-item">
-                    <span class="star-tag">S 情境</span
-                    ><span>{{ dailyQuestion.star_situation || '描述当时的环境和背景' }}</span>
-                  </div>
-                  <div class="star-item">
-                    <span class="star-tag">T 任务</span
-                    ><span>{{ dailyQuestion.star_task || '描述你需要完成的任务' }}</span>
-                  </div>
-                  <div class="star-item">
-                    <span class="star-tag">A 行动</span
-                    ><span>{{ dailyQuestion.star_action || '描述你采取的具体行动' }}</span>
-                  </div>
-                  <div class="star-item">
-                    <span class="star-tag">R 结果</span
-                    ><span>{{ dailyQuestion.star_result || '描述最终达成的结果' }}</span>
-                  </div>
+      <div v-else-if="dailyQuestion" class="daily-practice">
+        <div class="daily-question">
+          <div class="daily-badge">
+            <el-tag
+              size="small"
+              :type="
+                dailyQuestion.difficulty === 'hard'
+                  ? 'danger'
+                  : dailyQuestion.difficulty === 'medium'
+                    ? 'warning'
+                    : 'info'
+              "
+            >
+              {{ difficultyLabel(dailyQuestion.difficulty) }}
+            </el-tag>
+            <el-tag size="small" type="success" effect="plain">{{
+              dailyQuestion.category || '通用'
+            }}</el-tag>
+          </div>
+          <h4 class="daily-title">{{ dailyQuestion.question }}</h4>
+          <div class="daily-hint">
+            <el-icon><WarningFilled /></el-icon>
+            <span>先尝试独立回答，然后再看参考答案</span>
+          </div>
+          <div v-if="showAnswer" class="daily-answer">
+            <div class="daily-section star-section">
+              <h5>📋 STAR 法则参考</h5>
+              <div class="star-grid">
+                <div class="star-item">
+                  <span class="star-tag">S 情境</span
+                  ><span>{{ dailyQuestion.star_situation || '描述当时的环境和背景' }}</span>
+                </div>
+                <div class="star-item">
+                  <span class="star-tag">T 任务</span
+                  ><span>{{ dailyQuestion.star_task || '描述你需要完成的任务' }}</span>
+                </div>
+                <div class="star-item">
+                  <span class="star-tag">A 行动</span
+                  ><span>{{ dailyQuestion.star_action || '描述你采取的具体行动' }}</span>
+                </div>
+                <div class="star-item">
+                  <span class="star-tag">R 结果</span
+                  ><span>{{ dailyQuestion.star_result || '描述最终达成的结果' }}</span>
                 </div>
               </div>
-              <div class="daily-section">
-                <h5>💡 参考答案</h5>
-                <p>{{ dailyQuestion.suggested_answer || '暂无参考答案' }}</p>
-              </div>
-              <div class="daily-section">
-                <h5>🎯 考察要点</h5>
-                <p>{{ dailyQuestion.focus || dailyQuestion.intent || '综合能力考察' }}</p>
-              </div>
             </div>
-            <el-button v-if="!showAnswer" type="primary" plain @click="showAnswer = true"
-              >查看答案与 STAR 分析</el-button
-            >
-            <el-button v-else text @click="showAnswer = false">收起答案</el-button>
+            <div class="daily-section">
+              <h5>💡 参考答案</h5>
+              <p>{{ dailyQuestion.suggested_answer || '暂无参考答案' }}</p>
+            </div>
+            <div class="daily-section">
+              <h5>🎯 考察要点</h5>
+              <p>{{ dailyQuestion.focus || dailyQuestion.intent || '综合能力考察' }}</p>
+            </div>
           </div>
-          <!-- STAR 法则速查 -->
-          <div class="star-cheatsheet">
-            <h5>STAR 法则速查</h5>
-            <div class="star-grid">
-              <div class="star-item">
-                <span class="star-tag star-s">S</span
-                ><span><b>Situation</b> 情境 — 在什么背景下？</span>
-              </div>
-              <div class="star-item">
-                <span class="star-tag star-t">T</span
-                ><span><b>Task</b> 任务 — 你需要完成什么？</span>
-              </div>
-              <div class="star-item">
-                <span class="star-tag star-a">A</span><span><b>Action</b> 行动 — 你做了什么？</span>
-              </div>
-              <div class="star-item">
-                <span class="star-tag star-r">R</span
-                ><span><b>Result</b> 结果 — 达成了什么成果？</span>
-              </div>
+          <el-button v-if="!showAnswer" type="primary" plain @click="showAnswer = true"
+            >查看答案与 STAR 分析</el-button
+          >
+          <el-button v-else text @click="showAnswer = false">收起答案</el-button>
+        </div>
+        <!-- STAR 法则速查 -->
+        <div class="star-cheatsheet">
+          <h5>STAR 法则速查</h5>
+          <div class="star-grid">
+            <div class="star-item">
+              <span class="star-tag star-s">S</span
+              ><span><b>Situation</b> 情境 — 在什么背景下？</span>
+            </div>
+            <div class="star-item">
+              <span class="star-tag star-t">T</span><span><b>Task</b> 任务 — 你需要完成什么？</span>
+            </div>
+            <div class="star-item">
+              <span class="star-tag star-a">A</span><span><b>Action</b> 行动 — 你做了什么？</span>
+            </div>
+            <div class="star-item">
+              <span class="star-tag star-r">R</span
+              ><span><b>Result</b> 结果 — 达成了什么成果？</span>
             </div>
           </div>
         </div>
-        <div v-else class="empty-inline">暂无练习题目，开始一次模拟面试后会自动生成</div>
       </div>
-    </div>
+      <div v-else class="empty-inline">暂无练习题目，开始一次模拟面试后会自动生成</div>
+    </AppPanel>
 
     <!-- 薄弱知识点专项训练 -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-danger)"><TrendCharts /></el-icon>
-          <h3>薄弱知识点训练</h3>
-          <el-tag v-if="weakAreas.length" size="small" type="danger"
-            >{{ weakAreas.length }} 项待加强</el-tag
-          >
-        </div>
+    <AppPanel icon-color="var(--app-danger)">
+      <template #icon><TrendCharts /></template>
+      <template #title>薄弱知识点训练</template>
+      <template #badge>
+        <el-tag v-if="weakAreas.length" size="small" type="danger"
+          >{{ weakAreas.length }} 项待加强</el-tag
+        >
+      </template>
+      <div v-if="weakLoading" class="loading-state">
+        <el-icon class="is-loading"><Loading /></el-icon>
       </div>
-      <div class="panel-body">
-        <div v-if="weakLoading" class="loading-state">
-          <el-icon class="is-loading"><Loading /></el-icon>
-        </div>
-        <div v-else-if="weakAreas.length" class="weak-grid">
-          <div v-for="area in weakAreas" :key="area.name" class="weak-card">
-            <div class="weak-header">
-              <strong>{{ area.name }}</strong>
-              <el-tag :type="weakAreaTag(area.score)" size="small">{{ area.score }}分</el-tag>
-            </div>
-            <p class="weak-desc">{{ area.desc || '建议加强该方向训练' }}</p>
-            <div class="weak-actions">
-              <el-button size="small" @click="router.push('/interview/setup')">专项练习</el-button>
-              <el-button
-                v-if="area.practice_questions?.length"
-                size="small"
-                text
-                @click="showWeakDetail(area)"
-                >查看题目</el-button
-              >
-            </div>
+      <div v-else-if="weakAreas.length" class="weak-grid">
+        <div v-for="area in weakAreas" :key="area.name" class="weak-card">
+          <div class="weak-header">
+            <strong>{{ area.name }}</strong>
+            <el-tag :type="weakAreaTag(area.score)" size="small">{{ area.score }}分</el-tag>
+          </div>
+          <p class="weak-desc">{{ area.desc || '建议加强该方向训练' }}</p>
+          <div class="weak-actions">
+            <el-button size="small" @click="router.push('/interview/setup')">专项练习</el-button>
+            <el-button
+              v-if="area.practice_questions?.length"
+              size="small"
+              text
+              @click="showWeakDetail(area)"
+              >查看题目</el-button
+            >
           </div>
         </div>
-        <div v-else class="empty-inline">暂无薄弱项数据，完成更多模拟面试后可分析</div>
       </div>
-    </div>
+      <div v-else class="empty-inline">暂无薄弱项数据，完成更多模拟面试后可分析</div>
+    </AppPanel>
 
     <!-- 自我介绍生成器对话框 -->
     <el-dialog v-model="showIntroDialog" title="自我介绍生成器" width="600px">
@@ -235,87 +220,78 @@
     </el-dialog>
 
     <!-- 面试历史 -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-primary)"><ChatLineSquare /></el-icon>
-          <h3>面试记录</h3>
-        </div>
+    <AppPanel icon-color="var(--app-primary)">
+      <template #icon><ChatLineSquare /></template>
+      <template #title>面试记录</template>
+      <div v-if="sessionsLoading" class="loading-state">
+        <el-icon class="is-loading"><Loading /></el-icon>
       </div>
-      <div class="panel-body">
-        <div v-if="sessionsLoading" class="loading-state">
-          <el-icon class="is-loading"><Loading /></el-icon>
-        </div>
-        <AppLoadError
-          v-else-if="sessionsError"
-          title="面试记录拉取失败"
-          :message="sessionsError"
-          retry-label=""
-        />
-        <div v-else-if="!sessions.length" class="empty-inline">
-          还没有面试记录，开始一次模拟面试吧
-        </div>
-        <div v-else class="interview-list">
-          <div
-            v-for="s in sessions"
-            :key="s.id"
-            class="interview-row"
-            @click="$router.push(`/interview/report/${s.id}`)"
-          >
-            <div class="interview-dot" :class="s.status === 'completed' ? 'green' : 'amber'" />
-            <div class="interview-info">
-              <strong>{{ s.jd_title || s.position || '模拟面试' }}</strong>
-              <span
-                >{{ monthDayTime(s.created_at) }} ·
-                {{ s.status === 'completed' ? '已完成' : '进行中' }}</span
-              >
-            </div>
-            <div v-if="s.overall_score" class="interview-score">
-              <strong>{{ s.overall_score }}</strong>
-              <span>分</span>
-            </div>
-            <el-icon class="interview-arrow"><ArrowRight /></el-icon>
+      <AppLoadError
+        v-else-if="sessionsError"
+        title="面试记录拉取失败"
+        :message="sessionsError"
+        retry-label=""
+      />
+      <div v-else-if="!sessions.length" class="empty-inline">
+        还没有面试记录，开始一次模拟面试吧
+      </div>
+      <div v-else class="interview-list">
+        <div
+          v-for="s in sessions"
+          :key="s.id"
+          class="interview-row"
+          @click="$router.push(`/interview/report/${s.id}`)"
+        >
+          <div class="interview-dot" :class="s.status === 'completed' ? 'green' : 'amber'" />
+          <div class="interview-info">
+            <strong>{{ s.jd_title || s.position || '模拟面试' }}</strong>
+            <span
+              >{{ monthDayTime(s.created_at) }} ·
+              {{ s.status === 'completed' ? '已完成' : '进行中' }}</span
+            >
           </div>
+          <div v-if="s.overall_score" class="interview-score">
+            <strong>{{ s.overall_score }}</strong>
+            <span>分</span>
+          </div>
+          <el-icon class="interview-arrow"><ArrowRight /></el-icon>
         </div>
       </div>
-    </div>
+    </AppPanel>
 
     <!-- 面试题浏览 -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-success)"><Document /></el-icon>
-          <h3>面试题库</h3>
-        </div>
+    <AppPanel icon-color="var(--app-success)">
+      <template #icon><Document /></template>
+      <template #title>面试题库</template>
+      <template #actions>
         <el-button size="small" @click="useLast"> 加载最近分析 </el-button>
+      </template>
+      <div v-if="!questionData" class="question-load">
+        <el-input-number v-model="recordId" :min="1" placeholder="分析记录ID" />
+        <el-button @click="loadById" :loading="questionLoading">加载</el-button>
+        <span class="hint">输入分析记录ID查看面试题</span>
       </div>
-      <div class="panel-body">
-        <div v-if="!questionData" class="question-load">
-          <el-input-number v-model="recordId" :min="1" placeholder="分析记录ID" />
-          <el-button @click="loadById" :loading="questionLoading">加载</el-button>
-          <span class="hint">输入分析记录ID查看面试题</span>
-        </div>
-        <div v-else>
-          <div v-for="(items, key) in questionGroups" :key="key" class="question-group">
-            <h4>{{ getInterviewGroupTitle(key) }}</h4>
-            <div v-if="!items.length" class="empty-inline">该类型暂时没有题目</div>
-            <div v-for="(q, i) in items" :key="i" class="question-card">
-              <div class="q-text">
-                <b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}
-              </div>
-              <div class="q-focus">考察点：{{ q.focus || q.intent || '-' }}</div>
-              <div class="q-answer">
-                参考答案：{{ q.suggested_answer || q.expected_answer || q.ref_answer || '-' }}
-              </div>
+      <div v-else>
+        <div v-for="(items, key) in questionGroups" :key="key" class="question-group">
+          <h4>{{ getInterviewGroupTitle(key) }}</h4>
+          <div v-if="!items.length" class="empty-inline">该类型暂时没有题目</div>
+          <div v-for="(q, i) in items" :key="i" class="question-card">
+            <div class="q-text">
+              <b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}
+            </div>
+            <div class="q-focus">考察点：{{ q.focus || q.intent || '-' }}</div>
+            <div class="q-answer">
+              参考答案：{{ q.suggested_answer || q.expected_answer || q.ref_answer || '-' }}
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </AppPanel>
   </div>
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
