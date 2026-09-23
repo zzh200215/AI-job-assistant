@@ -722,7 +722,27 @@ agent.SummaryAgent           real  tokens=3215
 
 **棘轮的第三个盲区（已入账，未清偿，提交 `3bbc343`）**：`hardcodedColorLiterals` 数 `<style>`、`scriptColorLiterals` 数 `<script>`，而**模板属性里的色值两边都不算**——实测 **25 处分布在 6 个文件**（`Login.vue` 17、`DefaultLayout.vue` 3、`ExplainMatch.vue` 2、`CareerPlanning.vue`/`NotFound.vue`/`ResumeUpload.vue` 各 1）。已新增第三条预算 `templateColorLiterals`（同样"增长即红、还债必须调小"），三个维度改由同一对测试驱动：**抽取坏掉也无法蒙混**（template 取空会让 6 个文件全被"预算比现实松"那条点名）。用一次性探针验过三件事——预算数字与实测逐文件相等、多一处即红、未列进预算的文件里有 hex 也红。
 
-这 25 处里 17 处是 Login 的第三方登录品牌色（Google/GitHub 官方值，本就该写死）；其余 **8 处是真债**，和 D1 同源，且**没有一处等于最近的主题 token**：`DefaultLayout.vue:51-52` 导航菜单 `#4b5563` / `#196bdb`（主题里是 `--app-muted #697386` / `--app-primary #2563eb`）、`ExplainMatch.vue:131,140` 的"风险点/改进建议"标题吃 Element 默认橙 `#e6a23c` 与默认蓝 `#409eff`、`CareerPlanning.vue:523` 兜底 `#409EFF`、`NotFound.vue:4` 图标 `#667eea`（不是 `--app-violet #7147d9`）、`ResumeUpload.vue:156` 环形轨道 `#eee`。**本段一条都没换成 var()**：`stroke="var(--app-…)"` 这类 SVG 表现属性、以及 el-menu/el-icon 传色值 prop 的路径，必须真在浏览器里看结果才敢改，而 browser 工具被会话策略拦着——留待能验时逐条做，届时数字只会往下走。预算生成脚本 `scripts/style-budget.mjs` 同步改为三个维度都输出（此前只印 `<style>` 一条，谁照它重生成预算就会把另外两条写没了）。当前账本：`<style>` **510 处 / 34 文件**、`<script>` **0**、模板 **25 处 / 6 文件**。
+这 25 处里 17 处是 Login 的第三方登录品牌色（Google/GitHub 官方值，本就该写死）；其余 **8 处是真债**，和 D1 同源，且**没有一处等于最近的主题 token**：`DefaultLayout.vue:51-52` 导航菜单 `#4b5563` / `#196bdb`（主题里是 `--app-muted #697386` / `--app-primary #2563eb`）、`ExplainMatch.vue:131,140` 的"风险点/改进建议"标题吃 Element 默认橙 `#e6a23c` 与默认蓝 `#409eff`、`CareerPlanning.vue:523` 兜底 `#409EFF`、`NotFound.vue:4` 图标 `#667eea`（不是 `--app-violet #7147d9`）、`ResumeUpload.vue:156` 环形轨道 `#eee`。**本段一条都没换成 var()**：`stroke="var(--app-…)"` 这类 SVG 表现属性、以及 el-menu/el-icon 传色值 prop 的路径，必须真在浏览器里看结果才敢改，而 browser 工具被会话策略拦着——留待能验时逐条做，届时数字只会往下走。→ **D17 逐条做完了（`7f04a0a`）**：8 处里 2 处其实是**从来不起作用的死属性**（删掉，零视觉变化）、3 处换成了 token、3 处给了不换的理由；`var()` 在 SVG 表现属性上解不解析这条也一并量掉了。
+
+#### 已交付：D17 模板里的 8 处色值债：2 处是死属性，删掉比换成 token 诚实（提交 `7f04a0a`）
+
+**兑现的是 D1 第三段那句话**——"必须真在浏览器里看结果才敢改，留待能验时逐条做"。D16 证明浏览器可用之后，这 8 处逐条做完了，结论分三类。
+
+**① 两处不是"换成 token"，是删掉：它们从来不说真话。** `DefaultLayout.vue` 的 `text-color="#4b5563"` 与 `active-text-color="#196bdb"`：同文件 `<style>` 里 `.el-menu-item`、`.el-menu-item:hover`、`.el-menu-item.is-active`、`.el-sub-menu__title` 四条 `color: … !important` 把这两个属性能影响的**每一个状态**都盖住了。实验（不是推理）：把属性值改成 `#ff00ff` / `#00ffff`，属性确实写进了 `--el-menu-text-color` / `--el-menu-active-color`，但导航项的计算色**一个字节都没动**（未选中 `rgb(167,169,181)`、选中 `rgb(189,164,255)`）。删掉之后重测：12 个条目 + 子菜单标题逐条与删除前相同 ⇒ 这是一次**零视觉变化的删除**，而留着它会让下一个人以为导航文字是灰蓝色。（量这个必须用管理员身份：`el-sub-menu` 只在 `adminNav.length` 非空时渲染，候选人身份看不到那条路径。）
+
+**② 三处换成 token**：`NotFound.vue:4` 图标 `#667eea → var(--app-violet)`、`ResumeUpload.vue:160` 评分环轨道 `#eee → var(--app-line)`、`CareerPlanning.vue:543` 时间线节点兜底 `#409EFF → var(--app-primary)`。
+
+**③ 三处给出不换的理由**（不是漏）：Login 的 17 处是 Google/GitHub 官方品牌色与雷达图描边，本就该写死；`DefaultLayout.vue:33` 品牌标记的 `stroke="#fff"` 压在 `#6d3ce8` 的紫色块上，是**刻意的对比色**，它数值上等于 `--app-surface-strong` 只是巧合；`ExplainMatch.vue:131,140` 两处——D16 已证这个视图**没有路由可达**，改了没人看见，等 §7 阶段 3 决定删不删。
+
+**顺带答掉 D1 挂着的一条"没验"**：`var()` 到底能不能用在 SVG 表现属性上？本机 Chromium 实测 `<circle stroke="var(--app-primary)">` 计算成 `rgb(37,99,235)`，与 `style="stroke: var(--app-primary)"` 一致。所以 `ResumeUpload.vue:726` 那句早就在跑的 `diagScoreColor = 'var(--app-primary)'` 是成立的，本次的 `stroke="var(--app-line)"` 也成立。**只在这一个引擎上量过，没跨浏览器**——这条结论的适用范围就到这儿。
+
+**看得见的变化只有一处**：NotFound 图标从 `rgb(102,126,234)`(#667eea) 变成 `rgb(113,71,217)`(--app-violet)，ΔR=11 / ΔG=55 / ΔB=17，靛蓝转主题紫。另外两处（环轨道、时间线兜底）**没能在真页面上渲染**：一个要先有一次诊断结果，一个要有路线图数据；它们的机制由上面那条属性实验覆盖，观感仍待有数据时复核。
+
+**账**：`templateColorLiterals` **25 → 20**（Login 17 / DefaultLayout 1 / ExplainMatch 2），"还完债不调小就红"那条测试把数字钉住；理由写在预算注释里。
+
+**门禁**：`test:unit` **98 passed** / 18 files、棘轮 **24** 全绿、smoke 11、lint **0 error**、build ok、`prettier --check .` 全树 clean（`ResumeUpload` 那一行超 100 列，由 prettier 折行，diff 里没有无关重排）。后端**无改动**。**没验**：环轨道与时间线节点两处观感（缺数据）；跨浏览器引擎。
+
+预算生成脚本 `scripts/style-budget.mjs` 同步改为三个维度都输出（此前只印 `<style>` 一条，谁照它重生成预算就会把另外两条写没了）。当前账本：`<style>` **510 处 / 34 文件**、`<script>` **0**、模板 **25 处 / 6 文件**。
 
 #### 已交付：D1（第三段）状态→颜色也收成一个口径（提交 `a4156f5`）
 
