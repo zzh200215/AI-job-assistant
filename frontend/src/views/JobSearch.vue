@@ -125,6 +125,14 @@
                 :message="resumesError"
                 @retry="loadResumes"
               />
+              <!-- 列表和详情是两次 GET。只有详情失败时，简历摘要会以空串参与"改写搜索词"，
+                   页面接着对一个已经选了简历的人说"先选择一份简历" -->
+              <AppLoadError
+                v-else-if="resumeDetailError"
+                title="简历详情拉取失败"
+                :message="resumeDetailError"
+                @retry="loadResumeDetail(selectedResumeId)"
+              />
             </div>
           </div>
 
@@ -476,6 +484,13 @@
                 <el-icon class="is-loading"><Loading /></el-icon>
                 <span>正在根据简历生成匹配结果...</span>
               </div>
+
+              <AppLoadError
+                v-else-if="recommendError"
+                title="推荐结果拉取失败"
+                :message="recommendError"
+                @retry="loadRecommendations"
+              />
 
               <div v-else-if="normalizedRecommendations.length" class="recommend-grid">
                 <article
@@ -1086,6 +1101,9 @@ const resumeList = ref([])
 const resumesError = ref('')
 const pipelineError = ref('')
 const selectedResumeDetail = ref(null)
+// 详情失败与列表失败要分开：`selectedResumeSummary` 只从详情算，读不到又不出声的话，
+// 它会让"改写搜索词"对一个已经选了简历的人说"先输入岗位关键词，或先选择一份简历"。
+const resumeDetailError = ref('')
 
 const searching = ref(false)
 const hasSearched = ref(false)
@@ -1104,6 +1122,8 @@ const latestCall = useLatestCall()
 
 const recommendLoading = ref(false)
 const recommendations = ref([])
+// 推荐取不到 ≠ 没有贴合的推荐：清空列表会命中"还没有足够贴合的推荐结果，可以先补充岗位池"
+const recommendError = ref('')
 
 const seeding = ref(false)
 
@@ -1516,14 +1536,16 @@ async function loadResumes() {
 }
 
 async function loadResumeDetail(resumeId) {
+  resumeDetailError.value = ''
   if (!resumeId) {
     selectedResumeDetail.value = null
     return
   }
   try {
     selectedResumeDetail.value = await getResume(resumeId)
-  } catch {
+  } catch (e) {
     selectedResumeDetail.value = null
+    resumeDetailError.value = e?.userMessage || e?.message || '暂时读不到这份简历的详情'
   }
 }
 
@@ -1558,6 +1580,7 @@ async function loadPipelineEntries() {
 async function loadRecommendations() {
   // 令牌在进入时领取：新一次的意图（含"没选简历所以清空"）都应作废仍在途的旧请求
   const isCurrent = latestCall()
+  recommendError.value = ''
   if (!selectedResumeId.value) {
     recommendations.value = []
     return
@@ -1574,9 +1597,10 @@ async function loadRecommendations() {
     const data = await getJobRecommendations(params)
     if (!isCurrent()) return
     recommendations.value = data?.recommendations || []
-  } catch {
+  } catch (e) {
     if (!isCurrent()) return
     recommendations.value = []
+    recommendError.value = e?.userMessage || e?.message || '暂时取不到推荐结果，请稍后重试'
   } finally {
     if (isCurrent()) recommendLoading.value = false
   }
@@ -1651,7 +1675,9 @@ async function seedDemoData() {
 async function handleResumeChange() {
   if (!selectedResumeId.value) {
     recommendations.value = []
+    recommendError.value = ''
     selectedResumeDetail.value = null
+    resumeDetailError.value = ''
     return
   }
   await loadResumeDetail(selectedResumeId.value)

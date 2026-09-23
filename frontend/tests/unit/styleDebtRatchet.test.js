@@ -104,11 +104,15 @@ const BUDGET = {
        卡片因此不显示数字，也不再显示"0 个版本"——它没有作出假断言，只是少了一个按钮。
      - admin/Tenants 的 loadDomains：`notifyError: false` 且 `catch { domains[tid] = [] }`，
        展开某一行的租户域名列表失败会演成"该租户没有域名"。它是 D10 记下的那条盲区自己冒出来的：
-       这条尺子会往后看 12 行找"有没有提示"，2026-09-23 格式化把 submitCreate 的 ElMessage 折出
-       了窗口，它才现形（代码没变，是尺子的视野变了）。企业侧冻结，所以进预算不修。 */
+       旧尺子往后看 12 行找"有没有提示"，2026-09-23 格式化把 submitCreate 的 ElMessage 折出了
+       窗口，它才现形（代码没变，是尺子的视野变了）。企业侧冻结，所以进预算不修。
+     - JobSearch 的 explainCurrentJob 是 **POST**：`request.js` 对非 GET 会弹提示，所以它不属于
+       "失败演成没有数据"，只是解读块不出来时要用户自己再点一次"投递解读"。判据按形状数、不看
+       动词，所以它留在账上；D15 把窗口收到函数作用域后新暴露的三处里，两处 GET 已经修掉了。 */
   silentEmptyCatches: {
     'src/views/admin/Overview.vue': 2,
     'src/views/admin/Tenants.vue': 1,
+    'src/views/JobSearch.vue': 1,
     'src/views/ResumeUpload.vue': 1,
   },
   themeCompatWildcards: 27,
@@ -156,6 +160,11 @@ const themeCss = readFileSync('src/styles/main.css', 'utf8')
    所以 `catch { list.value = [] }` 这种写法会把一次 500 渲染成页面自己的"暂无数据"文案。
    数出来的每条都是待收的谎，只能往下走。
 
+   "这一处到底报告了没有"看的是**本函数剩余部分**，不是固定的 12 行。旧口径往后看 12 行，会把邻居函数
+   里的 `localError.value =` / `ElMessage` 当成这一处的报告：D10 用实验量到它会漏数（当时 3 → 7），
+   D13 那次纯格式化又让它现形一处（admin/Tenants 的 loadDomains）。catch 之后**新开的**嵌套函数体同样
+   跳过，否则又会栽在邻居 `seedData()` 的提示上——那正是 D10 记下的假阳性来源。
+
    已知盲区（不要把这个数字当"全部修完"）：它只看 catch 体里清值的写法，看不见两类同病——
    1) try 之前先清值、catch 里只留注释（SalaryInsight 曾写"保留上一次结果"，其实既没保留也没提示，
       D6 已修并有测试）；2) 值原样留着不删，于是新输入配旧答案。
@@ -163,31 +172,69 @@ const themeCss = readFileSync('src/styles/main.css', 'utf8')
 const CATCH_HEAD = /^\s*\}\s*catch/
 const CLEARS_VALUE = /=\s*(\[\]|null|''|0)\s*;?\s*$/
 const REPORTS = /userMessage|loadError|\w*Error\.value\s*=|ElMessage|console\./
+const BLOCK_HEAD = /^(?:if|for|while|switch|case|catch|else|try|finally|do|with|return)\b/
+const FUNCTION_HEAD = /\bfunction\b|=>|\b[\w$.]+\s*\([^()]*\)\s*\{?\s*$/
+
+/* 花括号配对，给出"函数体"的行区间。模板的 `{{ }}` 与 CSS 块也参与配对，但它们的块头既没有 `=>`
+   也没有 `名字(...)`，所以不会冒充函数；`} catch (e) {` 这类要先剥掉行首的括号才判得对。 */
+function functionRanges(lines) {
+  const stack = []
+  const ranges = []
+  lines.forEach((line, i) => {
+    for (let k = 0; k < line.length; k++) {
+      if (line[k] === '{') {
+        const head = line
+          .slice(0, k)
+          .trim()
+          .replace(/^[})\]]+\s*/, '')
+        stack.push({ fn: !BLOCK_HEAD.test(head) && FUNCTION_HEAD.test(head), start: i })
+      } else if (line[k] === '}') {
+        const top = stack.pop()
+        if (top?.fn) ranges.push({ start: top.start, end: i })
+      }
+    }
+  })
+  return ranges
+}
+
+/** 一个文件里"失败被清成空态、且本函数内没有任何报告"的 catch 行号（1 起）。 */
+function silentCatchesIn(source) {
+  const lines = source.split(/\r?\n/)
+  const ranges = functionRanges(lines)
+  const found = []
+  for (let i = 0; i < lines.length; i++) {
+    if (!CATCH_HEAD.test(lines[i])) continue
+    let depth = 1
+    const body = []
+    let j = i
+    for (j = i + 1; j < lines.length && depth > 0; j++) {
+      for (const ch of lines[j]) {
+        if (ch === '{') depth++
+        else if (ch === '}') depth--
+      }
+      if (depth > 0) body.push(lines[j])
+    }
+    const commented = body.length > 0 && body.every((l) => /^\s*(\/\/|\/\*|\*)/.test(l))
+    if (!body.some((l) => CLEARS_VALUE.test(l)) || commented) continue
+    // 内层函数：包住这个 catch 的那一层（catch 体结束在 j-1）
+    const owner = ranges
+      .filter((r) => r.start <= i && r.end >= j - 1)
+      .sort((a, b) => b.start - a.start || a.end - b.end)[0]
+    const upto = owner ? owner.end : lines.length - 1
+    const rest = []
+    for (let k = j; k <= upto; k++) {
+      if (ranges.some((r) => r.start >= j && r.start < k && r.end >= k)) continue
+      rest.push(lines[k])
+    }
+    if (!REPORTS.test(`${body.join('\n')}\n${rest.join('\n')}`)) found.push(i + 1)
+  }
+  return found
+}
 
 function silentCatchCounts() {
   const actual = {}
   for (const { rel, source } of viewSources) {
-    const lines = source.split(/\r?\n/)
-    let n = 0
-    for (let i = 0; i < lines.length; i++) {
-      if (!CATCH_HEAD.test(lines[i])) continue
-      let depth = 1
-      const body = []
-      let j = i
-      for (j = i + 1; j < lines.length && depth > 0; j++) {
-        for (const ch of lines[j]) {
-          if (ch === '{') depth++
-          else if (ch === '}') depth--
-        }
-        if (depth > 0) body.push(lines[j])
-      }
-      const cleared = body.some((l) => CLEARS_VALUE.test(l))
-      // 报告可能写在 catch 之后（批量诊断就是那样），所以往后多看 12 行
-      const window = body.join('\n') + '\n' + lines.slice(j, j + 12).join('\n')
-      const reported = REPORTS.test(window)
-      const commented = body.length > 0 && body.every((l) => /^\s*(\/\/|\/\*|\*)/.test(l))
-      if (cleared && !reported && !commented) n++
-    }
+    const n = silentCatchesIn(source).length
     if (n) actual[rel] = n
   }
   return actual
@@ -411,6 +458,58 @@ describe('style debt ratchet', () => {
       stale,
       `silent-empty budget is looser than reality, lower these in BUDGET: ${stale.join(', ')}`
     ).toEqual([])
+  })
+
+  /* 把"往后看 12 行"换成"看到本函数结束"这件事，两个方向都要有对照组，否则收窄窗口可以悄悄
+     变成"什么都看不见"。用合成源码，不依赖任何视图。 */
+  it('counts a report anywhere later in the same function as a report', () => {
+    const src = [
+      'async function loadThings() {',
+      '  try {',
+      '    things.value = await api.get()',
+      '  } catch (e) {',
+      '    things.value = []',
+      '  }',
+      // 报告落在第 21 行：远超旧口径的 12 行窗口，但它就在同一个函数里
+      ...Array.from({ length: 14 }, (_, k) => `  const pad${k} = ${k}`),
+      '  loadError.value = e?.userMessage',
+      '}',
+    ].join('\n')
+    expect(silentCatchesIn(src)).toEqual([])
+  })
+
+  it('does not borrow a report from the next function', () => {
+    const src = [
+      'async function loadThings() {',
+      '  try {',
+      '    things.value = await api.get()',
+      '  } catch (e) {',
+      '    things.value = []',
+      '  }',
+      '}',
+      'function seedData() {',
+      "  ElMessage.success('已补充')",
+      '}',
+    ].join('\n')
+    // 这正是 JobSearch.vue 当年被放过的方式：邻居函数里的 searchError.value = 被当成了报告
+    expect(silentCatchesIn(src)).toEqual([4])
+  })
+
+  it('does not borrow a report from a nested function opened after the catch', () => {
+    const src = [
+      'async function loadThings() {',
+      '  try {',
+      '    things.value = await api.get()',
+      '  } catch (e) {',
+      '    things.value = []',
+      '  }',
+      '  const paint = () => {',
+      "    ElMessage.success('画好了')",
+      '  }',
+      '  paint()',
+      '}',
+    ].join('\n')
+    expect(silentCatchesIn(src)).toEqual([4])
   })
 
   it('does not let the theme layer grow its class-name wildcards', () => {
