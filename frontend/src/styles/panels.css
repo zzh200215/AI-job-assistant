@@ -56,7 +56,13 @@
   gap: 8px;
 }
 
-.panel-title-row h3 {
+/* 面板头的标题规格要盖住**两种历史形状**：带 `.panel-title-row` 的（32 处，已收进
+   components/ui/AppPanel.vue）和裸 `<div class="panel-header"><h3>` 的（17 处）。
+   只写前者的话，后者会掉去吃 main.css 的全局 `h3 { font-size: 1.25rem }` + UA 的 1em
+   上下 margin —— 实测同一页上头部因此是 102.67px 而不是 56.26px（见 §10.13）。
+   这条是 D23 第一步：先让两种形状等价，迁移本身才可能量出 0 差异。 */
+.panel-title-row h3,
+.panel-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 700;
