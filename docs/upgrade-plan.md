@@ -742,6 +742,29 @@ agent.SummaryAgent           real  tokens=3215
 
 **门禁**：`test:unit` **98 passed** / 18 files、棘轮 **24** 全绿、smoke 11、lint **0 error**、build ok、`prettier --check .` 全树 clean（`ResumeUpload` 那一行超 100 列，由 prettier 折行，diff 里没有无关重排）。后端**无改动**。**没验**：环轨道与时间线节点两处观感（缺数据）；跨浏览器引擎。
 
+#### 已交付：D18 组件层长出第二个组件：`AppPanel`，以及"标记能搬、scoped 规则搬不动"这条约束（提交 `3f6dd7d`）
+
+**为什么现在做**：§7 阶段 1 里 `AppPanel`/`AppTable`/骨架态是最后一块没动的，当初挂起的理由写得很具体——"需要逐路由 computed-style 复核（浏览器工具目前被策略拦）"。D16/D17 已经把那个前提否掉了，于是来收。
+
+**先量，量出来的和预想不一样**：`class="panel-header"` 在 31 个视图里出现 **93 处**，但样式**早就集中**在 `styles/panels.css`（`main.js:9` 全局引入）——重复的是**标记**（那四层 div），不是规则。只有 **6 个视图**自带 `.panel-header` scoped 规则，全仓 `:deep(.panel-header)` **0 处**。所以"抽 AppPanel 能删掉 93 份 CSS"这个预期是错的，能删的只有标记。
+
+**真正的约束**（写进组件注释，也写进台账）：Vue 的 scoped CSS 只作用于**本组件模板里的节点**外加子组件的**根元素**。标记一旦搬进 `AppPanel`，父视图那条 `.panel-header { … }` 就再也匹配不到它——迁移会把这 6 个视图的样式静默改掉。所以它们必须先解决覆盖（搬进 `panels.css` 或改成 props），不能直接迁。
+
+**做了什么**：新建 `src/components/ui/AppPanel.vue`（`.panel > .panel-header > .panel-title-row` + `.panel-body`，槽 `#icon` / `#title` / `#actions` / 默认，prop 只有 `iconColor`），迁掉 `WeeklyReport.vue` 的 **5 处**（其中 2 处带 `v-if`——`v-if` 挂在组件根上行为一致，属性原样带走）。
+
+**证明方式是本条的重点**：桩 API 固定同一份数据，迁移前后各抓一次**整页逐元素计算样式**快照（**241 个元素 × 20 条属性**：color / background / font-size / font-weight / line-height / 四向 padding / margin-top / 边框宽与色 / display / align-items / justify-content / gap / width / height / text-align / letter-spacing），逐条比对：**0 差异**。这一次顺带证伪了两个真实疑虑——(a) 空的 `#actions` 槽会不会插入节点把 `justify-content: space-between` 挤歪：没有；(b) `.panel + .panel { margin-top: 16px }` 这条相邻兄弟规则在组件根上还成不成立：成立（快照里 `margin-top` 逐条相同）。
+
+**台账三条**（`styleDebtRatchet`）：`handRolledPanelHeaders = 88`（只降不升 + 降了必须调小）；`.panel-header` **本地覆盖文件清单**必须与实际一致且只准缩短——把"哪些文件不能直接迁"变成机器检查，而不是让下一个人重新踩一遍。
+
+**过程自纠（三次都是工具/脚本层面，值得记）**：
+1. 第一版脚本用带 `g` 的正则在**逐步缩短**的字符串上反复 `exec`，`lastIndex` 跨调用残留 → 5 个块只匹配到 2 个。
+2. 修完 `lastIndex` 仍把块尾算错，产出过 `+row">` 这种碎块——整块搬移不该用正则偏移量拼接。改成**按行**处理、从后往前替换，并加"块数 ≠ 5 就中止不动文件"的断言。
+3. **`git checkout -- <file>` 会按 `core.autocrlf=true` 把该文件落盘成 CRLF**（实测 667 处），而本工作区其他文件都是 LF。这一步差点把 `prettier --check` 变成假红；先归一回 LF 再继续。这就是 [[edit-tool-crlf-breaks-prettier]] 说的双向坑，这次是"git 动文件"那个方向。
+
+**没做/没验**：其余 **88 处**没迁（WeeklyReport 之外最大的是 `SmartAnalysis` 10、`Profile` 9、`InterviewReport` 8；另有 6 个视图被上面那条 scoped 约束挡住）；`#actions` 槽**有内容**的情形还没在真页面上验过——本周报 5 处都没有 actions，下一个该拿它来验的是 `OfferCompare` 那类带按钮的头部；`AppTable` 与骨架态未动。
+
+**门禁**：`test:unit` **98 → 101 passed**（+3 条台账）、棘轮 **27** 全绿、smoke 11、lint **0 error**（既有那条 `admin/Overview` warning 未动）、build ok、`prettier --check .` 全树 clean、改动文件均为 LF。后端**无改动**。
+
 预算生成脚本 `scripts/style-budget.mjs` 同步改为三个维度都输出（此前只印 `<style>` 一条，谁照它重生成预算就会把另外两条写没了）。当前账本：`<style>` **510 处 / 34 文件**、`<script>` **0**、模板 **25 处 / 6 文件**。
 
 #### 已交付：D1（第三段）状态→颜色也收成一个口径（提交 `a4156f5`）
