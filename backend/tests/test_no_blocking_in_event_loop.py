@@ -124,8 +124,8 @@ def _scan_app() -> tuple[list[str], int]:
 def test_no_async_route_calls_a_blocking_primitive_directly():
     """E15 之后的账：**空清单**。新增一条就要先想清楚为什么不能挪进线程池。"""
     violations, routes = _scan_app()
-    assert violations == [], "在 async 路由里发现同步出网/慢 CPU 调用，改成 await run_in_threadpool(...)：\n" + "\n".join(
-        violations
+    assert violations == [], (
+        "在 async 路由里发现同步出网/慢 CPU 调用，改成 await run_in_threadpool(...)：\n" + "\n".join(violations)
     )
 
 
