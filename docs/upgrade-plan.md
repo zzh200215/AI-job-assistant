@@ -474,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 8 个加载函数加令牌（5 个页面），其中 7 处有红→绿测试为证（见 D3、D7、D9、D10）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，D15 再补 2 处；棘轮 `silentEmptyCatches` 11 → 4 →（D15 把判据换成函数作用域）7 → **5** 盯着（见 D4、D5、D15。D10 记下的"这一维有已知漏数"随那次换口径**已关闭**：D13 的格式化让 `admin/Tenants` 先现形，剩下 3 处 D15 量到并修掉两处 GET）**。未收：`AppPanel`/`AppTable`/骨架态这些需要逐路由 computed-style 复核的组件抽取（浏览器工具目前被策略拦），以及其余尚未逐个证明可否被并发触发的加载函数 |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 8 个加载函数加令牌（5 个页面），其中 7 处有红→绿测试为证（见 D3、D7、D9、D10）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，D15 再补 2 处；棘轮 `silentEmptyCatches` 11 → 4 →（D15 把判据换成函数作用域）7 → **5** 盯着（见 D4、D5、D15。D10 记下的"这一维有已知漏数"随那次换口径**已关闭**：D13 的格式化让 `admin/Tenants` 先现形，剩下 3 处 D15 量到并修掉两处 GET）**。**已收：`AppPanel`** —— 93 → **35** 处手写面板头搬进组件，最后 22 处由 11 次逐路由 `getComputedStyle` 差分（5501 个元素实例 × 20 条属性）量出 **0 差异**，判定器与 13 条合成用例留在 `frontend/scripts/panel-migration.mjs`（D18–D26）。纯 drop-in 已见底：剩下 35 处不是"没来得及"，而是要先拍组件 API，见 §10.14。未收：`AppTable`、空/错/骨架态（逐路由 diff 现在是常规门，方法记在 D18/D26，浏览器工具可用），以及其余尚未逐个证明可否被并发触发的加载函数 |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -869,6 +869,45 @@ agent.SummaryAgent           real  tokens=3215
 **没做成的部分**：19 处的批量迁移器写出来了，但对本应合格的 `Profile` 4 处也报"匹配 0"，逐行读代码没定位到拒绝点（调试打印显示包裹与 title-row 两项检查都通过，说明失败在后面的某个 `continue`，需要带日志跑一遍才能确定）。**我没有改用手工编辑 19 处**：那等于放弃逐文件断言，而且 D24 已经证明这几条路由里有一半的面板在数据守卫后面、拿不到逐路由 diff 证据 —— 无证据的批量重构正是这份文档反复在防的东西。下一轮先给迁移器加"每个 `continue` 计数并打印"，再决定做不做。
 
 预算生成脚本 `scripts/style-budget.mjs` 同步改为三个维度都输出（此前只印 `<style>` 一条，谁照它重生成预算就会把另外两条写没了）。当前账本：`<style>` **510 处 / 34 文件**、`<script>` **0**、模板 **25 处 / 6 文件**。
+
+#### 已交付：D26 三个 `continue` 计数背后是三个 bug，以及一次 22 处的批量迁移（提交 `f6a80ac`）
+
+**上一轮欠的一件事**：给迁移器的每个 `continue` 计数。计数一加上，`Profile` 被拒的根因两行就露出来了——**问题从来不在代码里，在工具里**。
+
+**三个 bug**：
+
+1. `title = rel.match(H3)[2]` —— `H3 = /^ {4}<h3>(.*)<\/h3>$/` **只有一个捕获组**，`[2]` 恒为 `undefined`，于是每一处都在 `'5 无 h3 或未收尾'` 上 bail。`icon` 用的是 `ICON[1]/[2]`（两个组）所以一直正常。这解释了 D25 那句"调试打印显示前两项检查都通过却看不到失败点"：失败发生在标题提取，而当时没有任何计数把它暴露出来。改成 `[1]` 后 `Profile` 立刻 4/4。
+2. `EXPECT_OFF` 分支的 `continue` 排在 `writeFileSync` **之前** —— 上一轮那次"已迁移 21 处"**一个字节都没写**（`class="panel-header"` 仍是 57、`git diff --stat` 空）。**报数不等于做事：写盘批次的收据是 `git diff --stat`，不是 stdout。**
+3. 替换区间写成 `[i-1, e+1)`，把包裹 `div` 的收尾 `</div>` 留在原地 —— 22 处全部标签不配平。这次是 `--write` 之后**逐字读 `git diff`** 抓到的；事后单独验了一下：`vue/compiler-sfc` 对多出来的 `</div>` 报 `Invalid end tag.`，所以 `npm run build`（5 秒）本来就会拦住它。**顺序教训：写盘后第一个门是 build，然后才是读 diff**——门一直在那儿，是我没跑。现在工具自己在写盘前断言 `<AppPanel` 与 `</AppPanel>` 配平。
+
+**判据的两处改动**（都由合成用例双向自证，`--selftest` 13 条）：
+
+- 包裹层原先只认 `class="panel…" v-if="…"` 这一种书写顺序；`v-if` 写在前面（`RecommendationConfig:105`）就被判"结构不合格"。**顺序是书写习惯不是结构**，补上后召回 1 处。
+- 新增前置条件"本视图不得有自己的 `.panel-header` 规则"，判定时**先剥注释**（避免 CSS 注释里提到的类名被算成活覆盖——又是"数文本不数代码"那一类，同类错误这条台账已经记过六次）。`--all` 模式下 9 处因此被正确拒在覆盖类视图里。
+
+**实际迁了 22 处，不是 D25 说的 19**：D25 表格"严格重量 19"按它自己列的分项相加是 20，实测 **22**（`Profile` 4、`InterviewSetup` 3、`MultiAgentAnalysis` 3、`PromptTrace` 3、`AgentAnalysis` 2、`AnalysisResult` 2、`RecommendationConfig` 2、`RecommendationEval` 2、`History` 1）。D25 那句"5 处 SmartAnalysis 是动态 `:class` 包裹"**也是错的**：SmartAnalysis 的 3 处包裹是 `<section class="panel">`，动态 `:class` 全仓只有 `MultiAgentAnalysis:94` 一处。**同一把尺子第三次错在同一类地方：数名字不数形状。**
+
+**验证：11 次逐路由计算样式差分，5501 个元素实例 × 20 条属性 = 0 差异。**
+
+- 桩 API 说 `{code:0,message:'ok',data:…}`；`/api/interview/sessions` 必须返回**裸数组**（`historyList.value.filter(...)`），catch-all 的 `{items,total}` 会让 `InterviewSetup` 直接抛；`/api/auth/me` 同理必须是裸 user 对象。
+- A/C 两轮不换分支：把 9 个视图的 HEAD 版解进工作树跑 A，再用备份跑 C。**`git checkout -- <file>` 会按 autocrlf 落 CRLF**，解出来要手工把 `\r\n` 换回 `\n` 才能比（这一轮还顺手犯了个更低的错：用 `latin1` 读、`utf8` 写，把 9 个文件双重编码成乱码——`git show` 的 blob 还在，所以可逆）。
+- 有站点躲在数据/交互守卫后面，光加载页面测不到：`MultiAgentAnalysis` 的 3 处要点"开始智能分析"（`v-if="runId && dispatch"` / `runId` / `summaryReport`）、`RecommendationConfig` 的对比面板要点"实验对比"（`v-if="compareResult"`）、`AnalysisResult` 的参考依据那一处要切页签；`AgentAnalysis:56` 的 `v-if="taskId"` 来自查询参数，所以那条路由按 `/agent?task_id=5` 加载。**9 条路由因此是 11 次采集。**浏览器工具**拦 `fetch`**（"Possible side-effect"），快照改存 `localStorage`、**页内做身份匹配 diff**，只回差异；被拦的 `navigate_page` 重试一次就过了（同一类"先重测再写死结论"）。
+- **覆盖率不是猜的**：9 个文件里的 `<AppPanel>` 数与对应路由上渲染出的 `.panel-header` 数逐个相等（Profile 9/9、InterviewSetup 3/3、MultiAgentAnalysis 3/3、PromptTrace 3/3、AgentAnalysis 2/2、AnalysisResult 2/2、History 1/1、RecommendationConfig 5/5、RecommendationEval 7/7），也就是 22 处新站点全部在至少一次采集里真实渲染过。
+- **先证明尺子会响**：给 `AppPanel` 的 `<h3>` 临时加 `class="zz-probe"`，`/profile` 立刻报 9 处身份漂移（9 个 H3 全部换成带类名的新身份），撤掉后回到 0。**"两次数得一样"只有在"第三次能数出不一样"时才算证据。**
+
+**台账 57 → 35**（`handRolledPanelHeaders` 同步下调）。`--all` 现在报"命中 0"，也就是**纯 drop-in 见底了**。剩下 35 处按判定器给的形状分四类（细节写进棘轮注释）：11 处在 5 个仍带本地覆盖的视图里、12 处标题包在调用方自己的 div 里（`InterviewReport` 8 / `InterviewRoom` 4）、10 处在 `SmartAnalysis`（标题全是 `<span>`，其中 3 处还坐在 `<section class="panel">` 上）、2 处结构上不该迁。
+
+- **两条分类之间有重叠，别把工作量加两遍**：那 11 处里有 **5 处就是 §10.12 的 `el-card` 描述型头部**（`KnowledgeBase` 4 + `JobSearch` 1，实测 `KnowledgeBase:35` 写的正是 `<el-card><template #header><div class="panel-header">…`）——同一批站点，两个阻塞（el-card 归属 + 本地覆盖），先拍 §10.12 可能一次解掉 5 处。
+- **顺带更正 D24 的一句"裸 h3 形状清零"**：`Privacy:26` 与 `Privacy:62` 两处 `<div class="panel-header"><h3>…</h3></div>` 到今天还在，包裹确认是 `div.panel`——这正是 §10.13 表格里那"2 处未定"。它们没进 D24 那 12 处，是因为 `Privacy` 自带 `.panel-header` 与 `.panel-header h3` 两条本地规则（`LOCAL_OVERRIDE_FILES` 的第 5 个成员），不是因为形状不存在。**"清零"只在判定器能看见的形状里成立。**
+
+- **一个必须记下的测量盲区**：棘轮数的是 `class="panel-header"` 出现次数，判定器只认"单独成行"的写法——`SmartAnalysis` 5 处 + `Privacy` 2 处写成 `<div class="panel-header"><span>…</span></div>` 一行式，判定器看不见。**所以"命中 0"不等于"没有可迁的了"**，只等于"没有*纯 drop-in* 了"。
+
+**工具留在仓库里**：`frontend/scripts/panel-migration.mjs`（`--all` 全量统计 / `--selftest` 合成用例 / 逐文件断言 / 写盘前标签配平），`eslint.config.js` 的 Node globals 扩到 `scripts/**`。上一轮它是 throwaway，三个 bug 就跟着脚本一起被删了；这三个 bug 现在由 13 条用例盯着——**能复用的判定逻辑不要写完就扔，扔一次就要重新踩一遍**。
+
+**顺手量到的一条存量缺陷（本次没修）**：`Profile.vue` 用了 `<Loading />` 却没从 `@element-plus/icons-vue` 导入，控制台稳定报 `Failed to resolve component: Loading`，也就是那个加载态转圈从未出现过。HEAD 上就这样，与本次迁移无关；全仓 **17** 个文件写 `<Loading/>`，**16** 个从 `@element-plus/icons-vue` 导入了它，逐个查过只有 `Profile` 漏（判据是模板里的 `<Loading />` 对上本文件 icons-vue 导入清单里的 `Loading`，不是 grep 文件名）。没顺手修的原因：修它会让一个从未渲染的图标开始出现，那是**可见变化**，要走自己的 diff。
+
+**门禁**：`npm run build` ✓、`npx vitest run` 101/101 ✓、`npm run lint` 0 error（1 条 `admin/Overview.vue` 的 `no-unused-vars` warning 是存量，文件未改动）、`npx prettier --check src scripts tests` ✓。
+
 
 #### 已交付：D1（第三段）状态→颜色也收成一个口径（提交 `a4156f5`）
 
@@ -1276,8 +1315,8 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 9. **跨页隐式握手的最终归属**（E13 只做了三个 id）。`recruit.lastX` 现在集中在 `utils/lastSelection` 并按用户分槽，但它仍是 localStorage；§7 原话是"应改由 Pinia 承载"。两件事需要你定：① 要不要把它再收成一个 Pinia store（则 `setSelectionOwner` 变成 store 内部细节，视图少一层 import）；② `recruit.pendingAnalysis`（`JobSearch`→`SmartAnalysis` 的一次性载荷）与 `recruit.defaultResumeId` 是否也进同一套——前者跨账号也会存活，只是窗口小得多。
 10. **昂贵端点要不要单独的额度，以及每 IP 还要不要总闸**（E14 留下的两个数）。现在 228 条操作仍共用 `RATE_LIMIT_GENERAL`（默认 100/分钟，已改为按用户计），意味着一个登录用户可以一分钟发 100 次深度分析，每次都打真 LLM；而 E14 之后**同一出口的每 IP 总闸自然消失了**（原来它天然存在，因为大家共用一桶）。要收口就得填两个数：① 昂贵端点（`/api/analysis/full`、`/api/multi-agent/*`、`/api/agent/start`）的每分钟额度；② 是否用 `application_limits` 按地址再挂一层总闸、阈值多少。接线与对照组都已在 `tests/test_rate_limit_key.py` 备好，填数即可。
 11. **自动填的"目标岗位"该不该被下一次选择覆盖**（D7 量到的）。`CareerPlanning` 里 `targetRole` 只在为空时由简历职称填入，之后换简历不改它，于是薪资面板继续查第一份简历的职称——标签与数字自洽，所以不是假话，但它不再代表"当前这份简历"。要么"自动填入的值在用户没编辑过时跟随选择"（需要区分自动/手输），要么在换简历时把薪资面板标注成"按 目标岗位=<现值> 查询"。两条都改变候选人看到的数字，且第 ① 条要动输入框的状态模型。
-12. **卡片头要不要归 `AppPanel`**（D21 量到的）。`KnowledgeBase` 的 4 处与 `JobSearch` 的 1 处描述型头部（`h2` + `p`）全都包在 `<el-card class="panel-card">` 的 `#header` 槽里，不是 `div.panel`——所以它们不属于"缺副标题槽"，而属于"要不要把 `el-card` 也收进面板组件"。三个后果要你先拍：① `el-card` 自带 padding/border/背景，且被 `[class*='-card']` 那张通配网按类名兜住（§11），换成 `.panel` 会改变这 5 个头的观感；② 若保留 `el-card`，`AppPanel` 要加一个"只做头部、不做外壳"的模式（那它就不再是面板外壳）；③ 若认为卡片与面板是两个组件，那这 5 处就该长期留在各自视图里，台账按 74 而不是按 0 收敛。现状：没动，74 处台账里已把这 5 处排除在"可直接迁"之外。
-13. ~~**裸 `h3` 的面板头：归一到面板规格，还是给 `AppPanel` 加"无 title-row"模式**~~ —— **已定并执行：走 ③（D23，`f05fbe2` + `a5179f6`）**。有 **17 处**头部写成 `<div class="panel-header"><h3>…</h3></div>`，没有 `.panel-title-row`（15 处包裹确认为 `div.panel`，2 处未定；分布在 `Profile` 5、`RecommendationEval` 5、`RecommendationConfig` 3、`SalaryInsight` 3、`Subscription` 1）。在 `/profile` 上对这 5 处各造一个"包进 title-row"的克隆实测（同一路由、同一父级、只换形状）：
+12. **卡片头要不要归 `AppPanel`**（D21 量到的）。`KnowledgeBase` 的 4 处与 `JobSearch` 的 1 处描述型头部（`h2` + `p`）全都包在 `<el-card class="panel-card">` 的 `#header` 槽里，不是 `div.panel`——所以它们不属于"缺副标题槽"，而属于"要不要把 `el-card` 也收进面板组件"。三个后果要你先拍：① `el-card` 自带 padding/border/背景，且被 `[class*='-card']` 那张通配网按类名兜住（§11），换成 `.panel` 会改变这 5 个头的观感；② 若保留 `el-card`，`AppPanel` 要加一个"只做头部、不做外壳"的模式（那它就不再是面板外壳）；③ 若认为卡片与面板是两个组件，那这 5 处就该长期留在各自视图里，台账按 74 而不是按 0 收敛。现状：没动；**但"按 74 收敛"那个数已作废**——D26 之后台账是 **35** 处，而这 5 处仍然在里面（`KnowledgeBase:35/130/239/296` + `JobSearch:241`，实测它们写的就是 `<el-card><template #header><div class="panel-header">…`，所以两条台账是同一批站点）。
+13. ~~**裸 `h3` 的面板头：归一到面板规格，还是给 `AppPanel` 加"无 title-row"模式**~~ —— **已定并执行：走 ③（D23，`f05fbe2` + `a5179f6`）**。有 **17 处**头部写成 `<div class="panel-header"><h3>…</h3></div>`，没有 `.panel-title-row`（15 处包裹确认为 `div.panel`，2 处未定；分布在 `Profile` 5、`RecommendationEval` 5、`RecommendationConfig` 3、`SalaryInsight` 3、`Subscription` 1）。**D26 补一条：这个 17 本身就漏数了。** `Privacy:26` 与 `Privacy:62` 是同一种"一行式裸 h3"头部（`<div class="panel-header"><h3>数据管理</h3></div>`，包裹就是 `div.panel`），不在这 17 的分项里，也没被 D24 扫掉（`Privacy` 是 `LOCAL_OVERRIDE_FILES` 的成员，自带 `.panel-header` 与 `.panel-header h3` 两条本地规则）。**所以"17 处全部迁完 / 裸 h3 形状清零"实际是 15 处迁完、清零不成立**；那"2 处未定"是哪两处本轮没有再查（它们属于已迁的 17 之内，与 Privacy 这两处无关）。在 `/profile` 上对这 5 处各造一个"包进 title-row"的克隆实测（同一路由、同一父级、只换形状）：
 
     | 项 | 现状（裸 h3） | 包进 title-row |
     |---|---|---|
@@ -1291,6 +1330,13 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
     三条路：① **归一**——当普通站点迁进 `AppPanel`，与另外 32 处一致，代价是 5 个页面的标题变小、头部矮近一半（候选人可见）；② **加"无 title-row"模式**——观感零变化，代价是多一个分支，而它存在的唯一理由是保留那次泄漏；③ **先修规格再迁**——把 `.panel-header h3` 也纳入面板的 h3 规格，让两种形状先在同一路由量出 0 差异再迁；它到达的终点与 ① 相同，只是把可见变化拆成一次独立、可回滚的提交。建议 ③ 或 ①。因改变候选人所见，按本节惯例由你定，**我没动**。
 
     **执行结果（D23，选了 ③）与一处更正**：上面表格里"包进 title-row → 56.26px"那一列来自**克隆实验，是错的**——克隆出的 Element 按钮不参与同样的布局。真实情况是：规格统一后裸形状是 62.667px，迁移之后**仍然是 62.667px**（438 个既有元素 0 样式差异、页面高不变），也就是**迁移本身零差异**，全部可见变化都集中在"扩 selector"那一次提交里。**D24 收尾**：17 处全部迁完（`Profile` 5 在 `/profile` 上量过 0 差异；其余 12 处靠"同形状先例 + 这 4 个文件无本地 `.panel-header` 规则 + 迁移器逐行断言"成立，**未在这 4 条路由上做真页面 diff**，原因见 D24）。裸 h3 形状清零。
+
+14. **剩下 35 处面板头：`AppPanel` 要不要长出这三样**（D26 之后 `--all` 报"命中 0"，纯 drop-in 已见底）。下面是三个独立决定，爆炸半径各不相同，**都没动**：
+    1. **`#heading` 槽**（标题容器由调用方给）—— 真实需求 **12 处**：`InterviewReport` 8 处 `card-header`、`InterviewRoom` 4 处 `transcript-header` / `side-title`。技术上安全（slot 内容带父作用域 id，D19 已证），代价是"标题由谁渲染"从组件契约里溜出去：D23 统一的 `.panel-header h3` 规格对这 12 处不再自动生效，观感回到调用方手里。这与 §10.12 的 `el-card` 归属是同一类问题，建议合并拍。
+    2. **`<span>` 标题怎么算** —— **10 处**全在 `SmartAnalysis`，标题一律写成 `<span>` 而不是 h3（3 处的包裹还是 `<section class="panel">`、5 处整个头部就是一行）。要么给 `AppPanel` 加"标题不是 h3"的模式（那它就不再是面板规格的载体），要么承认这 10 处属于另一个组件。附带一条：**迁其中任何一处都会改变渲染**（span → h3 是候选人可见的），所以这里没有"零风险批量"可做。
+    3. **5 个视图的本地覆盖** —— **11 处**卡在它们自己的 `.panel-header` 规则上（`KnowledgeBase` 4、`OrganizationWorkspace` 3、`JobSearch` 1、`Register` 1、`Privacy` 2）。要么把覆盖搬进 `panels.css`（棘轮的 `LOCAL_OVERRIDE_FILES` 随之清空，代价是全局层多几条规则），要么给 `AppPanel` 加头部样式 props（多一套 API 面）。**与上面第 1 条和 §10.12 有重叠**：这 11 处里有 5 处正是 `el-card` 描述型头部（`KnowledgeBase` 4 + `JobSearch` 1），另 2 处是 `Privacy` 的裸 h3 一行式头部（判定器根本看不见它们）——三件事按顺序拍，别按三批工做。
+    - 另有 **2 处**判定器建议永久留在原地，不需要决定、只需要别硬迁：`MultiAgentAnalysis:94`（agent 卡片头根本没有 h3，只有 el-tag + span）、`AnalysisResult:54`（`is-loading` 图标写在 h3 **内部**，搬进 `#title` 会变成 h3 嵌 h3）。
+
 
 ---
 
