@@ -578,7 +578,7 @@ agent.SummaryAgent           real  tokens=3215
 |---|---|
 | 事件循环被阻塞 I/O 占用 | 195 个 `async def` 端点全部使用同步 `SessionLocal`；`chat_json` 用阻塞 `requests.post`（`llm_service.py:701`）直调于 `interview_rest.py:452` 与健康探针 `system.py:140`；`knowledge_service.save_and_process` 把 parse→chunk→embed→Chroma add 全串在请求里（`api/knowledge.py`）；`resume_export_service.py:321` 同步跑 WeasyPrint；`job_spider.py:72`、`webhook_service.py:155` 用 `time.sleep` → **E15 先修掉"在 `async def` 里直接出网"这一类 12 处**（`/ready`、`/model-probe`、知识入库/检索/重建/改写测试 7 处、飞书 SSO 2 处），并加了一条 AST 守卫防新写。**两处按本行说法不成立**：`/health` 现在不做任何 I/O，阻塞 provider 调用在 `/model-probe`；`interview_rest` 那次 `chat_json`（现在在 `:503`）已经挂在 `background_tasks` 上，同步函数由 Starlette 丢线程池跑，响应前不做这件事（代码里就是这句注释）。**仍在**：24 条 async 路由经 sync 服务函数间接出网（上界，含一条已证伪），以及 135 条 async 路由持有同步 db 会话——后者是"改成 `def` 还是逐处 `run_in_threadpool`"的方向选择，见 §10.15 |
 | WebSocket 鉴权与内存无界 | `interview_ws.py:39-43` 绕过 FastAPI 依赖手工校验 query token；`:23-34` 的进程级 `_engine_pool` 无上限，且无跨副本亲和 → **E16 收口**（提交 `eb5e040`）：① 凭据只认 `Sec-WebSocket-Protocol: jwt,<token>`，`?token=` 一律 4001（**改前实测**：同一枚有效长期 JWT 从查询串进来能一路走到 accept，而仓库自带的浏览器客户端从来用的是子协议）；② 引擎改成**按连接**持有，断开必 `cleanup()`（**改前实测**：客户端关闭后 `_engine_pool` 仍留着 1 个引擎且 `engine.db is not None`，也就是每放弃一场面试永久占着一个打开的 Session）。前提更正：原话"绕过 FastAPI 依赖手工校验"里，"手工校验"成立（WS 拿不到 HTTP 依赖，这条改不了也不需要改），"query token"只是兜底通道。**仍在**：跨副本亲和——两条连接打到不同副本就是两份引擎状态，这一点改前改后一样（原实现的"共享"也只共享本进程）；要消除得靠 sticky 路由或把引擎状态外置 |
-| schema 有第四条路径 | Alembic（22 个 revision）+ `Base.metadata.create_all`（`main.py:61`）+ `core/schema_bootstrap.py`（453 行 / 13 个手写 MySQL DDL，`AUTO_CREATE_TABLES` 默认 True）+ 散落的 `add_columns.py`/`reset_kb.py`。已存在重复：`ensure_agent_message_usage_columns`(`:23-41`) vs `20260624_0003`；`ensure_user_role_column`(`:9-20`) vs `20260801_0017`。DDL 是 MySQL 方言而测试引擎是 SQLite |
+| schema 有第四条路径 | ~~Alembic（22 个 revision）+ `Base.metadata.create_all` + `core/schema_bootstrap.py`（453 行 / 13 个手写 MySQL DDL）+ 散落的 `add_columns.py`/`reset_kb.py`~~ → **E17 收口**（提交 `f460310`）：删掉 `schema_bootstrap.py`，启动改成只做漂移体检（`core/schema_drift.py`，缺表/缺列/多出来都点名并提示跑 `alembic upgrade head`；库连不上只报告不抛）。**动手前量的事实**：在 `alembic upgrade head` 建出的库上，14 个 `ensure_*` **一条 DDL 都不发**；那 6 张"要建表"的表在 `Base.metadata` 里都有模型，`create_all` 独立建出 46 张表；而它写死的 MySQL 方言在 SQLite 上 6 个全部抛 `near "KEY"/"INDEX"/"ON"`。部署不依赖它：两份 compose 都有 `alembic upgrade head` 服务、生产 `AUTO_CREATE_TABLES=false`、config 校验器禁止生产开 create_all。**这条债的两个前提已作废**：revision 数是 **26** 不是 22；`scripts/add_columns.py` 与 `reset_kb.py` **已经不存在**（现在 `scripts/` 里碰 schema 的只有 `export_schema_baseline.py`（从 metadata 渲染）与 `seed_rag_corpus.py`（create_all 建临时库），都是派生读，不是第二条写路径）。**仍在**：`AUTO_CREATE_TABLES` 默认 `True`（开发便利，但也是"忘了迁移也能跑起来"的来源）；守卫 `test_schema_drift.py` 只保证 `app/**` 里不再出现手写 DDL |
 | 连接池未配置 | ~~`core/database.py:9-20` 未设 `pool_size`/`max_overflow`，默认 5+10 的 queuepool 面对线程池密集应用~~ → **E15 更正这行的前提**：`pool_pre_ping=True` 与 `pool_recycle=3600` 是设了的（`app/core/database.py:9-12`），没设的只有 `pool_size`/`max_overflow`/`pool_timeout`（默认 5+10+排队 30s）。**为什么现在才值得管**：E15 把 12 处同步出网挪进线程池之后，取连接的线程数不再天然是 0；要不要显式填数与"135 条 async 路由走哪条路"是同一个决定，见 §10.15 |
 | 测试覆盖真实路径为零 | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错，但 `backend/.coverage`(122KB) 被提交进了工作树 |
 | 队列无 ack/retry/DLQ | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py:76-79`）；Redis 队列存在（`:93-141`）。~~但 `mark_stale_running_tasks_failed` 启动时把 30 分钟以上任务一律置失败，多副本重启会误杀正常长任务~~ → 已改为按"最后一次进度写入"判静默（E12，提交 `3ecbb96`）。~~`run_strategy_async` 构造两个 `TaskPayload` 后丢弃~~ → **这条已不成立**：`orchestration_runner` 里两处 `TaskPayload(...)`（`:156`、`:204`）都紧跟 `return _get_backend().submit(payload, _run_task_payload)`，没有构造后丢弃的路径。**仍在的是**：任务入队后没有任何 lease/心跳字段，所以"排在长 backlog 里没开工"与"执行进程已经死了"在数据上仍然无法区分——这正是 E12 只把误杀范围缩到"完全静默"而没有消灭它的那一半 |
@@ -1132,6 +1132,29 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 **测试**：`tests/test_interview_ws.py` 8 条（4001/4003/4004/4000/4005 五种关闭码各有归属、同一枚 token 的两条路径成对照组、断开后在途计数归零且 `engine.db is None`、两条连接不共用引擎）。连接期资源用 `_active_engines` 集合暴露成 `live_interview_count()`——它不是为测试造的观察孔，容量上限就要靠它。
 
 **门禁**：backend **734 → 742 passed**；`ruff check .` 与 `ruff format --check .`（344 文件）clean。**没验**：真并发下的池行为（12 这个数是推导出来的，没有跑过 13 条并发连接看 HTTP 侧是否真的开始等 `pool_timeout`）；跨副本亲和未改，所以多副本部署下同一场面试开两个标签页仍可能落到两个进程——与改前一致。
+
+
+
+#### 已交付：E17 第四条建表路径不是"备份"，是一块只对一种引擎成立的暗功能（提交 `f460310`）
+
+**债表那句话先错在两处**：revision 数是 **26**（`migrations/versions/`，到 `20260919_0026_agent_run_task_id.py`），不是"22 个"；而点名的散落脚本 `scripts/add_columns.py` 与 `reset_kb.py` **已经不在仓库里**了（现在 `scripts/` 下会碰 schema 的只有 `export_schema_baseline.py`（从 metadata 渲染 DDL）和 `seed_rag_corpus.py`（对临时库 create_all），都是读派生，不构成第二条写路径）。
+
+**动手前先把"它到底有没有活干"量出来**（探针：给每个 `ensure_*` 挂 `before_cursor_execute` 监听，看它实际发了哪些 DDL）：
+
+| 建库方式 | 14 个 `ensure_*` 的产出 |
+|---|---|
+| `alembic upgrade head`（生产 / CI / compose 那条路） | **0 条 DDL**，一个都没活干 |
+| `Base.metadata.create_all`（导入模型后） | 8 个静默返回；6 个试图 `CREATE TABLE`，**全部抛** `near "KEY"/"INDEX"/"ON": syntax error` |
+
+第二行的 6 个之所以"想建表"是我探针自己的假象——它没 `import app.models`，metadata 只剩子集；补上之后 `create_all` 独立建出 **46 张表**，那 6 张（`job_bookmark`/`job_journal`/`job_target`/`notification`/`interview_question`/`interview_turn_evaluation`）**全都有模型**。**所以结论比"冗余"更硬**：这块 453 行的手写 MySQL DDL 对两条权威路径都是零作用，只对"从没迁移过的老库"有意义，而它在那里做的事正好是把迁移欠的账悄悄兜住。顺带一条真的方言 bug：同一批 DDL 在 SQLite 上必抛语法错，而 SQLite 恰是测试与临时库用的引擎。
+
+**部署侧不依赖它**（这是敢删的前提，逐条查过）：`docker-compose.prod.yml:140-141` 与 `docker-compose.yml:89-90` 都专门跑 `alembic upgrade head`；生产 `AUTO_CREATE_TABLES=false`；`core/config.py:168` 的校验器直接拒绝"生产 + create_all"这个组合。
+
+**改成什么**：`core/schema_drift.py` 只做一件事——把 `Base.metadata` 与真实库对表、对列，**缺的多出都点名**，并写清"请跑 `alembic upgrade head`"。启动期两种模式都执行（`log_drift(engine)`）：开发态照旧 `create_all`，生产态第一次有了"忘了迁移"的启动日志，而不是等第一条查询报 `no such column`。库连不上时报告后返回空，**绝不抛穿 lifespan**——体检不能变成新的启动故障源。
+
+**守卫**（`tests/test_schema_drift.py` 7 条）：migrated 库与 create_all 库都零漂移；人为只建一张表 → 必须报"缺表"且不把已建的那张报成缺；同表少一列（`tb_user.role`）→ 必须点名到那一列，**不能退化成"缺表"**。防复发的结构性一条：`app/**` 里 AST 字符串常量（跳过 docstring）不得出现 `ALTER TABLE` / `CREATE TABLE` / `CREATE INDEX` / `DROP COLUMN` —— 当前为 0，且用一段含两条语句的合成源码证明这个检查真的会响。这条判据第一次跑就抓到我自己：`alembic_version` 是迁移记账表，不排掉的话**每条正常 migrated 库都会被报成漂移**（真测试变红，改判据而不是改测试）。
+
+**门禁**：backend **742 → 749 passed**；`ruff check .` / `ruff format --check .`（345 文件）clean；`import app.main` 通过；额外实跑了一次完整 lifespan（临时 SQLite + `TestClient`）：`/api/system/health` 200、建出 46 张表、`describe_drift` 返回空。**没验**：真 MySQL 老库（当年确实靠这些 patcher 补过列的那种）现在会得到什么——按设计它只会得到一条"缺列，请迁移"的告警，没有现场可复验。
 
 
 
