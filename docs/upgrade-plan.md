@@ -474,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 8 个加载函数加令牌（5 个页面），其中 7 处有红→绿测试为证（见 D3、D7、D9、D10）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，D15 再补 2 处；棘轮 `silentEmptyCatches` 11 → 4 →（D15 把判据换成函数作用域）7 → **5** 盯着（见 D4、D5、D15。D10 记下的"这一维有已知漏数"随那次换口径**已关闭**：D13 的格式化让 `admin/Tenants` 先现形，剩下 3 处 D15 量到并修掉两处 GET）**。**已收：`AppPanel`** —— 93 → **35** 处手写面板头搬进组件，最后 22 处由 11 次逐路由 `getComputedStyle` 差分（5501 个元素实例 × 20 条属性）量出 **0 差异**，判定器与 13 条合成用例留在 `frontend/scripts/panel-migration.mjs`（D18–D26）。纯 drop-in 已见底：剩下 35 处不是"没来得及"，而是要先拍组件 API，见 §10.14。未收：`AppTable`、空/错/骨架态（逐路由 diff 现在是常规门，方法记在 D18/D26，浏览器工具可用），以及其余尚未逐个证明可否被并发触发的加载函数 |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 8 个加载函数加令牌（5 个页面），其中 7 处有红→绿测试为证（见 D3、D7、D9、D10）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，D15 再补 2 处；棘轮 `silentEmptyCatches` 11 → 4 →（D15 把判据换成函数作用域）7 → **5** 盯着（见 D4、D5、D15。D10 记下的"这一维有已知漏数"随那次换口径**已关闭**：D13 的格式化让 `admin/Tenants` 先现形，剩下 3 处 D15 量到并修掉两处 GET）**。**已收：`AppPanel`** —— 93 → **35** 处手写面板头搬进组件，最后 22 处由 11 次逐路由 `getComputedStyle` 差分（5501 个元素实例 × 20 条属性）量出 **0 差异**，判定器与 13 条合成用例留在 `frontend/scripts/panel-migration.mjs`（D18–D26）。纯 drop-in 已见底：剩下 35 处不是"没来得及"，而是要先拍组件 API，见 §10.14。未收（**D27 量过之后改判**）：~~`AppTable`+分页~~ —— 128 张 `<el-table>` 里可共享的只有 `stripe`/`size` 两个属性（`v-loading` 仅 5 处、`el-pagination` 仅 6 处），列定义是内容不是重复；而为它设想的那个缺陷——"表格在加载期间谎称暂无数据"——在 7 个有异步表格的文件里 **6 个已经被挡住**（`v-if="loading"` 的加载分支、`v-if="rows.length"` 的守卫、`<template v-else-if="evaluationData">`）。**包这一层不值当，从计划撤下**。骨架态仍然值得做，但它今天没有任何缺陷撑着、纯是观感改动 → 升为 §10.16 由你拍。真正还未收的是：其余尚未逐个证明可否被并发触发的加载函数 |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -1158,6 +1158,25 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 
 
 
+#### 未交付：D27 `AppTable` 这条被量没了（顺带把"表格会说谎"这个假设证伪）
+
+**为什么单独记一条**：§7 阶段 1 一直写着"未收：`AppTable`+分页、空/错/骨架态"。这轮真要动手前先数了一遍，结论是**这项不该做**，而它背后的假设也不成立。
+
+| 量什么 | 实测 |
+|---|---|
+| `<el-table>` 总数 | **128 处 / 15 个文件**（平均每页 8.5 张表） |
+| 可共享的属性 | `stripe`/`size`；`v-loading` 只有 **5 处**、`el-pagination` 只有 **6 处 / 6 文件** |
+| 列定义 | 全是各表自己的内容，**没有可提取的重复** |
+| `el-empty` | 84 处 / 20 文件，文案各处自定 |
+| `el-skeleton` | **0 处**（骨架态今天根本不存在） |
+
+**为 `AppTable` 设想的那个缺陷——"表格在加载期间把'暂无数据'当真话讲"——逐个文件查过去，7 个有异步表格的文件里 6 个已经被挡住**：`PipelineKanban:161` 有 `v-if="loading"` 的 spinner 分支、`admin/Overview:102` 与 `SalaryInsight:125` 用 `v-if="rows.length"` 守着表、`RecommendationEval:43` 整块在 `<template v-else-if="evaluationData">` 里、`JobRecommend` 既有 spinner 分支也有 `AppLoadError`。剩下的 `SmartAnalysis:177` 是 `v-if="loading && agentSteps.length"`（进度面板，另一种形状）。所以：**包一层只换来两个属性的复用，代价是 15 个文件的间接层**——这正是 D21 那次"加副标题槽其实一个站点都解不开"的同型错误，只是这次在动手前发现了。
+
+**骨架态没有消失，它换了性质**：今天缺的不是"错误信息"而是"内容未到的可见性"，两页（`SalaryInsight`/`RecommendationEval`）在加载期间整块不渲染，用户看到的是空白而不是"在等"。把它做成骨架屏是**观感决定**（占几行、宽度按什么给都是设计），已升为 §10.16 三条路，②（只给那两页补 spinner）风险最低，②③ 都没动。
+
+**这条对计划的实际改动**：§7 阶段 1 那一行按上面的数字改判（`AppTable` 撤下、骨架态转 §10.16、剩下"逐个证明可并发触发的加载函数"仍是未收项）。代码一行没改，工作树只有文档。
+
+
 #### 已交付：D7 职业规划页：旧简历的慢响应不再顶到新简历下面（提交 `fb57d7e`）
 
 D3 结尾留的那句"哪些加载函数真的可被用户并发触发，需要逐点读代码"——这轮挑了一页去读，答案是**能**，而且症状就在候选人眼前。
@@ -1414,6 +1433,8 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 
 15. **同步 db 的 135 条 async 路由走哪条路，以及连接池那三个数**（E15 留下的）。E15 只收了"`async def` 里直接出网"这一类；剩下的形状是"async 路由 + 同步 SQLAlchemy 会话"，两种改法互斥：① **逐处 `run_in_threadpool`**——改动可控，但要 135 次判断"这段能不能整体搬走"（事务边界跨多次 await 就会坏）；② **把路由改成 `def`**——FastAPI 自动丢线程池，一行改完，代价是并发取连接的线程从"几乎为 0"变成 anyio 默认上限 **40 根**。而 `core/database.py` 设了 `pool_pre_ping=True` 与 `pool_recycle=3600`（**所以债表旧说法"未配置连接池"不准确**），没设的只有 `pool_size` / `max_overflow` / `pool_timeout`，即走默认 **5 + 10 + 排队 30 秒**。② 一落地就是 40 根线程抢 5 个连接，尾延迟会先变差。所以这两个输入（目标并发、实例数）得先有人给，E15 没有顺手填。现状：`anyio` 线程上限同样没显式设过。
+
+16. **加载态要不要换成骨架屏**（D27 量出来的位置）。今天全站 **0 个** `el-skeleton`；异步列表已有三种表达——spinner + "加载中…"（`PipelineKanban`、`JobRecommend`）、加载期间**什么都不渲染**（`SalaryInsight`、`RecommendationEval`：整块在 `v-if="数据到了"` 里）、以及 `AnalysisResult` 那种进度面板。三者都不是说谎（没有一处把"加载中"说成"暂无数据"），所以**这条不是修 bug，是选观感**：骨架屏能让"结构已定、内容未到"看得出来，代价是要给 15 个有表格的文件各写一套占位形状，而那形状本身就是设计决定（占几行、宽度按什么给）。三条路：① 不动，spinner 与"空窗"并存；② 只给"什么都不渲染"的那两页补 spinner（几行改动，纯增加可见反馈，风险最低）；③ 全站上骨架屏（要先定占位规范，属视觉设计工作，且要逐路由 diff 才能证明没把布局改坏）。**②③ 我都没动**，等你点。
 
 ---
 
