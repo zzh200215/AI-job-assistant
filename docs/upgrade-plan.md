@@ -576,10 +576,10 @@ agent.SummaryAgent           real  tokens=3215
 
 | 项 | 证据 |
 |---|---|
-| 事件循环被阻塞 I/O 占用 | 195 个 `async def` 端点全部使用同步 `SessionLocal`；`chat_json` 用阻塞 `requests.post`（`llm_service.py:701`）直调于 `interview_rest.py:452` 与健康探针 `system.py:140`；`knowledge_service.save_and_process` 把 parse→chunk→embed→Chroma add 全串在请求里（`api/knowledge.py`）；`resume_export_service.py:321` 同步跑 WeasyPrint；`job_spider.py:72`、`webhook_service.py:155` 用 `time.sleep` |
+| 事件循环被阻塞 I/O 占用 | 195 个 `async def` 端点全部使用同步 `SessionLocal`；`chat_json` 用阻塞 `requests.post`（`llm_service.py:701`）直调于 `interview_rest.py:452` 与健康探针 `system.py:140`；`knowledge_service.save_and_process` 把 parse→chunk→embed→Chroma add 全串在请求里（`api/knowledge.py`）；`resume_export_service.py:321` 同步跑 WeasyPrint；`job_spider.py:72`、`webhook_service.py:155` 用 `time.sleep` → **E15 先修掉"在 `async def` 里直接出网"这一类 12 处**（`/ready`、`/model-probe`、知识入库/检索/重建/改写测试 7 处、飞书 SSO 2 处），并加了一条 AST 守卫防新写。**两处按本行说法不成立**：`/health` 现在不做任何 I/O，阻塞 provider 调用在 `/model-probe`；`interview_rest` 那次 `chat_json`（现在在 `:503`）已经挂在 `background_tasks` 上，同步函数由 Starlette 丢线程池跑，响应前不做这件事（代码里就是这句注释）。**仍在**：24 条 async 路由经 sync 服务函数间接出网（上界，含一条已证伪），以及 135 条 async 路由持有同步 db 会话——后者是"改成 `def` 还是逐处 `run_in_threadpool`"的方向选择，见 §10.15 |
 | WebSocket 鉴权与内存无界 | `interview_ws.py:39-43` 绕过 FastAPI 依赖手工校验 query token；`:23-34` 的进程级 `_engine_pool` 无上限，且无跨副本亲和 |
 | schema 有第四条路径 | Alembic（22 个 revision）+ `Base.metadata.create_all`（`main.py:61`）+ `core/schema_bootstrap.py`（453 行 / 13 个手写 MySQL DDL，`AUTO_CREATE_TABLES` 默认 True）+ 散落的 `add_columns.py`/`reset_kb.py`。已存在重复：`ensure_agent_message_usage_columns`(`:23-41`) vs `20260624_0003`；`ensure_user_role_column`(`:9-20`) vs `20260801_0017`。DDL 是 MySQL 方言而测试引擎是 SQLite |
-| 连接池未配置 | `core/database.py:9-20` 未设 `pool_size`/`max_overflow`，默认 5+10 的 queuepool 面对线程池密集应用 |
+| 连接池未配置 | ~~`core/database.py:9-20` 未设 `pool_size`/`max_overflow`，默认 5+10 的 queuepool 面对线程池密集应用~~ → **E15 更正这行的前提**：`pool_pre_ping=True` 与 `pool_recycle=3600` 是设了的（`app/core/database.py:9-12`），没设的只有 `pool_size`/`max_overflow`/`pool_timeout`（默认 5+10+排队 30s）。**为什么现在才值得管**：E15 把 12 处同步出网挪进线程池之后，取连接的线程数不再天然是 0；要不要显式填数与"135 条 async 路由走哪条路"是同一个决定，见 §10.15 |
 | 测试覆盖真实路径为零 | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错，但 `backend/.coverage`(122KB) 被提交进了工作树 |
 | 队列无 ack/retry/DLQ | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py:76-79`）；Redis 队列存在（`:93-141`）。~~但 `mark_stale_running_tasks_failed` 启动时把 30 分钟以上任务一律置失败，多副本重启会误杀正常长任务~~ → 已改为按"最后一次进度写入"判静默（E12，提交 `3ecbb96`）。~~`run_strategy_async` 构造两个 `TaskPayload` 后丢弃~~ → **这条已不成立**：`orchestration_runner` 里两处 `TaskPayload(...)`（`:156`、`:204`）都紧跟 `return _get_backend().submit(payload, _run_task_payload)`，没有构造后丢弃的路径。**仍在的是**：任务入队后没有任何 lease/心跳字段，所以"排在长 backlog 里没开工"与"执行进程已经死了"在数据上仍然无法区分——这正是 E12 只把误杀范围缩到"完全静默"而没有消灭它的那一半 |
 | ~~限流粒度~~ → 有身份的请求已按用户计额度（E14，提交 `63537ab`） | 原来的事实：只有 `api/auth.py` 的 5 个匿名端点自带限流，其余 **228/233 条操作只受 `RATE_LIMIT_GENERAL`（100/分钟）按 IP 管** → 一个 NAT 出口下所有人共用一份额度。**仍在的两半**：① 昂贵端点（深度分析/多智能体）没有自己的额度，一个用户照样能一分钟发 100 次真金白银的 LLM 调用；② 登录流量的每 IP 总闸随 E14 消失了，要补就是 `application_limits` 按地址再挂一层。两个数都要人定，见 §10.10 |
@@ -1083,6 +1083,35 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 
 **过程中查清的一件测试基建事实**：行为用例最初共用 `get_limiter()` 这个进程级单例，结果第二个 app 里同名探针路由的额度被前一个用例吃掉。我先怀疑是 `conftest.reset_rate_limiter` 没生效，用 `--setup-plan` 核过：**它确实是 autouse 且 `MemoryStorage.reset()` 真会清计数**——串扰来自单例的**路由注册表**，不是计数。所以每条行为用例各自 `Limiter(storage_uri="memory://")`，把这件事写进文件 docstring，免得下次又去怀疑 fixture。`ruff check` + `format --check` clean。**没验**：Redis 存储下的真实 keying（测试跑在 memory://），也没有真出现"某个 NAT 用户被 429"的现场记录。
 
+#### 已交付：E15 就绪探针一直在说谎，而它顺带是整台 worker 的刹车（提交 `1d9dc28`）
+
+**指令里那条前提先被量倒了。** §8 的债表写的是"`chat_json` 用阻塞 `requests.post`（`llm_service.py:701`）直调于 `interview_rest.py:452` 与健康探针 `system.py:140`"。逐个读过去之后：`/api/system/health` 现在**只返回一个字面 dict**，没有任何 I/O；阻塞 provider 调用活在 `/api/system/model-probe`（管理员按需）与 `/api/system/ready`。方向没错、行号与端点名都错了。而顺着 `/ready` 读下去撞到的东西比那行债严重得多。
+
+**`/ready` 在 SQLAlchemy 2.0 上永远不 ready。** 探针写的是 `conn.execute("SELECT 1")`，而 SQLAlchemy 2.0.35 对裸字符串抛 `ObjectNotExecutableError: Not an executable object: 'SELECT 1'`（本机实测：同一个引擎上 `text("SELECT 1")` 返回 `[(1,)]`）。异常被 `except Exception` 吞成 `mysql: false`，于是 `ready=false` → **HTTP 503，数据库健康也一样**。任何按就绪探针摘流量的编排（k8s readiness、LB health check）都会把健康的实例判死。
+
+**它为什么一直没被发现**：`tests/test_system_health.py::test_ready_returns_checks` 的断言是 `assert response.status_code in (200, 503)`，注释写着"测试用 SQLite，MySQL 检查可能为 false，两种都接受"。**一条两种结果都接受的断言不是门**。现在改成只放行 chroma 那一条腿（测试环境确实可能没有可用向量库），mysql 这条腿必须为真——先红（`AssertionError: 就绪探针把数据库判成 DOWN：Not an executable object`）后绿，红是手动把 `text()` 摘掉复现的，不是推断的。
+
+**顺带：这条端点是公开的**（`tests/test_public_api_surface.py` 的清单里就有 `("GET", "/system/ready")`，无凭据）。它做的事是同步 DB 往返 + Chroma `heartbeat()`，全在 `async def` 体内——**一个匿名请求就能把整个 worker 的事件循环停住**，同期所有人的请求排队。同一条债表里没写到的形状。
+
+**修法**：`_probe_dependencies()` 提成模块级 sync 函数，路由里 `checks = await run_in_threadpool(_probe_dependencies)`。同一口径一起处理了 12 处调用点：
+- `app/api/system.py`：`/ready` 一次；`/model-probe` 的 `_probe_llm` / `_probe_embedding` 两次（LLM 侧受 `LLM_TIMEOUT` 约束，按十秒计）；
+- `app/api/knowledge.py` 7 次：入库 `save_and_process`、`reprocess_document`、`/search` 的 `search_knowledge`、`/rebuild` 的 `rebuild_all`（全量重嵌入，分钟级）、`/query-rewrite-test` 的四段 provider 工作（LLM 改写 + 三路检索）；
+- `app/api/organization.py` 2 次：飞书 SSO 回调里的 `requests.post` + `requests.get`，各自 `timeout=10`。
+
+响应语义一个字没改（还是同步等完再返回），改的是"等的时候占着谁"。`rebuild_all` 那处注释留在代码里：真正该做的是入队并立刻返回受理，那是**改响应契约**，没做。
+
+**证据是一把双向的尺子，而且它前两次都是错的**：想测"慢请求在飞时快请求排了多久"，第一版 `ensure_future(slow)` 后直接 `await fast` —— 量到 0.0004s，因为 `ASGITransport` 会在同一个任务里跑完 handler，`/fast` 根本没让出循环，slow 还没开始；第二版中间加 `await asyncio.sleep(0.05)` 让 slow 先进 sleep —— 那 0.4 秒的阻塞被算进了 settle 里，`started` 取在阻塞结束之后，`/fast` 又是 0。**被同步代码卡住的协程还没开始执行，从它自己的起点量不出等待。** 第三版把两个请求都先 `ensure_future`、计时窗口从"两个都还没跑"开始，才成：`async def + time.sleep(0.4)` → 快请求 0.40s；同一段挪进线程池 → 0.00s。两个方向各自钉成测试（`test_the_stall_measurement_can_see_a_stall`），因为"绿灯"必须能被证伪。真端点那条（`test_readiness_probe_does_not_stall_the_loop`）用假 Chroma 心跳 sleep 0.4s，量 `/health` 的耗时 < 0.2s——**这条在改动前是红的**。
+
+**新增守卫**：`tests/test_no_blocking_in_event_loop.py` 用 AST 扫全仓路由，`async def` 路由体内**直接**调用 `requests.*` / `time.sleep` / `subprocess.*` / `engine.connect` / `chat_json` / `embed_texts` 等即失败，当前清单为**空**。两处限制不是注释而是测试（`test_guard_blind_spots_are_pinned`）：传递阻塞（路由 → sync 服务函数 → requests）与路由体内的 sync 闭包都看不见——因为 `await run_in_threadpool(_closure)` 与 `_closure()` 在这条判据下无法区分。另有防空转断言"确实扫到 ≥150 条 async 路由"，以及把违规形状写回合成源码、要求它必须被抓到。
+
+**分布数字（一次性 AST 量具，用完删了，所以记在这里）**：222 个路由函数，**194 个是 `async def`**，其中 **135 个直接持有同步 db 会话**；只走到"同步 db"的 async 路由 **151** 条，走到出网/慢 CPU 的 **24** 条，两者都不沾的 19 条。24 条是**上界而不是账**：闭包按短名匹配，`resume.upload_resume → check_quota` 这一条就是假的（`check_quota` 体内只有 db 与字典操作，逐个调用名比过）。真要收口，先逐条读，别拿这个数当进度。
+
+**还剩的两半**：① 那 24 条（其中 `run_full_analysis`、`parse_and_save`、`fetch_detail`、`run_auto_agents` 已核实确实出网）要不要同样挪进线程池——每处一行、语义不变，但 24 处得逐条读，且**更根本的问题是这批路由为什么是 `async def`**：它们体内几乎全是同步 db，改成 `def` 让 FastAPI 自己丢线程池是同一件事的另一种做法，代价是 135 处 `db` 会话的用法要重新审视；② 债表里"连接池未配置"这行**本身要更正**：`core/database.py` 设了 `pool_pre_ping=True` 与 `pool_recycle=3600`，没设的只是 `pool_size` / `max_overflow` / `pool_timeout`（也就是走默认 5 + 10 + 排队 30 秒）。挪线程池之后并发取连接的线程会变多，那三个数才第一次有意义。这两个数要人定，见 §10.15。
+
+**门禁**：`pytest` **726 → 734 passed**（新增 8 条：AST 守卫 5 + 行为 2 + 反向钉盲点 1，另把原来那条"200/503 都接受"改成只放行 chroma 腿）；`ruff check .` 与 `ruff format --check .` clean；改动过的 4 个文件单独再过一次 `ruff check`。**没验**：真 MySQL 下的 `/ready`（测试跑 SQLite in-memory，`SELECT 1` 两条路径都通过），以及真 provider 下 `/model-probe` 与知识入库的实际停摆时长（用假 Chroma 心跳 0.4s 代替）。
+
+
+
 #### 已交付：D7 职业规划页：旧简历的慢响应不再顶到新简历下面（提交 `fb57d7e`）
 
 D3 结尾留的那句"哪些加载函数真的可被用户并发触发，需要逐点读代码"——这轮挑了一页去读，答案是**能**，而且症状就在候选人眼前。
@@ -1338,8 +1367,11 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
     - 另有 **2 处**判定器建议永久留在原地，不需要决定、只需要别硬迁：`MultiAgentAnalysis:94`（agent 卡片头根本没有 h3，只有 el-tag + span）、`AnalysisResult:54`（`is-loading` 图标写在 h3 **内部**，搬进 `#title` 会变成 h3 嵌 h3）。
 
 
+15. **同步 db 的 135 条 async 路由走哪条路，以及连接池那三个数**（E15 留下的）。E15 只收了"`async def` 里直接出网"这一类；剩下的形状是"async 路由 + 同步 SQLAlchemy 会话"，两种改法互斥：① **逐处 `run_in_threadpool`**——改动可控，但要 135 次判断"这段能不能整体搬走"（事务边界跨多次 await 就会坏）；② **把路由改成 `def`**——FastAPI 自动丢线程池，一行改完，代价是并发取连接的线程从"几乎为 0"变成 anyio 默认上限 **40 根**。而 `core/database.py` 设了 `pool_pre_ping=True` 与 `pool_recycle=3600`（**所以债表旧说法"未配置连接池"不准确**），没设的只有 `pool_size` / `max_overflow` / `pool_timeout`，即走默认 **5 + 10 + 排队 30 秒**。② 一落地就是 40 根线程抢 5 个连接，尾延迟会先变差。所以这两个输入（目标并发、实例数）得先有人给，E15 没有顺手填。现状：`anyio` 线程上限同样没显式设过。
+
 ---
 
 ## 11. 附录：本方案未采纳的一条建议
+
 
 上一轮审计中曾提出"把全局主题从 `[class*='-card']` 类名通配改为覆盖 Element Plus `--el-*` 变量，删掉 56 个 `!important`"。实测该改法**不无损**：摘除通配网后 5 条路由出现 157 个元素实例的样式回归，而收窄到显式类名列表需先完成 D 阶段 1 的组件抽取。因此该动作已从"阶段 0"移出，改为由 `styleDebtRatchet.test.js` 以天花板数值跟踪、随 D 阶段单调下降。
