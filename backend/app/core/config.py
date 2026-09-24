@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     ORCHESTRATION_QUEUE_POLL_SECONDS: float = 1.0
     REDIS_URL: str | None = None
     INTERVIEW_EVALUATION_MAX_WORKERS: int = 2
+    # 同时在途的面试 WS 上限。**每连接一个引擎 = 一条连接期间持有一个 SQLAlchemy Session**，
+    # 而 `core/database.py` 没设 pool_size/max_overflow，默认是 5 + 10 = 15 根连接。
+    # 所以 12 不是拍脑袋：留 3 根给同期 HTTP 请求。§10.15 定了池子大小之后应改成从池推导。
+    WS_MAX_LIVE_INTERVIEWS: int = 12
 
     # Operations alerting: thresholds are deliberately configurable per deployment.
     OPERATIONS_ALERT_WINDOW_MINUTES: int = 60
