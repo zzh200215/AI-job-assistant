@@ -75,49 +75,41 @@
       </div>
 
       <div class="grid-two">
-        <div class="panel">
-          <div class="panel-header">
-            <div class="panel-title-row">
-              <h3>样本覆盖</h3>
-              <el-tag
-                :type="
-                  evaluationData.evaluation?.sample_health?.enough_for_tuning
-                    ? 'success'
-                    : 'warning'
-                "
-                effect="plain"
-              >
-                {{
-                  evaluationData.evaluation?.sample_health?.enough_for_tuning
-                    ? '可用于调优'
-                    : '样本仍偏少'
-                }}
-              </el-tag>
+        <AppPanel>
+          <template #title>样本覆盖</template>
+          <template #badge>
+            <el-tag
+              :type="
+                evaluationData.evaluation?.sample_health?.enough_for_tuning ? 'success' : 'warning'
+              "
+              effect="plain"
+            >
+              {{
+                evaluationData.evaluation?.sample_health?.enough_for_tuning
+                  ? '可用于调优'
+                  : '样本仍偏少'
+              }}
+            </el-tag>
+          </template>
+          <div class="coverage-grid">
+            <div class="coverage-item">
+              <span>简历数</span>
+              <strong>{{ evaluationData.evaluation?.coverage?.unique_resume_count ?? 0 }}</strong>
+            </div>
+            <div class="coverage-item">
+              <span>岗位数</span>
+              <strong>{{ evaluationData.evaluation?.coverage?.unique_job_count ?? 0 }}</strong>
+            </div>
+            <div class="coverage-item">
+              <span>行业数</span>
+              <strong>{{ evaluationData.evaluation?.coverage?.unique_industry_count ?? 0 }}</strong>
+            </div>
+            <div class="coverage-item">
+              <span>近 7 天反馈</span>
+              <strong>{{ recentTrendTotal }}</strong>
             </div>
           </div>
-          <div class="panel-body">
-            <div class="coverage-grid">
-              <div class="coverage-item">
-                <span>简历数</span>
-                <strong>{{ evaluationData.evaluation?.coverage?.unique_resume_count ?? 0 }}</strong>
-              </div>
-              <div class="coverage-item">
-                <span>岗位数</span>
-                <strong>{{ evaluationData.evaluation?.coverage?.unique_job_count ?? 0 }}</strong>
-              </div>
-              <div class="coverage-item">
-                <span>行业数</span>
-                <strong>{{
-                  evaluationData.evaluation?.coverage?.unique_industry_count ?? 0
-                }}</strong>
-              </div>
-              <div class="coverage-item">
-                <span>近 7 天反馈</span>
-                <strong>{{ recentTrendTotal }}</strong>
-              </div>
-            </div>
-          </div>
-        </div>
+        </AppPanel>
 
         <AppPanel>
           <template #title>调优优先级</template>
@@ -301,52 +293,43 @@
         </AppPanel>
       </div>
 
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <h3>调优样本预览</h3>
-            <span class="muted">{{ tuningSamples.length }} 条</span>
-          </div>
-        </div>
-        <div class="panel-body">
-          <el-table :data="tuningSamples" stripe>
-            <el-table-column prop="feedback_type" label="反馈" min-width="90">
-              <template #default="{ row }">
-                <el-tag :type="row.feedback_type === 'like' ? 'success' : 'danger'" effect="plain">
-                  {{ row.feedback_type }}
+      <AppPanel>
+        <template #title>调优样本预览</template>
+        <template #badge>
+          <span class="muted">{{ tuningSamples.length }} 条</span>
+        </template>
+        <el-table :data="tuningSamples" stripe>
+          <el-table-column prop="feedback_type" label="反馈" min-width="90">
+            <template #default="{ row }">
+              <el-tag :type="row.feedback_type === 'like' ? 'success' : 'danger'" effect="plain">
+                {{ row.feedback_type }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="jd_title" label="岗位" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="resume_title" label="简历" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="match_score" label="分数" min-width="80" />
+          <el-table-column label="规则拆解" min-width="180">
+            <template #default="{ row }">
+              向量 {{ row.vector_score }} / 规则 {{ row.rule_score }}
+            </template>
+          </el-table-column>
+          <el-table-column label="调优标签" min-width="220">
+            <template #default="{ row }">
+              <div class="tag-row">
+                <el-tag
+                  v-for="tag in row.tuning_tags"
+                  :key="`${row.feedback_id}-${tag}`"
+                  size="small"
+                  effect="plain"
+                >
+                  {{ tag }}
                 </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="jd_title" label="岗位" min-width="180" show-overflow-tooltip />
-            <el-table-column
-              prop="resume_title"
-              label="简历"
-              min-width="140"
-              show-overflow-tooltip
-            />
-            <el-table-column prop="match_score" label="分数" min-width="80" />
-            <el-table-column label="规则拆解" min-width="180">
-              <template #default="{ row }">
-                向量 {{ row.vector_score }} / 规则 {{ row.rule_score }}
-              </template>
-            </el-table-column>
-            <el-table-column label="调优标签" min-width="220">
-              <template #default="{ row }">
-                <div class="tag-row">
-                  <el-tag
-                    v-for="tag in row.tuning_tags"
-                    :key="`${row.feedback_id}-${tag}`"
-                    size="small"
-                    effect="plain"
-                  >
-                    {{ tag }}
-                  </el-tag>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </div>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </AppPanel>
     </template>
   </div>
 </template>

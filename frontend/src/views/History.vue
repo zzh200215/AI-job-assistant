@@ -37,74 +37,70 @@
       </div>
     </section>
 
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon><Clock /></el-icon>
-          <h3>历史记录</h3>
-        </div>
+    <AppPanel>
+      <template #title>历史记录</template>
+      <template #badge>
+        <el-icon><Clock /></el-icon>
+      </template>
+      <template #actions>
         <el-tag type="info" effect="plain">{{ total }} 条</el-tag>
-      </div>
-      <div class="panel-body">
-        <el-alert
-          v-if="listError"
-          class="load-error"
-          type="error"
-          :closable="false"
-          show-icon
-          title="历史记录加载失败"
-          description="暂时无法获取历史分析记录，请检查网络后重试。"
-        >
-          <template #default>
-            <el-button size="small" type="primary" plain @click="loadList">重新加载</el-button>
+      </template>
+      <el-alert
+        v-if="listError"
+        class="load-error"
+        type="error"
+        :closable="false"
+        show-icon
+        title="历史记录加载失败"
+        description="暂时无法获取历史分析记录，请检查网络后重试。"
+      >
+        <template #default>
+          <el-button size="small" type="primary" plain @click="loadList">重新加载</el-button>
+        </template>
+      </el-alert>
+
+      <el-table v-else :data="list" v-loading="loading" stripe>
+        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column label="简历" min-width="180">
+          <template #default="{ row }">
+            <div>{{ row.resume_name || '-' }}</div>
+            <div class="muted">{{ row.resume_file }}</div>
           </template>
-        </el-alert>
+        </el-table-column>
+        <el-table-column label="岗位" min-width="180">
+          <template #default="{ row }">
+            <div>{{ row.jd_title || '-' }}</div>
+            <div class="muted">{{ row.jd_company }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="匹配度" width="120">
+          <template #default="{ row }">
+            <el-tag :type="scoreToneTagType(row.match_score)">{{ row.match_score ?? '-' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="remark" label="备注" min-width="120" />
+        <el-table-column prop="create_time" label="时间" width="180" />
+        <el-table-column label="操作" width="280" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" @click="openDetail(row)">查看</el-button>
+            <el-button size="small" type="primary" @click="goInterview(row)">面试题</el-button>
+            <el-button size="small" type="danger" @click="onDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
 
-        <el-table v-else :data="list" v-loading="loading" stripe>
-          <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column label="简历" min-width="180">
-            <template #default="{ row }">
-              <div>{{ row.resume_name || '-' }}</div>
-              <div class="muted">{{ row.resume_file }}</div>
-            </template>
-          </el-table-column>
-          <el-table-column label="岗位" min-width="180">
-            <template #default="{ row }">
-              <div>{{ row.jd_title || '-' }}</div>
-              <div class="muted">{{ row.jd_company }}</div>
-            </template>
-          </el-table-column>
-          <el-table-column label="匹配度" width="120">
-            <template #default="{ row }">
-              <el-tag :type="scoreToneTagType(row.match_score)">{{
-                row.match_score ?? '-'
-              }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="remark" label="备注" min-width="120" />
-          <el-table-column prop="create_time" label="时间" width="180" />
-          <el-table-column label="操作" width="280" fixed="right">
-            <template #default="{ row }">
-              <el-button size="small" @click="openDetail(row)">查看</el-button>
-              <el-button size="small" type="primary" @click="goInterview(row)">面试题</el-button>
-              <el-button size="small" type="danger" @click="onDelete(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <el-pagination
-          v-if="!listError"
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :total="total"
-          :page-sizes="[10, 20, 50]"
-          layout="total, sizes, prev, pager, next"
-          class="pagination"
-          @current-change="loadList"
-          @size-change="loadList"
-        />
-      </div>
-    </div>
+      <el-pagination
+        v-if="!listError"
+        v-model:current-page="page"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50]"
+        layout="total, sizes, prev, pager, next"
+        class="pagination"
+        @current-change="loadList"
+        @size-change="loadList"
+      />
+    </AppPanel>
 
     <!-- 详情弹窗 -->
     <el-dialog v-model="showDetail" title="分析详情" width="900px" top="5vh">
@@ -273,6 +269,7 @@
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'

@@ -141,183 +141,167 @@
     </div>
 
     <div class="dual-grid">
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <h3>版本对比</h3>
-          </div>
+      <AppPanel>
+        <template #title>版本对比</template>
+        <template #actions>
           <el-button type="primary" size="small" :loading="loading.compare" @click="runCompare"
             >开始对比</el-button
           >
+        </template>
+        <div class="compare-controls">
+          <el-select
+            v-model="compareForm.source"
+            clearable
+            filterable
+            placeholder="选择来源"
+            style="width: 260px"
+          >
+            <el-option
+              v-for="item in summary.sources || []"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
+          <el-select
+            v-model="compareForm.versionA"
+            filterable
+            placeholder="版本 A"
+            style="width: 180px"
+          >
+            <el-option
+              v-for="item in compareVersionOptions"
+              :key="`a-${item}`"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
+          <el-select
+            v-model="compareForm.versionB"
+            filterable
+            placeholder="版本 B"
+            style="width: 180px"
+          >
+            <el-option
+              v-for="item in compareVersionOptions"
+              :key="`b-${item}`"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
         </div>
-        <div class="panel-body">
-          <div class="compare-controls">
-            <el-select
-              v-model="compareForm.source"
-              clearable
-              filterable
-              placeholder="选择来源"
-              style="width: 260px"
-            >
-              <el-option
-                v-for="item in summary.sources || []"
-                :key="item"
-                :label="item"
-                :value="item"
-              />
-            </el-select>
-            <el-select
-              v-model="compareForm.versionA"
-              filterable
-              placeholder="版本 A"
-              style="width: 180px"
-            >
-              <el-option
-                v-for="item in compareVersionOptions"
-                :key="`a-${item}`"
-                :label="item"
-                :value="item"
-              />
-            </el-select>
-            <el-select
-              v-model="compareForm.versionB"
-              filterable
-              placeholder="版本 B"
-              style="width: 180px"
-            >
-              <el-option
-                v-for="item in compareVersionOptions"
-                :key="`b-${item}`"
-                :label="item"
-                :value="item"
-              />
-            </el-select>
-          </div>
 
-          <div v-if="compareResult" class="compare-grid">
-            <div class="compare-col">
-              <div class="compare-title">{{ compareResult.version_a.prompt_version }}</div>
-              <div class="compare-metrics">
-                <div>调用数：{{ compareResult.version_a.metrics.total }}</div>
-                <div>
-                  成功率：{{ percentText(compareResult.version_a.metrics.success_rate || 0) }}
-                </div>
-                <div>平均耗时：{{ compareResult.version_a.metrics.avg_duration_ms ?? '-' }}</div>
-                <div>
-                  平均 Tokens：{{ compareResult.version_a.metrics.avg_total_tokens ?? '-' }}
-                </div>
-                <div>平均成本：{{ compareResult.version_a.metrics.avg_cost_cents ?? '-' }}</div>
+        <div v-if="compareResult" class="compare-grid">
+          <div class="compare-col">
+            <div class="compare-title">{{ compareResult.version_a.prompt_version }}</div>
+            <div class="compare-metrics">
+              <div>调用数：{{ compareResult.version_a.metrics.total }}</div>
+              <div>
+                成功率：{{ percentText(compareResult.version_a.metrics.success_rate || 0) }}
               </div>
-            </div>
-            <div class="compare-col">
-              <div class="compare-title">{{ compareResult.version_b.prompt_version }}</div>
-              <div class="compare-metrics">
-                <div>调用数：{{ compareResult.version_b.metrics.total }}</div>
-                <div>
-                  成功率：{{ percentText(compareResult.version_b.metrics.success_rate || 0) }}
-                </div>
-                <div>平均耗时：{{ compareResult.version_b.metrics.avg_duration_ms ?? '-' }}</div>
-                <div>
-                  平均 Tokens：{{ compareResult.version_b.metrics.avg_total_tokens ?? '-' }}
-                </div>
-                <div>平均成本：{{ compareResult.version_b.metrics.avg_cost_cents ?? '-' }}</div>
-              </div>
-            </div>
-            <div class="compare-col delta-col">
-              <div class="compare-title">差异</div>
-              <div class="compare-metrics">
-                <div>成功率差：{{ signed(compareResult.delta.success_rate, true) }}</div>
-                <div>耗时差：{{ signed(compareResult.delta.avg_duration_ms) }}</div>
-                <div>Tokens 差：{{ signed(compareResult.delta.avg_total_tokens) }}</div>
-                <div>成本差：{{ signed(compareResult.delta.avg_cost_cents) }}</div>
-              </div>
+              <div>平均耗时：{{ compareResult.version_a.metrics.avg_duration_ms ?? '-' }}</div>
+              <div>平均 Tokens：{{ compareResult.version_a.metrics.avg_total_tokens ?? '-' }}</div>
+              <div>平均成本：{{ compareResult.version_a.metrics.avg_cost_cents ?? '-' }}</div>
             </div>
           </div>
-          <el-empty v-else :image-size="72" description="选择两个版本后可查看对比结果" />
+          <div class="compare-col">
+            <div class="compare-title">{{ compareResult.version_b.prompt_version }}</div>
+            <div class="compare-metrics">
+              <div>调用数：{{ compareResult.version_b.metrics.total }}</div>
+              <div>
+                成功率：{{ percentText(compareResult.version_b.metrics.success_rate || 0) }}
+              </div>
+              <div>平均耗时：{{ compareResult.version_b.metrics.avg_duration_ms ?? '-' }}</div>
+              <div>平均 Tokens：{{ compareResult.version_b.metrics.avg_total_tokens ?? '-' }}</div>
+              <div>平均成本：{{ compareResult.version_b.metrics.avg_cost_cents ?? '-' }}</div>
+            </div>
+          </div>
+          <div class="compare-col delta-col">
+            <div class="compare-title">差异</div>
+            <div class="compare-metrics">
+              <div>成功率差：{{ signed(compareResult.delta.success_rate, true) }}</div>
+              <div>耗时差：{{ signed(compareResult.delta.avg_duration_ms) }}</div>
+              <div>Tokens 差：{{ signed(compareResult.delta.avg_total_tokens) }}</div>
+              <div>成本差：{{ signed(compareResult.delta.avg_cost_cents) }}</div>
+            </div>
+          </div>
         </div>
-      </div>
+        <el-empty v-else :image-size="72" description="选择两个版本后可查看对比结果" />
+      </AppPanel>
 
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <h3>实验分组</h3>
-          </div>
+      <AppPanel>
+        <template #title>实验分组</template>
+        <template #actions>
           <span class="muted">按 source + prompt_version 聚合</span>
-        </div>
-        <div class="panel-body">
-          <div v-if="summary.version_groups?.length" class="group-list">
-            <div
-              v-for="item in summary.version_groups"
-              :key="`${item.source}-${item.prompt_version}`"
-              class="group-item"
-            >
-              <div class="group-top">
-                <strong>{{ item.prompt_version }}</strong>
-                <span>{{ item.source }}</span>
-              </div>
-              <div class="group-meta">
-                <span>{{ item.total }} 次</span>
-                <span>成功率 {{ percentText(item.success_rate || 0) }}</span>
-                <span>均耗时 {{ item.avg_duration_ms ?? '-' }}</span>
-              </div>
+        </template>
+        <div v-if="summary.version_groups?.length" class="group-list">
+          <div
+            v-for="item in summary.version_groups"
+            :key="`${item.source}-${item.prompt_version}`"
+            class="group-item"
+          >
+            <div class="group-top">
+              <strong>{{ item.prompt_version }}</strong>
+              <span>{{ item.source }}</span>
+            </div>
+            <div class="group-meta">
+              <span>{{ item.total }} 次</span>
+              <span>成功率 {{ percentText(item.success_rate || 0) }}</span>
+              <span>均耗时 {{ item.avg_duration_ms ?? '-' }}</span>
             </div>
           </div>
-          <el-empty v-else :image-size="72" description="暂无版本样本" />
         </div>
-      </div>
+        <el-empty v-else :image-size="72" description="暂无版本样本" />
+      </AppPanel>
     </div>
 
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <h3>调用明细</h3>
-        </div>
+    <AppPanel>
+      <template #title>调用明细</template>
+      <template #actions>
         <span class="muted">点击查看完整 Prompt 与输出回放</span>
-      </div>
-      <div class="panel-body">
-        <el-table :data="traceList.items" v-loading="loading.list" stripe class="trace-table">
-          <el-table-column prop="created_at" label="时间" min-width="168">
-            <template #default="{ row }">{{ rawStamp(row.created_at) }}</template>
-          </el-table-column>
-          <el-table-column prop="source" label="来源" min-width="220" show-overflow-tooltip />
-          <el-table-column prop="prompt_version" label="版本" min-width="120" />
-          <el-table-column prop="model" label="模型" min-width="140" />
-          <el-table-column prop="response_source" label="应答来源" min-width="120">
-            <template #default="{ row }">
-              <el-tag :type="sourceTagType(row)" effect="plain">
-                {{ sourceLabel(row) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="status" label="状态" min-width="90">
-            <template #default="{ row }">
-              <el-tag :type="row.status === 'success' ? 'success' : 'danger'" effect="plain">
-                {{ row.status }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="duration_ms" label="耗时" min-width="90" />
-          <el-table-column prop="total_tokens" label="Tokens" min-width="90" />
-          <el-table-column prop="cost_cents" label="成本" min-width="110" />
-          <el-table-column label="操作" fixed="right" min-width="100">
-            <template #default="{ row }">
-              <el-button text type="primary" @click="openDetail(row.id)">回放</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
+      </template>
+      <el-table :data="traceList.items" v-loading="loading.list" stripe class="trace-table">
+        <el-table-column prop="created_at" label="时间" min-width="168">
+          <template #default="{ row }">{{ rawStamp(row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column prop="source" label="来源" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="prompt_version" label="版本" min-width="120" />
+        <el-table-column prop="model" label="模型" min-width="140" />
+        <el-table-column prop="response_source" label="应答来源" min-width="120">
+          <template #default="{ row }">
+            <el-tag :type="sourceTagType(row)" effect="plain">
+              {{ sourceLabel(row) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" min-width="90">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'success' ? 'success' : 'danger'" effect="plain">
+              {{ row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="duration_ms" label="耗时" min-width="90" />
+        <el-table-column prop="total_tokens" label="Tokens" min-width="90" />
+        <el-table-column prop="cost_cents" label="成本" min-width="110" />
+        <el-table-column label="操作" fixed="right" min-width="100">
+          <template #default="{ row }">
+            <el-button text type="primary" @click="openDetail(row.id)">回放</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
 
-        <div class="pager-row">
-          <el-pagination
-            background
-            layout="prev, pager, next, total"
-            :current-page="pagination.page"
-            :page-size="pagination.page_size"
-            :total="traceList.total || 0"
-            @current-change="handlePageChange"
-          />
-        </div>
+      <div class="pager-row">
+        <el-pagination
+          background
+          layout="prev, pager, next, total"
+          :current-page="pagination.page"
+          :page-size="pagination.page_size"
+          :total="traceList.total || 0"
+          @current-change="handlePageChange"
+        />
       </div>
-    </div>
+    </AppPanel>
 
     <el-drawer v-model="detailVisible" size="58%" title="Prompt 结果回放">
       <div v-if="detail" class="detail-wrap">
@@ -353,6 +337,7 @@
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 

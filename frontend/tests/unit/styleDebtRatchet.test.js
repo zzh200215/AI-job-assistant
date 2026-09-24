@@ -71,18 +71,29 @@ const BUDGET = {
   },
   /* 手写的 `class="panel-header"` 标记数——AppPanel（components/ui/AppPanel.vue）的迁移台账。
      样式早就集中在 styles/panels.css（main.js 全局引入），重复的只是那四层 div，所以这条数的是
-     "还有多少处标记没搬进组件"。D18 建组件并迁掉 WeeklyReport 的 5 处（逐路由 getComputedStyle
-     比对：241 个元素 × 20 条计算属性，0 差异）；D19 迁掉 OfferCompare 的 5 处，这是**带操作区**的
-     第一站（4 处有 #actions：3 处 `header-actions` 包着标签+按钮、1 处是裸 el-button），
-     1113 个元素 × 20 条属性 0 差异——顺带证明了一件事：**slot 内容带着父组件的 scoped 作用域**，
-     所以 OfferCompare 自己写的 `.header-actions { display:flex; gap:8px }` 迁移后仍然生效。
-     剩下的 83 处分两类，成本不同：
-     - 可以直接迁：该视图没有自己的 `.panel-header` scoped 规则（scoped CSS 匹配不到子组件内部
-       节点，标记搬走规则就失效——这是这条台账存在的真正约束）；
-     - 要先动手：Home / JobSearch / KnowledgeBase / Privacy / Register / OrganizationWorkspace
-       这 6 个视图各自覆盖了 `.panel-header`，得先把覆盖搬进 panels.css 或改成 props。
+     "还有多少处标记没搬进组件"。台账从 93 降到 35：D18 建组件并迁 WeeklyReport 5 处（241 元素
+     × 20 条计算属性 0 差异）、D19 OfferCompare 5 处（首个带 #actions 的站点，1113 元素 0 差异，
+     顺带证明 **slot 内容带着父组件的 scoped 作用域**）、D20–D25 再收 26 处（含 12 处裸 h3 头部）、
+     D26 一次性迁 22 处（Profile 4 / InterviewSetup 3 / MultiAgentAnalysis 3 / PromptTrace 3 /
+     AgentAnalysis 2 / AnalysisResult 2 / RecommendationConfig 2 / RecommendationEval 2 / History 1）。
+     剩下 35 处分四类，每一类都不是"没来得及"，而是**要先决定 AppPanel 的 API**：
+     - 11 处在还带自己 `.panel-header` 覆盖的 5 个视图里（JobSearch / KnowledgeBase / Privacy /
+       Register / OrganizationWorkspace，见 LOCAL_OVERRIDE_FILES）——覆盖不进 panels.css 就迁不动；
+     - 12 处标题包在调用方自己的 div 里（InterviewReport 8 处 `card-header`、InterviewRoom 4 处
+       `transcript-header` / `side-title`）——要迁得先给 AppPanel 加 `#heading` 槽，见 §10.12；
+     - 10 处在 SmartAnalysis，标题一律是 `<span>` 而不是 h3：3 处 `<section class="panel">` 里
+       `<el-icon/> + <span>`、2 处头部只有裸 `<span>`、5 处整个头部就是一行
+       `<div class="panel-header"><span>…</span></div>`——搬进 #title 等于把 span 换成 h3（那 3 处
+       还会顺手删掉 `<section>` 地标），是**视觉/语义变更**不是等价迁移，要先量；
+     - 2 处结构上就不该迁：MultiAgentAnalysis:94 的 agent 卡片头没有 h3（只有 el-tag + span），
+       AnalysisResult:54 的进度头把 `is-loading` 图标写在 h3 **内部**——AppPanel 的 #title 会把它
+       套进自己的 h3，等于 h3 嵌 h3。
+     这四类由 `scripts/panel-migration.mjs --all` 逐处判定（0 命中 = 纯 drop-in 已经迁完）。注意这条
+     台账数的是 `class="panel-header"` 出现次数，而扫描器只认"单独一行的 `<div class="panel-header`>"
+     那种写法：上面 SmartAnalysis 的 5 处一行式 + Privacy 的 2 处一共 7 处，扫描器看不见、这条数看得见
+     ——拿"命中 0"当"没有可迁的了"就错了，那是同一把尺子量两种形状的差别。
      全仓 `:deep(.panel-header)` 为 0 处，所以没有第三种隐藏耦合。 */
-  handRolledPanelHeaders: 57,
+  handRolledPanelHeaders: 35,
   /* 状态→el-tag 颜色此前和分数色板同病：17 份手写表、32 个键，其中 `running` 在任务中心
      是蓝、两个 agent 页是橙，`ongoing` 在房间页是绿、设置页是橙。异步任务与面试会话两组
      已收进 utils/statusTone.js；下面数的是**还剩多少条手写映射**，只能往下走。

@@ -36,10 +36,10 @@ export default [
   },
   prettierConfig,
   {
-    // 构建配置文件跑在 Node 里，`process` 是真实存在的全局；
+    // 构建配置与 scripts/ 下的 Node 小工具跑在服务端，`process` 是真实存在的全局；
     // 浏览器侧的 src/** 不给它，避免有人在组件里读 process.env 混过检查。
     name: 'app/node-config-files',
-    files: ['vite.config.js', '*.config.mjs'],
+    files: ['vite.config.js', '*.config.mjs', 'scripts/**/*.mjs'],
     languageOptions: { globals: { process: 'readonly' } },
   },
   {

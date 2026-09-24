@@ -106,98 +106,87 @@
     </AppPanel>
 
     <!-- 求职成就里程碑 -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-warning)"><Trophy /></el-icon>
-          <h3>求职成就里程碑</h3>
-        </div>
+    <AppPanel icon-color="var(--app-warning)">
+      <template #icon><Trophy /></template>
+      <template #title>求职成就里程碑</template>
+      <template #actions>
         <span class="panel-tip"
           >{{ achievements.filter((a) => a.unlocked).length }}/{{
             achievements.length
           }}
           已解锁</span
         >
-      </div>
-      <div class="panel-body">
-        <div class="achievement-grid">
-          <div
-            v-for="badge in achievements"
-            :key="badge.id"
-            class="achievement-card"
-            :class="{ unlocked: badge.unlocked, locked: !badge.unlocked }"
-          >
-            <div class="ach-icon" :class="'ach-' + badge.color">
-              <el-icon :size="22"><component :is="badge.icon" /></el-icon>
-            </div>
-            <div class="ach-info">
-              <strong>{{ badge.name }}</strong>
-              <span>{{ badge.desc }}</span>
-            </div>
-            <el-tag v-if="badge.unlocked" size="small" type="success" effect="dark">已达成</el-tag>
-            <el-tag v-else size="small" type="info" effect="plain">未解锁</el-tag>
+      </template>
+      <div class="achievement-grid">
+        <div
+          v-for="badge in achievements"
+          :key="badge.id"
+          class="achievement-card"
+          :class="{ unlocked: badge.unlocked, locked: !badge.unlocked }"
+        >
+          <div class="ach-icon" :class="'ach-' + badge.color">
+            <el-icon :size="22"><component :is="badge.icon" /></el-icon>
           </div>
+          <div class="ach-info">
+            <strong>{{ badge.name }}</strong>
+            <span>{{ badge.desc }}</span>
+          </div>
+          <el-tag v-if="badge.unlocked" size="small" type="success" effect="dark">已达成</el-tag>
+          <el-tag v-else size="small" type="info" effect="plain">未解锁</el-tag>
         </div>
       </div>
-    </div>
+    </AppPanel>
 
     <!-- 个人数据看板 -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-primary)"><DataAnalysis /></el-icon>
-          <h3>个人求职数据</h3>
-        </div>
+    <AppPanel icon-color="var(--app-primary)">
+      <template #icon><DataAnalysis /></template>
+      <template #title>个人求职数据</template>
+      <template #actions>
         <span class="panel-tip">基于投递和面试记录统计</span>
+      </template>
+      <div v-if="statsLoading" class="empty-inline">
+        <el-icon class="is-loading"><Loading /></el-icon> 加载中...
       </div>
-      <div class="panel-body">
-        <div v-if="statsLoading" class="empty-inline">
-          <el-icon class="is-loading"><Loading /></el-icon> 加载中...
-        </div>
-        <div v-else class="stats-dashboard">
-          <div class="stats-grid">
-            <div class="stat-card-v">
-              <span class="stat-label">投递总数</span
-              ><strong class="stat-num">{{ userStats.total_applications }}</strong>
-            </div>
-            <div class="stat-card-v">
-              <span class="stat-label">面试次数</span
-              ><strong class="stat-num stat-interview">{{ userStats.total_interviews }}</strong>
-            </div>
-            <div class="stat-card-v">
-              <span class="stat-label">Offer数</span
-              ><strong class="stat-num stat-offer">{{ userStats.total_offers }}</strong>
-            </div>
-            <div class="stat-card-v">
-              <span class="stat-label">面试转化率</span
-              ><strong class="stat-num">{{ userStats.interview_rate }}%</strong>
-            </div>
-            <div class="stat-card-v">
-              <span class="stat-label">Offer率</span
-              ><strong class="stat-num stat-offer">{{ userStats.offer_rate }}%</strong>
-            </div>
-            <div class="stat-card-v">
-              <span class="stat-label">简历数</span
-              ><strong class="stat-num">{{ userStats.resume_count }}</strong>
-            </div>
+      <div v-else class="stats-dashboard">
+        <div class="stats-grid">
+          <div class="stat-card-v">
+            <span class="stat-label">投递总数</span
+            ><strong class="stat-num">{{ userStats.total_applications }}</strong>
           </div>
-          <div class="stats-footer">
-            <span
-              >已使用 {{ userStats.days_active }} 天 ·
-              {{ userStats.total_sessions }} 次模拟面试</span
-            >
+          <div class="stat-card-v">
+            <span class="stat-label">面试次数</span
+            ><strong class="stat-num stat-interview">{{ userStats.total_interviews }}</strong>
+          </div>
+          <div class="stat-card-v">
+            <span class="stat-label">Offer数</span
+            ><strong class="stat-num stat-offer">{{ userStats.total_offers }}</strong>
+          </div>
+          <div class="stat-card-v">
+            <span class="stat-label">面试转化率</span
+            ><strong class="stat-num">{{ userStats.interview_rate }}%</strong>
+          </div>
+          <div class="stat-card-v">
+            <span class="stat-label">Offer率</span
+            ><strong class="stat-num stat-offer">{{ userStats.offer_rate }}%</strong>
+          </div>
+          <div class="stat-card-v">
+            <span class="stat-label">简历数</span
+            ><strong class="stat-num">{{ userStats.resume_count }}</strong>
           </div>
         </div>
+        <div class="stats-footer">
+          <span
+            >已使用 {{ userStats.days_active }} 天 · {{ userStats.total_sessions }} 次模拟面试</span
+          >
+        </div>
       </div>
-    </div>
+    </AppPanel>
 
     <!-- 每日任务 -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-success)"><List /></el-icon>
-          <h3>今日求职任务</h3>
-        </div>
+    <AppPanel icon-color="var(--app-success)">
+      <template #icon><List /></template>
+      <template #title>今日求职任务</template>
+      <template #actions>
         <el-tag
           size="small"
           :type="
@@ -206,52 +195,44 @@
         >
           {{ dailyTasks.filter((t) => t.done).length }}/{{ dailyTasks.length }}
         </el-tag>
-      </div>
-      <div class="panel-body">
-        <div class="daily-task-list">
-          <div v-for="task in dailyTasks" :key="task.id" class="daily-task-item">
-            <el-checkbox v-model="task.done" @change="onTaskChange">
-              <span :class="{ 'task-done-text': task.done }">{{ task.text }}</span>
-            </el-checkbox>
-            <el-tag v-if="task.bonus" size="small" type="warning" effect="plain"
-              >+{{ task.bonus }} 积分</el-tag
-            >
-          </div>
+      </template>
+      <div class="daily-task-list">
+        <div v-for="task in dailyTasks" :key="task.id" class="daily-task-item">
+          <el-checkbox v-model="task.done" @change="onTaskChange">
+            <span :class="{ 'task-done-text': task.done }">{{ task.text }}</span>
+          </el-checkbox>
+          <el-tag v-if="task.bonus" size="small" type="warning" effect="plain"
+            >+{{ task.bonus }} 积分</el-tag
+          >
         </div>
       </div>
-    </div>
+    </AppPanel>
 
     <!-- 邀请好友 -->
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <el-icon :size="18" color="var(--app-warning)"><Share /></el-icon>
-          <h3>邀请好友</h3>
+    <AppPanel icon-color="var(--app-warning)">
+      <template #icon><Share /></template>
+      <template #title>邀请好友</template>
+      <div class="invite-body">
+        <p class="invite-desc">邀请好友使用 Career Signal，双方均可获得额外权益</p>
+        <div class="invite-link-row">
+          <el-input v-model="inviteLink" readonly>
+            <template #append>
+              <el-button @click="copyInviteLink">复制邀请链接</el-button>
+            </template>
+          </el-input>
         </div>
-      </div>
-      <div class="panel-body">
-        <div class="invite-body">
-          <p class="invite-desc">邀请好友使用 Career Signal，双方均可获得额外权益</p>
-          <div class="invite-link-row">
-            <el-input v-model="inviteLink" readonly>
-              <template #append>
-                <el-button @click="copyInviteLink">复制邀请链接</el-button>
-              </template>
-            </el-input>
+        <div class="invite-stats">
+          <div class="invite-stat">
+            <strong>{{ inviteCount }}</strong
+            ><span>已邀请</span>
           </div>
-          <div class="invite-stats">
-            <div class="invite-stat">
-              <strong>{{ inviteCount }}</strong
-              ><span>已邀请</span>
-            </div>
-            <div class="invite-stat">
-              <strong>+{{ inviteBonus }}</strong
-              ><span>累计奖励</span>
-            </div>
+          <div class="invite-stat">
+            <strong>+{{ inviteBonus }}</strong
+            ><span>累计奖励</span>
           </div>
         </div>
       </div>
-    </div>
+    </AppPanel>
 
     <!-- 账号安全与隐私 -->
     <AppPanel>

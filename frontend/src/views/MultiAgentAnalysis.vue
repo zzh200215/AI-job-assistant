@@ -57,195 +57,179 @@
       </div>
     </div>
 
-    <div class="panel" v-if="runId && dispatch">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <h3>智能调度决策</h3>
-        </div>
-      </div>
-      <div class="panel-body">
-        <el-descriptions :column="1" border size="small">
-          <el-descriptions-item label="识别意图">
-            <el-tag size="small" type="primary">{{ intentLabel(dispatch.intent) }}</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="调度理由">{{ dispatch.reason || '-' }}</el-descriptions-item>
-          <el-descriptions-item v-if="dispatch.user_profile" label="用户画像">{{
-            dispatch.user_profile
-          }}</el-descriptions-item>
-          <el-descriptions-item label="本次调用">
-            <el-tag
-              v-for="n in selectedAgents"
-              :key="n"
-              size="small"
-              effect="plain"
-              style="margin: 2px"
-              >{{ agentLabel(n) }}</el-tag
-            >
-          </el-descriptions-item>
-          <el-descriptions-item v-if="dispatch.notes" label="提示">
-            <el-text type="warning">{{ dispatch.notes }}</el-text>
-          </el-descriptions-item>
-        </el-descriptions>
-      </div>
-    </div>
+    <AppPanel v-if="runId && dispatch">
+      <template #title>智能调度决策</template>
+      <el-descriptions :column="1" border size="small">
+        <el-descriptions-item label="识别意图">
+          <el-tag size="small" type="primary">{{ intentLabel(dispatch.intent) }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="调度理由">{{ dispatch.reason || '-' }}</el-descriptions-item>
+        <el-descriptions-item v-if="dispatch.user_profile" label="用户画像">{{
+          dispatch.user_profile
+        }}</el-descriptions-item>
+        <el-descriptions-item label="本次调用">
+          <el-tag
+            v-for="n in selectedAgents"
+            :key="n"
+            size="small"
+            effect="plain"
+            style="margin: 2px"
+            >{{ agentLabel(n) }}</el-tag
+          >
+        </el-descriptions-item>
+        <el-descriptions-item v-if="dispatch.notes" label="提示">
+          <el-text type="warning">{{ dispatch.notes }}</el-text>
+        </el-descriptions-item>
+      </el-descriptions>
+    </AppPanel>
 
-    <div class="panel" v-if="runId">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <h3>运行 #{{ runId }}</h3>
-          <el-tag :type="statusTag" size="small">{{ statusLabel }}</el-tag>
-        </div>
-      </div>
-      <div class="panel-body">
-        <el-row :gutter="12">
-          <el-col :span="8" v-for="agent in agents" :key="agent.name" class="mb">
-            <div :class="['agent-card', 'panel', agent.status]">
-              <div class="panel-header">
-                <div class="panel-title-row">
-                  <el-tag :type="agentStatusTag(agent)" size="small" effect="dark">
-                    {{ agentLabel(agent.name) }}
-                  </el-tag>
-                  <span v-if="agent.duration_ms" class="agent-time">{{ agent.duration_ms }}ms</span>
-                </div>
-              </div>
-              <div class="panel-body">
-                <div class="agent-status">
-                  <el-icon v-if="agent.status === 'completed'" class="s-green"
-                    ><SuccessFilled
-                  /></el-icon>
-                  <el-icon v-else-if="agent.status === 'running'" class="is-loading s-warning"
-                    ><Loading
-                  /></el-icon>
-                  <el-icon v-else-if="agent.status === 'failed'" class="s-danger"
-                    ><WarningFilled
-                  /></el-icon>
-                  <el-icon v-else class="s-info"><Clock /></el-icon>
-                  <span>{{ agentStatusText(agent) }}</span>
-                </div>
-
-                <div v-if="agent.summary" class="agent-summary">{{ agent.summary }}</div>
-
-                <el-button
-                  v-if="agent.output_data && Object.keys(agent.output_data).length"
-                  size="small"
-                  text
-                  type="primary"
-                  @click="showAgentDetail(agent)"
-                >
-                  查看详情
-                </el-button>
-
-                <div v-if="agent.error_msg" class="agent-error">{{ agent.error_msg }}</div>
+    <AppPanel v-if="runId">
+      <template #title>运行 #{{ runId }}</template>
+      <template #badge>
+        <el-tag :type="statusTag" size="small">{{ statusLabel }}</el-tag>
+      </template>
+      <el-row :gutter="12">
+        <el-col :span="8" v-for="agent in agents" :key="agent.name" class="mb">
+          <div :class="['agent-card', 'panel', agent.status]">
+            <div class="panel-header">
+              <div class="panel-title-row">
+                <el-tag :type="agentStatusTag(agent)" size="small" effect="dark">
+                  {{ agentLabel(agent.name) }}
+                </el-tag>
+                <span v-if="agent.duration_ms" class="agent-time">{{ agent.duration_ms }}ms</span>
               </div>
             </div>
-          </el-col>
-        </el-row>
+            <div class="panel-body">
+              <div class="agent-status">
+                <el-icon v-if="agent.status === 'completed'" class="s-green"
+                  ><SuccessFilled
+                /></el-icon>
+                <el-icon v-else-if="agent.status === 'running'" class="is-loading s-warning"
+                  ><Loading
+                /></el-icon>
+                <el-icon v-else-if="agent.status === 'failed'" class="s-danger"
+                  ><WarningFilled
+                /></el-icon>
+                <el-icon v-else class="s-info"><Clock /></el-icon>
+                <span>{{ agentStatusText(agent) }}</span>
+              </div>
 
-        <div class="dep-graph">
-          <el-tag size="small" type="info" effect="plain">依赖关系</el-tag>
-          <span class="dep-line"
-            >ResumeAgent + JobAgent -> MatchAgent -> InterviewAgent + CareerAgent ->
-            SummaryAgent</span
+              <div v-if="agent.summary" class="agent-summary">{{ agent.summary }}</div>
+
+              <el-button
+                v-if="agent.output_data && Object.keys(agent.output_data).length"
+                size="small"
+                text
+                type="primary"
+                @click="showAgentDetail(agent)"
+              >
+                查看详情
+              </el-button>
+
+              <div v-if="agent.error_msg" class="agent-error">{{ agent.error_msg }}</div>
+            </div>
+          </div>
+        </el-col>
+      </el-row>
+
+      <div class="dep-graph">
+        <el-tag size="small" type="info" effect="plain">依赖关系</el-tag>
+        <span class="dep-line"
+          >ResumeAgent + JobAgent -> MatchAgent -> InterviewAgent + CareerAgent ->
+          SummaryAgent</span
+        >
+      </div>
+    </AppPanel>
+
+    <AppPanel v-if="summaryReport">
+      <template #title>{{ summaryReport.report_title || '最终汇总报告' }}</template>
+      <el-tabs>
+        <el-tab-pane label="总览">
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="候选人">{{
+              summaryReport.summary?.candidate || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="目标岗位">{{
+              summaryReport.summary?.target_position || '-'
+            }}</el-descriptions-item>
+            <el-descriptions-item label="匹配度">
+              <el-tag :type="scoreToneTagType(summaryReport.summary?.match_score)">
+                {{ summaryReport.summary?.match_score }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="结论">{{
+              summaryReport.summary?.verdict || '-'
+            }}</el-descriptions-item>
+          </el-descriptions>
+        </el-tab-pane>
+
+        <el-tab-pane label="简历诊断">
+          <p><b>评分：</b>{{ summaryReport.resume_diagnosis?.score }}</p>
+          <ul>
+            <li v-for="(f, i) in summaryReport.resume_diagnosis?.key_findings || []" :key="i">
+              {{ f }}
+            </li>
+          </ul>
+        </el-tab-pane>
+
+        <el-tab-pane label="岗位分析">
+          <p><b>核心技能：</b></p>
+          <el-tag
+            v-for="(s, i) in summaryReport.job_analysis?.core_skills || []"
+            :key="i"
+            style="margin: 2px"
+            >{{ s }}</el-tag
           >
-        </div>
-      </div>
-    </div>
+        </el-tab-pane>
 
-    <div class="panel" v-if="summaryReport">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <h3>{{ summaryReport.report_title || '最终汇总报告' }}</h3>
-        </div>
-      </div>
-      <div class="panel-body">
-        <el-tabs>
-          <el-tab-pane label="总览">
-            <el-descriptions :column="2" border size="small">
-              <el-descriptions-item label="候选人">{{
-                summaryReport.summary?.candidate || '-'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="目标岗位">{{
-                summaryReport.summary?.target_position || '-'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="匹配度">
-                <el-tag :type="scoreToneTagType(summaryReport.summary?.match_score)">
-                  {{ summaryReport.summary?.match_score }}
+        <el-tab-pane label="面试准备">
+          <p>
+            共 <b>{{ summaryReport.interview_preparation?.questions_count || 0 }}</b> 道题
+          </p>
+          <p>重点领域：</p>
+          <el-tag
+            v-for="(f, i) in summaryReport.interview_preparation?.focus_areas || []"
+            :key="i"
+            style="margin: 2px"
+            type="warning"
+            >{{ f }}</el-tag
+          >
+        </el-tab-pane>
+
+        <el-tab-pane label="职业规划">
+          <el-collapse>
+            <el-collapse-item title="短期（1-3个月）">
+              <p>{{ summaryReport.career_plan?.short_term || '暂无' }}</p>
+            </el-collapse-item>
+            <el-collapse-item title="中期（3-12个月）">
+              <p>{{ summaryReport.career_plan?.mid_term || '暂无' }}</p>
+            </el-collapse-item>
+            <el-collapse-item title="长期（1-3年）">
+              <p>{{ summaryReport.career_plan?.long_term || '暂无' }}</p>
+            </el-collapse-item>
+          </el-collapse>
+        </el-tab-pane>
+
+        <el-tab-pane label="行动项">
+          <el-table :data="summaryReport.action_items || []" size="small">
+            <el-table-column prop="priority" label="优先级" width="80">
+              <template #default="{ row }">
+                <el-tag
+                  :type="
+                    row.priority === '高' ? 'danger' : row.priority === '中' ? 'warning' : 'info'
+                  "
+                  size="small"
+                >
+                  {{ row.priority }}
                 </el-tag>
-              </el-descriptions-item>
-              <el-descriptions-item label="结论">{{
-                summaryReport.summary?.verdict || '-'
-              }}</el-descriptions-item>
-            </el-descriptions>
-          </el-tab-pane>
-
-          <el-tab-pane label="简历诊断">
-            <p><b>评分：</b>{{ summaryReport.resume_diagnosis?.score }}</p>
-            <ul>
-              <li v-for="(f, i) in summaryReport.resume_diagnosis?.key_findings || []" :key="i">
-                {{ f }}
-              </li>
-            </ul>
-          </el-tab-pane>
-
-          <el-tab-pane label="岗位分析">
-            <p><b>核心技能：</b></p>
-            <el-tag
-              v-for="(s, i) in summaryReport.job_analysis?.core_skills || []"
-              :key="i"
-              style="margin: 2px"
-              >{{ s }}</el-tag
-            >
-          </el-tab-pane>
-
-          <el-tab-pane label="面试准备">
-            <p>
-              共 <b>{{ summaryReport.interview_preparation?.questions_count || 0 }}</b> 道题
-            </p>
-            <p>重点领域：</p>
-            <el-tag
-              v-for="(f, i) in summaryReport.interview_preparation?.focus_areas || []"
-              :key="i"
-              style="margin: 2px"
-              type="warning"
-              >{{ f }}</el-tag
-            >
-          </el-tab-pane>
-
-          <el-tab-pane label="职业规划">
-            <el-collapse>
-              <el-collapse-item title="短期（1-3个月）">
-                <p>{{ summaryReport.career_plan?.short_term || '暂无' }}</p>
-              </el-collapse-item>
-              <el-collapse-item title="中期（3-12个月）">
-                <p>{{ summaryReport.career_plan?.mid_term || '暂无' }}</p>
-              </el-collapse-item>
-              <el-collapse-item title="长期（1-3年）">
-                <p>{{ summaryReport.career_plan?.long_term || '暂无' }}</p>
-              </el-collapse-item>
-            </el-collapse>
-          </el-tab-pane>
-
-          <el-tab-pane label="行动项">
-            <el-table :data="summaryReport.action_items || []" size="small">
-              <el-table-column prop="priority" label="优先级" width="80">
-                <template #default="{ row }">
-                  <el-tag
-                    :type="
-                      row.priority === '高' ? 'danger' : row.priority === '中' ? 'warning' : 'info'
-                    "
-                    size="small"
-                  >
-                    {{ row.priority }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="action" label="行动" />
-              <el-table-column prop="reason" label="原因" show-overflow-tooltip />
-            </el-table>
-          </el-tab-pane>
-        </el-tabs>
-      </div>
-    </div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="action" label="行动" />
+            <el-table-column prop="reason" label="原因" show-overflow-tooltip />
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
+    </AppPanel>
 
     <el-dialog
       v-model="detailVisible"
@@ -269,6 +253,7 @@
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
 import { SuccessFilled, WarningFilled, Loading, Clock } from '@element-plus/icons-vue'

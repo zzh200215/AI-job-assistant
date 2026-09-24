@@ -53,346 +53,338 @@
       </div>
     </div>
 
-    <div class="panel" v-if="taskId">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <h3>任务 #{{ taskId }} 执行流水线</h3>
-          <el-tag :type="taskStatusTag" size="small">{{ taskStatusLabel }}</el-tag>
-        </div>
+    <AppPanel v-if="taskId">
+      <template #title>任务 #{{ taskId }} 执行流水线</template>
+      <template #badge>
+        <el-tag :type="taskStatusTag" size="small">{{ taskStatusLabel }}</el-tag>
+      </template>
+      <template #actions>
         <div class="task-head-actions">
           <el-button size="small" @click="openTaskCenter">任务中心</el-button>
           <el-button size="small" type="primary" plain @click="openPromptTrace"
             >Prompt 追踪</el-button
           >
         </div>
-      </div>
-      <div class="panel-body">
-        <el-descriptions
-          v-if="taskUsage.tokens_used || taskUsage.cost_cents"
-          :column="2"
-          border
-          size="small"
-          class="usage-summary"
+      </template>
+      <el-descriptions
+        v-if="taskUsage.tokens_used || taskUsage.cost_cents"
+        :column="2"
+        border
+        size="small"
+        class="usage-summary"
+      >
+        <el-descriptions-item label="Token 用量">{{
+          formatTokens(taskUsage.tokens_used)
+        }}</el-descriptions-item>
+        <el-descriptions-item label="预估成本">{{
+          formatCost(taskUsage.cost_cents)
+        }}</el-descriptions-item>
+      </el-descriptions>
+
+      <el-timeline>
+        <el-timeline-item
+          v-for="step in steps"
+          :key="step.step_index"
+          :timestamp="step.completed_at || ''"
+          :type="stepStatusType(step)"
+          :hollow="step.status === 'pending'"
+          placement="top"
+          size="large"
         >
-          <el-descriptions-item label="Token 用量">{{
-            formatTokens(taskUsage.tokens_used)
-          }}</el-descriptions-item>
-          <el-descriptions-item label="预估成本">{{
-            formatCost(taskUsage.cost_cents)
-          }}</el-descriptions-item>
-        </el-descriptions>
+          <div class="step-header">
+            <el-tag :type="stepStatusType(step)" size="small" effect="dark" class="step-badge">
+              {{ stepLabel(step.step_name) }}
+            </el-tag>
+            <span v-if="step.duration_ms" class="step-duration">{{ step.duration_ms }}ms</span>
+          </div>
 
-        <el-timeline>
-          <el-timeline-item
-            v-for="step in steps"
-            :key="step.step_index"
-            :timestamp="step.completed_at || ''"
-            :type="stepStatusType(step)"
-            :hollow="step.status === 'pending'"
-            placement="top"
-            size="large"
-          >
-            <div class="step-header">
-              <el-tag :type="stepStatusType(step)" size="small" effect="dark" class="step-badge">
-                {{ stepLabel(step.step_name) }}
-              </el-tag>
-              <span v-if="step.duration_ms" class="step-duration">{{ step.duration_ms }}ms</span>
-            </div>
+          <div class="step-status-text">{{ stepStatusText(step.status) }}</div>
 
-            <div class="step-status-text">{{ stepStatusText(step.status) }}</div>
+          <div v-if="step.status === 'running'" class="running-indicator">
+            <el-icon class="is-loading"><Loading /></el-icon> 执行中
+          </div>
 
-            <div v-if="step.status === 'running'" class="running-indicator">
-              <el-icon class="is-loading"><Loading /></el-icon> 执行中
+          <div v-if="step.status === 'completed' && step.output_data" class="step-output">
+            <div v-if="step.step_name === 'intent_recognition'" class="output-preview">
+              意图: <b>{{ step.output_data.intent || '-' }}</b>
+              <span v-if="typeof step.output_data.confidence === 'number'">
+                | 置信度 {{ (step.output_data.confidence * 100).toFixed(0) }}%
+              </span>
             </div>
-
-            <div v-if="step.status === 'completed' && step.output_data" class="step-output">
-              <div v-if="step.step_name === 'intent_recognition'" class="output-preview">
-                意图: <b>{{ step.output_data.intent || '-' }}</b>
-                <span v-if="typeof step.output_data.confidence === 'number'">
-                  | 置信度 {{ (step.output_data.confidence * 100).toFixed(0) }}%
-                </span>
-              </div>
-              <div v-else-if="step.step_name === 'task_planning'" class="output-preview">
-                拆解为 {{ step.output_data.steps_count || 0 }} 个子任务
-              </div>
-              <div v-else-if="step.step_name === 'match_analysis'" class="output-preview">
-                匹配度评分 <b>{{ step.output_data.match_score ?? '-' }}</b>
-              </div>
-              <div v-else-if="step.step_name === 'self_check'" class="output-preview">
-                校验结果: {{ step.output_data.passed ? '通过' : '发现问题' }}
-              </div>
-              <div v-else-if="step.step_name === 'knowledge_retrieval'" class="output-preview">
-                检索了 {{ Object.keys(step.output_data.retrievals || {}).length }} 类知识库
-              </div>
+            <div v-else-if="step.step_name === 'task_planning'" class="output-preview">
+              拆解为 {{ step.output_data.steps_count || 0 }} 个子任务
             </div>
-
-            <div v-if="step.status === 'failed'" class="step-error">
-              {{ step.error_msg || '执行失败' }}
+            <div v-else-if="step.step_name === 'match_analysis'" class="output-preview">
+              匹配度评分 <b>{{ step.output_data.match_score ?? '-' }}</b>
             </div>
-          </el-timeline-item>
-        </el-timeline>
-
-        <div v-if="steps.length || retrievals.length || checks.length" class="trace-section">
-          <div class="trace-stats">
-            <div class="trace-stat-card">
-              <span>步骤数</span>
-              <strong>{{ steps.length }}</strong>
+            <div v-else-if="step.step_name === 'self_check'" class="output-preview">
+              校验结果: {{ step.output_data.passed ? '通过' : '发现问题' }}
             </div>
-            <div class="trace-stat-card">
-              <span>检索次数</span>
-              <strong>{{ retrievals.length }}</strong>
-            </div>
-            <div class="trace-stat-card">
-              <span>召回文档</span>
-              <strong>{{ retrievalResultCount }}</strong>
-            </div>
-            <div class="trace-stat-card">
-              <span>自检通过</span>
-              <strong>{{ passedChecks }}/{{ checks.length }}</strong>
+            <div v-else-if="step.step_name === 'knowledge_retrieval'" class="output-preview">
+              检索了 {{ Object.keys(step.output_data.retrievals || {}).length }} 类知识库
             </div>
           </div>
 
-          <el-tabs class="trace-tabs">
-            <el-tab-pane :label="`检索日志 (${retrievals.length})`">
-              <el-empty v-if="!retrievals.length" description="暂无检索日志" />
-              <div v-else class="trace-list">
-                <div v-for="item in retrievals" :key="item.id" class="trace-card">
-                  <div class="trace-card-head">
-                    <strong>{{ item.query_text }}</strong>
-                    <div class="trace-card-tags">
-                      <el-tag size="small" type="info">Top {{ item.top_k }}</el-tag>
-                      <el-tag size="small">{{ item.result_count }} 条</el-tag>
-                      <el-tag v-if="item.duration_ms" size="small" type="success"
-                        >{{ item.duration_ms }}ms</el-tag
-                      >
-                    </div>
-                  </div>
-                  <div class="trace-meta">
-                    <span>文档类型：{{ item.doc_type_filter || '全部' }}</span>
-                    <span>步骤日志：#{{ item.step_log_id || '-' }}</span>
-                  </div>
-                  <div v-if="item.results?.length" class="trace-result-list">
-                    <div
-                      v-for="(resultItem, idx) in item.results.slice(0, 5)"
-                      :key="`${item.id}-${idx}`"
-                      class="trace-result-item"
+          <div v-if="step.status === 'failed'" class="step-error">
+            {{ step.error_msg || '执行失败' }}
+          </div>
+        </el-timeline-item>
+      </el-timeline>
+
+      <div v-if="steps.length || retrievals.length || checks.length" class="trace-section">
+        <div class="trace-stats">
+          <div class="trace-stat-card">
+            <span>步骤数</span>
+            <strong>{{ steps.length }}</strong>
+          </div>
+          <div class="trace-stat-card">
+            <span>检索次数</span>
+            <strong>{{ retrievals.length }}</strong>
+          </div>
+          <div class="trace-stat-card">
+            <span>召回文档</span>
+            <strong>{{ retrievalResultCount }}</strong>
+          </div>
+          <div class="trace-stat-card">
+            <span>自检通过</span>
+            <strong>{{ passedChecks }}/{{ checks.length }}</strong>
+          </div>
+        </div>
+
+        <el-tabs class="trace-tabs">
+          <el-tab-pane :label="`检索日志 (${retrievals.length})`">
+            <el-empty v-if="!retrievals.length" description="暂无检索日志" />
+            <div v-else class="trace-list">
+              <div v-for="item in retrievals" :key="item.id" class="trace-card">
+                <div class="trace-card-head">
+                  <strong>{{ item.query_text }}</strong>
+                  <div class="trace-card-tags">
+                    <el-tag size="small" type="info">Top {{ item.top_k }}</el-tag>
+                    <el-tag size="small">{{ item.result_count }} 条</el-tag>
+                    <el-tag v-if="item.duration_ms" size="small" type="success"
+                      >{{ item.duration_ms }}ms</el-tag
                     >
-                      <div class="trace-result-title">
-                        {{
-                          resultItem.title ||
-                          resultItem.doc_title ||
-                          resultItem.metadata?.title ||
-                          `结果 ${idx + 1}`
-                        }}
-                      </div>
-                      <div class="trace-meta">
-                        <span
-                          >分数：{{
-                            firstDefined(
-                              resultItem.final_score,
-                              resultItem.score,
-                              resultItem.similarity,
-                              '-'
-                            )
-                          }}</span
-                        >
-                        <span
-                          >来源：{{
-                            resultItem.doc_type || resultItem.metadata?.doc_type || 'unknown'
-                          }}</span
-                        >
-                      </div>
-                      <div class="trace-snippet">
-                        {{
-                          snippetOf(
-                            resultItem.text ||
-                              resultItem.content ||
-                              resultItem.chunk ||
-                              resultItem.metadata?.text
+                  </div>
+                </div>
+                <div class="trace-meta">
+                  <span>文档类型：{{ item.doc_type_filter || '全部' }}</span>
+                  <span>步骤日志：#{{ item.step_log_id || '-' }}</span>
+                </div>
+                <div v-if="item.results?.length" class="trace-result-list">
+                  <div
+                    v-for="(resultItem, idx) in item.results.slice(0, 5)"
+                    :key="`${item.id}-${idx}`"
+                    class="trace-result-item"
+                  >
+                    <div class="trace-result-title">
+                      {{
+                        resultItem.title ||
+                        resultItem.doc_title ||
+                        resultItem.metadata?.title ||
+                        `结果 ${idx + 1}`
+                      }}
+                    </div>
+                    <div class="trace-meta">
+                      <span
+                        >分数：{{
+                          firstDefined(
+                            resultItem.final_score,
+                            resultItem.score,
+                            resultItem.similarity,
+                            '-'
                           )
-                        }}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </el-tab-pane>
-
-            <el-tab-pane :label="`自检日志 (${checks.length})`">
-              <el-empty v-if="!checks.length" description="暂无自检日志" />
-              <div v-else class="trace-list">
-                <div v-for="item in checks" :key="item.id" class="trace-card">
-                  <div class="trace-card-head">
-                    <strong>{{ item.check_target || '自检项' }}</strong>
-                    <div class="trace-card-tags">
-                      <el-tag :type="item.passed ? 'success' : 'warning'" size="small">
-                        {{ item.passed ? '通过' : '待修正' }}
-                      </el-tag>
-                      <el-tag
-                        v-if="item.score !== null && item.score !== undefined"
-                        size="small"
-                        type="info"
+                        }}</span
                       >
-                        {{ item.score }}
-                      </el-tag>
-                      <el-tag v-if="item.retry_needed" size="small" type="danger">建议重试</el-tag>
+                      <span
+                        >来源：{{
+                          resultItem.doc_type || resultItem.metadata?.doc_type || 'unknown'
+                        }}</span
+                      >
                     </div>
-                  </div>
-                  <div class="trace-grid">
-                    <div>
-                      <div class="trace-block-title">问题</div>
-                      <ul class="trace-bullet-list">
-                        <li
-                          v-for="(issue, idx) in normalizeList(item.issues)"
-                          :key="`issue-${item.id}-${idx}`"
-                        >
-                          {{ issue }}
-                        </li>
-                      </ul>
-                    </div>
-                    <div>
-                      <div class="trace-block-title">改进建议</div>
-                      <pre class="code-block">{{ formatJson(item.improvement) }}</pre>
+                    <div class="trace-snippet">
+                      {{
+                        snippetOf(
+                          resultItem.text ||
+                            resultItem.content ||
+                            resultItem.chunk ||
+                            resultItem.metadata?.text
+                        )
+                      }}
                     </div>
                   </div>
                 </div>
               </div>
-            </el-tab-pane>
+            </div>
+          </el-tab-pane>
 
-            <el-tab-pane :label="`步骤 I/O (${steps.length})`">
-              <el-empty v-if="!steps.length" description="暂无步骤明细" />
-              <el-collapse v-else class="step-io-list">
-                <el-collapse-item v-for="step in steps" :key="step.id" :name="String(step.id)">
-                  <template #title>
-                    <div class="step-io-title">
-                      <strong>{{ stepLabel(step.step_name) }}</strong>
-                      <span>{{ stepStatusText(step.status) }}</span>
-                      <span v-if="step.duration_ms">{{ step.duration_ms }}ms</span>
-                    </div>
-                  </template>
-                  <div class="trace-grid">
-                    <div>
-                      <div class="trace-block-title">输入</div>
-                      <pre class="code-block">{{ formatJson(step.input_data) }}</pre>
-                    </div>
-                    <div>
-                      <div class="trace-block-title">输出</div>
-                      <pre class="code-block">{{ formatJson(step.output_data) }}</pre>
-                    </div>
+          <el-tab-pane :label="`自检日志 (${checks.length})`">
+            <el-empty v-if="!checks.length" description="暂无自检日志" />
+            <div v-else class="trace-list">
+              <div v-for="item in checks" :key="item.id" class="trace-card">
+                <div class="trace-card-head">
+                  <strong>{{ item.check_target || '自检项' }}</strong>
+                  <div class="trace-card-tags">
+                    <el-tag :type="item.passed ? 'success' : 'warning'" size="small">
+                      {{ item.passed ? '通过' : '待修正' }}
+                    </el-tag>
+                    <el-tag
+                      v-if="item.score !== null && item.score !== undefined"
+                      size="small"
+                      type="info"
+                    >
+                      {{ item.score }}
+                    </el-tag>
+                    <el-tag v-if="item.retry_needed" size="small" type="danger">建议重试</el-tag>
                   </div>
-                  <div v-if="step.error_msg" class="step-error">
-                    {{ step.error_msg }}
-                  </div>
-                </el-collapse-item>
-              </el-collapse>
-            </el-tab-pane>
-          </el-tabs>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel" v-if="finalReport">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <h3>最终报告</h3>
-        </div>
-      </div>
-      <div class="panel-body">
-        <el-descriptions :column="2" border size="small">
-          <el-descriptions-item label="候选人">{{
-            finalReport.summary?.candidate_name || '-'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="目标岗位">{{
-            finalReport.summary?.target_position || '-'
-          }}</el-descriptions-item>
-          <el-descriptions-item label="匹配度">
-            <el-tag :type="scoreToneTagType(finalReport.summary?.match_score)">
-              {{ finalReport.summary?.match_score ?? '-' }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="推荐建议">{{
-            localizedSummaryRecommendation
-          }}</el-descriptions-item>
-          <el-descriptions-item label="综合评价" :span="2">
-            {{ localizedOverallEvaluation }}
-          </el-descriptions-item>
-        </el-descriptions>
-
-        <el-tabs>
-          <el-tab-pane label="匹配分析">
-            <el-row :gutter="16">
-              <el-col
-                v-for="(value, key) in finalReport.match_analysis?.dimension_scores || {}"
-                :key="key"
-                :span="6"
-              >
-                <div class="dim-card">
-                  <div class="dim-label">{{ localizeDimensionLabel(key) }}</div>
-                  <div class="dim-score">{{ value }}</div>
                 </div>
-              </el-col>
-            </el-row>
-            <h4>优势</h4>
-            <ul>
-              <li v-for="(item, idx) in localizedAgentStrengths" :key="idx">{{ item }}</li>
-            </ul>
-            <h4>短板</h4>
-            <ul>
-              <li v-for="(item, idx) in localizedAgentGaps" :key="idx">{{ item }}</li>
-            </ul>
+                <div class="trace-grid">
+                  <div>
+                    <div class="trace-block-title">问题</div>
+                    <ul class="trace-bullet-list">
+                      <li
+                        v-for="(issue, idx) in normalizeList(item.issues)"
+                        :key="`issue-${item.id}-${idx}`"
+                      >
+                        {{ issue }}
+                      </li>
+                    </ul>
+                  </div>
+                  <div>
+                    <div class="trace-block-title">改进建议</div>
+                    <pre class="code-block">{{ formatJson(item.improvement) }}</pre>
+                  </div>
+                </div>
+              </div>
+            </div>
           </el-tab-pane>
 
-          <el-tab-pane label="优化建议">
-            <ul>
-              <li v-for="(item, idx) in localizedOptimizationKeyPoints" :key="idx">
-                <b>要点{{ idx + 1 }}：</b>{{ item }}
-              </li>
-            </ul>
-            <h4>快速可执行</h4>
-            <ul>
-              <li v-for="(item, idx) in localizedQuickWins" :key="idx">{{ item }}</li>
-            </ul>
-          </el-tab-pane>
-
-          <el-tab-pane label="面试指南">
-            <p>重点考察领域：</p>
-            <el-tag
-              v-for="item in finalReport.interview_guide?.focus_areas || []"
-              :key="item"
-              style="margin: 2px"
-            >
-              {{ localizeSentence(item) }}
-            </el-tag>
-            <h4>准备建议</h4>
-            <p>{{ localizedWeaknessPreparation }}</p>
-          </el-tab-pane>
-
-          <el-tab-pane label="发展建议">
-            <h4>短期</h4>
-            <ul>
-              <li v-for="(item, idx) in localizedShortTermAdvice" :key="idx">{{ item }}</li>
-            </ul>
-            <h4>长期</h4>
-            <ul>
-              <li v-for="(item, idx) in localizedLongTermAdvice" :key="idx">{{ item }}</li>
-            </ul>
-          </el-tab-pane>
-
-          <el-tab-pane label="质量保障">
-            <el-alert
-              :title="`自我校验评分: ${finalReport.quality_assurance?.self_check_score || 0}`"
-              :type="
-                scoreToneAtLeast(finalReport.quality_assurance?.self_check_score, 'good')
-                  ? 'success'
-                  : 'warning'
-              "
-              :closable="false"
-              show-icon
-            />
+          <el-tab-pane :label="`步骤 I/O (${steps.length})`">
+            <el-empty v-if="!steps.length" description="暂无步骤明细" />
+            <el-collapse v-else class="step-io-list">
+              <el-collapse-item v-for="step in steps" :key="step.id" :name="String(step.id)">
+                <template #title>
+                  <div class="step-io-title">
+                    <strong>{{ stepLabel(step.step_name) }}</strong>
+                    <span>{{ stepStatusText(step.status) }}</span>
+                    <span v-if="step.duration_ms">{{ step.duration_ms }}ms</span>
+                  </div>
+                </template>
+                <div class="trace-grid">
+                  <div>
+                    <div class="trace-block-title">输入</div>
+                    <pre class="code-block">{{ formatJson(step.input_data) }}</pre>
+                  </div>
+                  <div>
+                    <div class="trace-block-title">输出</div>
+                    <pre class="code-block">{{ formatJson(step.output_data) }}</pre>
+                  </div>
+                </div>
+                <div v-if="step.error_msg" class="step-error">
+                  {{ step.error_msg }}
+                </div>
+              </el-collapse-item>
+            </el-collapse>
           </el-tab-pane>
         </el-tabs>
       </div>
-    </div>
+    </AppPanel>
+
+    <AppPanel v-if="finalReport">
+      <template #title>最终报告</template>
+      <el-descriptions :column="2" border size="small">
+        <el-descriptions-item label="候选人">{{
+          finalReport.summary?.candidate_name || '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item label="目标岗位">{{
+          finalReport.summary?.target_position || '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item label="匹配度">
+          <el-tag :type="scoreToneTagType(finalReport.summary?.match_score)">
+            {{ finalReport.summary?.match_score ?? '-' }}
+          </el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item label="推荐建议">{{
+          localizedSummaryRecommendation
+        }}</el-descriptions-item>
+        <el-descriptions-item label="综合评价" :span="2">
+          {{ localizedOverallEvaluation }}
+        </el-descriptions-item>
+      </el-descriptions>
+
+      <el-tabs>
+        <el-tab-pane label="匹配分析">
+          <el-row :gutter="16">
+            <el-col
+              v-for="(value, key) in finalReport.match_analysis?.dimension_scores || {}"
+              :key="key"
+              :span="6"
+            >
+              <div class="dim-card">
+                <div class="dim-label">{{ localizeDimensionLabel(key) }}</div>
+                <div class="dim-score">{{ value }}</div>
+              </div>
+            </el-col>
+          </el-row>
+          <h4>优势</h4>
+          <ul>
+            <li v-for="(item, idx) in localizedAgentStrengths" :key="idx">{{ item }}</li>
+          </ul>
+          <h4>短板</h4>
+          <ul>
+            <li v-for="(item, idx) in localizedAgentGaps" :key="idx">{{ item }}</li>
+          </ul>
+        </el-tab-pane>
+
+        <el-tab-pane label="优化建议">
+          <ul>
+            <li v-for="(item, idx) in localizedOptimizationKeyPoints" :key="idx">
+              <b>要点{{ idx + 1 }}：</b>{{ item }}
+            </li>
+          </ul>
+          <h4>快速可执行</h4>
+          <ul>
+            <li v-for="(item, idx) in localizedQuickWins" :key="idx">{{ item }}</li>
+          </ul>
+        </el-tab-pane>
+
+        <el-tab-pane label="面试指南">
+          <p>重点考察领域：</p>
+          <el-tag
+            v-for="item in finalReport.interview_guide?.focus_areas || []"
+            :key="item"
+            style="margin: 2px"
+          >
+            {{ localizeSentence(item) }}
+          </el-tag>
+          <h4>准备建议</h4>
+          <p>{{ localizedWeaknessPreparation }}</p>
+        </el-tab-pane>
+
+        <el-tab-pane label="发展建议">
+          <h4>短期</h4>
+          <ul>
+            <li v-for="(item, idx) in localizedShortTermAdvice" :key="idx">{{ item }}</li>
+          </ul>
+          <h4>长期</h4>
+          <ul>
+            <li v-for="(item, idx) in localizedLongTermAdvice" :key="idx">{{ item }}</li>
+          </ul>
+        </el-tab-pane>
+
+        <el-tab-pane label="质量保障">
+          <el-alert
+            :title="`自我校验评分: ${finalReport.quality_assurance?.self_check_score || 0}`"
+            :type="
+              scoreToneAtLeast(finalReport.quality_assurance?.self_check_score, 'good')
+                ? 'success'
+                : 'warning'
+            "
+            :closable="false"
+            show-icon
+          />
+        </el-tab-pane>
+      </el-tabs>
+    </AppPanel>
 
     <div class="panel" v-if="taskId && !isTerminalTask">
       <div class="panel-body">
@@ -408,6 +400,7 @@
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
 import { Promotion, Loading } from '@element-plus/icons-vue'

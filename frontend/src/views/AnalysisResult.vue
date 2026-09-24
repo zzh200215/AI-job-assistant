@@ -155,42 +155,38 @@
           </div>
         </div>
 
-        <div class="panel summary-card">
-          <div class="panel-header">
-            <div class="panel-title-row">
-              <h3>这份结果告诉你什么</h3>
-              <el-tag type="info" effect="plain">记录 {{ result.record_id || result.id }}</el-tag>
+        <AppPanel class="summary-card">
+          <template #title>这份结果告诉你什么</template>
+          <template #badge>
+            <el-tag type="info" effect="plain">记录 {{ result.record_id || result.id }}</el-tag>
+          </template>
+          <div class="metric-grid">
+            <div class="metric-item">
+              <span>技能</span>
+              <strong>{{ result.match_report?.dimension_scores?.skills?.score ?? 0 }}</strong>
+            </div>
+            <div class="metric-item">
+              <span>经验</span>
+              <strong>{{ result.match_report?.dimension_scores?.experience?.score ?? 0 }}</strong>
+            </div>
+            <div class="metric-item">
+              <span>学历</span>
+              <strong>{{ result.match_report?.dimension_scores?.education?.score ?? 0 }}</strong>
+            </div>
+            <div class="metric-item">
+              <span>行业</span>
+              <strong>{{ result.match_report?.dimension_scores?.industry?.score ?? 0 }}</strong>
             </div>
           </div>
-          <div class="panel-body">
-            <div class="metric-grid">
-              <div class="metric-item">
-                <span>技能</span>
-                <strong>{{ result.match_report?.dimension_scores?.skills?.score ?? 0 }}</strong>
-              </div>
-              <div class="metric-item">
-                <span>经验</span>
-                <strong>{{ result.match_report?.dimension_scores?.experience?.score ?? 0 }}</strong>
-              </div>
-              <div class="metric-item">
-                <span>学历</span>
-                <strong>{{ result.match_report?.dimension_scores?.education?.score ?? 0 }}</strong>
-              </div>
-              <div class="metric-item">
-                <span>行业</span>
-                <strong>{{ result.match_report?.dimension_scores?.industry?.score ?? 0 }}</strong>
-              </div>
-            </div>
 
-            <div class="next-actions">
-              <el-button type="primary" @click="goInterview">
-                <el-icon><ChatLineSquare /></el-icon> 去看面试题
-              </el-button>
-              <el-button @click="goCareer">职业规划</el-button>
-              <el-button @click="goJobMarket">岗位市场</el-button>
-            </div>
+          <div class="next-actions">
+            <el-button type="primary" @click="goInterview">
+              <el-icon><ChatLineSquare /></el-icon> 去看面试题
+            </el-button>
+            <el-button @click="goCareer">职业规划</el-button>
+            <el-button @click="goJobMarket">岗位市场</el-button>
           </div>
-        </div>
+        </AppPanel>
       </section>
 
       <div class="panel detail-card">
@@ -319,24 +315,20 @@
               <el-empty v-if="!hasReferences" description="本次分析没有附带参考依据" />
               <template v-else>
                 <div v-for="(reference, ri) in result.references" :key="ri" class="ref-card">
-                  <div class="panel">
-                    <div class="panel-header">
-                      <div class="panel-title-row">
-                        <h3>{{ reference.doc_title }}</h3>
-                        <el-tag :type="refTypeTag(reference.doc_type)" size="small">{{
-                          refTypeLabel(reference.doc_type)
-                        }}</el-tag>
+                  <AppPanel>
+                    <template #title>{{ reference.doc_title }}</template>
+                    <template #badge>
+                      <el-tag :type="refTypeTag(reference.doc_type)" size="small">{{
+                        refTypeLabel(reference.doc_type)
+                      }}</el-tag>
+                    </template>
+                    <div v-for="(chunk, ci) in reference.chunks" :key="ci" class="ref-chunk">
+                      <div class="ref-meta">片段 {{ ci + 1 }} · 相似度 {{ chunk.score }}</div>
+                      <div class="ref-text">
+                        {{ chunk.text }}{{ chunk.text?.length >= 200 ? '...' : '' }}
                       </div>
                     </div>
-                    <div class="panel-body">
-                      <div v-for="(chunk, ci) in reference.chunks" :key="ci" class="ref-chunk">
-                        <div class="ref-meta">片段 {{ ci + 1 }} · 相似度 {{ chunk.score }}</div>
-                        <div class="ref-text">
-                          {{ chunk.text }}{{ chunk.text?.length >= 200 ? '...' : '' }}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  </AppPanel>
                 </div>
               </template>
             </el-tab-pane>
@@ -348,6 +340,7 @@
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'

@@ -46,243 +46,226 @@
     </div>
 
     <div class="setup-grid">
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title-row">
-            <h3>配置本场面试</h3>
-          </div>
+      <AppPanel>
+        <template #title>配置本场面试</template>
+        <template #actions>
           <el-tag type="danger" effect="plain">基础版</el-tag>
-        </div>
-        <div class="panel-body">
-          <el-form
-            ref="formRef"
-            :model="form"
-            :rules="rules"
-            label-position="top"
-            class="setup-form"
-          >
-            <el-form-item label="选择简历" prop="resume_id">
-              <el-select
-                v-model="form.resume_id"
-                placement="bottom-start"
-                :fallback-placements="['bottom-start']"
-                placeholder="选择要用于面试的简历"
-                filterable
-                :loading="loading.resume"
+        </template>
+        <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="setup-form">
+          <el-form-item label="选择简历" prop="resume_id">
+            <el-select
+              v-model="form.resume_id"
+              placement="bottom-start"
+              :fallback-placements="['bottom-start']"
+              placeholder="选择要用于面试的简历"
+              filterable
+              :loading="loading.resume"
+            >
+              <el-option
+                v-for="resume in resumeList"
+                :key="resume.id"
+                :label="resume.name || resume.file_name"
+                :value="resume.id"
               >
-                <el-option
-                  v-for="resume in resumeList"
-                  :key="resume.id"
-                  :label="resume.name || resume.file_name"
-                  :value="resume.id"
-                >
-                  <div class="option-row">
-                    <span>{{ resume.name || resume.file_name }}</span>
-                    <span class="option-meta">{{
-                      resume.parsed?.current_title || resume.current_title || ''
-                    }}</span>
-                  </div>
-                </el-option>
-              </el-select>
-            </el-form-item>
+                <div class="option-row">
+                  <span>{{ resume.name || resume.file_name }}</span>
+                  <span class="option-meta">{{
+                    resume.parsed?.current_title || resume.current_title || ''
+                  }}</span>
+                </div>
+              </el-option>
+            </el-select>
+          </el-form-item>
 
-            <el-form-item label="目标岗位" prop="jd_id">
-              <el-select
-                v-model="form.jd_id"
-                placement="bottom-start"
-                :fallback-placements="['bottom-start']"
-                placeholder="选择目标 JD"
-                filterable
-                :loading="loading.jd"
+          <el-form-item label="目标岗位" prop="jd_id">
+            <el-select
+              v-model="form.jd_id"
+              placement="bottom-start"
+              :fallback-placements="['bottom-start']"
+              placeholder="选择目标 JD"
+              filterable
+              :loading="loading.jd"
+            >
+              <el-option v-for="jd in jdList" :key="jd.id" :label="jd.title" :value="jd.id">
+                <div class="option-row">
+                  <span>{{ jd.title }}</span>
+                  <span class="option-meta">{{ jd.company || '未填写公司' }}</span>
+                </div>
+              </el-option>
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="面试风格" prop="interview_type">
+            <el-radio-group v-model="form.interview_type" class="type-group">
+              <el-radio-button v-for="item in typeOptions" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+
+          <div class="type-preview">
+            <div class="type-title">
+              <strong>{{ typeConfig.label }}</strong>
+              <span>{{ typeConfig.persona }}</span>
+            </div>
+            <p>{{ typeConfig.description }}</p>
+            <div class="chip-row">
+              <span v-for="focus in typeConfig.focus" :key="focus" class="focus-chip">{{
+                focus
+              }}</span>
+            </div>
+          </div>
+
+          <div class="checklist">
+            <div class="check-item">
+              <span>预计题量</span>
+              <strong>{{ questionPlan.total }}</strong>
+            </div>
+            <div class="check-item">
+              <span>预计时长</span>
+              <strong>{{ questionPlan.duration }}</strong>
+            </div>
+            <div class="check-item">
+              <span>单题节奏</span>
+              <strong>30 秒限时</strong>
+            </div>
+          </div>
+
+          <!-- 题库配置 -->
+          <div class="question-bank-config">
+            <div class="qb-header">
+              <span class="qb-title">题库配置</span>
+              <span class="qb-subtitle"
+                >{{ questionPlan.total }} · 覆盖 {{ questionCategories.length }} 类题型</span
               >
-                <el-option v-for="jd in jdList" :key="jd.id" :label="jd.title" :value="jd.id">
-                  <div class="option-row">
-                    <span>{{ jd.title }}</span>
-                    <span class="option-meta">{{ jd.company || '未填写公司' }}</span>
-                  </div>
-                </el-option>
-              </el-select>
-            </el-form-item>
-
-            <el-form-item label="面试风格" prop="interview_type">
-              <el-radio-group v-model="form.interview_type" class="type-group">
-                <el-radio-button v-for="item in typeOptions" :key="item.value" :value="item.value">
-                  {{ item.label }}
-                </el-radio-button>
-              </el-radio-group>
-            </el-form-item>
-
-            <div class="type-preview">
-              <div class="type-title">
-                <strong>{{ typeConfig.label }}</strong>
-                <span>{{ typeConfig.persona }}</span>
-              </div>
-              <p>{{ typeConfig.description }}</p>
-              <div class="chip-row">
-                <span v-for="focus in typeConfig.focus" :key="focus" class="focus-chip">{{
-                  focus
-                }}</span>
-              </div>
             </div>
-
-            <div class="checklist">
-              <div class="check-item">
-                <span>预计题量</span>
-                <strong>{{ questionPlan.total }}</strong>
-              </div>
-              <div class="check-item">
-                <span>预计时长</span>
-                <strong>{{ questionPlan.duration }}</strong>
-              </div>
-              <div class="check-item">
-                <span>单题节奏</span>
-                <strong>30 秒限时</strong>
-              </div>
-            </div>
-
-            <!-- 题库配置 -->
-            <div class="question-bank-config">
-              <div class="qb-header">
-                <span class="qb-title">题库配置</span>
-                <span class="qb-subtitle"
-                  >{{ questionPlan.total }} · 覆盖 {{ questionCategories.length }} 类题型</span
-                >
-              </div>
-              <div class="qb-grid">
-                <div v-for="cat in questionCategories" :key="cat.type" class="qb-item">
-                  <div class="qb-icon" :class="'qb-' + cat.color">
-                    <el-icon :size="16"><component :is="cat.icon" /></el-icon>
-                  </div>
-                  <div class="qb-info">
-                    <span class="qb-name">{{ cat.label }}</span>
-                    <span class="qb-count">{{ cat.count }} 题</span>
-                  </div>
+            <div class="qb-grid">
+              <div v-for="cat in questionCategories" :key="cat.type" class="qb-item">
+                <div class="qb-icon" :class="'qb-' + cat.color">
+                  <el-icon :size="16"><component :is="cat.icon" /></el-icon>
+                </div>
+                <div class="qb-info">
+                  <span class="qb-name">{{ cat.label }}</span>
+                  <span class="qb-count">{{ cat.count }} 题</span>
                 </div>
               </div>
             </div>
+          </div>
 
-            <el-button
-              type="primary"
-              size="large"
-              class="start-btn"
-              :loading="loading.start"
-              :disabled="!form.resume_id || !form.jd_id"
-              @click="startInterview"
-            >
-              开始这场模拟面试
-            </el-button>
-          </el-form>
-        </div>
-      </div>
+          <el-button
+            type="primary"
+            size="large"
+            class="start-btn"
+            :loading="loading.start"
+            :disabled="!form.resume_id || !form.jd_id"
+            @click="startInterview"
+          >
+            开始这场模拟面试
+          </el-button>
+        </el-form>
+      </AppPanel>
 
       <div class="preview-column">
-        <div class="panel">
-          <div class="panel-header">
-            <div class="panel-title-row">
-              <h3>面试蓝图</h3>
-            </div>
+        <AppPanel>
+          <template #title>面试蓝图</template>
+          <template #actions>
             <span class="panel-sub">进入房间前先看清楚这场面试会怎么问</span>
+          </template>
+          <div class="brief-block">
+            <div class="brief-title">候选人画像</div>
+            <template v-if="selectedResume">
+              <h3>{{ selectedResume.name || selectedResume.file_name }}</h3>
+              <p>
+                {{
+                  selectedResume.parsed?.current_title ||
+                  selectedResume.current_title ||
+                  '未识别当前岗位'
+                }}
+              </p>
+              <div class="chip-row">
+                <span
+                  v-for="skill in extractResumeSkills(selectedResume).slice(0, 6)"
+                  :key="skill"
+                  class="plain-chip"
+                >
+                  {{ skill }}
+                </span>
+              </div>
+            </template>
+            <el-empty v-else description="选择简历后会展示候选人画像" :image-size="70" />
           </div>
-          <div class="panel-body">
-            <div class="brief-block">
-              <div class="brief-title">候选人画像</div>
-              <template v-if="selectedResume">
-                <h3>{{ selectedResume.name || selectedResume.file_name }}</h3>
-                <p>
-                  {{
-                    selectedResume.parsed?.current_title ||
-                    selectedResume.current_title ||
-                    '未识别当前岗位'
-                  }}
-                </p>
-                <div class="chip-row">
-                  <span
-                    v-for="skill in extractResumeSkills(selectedResume).slice(0, 6)"
-                    :key="skill"
-                    class="plain-chip"
-                  >
-                    {{ skill }}
-                  </span>
-                </div>
-              </template>
-              <el-empty v-else description="选择简历后会展示候选人画像" :image-size="70" />
-            </div>
 
-            <div class="brief-block">
-              <div class="brief-title">岗位画像</div>
-              <template v-if="selectedJD">
-                <h3>{{ selectedJD.title }}</h3>
-                <p>
-                  {{ selectedJD.company || '未填写公司' }} ·
-                  {{ selectedJD.salary_range || '薪资待补充' }}
-                </p>
-                <div class="chip-row">
-                  <span
-                    v-for="skill in extractJDSkills(selectedJD).slice(0, 8)"
-                    :key="skill"
-                    class="plain-chip"
-                  >
-                    {{ skill }}
-                  </span>
-                </div>
-              </template>
-              <el-empty v-else description="选择 JD 后会展示岗位画像" :image-size="70" />
-            </div>
+          <div class="brief-block">
+            <div class="brief-title">岗位画像</div>
+            <template v-if="selectedJD">
+              <h3>{{ selectedJD.title }}</h3>
+              <p>
+                {{ selectedJD.company || '未填写公司' }} ·
+                {{ selectedJD.salary_range || '薪资待补充' }}
+              </p>
+              <div class="chip-row">
+                <span
+                  v-for="skill in extractJDSkills(selectedJD).slice(0, 8)"
+                  :key="skill"
+                  class="plain-chip"
+                >
+                  {{ skill }}
+                </span>
+              </div>
+            </template>
+            <el-empty v-else description="选择 JD 后会展示岗位画像" :image-size="70" />
+          </div>
 
-            <div class="blueprint-list">
-              <div v-for="stage in stagePlan" :key="stage.title" class="stage-card">
-                <span class="stage-index">{{ stage.index }}</span>
-                <div>
-                  <strong>{{ stage.title }}</strong>
-                  <p>{{ stage.desc }}</p>
-                </div>
+          <div class="blueprint-list">
+            <div v-for="stage in stagePlan" :key="stage.title" class="stage-card">
+              <span class="stage-index">{{ stage.index }}</span>
+              <div>
+                <strong>{{ stage.title }}</strong>
+                <p>{{ stage.desc }}</p>
               </div>
             </div>
           </div>
-        </div>
+        </AppPanel>
 
-        <div class="panel">
-          <div class="panel-header">
-            <div class="panel-title-row">
-              <h3>最近面试记录</h3>
-            </div>
+        <AppPanel>
+          <template #title>最近面试记录</template>
+          <template #actions>
             <span class="panel-sub">可以直接回看报告或继续未完成场次</span>
-          </div>
-          <div class="panel-body">
-            <el-empty
-              v-if="!historyList.length && !loading.history"
-              description="还没有模拟面试记录"
-              :image-size="80"
-            />
+          </template>
+          <el-empty
+            v-if="!historyList.length && !loading.history"
+            description="还没有模拟面试记录"
+            :image-size="80"
+          />
 
-            <div v-else class="history-list">
-              <div v-for="item in historyList.slice(0, 4)" :key="item.id" class="history-item">
-                <div>
-                  <div class="history-title">{{ item.jd_summary?.title || '未命名岗位' }}</div>
-                  <div class="history-meta">
-                    {{ item.resume_summary?.name || '未知候选人' }}
-                    <span>·</span>
-                    {{ typeLabel(item.interview_type) }}
-                  </div>
+          <div v-else class="history-list">
+            <div v-for="item in historyList.slice(0, 4)" :key="item.id" class="history-item">
+              <div>
+                <div class="history-title">{{ item.jd_summary?.title || '未命名岗位' }}</div>
+                <div class="history-meta">
+                  {{ item.resume_summary?.name || '未知候选人' }}
+                  <span>·</span>
+                  {{ typeLabel(item.interview_type) }}
                 </div>
-                <div class="history-actions">
-                  <el-tag :type="statusTagType(item.status)" effect="plain">
-                    {{ statusLabel(item.status) }}
-                  </el-tag>
-                  <el-button text type="primary" @click="openSession(item)">
-                    {{ item.status === 'completed' ? '查看报告' : '进入面试' }}
-                  </el-button>
-                </div>
+              </div>
+              <div class="history-actions">
+                <el-tag :type="statusTagType(item.status)" effect="plain">
+                  {{ statusLabel(item.status) }}
+                </el-tag>
+                <el-button text type="primary" @click="openSession(item)">
+                  {{ item.status === 'completed' ? '查看报告' : '进入面试' }}
+                </el-button>
               </div>
             </div>
           </div>
-        </div>
+        </AppPanel>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'

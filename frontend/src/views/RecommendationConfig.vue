@@ -55,108 +55,98 @@
       </AppPanel>
     </div>
 
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <h3>规则子项权重</h3>
-          <span class="muted">四项总和需为 100%</span>
+    <AppPanel>
+      <template #title>规则子项权重</template>
+      <template #badge>
+        <span class="muted">四项总和需为 100%</span>
+      </template>
+      <div class="component-grid">
+        <div class="slider-item">
+          <div class="slider-head">
+            <strong>技能匹配</strong>
+            <span>{{ percentText(form.rule_components.skill) }}</span>
+          </div>
+          <el-slider v-model="skillPercent" :min="0" :max="100" />
+        </div>
+        <div class="slider-item">
+          <div class="slider-head">
+            <strong>经验匹配</strong>
+            <span>{{ percentText(form.rule_components.experience) }}</span>
+          </div>
+          <el-slider v-model="experiencePercent" :min="0" :max="remainingAfterSkill" />
+        </div>
+        <div class="slider-item">
+          <div class="slider-head">
+            <strong>薪资匹配</strong>
+            <span>{{ percentText(form.rule_components.salary) }}</span>
+          </div>
+          <el-slider v-model="salaryPercent" :min="0" :max="remainingAfterExperience" />
+        </div>
+        <div class="slider-item locked-item">
+          <div class="slider-head">
+            <strong>地点匹配</strong>
+            <span>{{ percentText(form.rule_components.location) }}</span>
+          </div>
+          <el-progress :percentage="locationPercent" :show-text="false" />
         </div>
       </div>
-      <div class="panel-body">
-        <div class="component-grid">
-          <div class="slider-item">
-            <div class="slider-head">
-              <strong>技能匹配</strong>
-              <span>{{ percentText(form.rule_components.skill) }}</span>
-            </div>
-            <el-slider v-model="skillPercent" :min="0" :max="100" />
-          </div>
-          <div class="slider-item">
-            <div class="slider-head">
-              <strong>经验匹配</strong>
-              <span>{{ percentText(form.rule_components.experience) }}</span>
-            </div>
-            <el-slider v-model="experiencePercent" :min="0" :max="remainingAfterSkill" />
-          </div>
-          <div class="slider-item">
-            <div class="slider-head">
-              <strong>薪资匹配</strong>
-              <span>{{ percentText(form.rule_components.salary) }}</span>
-            </div>
-            <el-slider v-model="salaryPercent" :min="0" :max="remainingAfterExperience" />
-          </div>
-          <div class="slider-item locked-item">
-            <div class="slider-head">
-              <strong>地点匹配</strong>
-              <span>{{ percentText(form.rule_components.location) }}</span>
-            </div>
-            <el-progress :percentage="locationPercent" :show-text="false" />
-          </div>
-        </div>
-      </div>
-    </div>
+    </AppPanel>
 
     <AppPanel>
       <template #title>当前配置摘要</template>
       <pre class="code-block">{{ configPreview }}</pre>
     </AppPanel>
 
-    <div v-if="compareResult" class="panel">
-      <div class="panel-header">
-        <div class="panel-title-row">
-          <h3>实验对比结果</h3>
-          <span class="muted">{{ compareResult.sample_total }} 条历史反馈样本</span>
+    <AppPanel v-if="compareResult">
+      <template #title>实验对比结果</template>
+      <template #badge>
+        <span class="muted">{{ compareResult.sample_total }} 条历史反馈样本</span>
+      </template>
+      <div class="compare-grid">
+        <div class="compare-card">
+          <span class="compare-label">{{ compareResult.variant_a.label }}</span>
+          <strong>{{ percentText(compareResult.variant_a.summary.agreement_rate) }}</strong>
+          <small>一致率</small>
+          <p>
+            高分点踩 {{ compareResult.variant_a.summary.high_score_dislike_count }} · 低分点赞
+            {{ compareResult.variant_a.summary.low_score_like_count }}
+          </p>
+        </div>
+        <div class="compare-card">
+          <span class="compare-label">{{ compareResult.variant_b.label }}</span>
+          <strong>{{ percentText(compareResult.variant_b.summary.agreement_rate) }}</strong>
+          <small>一致率</small>
+          <p>
+            高分点踩 {{ compareResult.variant_b.summary.high_score_dislike_count }} · 低分点赞
+            {{ compareResult.variant_b.summary.low_score_like_count }}
+          </p>
+        </div>
+        <div class="compare-card delta-card">
+          <span class="compare-label">变化</span>
+          <strong>{{ signedPercent(compareResult.delta.agreement_rate) }}</strong>
+          <small>一致率变化</small>
+          <p>均分变化 {{ signedNumber(compareResult.delta.avg_combined_score) }}</p>
         </div>
       </div>
-      <div class="panel-body">
-        <div class="compare-grid">
-          <div class="compare-card">
-            <span class="compare-label">{{ compareResult.variant_a.label }}</span>
-            <strong>{{ percentText(compareResult.variant_a.summary.agreement_rate) }}</strong>
-            <small>一致率</small>
-            <p>
-              高分点踩 {{ compareResult.variant_a.summary.high_score_dislike_count }} · 低分点赞
-              {{ compareResult.variant_a.summary.low_score_like_count }}
-            </p>
-          </div>
-          <div class="compare-card">
-            <span class="compare-label">{{ compareResult.variant_b.label }}</span>
-            <strong>{{ percentText(compareResult.variant_b.summary.agreement_rate) }}</strong>
-            <small>一致率</small>
-            <p>
-              高分点踩 {{ compareResult.variant_b.summary.high_score_dislike_count }} · 低分点赞
-              {{ compareResult.variant_b.summary.low_score_like_count }}
-            </p>
-          </div>
-          <div class="compare-card delta-card">
-            <span class="compare-label">变化</span>
-            <strong>{{ signedPercent(compareResult.delta.agreement_rate) }}</strong>
-            <small>一致率变化</small>
-            <p>均分变化 {{ signedNumber(compareResult.delta.avg_combined_score) }}</p>
-          </div>
-        </div>
 
-        <div class="mover-list" v-if="compareResult.delta.top_movers?.length">
-          <div class="mover-title">变化最大的样本</div>
-          <div class="mover-items">
-            <div
-              v-for="item in compareResult.delta.top_movers"
-              :key="item.feedback_id"
-              class="mover-item"
+      <div class="mover-list" v-if="compareResult.delta.top_movers?.length">
+        <div class="mover-title">变化最大的样本</div>
+        <div class="mover-items">
+          <div
+            v-for="item in compareResult.delta.top_movers"
+            :key="item.feedback_id"
+            class="mover-item"
+          >
+            <strong>{{ item.jd_title }}</strong>
+            <span>{{ item.resume_title }} · {{ item.feedback_type }}</span>
+            <span
+              >{{ item.score_a }} → {{ item.score_b }}（{{ signedNumber(item.score_delta) }}）</span
             >
-              <strong>{{ item.jd_title }}</strong>
-              <span>{{ item.resume_title }} · {{ item.feedback_type }}</span>
-              <span
-                >{{ item.score_a }} → {{ item.score_b }}（{{
-                  signedNumber(item.score_delta)
-                }}）</span
-              >
-              <span>{{ item.type_a }} → {{ item.type_b }}</span>
-            </div>
+            <span>{{ item.type_a }} → {{ item.type_b }}</span>
           </div>
         </div>
       </div>
-    </div>
+    </AppPanel>
   </div>
 </template>
 
