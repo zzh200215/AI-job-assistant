@@ -577,7 +577,7 @@ agent.SummaryAgent           real  tokens=3215
 | 项 | 证据 |
 |---|---|
 | 事件循环被阻塞 I/O 占用 | 195 个 `async def` 端点全部使用同步 `SessionLocal`；`chat_json` 用阻塞 `requests.post`（`llm_service.py:701`）直调于 `interview_rest.py:452` 与健康探针 `system.py:140`；`knowledge_service.save_and_process` 把 parse→chunk→embed→Chroma add 全串在请求里（`api/knowledge.py`）；`resume_export_service.py:321` 同步跑 WeasyPrint；`job_spider.py:72`、`webhook_service.py:155` 用 `time.sleep` → **E15 先修掉"在 `async def` 里直接出网"这一类 12 处**（`/ready`、`/model-probe`、知识入库/检索/重建/改写测试 7 处、飞书 SSO 2 处），并加了一条 AST 守卫防新写。**两处按本行说法不成立**：`/health` 现在不做任何 I/O，阻塞 provider 调用在 `/model-probe`；`interview_rest` 那次 `chat_json`（现在在 `:503`）已经挂在 `background_tasks` 上，同步函数由 Starlette 丢线程池跑，响应前不做这件事（代码里就是这句注释）。**仍在**：24 条 async 路由经 sync 服务函数间接出网（上界，含一条已证伪），以及 135 条 async 路由持有同步 db 会话——后者是"改成 `def` 还是逐处 `run_in_threadpool`"的方向选择，见 §10.15 |
-| WebSocket 鉴权与内存无界 | `interview_ws.py:39-43` 绕过 FastAPI 依赖手工校验 query token；`:23-34` 的进程级 `_engine_pool` 无上限，且无跨副本亲和 |
+| WebSocket 鉴权与内存无界 | `interview_ws.py:39-43` 绕过 FastAPI 依赖手工校验 query token；`:23-34` 的进程级 `_engine_pool` 无上限，且无跨副本亲和 → **E16 收口**（提交 `eb5e040`）：① 凭据只认 `Sec-WebSocket-Protocol: jwt,<token>`，`?token=` 一律 4001（**改前实测**：同一枚有效长期 JWT 从查询串进来能一路走到 accept，而仓库自带的浏览器客户端从来用的是子协议）；② 引擎改成**按连接**持有，断开必 `cleanup()`（**改前实测**：客户端关闭后 `_engine_pool` 仍留着 1 个引擎且 `engine.db is not None`，也就是每放弃一场面试永久占着一个打开的 Session）。前提更正：原话"绕过 FastAPI 依赖手工校验"里，"手工校验"成立（WS 拿不到 HTTP 依赖，这条改不了也不需要改），"query token"只是兜底通道。**仍在**：跨副本亲和——两条连接打到不同副本就是两份引擎状态，这一点改前改后一样（原实现的"共享"也只共享本进程）；要消除得靠 sticky 路由或把引擎状态外置 |
 | schema 有第四条路径 | Alembic（22 个 revision）+ `Base.metadata.create_all`（`main.py:61`）+ `core/schema_bootstrap.py`（453 行 / 13 个手写 MySQL DDL，`AUTO_CREATE_TABLES` 默认 True）+ 散落的 `add_columns.py`/`reset_kb.py`。已存在重复：`ensure_agent_message_usage_columns`(`:23-41`) vs `20260624_0003`；`ensure_user_role_column`(`:9-20`) vs `20260801_0017`。DDL 是 MySQL 方言而测试引擎是 SQLite |
 | 连接池未配置 | ~~`core/database.py:9-20` 未设 `pool_size`/`max_overflow`，默认 5+10 的 queuepool 面对线程池密集应用~~ → **E15 更正这行的前提**：`pool_pre_ping=True` 与 `pool_recycle=3600` 是设了的（`app/core/database.py:9-12`），没设的只有 `pool_size`/`max_overflow`/`pool_timeout`（默认 5+10+排队 30s）。**为什么现在才值得管**：E15 把 12 处同步出网挪进线程池之后，取连接的线程数不再天然是 0；要不要显式填数与"135 条 async 路由走哪条路"是同一个决定，见 §10.15 |
 | 测试覆盖真实路径为零 | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错，但 `backend/.coverage`(122KB) 被提交进了工作树 |
@@ -1109,6 +1109,29 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 **还剩的两半**：① 那 24 条（其中 `run_full_analysis`、`parse_and_save`、`fetch_detail`、`run_auto_agents` 已核实确实出网）要不要同样挪进线程池——每处一行、语义不变，但 24 处得逐条读，且**更根本的问题是这批路由为什么是 `async def`**：它们体内几乎全是同步 db，改成 `def` 让 FastAPI 自己丢线程池是同一件事的另一种做法，代价是 135 处 `db` 会话的用法要重新审视；② 债表里"连接池未配置"这行**本身要更正**：`core/database.py` 设了 `pool_pre_ping=True` 与 `pool_recycle=3600`，没设的只是 `pool_size` / `max_overflow` / `pool_timeout`（也就是走默认 5 + 10 + 排队 30 秒）。挪线程池之后并发取连接的线程会变多，那三个数才第一次有意义。这两个数要人定，见 §10.15。
 
 **门禁**：`pytest` **726 → 734 passed**（新增 8 条：AST 守卫 5 + 行为 2 + 反向钉盲点 1，另把原来那条"200/503 都接受"改成只放行 chroma 腿）；`ruff check .` 与 `ruff format --check .` clean；改动过的 4 个文件单独再过一次 `ruff check`。**没验**：真 MySQL 下的 `/ready`（测试跑 SQLite in-memory，`SELECT 1` 两条路径都通过），以及真 provider 下 `/model-probe` 与知识入库的实际停摆时长（用假 Chroma 心跳 0.4s 代替）。
+
+
+
+#### 已交付：E16 面试 WebSocket：一条弱凭据通道，和一场泄漏一个 DB 会话的池（提交 `eb5e040`）
+
+**先更正债表那句话的一半**：`interview_ws.py:39-43` 写的是"绕过 FastAPI 依赖手工校验 query token"。"手工校验"确实成立（WebSocket 走不到 HTTP 依赖链，这条不需要改也改不掉）；但"query token"只是**兜底通道**——主路径早就是 `Sec-WebSocket-Protocol: jwt,<token>`，而仓库自带的浏览器客户端（`frontend/src/api/interview.js:93`）用的就是子协议，还带一句注释说明"避免 token 出现在 URL"。**唯一还在教人用查询串的地方是 `docs/面试消息协议.md` 自己**，已一并改掉。
+
+**弱通道为什么算问题**：那是**7 天有效期的长期 JWT**（`ACCESS_TOKEN_EXPIRE_DAYS`），落进 nginx/网关访问日志、代理与浏览器历史就能重放。删掉之后 `?token=` 一律 4001。证据不是"代码少了两行"，而是**同一枚有效 token** 两条路径各走各的结果：
+
+| 输入 | 改前 | 改后 |
+|---|---|---|
+| `?token=<有效 JWT>` | 认证通过，一路走到 accept 并发题 | **4001 拒绝**（且日志只记"有人这么试过"，不写 token 本身） |
+| 子协议 `jwt,<同一枚 token>` | 通过 | 通过（下一步 4004 会话不存在，用来证明"确实过了认证这一关"） |
+
+**另一半才是这次真正的账**：`_engine_pool: dict[session_id → InterviewEngine]` 只在"面试正常结束 / 超时结束 / 抛异常"三条路径上清理，而**用户关标签页走的是 `WebSocketDisconnect`**——那条分支只记了一行日志。每个引擎自带 `self.db = SessionLocal()`（`interview_engine.py:54-60`），于是每放弃一场面试，进程里就永久留下一个引擎 + 一个**打开着的 SQLAlchemy Session**。改前实测（把 HEAD 版实现装进独立模块、用同一条测试连接驱动）：客户端断开之后 `len(_engine_pool) == 1` 且 `engine.db is not None`。
+
+**修法**：引擎按**连接**创建，`finally` 里先取消计时任务再 `cleanup()` 并从在途集合移除。之所以能这么做，是因为引擎的的全部工作态都是从落库消息推断的（`_infer_current_index` / `_infer_start_time` / `resume()` 都重读 DB），进程内根本不必须存——"每场面试一个常驻对象"是写法惯性，不是需求。顺带一个副作用是好的：两个标签页打开同一场面试，以前**共用同一个可变对象**互相踩 `current_index`，现在各持一份，重复作答由已有的 `(session_id, turn_id)` 唯一约束拦。`finally` 里必须先 `cancel()` 并 `await` 掉计时任务：那个任务醒来第一件事就是 `_load_session()`，若 db 已被置 None，它会**再开一个 Session**——清理反而制造新泄漏。
+
+**新增上限**：`WS_MAX_LIVE_INTERVIEWS`（默认 **12**）。取 12 不是拍脑袋：`core/database.py` 没设 `pool_size`/`max_overflow`，默认 **5 + 10 = 15 根连接**，而每条在途面试在事务期间占一根——留 3 根给同期 HTTP。**这是个临时耦合**：§10.15 一旦定了池子大小，这个数就该改成从池配置推导，否则两处各自漂移。
+
+**测试**：`tests/test_interview_ws.py` 8 条（4001/4003/4004/4000/4005 五种关闭码各有归属、同一枚 token 的两条路径成对照组、断开后在途计数归零且 `engine.db is None`、两条连接不共用引擎）。连接期资源用 `_active_engines` 集合暴露成 `live_interview_count()`——它不是为测试造的观察孔，容量上限就要靠它。
+
+**门禁**：backend **734 → 742 passed**；`ruff check .` 与 `ruff format --check .`（344 文件）clean。**没验**：真并发下的池行为（12 这个数是推导出来的，没有跑过 13 条并发连接看 HTTP 侧是否真的开始等 `pool_timeout`）；跨副本亲和未改，所以多副本部署下同一场面试开两个标签页仍可能落到两个进程——与改前一致。
 
 
 
