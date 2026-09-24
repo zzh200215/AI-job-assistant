@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 
 import requests
 from fastapi import APIRouter, Depends, Header, Query
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -308,7 +309,10 @@ async def complete_feishu_sso(
     if organization is None:
         raise api_error(404, "组织未启用飞书 SSO", ERR_PARAM)
     try:
-        token_response = requests.post(
+        # 两次都是出网请求，各自 timeout=10：留在 `async def` 里会把整个事件循环停住最长 20 秒，
+        # 所以挪到线程池（await 期间本协程不返回，DB 会话也只有这一个线程在用）。
+        token_response = await run_in_threadpool(
+            requests.post,
             "https://open.feishu.cn/open-apis/authen/v1/oidc/access_token",
             json={
                 "grant_type": "authorization_code",
@@ -321,7 +325,8 @@ async def complete_feishu_sso(
         )
         token_response.raise_for_status()
         access_token = (token_response.json().get("data") or {}).get("access_token")
-        profile_response = requests.get(
+        profile_response = await run_in_threadpool(
+            requests.get,
             "https://open.feishu.cn/open-apis/authen/v1/user_info",
             headers={"Authorization": f"Bearer {access_token}"},
             timeout=10,

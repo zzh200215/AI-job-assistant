@@ -8,8 +8,9 @@ from time import perf_counter
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
@@ -227,10 +228,11 @@ async def probe_model_runtime(current_user: User = Depends(get_current_user)):
 
     runtime = _model_runtime_status()
     checks = {"llm": {"skipped": True}, "embedding": {"skipped": True}}
+    # 两个探针各发一次真实 provider 请求（LLM 侧受 LLM_TIMEOUT 约束，是秒级），必须离开事件循环。
     if runtime["llm"]["mode"] in {"demo", "live"}:
-        checks["llm"] = _probe_llm()
+        checks["llm"] = await run_in_threadpool(_probe_llm)
     if runtime["embedding"]["mode"] in {"demo", "live"}:
-        checks["embedding"] = _probe_embedding()
+        checks["embedding"] = await run_in_threadpool(_probe_embedding)
 
     return ok(
         data={
@@ -498,15 +500,13 @@ async def health_check():
     return ok(data={"status": "ok", "service": "smart-recruitment-platform"})
 
 
-@router.get("/ready", summary="Readiness probe")
-async def readiness_check():
-    checks = {
-        "mysql": False,
-        "chroma": False,
-    }
+def _probe_dependencies() -> dict:
+    """One DB round-trip plus a Chroma heartbeat. Sync on purpose: the caller offloads it."""
+    checks: dict = {"mysql": False, "chroma": False}
     try:
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            # SQLAlchemy 2.0 不再接受裸字符串（`ObjectNotExecutableError`），所以这里必须 text()。
+            conn.execute(text("SELECT 1"))
         checks["mysql"] = True
     except Exception as exc:
         checks["mysql_error"] = str(exc)
@@ -519,7 +519,14 @@ async def readiness_check():
         checks["chroma"] = True
     except Exception as exc:
         checks["chroma_error"] = str(exc)
+    return checks
 
+
+@router.get("/ready", summary="Readiness probe")
+async def readiness_check():
+    # 这条是公开端点（无凭据），而它要做的是同步的 DB + Chroma 往返：留在事件循环里，
+    # 一个匿名请求就能把整台 worker 停住，所以挪进线程池。
+    checks = await run_in_threadpool(_probe_dependencies)
     all_ready = all(checks.values())
     payload = ok(data={"ready": all_ready, "checks": checks})
     return JSONResponse(content=payload, status_code=200 if all_ready else 503)

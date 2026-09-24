@@ -37,15 +37,19 @@ class TestSystemHealth:
         assert body["code"] == 0
         assert body["data"]["status"] == "ok"
 
-    def test_ready_returns_checks(self, client):
+    def test_ready_reports_the_database_as_up(self, client):
+        """E15：这条以前是 `status_code in (200, 503)` + "MySQL 检查可能为假，两种都接受"，
+        于是什么都测不到——而它正好放过了一个真 bug：`conn.execute("SELECT 1")` 在
+        SQLAlchemy 2.0 里抛 `ObjectNotExecutableError`，被 `except Exception` 吞成
+        `mysql: false`，也就是**只要 MySQL 走这条探针就永远不 ready**。现在只放行 chroma
+        那一条腿（测试环境确实可能没有可用向量库），mysql 这条腿必须为真。"""
         response = client.get("/system/ready")
-        # SQLite is used in tests, so MySQL check may report false; accept either 200 or 503.
-        assert response.status_code in (200, 503)
         body = response.json()
-        assert "ready" in body["data"]
-        assert "checks" in body["data"]
-        assert "mysql" in body["data"]["checks"]
-        assert "chroma" in body["data"]["checks"]
+        checks = body["data"]["checks"]
+        assert checks["mysql"] is True, f"就绪探针把数据库判成 DOWN：{checks.get('mysql_error') or checks}"
+        assert "chroma" in checks
+        assert response.status_code == (200 if all(checks.values()) else 503)
+        assert body["data"]["ready"] is all(checks.values())
 
 
 class TestSystemMetricsAuth:

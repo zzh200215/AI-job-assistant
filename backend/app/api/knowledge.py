@@ -4,6 +4,7 @@ import os
 import traceback
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -141,7 +142,10 @@ async def upload_knowledge(
         return fail(message=f"file too large: {len(raw)} bytes", code=ERR_FILE)
 
     try:
-        doc = knowledge_service.save_and_process(
+        # 入库链路是 parse→chunk→embed→Chroma add，秒级起步；`async def` 里直接调会把整台
+        # worker 的事件循环停住。await 期间本协程不返回，所以这个请求作用域的 Session 只有一根线程在用。
+        doc = await run_in_threadpool(
+            knowledge_service.save_and_process,
             db,
             raw,
             file.filename,
@@ -272,7 +276,7 @@ async def reprocess_document(
     if not _can_manage_document(db, doc, current_user):
         return fail(message="permission denied", code=ERR_AUTH)
 
-    processed = knowledge_service.reprocess_document(db, doc_id)
+    processed = await run_in_threadpool(knowledge_service.reprocess_document, db, doc_id)
     if not processed:
         return fail(message="document not found", code=ERR_PARAM)
     return ok(data=_serialize_document(processed), message=f"status={processed.status}")
@@ -315,7 +319,8 @@ async def search_knowledge(
     organization = _organization_scope(db, current_user, x_organization_id)
     if x_organization_id is not None and organization is None:
         return fail(message="organization access denied", code=ERR_AUTH)
-    results = rag_service.search_knowledge(
+    results = await run_in_threadpool(
+        rag_service.search_knowledge,
         query=payload.query,
         doc_type=payload.doc_type,
         top_k=payload.top_k,
@@ -348,7 +353,9 @@ async def rebuild_all(
     if current_user.username not in settings.admin_usernames_list:
         return fail(message="admin only", code=ERR_AUTH)
     try:
-        knowledge_service.rebuild_all(db)
+        # 全量重建是分钟级：先让它不冻结事件循环（下面这行仍是同步等待，响应语义没变）。
+        # 真正的"后台跑 + 立即返回受理"会改响应契约，那一步留作未做，见 upgrade-plan E15。
+        await run_in_threadpool(knowledge_service.rebuild_all, db)
         return ok(message="rebuild completed")
     except Exception as exc:
         traceback.print_exc()
@@ -378,14 +385,18 @@ async def query_rewrite_test(
     organization = _organization_scope(db, current_user, x_organization_id)
     if x_organization_id is not None and organization is None:
         return fail(message="organization access denied", code=ERR_AUTH)
-    rewritten = rewrite_queries(
+    # 一次调试调用要打 4 段 provider 工作（改写过 LLM + 三路检索）。同步跑在 `async def` 里
+    # 就是按秒停事件循环，所以逐段挪进线程池；顺序、参数、返回都与原来一致。
+    rewritten = await run_in_threadpool(
+        rewrite_queries,
         original_query=payload.original_query,
         resume_summary=payload.resume_summary or "",
         jd_summary=payload.jd_summary or "",
         max_queries=payload.max_queries,
     )
 
-    retrieved = rag_service.search_knowledge_multi_queries(
+    retrieved = await run_in_threadpool(
+        rag_service.search_knowledge_multi_queries,
         rewritten_queries=rewritten,
         doc_type=payload.doc_type,
         top_k_per_query=payload.top_k_per_query,
@@ -393,7 +404,8 @@ async def query_rewrite_test(
         user_id=current_user.id,
         organization_id=organization.id if organization else None,
     )
-    rag_context = rag_service.build_rag_context_with_rewrite(
+    rag_context = await run_in_threadpool(
+        rag_service.build_rag_context_with_rewrite,
         rewritten_queries=rewritten,
         doc_type=payload.doc_type,
         top_k_per_query=payload.top_k_per_query,
@@ -401,7 +413,8 @@ async def query_rewrite_test(
         user_id=current_user.id,
         organization_id=organization.id if organization else None,
     )
-    references = rag_service.get_knowledge_references_with_rewrite(
+    references = await run_in_threadpool(
+        rag_service.get_knowledge_references_with_rewrite,
         rewritten_queries=rewritten,
         doc_type=payload.doc_type,
         top_k_per_query=payload.top_k_per_query,
