@@ -850,6 +850,24 @@ agent.SummaryAgent           real  tokens=3215
 
 **门禁**：`test:unit` **101 passed** / 18 files、棘轮 **27** 全绿、lint **0 error**、build ok、`prettier --check .` clean、均 LF。后端**无改动**。
 
+#### 未交付：D25 剩余 57 处的严格重量 —— 上一轮我报的"27 drop-in + 30 包在 div 里"两个数都是错的
+
+**为什么单独记一条而不是直接开工**：D24 收尾时我在汇报里给了剩余 57 处的构成（27 + 30），并据此说"27 处零风险可批量"。这一轮真要动手时按严格条件重数，两个数都不成立。**代码一行没改**（迁移器逐文件断言"匹配数必须等于预期否则不写盘"，两次都在写盘前退出，工作树始终干净）。
+
+**严格条件**：包裹是静态 `<div class="panel*">`（可带 `v-if`）、`panel-title-row` 紧跟头部、行内**恰好一个单行 `<h3>`** 加可选的单行 `<el-icon :size="18" color="…">`、其后是操作行、再紧跟 `panel-body`。逐条查下来：
+
+| 桶 | 我上轮报的 | 严格重量 | 差额去哪了 |
+|---|---|---|---|
+| 可直接迁 | 27 | **19**（9 个文件：`Profile` 4、`InterviewSetup` 3、`MultiAgentAnalysis` 3、`PromptTrace` 3、`AgentAnalysis` 2、`AnalysisResult`/`History`/`RecommendationConfig`/`RecommendationEval` 各 1） | 8 处不合格：`SmartAnalysis` 5 + `KnowledgeBase` 4 + `OrganizationWorkspace` 3 + `JobSearch` 1 + `Register` 1 + 各 1 处散件，原因是**包裹不是静态 class**（如 `<div :class="['agent-card','panel',agent.status]">`）或**标题行内没有单行 h3**（首元素是 `el-tag`）——后者迁进去会凭空多一个空 `<h3>` |
+| 标题包在别的 div/span 里 | 30 | **约 13** | 分类器把"头部没有子节点"的情况也算进来了：`</div>` 提前命中导致 `inner[0]` 读到 `<div class="panel-body">`，于是出现 `panel-body×7`、`(无类名)×10` 这种根本不存在的"包裹类名"。真实包裹只有 `card-header×8`（全在 `InterviewReport`）、`side-title×3`、`transcript-header×1`、`brand×1` |
+
+**这条对下一批的实际影响**：
+1. `#heading`（调用方给标题容器）这个 API 的**真实需求量是 13 处，且 8 处集中在 `InterviewReport` 一个文件一个类名** —— 不是"30 处逼出一个新槽位"。是否值得为它加模式，比上轮看起来小得多；而且 slot 内容带父作用域 id（D19 已证），技术上安全。
+2. 那 8 处不合格里有 5 处（`SmartAnalysis`）是动态 `:class` 包裹 —— 真要迁得先决定 `AppPanel` 怎么处理"根元素类名是动态的"，这跟 §10.12 的 `el-card` 归属是同一类问题，建议合并考虑。
+3. **别再用"首元素是不是 title-row"当可迁性的判据** —— 它不看包裹、不看标题行内容，两轮里把我误导了两次（`30` 与 `27`）。判据要包含：包裹静态性、h3 是否单行存在、行内是否只有已知元素。
+
+**没做成的部分**：19 处的批量迁移器写出来了，但对本应合格的 `Profile` 4 处也报"匹配 0"，逐行读代码没定位到拒绝点（调试打印显示包裹与 title-row 两项检查都通过，说明失败在后面的某个 `continue`，需要带日志跑一遍才能确定）。**我没有改用手工编辑 19 处**：那等于放弃逐文件断言，而且 D24 已经证明这几条路由里有一半的面板在数据守卫后面、拿不到逐路由 diff 证据 —— 无证据的批量重构正是这份文档反复在防的东西。下一轮先给迁移器加"每个 `continue` 计数并打印"，再决定做不做。
+
 预算生成脚本 `scripts/style-budget.mjs` 同步改为三个维度都输出（此前只印 `<style>` 一条，谁照它重生成预算就会把另外两条写没了）。当前账本：`<style>` **510 处 / 34 文件**、`<script>` **0**、模板 **25 处 / 6 文件**。
 
 #### 已交付：D1（第三段）状态→颜色也收成一个口径（提交 `a4156f5`）
