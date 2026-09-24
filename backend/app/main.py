@@ -26,22 +26,7 @@ from app.core.rate_limiter import get_limiter
 from app.core.request_context import set_request_id
 from app.core.runtime_metrics import record_request
 from app.core.scheduler import shutdown_scheduler, start_scheduler
-from app.core.schema_bootstrap import (
-    ensure_agent_message_usage_columns,
-    ensure_agent_task_columns,
-    ensure_analysis_record_columns,
-    ensure_interview_evaluation_schema,
-    ensure_interview_question_table,
-    ensure_jd_columns,
-    ensure_job_bookmark_table,
-    ensure_job_journal_table,
-    ensure_job_pipeline_columns,
-    ensure_job_target_table,
-    ensure_notification_table,
-    ensure_resume_columns,
-    ensure_user_profile_columns,
-    ensure_user_role_column,
-)
+from app.core.schema_drift import log_drift
 from app.core.tenant_context import tenant_context_middleware
 from app.services.interview_evaluation_service import shutdown_interview_evaluation_executor
 from app.services.orchestration_runner import mark_stale_running_tasks_failed, shutdown_orchestration_executor
@@ -59,20 +44,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(_app: FastAPI):
     if settings.AUTO_CREATE_TABLES:
         Base.metadata.create_all(bind=engine)
-        ensure_user_role_column(engine)
-        ensure_agent_task_columns(engine)
-        ensure_agent_message_usage_columns(engine)
-        ensure_user_profile_columns(engine)
-        ensure_job_bookmark_table(engine)
-        ensure_notification_table(engine)
-        ensure_interview_question_table(engine)
-        ensure_interview_evaluation_schema(engine)
-        ensure_job_journal_table(engine)
-        ensure_job_target_table(engine)
-        ensure_job_pipeline_columns(engine)
-        ensure_resume_columns(engine)
-        ensure_jd_columns(engine)
-        ensure_analysis_record_columns(engine)
+    # 两种模式都体检：开发态能发现"模型改了但表没建全"，生产态（AUTO_CREATE_TABLES=false）
+    # 第一次能在启动日志里看到"忘了跑 alembic upgrade head"，而不是等第一条查询报 no such column。
+    log_drift(engine)
     mark_stale_running_tasks_failed()
     start_scheduler()
     yield
