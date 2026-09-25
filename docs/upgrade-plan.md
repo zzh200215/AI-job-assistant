@@ -580,7 +580,7 @@ agent.SummaryAgent           real  tokens=3215
 | WebSocket 鉴权与内存无界 | `interview_ws.py:39-43` 绕过 FastAPI 依赖手工校验 query token；`:23-34` 的进程级 `_engine_pool` 无上限，且无跨副本亲和 → **E16 收口**（提交 `eb5e040`）：① 凭据只认 `Sec-WebSocket-Protocol: jwt,<token>`，`?token=` 一律 4001（**改前实测**：同一枚有效长期 JWT 从查询串进来能一路走到 accept，而仓库自带的浏览器客户端从来用的是子协议）；② 引擎改成**按连接**持有，断开必 `cleanup()`（**改前实测**：客户端关闭后 `_engine_pool` 仍留着 1 个引擎且 `engine.db is not None`，也就是每放弃一场面试永久占着一个打开的 Session）。前提更正：原话"绕过 FastAPI 依赖手工校验"里，"手工校验"成立（WS 拿不到 HTTP 依赖，这条改不了也不需要改），"query token"只是兜底通道。**仍在**：跨副本亲和——两条连接打到不同副本就是两份引擎状态，这一点改前改后一样（原实现的"共享"也只共享本进程）；要消除得靠 sticky 路由或把引擎状态外置 |
 | schema 有第四条路径 | ~~Alembic（22 个 revision）+ `Base.metadata.create_all` + `core/schema_bootstrap.py`（453 行 / 13 个手写 MySQL DDL）+ 散落的 `add_columns.py`/`reset_kb.py`~~ → **E17 收口**（提交 `f460310`）：删掉 `schema_bootstrap.py`，启动改成只做漂移体检（`core/schema_drift.py`，缺表/缺列/多出来都点名并提示跑 `alembic upgrade head`；库连不上只报告不抛）。**动手前量的事实**：在 `alembic upgrade head` 建出的库上，14 个 `ensure_*` **一条 DDL 都不发**；那 6 张"要建表"的表在 `Base.metadata` 里都有模型，`create_all` 独立建出 46 张表；而它写死的 MySQL 方言在 SQLite 上 6 个全部抛 `near "KEY"/"INDEX"/"ON"`。部署不依赖它：两份 compose 都有 `alembic upgrade head` 服务、生产 `AUTO_CREATE_TABLES=false`、config 校验器禁止生产开 create_all。**这条债的两个前提已作废**：revision 数是 **26** 不是 22；`scripts/add_columns.py` 与 `reset_kb.py` **已经不存在**（现在 `scripts/` 里碰 schema 的只有 `export_schema_baseline.py`（从 metadata 渲染）与 `seed_rag_corpus.py`（create_all 建临时库），都是派生读，不是第二条写路径）。**仍在**：`AUTO_CREATE_TABLES` 默认 `True`（开发便利，但也是"忘了迁移也能跑起来"的来源）；守卫 `test_schema_drift.py` 只保证 `app/**` 里不再出现手写 DDL |
 | 连接池未配置 | ~~`core/database.py:9-20` 未设 `pool_size`/`max_overflow`，默认 5+10 的 queuepool 面对线程池密集应用~~ → **E15 更正这行的前提**：`pool_pre_ping=True` 与 `pool_recycle=3600` 是设了的（`app/core/database.py:9-12`），没设的只有 `pool_size`/`max_overflow`/`pool_timeout`（默认 5+10+排队 30s）。**为什么现在才值得管**：E15 把 12 处同步出网挪进线程池之后，取连接的线程数不再天然是 0；要不要显式填数与"135 条 async 路由走哪条路"是同一个决定，见 §10.15 |
-| 测试覆盖真实路径为零 | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错，但 `backend/.coverage`(122KB) 被提交进了工作树 |
+| 测试覆盖真实路径为零 | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错，但 `backend/.coverage`(122KB) 被提交进了工作树 → **E18 收了 LLM 那半**（提交 `4a64537`）：5 条测试把真 `requests` 客户端打到本地 OpenAI 兼容假服务，顺带发现调用方拿到的是聚合 `LLMProviderError`（不是 `LLMTimeoutError`）以及**审计行在测试进程里根本没落库**（`prompt_trace` 插入 `NOT NULL constraint failed: id`，被 except 吞成计数器；46 张表全是 BigInteger PK，矛盾未解释，见 E18 记录）。**仍在**：`EMBEDDING_PROVIDER` 与 rerank 的真 HTTP、Chroma server 行为、`--cov-fail-under` 仍是 0；`.coverage` 那半句是假的（D14 已证 `git ls-files` 里 0 条） |
 | 队列无 ack/retry/DLQ | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py:76-79`）；Redis 队列存在（`:93-141`）。~~但 `mark_stale_running_tasks_failed` 启动时把 30 分钟以上任务一律置失败，多副本重启会误杀正常长任务~~ → 已改为按"最后一次进度写入"判静默（E12，提交 `3ecbb96`）。~~`run_strategy_async` 构造两个 `TaskPayload` 后丢弃~~ → **这条已不成立**：`orchestration_runner` 里两处 `TaskPayload(...)`（`:156`、`:204`）都紧跟 `return _get_backend().submit(payload, _run_task_payload)`，没有构造后丢弃的路径。**仍在的是**：任务入队后没有任何 lease/心跳字段，所以"排在长 backlog 里没开工"与"执行进程已经死了"在数据上仍然无法区分——这正是 E12 只把误杀范围缩到"完全静默"而没有消灭它的那一半 |
 | ~~限流粒度~~ → 有身份的请求已按用户计额度（E14，提交 `63537ab`） | 原来的事实：只有 `api/auth.py` 的 5 个匿名端点自带限流，其余 **228/233 条操作只受 `RATE_LIMIT_GENERAL`（100/分钟）按 IP 管** → 一个 NAT 出口下所有人共用一份额度。**仍在的两半**：① 昂贵端点（深度分析/多智能体）没有自己的额度，一个用户照样能一分钟发 100 次真金白银的 LLM 调用；② 登录流量的每 IP 总闸随 E14 消失了，要补就是 `application_limits` 按地址再挂一层。两个数都要人定，见 §10.10 |
 | ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`） | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。**仍然在的是性能那半句**：`score()` 为 O(terms×docs) 纯 Python 遍历，语料再大一个量级就要换实现 |
@@ -1156,6 +1156,27 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 
 **门禁**：backend **742 → 749 passed**；`ruff check .` / `ruff format --check .`（345 文件）clean；`import app.main` 通过；额外实跑了一次完整 lifespan（临时 SQLite + `TestClient`）：`/api/system/health` 200、建出 46 张表、`describe_drift` 返回空。**没验**：真 MySQL 老库（当年确实靠这些 patcher 补过列的那种）现在会得到什么——按设计它只会得到一条"缺列，请迁移"的告警，没有现场可复验。
 
+
+
+#### 已交付：E18 真实 provider 的 HTTP 路径第一次被执行（提交 `4a64537`）
+
+**债行的原话**："conftest 强制 `LLM_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**"。这条不是"覆盖率低"，是**发出去的那段客户端代码从来没跑过一次**。这次补的门不加依赖、不花钱：把 `LLM_BASE_URL` 指向一个进程内的 OpenAI 兼容假服务（`ThreadingHTTPServer` + 一条队列控制返回的状态/内容），走的是 `requests` 的真 socket。
+
+**被执行并断言的东西**（5 条，`tests/test_provider_http_contract.py`）：
+
+| 断言 | 以前为什么看不见 |
+|---|---|
+| URL 拼成 `{base}/v1/chat/completions`、`Authorization: Bearer <key>`、`response_format={"type":"json_object"}`、`model` 用配置值、messages 是 system+user | mock 分支直接返回本地模板，`_openai_compatible_chat` 整个函数没进过 |
+| **5xx 会重试**（1 首发 + 2 重试 = 3 次请求），**401 不重试**（正好 1 次） | 分类逻辑写在 `except requests.HTTPError` 里，只有真状态码能触发 |
+| 超时被归成可重试类（2 次请求），且调用方拿到的是**聚合后的 `LLMProviderError`，不是 `LLMTimeoutError`** | `_call_with_fallbacks` 把每一链的异常收进 `errors` 再统一抛——所以"异常类名带信息"这个假设是错的，测试改成断言消息里有"超时" |
+| 返回内容不是 JSON → `ValueError`（不是崩在解析里） | 同上 |
+| **`chat_with_tools` 的两轮循环**：模型要工具 → 未知工具的回执被注回消息序列（`system/user/assistant/tool` 四个角色、`tool_calls` 原样带上）→ 第二轮拿到最终 JSON | C6 只是把这段"接进了审计链"，循环本身从没运行过 |
+
+**顺带量到一件没查到底的事（记下来，不当已修）**：真路径一旦执行，审计行**在测试进程里落不下来**——`record_prompt_trace` 抛 `IntegrityError: NOT NULL constraint failed: prompt_trace.id`，被 `LLMTraceScope.persist` 的 `except` 吞成一条 `logger.exception` + 一个写失败计数器。现象可复现且自相矛盾：**同一张 `prompt_trace`，通过 app 的 `SessionLocal` 插必失败、通过 fixture 的 `db_session` 插能拿到 id=1**（两边 `sqlite_master` 里的 `id` 列都是 `BIGINT NOT NULL`）。我按 SQLite 只有 `INTEGER PRIMARY KEY` 才是 rowid 别名解释了一半，但"那 fixture 引擎为什么能成"没解释清，试了四次探针都被 Windows 控制台编码挡住了输出，就停在这里——**结论：不写"已修"，只写"审计链在测试环境里其实没落库，而且它被 except 吞掉了"**。要收口就先解释这对矛盾（大概率是两条引擎的建表时机/`checkfirst` 差异），再决定要不要给 BigInteger PK 加 `with_variant(Integer, "sqlite")`——那会牵动 **46 张表全部是 BigInteger PK、0 张 Integer**，不是单点改动。
+
+**没做**：`EMBEDDING_PROVIDER` 与 rerank 的真 HTTP 路径（同一套假服务能复用，但要先确定 embedding 端点的响应形状）；`--cov-fail-under` 仍是 0（这次补的是"行为被执行"，不是把覆盖率数字变成门——理由见 §8 里 E2/E3 那几条"数字不等于门"的教训）。
+
+**门禁**：backend **749 → 754 passed**（新增 5 条，整文件约 9 秒，其中超时用例占大头）；`ruff check .` 与 `ruff format --check .`（346 文件）clean。
 
 
 #### 未交付：D27 `AppTable` 这条被量没了（顺带把"表格会说谎"这个假设证伪）
