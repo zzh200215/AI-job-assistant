@@ -10,6 +10,25 @@ from scripts.eval_rag import run_eval as run_rag_eval
 from scripts.eval_recommend import check_thresholds as check_recommend_thresholds
 
 
+def test_the_chroma_dir_the_seed_script_writes_to_is_the_one_the_app_reads(monkeypatch, tmp_path):
+    """CI 那道 RAG 门是"seed 脚本写进 Chroma → eval 从同一处读"，两边都调 `resolve_chroma_dir()`。
+
+    这一趟以前没被执行过（覆盖率 missing 31）：只要 `CHROMA_DIR` 是相对路径或带 `~`，展开方式
+    一旦和 app 建 client 时的口径不一致，门就在对一份空索引打空靶——而且分数照样能过阈值的
+    样子看不出来。
+    """
+    from app.core import chroma_client
+
+    monkeypatch.setattr(chroma_client.settings, "CHROMA_DIR", str(tmp_path))
+    assert chroma_client.resolve_chroma_dir() == str(tmp_path)
+
+    monkeypatch.setattr(chroma_client.settings, "CHROMA_DIR", "relative/chroma")
+    assert Path(chroma_client.resolve_chroma_dir()).is_absolute()
+
+    monkeypatch.setattr(chroma_client.settings, "CHROMA_DIR", "")
+    assert chroma_client.resolve_chroma_dir() == chroma_client._DEFAULT_CHROMA_DIR
+
+
 def test_rag_thresholds_pass_when_metrics_meet_floor():
     report = {
         "total": 10,

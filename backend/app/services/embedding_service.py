@@ -254,11 +254,17 @@ def _log_embedding_stats(
 
 
 def _with_retry(fn, texts: list[str]) -> list[list[float]]:
-    """对网络型 embedding 调用做有限次重试 + 退避。"""
+    """对网络型 embedding 调用做有限次重试 + 退避。
+
+    只重试 embedding 这一族：默认 `(Exception,)` 会把"响应形状不对"这类确定性错误也退避两轮。
+    鉴权失败单独排除——重试它没有意义，而且退避完会被换成 RuntimeError（分类就丢了）。
+    """
     return retry_call(
         fn,
         args=(texts,),
         max_retries=max(0, settings.EMBEDDING_MAX_RETRIES),
+        retryable_exceptions=(EmbeddingProviderError,),
+        non_retryable_exceptions=(EmbeddingAuthError,),
         log_prefix="Embedding",
     )
 
@@ -496,7 +502,13 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
         record_embedding_error(provider=provider, model=model, error_type=error_type)
         raise
     except Exception as e:
-        record_embedding_error(provider=provider, model=model, error_type=type(e).__name__)
+        # `retry_call` 用尽后抛的是 RuntimeError，真分类只在 `__cause__` 里。对内可查的这份统计
+        # 必须记真实类型（超时要能看出是 Timeout），否则降级原因是假的；抛给调用方的也换回真类型。
+        cause = e.__cause__
+        real = cause if isinstance(e, RuntimeError) and isinstance(cause, EmbeddingProviderError) else e
+        record_embedding_error(provider=provider, model=model, error_type=type(real).__name__)
+        if isinstance(real, EmbeddingProviderError):
+            raise real from e
         raise EmbeddingProviderError(f"Embedding 调用失败: {e}") from e
     finally:
         # 记录网络调用指标

@@ -25,12 +25,15 @@ def retry_call(
     max_retries: int = 2,
     backoff_factor: float = 1.5,
     retryable_exceptions: tuple = (Exception,),
+    non_retryable_exceptions: tuple = (),
     on_retry: Callable[[Exception, int, int], None] | None = None,
     log_prefix: str = "",
 ) -> Any:
     """调用 fn，失败时最多重试 max_retries 次（不含首次）。
 
     重试用尽仍失败时抛 RuntimeError，原始异常保留在 __cause__。
+    `non_retryable_exceptions` 里的类型**直接外抛、保留原类型**（重试没有意义的失败不该
+    变成一次退避，更不该在出口被换成 RuntimeError 后丢掉分类）。
     """
     kwargs = kwargs or {}
     prefix = f"[{log_prefix}] " if log_prefix else ""
@@ -39,6 +42,8 @@ def retry_call(
         try:
             return fn(*args, **kwargs)
         except retryable_exceptions as e:
+            if non_retryable_exceptions and isinstance(e, non_retryable_exceptions):
+                raise
             last_err = e
             if attempt < max_retries:
                 wait = backoff_factor * (attempt + 1)
