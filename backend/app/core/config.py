@@ -60,10 +60,16 @@ class Settings(BaseSettings):
     # 含首次执行：跑满这么多回仍失败就进死信队列，不再回到主队列。
     ORCHESTRATION_MAX_ATTEMPTS: int = 3
     REDIS_URL: str | None = None
+    # 连接池三个数（§10.15 的那半决策）：以前没设，跑的是 SQLAlchemy 默认的 5 + 10 = 15 根、
+    # 排队 30 秒 —— 而 E16 之后每条面试 WS 会独占一根，这个隐式上限就成了实际吞吐上限。
+    # 现在写死并让它可读：`core/database.py:engine_kwargs_for` 只在非 sqlite 上生效。
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT: int = 30
     INTERVIEW_EVALUATION_MAX_WORKERS: int = 2
-    # 同时在途的面试 WS 上限。**每连接一个引擎 = 一条连接期间持有一个 SQLAlchemy Session**，
-    # 而 `core/database.py` 没设 pool_size/max_overflow，默认是 5 + 10 = 15 根连接。
-    # 所以 12 不是拍脑袋：留 3 根给同期 HTTP 请求。§10.15 定了池子大小之后应改成从池推导。
+    # 同时在途的面试 WS 上限。**每连接一个引擎 = 一条连接期间持有一个 SQLAlchemy Session**。
+    # 取 12 的理由现在写在纸面上而不是注释里：池子上限 10 + 10 = 20 根，留 8 根给同期 HTTP 请求。
+    # 改 DB_POOL_SIZE/DB_MAX_OVERFLOW 时必须同时回头看这个数还留不留得出 HTTP 的余量。
     WS_MAX_LIVE_INTERVIEWS: int = 12
 
     # Operations alerting: thresholds are deliberately configurable per deployment.
