@@ -474,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 8 个加载函数加令牌（5 个页面），其中 7 处有红→绿测试为证（见 D3、D7、D9、D10）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，D15 再补 2 处；棘轮 `silentEmptyCatches` 11 → 4 →（D15 把判据换成函数作用域）7 → **5** 盯着（见 D4、D5、D15。D10 记下的"这一维有已知漏数"随那次换口径**已关闭**：D13 的格式化让 `admin/Tenants` 先现形，剩下 3 处 D15 量到并修掉两处 GET）**。**已收：`AppPanel`** —— 93 → **35** 处手写面板头搬进组件，最后 22 处由 11 次逐路由 `getComputedStyle` 差分（5501 个元素实例 × 20 条属性）量出 **0 差异**，判定器与 13 条合成用例留在 `frontend/scripts/panel-migration.mjs`（D18–D26）。纯 drop-in 已见底：剩下 35 处不是"没来得及"，而是要先拍组件 API，见 §10.14。未收（**D27 量过之后改判**）：~~`AppTable`+分页~~ —— 128 张 `<el-table>` 里可共享的只有 `stripe`/`size` 两个属性（`v-loading` 仅 5 处、`el-pagination` 仅 6 处），列定义是内容不是重复；而为它设想的那个缺陷——"表格在加载期间谎称暂无数据"——在 7 个有异步表格的文件里 **6 个已经被挡住**（`v-if="loading"` 的加载分支、`v-if="rows.length"` 的守卫、`<template v-else-if="evaluationData">`）。**包这一层不值当，从计划撤下**。骨架态仍然值得做，但它今天没有任何缺陷撑着、纯是观感改动 → 升为 §10.16 由你拍。真正还未收的是：其余尚未逐个证明可否被并发触发的加载函数 |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 11 个加载函数加令牌（5 个页面，11 把实例一链一把），其中 10 处有红→绿测试为证（见 D3、D7、D9、D10、D28。D28 顺带证明 D7 那句"共用一把才对"是错的，并把它变成棘轮硬不变量）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，D15 再补 2 处；棘轮 `silentEmptyCatches` 11 → 4 →（D15 把判据换成函数作用域）7 → **5** 盯着（见 D4、D5、D15。D10 记下的"这一维有已知漏数"随那次换口径**已关闭**：D13 的格式化让 `admin/Tenants` 先现形，剩下 3 处 D15 量到并修掉两处 GET）**。**已收：`AppPanel`** —— 93 → **35** 处手写面板头搬进组件，最后 22 处由 11 次逐路由 `getComputedStyle` 差分（5501 个元素实例 × 20 条属性）量出 **0 差异**，判定器与 13 条合成用例留在 `frontend/scripts/panel-migration.mjs`（D18–D26）。纯 drop-in 已见底：剩下 35 处不是"没来得及"，而是要先拍组件 API，见 §10.14。未收（**D27 量过之后改判**）：~~`AppTable`+分页~~ —— 128 张 `<el-table>` 里可共享的只有 `stripe`/`size` 两个属性（`v-loading` 仅 5 处、`el-pagination` 仅 6 处），列定义是内容不是重复；而为它设想的那个缺陷——"表格在加载期间谎称暂无数据"——在 7 个有异步表格的文件里 **6 个已经被挡住**（`v-if="loading"` 的加载分支、`v-if="rows.length"` 的守卫、`<template v-else-if="evaluationData">`）。**包这一层不值当，从计划撤下**。骨架态仍然值得做，但它今天没有任何缺陷撑着、纯是观感改动 → 升为 §10.16 由你拍。真正还未收的是：**逐个证明可并发触发的加载函数**——`JobSearch.vue` 那 8 个已在 D28 证明完（5 个能并发、已加令牌；3 个证否，附理由），其余页面（`SmartAnalysis`/`PipelineKanban`/`InterviewRoom` 以及 43 个视图里剩下那 38 个还没接令牌的）仍未逐个做 |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -1226,6 +1226,35 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 **这条对计划的实际改动**：§7 阶段 1 那一行按上面的数字改判（`AppTable` 撤下、骨架态转 §10.16、剩下"逐个证明可并发触发的加载函数"仍是未收项）。代码一行没改，工作树只有文档。
 
 
+#### 已交付：D28 岗位搜索页的 8 个加载函数逐个证明，代价是撤回 D7 写下的一个前提
+
+§7 阶段 1 唯一还开着的出口判据是"其余尚未逐个证明可否被并发触发的加载函数"。按页做，这轮做 `JobSearch.vue`：**20 个 async 函数 = 8 个"发 GET → 响应落地写业务 ref"的加载函数**（下面这张表的判断对象）**+ 2 个同样是请求后写 ref、但入口只有一个且带 `:loading` 的**（`generateRewriteSuggestions`、`explainCurrentJob`；`el-button` 的 loading 就是 disabled，所以在途点不动）**+ 10 个不属于这一维的**（4 个编排壳子 `openRequestedJobDetailFromRoute`/`refreshActiveTab`/`handleResumeChange`/`seedDemoData`、1 个跳转 `startAnalysisForJob`、5 个对本地数组的乐观写入 `handlePipelineAction`/`touchPipelineEntry`/`updatePipelineStage`/`removePipelineEntry`/`clearRejectedPipeline`）。
+
+| 加载函数 | 入口（实测行号） | 能否被用户叠成两个在途 | 处置 |
+|---|---|---|---|
+| `loadCities` | 只有 `onMounted` | 否 | 不加 |
+| `loadResumes` | `onMounted` + `AppLoadError @retry`(`:126`) | **否**：`@retry` 只在 `resumesError` 非空时渲染，而重试进入就把 `resumesError` 清成空串，按钮当场消失，第二次点击不存在 | 不加 |
+| `loadPipelineEntries` | `onMounted`、`handleResumeChange` 尾(`:1703`)、`@retry`(`:778`)、保存失败的 catch 重取(`:2149`) | 能叠（切简历 × 保存失败重取），但**它不带参数**，两次请求拿的是同一份全量列表，两条路径之间没有任何写入 → 谁后落地内容一样，证不出用户可见的错误 | 不加，理由记这条 |
+| `loadLocalJobs` / `loadRecommendations` | `onMounted`、`watch(activeTab)`(`:1452`/`:1455`)、`@retry`、`刷新当前视图`(`:246`) | 能 | **已带令牌，但共用一把 → 见下面的主发现** |
+| `loadResumeDetail` | `loadResumes` 尾(`:1537`)、`@change`(`:112`，无 disabled)、`openRequestedJobDetailFromRoute`(`:1491`)、`@retry`(`:134`) | 能（连换两次简历） | 加令牌 |
+| `runSearch` | `@keydown.enter`(`:64`)、`.preset-chip`(`:146`，裸 `<button>`)、`refreshActiveTab`(`:1672`)、`applyRewriteSuggestion`、`reuseSearch` —— **主搜索按钮 `:14` 的 `:loading` 挡不住这 5 条** | 能（连按回车就是连发） | 加令牌 |
+| `openJobDetail` | `:337/:421/:576/:892/:1040` 五处按钮 + 路由驱动(`:1497`)。抽屉是模态的，但**关闭不取消已发出的请求** | 能 | 加令牌 |
+
+**主发现（不是"漏了两处"，是"修过的那两处本身是坏的"）**：`useLatestCall()` 每次 `latestCall()` 返回的令牌比较的是**整个实例共享**的 `seq`（composable 只有 14 行，计数器在闭包顶层）。两条链共用一把时，症状不是"旧的盖掉新的"而是**"两条都不写"**：仓库响应仍在途时切到「智能推荐」，`watch(activeTab)` 领走同一把令牌 → 仓库响应被 `if (!isCurrent()) return` 丢掉，而 `finally` 里的解 loading 带着同一个条件 → `localJobs` 停在 `[]`、`localLoading` 停在 `true`，hero 上"岗位仓库"的数字**永久停在 0 且转圈不停**；tab 的守卫 `!localJobs.value.length` 下次切回来才会救它。D7 当时把"共用"写成"互斥标签页，共用才对"，这次是它第一次被跑出来。全树重数：5 个页面 11 个领取点，此前 6 个实例里**只有 JobSearch 那一个**是两链共用，其余每实例一链；改完是 11 实例 / 11 领取点。
+
+**三种症状各不相同**（所以写成三条测试而不是一条泛化断言）：`runSearch` 换掉的是结果列表，顺带把 `saved_count`/`is_demo`/`result_mode` 打回上一轮（`result_mode` 驱动"演示数据"那条横幅）；`loadResumeDetail` 在模板里根本不显示——`selectedResumeSummary` 唯一的消费者是 `queryRewriteTest` 的 `resume_summary`，所以症状是**页面写着简历乙、发给模型的摘要是简历甲**，清空选择时同理（页面显示"未选择简历"而请求仍带摘要），测试因此断言的是**出网请求的 payload**；`openJobDetail` 原本是 `detailJob.value = {...detailJob.value, ...}` 就地合并，旧响应会把上一个岗位的公司/薪资**并进当前抽屉**，且它的 `finally` 无条件，还会把后一次的转圈提前停掉。
+
+**测试**：`tests/unit/jobSearchRace.test.js` 8 条 = 5 条竞态 + 3 条对照组（单次触发必须照常写入 / 照常渲染，防"把所有响应都废掉"这种假修）。前 4 条对着 HEAD 跑过，4 红；第 5 条（清空选择）是修完之后补写的，所以它的红**用变异证明**：把 `handleResumeChange` 改回就地 `selectedResumeDetail.value = null` → 只有这条红，其余 7 条仍绿。
+
+**防复发**：棘轮加一条硬不变量（不是预算）`never lets one race-token instance serve two loading functions`，复用 D15 那套 `functionRanges` 把每个领取点归到最内层函数体，一个实例出现在 >1 个函数体即红。变异自证：把 `latestRecommendCall()` 改回 `latestLocalJobsCall()` → 该条红并指名 `src/views/JobSearch.vue: latestLocalJobsCall (2 条链)`。**这条比"逐个证明"更便宜**：以后新接令牌时不用再读页面就知道方向。
+
+**门禁**：`test:unit` **97 → 106 passed / 18 files**（+8 竞态与对照、+1 棘轮不变量。97 是本轮动手前在同一工作树上跑出来的实测值，不拿 D15 那个 98 当基线）、lint **0 error**（`admin/Overview` 那条既有 warning 未动）、build ok、backend 无改动。**没验**：真浏览器（`navigate_page` 本轮仍被策略拦），5 条竞态全部在 jsdom。
+
+**故意没改**：`runSearch` 里 `pushRecentSearch(keyword.value.trim())` 读的是**完成时**的输入框而不是发起时那个词——输入后不搜索，历史就会记一个从没搜过的词。这不是并发问题（是"await 之后读活引用"），一行可修（进入时 `const term = keyword.value.trim()`），但它不属于这条判据，写在账上等拍。
+
+**过程账（我的操作失误，记下来防再犯）**：第二次变异回退用了 `git checkout -- frontend/src/views/JobSearch.vue`，把**这一轮尚未提交的全部改动**一起打回 HEAD，同时 autocrlf 把该文件写成 CRLF，`npm run lint` 当场冒出 **3422 条 `Delete ␍`**。7 处改动重落、文件转回 LF 后 lint 回到 0 error / 1 warning。教训：对脏文件做变异实验只能用自己留的副本，`git checkout --` / `git restore` 一律不能用。
+
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
@@ -1647,7 +1676,7 @@ D3 结尾留的那句"哪些加载函数真的可被用户并发触发，需要�
 - 8 还在飞的时候，7 的方向**原样留在屏上**，看起来像是新简历的结果；
 - 薪资区间同形。
 
-**改法**：两个面板各自一把 `useLatestCall()` 令牌，并且新一发请求在 `await` 之前先把上一份简历的结果撤下。**两把令牌不是讲究**：先照 JobSearch 那样共用一把（那里两个加载函数是互斥标签页，共用才对）会让方向在薪资请求发出的那一刻就被判成"过期"，因为这两个请求是**同一意图下一起发的**——这一条是重读 composable 时抓到的，没跑测试之前它就已经是错的。
+**改法**：两个面板各自一把 `useLatestCall()` 令牌，并且新一发请求在 `await` 之前先把上一份简历的结果撤下。**两把令牌不是讲究**：先照 JobSearch 那样共用一把（~~那里两个加载函数是互斥标签页，共用才对~~ —— **这句前提是错的，D28 用红测试证伪并修掉**：`onMounted` 的仓库请求仍在途时切到推荐 tab 就会领走同一把令牌）会让方向在薪资请求发出的那一刻就被判成"过期"，因为这两个请求是**同一意图下一起发的**——这一条是重读 composable 时抓到的，没跑测试之前它就已经是错的。
 
 **测试 5 条，`test:unit` 77 → 82 passed**：3 条对着 HEAD 是红的（旧响应覆盖、加载中残留旧结果、薪资被覆盖），2 条是**两条方向都绿的对照组**——丢弃旧响应不许把"加载中…"卡死；同一份简历点"刷新"必须还能显示新数据（要是把"清空"写成无条件，这条就红）。薪资那两条要先 resolve 掉方向的请求才会有第二次薪资请求，因为 watcher 里是 `await 方向; await 薪资` 的顺序——这是页面的真实性质，写进了测试注释。
 
