@@ -406,6 +406,7 @@ import { ElMessage } from '@/plugins/element-services'
 import { Promotion, Loading } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAgentSteps, startAgentAnalysis } from '@/api/agent'
+import { useLatestCall } from '@/composables/useLatestCall'
 import {
   localizeDimensionLabel,
   localizeRecommendationText,
@@ -530,11 +531,17 @@ async function onStart() {
   }
 }
 
+// 从 URL 带 task_id 进来是一条轮询链，点「启动分析」在 onStart 尾巴上又是另一条；
+// 两条都读同一个 taskId，旧链在途的那一发会用旧任务的响应盖掉新任务的步骤
+const latestPollCall = useLatestCall()
+
 async function pollSteps() {
   if (!taskId.value) return
+  const isCurrent = latestPollCall()
 
   try {
     const data = await getAgentSteps(taskId.value)
+    if (!isCurrent()) return
     task.value = data.task
     steps.value = data.steps || []
     retrievals.value = data.retrievals || []
@@ -543,6 +550,8 @@ async function pollSteps() {
     // ignore transient polling errors
   }
 
+  // 被新一轮顶掉的那一条既不再写屏幕，也不再续自己的定时器
+  if (!isCurrent()) return
   if (!isTerminalTask.value) {
     pollTimer = setTimeout(pollSteps, 1500)
   }

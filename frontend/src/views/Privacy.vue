@@ -145,11 +145,15 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import request from '@/api/request'
+import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 
 const exporting = ref(false)
 const dataSummary = ref(null)
 const summaryError = ref('')
+// 三个删除动作的尾巴都调 loadDataSummary，而这些删除按钮互不锁：旧一份概览晚到，
+// 合规面就会把刚删掉的记录又数回来一遍
+const latestSummaryCall = useLatestCall()
 
 const summaryItems = computed(() => [
   { key: 'resumes', label: '简历', value: dataSummary.value?.resumes || 0 },
@@ -162,10 +166,14 @@ const summaryItems = computed(() => [
 onMounted(loadDataSummary)
 
 async function loadDataSummary() {
+  const isCurrent = latestSummaryCall()
   summaryError.value = ''
   try {
-    dataSummary.value = await request.get('/auth/data-summary')
+    const data = await request.get('/auth/data-summary')
+    if (!isCurrent()) return
+    dataSummary.value = data
   } catch (e) {
+    if (!isCurrent()) return
     dataSummary.value = null
     summaryError.value = e?.userMessage || e?.message || '未能获取你的数据概览'
   }

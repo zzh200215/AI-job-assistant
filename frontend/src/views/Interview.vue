@@ -310,6 +310,7 @@ import { getInterviewList, getQuestionBank } from '@/api/interview'
 import { getAnalysis } from '@/api/analysis'
 import { getJobPipelineList } from '@/api/jobs'
 import { getInterviewGroupTitle, normalizeInterviewQuestions } from '@/utils/interviewQuestions'
+import { useLatestCall } from '@/composables/useLatestCall'
 import { readRecordId, rememberRecord } from '@/utils/lastSelection'
 import { INTERVIEW_SCORE_BANDS, scoreToneAtLeast } from '@/utils/scoreTone'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
@@ -336,6 +337,8 @@ const questionGroups = computed(() =>
 const dailyLoading = ref(false)
 const dailyQuestion = ref(null)
 const showAnswer = ref(false)
+// 「换一题」按钮没有 loading：连点两次就是两发在途，屏幕上留哪一道由后回来的决定
+const latestDailyCall = useLatestCall()
 const dailyQuestions = [
   {
     question: '请介绍一下你自己，以及为什么你适合这个岗位？',
@@ -390,11 +393,13 @@ function difficultyLabel(d) {
 }
 
 async function refreshDaily() {
+  const isCurrent = latestDailyCall()
   showAnswer.value = false
   dailyLoading.value = true
   // 尝试从后端题库获取随机题目
   try {
     const data = await getQuestionBank({ limit: 10, random: true })
+    if (!isCurrent()) return
     const items = data?.items || data || []
     if (items.length) {
       const q = items[Math.floor(Math.random() * items.length)]
@@ -409,13 +414,14 @@ async function refreshDaily() {
         star_action: '',
         star_result: '',
       }
-      dailyLoading.value = false
+      if (isCurrent()) dailyLoading.value = false
       return
     }
   } catch {
     // 远端题库不可用时使用本地题库。
   }
   // fallback: 本地题库
+  if (!isCurrent()) return
   const q = dailyQuestions[Math.floor(Math.random() * dailyQuestions.length)]
   dailyQuestion.value = {
     ...q,
@@ -424,7 +430,7 @@ async function refreshDaily() {
     star_action: '描述你采取的关键行动步骤',
     star_result: '用数据说明最终成果',
   }
-  dailyLoading.value = false
+  if (isCurrent()) dailyLoading.value = false
 }
 
 // 薄弱知识点

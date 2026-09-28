@@ -227,6 +227,7 @@ import { ref, computed } from 'vue'
 import { Coin } from '@element-plus/icons-vue'
 import { getSalaryCompare, getSalaryOverview, checkSalaryExpectation } from '@/api/salary'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
+import { useLatestCall } from '@/composables/useLatestCall'
 
 const searchPosition = ref('')
 const searchCity = ref('')
@@ -240,6 +241,9 @@ const expectPosition = ref('')
 const expectSalary = ref(null)
 const expectCity = ref('')
 const expectResult = ref(null)
+// 一次查询要落两块屏幕（区间卡 + 城市对比表），一条链一把令牌
+const latestSearchCall = useLatestCall()
+const latestExpectCall = useLatestCall()
 const quickPositions = ['前端开发', 'Java 开发', '产品经理', '数据分析师', '算法工程师']
 
 // /salary/overview reports { statistics: {p25..p90}, distribution: {label: count} }.
@@ -268,21 +272,26 @@ function distHeight(count) {
 
 async function doSearch() {
   if (!searchPosition.value.trim()) return
+  // 「查询」按钮和两个输入框的 enter 都没有锁，连点两次就是两轮串联请求在途
+  const isCurrent = latestSearchCall()
   loading.value = true
   searchError.value = ''
   overview.value = null
   cityComparison.value = []
   try {
     const data = await getSalaryOverview({ position: searchPosition.value, city: searchCity.value })
+    if (!isCurrent()) return
     overview.value = data
     const compare = await getSalaryCompare({ position: searchPosition.value })
+    if (!isCurrent()) return
     cityComparison.value = compare?.comparison || []
   } catch (e) {
+    if (!isCurrent()) return
     // 旧注释写"保留上一次查询结果"，但上面已经把 overview 清空了；GET 失败也不弹提示，
     // 所以真实表现是一片空白 + 没有人告诉你为什么。现在显式失败。
     searchError.value = e?.userMessage || e?.message || '暂时无法读取该岗位的薪资样本'
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
 
@@ -299,6 +308,7 @@ function syncExpectation() {
 
 async function checkExpectation() {
   if (!expectPosition.value.trim() || !expectSalary.value) return
+  const isCurrent = latestExpectCall()
   expectError.value = ''
   try {
     const data = await checkSalaryExpectation({
@@ -306,10 +316,12 @@ async function checkExpectation() {
       salary: expectSalary.value,
       city: expectCity.value,
     })
+    if (!isCurrent()) return
     expectResult.value = data
   } catch (e) {
     // 不撤掉旧结果的话，页面上就是"用新岗位/新薪资提问、拿到上一次评估的结论"——
     // GET 失败请求层不弹提示，这条错会被当成正确答案读走。
+    if (!isCurrent()) return
     expectResult.value = null
     expectError.value = e?.userMessage || e?.message || '暂时无法完成期望薪资评估'
   }

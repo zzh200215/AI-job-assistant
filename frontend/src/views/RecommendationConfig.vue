@@ -13,8 +13,16 @@
         <el-button :loading="loading.compare" type="success" plain @click="runCompare"
           >实验对比</el-button
         >
-        <el-button :loading="loading.reset" @click="handleReset">恢复默认</el-button>
-        <el-button type="primary" :loading="loading.save" @click="handleSave">保存配置</el-button>
+        <el-button :loading="loading.reset" :disabled="loading.save" @click="handleReset"
+          >恢复默认</el-button
+        >
+        <el-button
+          type="primary"
+          :loading="loading.save"
+          :disabled="loading.reset"
+          @click="handleSave"
+          >保存配置</el-button
+        >
       </div>
     </header>
 

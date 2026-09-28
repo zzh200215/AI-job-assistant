@@ -536,6 +536,7 @@ import {
   WarningFilled,
   CircleCheckFilled,
 } from '@element-plus/icons-vue'
+import { useLatestCall } from '@/composables/useLatestCall'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import {
   uploadResume,
@@ -586,6 +587,8 @@ const currentShareResume = ref(null)
 const diagnosisLoading = ref(false)
 const diagnosisError = ref('')
 const currentDiagnosis = ref(null)
+// 关掉弹窗不会取消已发出的诊断，再看另一份简历时旧响应会给错人打分
+const latestDiagnosisCall = useLatestCall()
 const diagnosisStale = ref(false)
 const diagActivePanels = ref(['structure', 'expression', 'keywords', 'highlights'])
 
@@ -938,6 +941,7 @@ async function copyShareUrl() {
 
 // ---- AI 诊断 ----
 async function showDiagnosisDialog(r) {
+  const isCurrent = latestDiagnosisCall()
   showDiagnosis.value = true
   diagnosisLoading.value = true
   diagnosisError.value = ''
@@ -962,6 +966,7 @@ async function showDiagnosisDialog(r) {
     d = null
   }
 
+  if (!isCurrent()) return
   if (!d) {
     // A diagnosis we could not compute must not be replaced with invented
     // numbers. The previous fallback derived five dimension scores from

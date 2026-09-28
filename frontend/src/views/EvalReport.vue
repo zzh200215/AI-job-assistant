@@ -253,6 +253,7 @@ import {
   getEvalReportSummary,
 } from '@/api/evaluation'
 import { ElMessage } from '@/plugins/element-services'
+import { useLatestCall } from '@/composables/useLatestCall'
 import { utcStamp } from '@/utils/format/date'
 
 const loading = reactive({
@@ -271,6 +272,7 @@ const compareForm = reactive({
   reportB: '',
 })
 
+const latestReloadCall = useLatestCall()
 const summary = ref({ counts: {}, latest_by_type: {} })
 const reportList = ref([])
 const compareResult = ref(null)
@@ -288,12 +290,15 @@ onMounted(async () => {
 })
 
 async function reloadAll() {
+  // 报告类型下拉的 @change 直接触发它，而那个 select 没有锁：连换两次筛选就是两发在途
+  const isCurrent = latestReloadCall()
   loading.list = true
   try {
     const [summaryData, listData] = await Promise.all([
       getEvalReportSummary(filters.reportType ? { report_type: filters.reportType } : {}),
       getEvalReportList(filters.reportType ? { report_type: filters.reportType } : {}),
     ])
+    if (!isCurrent()) return
     summary.value = summaryData || { counts: {}, latest_by_type: {} }
     reportList.value = listData?.items || []
     if (!compareOptions.value.some((item) => item.report_id === compareForm.reportA)) {
@@ -305,7 +310,7 @@ async function reloadAll() {
     }
     compareResult.value = null
   } finally {
-    loading.list = false
+    if (isCurrent()) loading.list = false
   }
 }
 
