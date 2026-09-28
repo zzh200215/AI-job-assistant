@@ -587,7 +587,7 @@ agent.SummaryAgent           real  tokens=3215
 | Rerank 生产用启发式 | `rerank_service.py:125-159` 可选本地 cross-encoder，否则 jieba 词重叠 + 硬编码 0.5/0.3/0.2 权重；`RERANKER_MODEL_PATH` 默认未设 |
 | 死代码 → ~~`api/tracking.py` 定义了 router 但**从未被 include**~~ 已挂载并修好整条链（E10，提交 `cb5a72b`）；**但 `track()` 调用方为 0，"要不要真埋点"回到 §10.8** | 另一半**前提两头都不准，已由 E21 更正**：原话点名的三个"靠 import 维持存活的垫片层"里，`agents/agent_orchestrator.py`（154 行）与 `services/agent_workflow.py`（20 行）是 `/api/multi-agent`、`/api/agent` **在用的兼容入口**，不是死代码；真正零引用的是另外 6 个模块共 **425 行**——`services/smart_orchestrator.py`（80 行，唯一公开函数 `run_orchestrator_sync` 无人调用，而两处"已废弃，请使用 …→ smart_orchestrator"的提示恰恰指向这个死入口）、4 个 prompt 文本模块（210 行，`PROMPT_VERSION` 全仓无人读，`SummaryAgent` 实际吃 `agent_report`）、`utils/llm_output.py`（135 行，覆盖率 **0%**）。已全部删除，并留一条可达性守卫 `tests/test_no_dead_app_modules.py`（静态 import 闭包 + 空 allowlist + 合成树反向证据 + "无动态 import app 模块"前提检查），详见 E21 记录 |
 | ~~缺少 router 级鉴权~~ → 已收口：22 段纯会话前缀挂 include 级守护（E11，提交 `21778e2`）+ **按操作补齐的装配期默认拒绝**（E19） | 原判断成立的方式：31 个 router / 218 端点无一处用 `dependencies=[...]`，鉴权靠每端点自己写。**现在的保证**：一条操作要么在 `app/core/api_access.py` 的两张清单里（15 条真公开 + 4 条自带别的凭据），要么它的依赖树里必有 `Depends(get_current_user)`——缺的自己被补上，所以那 8 段混着公开端点的前缀不再靠自觉。**计划里开的方子"先做端点级拆分"已被实测否掉**（42 个测试文件自建 mini-app、拆完 25 个 404），见 E19 |
-| 三个 router 共享 `/jobs` 前缀 | `api/router.py:54-56`；当前不冲突仅因 `job_recommend.py:1448` 的 `/{jd_id:int}` 是单段 |
+| ~~三个 router 共享 `/jobs` 前缀~~ → 已收口为构造保证（E22，`tests/test_route_prefix_collisions.py`） | 原话"当前不冲突仅因 `job_recommend.py:1448` 的 `/{jd_id:int}` 是单段"里，**"不冲突"这件事先量成了事实**：`/jobs` 下 37 条路由，0 组同 (方法, 模板) 重复、0 条字面路径被更靠前的动态路径遮蔽。所以这行记的不是现存故障，而是"没人保证下次也不出故障"——谁在 `/jobs` 下加一条 `/{section}` 就能安静吃掉三条字面路径（Starlette 只跑第一条）。现在这条性质由守卫测（真实路由表 + 合成路由反证它会响），不再依赖某个模板恰好是单段 |
 
 #### 已交付：E6 CI 的 RAG 门第一次有自己的语料可查（提交 `221b191`）
 
@@ -1346,6 +1346,31 @@ router 全被判死、报出 **84 个"死模块"——全是假阳性**；逐 al
 
 **门禁**：backend 全量 **778 → 782 passed**（+4 条守卫；删除 6 个模块本身不改变用例数）；
 `ruff check .` 与 `ruff format --check .` clean；删除后 `import app.main` 正常。
+
+#### 已交付：E22 `/jobs` 共享前缀从"靠顺序侥幸"变成会响的尺子（顺带把那条债的因果量正）
+
+**先量**。债行写的是"当前不冲突仅因 `job_recommend.py:1448` 的 `/{jd_id:int}` 是单段"。把"不冲突"量成数字：
+`/jobs` 下 **37 条路由、0 组同 `(方法, 模板)` 重复、0 条字面路径被更靠前的动态路径遮蔽**。所以那半句的**因果**是猜的：
+今天不冲突不是因为某个模板恰好是单段，而是三段的字面路径与动态路径当前不重叠。真正没被保证的是下一次——
+谁加一条 `GET /jobs/{section}`，就能安静吃掉它下面所有字面路径（Starlette 取第一条匹配，被吃的那条既不 404
+也不报错，只是再也进不去）。
+
+**做了什么**：`tests/test_route_prefix_collisions.py`，4 条。真实路由表上两条不变式（无重号；无遮蔽——并且先断言
+`/jobs` 确实由 ≥3 个模块共享，否则"没有遮蔽"可能只是作用域空了）；合成表上两条反向证据：动态在前的遮蔽**必须被点名**，
+顺序反过来**必须不点名**（没有这条对照组，前者可以恒真）。检查函数是纯函数，所以合成用例测的是尺子本身，
+而不是真路由恰好没病的副产品。
+
+**边界（已知且不装）**：只比较**同一条 api_router 展开后**的模板遮蔽，`{x:int}` 按"数字段"近似编译，
+跨前缀嵌套（`/jobs` 与 `/jobs-archive` 那种）本仓不存在、也就没测。
+
+**为什么不是把三个 router 合成一个**：那是外观改动，要动三段的 include 顺序与 tags，而 E19 刚演示过"改装配方式"
+的代价是用测试数量付的；这次的收益（下次加路由不会静默被遮蔽）一条尺子就能拿到，不需要重构。
+
+**过程自纠**：第一版里我多写了两条与 `duplicate_operations` 重复的用例，还有一条 `Path(__file__).name == ...`
+的无意义断言（它只断言文件自己的名字），删干净后是 4 条；删 `Path` import 时正好把那条无意义断言暴露成
+`NameError`，说明它当时已经是死的。
+
+**门禁**：backend 全量 **782 → 786 passed**；`ruff check .` 与 `ruff format --check .` clean。
 
 #### 已交付：D7 职业规划页：旧简历的慢响应不再顶到新简历下面（提交 `fb57d7e`）
 
