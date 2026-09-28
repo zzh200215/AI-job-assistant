@@ -474,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 13 处领走令牌（6 个页面，一链一把），另有 1 处按 D29 的判据改用 `:disabled` 串行而不是令牌；这 13 处现在全部有红→绿或变异证据（见 D3、D7、D9、D10、D28、D29——D3 那次欠着测试的 `JobSearch` 两处由 D28 补上，也正是那次把"两条链共用一把令牌"这个缺陷跑出来；D28 顺带撤回 D7"互斥标签页共用才对"的前提，并把它变成棘轮硬不变量）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，D15 再补 2 处；棘轮 `silentEmptyCatches` 11 → 4 →（D15 把判据换成函数作用域）7 → **5** 盯着（见 D4、D5、D15。D10 记下的"这一维有已知漏数"随那次换口径**已关闭**：D13 的格式化让 `admin/Tenants` 先现形，剩下 3 处 D15 量到并修掉两处 GET）**。**已收：`AppPanel`** —— 93 → **35** 处手写面板头搬进组件，最后 22 处由 11 次逐路由 `getComputedStyle` 差分（5501 个元素实例 × 20 条属性）量出 **0 差异**，判定器与 13 条合成用例留在 `frontend/scripts/panel-migration.mjs`（D18–D26）。纯 drop-in 已见底：剩下 35 处不是"没来得及"，而是要先拍组件 API，见 §10.14。未收（**D27 量过之后改判**）：~~`AppTable`+分页~~ —— 128 张 `<el-table>` 里可共享的只有 `stripe`/`size` 两个属性（`v-loading` 仅 5 处、`el-pagination` 仅 6 处），列定义是内容不是重复；而为它设想的那个缺陷——"表格在加载期间谎称暂无数据"——在 7 个有异步表格的文件里 **6 个已经被挡住**（`v-if="loading"` 的加载分支、`v-if="rows.length"` 的守卫、`<template v-else-if="evaluationData">`）。**包这一层不值当，从计划撤下**。骨架态仍然值得做，但它今天没有任何缺陷撑着、纯是观感改动 → 升为 §10.16 由你拍。真正还未收的是：**逐个证明可并发触发的加载函数**——已按页判完 2 页：`JobSearch.vue`（D28：8 个加载函数，5 个能并发已加令牌、3 个证否并附理由）与 `ResumeCompare.vue`（D29：3 处修，其中 1 处的正解是 `:disabled` 串行不是令牌；4 处证否）。粗尺（同形状全站 108 处 / 31 个文件）**只能用来挑页、不能当工作量**，它把控制位也算进去了；企业侧的 `admin/Tenants`、`OrganizationWorkspace` 按 §2 收缩跳过，其余按 `KnowledgeBase`(7)、`PipelineKanban`(6)、`Interview`(5)、`Profile`(5) 的顺序推进 |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 14 处领走令牌（6 个页面，一链一把），另有 3 处按同一条判据换了别的修法（D29 的 `:disabled` 串行、D30 的"只在仍指向自己那行时才解锁"与给无锁按钮补 `:loading`）；这 17 处现在全部有红→绿或变异证据（见 D3、D7、D9、D10、D28、D29、D30——D3 那次欠着测试的 `JobSearch` 两处由 D28 补上，也正是那次把"两条链共用一把令牌"这个缺陷跑出来；D28 顺带撤回 D7"互斥标签页共用才对"的前提，并把它变成棘轮硬不变量）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，D15 再补 2 处；棘轮 `silentEmptyCatches` 11 → 4 →（D15 把判据换成函数作用域）7 → **5** 盯着（见 D4、D5、D15。D10 记下的"这一维有已知漏数"随那次换口径**已关闭**：D13 的格式化让 `admin/Tenants` 先现形，剩下 3 处 D15 量到并修掉两处 GET）**。**已收：`AppPanel`** —— 93 → **35** 处手写面板头搬进组件，最后 22 处由 11 次逐路由 `getComputedStyle` 差分（5501 个元素实例 × 20 条属性）量出 **0 差异**，判定器与 13 条合成用例留在 `frontend/scripts/panel-migration.mjs`（D18–D26）。纯 drop-in 已见底：剩下 35 处不是"没来得及"，而是要先拍组件 API，见 §10.14。未收（**D27 量过之后改判**）：~~`AppTable`+分页~~ —— 128 张 `<el-table>` 里可共享的只有 `stripe`/`size` 两个属性（`v-loading` 仅 5 处、`el-pagination` 仅 6 处），列定义是内容不是重复；而为它设想的那个缺陷——"表格在加载期间谎称暂无数据"——在 7 个有异步表格的文件里 **6 个已经被挡住**（`v-if="loading"` 的加载分支、`v-if="rows.length"` 的守卫、`<template v-else-if="evaluationData">`）。**包这一层不值当，从计划撤下**。骨架态仍然值得做，但它今天没有任何缺陷撑着、纯是观感改动 → 升为 §10.16 由你拍。真正还未收的是：**逐个证明可并发触发的加载函数**——已按页判完 3 页：`JobSearch.vue`（D28：8 个加载函数，5 个能并发已加令牌、3 个证否并附理由）、`ResumeCompare.vue`（D29：3 处修，其中 1 处的正解是 `:disabled` 串行不是令牌；4 处证否）、`KnowledgeBase.vue`（D30：1 处补令牌、2 处修的是"锁的时机/没有锁"、4 处证否、1 处另立一维记着没动）。粗尺（同形状全站 108 处 / 31 个文件）**只能用来挑页、不能当工作量**，它把控制位也算进去了；企业侧的 `admin/Tenants`、`OrganizationWorkspace` 按 §2 收缩跳过，下一个是 `PipelineKanban`(6)，再往后 `Interview`(5)、`Profile`(5) |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -1276,6 +1276,31 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 **门禁**：`test:unit` 106 → **112 passed / 19 files**、lint **0 error**（`admin/Overview` 那条既有 warning 未动）、build ok、backend 无改动。全树令牌接线现在是 **13 个实例 / 13 个领取点 / 6 个页面**，一链一把，D28 那条棘轮仍然绿。本轮所有变异回退都用 `cp` 副本，改动文件 CRLF 计数 **0**。**没验**：真浏览器（`navigate_page` 仍被策略拦）。
 
 **剩余**：31 个有候选的文件里已逐个判完 **2 页**（`JobSearch`、`ResumeCompare`）；剩下的按同一判据推进，粗尺排前面的是 `admin/Tenants`(9，企业侧跳过)、`KnowledgeBase`(7，已有 1 把令牌)、`PipelineKanban`(6)、`Interview`(5)、`Profile`(5)。
+
+
+#### 已交付：D30 知识库页：三处修法里有两处根本不是令牌
+
+**这页不是只有加载函数**：粗尺数到 7 处候选，逐个读过去之后是 **1 处已有令牌**（`loadList`，D3 接的）、**1 处补令牌**、**2 处修锁的时机**、**4 处证否**、**1 处记为未收**。
+
+| 函数 | 触发入口 | 判定 | 处置 |
+|---|---|---|---|
+| `refreshDetail` | 行上「详情」(`:208`，无 disabled)、抽屉内「刷新详情」(`:568`，带 `:loading`)、`onReprocess` 尾 | 抽屉是模态的，但**关掉不取消已经发出的 GET**；再点另一行就是两个在途 | 加令牌 |
+| `onReprocess` | 每行的「重处理」`:disabled="reprocessingId === row.id"` | **按行的锁只有一个位**：点第二行时 `reprocessingId` 指向第二行，第一行收尾的 `finally` 把它整个清成 null → **第二行还在途就解锁**，可以重复提交（每次都是一回真金白银的重处理） | 改 `finally`：只在仍指向自己那行时才清 |
+| `onRebuild` | 「重建索引」(`:137`)，**没有任何锁** | 确认框 → POST → 尾部 `loadList`。POST 在途时按钮照样能点，再确认一次就是**第二次全量重处理** | 补 `rebuilding` + `:loading` |
+| `loadEmbeddingStats` | `onMounted` + 一个带 `:loading` 的刷新按钮 | 否：挂载那一次已经把按钮锁上，之后每次点击也只由自己解锁 | 不加 |
+| `onSearch` / `runRewriteDebug` / `retryUpload` | 各一个按钮，都带 `:loading` | 否：单入口 + loading 即 disabled | 不加 |
+| `onDelete` | 行上「删除」(`:219`，无 disabled) + 确认框 | 能并发，但两次删除都是用户真做过的，尾部写的是 `loadList`（已有令牌）→ 列表落回新那一份，没有可证的错误状态 | 不加 |
+| `doUpload` | `el-upload` 的 `:http-request`（无 `multiple`） | **未收**：上传失败后对话框与拖拽区都还在，此时再投一个文件，`uploadProgress`/`uploadStatus`/`uploadError` 会互相串——但那不是"旧结果盖新结果"，是要给上传会话建身份的另一维改动 | 记着，没动 |
+
+**测试手段的降级要说明白**：`el-table` 在 jsdom 里不渲染行（`knowledgeRace.test.js` 早就记过这条，所以它当时是断言 `wrapper.vm.list` 而不是 DOM）。因此前两条测试是**直接调 `wrapper.vm` 上的入口函数**，"用户能不能点"由 `:208` 详情按钮没有 disabled、`:213` 重处理是按行 disabled、`drawer` 关闭不取消请求这三条模板事实证明；第三条（重建）是 `trigger('click')` 打在真按钮上，因为它在卡片头、不在表格里。**这比 D28/D29 的"点真实按钮"弱一档**，浏览器复核仍然欠着。
+
+**症状里最贵的是第二条而不是第一条**：第一条错的是抽屉里装着上一份文档的切片，而"重新处理文档"按钮拿的正是 `detailDoc.id`——**错文档 + 一次真提交**；第二条更直接：第一行收尾把第二行解锁，用户对同一行连点两次就是两次提交。两条都不是显示错乱，是会花钱的。
+
+**变异自证**：去掉 `refreshDetail` 的守卫 → 只有第 1 条红；把 `finally` 改回无条件清 → 只有第 2 条红；摘掉重建按钮的 `:loading` → 只有第 3 条红。三次变异各自"红 1 / 绿 5"，还原后 6 条全绿。回退一律用 `cp` 副本。
+
+**门禁**：`test:unit` 112 → **118 passed / 20 files**、lint **0 error**（`admin/Overview` 那条既有 warning 未动）、build ok、backend 无改动。全树令牌接线 **14 个实例 / 14 个领取点 / 6 个页面**，一链一把，D28 那条棘轮仍然绿；改动文件 CRLF 计数 **0**（`KnowledgeBase.vue` 净增 23 行、删 6 行，prettier 报 unchanged）。**没验**：真浏览器（`navigate_page` 仍被策略拦）。
+
+**剩余**：31 个有候选的文件里已判完 **3 页**（`JobSearch`、`ResumeCompare`、`KnowledgeBase`），下一个是 `PipelineKanban`(6)。
 
 
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
