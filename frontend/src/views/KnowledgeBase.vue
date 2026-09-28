@@ -134,7 +134,9 @@
           </div>
           <div class="panel-actions">
             <el-button @click="loadList" :loading="loading">刷新</el-button>
-            <el-button type="danger" plain @click="onRebuild">重建索引</el-button>
+            <el-button type="danger" plain :loading="rebuilding" @click="onRebuild">
+              重建索引
+            </el-button>
           </div>
         </div>
       </template>
@@ -637,6 +639,8 @@ const authStore = useAuthStore()
 
 const loading = ref(false)
 const latestCall = useLatestCall()
+// 抽屉那份详情是另一条链，必须各建一个实例（共用一把会把列表的在途响应一起判为过期）
+const latestDetailCall = useLatestCall()
 const list = ref([])
 const total = ref(0)
 const page = ref(1)
@@ -645,6 +649,7 @@ const filterType = ref(null)
 const filterStatus = ref(null)
 const myOnly = ref(false)
 const reprocessingId = ref(null)
+const rebuilding = ref(false)
 
 const showUpload = ref(false)
 const uploading = ref(false)
@@ -839,13 +844,17 @@ async function openDetail(row) {
 
 async function refreshDetail(id = detailDoc.value?.id) {
   if (!id) return
+  // 行的「详情」按钮没有 disabled，而关掉抽屉并不会取消已经发出的 GET；这里不守，
+  // 抽屉就会装着上一份文档的切片，"重新处理文档"还会拿那份文档的 id 去提交
+  const isCurrent = latestDetailCall()
   detailLoading.value = true
   try {
     const data = await getKnowledgeChunks(id)
+    if (!isCurrent()) return
     detailDoc.value = data.document || detailDoc.value
     detailChunks.value = data.chunks || []
   } finally {
-    detailLoading.value = false
+    if (isCurrent()) detailLoading.value = false
   }
 }
 
@@ -873,7 +882,9 @@ async function onReprocess(row) {
       await refreshDetail(row.id)
     }
   } finally {
-    reprocessingId.value = null
+    // 这个位是按行判断的：点第二行时它已经指向第二行，第一行收尾时不能把它整个清掉，
+    // 否则第二行还在途就解锁、可以重复提交
+    if (reprocessingId.value === row.id) reprocessingId.value = null
   }
 }
 
@@ -885,9 +896,15 @@ async function onRebuild() {
   } catch {
     return
   }
-  await rebuildKnowledge()
-  ElMessage.success('重建完成')
-  await loadList()
+  // 这个按钮今天没有任何锁：再确认一次就是第二次全量重处理
+  rebuilding.value = true
+  try {
+    await rebuildKnowledge()
+    ElMessage.success('重建完成')
+    await loadList()
+  } finally {
+    rebuilding.value = false
+  }
 }
 
 async function onSearch() {
