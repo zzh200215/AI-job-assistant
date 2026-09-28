@@ -7,6 +7,7 @@ import traceback
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -939,7 +940,10 @@ async def download_resume_export(
 
     try:
         if format == "docx":
-            rel_path = resume_export_service.export_docx(
+            # 渲染文档是 CPU + 磁盘活（PDF 那支还要跑 WeasyPrint），秒级；这条路由是 `async def`，
+            # 不挪出事件循环就会把同期所有请求一起停住（E15 同一类）。
+            rel_path = await run_in_threadpool(
+                resume_export_service.export_docx,
                 resume_id,
                 version,
                 db,
@@ -949,7 +953,8 @@ async def download_resume_export(
             )
             media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         else:
-            rel_path = resume_export_service.export_pdf(
+            rel_path = await run_in_threadpool(
+                resume_export_service.export_pdf,
                 resume_id,
                 version,
                 db,

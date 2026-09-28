@@ -41,6 +41,15 @@ BLOCKING_DOTTED = {
     "os.system",
     "os.popen",
     "engine.connect",
+    # 仓内自己的**慢 helper**（E25 补）：这一层 E15 那把尺子看不见，因为它只认原语。
+    # 漏掉的四个站点当时就是这么活下来的 —— `spider.search` 里面确实是 requests + `time.sleep`，
+    # 但尺子扫的是调用点的名字，不会下钻到 helper 体内。
+    "spider.search",
+    "spider.demo",
+    "spider.fetch_detail",
+    "knowledge_service.save_and_process",
+    "resume_export_service.export_pdf",
+    "resume_export_service.export_docx",
 }
 # 仓内自己的同步 provider 入口（都在 `app/services/*` 里用 requests 实现）
 BLOCKING_NAMES = {
@@ -68,8 +77,12 @@ def _is_route(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     for d in fn.decorator_list:
         target = d.func if isinstance(d, ast.Call) else d
         name = _dotted(target)
-        head = name.split(".")[0]
-        if head in {"router", "ws"} and (len(name.split(".")) == 1 or name.split(".")[1] in HTTP_VERBS):
+        parts = name.split(".")
+        head = parts[0]
+        # 只认 `router.` / `ws.` 会漏掉整段 `admin_router`、`external_router` 上的路由 ——
+        # `api/tenant.py` 那条阻塞的入库就是靠这个盲区活到 E25 的。
+        head_ok = head in {"router", "ws"} or head.endswith("_router")
+        if head_ok and (len(parts) == 1 or parts[1] in HTTP_VERBS):
             return True
     return False
 
@@ -193,10 +206,37 @@ async def closure_route():
 """
 
 
+helper_src_blocking = """
+from app.api import knowledge
+from fastapi import APIRouter
+router = APIRouter()
+
+@router.post("/x")
+async def bad_helper_route(db, raw):
+    return knowledge_service.save_and_process(db, raw)
+"""
+
+helper_src_threadpool = """
+from fastapi import APIRouter
+from fastapi.concurrency import run_in_threadpool
+router = APIRouter()
+
+@router.post("/x")
+async def good_helper_route(db, raw):
+    return await run_in_threadpool(knowledge_service.save_and_process, db, raw)
+"""
+
+
 def test_guard_fires_on_a_real_violation():
     """反方向自证：把违规写回来看得见吗。看不见的话，上面那条"全绿"没有意义。"""
     hits = violations_in_source(async_src_blocking, "bad.py")
     assert len(hits) == 1 and "requests.get" in hits[0], hits
+
+
+def test_guard_fires_on_a_slow_project_helper():
+    """E25 新补的那一层也要自证：只列名字不咬人等于没列。"""
+    hits = violations_in_source(helper_src_blocking, "bad_helper.py")
+    assert len(hits) == 1 and "knowledge_service.save_and_process" in hits[0], hits
 
 
 @pytest.mark.parametrize(
@@ -204,6 +244,7 @@ def test_guard_fires_on_a_real_violation():
     [
         (async_src_threadpool, "线程池写法"),
         (sync_src_route, "sync def 路由（FastAPI 自己丢线程池）"),
+        (helper_src_threadpool, "helper 的线程池写法"),
     ],
 )
 def test_guard_passes_the_correct_forms(src, label):

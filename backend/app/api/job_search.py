@@ -5,6 +5,7 @@ from __future__ import annotations
 import traceback
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import String, cast, or_
 from sqlalchemy.orm import Session
 
@@ -261,7 +262,9 @@ async def search_external_jobs(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        external_jobs, external_error = spider.search(keyword, city, source, page)
+        # 爬虫内部是 requests + 退避 `time.sleep`，秒级起步；这条是 `async def`，
+        # 直接调会把整台 worker 的事件循环停住（E15 同一类，当时只扫了 primitives 没扫项目 helper）。
+        external_jobs, external_error = await run_in_threadpool(spider.search, keyword, city, source, page)
     except Exception as exc:
         traceback.print_exc()
         external_jobs, external_error = [], f"外部抓取异常: {str(exc)[:80]}"
@@ -284,7 +287,7 @@ async def search_external_jobs(
         else:
             demo_jobs = [job for job in external_jobs if _is_demo_source(job.source)]
             if not demo_jobs:
-                demo_jobs, _ = spider.demo(keyword, city)
+                demo_jobs, _ = await run_in_threadpool(spider.demo, keyword, city)
             external_results, _ = _save_external_jobs(db, demo_jobs, current_user, save=False)
             result_mode = "demo_fallback"
             info_message = "当前未获取到真实岗位，已展示演示数据"
@@ -322,7 +325,7 @@ async def fetch_job_detail(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        job = spider.fetch_detail(source, url)
+        job = await run_in_threadpool(spider.fetch_detail, source, url)
         if not job or not job.raw_text:
             return fail(message="抓取详情失败", code=ERR_COMMON)
 

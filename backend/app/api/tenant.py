@@ -22,6 +22,7 @@ import re
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from app.api.auth import require_admin
@@ -553,7 +554,10 @@ async def import_tenant_knowledge(
         raise api_error(400, f"文件过大: {len(raw)} 字节（上限 20MB）", ERR_FILE)
 
     try:
-        doc = knowledge_service.save_and_process(
+        # 与 `api/knowledge.py` 同一条入库链路（parse→chunk→embed→Chroma add，秒级起步）。
+        # E15 那次只把 knowledge.py 的调用挪出了事件循环，这个组织侧入口漏了 —— 同样是 `async def`。
+        doc = await run_in_threadpool(
+            knowledge_service.save_and_process,
             db,
             raw,
             file.filename,
