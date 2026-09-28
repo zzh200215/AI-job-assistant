@@ -118,6 +118,11 @@ class Settings(BaseSettings):
 
     # Rate limiting (slowapi). Empty/unset falls back to code defaults.
     RATE_LIMIT_GENERAL: str | None = None
+    # §10.10 的决策：只给昂贵端点（=真实 provider 调用）独立额度，每 IP 总闸维持现状。
+    # 30 不是拍的：一次 linear 编排实测 12 个 agent / 13 个 chat 调用点 ≈ 每个任务 ≤11 次调用，
+    # 而请求内同步花钱的 resume 路由每次 1 次。30/分钟 ≈ 一分钟内三个完整深度分析。
+    # 0 或负数 = 关闭额度（`llm_quota.charge_if_real_provider` 直接放行）。
+    LLM_CALLS_PER_USER_PER_MINUTE: int = 30
     RATE_LIMIT_AUTH: str | None = None
     RATE_LIMIT_LOGIN: str | None = None
 

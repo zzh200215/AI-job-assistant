@@ -20,6 +20,7 @@ from app.api.interview_ws import router as interview_ws_router
 from app.api.router import api_router
 from app.core.config import settings
 from app.core.database import Base, engine
+from app.core.llm_quota import LLMQuotaExceededError
 from app.core.logging_utils import clear_logging_context, configure_logging, set_logging_context
 from app.core.prometheus_metrics import record_http_request, record_rate_limited
 from app.core.rate_limiter import get_limiter
@@ -143,6 +144,21 @@ async def request_context_middleware(request: Request, call_next):
     set_request_id(None)
     clear_logging_context()
     return response
+
+
+@app.exception_handler(LLMQuotaExceededError)
+async def llm_quota_handler(request: Request, exc: LLMQuotaExceededError):
+    """E28 的昂贵端点额度：超预算是真拒绝（429），不是静默降级。
+
+    对内可查这半由 `record_rate_limited` 完成 —— 没有它，运维只看到一个 429，
+    分不清是慢api 的按分钟闸还是模型调用额度闸拦的。
+    """
+    logger.warning("LLM quota exceeded path=%s detail=%s", request.url.path, str(exc)[:120])
+    record_rate_limited(path=request.url.path)
+    return JSONResponse(
+        status_code=429,
+        content=fail(message=str(exc), code=ERR_COMMON),
+    )
 
 
 @app.exception_handler(RateLimitExceeded)

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.core.llm_quota import set_billing_user
 from app.models.agent import AgentStepLog, AgentTask
 from app.models.agent_run import AgentMessage, AgentRun
 from app.orchestration.registry import DEFAULT_REGISTRY
@@ -37,6 +38,9 @@ def _get_backend():
 
 def _run_task_payload(payload: TaskPayload) -> None:
     """唯一的任务执行入口：线程后端和 Redis worker 跑的是同一份代码。"""
+    # 计费身份必须在这里显式设：`logging_utils` 那套上下文是 `threading.local`，
+    # worker 线程里取不到请求上下文的 user，不设就等于编排的花费全员不扣。
+    set_billing_user(payload.user_id)
     db = SessionLocal()
     try:
         strategy = StrategyFactory.create(payload.strategy_name, DEFAULT_REGISTRY)

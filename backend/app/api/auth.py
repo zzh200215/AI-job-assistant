@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.llm_quota import set_billing_user
 from app.core.prometheus_metrics import record_login_attempt
 from app.core.rate_limiter import auth_limit, get_limiter, login_limit
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
@@ -170,6 +171,9 @@ def get_current_user(authorization: str = Header(None), db: Session = Depends(ge
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=401, detail="用户不存在")
+    # 计费身份就在这一处挂：每条受守护路由都会经过这里（E19 之后更是构造保证），
+    # 比在 8 个昂贵路由的签名上加参数少得多，也覆盖了后台入队后的调用。
+    set_billing_user(user.id)
     return user
 
 

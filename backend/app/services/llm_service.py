@@ -22,6 +22,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.agents.tools import Tool, get_tool
 from app.core.config import settings
+from app.core.llm_quota import charge_if_real_provider
 from app.core.prometheus_metrics import (
     record_llm_degraded_response,
     record_llm_error,
@@ -1027,6 +1028,9 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
     - 返回内容非合法 JSON → 尝试提取，仍失败抛 ValueError
     """
     provider = (settings.LLM_PROVIDER or "mock").lower()
+    # E28：真花钱之前先扣用户的额度。放在 trace 之前，超额的那次不会留下"看起来跑过"的审计行；
+    # 也放在降级/重试链之外 —— 抛出的 LLMQuotaExceededError 不会被 `_call_with_fallbacks` 吞成降级。
+    charge_if_real_provider(provider=provider)
     scope = LLMTraceScope.begin(prompt=prompt, provider=provider, writer="chat_json")
     persist_trace = scope.persist
 
@@ -1213,6 +1217,8 @@ def chat_with_tools(
         - 工具调用有状态，不参与 LLM 结果缓存
     """
     provider = (settings.LLM_PROVIDER or "mock").lower()
+    # 工具循环一轮就是一次真调用，所以在这里按整次请求扣一格（与 chat_json 同口径）。
+    charge_if_real_provider(provider=provider)
 
     # ---- mock 无工具能力，降级 ----
     if provider == "mock":
