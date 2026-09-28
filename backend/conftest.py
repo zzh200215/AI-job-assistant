@@ -25,20 +25,25 @@ os.environ["RUN_SCHEDULER"] = "false"
 os.environ["DATABASE_URL"] = "sqlite://"
 
 # 注册全部模型并给 app 引擎建表，使后台任务（SessionLocal 直连 app 引擎）可查询。
-import app.models  # noqa: F401
-from app.core.database import Base, SessionLocal
+import app.models  # noqa: E402, F401
+from app.core.database import Base, SessionLocal  # noqa: E402
 from app.core.database import engine as _app_engine
+
+
+# SQLite 只有 `INTEGER PRIMARY KEY` 才是 rowid 别名（才会自增）。模型清一色是 BigInteger PK，
+# 所以渲染规则必须在**任何 DDL 发出之前**挂上，否则建出来的表是 `id BIGINT NOT NULL`，
+# 插入不给 id 就撞 `NOT NULL constraint failed`。这条钩子曾注册在下面的 create_all 之后
+# （E18/E19 那对"fixture 插得进、SessionLocal 插不进"的矛盾就是这么来的）。
+@compiles(BigInteger, "sqlite")
+def _compile_big_integer_sqlite(_type, _compiler, **_kwargs):
+    return "INTEGER"
+
 
 Base.metadata.create_all(bind=_app_engine)
 
 BACKEND_ROOT = Path(__file__).resolve().parent
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
-
-
-@compiles(BigInteger, "sqlite")
-def _compile_big_integer_sqlite(_type, _compiler, **_kwargs):
-    return "INTEGER"
 
 
 # ===================== Database Fixtures =====================

@@ -421,30 +421,25 @@ def test_the_real_app_blocks_anonymous_and_keeps_public_paths_working():
 
 
 def _seed_app_engine_user(prefix: str) -> int:
-    """在 app 引擎那块库里造一个能被真实 `get_db` 读到的用户，返回它的 id。"""
-    from sqlalchemy import text
+    """在 app 引擎那块库里造一个能被真实 `get_db` 读到的用户，返回它的 id。
 
+    **故意不给 id**：这条就是"BigInteger PK 在 SQLite 下必须渲染成 INTEGER 才会自增"的活证据。
+    `backend/conftest.py` 里那条 `@compiles` 钩子一旦注册得比 `create_all` 晚，这里立刻撞
+    `NOT NULL constraint failed: tb_user.id` —— E18 那对"fixture 插得进、SessionLocal 插不进"
+    的矛盾原形就是这个顺序问题。
+    """
     from app.core.database import Base, SessionLocal
     from app.core.database import engine as app_engine
 
     Base.metadata.create_all(bind=app_engine)
     session = SessionLocal()
     try:
-        # 显式给 id：pytest 里 app 引擎那块共享内存库的 tb_user 是 `id BIGINT`，SQLite 下
-        # BIGINT 主键不是 rowid 别名、不自增（同一份 metadata 新建引擎给的是 INTEGER）。
-        # 谁先把它建成 BIGINT 是 §8 的未决项，不影响这里数 SELECT。
-        next_id = int(session.execute(text("SELECT coalesce(max(id), 0) + 1 FROM tb_user")).scalar())
         tag = uuid4().hex[:8]
-        session.add(
-            User(
-                id=next_id,
-                username=f"{prefix}-{tag}",
-                email=f"{prefix}-{tag}@x.io",
-                password=hash_password("GatePass123!"),
-            )
-        )
+        user = User(username=f"{prefix}-{tag}", email=f"{prefix}-{tag}@x.io", password=hash_password("GatePass123!"))
+        session.add(user)
         session.commit()
-        return next_id
+        assert user.id is not None, "没给 id 却没拿到自增主键"
+        return int(user.id)
     finally:
         session.close()
 
