@@ -586,7 +586,7 @@ agent.SummaryAgent           real  tokens=3215
 | ~~限流粒度~~ → 有身份的请求已按用户计额度（E14，提交 `63537ab`） | 原来的事实：只有 `api/auth.py` 的 5 个匿名端点自带限流，其余 **228/233 条操作只受 `RATE_LIMIT_GENERAL`（100/分钟）按 IP 管** → 一个 NAT 出口下所有人共用一份额度。**仍在的两半**：① 昂贵端点（深度分析/多智能体）没有自己的额度，一个用户照样能一分钟发 100 次真金白银的 LLM 调用；② 登录流量的每 IP 总闸随 E14 消失了，要补就是 `application_limits` 按地址再挂一层。两个数都要人定，见 §10.10 |
 | ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`）；**性能那半句已被 E23 量没** | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。原话剩下的"性能"半句（`score()` 为 O(terms×docs) 纯 Python 遍历，**语料再大一个量级就要换实现**）实测不支持：91 切片 / 词表 2824 / 8 个查询词 = **0.13 ms/次**，10× 语料 0.72 ms，50× 语料（4550 切片 / 25000 词表）也只要 2.87 ms，而同一条召回链路里的 embedding 是百毫秒级的网络调用。与岗位 ANN 那行同形（72 条岗位全量扫是微秒级，`5d7508a` 的撤回理由仍成立），详见 E23 记录 |
 | Rerank 生产用启发式 | `rerank_service.py:125-159` 可选本地 cross-encoder，否则词重叠 + 硬编码 0.5/0.3/0.2 权重；`RERANKER_MODEL_PATH` 默认未设。**"jieba 词重叠"这个说法已被 E25 撤掉**：`jieba` 不在 `backend/requirements.txt` 里（`weasyprint` 在），所以按 requirements 装的任何环境里 `import jieba` 必失败，`rerank_service._tokenize` 与 `multi_recall._tokenize` 走的都是 `except ImportError` 的字符 n-gram 兜底 —— 也就是"文档在描述一条生产跑不到的分支"。`tests/test_tokenizer_fallback.py` 把两件事钉住：兜底有产出、装了 jieba 会改用 jieba，并且**故意在有人把 jieba 加进 requirements 时变红**（那时要同步改这里的说法并重跑 RAG/Recommend 门，因为分词一变 BM25 与 rerank 分数都会动）。要让这行真正收口，得决定"上不上真模型"（环境 + 成本），不是换分词器 |
-| 死代码 → ~~`api/tracking.py` 定义了 router 但**从未被 include**~~ 已挂载并修好整条链（E10，提交 `cb5a72b`）；**但 `track()` 调用方为 0，"要不要真埋点"回到 §10.8** | 另一半**前提两头都不准，已由 E21 更正**：原话点名的三个"靠 import 维持存活的垫片层"里，`agents/agent_orchestrator.py`（154 行）与 `services/agent_workflow.py`（20 行）是 `/api/multi-agent`、`/api/agent` **在用的兼容入口**，不是死代码；真正零引用的是另外 6 个模块共 **425 行**——`services/smart_orchestrator.py`（80 行，唯一公开函数 `run_orchestrator_sync` 无人调用，而两处"已废弃，请使用 …→ smart_orchestrator"的提示恰恰指向这个死入口）、4 个 prompt 文本模块（210 行，`PROMPT_VERSION` 全仓无人读，`SummaryAgent` 实际吃 `agent_report`）、`utils/llm_output.py`（135 行，覆盖率 **0%**）。已全部删除，并留一条可达性守卫 `tests/test_no_dead_app_modules.py`（静态 import 闭包 + 空 allowlist + 合成树反向证据 + "无动态 import app 模块"前提检查），详见 E21 记录 |
+| 死代码 → ~~`api/tracking.py` 定义了 router 但**从未被 include**~~ 已挂载并修好整条链（E10，提交 `cb5a72b`）→ **E29 按 §10.8 的决定整条删除**（调用方始终为 0，且 stub 会把 `user_id`+`username` 写进日志）；~~另一半"三个垫片层靠 import 存活"~~ → **E21 实测两头都不准并已收口** | 另一半**前提两头都不准，已由 E21 更正**：原话点名的三个"靠 import 维持存活的垫片层"里，`agents/agent_orchestrator.py`（154 行）与 `services/agent_workflow.py`（20 行）是 `/api/multi-agent`、`/api/agent` **在用的兼容入口**，不是死代码；真正零引用的是另外 6 个模块共 **425 行**——`services/smart_orchestrator.py`（80 行，唯一公开函数 `run_orchestrator_sync` 无人调用，而两处"已废弃，请使用 …→ smart_orchestrator"的提示恰恰指向这个死入口）、4 个 prompt 文本模块（210 行，`PROMPT_VERSION` 全仓无人读，`SummaryAgent` 实际吃 `agent_report`）、`utils/llm_output.py`（135 行，覆盖率 **0%**）。已全部删除，并留一条可达性守卫 `tests/test_no_dead_app_modules.py`（静态 import 闭包 + 空 allowlist + 合成树反向证据 + "无动态 import app 模块"前提检查），详见 E21 记录 |
 | ~~缺少 router 级鉴权~~ → 已收口：22 段纯会话前缀挂 include 级守护（E11，提交 `21778e2`）+ **按操作补齐的装配期默认拒绝**（E19） | 原判断成立的方式：31 个 router / 218 端点无一处用 `dependencies=[...]`，鉴权靠每端点自己写。**现在的保证**：一条操作要么在 `app/core/api_access.py` 的两张清单里（15 条真公开 + 4 条自带别的凭据），要么它的依赖树里必有 `Depends(get_current_user)`——缺的自己被补上，所以那 8 段混着公开端点的前缀不再靠自觉。**计划里开的方子"先做端点级拆分"已被实测否掉**（42 个测试文件自建 mini-app、拆完 25 个 404），见 E19 |
 | ~~三个 router 共享 `/jobs` 前缀~~ → 已收口为构造保证（E22，`tests/test_route_prefix_collisions.py`） | 原话"当前不冲突仅因 `job_recommend.py:1448` 的 `/{jd_id:int}` 是单段"里，**"不冲突"这件事先量成了事实**：`/jobs` 下 37 条路由，0 组同 (方法, 模板) 重复、0 条字面路径被更靠前的动态路径遮蔽。所以这行记的不是现存故障，而是"没人保证下次也不出故障"——谁在 `/jobs` 下加一条 `/{section}` 就能安静吃掉三条字面路径（Starlette 只跑第一条）。现在这条性质由守卫测（真实路由表 + 合成路由反证它会响），不再依赖某个模板恰好是单段 |
 
@@ -1580,6 +1580,27 @@ MySQL 分支三个数确实等于配置值；sqlite 分支**不能**出现这些
 **门禁**：backend 全量 **806 → 813 passed**；`ruff check .` 与 `ruff format --check .` clean。
 **没做**：135 条 async 路由走 `def` 还是逐处 `run_in_threadpool`，按同一条决策明确留着。
 
+#### 已交付：E29 埋点这条"链"两端都修好了，然后按决定整条删掉
+
+**先量再删**（四条独立证据，不只看 `track()` 的引用数）：
+
+| 量到的事实 | 怎么量的 |
+|---|---|
+| 端点实现只有 48 行，做的事是把事件 `logger.info` 出去 —— **没有存储、没有消费方**，`db` 参数收了不用 | 读 `app/api/tracking.py` |
+| `track()` 调用方 **0** | 全仓 grep（E10 当时就是 0，三年后还是 0） |
+| `frontend/src/utils/tracker.js` 除了自己的测试文件外**无人 import** | grep `tracker` 于 `frontend/src`、`frontend/tests` |
+| 每条事件会把 `user_id` + `username` 写进日志文件 | 读实现 |
+
+**为什么 E10 那笔不是白做、但这条还是要删**：E10 修的是"router 从未 include → 每条埋点 404，而 fetch 失败被 `resp.ok` 当成成功丢掉"——那是**当时真实存在的假象**，修完链路才第一次说得清"端点在、生产者是零"。留着它的成本不是维护，是**往日志里写身份却没有读者**。§10.8 一直是这个决定该由谁做，现在做了：删。
+
+**删了什么**：`app/api/tracking.py`、`tests/test_tracking_endpoint.py`、`frontend/src/utils/tracker.js`、`frontend/tests/unit/tracker.test.js`，加上 `api/router.py` 的挂载与 import、E19 前缀表 `CONSTRUCT_PROTECTED_PREFIXES` 里的 `/tracking`。`api_router.routes` 从 233 条降到 **232** 条。
+
+**没动**：`tests/test_analytics_tenant.py` 第 3 行那句"两个租户的 tracking 数据互不串"——那是漏斗/收入分析的措辞，跟埋点无关，不在射程里。将来真要做分析，按事件清单从零设计，而不是复活这条 stub。
+
+**门禁**：backend **813 → 810 passed**（少的 3 条就是被删的 tracking 用例）；`ruff check .` clean；
+frontend 17 文件 **97 passed**、`lint` 0 error（唯一 warning 是 `admin/Overview.vue` 里既有的
+`paidOrders` 未使用，与本次无关）、`build` 通过。
+
 #### 已交付：D7 职业规划页：旧简历的慢响应不再顶到新简历下面（提交 `fb57d7e`）
 
 D3 结尾留的那句"哪些加载函数真的可被用户并发触发，需要逐点读代码"——这轮挑了一页去读，答案是**能**，而且症状就在候选人眼前。
@@ -1808,7 +1829,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 5. **"优先投递"这类产品口径是否跟随后端档位（85）**。D1 只统一颜色；下面几处 80 分界表达的是徽章、统计数与解锁，改了会改变候选人看到的数字与文案，需本人定：`JobRecommend.vue:380`（优先投递徽章，配 `:655` 的计数）、`History.vue:318`（"高匹配记录"）、`Profile.vue:492`（成就解锁）、`CareerPlanning.vue:968-990`（投递策略 80/70/60 分档）。徽章与卡片上后端给的推荐标签现已可能相反（82 分：徽章"优先投递" + 标签"可以投递"）。
 6. **`Interview.vue:464` 的随机"薄弱项"分数怎么处置**。当前无趋势数据时用 `Math.random()*40+30` 造分并配颜色与训练建议；选项是按真实会话维度聚合，或删掉该块改显式空态。两者都改变候选人所见。
 7. ~~**前端 `format:check` 门走哪条路**~~ —— **已定并落地（D13，`5662916`）**：选了"一次性 `npm run format`"而不是把 prettier 钉回 3.3。CI 口径的不过文件数从 **17 → 0**（原来记的 95 是本机 CRLF 噪音，见 `docs/engineering-quality.md` 同节）。附带代价与收获写在 D13：两把按行数数的棘轮尺子被这次折行戳穿。
-8. **埋点：补上调用方，还是删掉 SDK**（E10 留下的）。管道两端已修好且各有测试锁住，但 `track()` 调用方仍为 0，所以今天没有任何事件在流动。埋哪些点是产品/隐私决定（服务端 stub 会把 `user_id` + `username` 写进日志文件，而 `db` 参数收了不用），不该由清理顺手替用户做；反之若决定不做分析，`utils/tracker.js` + `api/tracking.py` + 刚挂上的路由一起删。
+8. ~~**埋点：补上调用方，还是删掉 SDK**~~ —— **已定并执行：删（E29，2026-09-28）**。管道两端在 E10 都修好且各有测试锁住，但 `track()` 的调用方到删除那天仍然是 0，而且实测 `frontend/src/utils/tracker.js` 除了自己的测试之外无人 import；端点本身只把 `user_id` + `username` 写进日志文件（无存储、无消费方，`db` 参数收了不用）。所以留着它不只是维护成本，还在往日志里写身份。已删的 4 个文件：`app/api/tracking.py`、`tests/test_tracking_endpoint.py`、`frontend/src/utils/tracker.js`、`frontend/tests/unit/tracker.test.js`，外加路由挂载与 E19 前缀表里的 `/tracking`。将来真要做分析，是从零按事件清单设计，不是复活这条 stub。
 9. **跨页隐式握手的最终归属**（E13 只做了三个 id）。`recruit.lastX` 现在集中在 `utils/lastSelection` 并按用户分槽，但它仍是 localStorage；§7 原话是"应改由 Pinia 承载"。两件事需要你定：① 要不要把它再收成一个 Pinia store（则 `setSelectionOwner` 变成 store 内部细节，视图少一层 import）；② `recruit.pendingAnalysis`（`JobSearch`→`SmartAnalysis` 的一次性载荷）与 `recruit.defaultResumeId` 是否也进同一套——前者跨账号也会存活，只是窗口小得多。
 10. **昂贵端点要不要单独的额度，以及每 IP 还要不要总闸**（E14 留下的两个数）。现在 228 条操作仍共用 `RATE_LIMIT_GENERAL`（默认 100/分钟，已改为按用户计），意味着一个登录用户可以一分钟发 100 次深度分析，每次都打真 LLM；而 E14 之后**同一出口的每 IP 总闸自然消失了**（原来它天然存在，因为大家共用一桶）。要收口就得填两个数：① 昂贵端点（`/api/analysis/full`、`/api/multi-agent/*`、`/api/agent/start`）的每分钟额度；② 是否用 `application_limits` 按地址再挂一层总闸、阈值多少。接线与对照组都已在 `tests/test_rate_limit_key.py` 备好，填数即可。
 11. **自动填的"目标岗位"该不该被下一次选择覆盖**（D7 量到的）。`CareerPlanning` 里 `targetRole` 只在为空时由简历职称填入，之后换简历不改它，于是薪资面板继续查第一份简历的职称——标签与数字自洽，所以不是假话，但它不再代表"当前这份简历"。要么"自动填入的值在用户没编辑过时跟随选择"（需要区分自动/手输），要么在换简历时把薪资面板标注成"按 目标岗位=<现值> 查询"。两条都改变候选人看到的数字，且第 ① 条要动输入框的状态模型。
