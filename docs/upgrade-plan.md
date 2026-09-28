@@ -581,7 +581,7 @@ agent.SummaryAgent           real  tokens=3215
 | schema 有第四条路径 | ~~Alembic（22 个 revision）+ `Base.metadata.create_all` + `core/schema_bootstrap.py`（453 行 / 13 个手写 MySQL DDL）+ 散落的 `add_columns.py`/`reset_kb.py`~~ → **E17 收口**（提交 `f460310`）：删掉 `schema_bootstrap.py`，启动改成只做漂移体检（`core/schema_drift.py`，缺表/缺列/多出来都点名并提示跑 `alembic upgrade head`；库连不上只报告不抛）。**动手前量的事实**：在 `alembic upgrade head` 建出的库上，14 个 `ensure_*` **一条 DDL 都不发**；那 6 张"要建表"的表在 `Base.metadata` 里都有模型，`create_all` 独立建出 46 张表；而它写死的 MySQL 方言在 SQLite 上 6 个全部抛 `near "KEY"/"INDEX"/"ON"`。部署不依赖它：两份 compose 都有 `alembic upgrade head` 服务、生产 `AUTO_CREATE_TABLES=false`、config 校验器禁止生产开 create_all。**这条债的两个前提已作废**：revision 数是 **26** 不是 22；`scripts/add_columns.py` 与 `reset_kb.py` **已经不存在**（现在 `scripts/` 里碰 schema 的只有 `export_schema_baseline.py`（从 metadata 渲染）与 `seed_rag_corpus.py`（create_all 建临时库），都是派生读，不是第二条写路径）。**仍在**：`AUTO_CREATE_TABLES` 默认 `True`（开发便利，但也是"忘了迁移也能跑起来"的来源）；守卫 `test_schema_drift.py` 只保证 `app/**` 里不再出现手写 DDL |
 | 连接池未配置 | ~~`core/database.py:9-20` 未设 `pool_size`/`max_overflow`，默认 5+10 的 queuepool 面对线程池密集应用~~ → **E15 更正这行的前提**：`pool_pre_ping=True` 与 `pool_recycle=3600` 是设了的（`app/core/database.py:9-12`），没设的只有 `pool_size`/`max_overflow`/`pool_timeout`（默认 5+10+排队 30s）。**为什么现在才值得管**：E15 把 12 处同步出网挪进线程池之后，取连接的线程数不再天然是 0；要不要显式填数与"135 条 async 路由走哪条路"是同一个决定，见 §10.15 |
 | ~~测试覆盖真实路径为零~~ → LLM（E18）、embedding 与 rerank（E20）三条真路径都已执行；**`--cov-fail-under` 仍是 0（有意）** | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错 → **E18 收了 LLM 那半**（提交 `4a64537`）：5 条测试把真 `requests` 打到本地 OpenAI 兼容假服务，顺带发现调用方拿到的是聚合 `LLMProviderError`（不是 `LLMTimeoutError`）以及**审计行在测试进程里根本没落库**（`prompt_trace` 插入 `NOT NULL constraint failed: id`，被 except 吞成计数器；46 张表全是 BigInteger PK，矛盾未解释，见 E18 记录）。**E20 收了 embedding + rerank**（`tests/test_embedding_http_contract.py` 7 条、`tests/test_rerank_local_branch.py` 6 条：前者打真 socket 的假 embedding 服务，后者往 `sys.modules` 塞假 `transformers`/`torch` 跑产品自己的分批与降级）；两处顺带修了生产代码，见 E20 记录。**这行原本还写着的两件事已更正**：① "`.coverage` 被提交进工作树"是假的（D14 已证 `git ls-files` 里 0 条，`.gitignore:49` 忽略它）；② "Chroma server 行为从未被执行"**不成立**——`core/chroma_client.py` 里根本没有 server 模式（只有 `PersistentClient`），且该文件在改动前就已执行 80%，缺的 `31` 是 CI 语料评估用的 `CHROMA_DIR` 分支（E20 已钉住）、`70-74` 是测试辅助 `reset_collection`。要不要真的接服务端向量库是 §10.3。 |
-| 队列无 ack/retry/DLQ | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py:76-79`）；Redis 队列存在（`:93-141`）。~~但 `mark_stale_running_tasks_failed` 启动时把 30 分钟以上任务一律置失败，多副本重启会误杀正常长任务~~ → 已改为按"最后一次进度写入"判静默（E12，提交 `3ecbb96`）。~~`run_strategy_async` 构造两个 `TaskPayload` 后丢弃~~ → **这条已不成立**：`orchestration_runner` 里两处 `TaskPayload(...)`（`:156`、`:204`）都紧跟 `return _get_backend().submit(payload, _run_task_payload)`，没有构造后丢弃的路径。**仍在的是**：任务入队后没有任何 lease/心跳字段，所以"排在长 backlog 里没开工"与"执行进程已经死了"在数据上仍然无法区分——这正是 E12 只把误杀范围缩到"完全静默"而没有消灭它的那一半 |
+| ~~队列无 ack/retry/DLQ~~ → `redis_queue` 后端已由 E24 收口（至少一次投递 + 重试上限 + 死信）；**`thread` 后端仍是内存 fire-and-forget** | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py`）；Redis 队列存在。~~但 `mark_stale_running_tasks_failed` 启动时把 30 分钟以上任务一律置失败，多副本重启会误杀正常长任务~~ → 已改为按"最后一次进度写入"判静默（E12，提交 `3ecbb96`）。~~`run_strategy_async` 构造两个 `TaskPayload` 后丢弃~~ → **这条已不成立**。~~"入队后没有任何 lease 字段，分不清'排在长 backlog 里'与'执行进程已死'"~~ → **E24 收口了 redis 那半**：交接用 `BRPOPLPUSH` 进 `<队列>:processing`、跑完才 ack、期限记在 `<队列>:inflight-deadlines`（ZSET）、超时重投、`ORCHESTRATION_MAX_ATTEMPTS` 跑满进 `<队列>:dead-letter`——"排队中"与"在途"从此是两个不同的键。**thread 那半仍在**：线程模式没有 broker，进程死亡即丢掉还没开工的 future，只能靠 E12 的静默判定把 DB 行扫成失败，所以它是"最终可见"而不是"不丢"。今天 `ORCHESTRATION_BACKEND` 与 `docker-compose.prod.yml` 默认都是 `thread` |
 | ~~限流粒度~~ → 有身份的请求已按用户计额度（E14，提交 `63537ab`） | 原来的事实：只有 `api/auth.py` 的 5 个匿名端点自带限流，其余 **228/233 条操作只受 `RATE_LIMIT_GENERAL`（100/分钟）按 IP 管** → 一个 NAT 出口下所有人共用一份额度。**仍在的两半**：① 昂贵端点（深度分析/多智能体）没有自己的额度，一个用户照样能一分钟发 100 次真金白银的 LLM 调用；② 登录流量的每 IP 总闸随 E14 消失了，要补就是 `application_limits` 按地址再挂一层。两个数都要人定，见 §10.10 |
 | ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`）；**性能那半句已被 E23 量没** | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。原话剩下的"性能"半句（`score()` 为 O(terms×docs) 纯 Python 遍历，**语料再大一个量级就要换实现**）实测不支持：91 切片 / 词表 2824 / 8 个查询词 = **0.13 ms/次**，10× 语料 0.72 ms，50× 语料（4550 切片 / 25000 词表）也只要 2.87 ms，而同一条召回链路里的 embedding 是百毫秒级的网络调用。与岗位 ANN 那行同形（72 条岗位全量扫是微秒级，`5d7508a` 的撤回理由仍成立），详见 E23 记录 |
 | Rerank 生产用启发式 | `rerank_service.py:125-159` 可选本地 cross-encoder，否则 jieba 词重叠 + 硬编码 0.5/0.3/0.2 权重；`RERANKER_MODEL_PATH` 默认未设 |
@@ -1406,6 +1406,55 @@ E5 收口失效链路之后，那行债只剩一句"性能"：`score()` 是 O(te
 `track()` 调用方为 0（§10.8 待决策）。
 
 **门禁**：backend 无代码改动，全量仍是 **786 passed**；工作树只有本文件。
+
+#### 已交付：E24 `redis_queue` 从"先删再跑"改成至少一次投递：ack、超时重投、重试上限、死信
+
+**改前的形状**：`submit` = `rpush`，`worker_loop` = **`blpop` 先删再跑** —— worker 进程一死，元素就没了。
+DB 侧不是全瞎（`_run_task_payload` 会把异常写成 `failed`，E12 的静默判定把残留 `running` 扫成失败），
+但那只是"最终会被标失败"，不是"不会被丢"。
+
+**做了什么**
+
+- 队列元素换成信封 `{v, attempts, payload}`。`attempts` 随元素本身走，**交接之后不改写元素**
+  （改写会让 processing 与期限表里的键对不上），所以重投是"摘掉旧元素 + 推一个新 attempts 的元素"。
+- **`LPUSH` 入头 + `BRPOPLPUSH` 出尾 = FIFO**。这条是写到一半才发现的：沿用 `rpush` 的话
+  `BRPOPLPUSH` 会从尾部拿到最新那条，队列变成 LIFO，排在前面的老任务被饿死。
+- 在途用两个键表示：`<队列>:processing`（列表）与 `<队列>:inflight-deadlines`（ZSET，成员是元素原文、
+  分数是到期时刻）。跑成功才 `_discard`（`LREM` + `ZREM`）—— 那才是 ack。
+- `reclaim_stale()` 每轮开头跑两件事：① **领养**——在 processing 里但期限表没有的元素补一个期限
+  （那是崩在"交接完成"与"登记期限"之间的）；② **过期重投**——期限到点且仍在 processing 的元素按
+  attempts 决定回队列还是进死信。
+- 上限 `ORCHESTRATION_MAX_ATTEMPTS`（默认 3，含首次）跑满就进 `<队列>:dead-letter` 并带上 `reason`。
+- **SIGTERM 不吞任务**：runner 被打断时原样回队且**不消耗重试预算**（部署动作不是任务的错）。
+- 认不出的元素直接进死信，不占重试预算 —— 重投一百次也还是认不出。
+- 兼容：升级前就排在队列里的平铺元素（没有 `payload` 键）仍被正常消费，attempts 记 0。
+- `queue_health()` 从只报 `queue_length` 扩成四个桶（队列 / 在途 / 死信 / 已登记期限）。理由很实在：
+  在途与死信看不见的话，"任务被静默吞掉"这类事故就没有对内可见性。
+
+**两个必须说清的边界**
+
+1. 语义是 **at-least-once**：崩在 ack 之前会让同一个任务再跑一遍。这不是疏漏，是"不丢"的代价。
+   相应地 `reclaim_stale` 里专门有一条挡"已经跑完、只是 `ZREM` 之前崩了"的元素 —— 它**绝不重投**，
+   否则每次优雅退出都要多烧一遍 LLM。
+2. `ORCHESTRATION_VISIBILITY_SECONDS`（默认 3600）**必须大于单条编排任务的真实最长耗时**；短于它就会把
+   还在跑的任务重投、两个 worker 同跑一个 run。默认值刻意取在 E12 那个 30 分钟静默窗口之上，
+   这条约束也写进了 README 的 env 表而不是只留在注释里。
+
+**测试**：`tests/test_orchestration_backend.py` 从 4 条变 13 条。假 Redis 按真实语义实现
+（`LPUSH` 进头、`BRPOPLPUSH` 出尾、ZSET 按分数排序）——假客户端要是把语义写松，这些测试就只是在给实现背书。
+反向证据做了两处，其中一处是**跑出来的不是推断**：把"已 ack 的元素不重投"那道护栏删掉，
+`test_an_acked_item_with_a_lingering_deadline_is_not_requeued` 立刻红；装回去 13 条全绿。
+另一处是"崩在交接与登记之间"的元素必须被领养且**当轮不重投**。
+
+**一次自错值得留着**：第一版测试脚手架靠 runner 抛 `KeyboardInterrupt` 来停循环，于是"坏数据直接进死信"
+这类**根本走不到 runner** 的用例自旋到超时——真 Redis 的 `BRPOPLPUSH` 会阻塞够时间，假客户端立刻返回
+`None`。改成"队列空即停"的钩子之后才分清这是我的量具问题、不是产品死循环。
+
+**没做**：`thread` 后端仍是内存 fire-and-forget（进程死亡丢掉还没开工的 future，靠 E12 收尾）。
+要把它也变成持久队列，先得决定"默认后端换不换"——那是部署决定，不是工程债。
+
+**门禁**：backend 全量 **786 → 795 passed**；`ruff check .` 与 `ruff format --check .`（345 文件）clean；
+README env 表补上两个新键。
 
 #### 已交付：D7 职业规划页：旧简历的慢响应不再顶到新简历下面（提交 `fb57d7e`）
 

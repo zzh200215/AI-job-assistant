@@ -378,6 +378,8 @@ npm run dev
 | `ORCHESTRATION_ENGINE` | `native` | 编排引擎（`native` / `langgraph`） |
 | `ORCHESTRATION_BACKEND` | `thread` | 任务执行后端（`thread` / `redis_queue`） |
 | `REDIS_URL` | `redis://127.0.0.1:6379/0` | Redis 队列地址 |
+| `ORCHESTRATION_VISIBILITY_SECONDS` | `3600` | 仅 `redis_queue`：在途任务多久没 ack 就重投。**必须大于单条编排的真实最长耗时**，否则一个还在跑的任务会被第二个 worker 再跑一遍（LLM 白付两遍） |
+| `ORCHESTRATION_MAX_ATTEMPTS` | `3` | 仅 `redis_queue`：含首次的执行次数上限，跑满即转入 `<队列名>:dead-letter` |
 | `RAG_TOP_K` | `5` | 检索 Top K |
 | `RAG_CHUNK_SIZE` / `RAG_CHUNK_OVERLAP` | `500` / `50` | 切片参数 |
 | `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | — | 飞书应用凭据，仅从环境变量读取 |
