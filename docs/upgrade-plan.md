@@ -576,7 +576,8 @@ agent.SummaryAgent           real  tokens=3215
 
 | 项 | 证据 |
 |---|---|
-| 事件循环被阻塞 I/O 占用 | 195 个 `async def` 端点全部使用同步 `SessionLocal`；`chat_json` 用阻塞 `requests.post`（`llm_service.py:701`）直调于 `interview_rest.py:452` 与健康探针 `system.py:140`；`knowledge_service.save_and_process` 把 parse→chunk→embed→Chroma add 全串在请求里（`api/knowledge.py`）；`resume_export_service.py:321` 同步跑 WeasyPrint；`job_spider.py:72`、`webhook_service.py:155` 用 `time.sleep` → **E15 先修掉"在 `async def` 里直接出网"这一类 12 处**（`/ready`、`/model-probe`、知识入库/检索/重建/改写测试 7 处、飞书 SSO 2 处），并加了一条 AST 守卫防新写。**两处按本行说法不成立**：`/health` 现在不做任何 I/O，阻塞 provider 调用在 `/model-probe`；`interview_rest` 那次 `chat_json`（现在在 `:503`）已经挂在 `background_tasks` 上，同步函数由 Starlette 丢线程池跑，响应前不做这件事（代码里就是这句注释）。**仍在**：24 条 async 路由经 sync 服务函数间接出网（上界，含一条已证伪），以及 135 条 async 路由持有同步 db 会话——后者是"改成 `def` 还是逐处 `run_in_threadpool`"的方向选择，见 §10.15 |
+| 事件循环被阻塞 I/O 占用 | 195 个 `async def` 端点全部使用同步 `SessionLocal`；`chat_json` 用阻塞 `requests.post`（`llm_service.py:701`）直调于 `interview_rest.py:452` 与健康探针 `system.py:140`；`knowledge_service.save_and_process` 把 parse→chunk→embed→Chroma add 全串在请求里（`api/knowledge.py`）；`resume_export_service.py:321` 同步跑 WeasyPrint；`job_spider.py:72`、`webhook_service.py:155` 用 `time.sleep` → **E15 先修掉"在 `async def` 里直接出网"这一类 12 处**（`/ready`、`/model-probe`、知识入库/检索/重建/改写测试 7 处、飞书 SSO 2 处），并加了一条 AST 守卫防新写。**两处按本行说法不成立**：`/health` 现在不做任何 I/O，阻塞 provider 调用在 `/model-probe`；`interview_rest` 那次 `chat_json`（现在在 `:503`）已经挂在 `background_tasks` 上，同步函数由 Starlette 丢线程池跑，响应前不做这件事（代码里就是这句注释）。**E25 收了这半句里的 4 条 async 路由 / 6 个调用点**：`GET /jobs/search-external` 的 `spider.search`+`spider.demo`、`GET /jobs/detail` 的 `spider.fetch_detail`（这两条属于"经 sync 服务函数间接出网"那 24 条的口径），`GET /resume/{id}/export` 的 `export_pdf`+`export_docx`（列在同行里的 WeasyPrint），以及 `POST /tenant/{id}/knowledge` 的 `save_and_process`（知识库全链路）。E15 当时漏掉它们的真原因也量出来了：守卫的**路由判据只认 `@router.`/`@ws.`**，`@admin_router.post` 那条路由**根本不在它的扫描范围内**（旧判据看得见 194 条 async 路由，实际 195 条），而且它只匹配原语（`requests.*`/`time.sleep`），不下钻项目 helper。两处都补了，并留了"改前的真 blob 会被抓到、改后为空"的证据。
+**仍在**：24 条间接出网的上界口径没重算（只确知这 2 条已收口），以及 135 条 async 路由持有同步 db 会话——后者是"改成 `def` 还是逐处 `run_in_threadpool`"的方向选择，见 §10.15 |
 | WebSocket 鉴权与内存无界 | `interview_ws.py:39-43` 绕过 FastAPI 依赖手工校验 query token；`:23-34` 的进程级 `_engine_pool` 无上限，且无跨副本亲和 → **E16 收口**（提交 `eb5e040`）：① 凭据只认 `Sec-WebSocket-Protocol: jwt,<token>`，`?token=` 一律 4001（**改前实测**：同一枚有效长期 JWT 从查询串进来能一路走到 accept，而仓库自带的浏览器客户端从来用的是子协议）；② 引擎改成**按连接**持有，断开必 `cleanup()`（**改前实测**：客户端关闭后 `_engine_pool` 仍留着 1 个引擎且 `engine.db is not None`，也就是每放弃一场面试永久占着一个打开的 Session）。前提更正：原话"绕过 FastAPI 依赖手工校验"里，"手工校验"成立（WS 拿不到 HTTP 依赖，这条改不了也不需要改），"query token"只是兜底通道。**仍在**：跨副本亲和——两条连接打到不同副本就是两份引擎状态，这一点改前改后一样（原实现的"共享"也只共享本进程）；要消除得靠 sticky 路由或把引擎状态外置 |
 | schema 有第四条路径 | ~~Alembic（22 个 revision）+ `Base.metadata.create_all` + `core/schema_bootstrap.py`（453 行 / 13 个手写 MySQL DDL）+ 散落的 `add_columns.py`/`reset_kb.py`~~ → **E17 收口**（提交 `f460310`）：删掉 `schema_bootstrap.py`，启动改成只做漂移体检（`core/schema_drift.py`，缺表/缺列/多出来都点名并提示跑 `alembic upgrade head`；库连不上只报告不抛）。**动手前量的事实**：在 `alembic upgrade head` 建出的库上，14 个 `ensure_*` **一条 DDL 都不发**；那 6 张"要建表"的表在 `Base.metadata` 里都有模型，`create_all` 独立建出 46 张表；而它写死的 MySQL 方言在 SQLite 上 6 个全部抛 `near "KEY"/"INDEX"/"ON"`。部署不依赖它：两份 compose 都有 `alembic upgrade head` 服务、生产 `AUTO_CREATE_TABLES=false`、config 校验器禁止生产开 create_all。**这条债的两个前提已作废**：revision 数是 **26** 不是 22；`scripts/add_columns.py` 与 `reset_kb.py` **已经不存在**（现在 `scripts/` 里碰 schema 的只有 `export_schema_baseline.py`（从 metadata 渲染）与 `seed_rag_corpus.py`（create_all 建临时库），都是派生读，不是第二条写路径）。**仍在**：`AUTO_CREATE_TABLES` 默认 `True`（开发便利，但也是"忘了迁移也能跑起来"的来源）；守卫 `test_schema_drift.py` 只保证 `app/**` 里不再出现手写 DDL |
 | 连接池未配置 | ~~`core/database.py:9-20` 未设 `pool_size`/`max_overflow`，默认 5+10 的 queuepool 面对线程池密集应用~~ → **E15 更正这行的前提**：`pool_pre_ping=True` 与 `pool_recycle=3600` 是设了的（`app/core/database.py:9-12`），没设的只有 `pool_size`/`max_overflow`/`pool_timeout`（默认 5+10+排队 30s）。**为什么现在才值得管**：E15 把 12 处同步出网挪进线程池之后，取连接的线程数不再天然是 0；要不要显式填数与"135 条 async 路由走哪条路"是同一个决定，见 §10.15 |
@@ -584,7 +585,7 @@ agent.SummaryAgent           real  tokens=3215
 | ~~队列无 ack/retry/DLQ~~ → `redis_queue` 后端已由 E24 收口（至少一次投递 + 重试上限 + 死信）；**`thread` 后端仍是内存 fire-and-forget** | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py`）；Redis 队列存在。~~但 `mark_stale_running_tasks_failed` 启动时把 30 分钟以上任务一律置失败，多副本重启会误杀正常长任务~~ → 已改为按"最后一次进度写入"判静默（E12，提交 `3ecbb96`）。~~`run_strategy_async` 构造两个 `TaskPayload` 后丢弃~~ → **这条已不成立**。~~"入队后没有任何 lease 字段，分不清'排在长 backlog 里'与'执行进程已死'"~~ → **E24 收口了 redis 那半**：交接用 `BRPOPLPUSH` 进 `<队列>:processing`、跑完才 ack、期限记在 `<队列>:inflight-deadlines`（ZSET）、超时重投、`ORCHESTRATION_MAX_ATTEMPTS` 跑满进 `<队列>:dead-letter`——"排队中"与"在途"从此是两个不同的键。**thread 那半仍在**：线程模式没有 broker，进程死亡即丢掉还没开工的 future，只能靠 E12 的静默判定把 DB 行扫成失败，所以它是"最终可见"而不是"不丢"。今天 `ORCHESTRATION_BACKEND` 与 `docker-compose.prod.yml` 默认都是 `thread` |
 | ~~限流粒度~~ → 有身份的请求已按用户计额度（E14，提交 `63537ab`） | 原来的事实：只有 `api/auth.py` 的 5 个匿名端点自带限流，其余 **228/233 条操作只受 `RATE_LIMIT_GENERAL`（100/分钟）按 IP 管** → 一个 NAT 出口下所有人共用一份额度。**仍在的两半**：① 昂贵端点（深度分析/多智能体）没有自己的额度，一个用户照样能一分钟发 100 次真金白银的 LLM 调用；② 登录流量的每 IP 总闸随 E14 消失了，要补就是 `application_limits` 按地址再挂一层。两个数都要人定，见 §10.10 |
 | ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`）；**性能那半句已被 E23 量没** | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。原话剩下的"性能"半句（`score()` 为 O(terms×docs) 纯 Python 遍历，**语料再大一个量级就要换实现**）实测不支持：91 切片 / 词表 2824 / 8 个查询词 = **0.13 ms/次**，10× 语料 0.72 ms，50× 语料（4550 切片 / 25000 词表）也只要 2.87 ms，而同一条召回链路里的 embedding 是百毫秒级的网络调用。与岗位 ANN 那行同形（72 条岗位全量扫是微秒级，`5d7508a` 的撤回理由仍成立），详见 E23 记录 |
-| Rerank 生产用启发式 | `rerank_service.py:125-159` 可选本地 cross-encoder，否则 jieba 词重叠 + 硬编码 0.5/0.3/0.2 权重；`RERANKER_MODEL_PATH` 默认未设 |
+| Rerank 生产用启发式 | `rerank_service.py:125-159` 可选本地 cross-encoder，否则词重叠 + 硬编码 0.5/0.3/0.2 权重；`RERANKER_MODEL_PATH` 默认未设。**"jieba 词重叠"这个说法已被 E25 撤掉**：`jieba` 不在 `backend/requirements.txt` 里（`weasyprint` 在），所以按 requirements 装的任何环境里 `import jieba` 必失败，`rerank_service._tokenize` 与 `multi_recall._tokenize` 走的都是 `except ImportError` 的字符 n-gram 兜底 —— 也就是"文档在描述一条生产跑不到的分支"。`tests/test_tokenizer_fallback.py` 把两件事钉住：兜底有产出、装了 jieba 会改用 jieba，并且**故意在有人把 jieba 加进 requirements 时变红**（那时要同步改这里的说法并重跑 RAG/Recommend 门，因为分词一变 BM25 与 rerank 分数都会动）。要让这行真正收口，得决定"上不上真模型"（环境 + 成本），不是换分词器 |
 | 死代码 → ~~`api/tracking.py` 定义了 router 但**从未被 include**~~ 已挂载并修好整条链（E10，提交 `cb5a72b`）；**但 `track()` 调用方为 0，"要不要真埋点"回到 §10.8** | 另一半**前提两头都不准，已由 E21 更正**：原话点名的三个"靠 import 维持存活的垫片层"里，`agents/agent_orchestrator.py`（154 行）与 `services/agent_workflow.py`（20 行）是 `/api/multi-agent`、`/api/agent` **在用的兼容入口**，不是死代码；真正零引用的是另外 6 个模块共 **425 行**——`services/smart_orchestrator.py`（80 行，唯一公开函数 `run_orchestrator_sync` 无人调用，而两处"已废弃，请使用 …→ smart_orchestrator"的提示恰恰指向这个死入口）、4 个 prompt 文本模块（210 行，`PROMPT_VERSION` 全仓无人读，`SummaryAgent` 实际吃 `agent_report`）、`utils/llm_output.py`（135 行，覆盖率 **0%**）。已全部删除，并留一条可达性守卫 `tests/test_no_dead_app_modules.py`（静态 import 闭包 + 空 allowlist + 合成树反向证据 + "无动态 import app 模块"前提检查），详见 E21 记录 |
 | ~~缺少 router 级鉴权~~ → 已收口：22 段纯会话前缀挂 include 级守护（E11，提交 `21778e2`）+ **按操作补齐的装配期默认拒绝**（E19） | 原判断成立的方式：31 个 router / 218 端点无一处用 `dependencies=[...]`，鉴权靠每端点自己写。**现在的保证**：一条操作要么在 `app/core/api_access.py` 的两张清单里（15 条真公开 + 4 条自带别的凭据），要么它的依赖树里必有 `Depends(get_current_user)`——缺的自己被补上，所以那 8 段混着公开端点的前缀不再靠自觉。**计划里开的方子"先做端点级拆分"已被实测否掉**（42 个测试文件自建 mini-app、拆完 25 个 404），见 E19 |
 | ~~三个 router 共享 `/jobs` 前缀~~ → 已收口为构造保证（E22，`tests/test_route_prefix_collisions.py`） | 原话"当前不冲突仅因 `job_recommend.py:1448` 的 `/{jd_id:int}` 是单段"里，**"不冲突"这件事先量成了事实**：`/jobs` 下 37 条路由，0 组同 (方法, 模板) 重复、0 条字面路径被更靠前的动态路径遮蔽。所以这行记的不是现存故障，而是"没人保证下次也不出故障"——谁在 `/jobs` 下加一条 `/{section}` 就能安静吃掉三条字面路径（Starlette 只跑第一条）。现在这条性质由守卫测（真实路由表 + 合成路由反证它会响），不再依赖某个模板恰好是单段 |
@@ -1478,6 +1479,45 @@ DB 侧不是全瞎（`_run_task_payload` 会把异常写成 `failed`，E12 的�
 
 **门禁**：backend 全量 **786 → 795 passed**；`ruff check .` 与 `ruff format --check .`（345 文件）clean；
 README env 表补上两个新键。
+
+#### 已交付：E25 E15 那把尺子有两只眼睛是瞎的，补上之后抓到 4 条 async 路由 / 6 个阻塞调用点
+
+E 表只剩卡在 §10 的行之后，我回头查 E15 那行剩下的"仍在"半句，用 AST 把每个可疑调用点的
+**外层函数是不是 `async def`** 逐个判了一遍（不是看注释里说的"已挪线程池"）：
+
+| 站点 | 所在路由 | 阻塞的是什么 |
+|---|---|---|
+| `spider.search`、`spider.demo` | `search_external_jobs`（async） | 爬虫内部是 `requests` + 退避 `time.sleep` |
+| `spider.fetch_detail` | `fetch_job_detail`（async） | 同上 |
+| `resume_export_service.export_pdf` / `export_docx` | `download_resume_export`（async） | WeasyPrint / python-docx 渲染 + 落盘 |
+| `knowledge_service.save_and_process` | `import_tenant_knowledge`（async） | parse→chunk→embed→Chroma add，秒级起步 |
+
+四处全部改成 `await run_in_threadpool(...)`。**同一条入库链路在 `api/knowledge.py` 里 E15 就挪出去了，
+组织侧那个入口漏了** —— 这不是运气差，是守卫有两只瞎眼：
+
+1. **只匹配原语**。`BLOCKING_DOTTED/NAMES` 里是 `requests.*`、`time.sleep`、`chat_json` 这类名字，
+   尺子看的是调用点的名字，**不下钻 helper 体内**，所以 `spider.search(...)` 一路全绿。
+2. **路由判据只认 `@router.` / `@ws.`**。`@admin_router.post("/{tenant_id}/knowledge")` 那条路由
+   **从来没进过扫描范围** —— 旧判据在全仓看得见 **194** 条 async 路由，实际是 **195** 条。
+   这只瞎眼比漏掉本身更糟：它让"清单是空的"这个结论自我感觉良好。
+
+**证据不是推断**：把改前的 git blob 直接喂给新守卫 —— `job_search.py` 抓到 3 处、`resume.py` 2 处、
+`tenant.py` 1 处；而同一份 `tenant.py` blob 喂**旧**判据是 **0 处**（这就是它活到今天的机制原因）。
+当前树重扫：195 条路由、违规 0。合成用例也各补了一条（helper 层会咬 / 线程池写法不咬），
+`tests/test_no_blocking_in_event_loop.py` 8 → 10 passed。
+
+**顺带量出的一个错前提（同一批里最值钱的一条）**：`§8` 的 rerank 行一直写"生产用 **jieba** 词重叠"。
+实测 `jieba` **不在 `backend/requirements.txt` 里**（`weasyprint` 在），所以按 requirements 装的任何环境
+（本机、CI、生产镜像）`import jieba` 必失败，`rerank_service._tokenize` 与 `multi_recall._tokenize`
+两处走的都是 `except ImportError` 的字符 n-gram 兜底 —— 文档一直在描述一条生产跑不到的分支。
+`tests/test_tokenizer_fallback.py`（5 条）把两件事钉住：兜底必须有产出（空 token 不报错，只会让关键词
+这一路静默召不到东西）、装上假 jieba 时两处分词器确实改用 jieba（证明那条分支也不是死代码）。
+第三条是**故意会红的绊线**：谁把 jieba 写进 requirements，它就让谁同步改这里的说法并重跑评测门。
+
+**没做/做不到**：WeasyPrint 那条只修了形状、没测耗时 —— 本机 `import weasyprint` 直接
+`OSError`（缺原生库），拿不到真实渲染时间。135 条 async 路由持同步 db 会话那个方向仍在 §10.15。
+
+**门禁**：backend 全量 **797 → 802 passed**；`ruff check .` 与 `ruff format --check .` clean。
 
 #### 已交付：D7 职业规划页：旧简历的慢响应不再顶到新简历下面（提交 `fb57d7e`）
 
