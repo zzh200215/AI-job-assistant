@@ -1176,6 +1176,29 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 
 **顺带量到一件没查到底的事（记下来，不当已修）**：真路径一旦执行，审计行**在测试进程里落不下来**——`record_prompt_trace` 抛 `IntegrityError: NOT NULL constraint failed: prompt_trace.id`，被 `LLMTraceScope.persist` 的 `except` 吞成一条 `logger.exception` + 一个写失败计数器。现象可复现且自相矛盾：**同一张 `prompt_trace`，通过 app 的 `SessionLocal` 插必失败、通过 fixture 的 `db_session` 插能拿到 id=1**（两边 `sqlite_master` 里的 `id` 列都是 `BIGINT NOT NULL`）。我按 SQLite 只有 `INTEGER PRIMARY KEY` 才是 rowid 别名解释了一半，但"那 fixture 引擎为什么能成"没解释清，试了四次探针都被 Windows 控制台编码挡住了输出，就停在这里——**结论：不写"已修"，只写"审计链在测试环境里其实没落库，而且它被 except 吞掉了"**。要收口就先解释这对矛盾（大概率是两条引擎的建表时机/`checkfirst` 差异），再决定要不要给 BigInteger PK 加 `with_variant(Integer, "sqlite")`——那会牵动 **46 张表全部是 BigInteger PK、0 张 Integer**，不是单点改动。
 
+> **2026-09-28 追加诊断（仍未收口，但范围缩了三格，并且纠正上面一句括注）**
+>
+> ① 在 pytest 里 app 引擎是 `sqlite://` + StaticPool（`settings.database_url` 的观测值就是 `sqlite://`，
+> 与 conftest 写下的 `DATABASE_URL=sqlite:///:memory:` **不同形**——为什么不同没查）。那块库在探针模块
+> **导入时**就已经有 **46 张表**（正好等于 `len(Base.metadata.tables)`），其中 `tb_user` 是
+> `id BIGINT NOT NULL` → 不给 id 的 INSERT 必失败（SQLite 下 `BIGINT` 主键不是 rowid 别名）。
+> ② 同一份 `Base.metadata` 在**新建引擎**上 `create_all` 渲染的是 `id INTEGER NOT NULL`，插入正常；
+> 全新解释器 + 同一套环境变量的话，那块库是 **0 张表**。所以那 46 张表是在 **pytest 启动链里
+> （早于 `pytest_configure`）** 建的，而且**不是**这份 metadata 在当前方言下的渲染结果。
+> ③ 由 ①+② 可得：审计行落不下来是**测试环境里那一块库的建表形状**问题，不是生产路径（MySQL 的
+> `BIGINT AUTO_INCREMENT` 本来就是自增列）。于是"要不要给 46 张表的 BigInteger PK 加
+> `with_variant(Integer, "sqlite")`"这个决定，前提从"线上会丢审计"降级为"测试环境自己伤自己"。
+>
+> **纠正上面那段的一处括注**：原文写"两边 `sqlite_master` 里的 `id` 列都是 `BIGINT NOT NULL`"。实测
+> conftest 的 `db_engine`（由 `Base.metadata.create_all` 建）是 **`INTEGER`**，只有 app 引擎那块库是
+> `BIGINT` —— 而"fixture 插得进、`SessionLocal` 插不进"这对矛盾，成因就是这个差异，不是建表时机或
+> `checkfirst`。E18 当时说"没解释清的那一半"在这里闭合了。
+>
+> **仍然没查到的**：是谁在 app 引擎上建的那 46 张表。三次尝试都不成立：`pytest_configure` 里挂
+> `before_cursor_execute` → **0 命中**（说明建表发生在它之前）；把插桩挪到 conftest 顶部 → 插桩自身没产出，
+> 结果丢弃、不采信；`grep` 遍 `app/` 只有 `app/main.py:46` 一处 `create_all`，而它在 lifespan 里，
+> 探针跑之前不会被调用。**本轮没有据此改任何生产代码。**
+
 **没做**：`EMBEDDING_PROVIDER` 与 rerank 的真 HTTP 路径（同一套假服务能复用，但要先确定 embedding 端点的响应形状）；`--cov-fail-under` 仍是 0（这次补的是"行为被执行"，不是把覆盖率数字变成门——理由见 §8 里 E2/E3 那几条"数字不等于门"的教训）。
 
 **门禁**：backend **749 → 754 passed**（新增 5 条，整文件约 9 秒，其中超时用例占大头）；`ruff check .` 与 `ruff format --check .`（346 文件）clean。
