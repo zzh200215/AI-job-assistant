@@ -580,7 +580,7 @@ agent.SummaryAgent           real  tokens=3215
 **仍在**：24 条间接出网的上界口径没重算（只确知这 2 条已收口），以及 135 条 async 路由持有同步 db 会话——后者是"改成 `def` 还是逐处 `run_in_threadpool`"的方向选择，见 §10.15 |
 | WebSocket 鉴权与内存无界 | `interview_ws.py:39-43` 绕过 FastAPI 依赖手工校验 query token；`:23-34` 的进程级 `_engine_pool` 无上限，且无跨副本亲和 → **E16 收口**（提交 `eb5e040`）：① 凭据只认 `Sec-WebSocket-Protocol: jwt,<token>`，`?token=` 一律 4001（**改前实测**：同一枚有效长期 JWT 从查询串进来能一路走到 accept，而仓库自带的浏览器客户端从来用的是子协议）；② 引擎改成**按连接**持有，断开必 `cleanup()`（**改前实测**：客户端关闭后 `_engine_pool` 仍留着 1 个引擎且 `engine.db is not None`，也就是每放弃一场面试永久占着一个打开的 Session）。前提更正：原话"绕过 FastAPI 依赖手工校验"里，"手工校验"成立（WS 拿不到 HTTP 依赖，这条改不了也不需要改），"query token"只是兜底通道。**仍在**：跨副本亲和——两条连接打到不同副本就是两份引擎状态，这一点改前改后一样（原实现的"共享"也只共享本进程）；要消除得靠 sticky 路由或把引擎状态外置 |
 | schema 有第四条路径 | ~~Alembic（22 个 revision）+ `Base.metadata.create_all` + `core/schema_bootstrap.py`（453 行 / 13 个手写 MySQL DDL）+ 散落的 `add_columns.py`/`reset_kb.py`~~ → **E17 收口**（提交 `f460310`）：删掉 `schema_bootstrap.py`，启动改成只做漂移体检（`core/schema_drift.py`，缺表/缺列/多出来都点名并提示跑 `alembic upgrade head`；库连不上只报告不抛）。**动手前量的事实**：在 `alembic upgrade head` 建出的库上，14 个 `ensure_*` **一条 DDL 都不发**；那 6 张"要建表"的表在 `Base.metadata` 里都有模型，`create_all` 独立建出 46 张表；而它写死的 MySQL 方言在 SQLite 上 6 个全部抛 `near "KEY"/"INDEX"/"ON"`。部署不依赖它：两份 compose 都有 `alembic upgrade head` 服务、生产 `AUTO_CREATE_TABLES=false`、config 校验器禁止生产开 create_all。**这条债的两个前提已作废**：revision 数是 **26** 不是 22；`scripts/add_columns.py` 与 `reset_kb.py` **已经不存在**（现在 `scripts/` 里碰 schema 的只有 `export_schema_baseline.py`（从 metadata 渲染）与 `seed_rag_corpus.py`（create_all 建临时库），都是派生读，不是第二条写路径）。**仍在**：`AUTO_CREATE_TABLES` 默认 `True`（开发便利，但也是"忘了迁移也能跑起来"的来源）；守卫 `test_schema_drift.py` 只保证 `app/**` 里不再出现手写 DDL |
-| 连接池未配置 | ~~`core/database.py:9-20` 未设 `pool_size`/`max_overflow`，默认 5+10 的 queuepool 面对线程池密集应用~~ → **E15 更正这行的前提**：`pool_pre_ping=True` 与 `pool_recycle=3600` 是设了的（`app/core/database.py:9-12`），没设的只有 `pool_size`/`max_overflow`/`pool_timeout`（默认 5+10+排队 30s）。**为什么现在才值得管**：E15 把 12 处同步出网挪进线程池之后，取连接的线程数不再天然是 0；要不要显式填数与"135 条 async 路由走哪条路"是同一个决定，见 §10.15 |
+| 连接池未配置 | ~~`core/database.py:9-20` 未设 `pool_size`/`max_overflow`，默认 5+10 的 queuepool 面对线程池密集应用~~ → **E15 更正这行的前提**：`pool_pre_ping=True` 与 `pool_recycle=3600` 是设了的（`app/core/database.py:9-12`），没设的只有 `pool_size`/`max_overflow`/`pool_timeout`（默认 5+10+排队 30s）。**为什么现在才值得管**：E15 把 12 处同步出网挪进线程池之后，取连接的线程数不再天然是 0；要不要显式填数与"135 条 async 路由走哪条路"是同一个决定，见 §10.15 → **2026-09-28 该决定已下并且池子这半落地（E27）**：`DB_POOL_SIZE=10 / DB_MAX_OVERFLOW=10 / DB_POOL_TIMEOUT=30`（合计 20 根，比之前的隐式 15 大），只对非 sqlite 生效，`core/database.py:engine_kwargs_for` 是纯函数所以"传没传进去"能测。**§10.15 剩下的那半（135 条 async 路由走 `def` 还是逐处 `run_in_threadpool`）按同一决定不动**，这行由"未配置"变成"已配置、形状债仍在" |
 | ~~测试覆盖真实路径为零~~ → LLM（E18）、embedding 与 rerank（E20）三条真路径都已执行；**`--cov-fail-under` 仍是 0（有意）** | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错 → **E18 收了 LLM 那半**（提交 `4a64537`）：5 条测试把真 `requests` 打到本地 OpenAI 兼容假服务，顺带发现调用方拿到的是聚合 `LLMProviderError`（不是 `LLMTimeoutError`）以及**审计行在测试进程里根本没落库**（`prompt_trace` 插入 `NOT NULL constraint failed: id`，被 except 吞成计数器；46 张表全是 BigInteger PK，矛盾未解释，见 E18 记录 —— **该矛盾已由 E26 解释并修掉**：是 `backend/conftest.py` 里 `@compiles(BigInteger,"sqlite")` 注册在 `create_all` 之后，纯测试环境 bug，生产 MySQL 一直是自增列）。**E20 收了 embedding + rerank**（`tests/test_embedding_http_contract.py` 7 条、`tests/test_rerank_local_branch.py` 6 条：前者打真 socket 的假 embedding 服务，后者往 `sys.modules` 塞假 `transformers`/`torch` 跑产品自己的分批与降级）；两处顺带修了生产代码，见 E20 记录。**这行原本还写着的两件事已更正**：① "`.coverage` 被提交进工作树"是假的（D14 已证 `git ls-files` 里 0 条，`.gitignore:49` 忽略它）；② "Chroma server 行为从未被执行"**不成立**——`core/chroma_client.py` 里根本没有 server 模式（只有 `PersistentClient`），且该文件在改动前就已执行 80%，缺的 `31` 是 CI 语料评估用的 `CHROMA_DIR` 分支（E20 已钉住）、`70-74` 是测试辅助 `reset_collection`。要不要真的接服务端向量库是 §10.3。 |
 | ~~队列无 ack/retry/DLQ~~ → `redis_queue` 后端已由 E24 收口（至少一次投递 + 重试上限 + 死信）；**`thread` 后端仍是内存 fire-and-forget** | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py`）；Redis 队列存在。~~但 `mark_stale_running_tasks_failed` 启动时把 30 分钟以上任务一律置失败，多副本重启会误杀正常长任务~~ → 已改为按"最后一次进度写入"判静默（E12，提交 `3ecbb96`）。~~`run_strategy_async` 构造两个 `TaskPayload` 后丢弃~~ → **这条已不成立**。~~"入队后没有任何 lease 字段，分不清'排在长 backlog 里'与'执行进程已死'"~~ → **E24 收口了 redis 那半**：交接用 `BRPOPLPUSH` 进 `<队列>:processing`、跑完才 ack、期限记在 `<队列>:inflight-deadlines`（ZSET）、超时重投、`ORCHESTRATION_MAX_ATTEMPTS` 跑满进 `<队列>:dead-letter`——"排队中"与"在途"从此是两个不同的键。**thread 那半仍在**：线程模式没有 broker，进程死亡即丢掉还没开工的 future，只能靠 E12 的静默判定把 DB 行扫成失败，所以它是"最终可见"而不是"不丢"。今天 `ORCHESTRATION_BACKEND` 与 `docker-compose.prod.yml` 默认都是 `thread` |
 | ~~限流粒度~~ → 有身份的请求已按用户计额度（E14，提交 `63537ab`） | 原来的事实：只有 `api/auth.py` 的 5 个匿名端点自带限流，其余 **228/233 条操作只受 `RATE_LIMIT_GENERAL`（100/分钟）按 IP 管** → 一个 NAT 出口下所有人共用一份额度。**仍在的两半**：① 昂贵端点（深度分析/多智能体）没有自己的额度，一个用户照样能一分钟发 100 次真金白银的 LLM 调用；② 登录流量的每 IP 总闸随 E14 消失了，要补就是 `application_limits` 按地址再挂一层。两个数都要人定，见 §10.10 |
@@ -1558,6 +1558,27 @@ E18 那句报错 `NOT NULL constraint failed: prompt_trace.id`；搬回来 → �
 —— 它同时变成了这个 bug 的活体断言。
 
 **门禁**：backend 全量 **805 → 806 passed**；`ruff check .` 与 `ruff format --check .` clean。
+
+#### 已交付：E27 连接池三个数写进配置，并让它与 WS 上限的关系变成会红的断言
+
+**决策的边界**：§10.15 把两件事捆在一起（池子数字 / 135 条 async 路由的形状）。这次按决定**只做前半**：
+`DB_POOL_SIZE=10`、`DB_MAX_OVERFLOW=10`、`DB_POOL_TIMEOUT=30`，路由形状一律不动。
+
+**为什么这三个数不是拍的**：E16 把 `WS_MAX_LIVE_INTERVIEWS` 定在 12，理由是"每连接独占一根连接，
+池子默认 5+10=15，留 3 根给 HTTP"。也就是说**WS 的容量上限一直挂在一个没人写下来、也没人测过的
+框架默认值上**。现在总容量 20 根、HTTP 余量 8 根，两个数都写在配置里。
+
+**为了让"参数到底传没传"可测**，把原来那段"if 完赋值给模块级 dict"的代码抽成纯函数
+`core/database.py:engine_kwargs_for(url)`。测试 7 条（`tests/test_db_pool_settings.py`）：
+MySQL 分支三个数确实等于配置值；sqlite 分支**不能**出现这些键（`StaticPool` 不接，传了
+`create_engine` 直接报错，所以这不是洁癖）；三组参数化证明"改配置=改到参数上"而不是读到抄的默认值；
+0/负数被夹进可用区间（不让配出一个"一根都不给"或"排队 0 秒"的池子）；最后一条把
+`池子总数 − WS 上限 ≥ 5` 写成断言 —— 以后谁只改一边就会红。
+
+**文档**：三个键连同"只对 MySQL 生效 / 与 `WS_MAX_LIVE_INTERVIEWS` 绑定"写进 `backend/.env.example`。
+
+**门禁**：backend 全量 **806 → 813 passed**；`ruff check .` 与 `ruff format --check .` clean。
+**没做**：135 条 async 路由走 `def` 还是逐处 `run_in_threadpool`，按同一条决策明确留着。
 
 #### 已交付：D7 职业规划页：旧简历的慢响应不再顶到新简历下面（提交 `fb57d7e`）
 
