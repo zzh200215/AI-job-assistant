@@ -498,7 +498,7 @@ agent.SummaryAgent           real  tokens=3215
 
 **做法**：`require_metrics_reader` 依赖，两种凭据任一即可——① `METRICS_TOKEN` 静态 Bearer 令牌（`secrets.compare_digest` 比较，给采集端用，它没有会话可登）；② 管理员会话（复用 `_can_view_system_overview`）。令牌没配就只剩第 ②，端点**不会退回公开**。配套改了仓库内唯一的消费方：`monitoring/prometheus.yml` 加 `authorization.credentials: '${METRICS_TOKEN}'`，`docker-compose.prod.yml` 的 prometheus 服务加 `--config.expand-env=true` 并透传该变量（两个 YAML 都过 `yaml.safe_load` 校验）；`backend/.env.example`、`.env.production.example`、`docs/setup-and-security.md` 同步口径（示例文件里只放占位值）。
 
-**公开面从"逐端点自觉"变成清单**：`tests/test_public_api_surface.py` 遍历真实路由图，把匿名可调集合与 `PUBLIC_OPERATIONS` 逐条比对——新加一条公开路由就失败，除非在清单里写出理由；同时有反向断言（清单里条目若已加凭据也要删掉），以及一条"遍历确实能看到 ≥200 条凭据依赖"的防空转断言。这条测试是 §8"缺少 router 级鉴权、保护是 opt-in"那一行针对读路径的最小构造保证，不是把 232 条都塞进 `dependencies=[...]` 的那件大事。
+**公开面从"逐端点自觉"变成清单**：`tests/test_public_api_surface.py` 遍历真实路由图，把匿名可调集合与 `PUBLIC_OPERATIONS` 逐条比对——新加一条公开路由就失败，除非在清单里写出理由；同时有反向断言（清单里条目若已加凭据也要删掉），以及一条"遍历确实能看到 ≥200 条凭据依赖"的防空转断言。这条测试当年是 §8"缺少 router 级鉴权、保护是 opt-in"那一行的**最小**保证；"把清单外操作也变成构造保证"那件大事由 E19 收口（`app/core/api_access.py:apply_default_deny` 按操作补 `Depends(get_current_user)`，不按前缀、不拆 router）。
 
 **验收**：backend 664 passed（新增 7：匿名 401、候选人会话 403、管理员 200、令牌 200、错令牌匿名仍 401，加清单三条）；`ruff check` + `ruff format --check` 对本次 3 个文件均 clean。
 
@@ -586,7 +586,7 @@ agent.SummaryAgent           real  tokens=3215
 | ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`） | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。**仍然在的是性能那半句**：`score()` 为 O(terms×docs) 纯 Python 遍历，语料再大一个量级就要换实现 |
 | Rerank 生产用启发式 | `rerank_service.py:125-159` 可选本地 cross-encoder，否则 jieba 词重叠 + 硬编码 0.5/0.3/0.2 权重；`RERANKER_MODEL_PATH` 默认未设 |
 | 死代码 → ~~`api/tracking.py` 定义了 router 但**从未被 include**~~ 已挂载并修好整条链（E10，提交 `cb5a72b`）；**但 `track()` 调用方为 0，"要不要真埋点"回到 §10.8** | 仍在的是另一半：`agents/agent_orchestrator.py`、`services/smart_orchestrator.py`、`services/agent_workflow.py` 是 `DeprecationWarning` 垫片层，靠 import 维持存活 |
-| ~~缺少 router 级鉴权~~ → 22 段纯会话前缀已改为 include 级守护（E11，提交 `21778e2`） | 原判断成立的方式：31 个 router / 218 端点无一处用 `dependencies=[...]`，鉴权靠每端点自己写。**已变**：123 条操作所在前缀"新端点默认 401"；**仍在**：混着公开端点的 8 段（110 条，含 `/jobs`、`/auth`、`/system`）仍是逐端点声明，公开面由 `PUBLIC_OPERATIONS` 清单钉住——要把它们也变成构造保证需先做端点级拆分，见 E11 末段 |
+| ~~缺少 router 级鉴权~~ → 已收口：22 段纯会话前缀挂 include 级守护（E11，提交 `21778e2`）+ **按操作补齐的装配期默认拒绝**（E19） | 原判断成立的方式：31 个 router / 218 端点无一处用 `dependencies=[...]`，鉴权靠每端点自己写。**现在的保证**：一条操作要么在 `app/core/api_access.py` 的两张清单里（15 条真公开 + 4 条自带别的凭据），要么它的依赖树里必有 `Depends(get_current_user)`——缺的自己被补上，所以那 8 段混着公开端点的前缀不再靠自觉。**计划里开的方子"先做端点级拆分"已被实测否掉**（42 个测试文件自建 mini-app、拆完 25 个 404），见 E19 |
 | 三个 router 共享 `/jobs` 前缀 | `api/router.py:54-56`；当前不冲突仅因 `job_recommend.py:1448` 的 `/{jd_id:int}` 是单段 |
 
 #### 已交付：E6 CI 的 RAG 门第一次有自己的语料可查（提交 `221b191`）
@@ -1032,6 +1032,8 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 
 **还剩什么**：那 8 段混合格式的 110 条操作仍靠逐端点声明 + 清单兜住。要把它们也变成构造保证，需要先做**端点级拆分**（把 `auth.py` 的 6 条公开、`system.py` 的 2 条探活等挂到不带守护的子 router 上），是一次跨 6 个文件的机械改动，收益是"新端点默认 401"覆盖面从 123/233 提到 218/233。这活没干的原因：它改的是登录/回调/探活路径，属于一旦弄错就锁死入口的那类，且 E1 的清单已经把当前漏保护的实际风险压到 0。
 
+> **这段已被 E19 收口**，而且这里开的方子被实测否掉了：端点级拆分真做完过，结果是 **42 个测试文件自建 mini-app、25 个 404**；E19 换成的"装配期按操作补齐"覆盖面是 **233/233**，且不新增任何运行时代码路径。
+
 #### 已交付：E12 启动清扫改判"静默"，不再按"多久以前开始"判死刑（提交 `3ecbb96`）
 
 **机制**：`app/main.py` 的 lifespan 每次 web 进程启动都调 `mark_stale_running_tasks_failed()`，旧判据只有一句 `status == "running" and start_time < now-30min`。而 `start_time` 是**建任务那一刻**写的，任务完全可能在**另一个进程**里跑（`ORCHESTRATION_BACKEND=redis_queue` 时 worker 独立），所以只重启 web（`--reload`、滚动发布、崩掉拉起）就会把 worker 手里的活任务判成 failed。落到候选人身上是一条链：`utils/agentTaskPolling.js:99` 一见到 failed 就 `stopPolling()` 并拿 `error_msg` 报错（`:102`），于是**分析页停在"失败"，而分析在几秒后正常完成并落库**——结果存在，人已经走了。
@@ -1197,6 +1199,32 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 
 **这条对计划的实际改动**：§7 阶段 1 那一行按上面的数字改判（`AppTable` 撤下、骨架态转 §10.16、剩下"逐个证明可并发触发的加载函数"仍是未收项）。代码一行没改，工作树只有文档。
 
+
+#### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
+
+E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
+
+**① 按路径给混合前缀挂守护** —— `GET /jobs/cities`（登录页在拿到 token 之前要用）会被一起关死。不成立。
+
+**② 每模块拆出 `public_router`** —— 真做完并真跑过：**42 个测试文件**自建 mini-app，其中十几个只 `include_router(auth_router)`，拆完直接 **25 个 404**。而且以后任何自建装配漏挂第二个 router 都是一次莫名 404——为一条"构造保证"换这个长期陷阱不值。8 个模块字节级回滚。
+
+**③ 在唯一的 `/api` 挂载点上一道请求期的门**（`dependencies=[Depends(require_api_access)]`，门里直接调 `get_current_user`）—— 拦得住，全量 **757 条零红**，但把它的真实代价量出来之后不能要：一次带凭据请求在 `tb_user` 上发 **2 条 SELECT**。原因是门不在 FastAPI 的依赖树上，进不去端点那个 session 的 identity map，而它自己的 `Depends(get_db)` 与端点的是两条独立 session（连接池默认 5+10，见 E16）。同一次测量里 include 级 `Depends(get_current_user)` 是 **1 条**——框架会合并同一依赖。于是"门只多一次 JWT 解析、不发 SQL"这句写进文档串的承诺**是错的**，被它自己那条测试推翻。
+
+**最终形态**：判定挪到**装配期**（`app/core/api_access.py:apply_default_deny`，由 `app/api/router.py` 末尾调用），补的是请求期真正走的那棵树。规则是"清单外 **且** 自己的依赖树里没有任何会话凭据"才补一条 `Depends(get_current_user)`：已写凭据的端点一条不动，缺凭据的补成恰好一次解析——**每次受守护请求仍是 1 条 SELECT，与改动前零差别**，而覆盖面不再区分前缀。今天真实路由上补到 **0 条**（233 条路由全部已在覆盖内），它的价值在"以后漏写也不会裸奔"。
+
+**一条框架事实决定了代码怎么写**：FastAPI 0.111.0 的 `APIRoute.__init__` 用 `get_parameterless_sub_dependant` 把 `self.dependencies` 编进 `self.dependant.dependencies`，请求期 `solve_dependencies` 读的是那棵树 → **只 append `route.dependencies` 不生效**，两份都得写（`api_access.py:97-102` 注释标了原因）。
+
+**顺手把两个静默陷阱改成会炸的**：① 同一个路由对象上混了公开方法与需凭据方法（`methods=["GET","POST"]` 只把 GET 登记公开）→ 装配期 `ValueError`，否则补依赖会静默关死那条公开腿；② 对**已展开成 `/api/...` 的 `app.routes`** 误调用这一趟 → 装配期 `ValueError`，因为清单键是 `/api` + 挂载前模板，误用会让清单永远匹配不上、公开端点被静默关死（这个坑是写测试时真踩到才发现的）。
+
+**清单就是公开面**：`ANONYMOUS_OPERATIONS` 15 条 + `OTHER_CREDENTIAL_OPERATIONS` 4 条（`/system/metrics` 与 3 条 `X-API-Key` 外部能力 API），键 `(方法, "/api" + 路由模板)`。
+
+**测试**：`tests/test_public_api_surface.py` 18 条。逐条钉住的是——清单外没有任何裸操作（遍历真实依赖树，不看注释）＋ 一条下限防空转；"今天补 0 条"这个事实本身（**它若非空是发现不是失败**：说明真有端点漏写凭据被装配期救下）；裸端点补完 401、不补 200 的对照组；已声明凭据的路由不被补第二条（结构侧数 `dependant` 里出现 1 次，行为侧数 override 调用 1 次）；两个 `ValueError`；端到端一次（探活 200 / 混合前缀受守护操作 401 / 外部 API 报的是 `X-API-Key` 那句而不是缺会话那句 / metrics 匿名必拒）；以及一条**数 SELECT** 的用例钉住"补齐只解析一次"（对照组 0 条，否则那个 1 说不清是谁发的）。
+
+**踩到又修掉的测量陷阱（写给下一个人）**：**别用带 `dependency_overrides[get_db]` 的装配数 SELECT**——那个 override 让门和端点共用同一个 session，把真实的 2 条掩盖成 1 条，上一版那句错误承诺正是这么活下来的。另外 `pool.checkout` 计数在 StaticPool 下三种形态都是 1，毫无区分力，只有 `before_cursor_execute` 能用。
+
+**顺带证实、故意不在本条收口**：`tests/conftest.py:12` 在任何 app import 之前把 `DATABASE_URL` 设成内存 SQLite，于是**同一进程里存在两块互不相干的内存库**（conftest 的 `db_engine` 与 app 引擎的 StaticPool 库）。同一份 `Base.metadata` 在**新建引擎**上建出的 `tb_user` 是 `id INTEGER NOT NULL`（SQLite 下是 rowid 别名、能自增），而 app 引擎里那张是 `id BIGINT NOT NULL`（不自增，必须显式给 id 才插得进去）——这正是 E18 留下的那对矛盾的同一半，**谁先把它建成 BIGINT 仍未查**。本轮只把这条差异写进测试注释（造用户时显式取 `max(id)+1`），没有据此改任何生产代码。
+
+**门禁**：backend 全量 **757 → 764 passed**；`ruff check .` 与 `ruff format --check .`（347 文件）clean；`app/main.py` 回到 HEAD（请求期门整段撤除，不再有任何运行时代码在依赖树外解析凭据）。
 
 #### 已交付：D7 职业规划页：旧简历的慢响应不再顶到新简历下面（提交 `fb57d7e`）
 
