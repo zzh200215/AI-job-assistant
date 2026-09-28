@@ -13,12 +13,18 @@ the credentials the codebase knows about and is not listed below with a reason.
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from uuid import uuid4
+
+import pytest
+from fastapi import APIRouter, Depends, FastAPI
 
 from app.api.auth import get_current_user, require_admin
 from app.api.external.auth import require_api_key
 from app.api.router import api_router
 from app.api.system import require_metrics_reader
+from app.core.api_access import ANONYMOUS_OPERATIONS, OTHER_CREDENTIAL_OPERATIONS
+from app.core.security import create_access_token, hash_password
+from app.models.user import User
 
 # require_metrics_reader 内部直接调用 get_current_user（为了让采集令牌能在无会话时通过），
 # 所以 FastAPI 的依赖树上看不见会话依赖，只能显式登记。
@@ -232,3 +238,315 @@ def test_the_guard_does_not_resolve_the_user_twice():
     client.app.dependency_overrides[get_current_user] = counting
     assert client.get("/resume/probe-auth").status_code == 200
     assert len(calls) == 1, f"get_current_user 每请求跑了 {len(calls)} 次，守护在重复解析"
+
+
+# ------------------------------------------------- E11 末段：装配期补齐会话依赖
+#
+# 这条债原本写的是"端点级拆分"。三种做法都实测过，前两种被数据否掉了：
+#   * 按路径给那 8 段混合前缀挂 include 级守护 —— 会把 `GET /jobs/cities`（登录页要用）一起关死；
+#   * 每个模块拆出 `public_router` —— 真跑起来有 42 个测试文件自建 mini-app，其中十几个只
+#     `include_router(auth_router)`，拆完它们全变 404；以后任何自建装配漏挂 public_router
+#     都是一次莫名 404。为一条"构造保证"换这个代价不值。
+#   * 在唯一 /api 挂载点上一道**请求期**的门 —— 拦得住，但实测每次带凭据请求在 `tb_user` 上发
+#     **两条** SELECT（门不在依赖树上，进不去端点那个 session 的 identity map），还多开一条
+#     session（连接池默认 5+10）。
+# 现在是第三种的正确形态：判定还在装配期，但补的是 FastAPI 请求期真正走的那棵依赖树
+# （`app/core/api_access.py:apply_default_deny`，由 `app/api/router.py` 末尾调用）。
+# 于是覆盖面不区分前缀、不需要任何人记得挂第二个 router，而一条受守护请求仍只解析一次凭据。
+
+ALL_LISTED = ANONYMOUS_OPERATIONS | OTHER_CREDENTIAL_OPERATIONS
+
+
+def _guarded_and_public_operations() -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
+    """(有会话凭据的操作, 清单上的操作)，键都带 `/api` 前缀，与 `api_access` 那两张清单同形。"""
+    guarded: set[tuple[str, str]] = set()
+    listed: set[tuple[str, str]] = set()
+    for op, kinds in _kinds_by_operation().items():
+        key = (op[0], "/api" + op[1])
+        if "session" in kinds:
+            guarded.add(key)
+        elif key in ALL_LISTED:
+            listed.add(key)
+    return guarded, listed
+
+
+def test_every_operation_outside_the_two_lists_carries_a_session_credential():
+    """构造保证的正面：清单外没有任何一条操作可以匿名调（遍历真实依赖树，不看注释）。"""
+    guarded, listed = _guarded_and_public_operations()
+    naked = sorted(
+        (m, "/api" + p)
+        for (m, p), kinds in _kinds_by_operation().items()
+        if not kinds and (m, "/api" + p) not in ALL_LISTED
+    )
+    assert not naked, f"这些操作既不在两张清单里也没有会话凭据：{naked[:8]}"
+    # 非空断言：量过是 233 条路由、清单 19 条，covered 远低于这个数说明遍历失效。
+    assert len(guarded) >= 200, f"只核到 {len(guarded)} 条带会话凭据的操作，和真实规模对不上"
+    assert (
+        listed == ALL_LISTED
+    ), f"清单里有操作其实已被补齐凭据（该删条目）或多出没登记的：{sorted(listed ^ ALL_LISTED)}"
+
+
+def test_the_pass_attached_nothing_today_because_everyone_already_declares_auth():
+    """`apply_default_deny` 今天补到 0 条——这是**事实**，不是它空转的证据（下一条测它的效果）。
+    登记这个数字：以后它一旦非空，说明有人漏写了凭据却被装配期救下，值得知道发生了多少次。"""
+    from app.api.router import DEFAULT_DENY_GUARDED_OPERATIONS
+
+    assert DEFAULT_DENY_GUARDED_OPERATIONS == []
+
+
+def _naked_probe_router(*, api_prefixed: bool = False):
+    """一条挂在混合前缀下、自己完全不写凭据的端点——就是这次要防的那种写法。
+
+    默认按**挂载前**的形状建（前缀 `/organizations`，与 `api_router` 里一致），因为
+    `apply_default_deny` 要的就是这个形状；`api_prefixed=True` 用来测误用守卫。
+    """
+    naked = APIRouter()
+
+    @naked.get("/forgot-me")
+    def _forgot():
+        return {"leak": True}
+
+    app = FastAPI()
+    app.include_router(naked, prefix="/api/organizations" if api_prefixed else "/organizations")
+    return app
+
+
+def test_the_pass_protects_an_endpoint_that_forgot_to_declare_auth():
+    """裸端点经过这一趟之后必须 401；不跑这一趟必须 200（对照组，否则上一条测试是空转的）。"""
+    from fastapi.testclient import TestClient
+
+    from app.core.api_access import apply_default_deny
+
+    app = _naked_probe_router()
+    apply_default_deny(app.routes)
+    guarded = TestClient(app).get("/organizations/forgot-me")
+    assert guarded.status_code == 401, f"补齐后居然还能匿名调：{guarded.status_code}"
+
+    control = TestClient(_naked_probe_router()).get("/organizations/forgot-me")
+    assert control.status_code == 200, "对照组不跑这一趟就该是 200，否则上面那条断言什么都没证明"
+
+
+def test_the_pass_refuses_a_route_table_that_already_carries_the_api_prefix():
+    """这一趟作用在**挂载前**的 api_router 上；对着已展开成 `/api/...` 的 app.routes 调用会让
+    清单永远匹配不上，公开端点被静默关死。所以误用必须炸，而不是悄悄通过。"""
+    from app.core.api_access import apply_default_deny
+
+    with pytest.raises(ValueError, match="挂载前"):
+        apply_default_deny(_naked_probe_router(api_prefixed=True).routes)
+
+
+def test_the_pass_leaves_alone_routes_that_already_declare_credentials():
+    """已经写了 `Depends(get_current_user)` 的端点不该被再补一条：补了就是每请求两趟解析。"""
+    from fastapi.testclient import TestClient
+
+    from app.core.api_access import apply_default_deny
+
+    declared = APIRouter()
+
+    @declared.get("/already")
+    def _already(current_user=Depends(get_current_user)):
+        return {"ok": bool(current_user)}
+
+    app = FastAPI()
+    app.include_router(declared, prefix="/organizations")
+    apply_default_deny(app.routes)
+
+    route = next(r for r in app.routes if getattr(r, "path", "").endswith("/already"))
+    session_deps = [d for d in route.dependant.dependencies if getattr(d, "call", None) is get_current_user]
+    assert len(session_deps) == 1, f"同一请求里 get_current_user 挂了 {len(session_deps)} 次，会解析两趟"
+
+    # 行为侧再钉一次：override 只被走一遍。
+    calls = []
+
+    def counting():
+        calls.append(1)
+        return object()
+
+    app.dependency_overrides[get_current_user] = counting
+    assert TestClient(app).get("/organizations/already").status_code == 200
+    assert len(calls) == 1, f"get_current_user 每请求跑了 {len(calls)} 次"
+
+
+def test_the_pass_refuses_a_route_object_mixing_public_and_guarded_methods():
+    """一个装饰器上同时声明公开方法和需要凭据的方法时，补依赖会把公开那个一起关死——
+    这种混法没人看得出来，所以直接炸在装配期。"""
+    from app.core import api_access
+    from app.core.api_access import apply_default_deny
+
+    mixed = APIRouter()
+
+    @mixed.api_route("/mix", methods=["GET", "POST"])
+    def _mix():
+        return {"ok": True}
+
+    app = FastAPI()
+    app.include_router(mixed, prefix="/organizations")
+    # 把 GET 登记成公开、POST 不登记 → 同一个路由对象上混了两种命运
+    original = api_access.NEVER_SESSION_GUARDED
+    api_access.NEVER_SESSION_GUARDED = original | {("GET", "/api/organizations/mix")}
+    try:
+        with pytest.raises(ValueError, match="混了公开"):
+            apply_default_deny(app.routes)
+    finally:
+        api_access.NEVER_SESSION_GUARDED = original
+
+
+def test_the_real_app_blocks_anonymous_and_keeps_public_paths_working():
+    """端到端钉一次装配结果：公开面还能匿名走，混合前缀下的受守护操作匿名走不了，
+    而『自带别的凭据』那几条不是被会话依赖挡下的（补齐没把它们关错）。"""
+    from fastapi.testclient import TestClient
+
+    from app.main import app as real_app
+
+    client = TestClient(real_app)
+    assert client.get("/api/system/health").status_code == 200, "探活被关掉了"
+
+    mixed_guarded = sorted(
+        (m, p)
+        for (m, p), kinds in _kinds_by_operation().items()
+        if "session" in kinds and p.startswith("/organizations")
+    )
+    assert mixed_guarded, "混合前缀下没有受守护的操作，这条测试选不到靶子"
+    method, path = mixed_guarded[0]
+    denied = client.request(method, f"/api{path}")
+    assert denied.status_code == 401, f"混合前缀下的受守护操作匿名居然通过：{method} {path} → {denied.status_code}"
+
+    # X-API-Key 通道（这三条都是 POST）：报的必须是它自己的错。被会话依赖接管的话这里会是"未提供认证 Token"。
+    external = client.post("/api/v1/external/resume/parse")
+    assert external.status_code in (401, 403), f"外部能力 API 匿名调用返回了 {external.status_code}"
+    assert "X-API-Key" in str(external.json()), f"外部 API 被会话依赖接管了：{str(external.json())[:120]}"
+
+    # metrics 匿名必须拒（它内部会转调 get_current_user，所以只断言拒、不断言是谁报的错）。
+    assert client.get("/api/system/metrics").status_code == 401, "metrics 对匿名开放了"
+
+
+def _seed_app_engine_user(prefix: str) -> int:
+    """在 app 引擎那块库里造一个能被真实 `get_db` 读到的用户，返回它的 id。"""
+    from sqlalchemy import text
+
+    from app.core.database import Base, SessionLocal
+    from app.core.database import engine as app_engine
+
+    Base.metadata.create_all(bind=app_engine)
+    session = SessionLocal()
+    try:
+        # 显式给 id：pytest 里 app 引擎那块共享内存库的 tb_user 是 `id BIGINT`，SQLite 下
+        # BIGINT 主键不是 rowid 别名、不自增（同一份 metadata 新建引擎给的是 INTEGER）。
+        # 谁先把它建成 BIGINT 是 §8 的未决项，不影响这里数 SELECT。
+        next_id = int(session.execute(text("SELECT coalesce(max(id), 0) + 1 FROM tb_user")).scalar())
+        tag = uuid4().hex[:8]
+        session.add(
+            User(
+                id=next_id,
+                username=f"{prefix}-{tag}",
+                email=f"{prefix}-{tag}@x.io",
+                password=hash_password("GatePass123!"),
+            )
+        )
+        session.commit()
+        return next_id
+    finally:
+        session.close()
+
+
+def _count_user_selects(app_engine, make_request):
+    """返回 (状态码, tb_user 上的 SELECT 条数)。"""
+    from sqlalchemy import event
+
+    selects = []
+
+    def listener(conn, cursor, statement, parameters, context, executemany):
+        if "FROM tb_user" in statement:
+            selects.append(statement[:60])
+
+    event.listen(app_engine, "before_cursor_execute", listener)
+    try:
+        status = make_request()
+    finally:
+        event.remove(app_engine, "before_cursor_execute", listener)
+    return status, len(selects)
+
+
+def test_a_pass_attached_guard_resolves_the_user_exactly_once():
+    """补齐的那条依赖的真实代价：一次带凭据请求在 `tb_user` 上只有 **1** 条 SELECT。
+
+    这条同时是放弃"请求期再判定"那个形态的数字依据——那扇门实测发 2 条（它不在依赖树上，
+    进不去端点那个 session 的 identity map，还要多开一条 session）。
+    """
+    from fastapi.testclient import TestClient
+
+    from app.core.api_access import apply_default_deny
+    from app.core.database import engine as app_engine
+
+    user_id = _seed_app_engine_user("gate")
+    headers = {"authorization": f"Bearer {create_access_token({'sub': str(user_id)})}"}
+
+    app = _naked_probe_router()
+    apply_default_deny(app.routes)
+    client = TestClient(app)
+    status, guarded_selects = _count_user_selects(
+        app_engine, lambda: client.get("/organizations/forgot-me", headers=headers).status_code
+    )
+    assert status == 200, f"带着有效 token 还被拦：{status}"
+    assert guarded_selects == 1, f"补齐的守护每请求解析了 {guarded_selects} 次用户，应该是 1 次"
+
+    # 对照组：同一条件不过这一趟，没人查用户 → 必须是 0 条，否则上面那个 1 说不清是谁发的。
+    control = TestClient(_naked_probe_router())
+    status, plain_selects = _count_user_selects(
+        app_engine, lambda: control.get("/organizations/forgot-me", headers=headers).status_code
+    )
+    assert status == 200 and plain_selects == 0, f"对照组应该是 200/0 条，实测 {status}/{plain_selects}"
+
+
+def _path_to_regex(path: str):
+    """把路由模板近似编译成正则（只处理本仓出现的 `{name}` 与 `{name:int}` 两种）。"""
+    import re
+
+    out = re.sub(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\:int\}", r"[0-9]+", path)
+    out = re.sub(r"\{[^}]+\}", r"[^/]+", out)
+    return re.compile("^" + out + "$")
+
+
+def _first_matching_route(routes, method: str, full: str):
+    return next((r for r in routes if method in (r.methods or set()) and _path_to_regex(r.path).match(full)), None)
+
+
+def test_public_literal_paths_are_not_shadowed_by_dynamic_siblings():
+    """`/jobs/cities` 这类字面路径必须在同前缀的动态路径**之前**被匹配到，
+    否则守护拆分会把公开端点变成一条假 404/401。这里按 app 的真实路由顺序解析。"""
+    from app.main import app as real_app
+
+    ordered = [r for r in real_app.routes if getattr(r, "path", None) and getattr(r, "methods", None)]
+    for method, path in sorted(PUBLIC_OPERATIONS):
+        full = "/api" + path
+        winner = _first_matching_route(ordered, method, full)
+        assert winner is not None, f"{method} {full} 一条路由都匹配不到"
+        # 先匹配到的必须正是它自己那条路由（`/organizations/sso/feishu/{slug}/start` 自身就带
+        # 一个参数段，所以判据是"同一条路径"，不是"没有花括号"）。
+        assert winner.path == full, f"{method} {full} 被 {winner.path} 抢先匹配，公开端点会被遮蔽"
+
+
+def test_the_shadow_check_itself_has_teeth():
+    """反方向：真造一个"动态路径在前、字面路径在后"的装配，上面那条判据必须报出遮蔽——
+    不然"全部 winner.path == full"可能只是因为压根匹配不到东西。"""
+    from fastapi import APIRouter, FastAPI
+    from fastapi.testclient import TestClient
+
+    probe = APIRouter()
+
+    @probe.get("/jobs/{any_id}")
+    def _dynamic(any_id: str):
+        return {"shadowed": any_id}
+
+    @probe.get("/jobs/cities")
+    def _literal():
+        return {"cities": []}
+
+    app = FastAPI()
+    app.include_router(probe)
+    client = TestClient(app)
+    ordered = [r for r in app.routes if getattr(r, "path", None) and getattr(r, "methods", None)]
+    winner = _first_matching_route(ordered, "GET", "/jobs/cities")
+    assert winner is not None and winner.path == "/jobs/{any_id}", "这个反例没构造成功：字面路径反而先匹配了"
+    # 真实 HTTP 也确认它被遮蔽（证明这条判据测的是会发生的事，不是正则游戏的自洽）
+    assert client.get("/jobs/cities").json() == {"shadowed": "cities"}

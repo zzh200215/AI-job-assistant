@@ -35,6 +35,7 @@ from app.api import (
     user_preferences,
 )
 from app.api.auth import get_current_user
+from app.core.api_access import apply_default_deny
 
 api_router = APIRouter()
 
@@ -42,9 +43,9 @@ api_router = APIRouter()
 # 只挂到改动前就 100% 已经带会话依赖的 22 段前缀上（量出来是 123 条操作），所以已有响应零改变；
 # 变的是"以后新增一条忘了写凭据的端点"的命运——它出生就 401。
 # 仍混着公开端点的前缀（auth / system / jobs / interview / organizations / subscription /
-# tenant / v1 external，共 110 条操作）不在这张表里，它们的公开面由
-# tests/test_public_api_surface.py 的 PUBLIC_OPERATIONS 逐条钉住——那张清单也保证不会有人顺手
-# 把公开端点关进守护里。
+# tenant / v1 external，共 110 条操作）不能按前缀挂：那会把 `GET /jobs/cities`（登录页要用）
+# 这类公开端点一起关死。它们由文件末尾 `apply_default_deny` 那一趟逐条补齐——按操作判定，
+# 不再按前缀，所以这张表只是历史事实，真正的构造保证在那一趟里。
 SESSION_GUARD = [Depends(get_current_user)]
 
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -120,3 +121,10 @@ api_router.include_router(
 # 外部能力 API（M6）：主 app 挂载前缀 /api + 此处 /v1 → /api/v1/external/...
 # 这一段走 X-API-Key（app/api/external/auth.py），不是会话，不能挂 SESSION_GUARD。
 api_router.include_router(external.external_router, tags=["external-api"])
+
+# 装配期的默认拒绝：上面那些前缀守护只能盖住"整段都要会话"的前缀，8 段混合前缀里的公开端点
+# 让它们挂不上去。这一趟按**操作**判定——不在 api_access 那两张清单里、且自己的依赖树里没有任何
+# 会话凭据的，就地补一条 Depends(get_current_user)。补的是 FastAPI 请求期真正走的那棵树，所以
+# 一条受守护请求仍然只解析一次凭据（换成请求期再判定的门实测会发两条 SELECT，见 api_access 顶注）。
+# 今天真实路由上应该补到 0 条（所有非公开操作都各自写了凭据），它的价值在"以后漏写也不会裸奔"。
+DEFAULT_DENY_GUARDED_OPERATIONS = apply_default_deny(api_router.routes)
