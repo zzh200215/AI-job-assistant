@@ -273,6 +273,35 @@ function silentCatchCounts() {
   return actual
 }
 
+/* 一个令牌实例只管一条链。`useLatestCall()` 里的计数器是**整个实例共享**的，所以两个不同的加载函数
+   领同一份令牌时，症状不是"旧的盖掉新的"，而是"两条都不写"：后发起的那条把仍在途的前一条判为过期，
+   前一条连 `finally` 里的解 loading 都带着条件，于是列表永久空着。D30 在 JobSearch 量到的即此
+   （切到「智能推荐」把在途的岗位仓库响应一起废掉，hero 的"岗位仓库"数字停在 0）。 */
+const TOKEN_DECL = /^\s*const\s+(\w+)\s*=\s*useLatestCall\(\)/
+const tokenClaim = (name) => new RegExp(`(?<![\\w$.])${name}\\(\\s*\\)`)
+
+/** 按令牌实例名分组，给出它在哪些函数体里被领走。 */
+function tokenClaimsByInstance(source) {
+  const lines = source.split(/\r?\n/)
+  const names = lines.map((line) => TOKEN_DECL.exec(line)?.[1]).filter(Boolean)
+  if (!names.length) return {}
+  const ranges = functionRanges(lines)
+  const ownerOf = (i) => {
+    const inner = ranges
+      .filter((r) => r.start <= i && r.end >= i)
+      .sort((a, b) => b.start - a.start)[0]
+    return inner ? `${inner.start}:${inner.end}` : `top:${i}`
+  }
+  const claims = {}
+  lines.forEach((line, i) => {
+    if (TOKEN_DECL.test(line) || /^\s*\/\//.test(line)) return
+    for (const name of names) {
+      if (tokenClaim(name).test(line)) (claims[name] ||= new Set()).add(ownerOf(i))
+    }
+  })
+  return claims
+}
+
 /* 手写"状态 → el-tag 颜色"的条目数，见 BUDGET.statusTagEntries 的口径说明。
    键可以是中文（`高: 'danger'`）、可以带引号，颜色后面可以有逗号，但**整条不锚行**。
    旧规则锚了行，于是同一个色表换行就换个数，而且有 47 条从来没被数到。 */
@@ -580,6 +609,20 @@ describe('style debt ratchet', () => {
       `read/write the last resume / JD / record id through @/utils/lastSelection — it slots these per logged-in user, which a raw localStorage key cannot, and a stale foreign id gets prefilled into a form: ${offenders.join(
         ', '
       )}`
+    ).toEqual([])
+  })
+
+  it('never lets one race-token instance serve two loading functions', () => {
+    const offenders = viewSources
+      .flatMap(({ rel, source }) =>
+        Object.entries(tokenClaimsByInstance(source))
+          .filter(([, owners]) => owners.size > 1)
+          .map(([name, owners]) => `${rel}: ${name} (${owners.size} 条链)`)
+      )
+      .sort()
+    expect(
+      offenders,
+      `一个 useLatestCall() 实例被多条链共用，后发起的那条会把前一条仍在途的响应整个废掉 —— 每条链各建一个实例：${offenders.join(', ')}`
     ).toEqual([])
   })
 

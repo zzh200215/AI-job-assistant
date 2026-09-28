@@ -1118,7 +1118,14 @@ const localLoading = ref(false)
 const localJobs = ref([])
 // 与"仓库为空"分开：GET 失败不弹提示，只清空列表会让候选人以为岗位库是空的
 const localError = ref('')
-const latestCall = useLatestCall()
+// 每条链各一个令牌实例。`useLatestCall()` 的计数器是整个实例共享的，共用一个的话，切到「智能推荐」
+// 会把仍在途的岗位仓库响应一起判为过期，而 `finally` 里的解 loading 也带着同一个条件——
+// 结果是仓库数字永久停在 0 且转圈不停。
+const latestLocalJobsCall = useLatestCall()
+const latestRecommendCall = useLatestCall()
+const latestResumeDetailCall = useLatestCall()
+const latestSearchCall = useLatestCall()
+const latestJobDetailCall = useLatestCall()
 
 const recommendLoading = ref(false)
 const recommendations = ref([])
@@ -1536,21 +1543,27 @@ async function loadResumes() {
 }
 
 async function loadResumeDetail(resumeId) {
+  // 令牌在进入时领取：换简历与"清空选择"这两次意图都要作废仍在途的旧详情，
+  // 否则旧简历的技能会留在摘要里，被"改写搜索词"当成当前简历发给模型
+  const isCurrent = latestResumeDetailCall()
   resumeDetailError.value = ''
   if (!resumeId) {
     selectedResumeDetail.value = null
     return
   }
   try {
-    selectedResumeDetail.value = await getResume(resumeId)
+    const data = await getResume(resumeId)
+    if (!isCurrent()) return
+    selectedResumeDetail.value = data
   } catch (e) {
+    if (!isCurrent()) return
     selectedResumeDetail.value = null
     resumeDetailError.value = e?.userMessage || e?.message || '暂时读不到这份简历的详情'
   }
 }
 
 async function loadLocalJobs() {
-  const isCurrent = latestCall()
+  const isCurrent = latestLocalJobsCall()
   localLoading.value = true
   localError.value = ''
   try {
@@ -1579,7 +1592,7 @@ async function loadPipelineEntries() {
 
 async function loadRecommendations() {
   // 令牌在进入时领取：新一次的意图（含"没选简历所以清空"）都应作废仍在途的旧请求
-  const isCurrent = latestCall()
+  const isCurrent = latestRecommendCall()
   recommendError.value = ''
   if (!selectedResumeId.value) {
     recommendations.value = []
@@ -1611,6 +1624,8 @@ async function runSearch() {
     ElMessage.warning('请输入搜索关键词')
     return
   }
+  // 快速搜索标签和"刷新当前视图"在搜索期间照样可点（都没有 disabled），两次点击就是两个在途请求
+  const isCurrent = latestSearchCall()
   searching.value = true
   hasSearched.value = true
   searchError.value = ''
@@ -1625,6 +1640,7 @@ async function runSearch() {
       source: source.value,
       page: 1,
     })
+    if (!isCurrent()) return
     externalJobs.value = (data?.jobs || []).map((item, index) =>
       normalizeJob(item, `search-${index}`)
     )
@@ -1634,11 +1650,12 @@ async function runSearch() {
     resultMode.value = data?.result_mode || 'external'
     pushRecentSearch(keyword.value.trim())
   } catch {
+    if (!isCurrent()) return
     externalJobs.value = []
     searchError.value = '搜索失败，请稍后重试'
     resultMode.value = ''
   } finally {
-    searching.value = false
+    if (isCurrent()) searching.value = false
   }
 }
 
@@ -1676,8 +1693,9 @@ async function handleResumeChange() {
   if (!selectedResumeId.value) {
     recommendations.value = []
     recommendError.value = ''
-    selectedResumeDetail.value = null
-    resumeDetailError.value = ''
+    // 走 loadResumeDetail(null) 而不是就地清空：清空也是一次意图，要作废仍在途的那份旧详情，
+    // 否则它随后落地会把上一个简历的技能重新填回摘要
+    await loadResumeDetail(null)
     return
   }
   await loadResumeDetail(selectedResumeId.value)
@@ -1765,6 +1783,9 @@ function normalizeJob(item, seed) {
 }
 
 async function openJobDetail(job, origin) {
+  // 抽屉是模态的，但关闭不会取消已经发出的请求；站内带 job_id 的链接也会再开一个详情。
+  // 这里原本是 `...detailJob.value` 就地合并，所以旧响应会把上一个岗位的内容并进当前抽屉
+  const isCurrent = latestJobDetailCall()
   detailVisible.value = true
   detailLoading.value = true
   explainResult.value = null
@@ -1780,6 +1801,7 @@ async function openJobDetail(job, origin) {
 
   try {
     const data = await getJobDetail(job.id)
+    if (!isCurrent()) return
     detailJob.value = {
       ...detailJob.value,
       ...normalizeJob(
@@ -1801,9 +1823,10 @@ async function openJobDetail(job, origin) {
       ),
     }
   } catch {
+    if (!isCurrent()) return
     detailJob.value = { ...job }
   } finally {
-    detailLoading.value = false
+    if (isCurrent()) detailLoading.value = false
   }
 }
 
