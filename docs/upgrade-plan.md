@@ -474,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 14 处领走令牌（6 个页面，一链一把），另有 3 处按同一条判据换了别的修法（D29 的 `:disabled` 串行、D30 的"只在仍指向自己那行时才解锁"与给无锁按钮补 `:loading`）；这 17 处现在全部有红→绿或变异证据（见 D3、D7、D9、D10、D28、D29、D30——D3 那次欠着测试的 `JobSearch` 两处由 D28 补上，也正是那次把"两条链共用一把令牌"这个缺陷跑出来；D28 顺带撤回 D7"互斥标签页共用才对"的前提，并把它变成棘轮硬不变量）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，D15 再补 2 处；棘轮 `silentEmptyCatches` 11 → 4 →（D15 把判据换成函数作用域）7 → **5** 盯着（见 D4、D5、D15。D10 记下的"这一维有已知漏数"随那次换口径**已关闭**：D13 的格式化让 `admin/Tenants` 先现形，剩下 3 处 D15 量到并修掉两处 GET）**。**已收：`AppPanel`** —— 93 → **35** 处手写面板头搬进组件，最后 22 处由 11 次逐路由 `getComputedStyle` 差分（5501 个元素实例 × 20 条属性）量出 **0 差异**，判定器与 13 条合成用例留在 `frontend/scripts/panel-migration.mjs`（D18–D26）。纯 drop-in 已见底：剩下 35 处不是"没来得及"，而是要先拍组件 API，见 §10.14。未收（**D27 量过之后改判**）：~~`AppTable`+分页~~ —— 128 张 `<el-table>` 里可共享的只有 `stripe`/`size` 两个属性（`v-loading` 仅 5 处、`el-pagination` 仅 6 处），列定义是内容不是重复；而为它设想的那个缺陷——"表格在加载期间谎称暂无数据"——在 7 个有异步表格的文件里 **6 个已经被挡住**（`v-if="loading"` 的加载分支、`v-if="rows.length"` 的守卫、`<template v-else-if="evaluationData">`）。**包这一层不值当，从计划撤下**。骨架态仍然值得做，但它今天没有任何缺陷撑着、纯是观感改动 → 升为 §10.16 由你拍。真正还未收的是：**逐个证明可并发触发的加载函数**——已按页判完 3 页：`JobSearch.vue`（D28：8 个加载函数，5 个能并发已加令牌、3 个证否并附理由）、`ResumeCompare.vue`（D29：3 处修，其中 1 处的正解是 `:disabled` 串行不是令牌；4 处证否）、`KnowledgeBase.vue`（D30：1 处补令牌、2 处修的是"锁的时机/没有锁"、4 处证否、1 处另立一维记着没动）。粗尺（同形状全站 108 处 / 31 个文件）**只能用来挑页、不能当工作量**，它把控制位也算进去了；企业侧的 `admin/Tenants`、`OrganizationWorkspace` 按 §2 收缩跳过，下一个是 `PipelineKanban`(6)，再往后 `Interview`(5)、`Profile`(5) |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 15 处领走令牌（7 个页面，一链一把），另有 3 处按同一条判据换了别的修法（D29 的 `:disabled` 串行、D30 的"只在仍指向自己那行时才解锁"与给无锁按钮补 `:loading`）；这 18 处现在全部有红→绿或变异证据（见 D3、D7、D9、D10、D28、D29、D30、D31——D3 那次欠着测试的 `JobSearch` 两处由 D28 补上，也正是那次把"两条链共用一把令牌"这个缺陷跑出来；D28 顺带撤回 D7"互斥标签页共用才对"的前提，并把它变成棘轮硬不变量）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，D15 再补 2 处；棘轮 `silentEmptyCatches` 11 → 4 →（D15 把判据换成函数作用域）7 → **5** 盯着（见 D4、D5、D15。D10 记下的"这一维有已知漏数"随那次换口径**已关闭**：D13 的格式化让 `admin/Tenants` 先现形，剩下 3 处 D15 量到并修掉两处 GET）**。**已收：`AppPanel`** —— 93 → **35** 处手写面板头搬进组件，最后 22 处由 11 次逐路由 `getComputedStyle` 差分（5501 个元素实例 × 20 条属性）量出 **0 差异**，判定器与 13 条合成用例留在 `frontend/scripts/panel-migration.mjs`（D18–D26）。纯 drop-in 已见底：剩下 35 处不是"没来得及"，而是要先拍组件 API，见 §10.14。未收（**D27 量过之后改判**）：~~`AppTable`+分页~~ —— 128 张 `<el-table>` 里可共享的只有 `stripe`/`size` 两个属性（`v-loading` 仅 5 处、`el-pagination` 仅 6 处），列定义是内容不是重复；而为它设想的那个缺陷——"表格在加载期间谎称暂无数据"——在 7 个有异步表格的文件里 **6 个已经被挡住**（`v-if="loading"` 的加载分支、`v-if="rows.length"` 的守卫、`<template v-else-if="evaluationData">`）。**包这一层不值当，从计划撤下**。骨架态仍然值得做，但它今天没有任何缺陷撑着、纯是观感改动 → 升为 §10.16 由你拍。真正还未收的是：**逐个证明可并发触发的加载函数**——已按页判完 4 页：`JobSearch.vue`（D28：8 个加载函数，5 个能并发已加令牌、3 个证否并附理由）、`ResumeCompare.vue`（D29：3 处修，其中 1 处的正解是 `:disabled` 串行不是令牌；4 处证否）、`KnowledgeBase.vue`（D30：1 处补令牌、2 处修的是"锁的时机/没有锁"、4 处证否、1 处另立一维记着没动）、`PipelineKanban.vue`（D31：1 处加令牌；另有一条竞态用例被自己的前提证伪并撤掉——那条路今天被 spinner 分支挡着，账上写明它是副作用不是设计）。粗尺（同形状全站 108 处 / 31 个文件）**只能用来挑页、不能当工作量**，它把控制位也算进去了；企业侧的 `admin/Tenants`、`OrganizationWorkspace` 按 §2 收缩跳过，下一个是 `Interview`(5)、`Profile`(5) |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -1301,6 +1301,27 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 **门禁**：`test:unit` 112 → **118 passed / 20 files**、lint **0 error**（`admin/Overview` 那条既有 warning 未动）、build ok、backend 无改动。全树令牌接线 **14 个实例 / 14 个领取点 / 6 个页面**，一链一把，D28 那条棘轮仍然绿；改动文件 CRLF 计数 **0**（`KnowledgeBase.vue` 净增 23 行、删 6 行，prettier 报 unchanged）。**没验**：真浏览器（`navigate_page` 仍被策略拦）。
 
 **剩余**：31 个有候选的文件里已判完 **3 页**（`JobSearch`、`ResumeCompare`、`KnowledgeBase`），下一个是 `PipelineKanban`(6)。
+
+
+#### 已交付：D31 投递看板：一条竞态用例被我自己的前提证伪，于是删掉而不是给它加守卫
+
+**这页只有 1 个加载函数需要动手**：`loadKanban`（`:742`）在 `await Promise.all([getKanban(), getPipelineResumeVersionStats()])` 之后**连着写三处**（`kanban` / `versionPerformance` / `loadError`），而「刷新」按钮（`:28`）今天**既没有 `:loading` 也没有 `:disabled`** → 连点两次就是两发在途，晚到的旧快照把卡片放回原列。红→绿 1 条，改 9 行。
+
+**被证伪的那条**：我原本写了一条"刷新在途时把卡片从「待投递」拖到「面试」，随后落地的旧快照会把它弹回原列"，并打算让 `onDrop` 也领一发令牌来治它。**跑出来发现这条前提不成立**：重取在途时整块看板被 `v-if="loading"` 的 spinner 分支（`:161`，正是 D27 量的那个）取代，卡片不在屏幕上，拖动无从发生，也就交叠不了。于是**用例撤掉、`onDrop` 一行没改**，改成留一条对照组断言这个保护本身（在途期间 `.kanban-card` 数量为 0），并在账上写清楚：**它是 spinner 分支的副作用，不是设计出来的互斥**——将来谁把加载态换成骨架屏或让看板在加载时保留旧数据，这条路就会打开，届时需要的是给 `onDrop` 领令牌，而不是相信今天这道墙。
+
+| 函数 | 判定 | 依据 |
+|---|---|---|
+| `loadKanban` | **能并发，已加令牌** | 「刷新」`:28` 无锁；10 个调用点里其余（新增/卡片菜单/批量移动/拖动失败重取）都在尾部发，令牌同样管得住 |
+| `loadResumeVersions` | 否 | `onMounted` + `AppLoadError @retry`(`:426`)，而重试进入即 `versionError.value = ''` → 按钮当场消失（与 D28 的 `loadResumes` 同型） |
+| `handleAdd` / `saveFeedback` | 否 | 各自唯一入口且带 `:loading`（`:432`、`:494`） |
+| `batchMove` | 能并发，但**没有可证的错误状态** | 按钮确实没锁，两次批量移动的循环会并行；各自 toast 自己那一轮的计数是真的，尾部只有一次 `loadKanban`（已被令牌管住），`selectedCards` 两边都清成空集 |
+| `onDrop` | 见上面那条被撤掉的用例 | spinner 挡住了交叠 |
+
+**测试**：`tests/unit/pipelineKanbanRace.test.js` 5 条 = 1 条竞态（对 HEAD 红）+ 4 条对照组（单次刷新照常出数据 / 无并发时乐观更新照常 / 在途期间看板整块不在屏幕上 / 失败块的重试按钮在途期间点不出第二次）。**变异自证**：去掉 `loadKanban` 的守卫 → 只有那条竞态红，其余 4 条绿。**顺带记一条写测试踩的坑**：`loadKanban` 一发是**两个并行请求**，只 resolve `getKanban` 而不管配对的 stats，`Promise.all` 就永远挂不住、页面停在 spinner，症状长得像"列没渲染出来"——第一版三条红全是这个原因，不是缺陷本身；现在用 `settleRound(i, …)` 一次落两条。
+
+**门禁**：`test:unit` 118 → **123 passed / 21 files**、lint **0 error**（`admin/Overview` 既有 warning 未动）、build ok、backend 无改动。`PipelineKanban.vue` 净 **+9/−1**。全树令牌接线 **15 实例 / 15 领取点 / 7 个页面**，D28 的棘轮仍绿；改动文件 CRLF **0**。**没验**：真浏览器。
+
+**剩余**：已判完 **4 页**（`JobSearch`、`ResumeCompare`、`KnowledgeBase`、`PipelineKanban`），下一个 `Interview`(5)、`Profile`(5)。
 
 
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
