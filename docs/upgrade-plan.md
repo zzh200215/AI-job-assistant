@@ -585,7 +585,7 @@ agent.SummaryAgent           real  tokens=3215
 | ~~限流粒度~~ → 有身份的请求已按用户计额度（E14，提交 `63537ab`） | 原来的事实：只有 `api/auth.py` 的 5 个匿名端点自带限流，其余 **228/233 条操作只受 `RATE_LIMIT_GENERAL`（100/分钟）按 IP 管** → 一个 NAT 出口下所有人共用一份额度。**仍在的两半**：① 昂贵端点（深度分析/多智能体）没有自己的额度，一个用户照样能一分钟发 100 次真金白银的 LLM 调用；② 登录流量的每 IP 总闸随 E14 消失了，要补就是 `application_limits` 按地址再挂一层。两个数都要人定，见 §10.10 |
 | ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`） | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。**仍然在的是性能那半句**：`score()` 为 O(terms×docs) 纯 Python 遍历，语料再大一个量级就要换实现 |
 | Rerank 生产用启发式 | `rerank_service.py:125-159` 可选本地 cross-encoder，否则 jieba 词重叠 + 硬编码 0.5/0.3/0.2 权重；`RERANKER_MODEL_PATH` 默认未设 |
-| 死代码 → ~~`api/tracking.py` 定义了 router 但**从未被 include**~~ 已挂载并修好整条链（E10，提交 `cb5a72b`）；**但 `track()` 调用方为 0，"要不要真埋点"回到 §10.8** | 仍在的是另一半：`agents/agent_orchestrator.py`、`services/smart_orchestrator.py`、`services/agent_workflow.py` 是 `DeprecationWarning` 垫片层，靠 import 维持存活 |
+| 死代码 → ~~`api/tracking.py` 定义了 router 但**从未被 include**~~ 已挂载并修好整条链（E10，提交 `cb5a72b`）；**但 `track()` 调用方为 0，"要不要真埋点"回到 §10.8** | 另一半**前提两头都不准，已由 E21 更正**：原话点名的三个"靠 import 维持存活的垫片层"里，`agents/agent_orchestrator.py`（154 行）与 `services/agent_workflow.py`（20 行）是 `/api/multi-agent`、`/api/agent` **在用的兼容入口**，不是死代码；真正零引用的是另外 6 个模块共 **425 行**——`services/smart_orchestrator.py`（80 行，唯一公开函数 `run_orchestrator_sync` 无人调用，而两处"已废弃，请使用 …→ smart_orchestrator"的提示恰恰指向这个死入口）、4 个 prompt 文本模块（210 行，`PROMPT_VERSION` 全仓无人读，`SummaryAgent` 实际吃 `agent_report`）、`utils/llm_output.py`（135 行，覆盖率 **0%**）。已全部删除，并留一条可达性守卫 `tests/test_no_dead_app_modules.py`（静态 import 闭包 + 空 allowlist + 合成树反向证据 + "无动态 import app 模块"前提检查），详见 E21 记录 |
 | ~~缺少 router 级鉴权~~ → 已收口：22 段纯会话前缀挂 include 级守护（E11，提交 `21778e2`）+ **按操作补齐的装配期默认拒绝**（E19） | 原判断成立的方式：31 个 router / 218 端点无一处用 `dependencies=[...]`，鉴权靠每端点自己写。**现在的保证**：一条操作要么在 `app/core/api_access.py` 的两张清单里（15 条真公开 + 4 条自带别的凭据），要么它的依赖树里必有 `Depends(get_current_user)`——缺的自己被补上，所以那 8 段混着公开端点的前缀不再靠自觉。**计划里开的方子"先做端点级拆分"已被实测否掉**（42 个测试文件自建 mini-app、拆完 25 个 404），见 E19 |
 | 三个 router 共享 `/jobs` 前缀 | `api/router.py:54-56`；当前不冲突仅因 `job_recommend.py:1448` 的 `/{jd_id:int}` 是单段 |
 
@@ -1294,6 +1294,58 @@ RemoteDisconnected；改名之后又漏改三处调用点，整文件 `NameError
 
 **门禁**：backend 全量 **764 → 778 passed**（+7 embedding、+6 rerank、+1 chroma 目录）；
 `ruff check .` 与 `ruff format --check .` clean。
+
+#### 已交付：E21 删掉 6 个零引用模块（425 行），而债行点名的"三个垫片层"其实是活的
+
+**先量再动手**。那条债的原话是："`agents/agent_orchestrator.py`、`services/smart_orchestrator.py`、
+`services/agent_workflow.py` 是 `DeprecationWarning` 垫片层，靠 import 维持存活"。逐个查引用，**两头都不对**：
+
+- `agent_orchestrator.py`（154 行）被 `api/multi_agent.py:8` 在用，`run_multi_agents` / `run_auto_agents`
+  里真的在建 task、建 run、派发意图、起后台线程——它是 `/api/multi-agent` 的**在用兼容入口**，
+  不是"靠 import 活着的死码"。`agent_workflow.py`（20 行）同理（`api/agent.py:16`）。
+- `smart_orchestrator.py`（80 行）**零引用**：唯一公开函数 `run_orchestrator_sync` 全仓没有调用方，
+  它带的 `AGENT_REGISTRY` 也没人读（真实注册表是 `orchestration.registry.DEFAULT_REGISTRY`）。
+
+**最难看到的是那句提示**：两处 `warnings.warn("… 已废弃，请使用 run_smart_analysis → smart_orchestrator")`
+指向的正是这个零引用模块——**废弃提示在把调用方往一个死入口赶**。文案已改成真实主线
+`analysis_service.run_smart_analysis`（`/api/analysis/full` 走的那条），`orchestration/strategies.py`
+里两处"smart_orchestrator 主线"的注释同步更正。测试只断言"会 warn"（`test_orchestration.py:438`），
+不断言文案，所以这三处改字零风险。
+
+**顺带用一把静态尺子量了全仓**：从 `app.main` + `app.api.router` + 每个 `tests/`、`scripts/`、`alembic/`
+文件做 import 闭包。第一版把 `from app.api import (agent, analysis, ...)` 只记成 `app.api`，于是 30 段
+router 全被判死、报出 **84 个"死模块"——全是假阳性**；逐 alias 展开之后是 **213 个模块、12 项不可达**，
+其中 6 项是包的 `__init__.py`（构造性假阳性，守卫里按"包"排除）。剩下的候选逐个独立复核（不只看探针）：
+
+| 模块 | 行数 | 独立复核 |
+|---|---|---|
+| `app/prompts/agent_planning.py` | 53 | 全仓无 `from app.prompts.agent_planning`；再用 `ls` 与"被引用集合"做差集复算，同向 |
+| `app/prompts/agent_self_check.py` | 40 | 同上 |
+| `app/prompts/dispatcher_agent.py` | 47 | 同上 |
+| `app/prompts/summary_agent.py` | 70 | 同上；且 `agents/summary_agent.py:12` 实际 import 的是 `agent_report`——这是重构留下的孤儿 |
+| `app/utils/llm_output.py` | 135 | 零文本引用，且 E18 那次覆盖率表里它就是 **0%**（两条独立证据同向） |
+
+`PROMPT_VERSION`（8 个 prompt 模块都定义了这个常量）经查**没有任何读取方**，所以"这些 prompt 是按版本
+留给审计链取的"这个假设不成立，不能当留着的理由。**6 个文件共 425 行已删**（含 `smart_orchestrator.py`）。
+
+**防复发的守卫**：`tests/test_no_dead_app_modules.py`，4 条。
+
+1. **合成树反向证据**：造一棵 live/dead 各一的假仓，dead 必须被点名——否则"零不可达"是空绿。
+2. 真实不变式：不可达集合 ⊆ 显式 `ALLOWED_UNREACHABLE`（**今天是空的**），并要求可达数 ≥180 防遍历失效。
+3. allowlist 里若有条目已经变可达就报错（防止留下"早就接上了但没人删条目"的腐化）。
+4. **前提检查**：全仓不许出现 `import_module("app.` / `__import__("app.")`——有它这条静态闭包就不可信。
+   `utils/file_parser.py` 里那两处 `import_module` 取的是可选第三方模块（pytesseract 等），是刻意的
+   软依赖，不在这条射程里。
+
+**顺手收掉一个会咬人的小洞**：并发跑 pytest 会在 `backend/` 落下 `.coverage.<host>.pid<pid>.<rand>`
+数据文件，而 `.gitignore` 只有 `.coverage`（**不匹配带后缀的那些**），一次 `git add -A` 就会把它们
+提交进去——这正是那条已被 D14 撤过的"`.coverage` 被提交进工作树"的复发路径。已补 `.coverage.*`。
+
+**没做**：`/jobs` 三段共享前缀、BM25 `score()` O(terms×docs)、队列 ack/retry/DLQ 都仍未动；
+`track()` 调用方为 0 那半句还是 §10.8。
+
+**门禁**：backend 全量 **778 → 782 passed**（+4 条守卫；删除 6 个模块本身不改变用例数）；
+`ruff check .` 与 `ruff format --check .` clean；删除后 `import app.main` 正常。
 
 #### 已交付：D7 职业规划页：旧简历的慢响应不再顶到新简历下面（提交 `fb57d7e`）
 
