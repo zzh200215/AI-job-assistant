@@ -1,6 +1,6 @@
 """执行策略抽象与两种具体实现
 
-- LinearStrategy:          线性流水线（smart_orchestrator 主线，`/api/analysis/full`）
+- LinearStrategy:          线性流水线（主线，由 `analysis_service.run_smart_analysis` 按配置选中）
 - LayeredParallelStrategy: 分层并行（legacy `/api/multi-agent/*`）
 
 每种流水线各有一个 LangGraph 孪生实现（`langgraph_flow.py`），由
@@ -382,7 +382,6 @@ class LinearStrategy(ExecutionStrategy):
     """线性流水线策略
 
     按注册表顺序串行执行每个 Agent，支持意图裁剪跳过非必要步骤。
-    对应原 smart_orchestrator 的实现。
     """
 
     AGENT_ORDER: list[str] = [

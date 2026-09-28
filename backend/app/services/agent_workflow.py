@@ -13,7 +13,7 @@ from app.services.analysis_service import run_smart_analysis
 def run_workflow(resume_id: int, jd_id: int, user_id: int = None) -> int:
     """按配置策略启动一次分析；返回值仍是 agent_task.id。"""
     warnings.warn(
-        "run_workflow 已废弃，请直接使用 run_smart_analysis → smart_orchestrator",
+        "run_workflow 已废弃，请改用 analysis_service.run_smart_analysis（`/api/analysis/full` 那条主线）",
         DeprecationWarning,
         stacklevel=2,
     )

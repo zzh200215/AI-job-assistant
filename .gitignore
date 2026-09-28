@@ -47,6 +47,7 @@ ports.log
 # Test/cache data
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 backend/backups/
 backups/

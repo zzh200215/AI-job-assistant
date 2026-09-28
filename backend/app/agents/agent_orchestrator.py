@@ -32,7 +32,7 @@ C_END_AGENTS = ["ResumeAgent", "JobAgent", "MatchAgent", "InterviewAgent", "Care
 def run_multi_agents(resume_id: int, jd_id: int, user_id: int | None = None) -> int:
     """Start the legacy full multi-agent flow via the shared layered runner."""
     warnings.warn(
-        "run_multi_agents 已废弃，请使用 run_smart_analysis → smart_orchestrator",
+        "run_multi_agents 已废弃：它是 /api/multi-agent 的兼容入口，主线是 analysis_service.run_smart_analysis",
         DeprecationWarning,
         stacklevel=2,
     )
@@ -56,7 +56,7 @@ def run_auto_agents(
 ) -> int:
     """Start the legacy auto-dispatch flow and persist intent metadata."""
     warnings.warn(
-        "run_auto_agents 已废弃，请使用 run_smart_analysis → smart_orchestrator",
+        "run_auto_agents 已废弃：它是 /api/multi-agent 的兼容入口，主线是 analysis_service.run_smart_analysis",
         DeprecationWarning,
         stacklevel=2,
     )
