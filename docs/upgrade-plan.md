@@ -474,7 +474,7 @@ agent.SummaryAgent           real  tokens=3215
 
 | 阶段 | 内容 | 收口目标 |
 |---|---|---|
-| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 15 处领走令牌（7 个页面，一链一把），另有 3 处按同一条判据换了别的修法（D29 的 `:disabled` 串行、D30 的"只在仍指向自己那行时才解锁"与给无锁按钮补 `:loading`）；这 18 处现在全部有红→绿或变异证据（见 D3、D7、D9、D10、D28、D29、D30、D31——D3 那次欠着测试的 `JobSearch` 两处由 D28 补上，也正是那次把"两条链共用一把令牌"这个缺陷跑出来；D28 顺带撤回 D7"互斥标签页共用才对"的前提，并把它变成棘轮硬不变量）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，D15 再补 2 处；棘轮 `silentEmptyCatches` 11 → 4 →（D15 把判据换成函数作用域）7 → **5** 盯着（见 D4、D5、D15。D10 记下的"这一维有已知漏数"随那次换口径**已关闭**：D13 的格式化让 `admin/Tenants` 先现形，剩下 3 处 D15 量到并修掉两处 GET）**。**已收：`AppPanel`** —— 93 → **35** 处手写面板头搬进组件，最后 22 处由 11 次逐路由 `getComputedStyle` 差分（5501 个元素实例 × 20 条属性）量出 **0 差异**，判定器与 13 条合成用例留在 `frontend/scripts/panel-migration.mjs`（D18–D26）。纯 drop-in 已见底：剩下 35 处不是"没来得及"，而是要先拍组件 API，见 §10.14。未收（**D27 量过之后改判**）：~~`AppTable`+分页~~ —— 128 张 `<el-table>` 里可共享的只有 `stripe`/`size` 两个属性（`v-loading` 仅 5 处、`el-pagination` 仅 6 处），列定义是内容不是重复；而为它设想的那个缺陷——"表格在加载期间谎称暂无数据"——在 7 个有异步表格的文件里 **6 个已经被挡住**（`v-if="loading"` 的加载分支、`v-if="rows.length"` 的守卫、`<template v-else-if="evaluationData">`）。**包这一层不值当，从计划撤下**。骨架态仍然值得做，但它今天没有任何缺陷撑着、纯是观感改动 → 升为 §10.16 由你拍。真正还未收的是：**逐个证明可并发触发的加载函数**——已按页判完 4 页：`JobSearch.vue`（D28：8 个加载函数，5 个能并发已加令牌、3 个证否并附理由）、`ResumeCompare.vue`（D29：3 处修，其中 1 处的正解是 `:disabled` 串行不是令牌；4 处证否）、`KnowledgeBase.vue`（D30：1 处补令牌、2 处修的是"锁的时机/没有锁"、4 处证否、1 处另立一维记着没动）、`PipelineKanban.vue`（D31：1 处加令牌；另有一条竞态用例被自己的前提证伪并撤掉——那条路今天被 spinner 分支挡着，账上写明它是副作用不是设计）。粗尺（同形状全站 108 处 / 31 个文件）**只能用来挑页、不能当工作量**，它把控制位也算进去了；企业侧的 `admin/Tenants`、`OrganizationWorkspace` 按 §2 收缩跳过，下一个是 `Interview`(5)、`Profile`(5) |
+| 1 | 共享层 `components/ui/`：`AppPanel`、`AppTag`（唯一状态色表）、`AppScoreBar`、`AppTable`+分页、空/错/骨架态；`utils/format/` 统一日期；`composables/useLatestCall`（竞态令牌。原计划的 `useAsync` 经实测撤销，见 D3） | 已收：**3 套互相矛盾的分数色板 → `utils/scoreTone.js`**（分数→显示共 17 处，见 D1 第一~二段）；**状态色表中真跨页矛盾的两处 → `utils/statusTone.js`**（17 份表里先收任务/面试两组，其余 99 条手写映射由棘轮 `statusTagEntries` 按数字盯着（D13 换成 token 口径后才是这个数，按行口径当时只看见 52 条））；**日期格式化 18 份副本 → `utils/format/date.js` 的 7 个具名输出**（34 个调用点，见 D2）；**并发覆盖：95 个"await 后直接写 ref"里已给 22 处领走令牌（13 个页面，一链一把），另有 4 处按同一条判据换了别的修法（D29 的 `:disabled` 串行、D30 的"只在仍指向自己那行时才解锁"与给无锁按钮补 `:loading`、D32 的保存×恢复默认互锁）；这些站点现在全部有红→绿或变异证据（见 D3、D7、D9、D10、D28、D29、D30、D31、D32——D3 那次欠着测试的 `JobSearch` 两处由 D28 补上，也正是那次把"两条链共用一把令牌"这个缺陷跑出来；D28 顺带撤回 D7"互斥标签页共用才对"的前提，并把它变成棘轮硬不变量）**；**"失败被说成没有数据"：D4+D5 共 9 处接进 `components/ui/AppLoadError`，D15 再补 2 处；棘轮 `silentEmptyCatches` 11 → 4 →（D15 把判据换成函数作用域）7 → **5** 盯着（见 D4、D5、D15。D10 记下的"这一维有已知漏数"随那次换口径**已关闭**：D13 的格式化让 `admin/Tenants` 先现形，剩下 3 处 D15 量到并修掉两处 GET）**。**已收：`AppPanel`** —— 93 → **35** 处手写面板头搬进组件，最后 22 处由 11 次逐路由 `getComputedStyle` 差分（5501 个元素实例 × 20 条属性）量出 **0 差异**，判定器与 13 条合成用例留在 `frontend/scripts/panel-migration.mjs`（D18–D26）。纯 drop-in 已见底：剩下 35 处不是"没来得及"，而是要先拍组件 API，见 §10.14。未收（**D27 量过之后改判**）：~~`AppTable`+分页~~ —— 128 张 `<el-table>` 里可共享的只有 `stripe`/`size` 两个属性（`v-loading` 仅 5 处、`el-pagination` 仅 6 处），列定义是内容不是重复；而为它设想的那个缺陷——"表格在加载期间谎称暂无数据"——在 7 个有异步表格的文件里 **6 个已经被挡住**（`v-if="loading"` 的加载分支、`v-if="rows.length"` 的守卫、`<template v-else-if="evaluationData">`）。**包这一层不值当，从计划撤下**。骨架态仍然值得做，但它今天没有任何缺陷撑着、纯是观感改动 → 升为 §10.16 由你拍。**已收：逐个证明可并发触发的加载函数（D28–D32）**——粗尺在同形状下列出 108 处 / 31 个文件，这个数只用来挑页、不能当工作量（它把控制位也算进去了）。判完的结果：**13 页有结论并落地**（`JobSearch` D28、`ResumeCompare` D29、`KnowledgeBase` D30、`PipelineKanban` D31、`SalaryInsight`/`Interview`/`ResumeUpload`/`Privacy`/`AgentAnalysis`/`RecommendationConfig`/`EvalReport` D32），**2 页先装了守卫又撤回、留成绊线**（`Home`、`JobTargets`：第二次点不出来，因为进入即清错误位 + spinner 分支在前），**8 页证否**（`Profile`、`InterviewSetup`、`AnalysisResult`、`ExplainMatch`、`InterviewReport`、`SystemStatus`、`WeeklyReport`、`RecommendationEval`：单入口带 `:loading`、只由 `onMounted` 触发、或重试按钮自藏），企业侧的 `admin/Tenants`、`OrganizationWorkspace` 按 §2 收缩跳过。**这一维还剩两件事没做**：`Profile.copyInviteLink` 的读后写计数（不是竞态，另立一维等拍）与 `ResumeUpload.handleCmd('parse')`（要先把这个 11 分支函数拆开，属阶段 2）；而全部 22 处令牌 + 4 处互锁**都没有真浏览器复核**，jsdom 里 `el-table` 不渲染行的那些站点是靠 `wrapper.vm` 入口函数 + 模板绑定证明的。 |
 
 | 2 | 按 feature 重组 `src/features/{resume,analysis,jobs,pipeline,interview,planning,eval,admin,legal}/`；先出纯 `git mv` + alias 的机械提交，再拆 5 个巨页 | `JobSearch.vue`(3344)、`SmartAnalysis.vue`(2914)、`CareerPlanning.vue`(2164)、`PipelineKanban.vue`(1661)、`InterviewRoom.vue`(1462)。抽一个 `JobCard` 同时让 4 个文件变短（`JobSearch.vue:276,391,476` + `JobRecommend.vue` 重复渲染同一卡片） |
 | 3 | TypeScript（`allowJs` 渐进、新文件强制 `.ts`）+ `unplugin` 自动导入，删掉 `plugins/element.js` 的 111 行手写注册 | 视图数从 45 降至约 41（去 `OrganizationWorkspace`、`admin/{Tenants,Orders}`，`Subscription` 视付费决策） |
@@ -1322,6 +1322,39 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 **门禁**：`test:unit` 118 → **123 passed / 21 files**、lint **0 error**（`admin/Overview` 既有 warning 未动）、build ok、backend 无改动。`PipelineKanban.vue` 净 **+9/−1**。全树令牌接线 **15 实例 / 15 领取点 / 7 个页面**，D28 的棘轮仍绿；改动文件 CRLF **0**。**没验**：真浏览器。
 
 **剩余**：已判完 **4 页**（`JobSearch`、`ResumeCompare`、`KnowledgeBase`、`PipelineKanban`），下一个 `Interview`(5)、`Profile`(5)。
+
+
+#### 已交付：D32 一次把剩下 17 个文件扫完：7 处修、2 处撤回、8 页证否，外加一次自己盖掉自己文件的事故
+
+**分诊方式换了**：不再一页一页从头读。用一次性脚本按 D28/D30 的形状（`await` 之后写业务 ref）把剩下的文件列出来，再逐个只看"入口有没有锁"——**这个列表只用来决定读哪页，不进任何数字**。粗尺在 17 个文件里列出 35 个候选函数（不含已判完的 4 页；企业侧的 `admin/Tenants`、`OrganizationWorkspace` 按 §2 收缩跳过）。
+
+**修掉的 7 处**（症状各不相同，所以各写各的测试）：
+
+| 页面 · 函数 | 能被谁叠起来 | 旧那一发盖新那一发时，屏幕上留下什么 | 修法 |
+|---|---|---|---|
+| `SalaryInsight.doSearch` | 「查询」`:26` 与两个输入框的 `@keyup.enter`(`:17/:24`) 都没有锁 | 它是**两个串联 await**：先 `overview`（合理区间卡）再 `cityComparison`（城市对比表）。交叠时留下的是**岗位甲的区间 + 岗位乙的城市对比**——同一屏写着两个岗位的读数，看不出是拼的 | 一把令牌管两轮写入 |
+| `SalaryInsight.checkExpectation` | 「评估」`:180` 无锁 | 换报价再点一次，屏幕上留的是上一次报价的结论与市场中位数 | 另一把令牌 |
+| `Interview.refreshDaily` | 「换一题」`:62` 无锁 | 两次点击各拿一批 `limit=10 random` 的题、前端再随机取一条；旧批次晚到就把刚换出来的题顶回去 | 令牌 |
+| `ResumeUpload.showDiagnosisDialog` | 行下拉里的「AI诊断」`:428` 无锁；**关掉弹窗不取消已发出的请求** | 弹窗里是**上一份简历的分数**（仪表盘、五个维度、问题清单一起错），且 `r._diagnosisScore` 会回填到**另一行**上——给错人打分 | 令牌 |
+| `Privacy.loadDataSummary` | 三个删除动作（删简历/删分析/删面试）的尾巴都调它，而这些删除按钮互不锁 | 合规面把**刚删掉的记录又数回来一遍**（"分析记录还有 5 条"，而它们已经删了） | 令牌 |
+| `AgentAnalysis.pollSteps` | 从 URL 带 `task_id` 进来是一条自续轮询链，`onStart` 尾巴又起一条；两条都读同一个 `taskId.value` | 旧任务那一发用**旧 id 发的请求**回来盖掉新任务的步骤/检索/检查，而且被顶掉那条还会 `setTimeout` 续自己的定时器 | 令牌 + 被顶掉那一条不再续定时器 |
+| `EvalReport.reloadAll` | 报告类型下拉 `@change`(`:13`)，select 没有任何锁（「刷新」按钮倒是有 `:loading`） | 两发**带不同参数**的请求，屏幕上的计数属于上一个类型，而下拉框写着新选的类型 | 令牌 |
+
+**`RecommendationConfig` 的保存 × 恢复默认是第 8 处，但修法不是令牌**：两个按钮各自锁自己的 `loading.save` / `loading.reset`，所以保存还在途时"恢复默认"照样能点，两者都在响应后写同一个 `savedConfig` 并跑 `applyConfig` 重刷表单。这里两条写意都是真的（不像 D29 的建议映射那样需要保留双份），但也谈不上"只让最后一次赢"——用户看到的是一个 toast 说已保存、屏幕上是另一份配置。**改成互锁**（各自 `:disabled` 对方那个位），并发窗口直接不存在。
+
+**撤回去的两处**：`Home.loadDashboard`（三块错误里各有一个「重新加载」，`:50/:110/:151`）和 `JobTargets.loadTargets`（`:60`）——形状完全对得上，我甚至先写了令牌和三块屏幕的竞态测试。跑下去发现**第二次点不出来**：`loadDashboard` 进入就把 `overviewError/tasksError/actionsError` 一起清掉，`loadTargets` 那一发在途时 `v-if="loading"` 的 spinner 分支整块换掉错误块与行按钮。与 D31 的看板同型。**组件一行退回**（Home/JobTargets 与 HEAD 逐字节相同），测试留成绊线：断言"点下重载之后屏幕上 `重新加载` 的数量是 0"，将来谁把加载态改成保留旧数据或换骨架屏，这条会红，那时才需要真装令牌。
+
+**另外 8 个文件全部证否**，依据都是同三条之一：入口唯一且带 `:loading`（`ExplainMatch.doExplain`、`SystemStatus.runModelProbe`、`Privacy.exportData`、`RecommendationEval.downloadSamples` 的两个按钮各锁自己的格式）、只由 `onMounted` 触发（`InterviewReport.loadReport`、`InterviewSetup.fetchResumes/fetchJDs/loadTypeConfigs`、`Profile.loadUserStats/loadSubscription`、`Interview.loadUpcoming/loadSessions/loadWeakAreas`）、或重试按钮进入即清错误位而自藏（`WeeklyReport.loadReport`、`AnalysisResult.loadAnalysisById`）。`RecommendationEval.downloadSamples` 是"能并发但没有可证的错误状态"：json 在途时 csv 按钮确实可点，两份都真能下载，只有 spinner 会被先落地那关掉。
+
+**量到但故意没改的两处**：
+1. `Profile.copyInviteLink`（`:355`，按钮无锁）：`await clipboard.writeText` 之后读 `inviteCount.value + 1` 再写回，连点两次会**少算一次**。这不是"旧响应盖新响应"——把自增挪到 `await` 之前会变成"复制失败也计数"，正解是把计数交给服务端或做成幂等，属另一维，等拍。
+2. `ResumeUpload.handleCmd('parse')`：与 `showDiagnosisDialog` 同型（`await parseResume` 之后写 `currentParsed/showParsed`），但 `handleCmd` 是一个函数体里 11 个分支共用，按分支拆令牌要先把这个函数拆开——那是 §7 阶段 2 拆巨页的工作，不在这一维里顺手做。
+
+**事故账（这条比上面的修法更该记住）**：一次批量变异脚本把**三个文件的备份写进了同一个临时路径**（`/tmp/mut.keep` 被覆盖三次），于是"还原"步骤把 `RecommendationConfig.vue` 的内容依次盖进了 `Privacy.vue` 与 `AgentAnalysis.vue`——两个视图当场变成另一个页面（`git diff --numstat` 报 459/279 与 417/866 才暴露，棘轮那几条也一起红，因为 `Privacy` 的本地 `.panel-header` 覆盖不见了）。恢复用 `git show HEAD:<path> | tr -d '\r'`（LF 安全，避开 autocrlf），两处守卫重落一遍。**规则：变异脚本每个文件必须各自一个备份文件名；还原前先 `git diff --numstat` 看爆炸半径**。这条与 [[edit-tool-crlf-breaks-prettier]] 是同一条腿的第四种咬法。
+
+**测试**：本轮新增 9 个文件、23 条。`jobSearchRace` 那类"点真实按钮"的有 3 条（`SalaryInsight` 的查询/评估、`RecommendationConfig` 的两个按钮、`Home/JobTargets` 的绊线）；其余因 `el-table` 在 jsdom 不渲染行，走 `wrapper.vm` 的入口函数 + 模板绑定证明（与 D30 同一档，浏览器复核仍然欠）。**7 处修法逐条变异自证**：各自撤掉守卫 → 只有对应那条红（Privacy 的概览数回来、AgentAnalysis 的旧任务步骤盖回、RecommendationConfig 的按钮还能点、EvalReport 的旧筛选计数留下、SalaryInsight 的混合区间、Interview 的旧批次、ResumeUpload 的上一份分数），其余全绿。
+
+**门禁**：`test:unit` 123 → **146 passed / 30 files**、lint **0 error**（`admin/Overview` 既有 warning 未动）、build ok、backend 无改动。全树令牌接线 **22 个实例 / 22 个领取点 / 13 个页面**，一链一把（D28 的棘轮仍绿）；改动文件 CRLF 计数 **0**。§7 阶段 1 那条"逐个证明可并发触发的加载函数"至此**判完**：粗尺列出的 31 个文件里，求职侧 13 页有结论并落地，8 页证否，2 页撤回守卫并留绊线，企业侧 2 页按 §2 跳过。
 
 
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
