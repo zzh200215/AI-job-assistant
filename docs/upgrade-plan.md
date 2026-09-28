@@ -1352,7 +1352,9 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 
 **事故账（这条比上面的修法更该记住）**：一次批量变异脚本把**三个文件的备份写进了同一个临时路径**（`/tmp/mut.keep` 被覆盖三次），于是"还原"步骤把 `RecommendationConfig.vue` 的内容依次盖进了 `Privacy.vue` 与 `AgentAnalysis.vue`——两个视图当场变成另一个页面（`git diff --numstat` 报 459/279 与 417/866 才暴露，棘轮那几条也一起红，因为 `Privacy` 的本地 `.panel-header` 覆盖不见了）。恢复用 `git show HEAD:<path> | tr -d '\r'`（LF 安全，避开 autocrlf），两处守卫重落一遍。**规则：变异脚本每个文件必须各自一个备份文件名；还原前先 `git diff --numstat` 看爆炸半径**。这条与 [[edit-tool-crlf-breaks-prettier]] 是同一条腿的第四种咬法。
 
-**测试**：本轮新增 9 个文件、23 条。`jobSearchRace` 那类"点真实按钮"的有 3 条（`SalaryInsight` 的查询/评估、`RecommendationConfig` 的两个按钮、`Home/JobTargets` 的绊线）；其余因 `el-table` 在 jsdom 不渲染行，走 `wrapper.vm` 的入口函数 + 模板绑定证明（与 D30 同一档，浏览器复核仍然欠）。**7 处修法逐条变异自证**：各自撤掉守卫 → 只有对应那条红（Privacy 的概览数回来、AgentAnalysis 的旧任务步骤盖回、RecommendationConfig 的按钮还能点、EvalReport 的旧筛选计数留下、SalaryInsight 的混合区间、Interview 的旧批次、ResumeUpload 的上一份分数），其余全绿。
+**测试**：本轮新增 9 个文件、23 条。`jobSearchRace` 那类"点真实按钮"的有 3 条（`SalaryInsight` 的查询/评估、`RecommendationConfig` 的两个按钮、`Home/JobTargets` 的绊线）；其余因 `el-table` 在 jsdom 不渲染行，走 `wrapper.vm` 的入口函数 + 模板绑定证明（与 D30 同一档；浏览器侧补做的部分见下面那段）。**7 处修法逐条变异自证**：各自撤掉守卫 → 只有对应那条红（Privacy 的概览数回来、AgentAnalysis 的旧任务步骤盖回、RecommendationConfig 的按钮还能点、EvalReport 的旧筛选计数留下、SalaryInsight 的混合区间、Interview 的旧批次、ResumeUpload 的上一份分数），其余全绿。
+
+**浏览器复核（本轮补做，比前几轮走得远）**：`navigate_page` 这次没被策略拦，于是起了一个只跑的 Vite（不启动 8010 后端——共享开发库那条约束仍然成立），实地量了三件事：① `/privacy` 挂载后确实打出 `/api/auth/data-summary` 并落进 `AppLoadError` 失败块，三个删除按钮同时在场且都不 disabled——**D32 那处并发入口在真浏览器里是活的**；② `/salary` 的 `.search-bar` 里是 2 个输入框 + 一个 `disabled === false` 的「查询」按钮，即 `doSearch` 那条前提在浏览器里成立，不只是 jsdom；③ 控制台除资源 500 外没有组件级 JS 报错。**仍然没验的**：竞态本身——没有活的 API，所有请求在几毫秒内失败，观察不到"在途期间"那个窗口（想量重试按钮是否自藏，实测 `during=1`，因为往返太快，这条**不能算证否成立**，只能算没观察到）。所以 Privacy 的重试自藏那条以后端在场时为准；本轮改的其余各页同理。用完的 dev server 按 PID 定点停掉。
 
 **门禁**：`test:unit` 123 → **146 passed / 30 files**、lint **0 error**（`admin/Overview` 既有 warning 未动）、build ok、backend 无改动。全树令牌接线 **22 个实例 / 22 个领取点 / 13 个页面**，一链一把（D28 的棘轮仍绿）；改动文件 CRLF 计数 **0**。§7 阶段 1 那条"逐个证明可并发触发的加载函数"至此**判完**：粗尺列出的 31 个文件里，求职侧 13 页有结论并落地，8 页证否，2 页撤回守卫并留绊线，企业侧 2 页按 §2 跳过。
 
