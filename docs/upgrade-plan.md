@@ -583,7 +583,7 @@ agent.SummaryAgent           real  tokens=3215
 | ~~测试覆盖真实路径为零~~ → LLM（E18）、embedding 与 rerank（E20）三条真路径都已执行；**`--cov-fail-under` 仍是 0（有意）** | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错 → **E18 收了 LLM 那半**（提交 `4a64537`）：5 条测试把真 `requests` 打到本地 OpenAI 兼容假服务，顺带发现调用方拿到的是聚合 `LLMProviderError`（不是 `LLMTimeoutError`）以及**审计行在测试进程里根本没落库**（`prompt_trace` 插入 `NOT NULL constraint failed: id`，被 except 吞成计数器；46 张表全是 BigInteger PK，矛盾未解释，见 E18 记录）。**E20 收了 embedding + rerank**（`tests/test_embedding_http_contract.py` 7 条、`tests/test_rerank_local_branch.py` 6 条：前者打真 socket 的假 embedding 服务，后者往 `sys.modules` 塞假 `transformers`/`torch` 跑产品自己的分批与降级）；两处顺带修了生产代码，见 E20 记录。**这行原本还写着的两件事已更正**：① "`.coverage` 被提交进工作树"是假的（D14 已证 `git ls-files` 里 0 条，`.gitignore:49` 忽略它）；② "Chroma server 行为从未被执行"**不成立**——`core/chroma_client.py` 里根本没有 server 模式（只有 `PersistentClient`），且该文件在改动前就已执行 80%，缺的 `31` 是 CI 语料评估用的 `CHROMA_DIR` 分支（E20 已钉住）、`70-74` 是测试辅助 `reset_collection`。要不要真的接服务端向量库是 §10.3。 |
 | 队列无 ack/retry/DLQ | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py:76-79`）；Redis 队列存在（`:93-141`）。~~但 `mark_stale_running_tasks_failed` 启动时把 30 分钟以上任务一律置失败，多副本重启会误杀正常长任务~~ → 已改为按"最后一次进度写入"判静默（E12，提交 `3ecbb96`）。~~`run_strategy_async` 构造两个 `TaskPayload` 后丢弃~~ → **这条已不成立**：`orchestration_runner` 里两处 `TaskPayload(...)`（`:156`、`:204`）都紧跟 `return _get_backend().submit(payload, _run_task_payload)`，没有构造后丢弃的路径。**仍在的是**：任务入队后没有任何 lease/心跳字段，所以"排在长 backlog 里没开工"与"执行进程已经死了"在数据上仍然无法区分——这正是 E12 只把误杀范围缩到"完全静默"而没有消灭它的那一半 |
 | ~~限流粒度~~ → 有身份的请求已按用户计额度（E14，提交 `63537ab`） | 原来的事实：只有 `api/auth.py` 的 5 个匿名端点自带限流，其余 **228/233 条操作只受 `RATE_LIMIT_GENERAL`（100/分钟）按 IP 管** → 一个 NAT 出口下所有人共用一份额度。**仍在的两半**：① 昂贵端点（深度分析/多智能体）没有自己的额度，一个用户照样能一分钟发 100 次真金白银的 LLM 调用；② 登录流量的每 IP 总闸随 E14 消失了，要补就是 `application_limits` 按地址再挂一层。两个数都要人定，见 §10.10 |
-| ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`） | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。**仍然在的是性能那半句**：`score()` 为 O(terms×docs) 纯 Python 遍历，语料再大一个量级就要换实现 |
+| ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`）；**性能那半句已被 E23 量没** | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。原话剩下的"性能"半句（`score()` 为 O(terms×docs) 纯 Python 遍历，**语料再大一个量级就要换实现**）实测不支持：91 切片 / 词表 2824 / 8 个查询词 = **0.13 ms/次**，10× 语料 0.72 ms，50× 语料（4550 切片 / 25000 词表）也只要 2.87 ms，而同一条召回链路里的 embedding 是百毫秒级的网络调用。与岗位 ANN 那行同形（72 条岗位全量扫是微秒级，`5d7508a` 的撤回理由仍成立），详见 E23 记录 |
 | Rerank 生产用启发式 | `rerank_service.py:125-159` 可选本地 cross-encoder，否则 jieba 词重叠 + 硬编码 0.5/0.3/0.2 权重；`RERANKER_MODEL_PATH` 默认未设 |
 | 死代码 → ~~`api/tracking.py` 定义了 router 但**从未被 include**~~ 已挂载并修好整条链（E10，提交 `cb5a72b`）；**但 `track()` 调用方为 0，"要不要真埋点"回到 §10.8** | 另一半**前提两头都不准，已由 E21 更正**：原话点名的三个"靠 import 维持存活的垫片层"里，`agents/agent_orchestrator.py`（154 行）与 `services/agent_workflow.py`（20 行）是 `/api/multi-agent`、`/api/agent` **在用的兼容入口**，不是死代码；真正零引用的是另外 6 个模块共 **425 行**——`services/smart_orchestrator.py`（80 行，唯一公开函数 `run_orchestrator_sync` 无人调用，而两处"已废弃，请使用 …→ smart_orchestrator"的提示恰恰指向这个死入口）、4 个 prompt 文本模块（210 行，`PROMPT_VERSION` 全仓无人读，`SummaryAgent` 实际吃 `agent_report`）、`utils/llm_output.py`（135 行，覆盖率 **0%**）。已全部删除，并留一条可达性守卫 `tests/test_no_dead_app_modules.py`（静态 import 闭包 + 空 allowlist + 合成树反向证据 + "无动态 import app 模块"前提检查），详见 E21 记录 |
 | ~~缺少 router 级鉴权~~ → 已收口：22 段纯会话前缀挂 include 级守护（E11，提交 `21778e2`）+ **按操作补齐的装配期默认拒绝**（E19） | 原判断成立的方式：31 个 router / 218 端点无一处用 `dependencies=[...]`，鉴权靠每端点自己写。**现在的保证**：一条操作要么在 `app/core/api_access.py` 的两张清单里（15 条真公开 + 4 条自带别的凭据），要么它的依赖树里必有 `Depends(get_current_user)`——缺的自己被补上，所以那 8 段混着公开端点的前缀不再靠自觉。**计划里开的方子"先做端点级拆分"已被实测否掉**（42 个测试文件自建 mini-app、拆完 25 个 404），见 E19 |
@@ -1371,6 +1371,41 @@ router 全被判死、报出 **84 个"死模块"——全是假阳性**；逐 al
 `NameError`，说明它当时已经是死的。
 
 **门禁**：backend 全量 **782 → 786 passed**；`ruff check .` 与 `ruff format --check .` clean。
+
+#### 未交付：E23 BM25"要换实现"这半句被量没了（附一条我自己造出来的假数字）
+
+E5 收口失效链路之后，那行债只剩一句"性能"：`score()` 是 O(terms×docs) 的纯 Python 遍历，
+**语料再大一个量级就要换实现**。这条没有代码改动——因为它不成立。
+
+**怎么量的**：不动共享开发库（读它要连 MySQL，而且这条问的不是真语料有多大，是"大一个量级会不会疼"），
+所以按合成索引量：91 切片为基准档（这个数字来自 CI 种子链路的实测：16 篇 → 91 切片），每篇 90 个 token，
+查询固定 8 个词，三档规模各取 20 次平均。
+
+| 语料 | 词表 | `score()` 每次 |
+|---|---|---|
+| 91 切片（今天的量级） | 2824 | **0.13 ms** |
+| 910（大一个量级） | 11991 | **0.72 ms** |
+| 4550（大约 50×） | 25000 | **2.87 ms** |
+
+对照同一条召回链路里的其它环节：embedding 是百毫秒级的网络调用。所以"大一个量级就要换实现"没有证据，
+这句和岗位 ANN 那行是同一个形状（真库 72 条活跃岗位、全量扫是微秒级，`5d7508a` 的撤回理由至今成立）。
+
+**顺手量到的一个真实形状、但故意不改**：`score()` 外层是 `for term, idf_val in self.idf.items()`，
+靠 `term not in query_terms` 继续跳过——也就是**每个查询都要扫一遍完整词表**，而不是只遍历查询词与词表的交集。
+改成后者是几行的事，但它省下来的部分**整个包含在那 0.13 ms 里**，量级不到 0.1 毫秒；按"不为假设性未来做设计"的
+规矩，这不该占一次改动。真到了词表十万级再动，届时这张表就是起点。
+
+**一条自纠，值得单独留着**：量具的第四档我写的是"纯词表扫描耗时"，跑出来 **0.481 ms**——比整个 `score()`
+的 0.13 ms 还大。那是我量具自己的 bug：小循环里每次迭代都重建一次 `set(query)`，测的是构造集合的开销，
+不是扫描词表的开销。**如果没有跟整数对照，这个假数字就会进文档，并且会把结论反向推成"外层扫描才是瓶颈"。**
+数字已丢弃，不进任何结论。
+
+**这行债的状态**：整行关闭（失效链路由 E5 收口，性能半句按上面撤下）。**§8 表里 E 阶段"仍在"的行由此只剩**：
+135 条 async 路由走同步 `SessionLocal`（§10.15 待决策）、昂贵端点额度与每 IP 总闸（§10.10 待决策）、
+队列 ack/retry/DLQ（工程量，无决策阻塞）、rerank 生产用启发式（要装模型，环境决定）、
+`track()` 调用方为 0（§10.8 待决策）。
+
+**门禁**：backend 无代码改动，全量仍是 **786 passed**；工作树只有本文件。
 
 #### 已交付：D7 职业规划页：旧简历的慢响应不再顶到新简历下面（提交 `fb57d7e`）
 
