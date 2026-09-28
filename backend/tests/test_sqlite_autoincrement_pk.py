@@ -15,7 +15,9 @@
 
 from __future__ import annotations
 
-from sqlalchemy import inspect, text
+from uuid import uuid4
+
+from sqlalchemy import func, inspect, select, text
 
 from app.core.database import SessionLocal
 from app.core.database import engine as app_engine
@@ -60,3 +62,44 @@ def test_the_app_engine_actually_has_the_full_schema():
     tables = set(inspect(app_engine).get_table_names())
     assert len(tables) >= 40, f"app 引擎那块库里只有 {len(tables)} 张表"
     assert set(TABLES_WITH_BIGINT_PK) <= tables
+
+
+def test_the_audit_row_lands_through_the_apps_own_session():
+    """E18 的原症状：`record_prompt_trace` 抛 `NOT NULL constraint failed: prompt_trace.id`，
+    被 `LLMTraceScope.persist` 的 except 吞成一条日志 + 一个失败计数器，于是"审计链在测试进程里
+    从不落库"。那条说法其实是**关于测试环境的**，不是关于产品的 —— 主键顺序修好就该落得下来。
+
+    按唯一的 `source` 回查而不是读返回对象的 `.id`：服务在自己的 session 里提交后返回的实例已经
+    detach，读过期属性会抛 DetachedInstanceError（那是服务的既有行为，不是这次要钉的东西）。
+    """
+    from app.models.prompt_trace import PromptTrace
+    from app.services.prompt_trace_service import record_prompt_trace
+
+    tag = f"autoincrement-probe-{uuid4().hex[:8]}"
+    before = _count_rows(PromptTrace)
+    record_prompt_trace(
+        prompt="探针用的提示词",
+        response_text="探针用的应答",
+        response_json=None,
+        provider="mock",
+        model="probe-model",
+        source=tag,
+        response_source="real",
+    )
+
+    session = SessionLocal()
+    try:
+        stored = session.scalar(select(PromptTrace).where(PromptTrace.source == tag))
+        assert stored is not None, "审计行没落进 app 引擎那块库 —— E18 的说法仍然成立"
+        assert stored.id and stored.id > 0, f"落库了但主键是空的：{stored.id!r}"
+        assert _count_rows(PromptTrace) == before + 1
+    finally:
+        session.close()
+
+
+def _count_rows(model) -> int:
+    session = SessionLocal()
+    try:
+        return int(session.scalar(select(func.count()).select_from(model.__table__)) or 0)
+    finally:
+        session.close()
