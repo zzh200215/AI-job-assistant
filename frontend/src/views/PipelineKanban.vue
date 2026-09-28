@@ -558,6 +558,7 @@ import {
   updateJobPipelineEntry,
 } from '@/api/targets'
 import { monthDay, monthDayTime } from '@/utils/format/date'
+import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 
 const router = useRouter()
@@ -575,6 +576,7 @@ const columns = [
 
 const loading = ref(true)
 const kanban = ref({})
+const latestKanbanCall = useLatestCall()
 const dragCard = ref(null)
 const viewMode = ref('kanban')
 const showStats = ref(false)
@@ -740,17 +742,23 @@ function stageLabel(stage) {
 }
 
 async function loadKanban() {
+  // 「刷新」(`:28`) 没有 loading 也没有 disabled：连点两次就是两发在途，
+  // 而 Promise.all 之后是三处直接写，晚到的旧快照会把卡片放回原列
+  const isCurrent = latestKanbanCall()
   loading.value = true
   try {
     const [data, stats] = await Promise.all([getKanban(), getPipelineResumeVersionStats()])
+    if (!isCurrent()) return
     kanban.value = data?.stages || data || {}
     versionPerformance.value = stats?.items || []
     loadError.value = ''
   } catch (error) {
+    if (!isCurrent()) return
     kanban.value = {}
     loadError.value = error?.userMessage || '暂时无法获取投递记录，请检查网络后重试。'
   } finally {
-    loading.value = false
+    // 过期那一次不动 loading：转圈归更新的那一次
+    if (isCurrent()) loading.value = false
   }
 }
 
