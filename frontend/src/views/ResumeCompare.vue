@@ -235,6 +235,7 @@
               <el-button
                 circle
                 size="small"
+                :disabled="decisionBusy"
                 :type="suggestionDecision(index) === 'accepted' ? 'success' : 'default'"
                 :aria-label="`采纳建议 ${index + 1}`"
                 @click="setSuggestionDecision(index, 'accepted')"
@@ -243,6 +244,7 @@
               <el-button
                 circle
                 size="small"
+                :disabled="decisionBusy"
                 :type="suggestionDecision(index) === 'ignored' ? 'info' : 'default'"
                 :aria-label="`忽略建议 ${index + 1}`"
                 @click="setSuggestionDecision(index, 'ignored')"
@@ -305,6 +307,7 @@ import {
   updateResumeVersion,
 } from '@/api/resume'
 import { monthDay } from '@/utils/format/date'
+import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 
 const route = useRoute()
@@ -334,6 +337,12 @@ const atsResult = ref(null)
 const baseVersionId = ref('original')
 const diffResult = ref(null)
 const recommendedVersion = ref(null)
+// 每条链一把令牌：工作台重取挂在三个不同动作的尾巴上，而那些按钮各自只锁自己的 loading 位
+const latestWorkspaceCall = useLatestCall()
+const latestDiffCall = useLatestCall()
+// 每个响应都带着整份 decision 映射，两条建议并发时后落地的那份会把另一条刚打上的标记冲回去，
+// 所以用这一个位把两个圆圈按钮在途期间锁住
+const decisionBusy = ref(false)
 
 const selectedVersion = computed(
   () =>
@@ -356,10 +365,12 @@ onMounted(async () => {
 })
 
 async function loadWorkspace(preferredVersionId = null) {
+  const isCurrent = latestWorkspaceCall()
   loading.value = true
   errorMsg.value = ''
   try {
     const data = await getResumeVersions(resumeId.value)
+    if (!isCurrent()) return
     originalVersion.value = {
       id: 'original',
       version_type: 'original',
@@ -380,9 +391,10 @@ async function loadWorkspace(preferredVersionId = null) {
     }
     setDraftsFromSelected()
   } catch (error) {
+    if (!isCurrent()) return
     errorMsg.value = error.message || '加载简历工作台失败'
   } finally {
-    loading.value = false
+    if (isCurrent()) loading.value = false
   }
 }
 
@@ -523,19 +535,25 @@ async function onPreviewAts() {
 
 async function loadDiff() {
   if (isOriginal.value) return
+  // 版本选择器和基准选择器都直接触发它，两个选择器都没有 loading
+  const isCurrent = latestDiffCall()
   try {
-    diffResult.value = await getResumeVersionDiff(
+    const data = await getResumeVersionDiff(
       resumeId.value,
       selectedVersion.value.id,
       baseVersionId.value === 'original' ? null : baseVersionId.value
     )
+    if (!isCurrent()) return
+    diffResult.value = data
   } catch (error) {
+    if (!isCurrent()) return
     errorMsg.value = error.message || '加载版本差异失败'
   }
 }
 
 async function setSuggestionDecision(index, decision) {
   if (isOriginal.value) return
+  decisionBusy.value = true
   try {
     const result = await saveResumeSuggestionDecision(resumeId.value, selectedVersion.value.id, {
       suggestion_id: String(index),
@@ -546,6 +564,8 @@ async function setSuggestionDecision(index, decision) {
     ElMessage.success(decision === 'accepted' ? '已标记为采纳' : '已标记为忽略')
   } catch (error) {
     errorMsg.value = error.message || '保存建议状态失败'
+  } finally {
+    decisionBusy.value = false
   }
 }
 
