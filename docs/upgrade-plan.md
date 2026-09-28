@@ -581,7 +581,7 @@ agent.SummaryAgent           real  tokens=3215
 | WebSocket 鉴权与内存无界 | `interview_ws.py:39-43` 绕过 FastAPI 依赖手工校验 query token；`:23-34` 的进程级 `_engine_pool` 无上限，且无跨副本亲和 → **E16 收口**（提交 `eb5e040`）：① 凭据只认 `Sec-WebSocket-Protocol: jwt,<token>`，`?token=` 一律 4001（**改前实测**：同一枚有效长期 JWT 从查询串进来能一路走到 accept，而仓库自带的浏览器客户端从来用的是子协议）；② 引擎改成**按连接**持有，断开必 `cleanup()`（**改前实测**：客户端关闭后 `_engine_pool` 仍留着 1 个引擎且 `engine.db is not None`，也就是每放弃一场面试永久占着一个打开的 Session）。前提更正：原话"绕过 FastAPI 依赖手工校验"里，"手工校验"成立（WS 拿不到 HTTP 依赖，这条改不了也不需要改），"query token"只是兜底通道。**仍在**：跨副本亲和——两条连接打到不同副本就是两份引擎状态，这一点改前改后一样（原实现的"共享"也只共享本进程）；要消除得靠 sticky 路由或把引擎状态外置 |
 | schema 有第四条路径 | ~~Alembic（22 个 revision）+ `Base.metadata.create_all` + `core/schema_bootstrap.py`（453 行 / 13 个手写 MySQL DDL）+ 散落的 `add_columns.py`/`reset_kb.py`~~ → **E17 收口**（提交 `f460310`）：删掉 `schema_bootstrap.py`，启动改成只做漂移体检（`core/schema_drift.py`，缺表/缺列/多出来都点名并提示跑 `alembic upgrade head`；库连不上只报告不抛）。**动手前量的事实**：在 `alembic upgrade head` 建出的库上，14 个 `ensure_*` **一条 DDL 都不发**；那 6 张"要建表"的表在 `Base.metadata` 里都有模型，`create_all` 独立建出 46 张表；而它写死的 MySQL 方言在 SQLite 上 6 个全部抛 `near "KEY"/"INDEX"/"ON"`。部署不依赖它：两份 compose 都有 `alembic upgrade head` 服务、生产 `AUTO_CREATE_TABLES=false`、config 校验器禁止生产开 create_all。**这条债的两个前提已作废**：revision 数是 **26** 不是 22；`scripts/add_columns.py` 与 `reset_kb.py` **已经不存在**（现在 `scripts/` 里碰 schema 的只有 `export_schema_baseline.py`（从 metadata 渲染）与 `seed_rag_corpus.py`（create_all 建临时库），都是派生读，不是第二条写路径）。**仍在**：`AUTO_CREATE_TABLES` 默认 `True`（开发便利，但也是"忘了迁移也能跑起来"的来源）；守卫 `test_schema_drift.py` 只保证 `app/**` 里不再出现手写 DDL |
 | 连接池未配置 | ~~`core/database.py:9-20` 未设 `pool_size`/`max_overflow`，默认 5+10 的 queuepool 面对线程池密集应用~~ → **E15 更正这行的前提**：`pool_pre_ping=True` 与 `pool_recycle=3600` 是设了的（`app/core/database.py:9-12`），没设的只有 `pool_size`/`max_overflow`/`pool_timeout`（默认 5+10+排队 30s）。**为什么现在才值得管**：E15 把 12 处同步出网挪进线程池之后，取连接的线程数不再天然是 0；要不要显式填数与"135 条 async 路由走哪条路"是同一个决定，见 §10.15 |
-| ~~测试覆盖真实路径为零~~ → LLM（E18）、embedding 与 rerank（E20）三条真路径都已执行；**`--cov-fail-under` 仍是 0（有意）** | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错 → **E18 收了 LLM 那半**（提交 `4a64537`）：5 条测试把真 `requests` 打到本地 OpenAI 兼容假服务，顺带发现调用方拿到的是聚合 `LLMProviderError`（不是 `LLMTimeoutError`）以及**审计行在测试进程里根本没落库**（`prompt_trace` 插入 `NOT NULL constraint failed: id`，被 except 吞成计数器；46 张表全是 BigInteger PK，矛盾未解释，见 E18 记录）。**E20 收了 embedding + rerank**（`tests/test_embedding_http_contract.py` 7 条、`tests/test_rerank_local_branch.py` 6 条：前者打真 socket 的假 embedding 服务，后者往 `sys.modules` 塞假 `transformers`/`torch` 跑产品自己的分批与降级）；两处顺带修了生产代码，见 E20 记录。**这行原本还写着的两件事已更正**：① "`.coverage` 被提交进工作树"是假的（D14 已证 `git ls-files` 里 0 条，`.gitignore:49` 忽略它）；② "Chroma server 行为从未被执行"**不成立**——`core/chroma_client.py` 里根本没有 server 模式（只有 `PersistentClient`），且该文件在改动前就已执行 80%，缺的 `31` 是 CI 语料评估用的 `CHROMA_DIR` 分支（E20 已钉住）、`70-74` 是测试辅助 `reset_collection`。要不要真的接服务端向量库是 §10.3。 |
+| ~~测试覆盖真实路径为零~~ → LLM（E18）、embedding 与 rerank（E20）三条真路径都已执行；**`--cov-fail-under` 仍是 0（有意）** | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错 → **E18 收了 LLM 那半**（提交 `4a64537`）：5 条测试把真 `requests` 打到本地 OpenAI 兼容假服务，顺带发现调用方拿到的是聚合 `LLMProviderError`（不是 `LLMTimeoutError`）以及**审计行在测试进程里根本没落库**（`prompt_trace` 插入 `NOT NULL constraint failed: id`，被 except 吞成计数器；46 张表全是 BigInteger PK，矛盾未解释，见 E18 记录 —— **该矛盾已由 E26 解释并修掉**：是 `backend/conftest.py` 里 `@compiles(BigInteger,"sqlite")` 注册在 `create_all` 之后，纯测试环境 bug，生产 MySQL 一直是自增列）。**E20 收了 embedding + rerank**（`tests/test_embedding_http_contract.py` 7 条、`tests/test_rerank_local_branch.py` 6 条：前者打真 socket 的假 embedding 服务，后者往 `sys.modules` 塞假 `transformers`/`torch` 跑产品自己的分批与降级）；两处顺带修了生产代码，见 E20 记录。**这行原本还写着的两件事已更正**：① "`.coverage` 被提交进工作树"是假的（D14 已证 `git ls-files` 里 0 条，`.gitignore:49` 忽略它）；② "Chroma server 行为从未被执行"**不成立**——`core/chroma_client.py` 里根本没有 server 模式（只有 `PersistentClient`），且该文件在改动前就已执行 80%，缺的 `31` 是 CI 语料评估用的 `CHROMA_DIR` 分支（E20 已钉住）、`70-74` 是测试辅助 `reset_collection`。要不要真的接服务端向量库是 §10.3。 |
 | ~~队列无 ack/retry/DLQ~~ → `redis_queue` 后端已由 E24 收口（至少一次投递 + 重试上限 + 死信）；**`thread` 后端仍是内存 fire-and-forget** | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py`）；Redis 队列存在。~~但 `mark_stale_running_tasks_failed` 启动时把 30 分钟以上任务一律置失败，多副本重启会误杀正常长任务~~ → 已改为按"最后一次进度写入"判静默（E12，提交 `3ecbb96`）。~~`run_strategy_async` 构造两个 `TaskPayload` 后丢弃~~ → **这条已不成立**。~~"入队后没有任何 lease 字段，分不清'排在长 backlog 里'与'执行进程已死'"~~ → **E24 收口了 redis 那半**：交接用 `BRPOPLPUSH` 进 `<队列>:processing`、跑完才 ack、期限记在 `<队列>:inflight-deadlines`（ZSET）、超时重投、`ORCHESTRATION_MAX_ATTEMPTS` 跑满进 `<队列>:dead-letter`——"排队中"与"在途"从此是两个不同的键。**thread 那半仍在**：线程模式没有 broker，进程死亡即丢掉还没开工的 future，只能靠 E12 的静默判定把 DB 行扫成失败，所以它是"最终可见"而不是"不丢"。今天 `ORCHESTRATION_BACKEND` 与 `docker-compose.prod.yml` 默认都是 `thread` |
 | ~~限流粒度~~ → 有身份的请求已按用户计额度（E14，提交 `63537ab`） | 原来的事实：只有 `api/auth.py` 的 5 个匿名端点自带限流，其余 **228/233 条操作只受 `RATE_LIMIT_GENERAL`（100/分钟）按 IP 管** → 一个 NAT 出口下所有人共用一份额度。**仍在的两半**：① 昂贵端点（深度分析/多智能体）没有自己的额度，一个用户照样能一分钟发 100 次真金白银的 LLM 调用；② 登录流量的每 IP 总闸随 E14 消失了，要补就是 `application_limits` 按地址再挂一层。两个数都要人定，见 §10.10 |
 | ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`）；**性能那半句已被 E23 量没** | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。原话剩下的"性能"半句（`score()` 为 O(terms×docs) 纯 Python 遍历，**语料再大一个量级就要换实现**）实测不支持：91 切片 / 词表 2824 / 8 个查询词 = **0.13 ms/次**，10× 语料 0.72 ms，50× 语料（4550 切片 / 25000 词表）也只要 2.87 ms，而同一条召回链路里的 embedding 是百毫秒级的网络调用。与岗位 ANN 那行同形（72 条岗位全量扫是微秒级，`5d7508a` 的撤回理由仍成立），详见 E23 记录 |
@@ -1195,10 +1195,12 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 > `BIGINT` —— 而"fixture 插得进、`SessionLocal` 插不进"这对矛盾，成因就是这个差异，不是建表时机或
 > `checkfirst`。E18 当时说"没解释清的那一半"在这里闭合了。
 >
-> **仍然没查到的**：是谁在 app 引擎上建的那 46 张表。三次尝试都不成立：`pytest_configure` 里挂
-> `before_cursor_execute` → **0 命中**（说明建表发生在它之前）；把插桩挪到 conftest 顶部 → 插桩自身没产出，
-> 结果丢弃、不采信；`grep` 遍 `app/` 只有 `app/main.py:46` 一处 `create_all`，而它在 lifespan 里，
-> 探针跑之前不会被调用。**本轮没有据此改任何生产代码。**
+> **当时没查到的一环已在 E26 查到**：建那 46 张表的是 `backend/conftest.py` 自己 —— 它设完
+> `DATABASE_URL=sqlite://` 就立刻 `Base.metadata.create_all(bind=_app_engine)`，而把 `BigInteger`
+> 渲染成 `INTEGER` 的 `@compiles` 钩子注册在这次建表**之后**。所以"仍然没查到的"那段的三次尝试
+> （`pytest_configure` 挂监听 → 0 命中；挪到 `tests/conftest.py` 顶部 → 插桩自身失效）都是找错了文件：
+> 起作用的是**根目录那层 conftest**，它比 `tests/conftest.py` 和 `pytest_configure` 都早。
+> 真正抓到它的是把监听器挂到 `Engine` **类**上、并在 `-p` 插件的模块导入期就注册。
 
 **没做**：`EMBEDDING_PROVIDER` 与 rerank 的真 HTTP 路径（同一套假服务能复用，但要先确定 embedding 端点的响应形状）；`--cov-fail-under` 仍是 0（这次补的是"行为被执行"，不是把覆盖率数字变成门——理由见 §8 里 E2/E3 那几条"数字不等于门"的教训）。
 
@@ -1518,6 +1520,44 @@ E 表只剩卡在 §10 的行之后，我回头查 E15 那行剩下的"仍在"�
 `OSError`（缺原生库），拿不到真实渲染时间。135 条 async 路由持同步 db 会话那个方向仍在 §10.15。
 
 **门禁**：backend 全量 **797 → 802 passed**；`ruff check .` 与 `ruff format --check .` clean。
+
+#### 已交付：E26 E18 那对矛盾的答案是一行注册顺序，而它纠正的是我们对产品链路的判断
+
+**症状**（E18 原话，当时明写"未解释、不当已修"）：同一份 metadata，`prompt_trace` / `tb_user`
+通过 fixture 的 `db_session` 插得进去，通过 app 自己的 `SessionLocal` 插就
+`IntegrityError: NOT NULL constraint failed: <table>.id`。
+
+**抓到它靠的不是读代码**。三次"在 `pytest_configure` 挂 `before_cursor_execute`"的尝试都是 0 命中
+（建表比那个钩子早），而把插桩挪进 `tests/conftest.py` 又因为插桩自身失效而什么都没抓到。真正有效的是
+把监听器挂到 `Engine` **类**上、并且在一支 `-p` 插件的**模块导入期**就注册 —— 栈立刻指向
+`backend/conftest.py`（**不是** `backend/tests/conftest.py`，我一开始找错了文件）：它设完
+`DATABASE_URL=sqlite://` 就 `Base.metadata.create_all(bind=_app_engine)`，而把 `BigInteger` 渲染成
+`INTEGER` 的那条 `@compiles(BigInteger, "sqlite")` 钩子注册在这次建表**之后**。
+
+**机制**：SQLite 里只有 `INTEGER PRIMARY KEY` 才是 rowid 别名、才会自增。所以 app 引擎那块共享内存库里
+46 张表的 `id` 全是字面 `BIGINT NOT NULL`，任何不给 id 的插入必撞 NOT NULL；而钩子生效之后跑的
+`create_all`（fixture 那块库）拿到的是 `INTEGER` —— 这就是"一边插得进、一边插不进"的全部真相，
+跟建表时机、`checkfirst` 都没关系（E18 猜的那两个方向都是错的）。
+
+**修法**：钩子挪到 `create_all` 之前。放在"app 导入之后、建表之前"这个位置是必要的：再往上挪会撞上
+ruff 的 I001/E402，而 `--fix` 会把 `import app.models` 抬到 `os.environ[...]` 之前，**那会破坏
+"环境变量必须先于 settings 单例实例化"这条既有约束**（conftest 里专门有注释说明），所以没让 ruff 自动修。
+
+**为什么这条不该被归成"只是测试环境的小事"**：生产 MySQL 的 `BIGINT AUTO_INCREMENT` 一直是对的，
+但这正是它的价值所在 —— 我们曾经**根据测试环境的证据怀疑过一条产品链路**（E18 记的"审计链在测试进程里
+从不落库"）。现在结论改写为：那条说法测的是 harness，不是代码。
+
+**新测试** `tests/test_sqlite_autoincrement_pk.py`（4 条）：三张代表表的 `id` 列必须是 `INTEGER`；
+不给 id 也要拿到自增主键；那块库真有 40+ 张表（防止"没有 BIGINT 列"只是因为库是空的）；
+**审计行真的落得下来**（按唯一 `source` 回查，不去读已 detach 的返回实例）。
+
+**变异证据是跑出来的，不是推的**：把钩子搬回 `create_all` 之后 → 3 条测试红，其中一条原样复现
+E18 那句报错 `NOT NULL constraint failed: prompt_trace.id`；搬回来 → 全绿。
+
+**顺带拆掉一处绕行**：E19 那条测试原本"先 `SELECT max(id)+1` 再显式给 id"，现在改成**故意不给 id**
+—— 它同时变成了这个 bug 的活体断言。
+
+**门禁**：backend 全量 **805 → 806 passed**；`ruff check .` 与 `ruff format --check .` clean。
 
 #### 已交付：D7 职业规划页：旧简历的慢响应不再顶到新简历下面（提交 `fb57d7e`）
 
