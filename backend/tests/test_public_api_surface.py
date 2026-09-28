@@ -129,7 +129,6 @@ CONSTRUCT_PROTECTED_PREFIXES = {
     "/career-path",
     "/salary",
     "/timeline",
-    "/tracking",
     "/notifications",
     "/prompt-traces",
     "/reminders",
@@ -279,7 +278,7 @@ def test_every_operation_outside_the_two_lists_carries_a_session_credential():
         if not kinds and (m, "/api" + p) not in ALL_LISTED
     )
     assert not naked, f"这些操作既不在两张清单里也没有会话凭据：{naked[:8]}"
-    # 非空断言：量过是 233 条路由、清单 19 条，covered 远低于这个数说明遍历失效。
+    # 非空断言：量过是 232 条路由（E29 删掉 /tracking 之前是 233），远低于这个数说明遍历失效。
     assert len(guarded) >= 200, f"只核到 {len(guarded)} 条带会话凭据的操作，和真实规模对不上"
     assert (
         listed == ALL_LISTED

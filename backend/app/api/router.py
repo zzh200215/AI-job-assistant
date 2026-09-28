@@ -31,7 +31,6 @@ from app.api import (
     system,
     tenant,
     timeline,
-    tracking,
     user_preferences,
 )
 from app.api.auth import get_current_user
@@ -93,9 +92,8 @@ api_router.include_router(
     dependencies=SESSION_GUARD,
 )
 api_router.include_router(timeline.router, prefix="/timeline", tags=["timeline"], dependencies=SESSION_GUARD)
-# 前端 utils/tracker.js 一直在往 /api/tracking/events 发；这个 router 此前从未 include，
-# 所以每一条埋点都是 404，而且失败被 fetch 当成成功丢掉（见 tracker 的 resp.ok）。
-api_router.include_router(tracking.router, prefix="/tracking", tags=["tracking"], dependencies=SESSION_GUARD)
+# 埋点入口 `/api/tracking/events` 与前端 tracker.js 已由 E29 删除：那条"链"两端都修好过
+# （E10），但 `track()` 的调用方始终是 0，而端点本身只把事件写进日志（无存储、无消费方）。
 api_router.include_router(
     notification.router,
     prefix="/notifications",
