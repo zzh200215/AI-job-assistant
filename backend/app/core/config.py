@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     ORCHESTRATION_STALE_TASK_MINUTES: int = 30
     ORCHESTRATION_QUEUE_NAME: str = "analysis-tasks"
     ORCHESTRATION_QUEUE_POLL_SECONDS: float = 1.0
+    # 只作用于 redis_queue 后端。可见性超时必须**大于**单条编排任务的真实最长耗时：
+    # 短于它就会把一个还在跑的 TaskPayload 重投，两个 worker 同时跑同一个 run（LLM 白付两遍、
+    # 结果互相覆盖）。3600 是刻意取在 ORCHESTRATION_STALE_TASK_MINUTES(30 分钟) 之上的。
+    ORCHESTRATION_VISIBILITY_SECONDS: float = 3600.0
+    # 含首次执行：跑满这么多回仍失败就进死信队列，不再回到主队列。
+    ORCHESTRATION_MAX_ATTEMPTS: int = 3
     REDIS_URL: str | None = None
     INTERVIEW_EVALUATION_MAX_WORKERS: int = 2
     # 同时在途的面试 WS 上限。**每连接一个引擎 = 一条连接期间持有一个 SQLAlchemy Session**，
