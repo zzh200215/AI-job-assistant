@@ -580,7 +580,7 @@ agent.SummaryAgent           real  tokens=3215
 | WebSocket 鉴权与内存无界 | `interview_ws.py:39-43` 绕过 FastAPI 依赖手工校验 query token；`:23-34` 的进程级 `_engine_pool` 无上限，且无跨副本亲和 → **E16 收口**（提交 `eb5e040`）：① 凭据只认 `Sec-WebSocket-Protocol: jwt,<token>`，`?token=` 一律 4001（**改前实测**：同一枚有效长期 JWT 从查询串进来能一路走到 accept，而仓库自带的浏览器客户端从来用的是子协议）；② 引擎改成**按连接**持有，断开必 `cleanup()`（**改前实测**：客户端关闭后 `_engine_pool` 仍留着 1 个引擎且 `engine.db is not None`，也就是每放弃一场面试永久占着一个打开的 Session）。前提更正：原话"绕过 FastAPI 依赖手工校验"里，"手工校验"成立（WS 拿不到 HTTP 依赖，这条改不了也不需要改），"query token"只是兜底通道。**仍在**：跨副本亲和——两条连接打到不同副本就是两份引擎状态，这一点改前改后一样（原实现的"共享"也只共享本进程）；要消除得靠 sticky 路由或把引擎状态外置 |
 | schema 有第四条路径 | ~~Alembic（22 个 revision）+ `Base.metadata.create_all` + `core/schema_bootstrap.py`（453 行 / 13 个手写 MySQL DDL）+ 散落的 `add_columns.py`/`reset_kb.py`~~ → **E17 收口**（提交 `f460310`）：删掉 `schema_bootstrap.py`，启动改成只做漂移体检（`core/schema_drift.py`，缺表/缺列/多出来都点名并提示跑 `alembic upgrade head`；库连不上只报告不抛）。**动手前量的事实**：在 `alembic upgrade head` 建出的库上，14 个 `ensure_*` **一条 DDL 都不发**；那 6 张"要建表"的表在 `Base.metadata` 里都有模型，`create_all` 独立建出 46 张表；而它写死的 MySQL 方言在 SQLite 上 6 个全部抛 `near "KEY"/"INDEX"/"ON"`。部署不依赖它：两份 compose 都有 `alembic upgrade head` 服务、生产 `AUTO_CREATE_TABLES=false`、config 校验器禁止生产开 create_all。**这条债的两个前提已作废**：revision 数是 **26** 不是 22；`scripts/add_columns.py` 与 `reset_kb.py` **已经不存在**（现在 `scripts/` 里碰 schema 的只有 `export_schema_baseline.py`（从 metadata 渲染）与 `seed_rag_corpus.py`（create_all 建临时库），都是派生读，不是第二条写路径）。**仍在**：`AUTO_CREATE_TABLES` 默认 `True`（开发便利，但也是"忘了迁移也能跑起来"的来源）；守卫 `test_schema_drift.py` 只保证 `app/**` 里不再出现手写 DDL |
 | 连接池未配置 | ~~`core/database.py:9-20` 未设 `pool_size`/`max_overflow`，默认 5+10 的 queuepool 面对线程池密集应用~~ → **E15 更正这行的前提**：`pool_pre_ping=True` 与 `pool_recycle=3600` 是设了的（`app/core/database.py:9-12`），没设的只有 `pool_size`/`max_overflow`/`pool_timeout`（默认 5+10+排队 30s）。**为什么现在才值得管**：E15 把 12 处同步出网挪进线程池之后，取连接的线程数不再天然是 0；要不要显式填数与"135 条 async 路由走哪条路"是同一个决定，见 §10.15 |
-| 测试覆盖真实路径为零 | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错，但 `backend/.coverage`(122KB) 被提交进了工作树 → **E18 收了 LLM 那半**（提交 `4a64537`）：5 条测试把真 `requests` 客户端打到本地 OpenAI 兼容假服务，顺带发现调用方拿到的是聚合 `LLMProviderError`（不是 `LLMTimeoutError`）以及**审计行在测试进程里根本没落库**（`prompt_trace` 插入 `NOT NULL constraint failed: id`，被 except 吞成计数器；46 张表全是 BigInteger PK，矛盾未解释，见 E18 记录）。**仍在**：`EMBEDDING_PROVIDER` 与 rerank 的真 HTTP、Chroma server 行为、`--cov-fail-under` 仍是 0；`.coverage` 那半句是假的（D14 已证 `git ls-files` 里 0 条） |
+| ~~测试覆盖真实路径为零~~ → LLM（E18）、embedding 与 rerank（E20）三条真路径都已执行；**`--cov-fail-under` 仍是 0（有意）** | `pytest.ini` 的 `--cov-fail-under=0`；`conftest.py` 强制 `LLM_PROVIDER=mock`/`EMBEDDING_PROVIDER=mock` + 内存 SQLite → 真实 HTTP 路径、工具循环、rerank 模型、Chroma server 行为**从未被执行**。62 文件 / 429 测试函数广度不错 → **E18 收了 LLM 那半**（提交 `4a64537`）：5 条测试把真 `requests` 打到本地 OpenAI 兼容假服务，顺带发现调用方拿到的是聚合 `LLMProviderError`（不是 `LLMTimeoutError`）以及**审计行在测试进程里根本没落库**（`prompt_trace` 插入 `NOT NULL constraint failed: id`，被 except 吞成计数器；46 张表全是 BigInteger PK，矛盾未解释，见 E18 记录）。**E20 收了 embedding + rerank**（`tests/test_embedding_http_contract.py` 7 条、`tests/test_rerank_local_branch.py` 6 条：前者打真 socket 的假 embedding 服务，后者往 `sys.modules` 塞假 `transformers`/`torch` 跑产品自己的分批与降级）；两处顺带修了生产代码，见 E20 记录。**这行原本还写着的两件事已更正**：① "`.coverage` 被提交进工作树"是假的（D14 已证 `git ls-files` 里 0 条，`.gitignore:49` 忽略它）；② "Chroma server 行为从未被执行"**不成立**——`core/chroma_client.py` 里根本没有 server 模式（只有 `PersistentClient`），且该文件在改动前就已执行 80%，缺的 `31` 是 CI 语料评估用的 `CHROMA_DIR` 分支（E20 已钉住）、`70-74` 是测试辅助 `reset_collection`。要不要真的接服务端向量库是 §10.3。 |
 | 队列无 ack/retry/DLQ | 默认 `ThreadPoolExecutor(max_workers=4)`（`orchestration_backend.py:76-79`）；Redis 队列存在（`:93-141`）。~~但 `mark_stale_running_tasks_failed` 启动时把 30 分钟以上任务一律置失败，多副本重启会误杀正常长任务~~ → 已改为按"最后一次进度写入"判静默（E12，提交 `3ecbb96`）。~~`run_strategy_async` 构造两个 `TaskPayload` 后丢弃~~ → **这条已不成立**：`orchestration_runner` 里两处 `TaskPayload(...)`（`:156`、`:204`）都紧跟 `return _get_backend().submit(payload, _run_task_payload)`，没有构造后丢弃的路径。**仍在的是**：任务入队后没有任何 lease/心跳字段，所以"排在长 backlog 里没开工"与"执行进程已经死了"在数据上仍然无法区分——这正是 E12 只把误杀范围缩到"完全静默"而没有消灭它的那一半 |
 | ~~限流粒度~~ → 有身份的请求已按用户计额度（E14，提交 `63537ab`） | 原来的事实：只有 `api/auth.py` 的 5 个匿名端点自带限流，其余 **228/233 条操作只受 `RATE_LIMIT_GENERAL`（100/分钟）按 IP 管** → 一个 NAT 出口下所有人共用一份额度。**仍在的两半**：① 昂贵端点（深度分析/多智能体）没有自己的额度，一个用户照样能一分钟发 100 次真金白银的 LLM 调用；② 登录流量的每 IP 总闸随 E14 消失了，要补就是 `application_limits` 按地址再挂一层。两个数都要人定，见 §10.10 |
 | ~~RAG 索引陈旧~~ → 失效链路已修（E5，提交 `aa9d64b`） | `multi_recall.py` 的 BM25 是手写内存索引，`_dirty` 标志**从未被读** → 进程启动后入库的文档在关键词这一路永远召不到；现在由"条数自愈 + 同计数改写显式 invalidate"接管。**仍然在的是性能那半句**：`score()` 为 O(terms×docs) 纯 Python 遍历，语料再大一个量级就要换实现 |
@@ -1225,6 +1225,75 @@ E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 inc
 **顺带证实、故意不在本条收口**：`tests/conftest.py:12` 在任何 app import 之前把 `DATABASE_URL` 设成内存 SQLite，于是**同一进程里存在两块互不相干的内存库**（conftest 的 `db_engine` 与 app 引擎的 StaticPool 库）。同一份 `Base.metadata` 在**新建引擎**上建出的 `tb_user` 是 `id INTEGER NOT NULL`（SQLite 下是 rowid 别名、能自增），而 app 引擎里那张是 `id BIGINT NOT NULL`（不自增，必须显式给 id 才插得进去）——这正是 E18 留下的那对矛盾的同一半，**谁先把它建成 BIGINT 仍未查**。本轮只把这条差异写进测试注释（造用户时显式取 `max(id)+1`），没有据此改任何生产代码。
 
 **门禁**：backend 全量 **757 → 764 passed**；`ruff check .` 与 `ruff format --check .`（347 文件）clean；`app/main.py` 回到 HEAD（请求期门整段撤除，不再有任何运行时代码在依赖树外解析凭据）。
+
+#### 已交付：E20 两条"写了但从没跑过"的路径被执行，代价是修了两处错误分类
+
+**先量，不动手**：E18 收了 LLM 那半，剩下半句是 embedding 与 rerank。用覆盖率行号定位，不靠猜——
+`embedding_service.py` missing **325-355**（`_openai_embed` 的整个函数体）+ dispatch **482-485**；
+`rerank_service.py` missing **74-88**（加载模型）+ **99-122**（分批前向）。也就是说"生产可以用 OpenAI 兼容
+embedding"和"生产可以选本地 cross-encoder 重排"这两句话底下的代码**一行都没执行过**。顺带量到
+`.venv` 里 `torch`/`transformers` **根本没装**，所以后者在生产里连"能不能加载"都没人验证过。
+
+**新写的 14 条测试**
+
+`tests/test_embedding_http_contract.py`（7 条）：把 `EMBEDDING_BASE_URL` 指向本地 OpenAI 兼容假服务
+（`ThreadingHTTPServer` + 应答队列，样板是 E18 那份），跑的是产品自己的 `requests` 真 socket。钉住的是：
+URL 拼成 `{base}/embeddings`、`Authorization: Bearer`、请求体 `{"input", "model"}` 且 model 取配置值；
+**响应的 `data[].index` 乱序时必须排回输入顺序**（排错不会报错，只会把第 2 段的向量安到第 1 段头上，
+静默毁掉召回）；12 条输入按 `_EMBED_BATCH_SIZE=10` 切成 10+2 且跨批按下标回填；没配 key 时**一个 socket
+都不发**；5xx 会重试；`timeout=max(5, EMBEDDING_TIMEOUT)` 这个下限（配 1 秒、服务端睡 1.6 秒 → 实际不超时）。
+
+`tests/test_rerank_local_branch.py`（6 条）：往 `sys.modules` 塞假 `transformers`/`torch`，跑产品自己的
+门径检查、加载缓存、批切片、按输入顺序回填、`rerank_source` 标签。**不下载真模型**——装不装是环境决定，
+而这次要的是"这段代码被执行过没有"这个事实。断言里最要紧的一条是批形状：`RERANKER_BATCH_SIZE=2` + 3 条
+候选 → 前向必须被调 2 次（2 与 1），且分数落回各自那条。
+
+`tests/test_eval_thresholds.py` 加 1 条：CI 那道 RAG 门是"seed 脚本写进 Chroma → eval 从同一处读"，两边都调
+`resolve_chroma_dir()`，而它的 `CHROMA_DIR` 分支（missing **31**）以前从没执行过。现在钉住：给了值就展开成
+绝对路径、相对路径不会让两边算出不同目录、没设时回落到默认目录。
+
+**顺带修的两处生产代码，都是"没跑过"的直接后果**
+
+1. `_with_retry` 吃的是 `retry_call` 的默认 `retryable_exceptions=(Exception,)` → **鉴权失败也被退避重试**
+   （默认 `EMBEDDING_MAX_RETRIES=2`，即白等 1.5s+3.0s），连"响应形状不对"这种确定性错误也重试两轮。
+   现在 `retry_call` 多一个 `non_retryable_exceptions`（默认空元组 → LLM/agent 调用方零改变），embedding
+   侧只重试 `EmbeddingProviderError` 且把 `EmbeddingAuthError` 排除掉。
+2. 更要紧的是**对内可查的降级分类一直是假的**：`retry_call` 用尽后统一抛 `RuntimeError`（真实类型只活在
+   `__cause__` 里），而 `embed_texts` 记录的是 `type(e).__name__` → **运维统计里所有 embedding 故障都叫
+   `RuntimeError`**。现在从 `__cause__` 取回真实类型：记它，也把它抛回调用方。
+   改抛出类型之前先量了爆炸半径：全仓**没有任何调用方 catch** `EmbeddingAuthError`/`ProviderError`/`TimeoutError`
+   （只有 `embedding_service.py` 自己 raise），且全量跑复核过这条判断。
+
+**顺手钉死一条 A 阶段的规矩**：`rerank_source` 会经 `api/knowledge.py:449` 进入候选人可见的响应，所以
+"模型不可用时降级到启发式"不许冒充模型。`test_a_broken_model_is_remembered_and_never_retried` 一次断三件事：
+加载失败只尝试 **1** 次（每条请求重跑 `from_pretrained` 会把请求线程全卡在磁盘 IO 上）、
+`rerank_source == "heuristic"`、分数不是模型那三个值。
+
+**改完的覆盖率（同一份全量里量）**：`embedding_service.py` **70% → 81%**、`rerank_service.py` **67% → 93%**、
+`chroma_client.py` **80% → 83%**，三段主 missing（325-355 / 482-485 / 74-88 / 99-122 / 31）全部消失。
+`rerank_service.py` 还剩几段，各有原因，**没有为了行号去戳私有函数**：**76** 是双检锁的竞态分支（要线程交错才进）、
+**93** 从公开入口不可达（`rerank_results` 第 127 行就对空列表 return 了）、**101-103** 是 `import torch`
+失败的 except 分支。
+
+**这行债原本还写着的两件事已更正**（详见上面 §8 那行）：① "`.coverage` 被提交进工作树"是假的——D14 已经
+撤过一次，本轮重新用 `git ls-files | grep -i coverage`（全仓 0 条）与 `.gitignore:49` 复核，仍然不成立；
+② "Chroma server 行为从未被执行"**不成立**——`core/chroma_client.py` 里**根本没有 server 模式**（只有
+`PersistentClient`），且该文件改动前就已执行 80%。要不要真接服务端向量库是 §10.3 的事，不该记在测试债上。
+
+**没做**：真 cross-encoder 模型（`RERANKER_MODEL_PATH` 仍默认未设 → 生产今天仍走启发式，这一条仍挂在 §3.1
+"挂着 AI 名头"那张表上，要改颜色得先决定装不装模型）；`--cov-fail-under` **仍是 0**（E18 已给过理由：补的是
+"行为被执行"，不是把数字变成门）。
+
+**过程自纠（测具，不是产品）**：第一版 embedding 测试我自己错了两处——辅助函数返回 dict 而不是
+`(状态码, body)` 元组，于是假服务把字符串 `"data"` 当状态码（`TypeError: %d format`），客户端只看到
+RemoteDisconnected；改名之后又漏改三处调用点，整文件 `NameError`。`test_top_k...` 我原本断言"模型给 0.9
+的那条排第一"，跑出来红的——**红得对**：`final = 向量*0.5 + BM25*0.3 + rerank*0.2`，模型分只占 0.2，
+第一是 BM25 满分的候选；断言因此改成"截断发生在排序之后"这个真性质，而不是我凭直觉猜的排序结果。
+还有一处 Python 事实：`with torch.no_grad():` 找的是**类型**上的 `__enter__/__exit__`，用
+`SimpleNamespace(__enter__=...)` 造假的上下文管理器不管用，得写真的类。
+
+**门禁**：backend 全量 **764 → 778 passed**（+7 embedding、+6 rerank、+1 chroma 目录）；
+`ruff check .` 与 `ruff format --check .` clean。
 
 #### 已交付：D7 职业规划页：旧简历的慢响应不再顶到新简历下面（提交 `fb57d7e`）
 
