@@ -150,6 +150,10 @@ const BUDGET = {
   },
   themeCompatWildcards: 27,
   themeImportantOverrides: 56,
+  /* 视图侧的色值预算有三条（style/script/template），但把 `#fff` 从视图**上提到 src/styles/ 的
+     某个 .css** 就能全部绕过——而视图预算按文件路径记账，上提还会让它看起来"还了债"。
+     这条按整个样式层记一笔总量，与视图侧同尺子（`#hex` + `rgba(`）。 */
+  themeColorLiterals: 124,
   pageShellRedeclarations: 22,
   viewsBypassingApiLayer: 7,
 }
@@ -188,6 +192,20 @@ function colorCounts(blockKey) {
 }
 
 const themeCss = readFileSync('src/styles/main.css', 'utf8')
+
+/** 整个样式层（src/styles/*.css）里写死的色值，与视图侧用同一把尺子。 */
+function themeColorLiteralCount() {
+  return readdirSync('src/styles')
+    .filter((f) => f.endsWith('.css'))
+    .reduce((n, f) => {
+      const src = readFileSync(path.join('src/styles', f), 'utf8')
+      return (
+        n +
+        (src.match(/#[0-9a-fA-F]{3,8}\b/g) || []).length +
+        (src.match(/\brgba?\(/g) || []).length
+      )
+    }, 0)
+}
 
 /* 失败被清成空态：`request.js` 只对**非 GET** 弹提示（`notifyError !== false && method !== 'get'`），
    所以 `catch { list.value = [] }` 这种写法会把一次 500 渲染成页面自己的"暂无数据"文案。
@@ -708,6 +726,22 @@ describe('style debt ratchet', () => {
   it('does not let the theme layer grow its !important overrides', () => {
     const n = (themeCss.match(/!important/g) || []).length
     expect(n).toBeLessThanOrEqual(BUDGET.themeImportantOverrides)
+  })
+
+  it('does not let hardcoded colours escape into the theme layer', () => {
+    const n = themeColorLiteralCount()
+    expect(
+      n,
+      `src/styles/ 里的写死色值变多了（${n} > ${BUDGET.themeColorLiterals}）——视图侧那三条预算挡不住"把颜色上提到全局 css"，所以这里封顶：新增语义色请做成 var(--app-*) token`
+    ).toBeLessThanOrEqual(BUDGET.themeColorLiterals)
+  })
+
+  it('forces the theme colour budget to be tightened once paid down', () => {
+    const n = themeColorLiteralCount()
+    expect(
+      n < BUDGET.themeColorLiterals,
+      `样式层的色值少了——把 BUDGET.themeColorLiterals 降到 ${n}`
+    ).toBe(false)
   })
 
   it('does not let views re-declare the shared .page-shell chrome', () => {
