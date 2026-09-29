@@ -1404,7 +1404,9 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 
 **阶段 3 剩下的那半（`unplugin` 自动导入 + 删掉这两份列表）现在收益与风险都量过了，交给用户拍**：收益 = 少 155 行平行列表、这类漂移从此不可能；风险 = **样式注入顺序**。`element.css` 是手写的 `@import` 顺序，而主题层靠 `:deep()` 与那张通配网（§11）覆盖 EP 默认样式，unplugin 的按需样式会换注入顺序，观感可能变——这不是"跑一遍测试"能兜住的，得逐路由 `getComputedStyle` 差分（D18–D26 那套），并且要新增构建期依赖、改 `vite.config.js`。
 
-**门禁**：`test:unit` 149 → **152 passed / 31 files**、lint **0 error**、build ok、backend 无改动；dev server 用完按 PID 定点停掉。**没验**：EP 组件的视觉回归（本轮只删了零使用的组件，未触碰任何在用的样式）。
+**门禁**：`test:unit` 149 → **152 passed / 31 files**、lint **0 error**、build ok、backend 无改动；dev server 用完按 PID 定点停掉。
+
+**顺带补掉 D15 欠的一条浏览器复核**（后端不在恰好就是失败态）：`/jobs/search` 的简历工具条在真浏览器里量到 `.resume-row` 198×173、里面 `.app-load-error` 198×106、选择器 198×32，**纵向堆叠、`scrollWidth == clientWidth` 没有横向溢出**，文案读作"目标简历 / 选择用于推荐和分析的简历 / 简历列表拉取失败 / Request failed with status code 500 / 重试"。量这个是在窄视口（约 515px）下做的，所以它证明的是"不溢出"，不是"好看"。**仍然没验的**：D15 说的"列表失败与详情失败连着两条 `AppLoadError`"——那要求列表成功、只有详情失败，而两块是 `v-if`/`v-else-if` 一条链，后端不在时永远只能出现上面那一条，所以这条得等活的 API。EP 组件的视觉回归同样没做（本轮只删了零使用的组件）。
 
 
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
