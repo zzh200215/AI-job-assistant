@@ -962,13 +962,7 @@ import {
 import { getResume, getResumeList } from '@/api/resume'
 import { explainMatch } from '@/api/analysis'
 import { queryRewriteTest } from '@/api/knowledge'
-import {
-  getJobDetail,
-  getJobList,
-  getJobRecommendations,
-  seedDemoJobs,
-  startFullAnalysis,
-} from '@/api/jobs'
+import { getJobDetail, getJobList, seedDemoJobs, startFullAnalysis } from '@/api/jobs'
 import { priorityTagType } from '@/utils/statusTone'
 import { compactDateTime } from '@/utils/format/date'
 import { rememberResume } from '@/utils/lastSelection'
@@ -977,10 +971,10 @@ import AppLoadError from '@/components/ui/AppLoadError.vue'
 import JobCompareDialog from '@/features/jobs/components/JobCompareDialog.vue'
 import JobDetailDrawer from '@/features/jobs/components/JobDetailDrawer.vue'
 import { useJobPipeline } from '@/features/jobs/composables/useJobPipeline'
+import { useJobRecommend } from '@/features/jobs/composables/useJobRecommend'
 import { useJobSearch } from '@/features/jobs/composables/useJobSearch'
 import { useJobShortlist } from '@/features/jobs/composables/useJobShortlist'
 import {
-  calculateApplicationPriority,
   normalizeJob,
   pipelineEntryToJob,
   pipelineHistoryText,
@@ -991,7 +985,6 @@ import {
   salaryMid,
   signalClass,
   sourceText,
-  uniqueList,
 } from '@/features/jobs/lib/jobModel'
 
 const route = useRoute()
@@ -1014,14 +1007,8 @@ const localError = ref('')
 // 会把仍在途的岗位仓库响应一起判为过期，而 `finally` 里的解 loading 也带着同一个条件——
 // 结果是仓库数字永久停在 0 且转圈不停。
 const latestLocalJobsCall = useLatestCall()
-const latestRecommendCall = useLatestCall()
 const latestResumeDetailCall = useLatestCall()
 const latestJobDetailCall = useLatestCall()
-
-const recommendLoading = ref(false)
-const recommendations = ref([])
-// 推荐取不到 ≠ 没有贴合的推荐：清空列表会命中"还没有足够贴合的推荐结果，可以先补充岗位池"
-const recommendError = ref('')
 
 const seeding = ref(false)
 
@@ -1042,11 +1029,6 @@ const rewriteMeta = ref('')
 const warehouseFilters = ref({
   keyword: '',
   source: '',
-  industry: '',
-})
-
-const recommendFilters = ref({
-  location: '',
   industry: '',
 })
 
@@ -1086,6 +1068,15 @@ const {
   searchWithKeyword,
   resetSearchFilters,
 } = useJobSearch({ pushRecentSearch })
+
+const {
+  recommendations,
+  recommendLoading,
+  recommendError,
+  recommendFilters,
+  normalizedRecommendations,
+  loadRecommendations,
+} = useJobRecommend({ selectedResumeId, city })
 
 const selectedResumeName = computed(() => {
   const resume = resumeList.value.find((item) => item.id === selectedResumeId.value)
@@ -1146,39 +1137,6 @@ const filteredLocalJobs = computed(() => {
     return sourceOk && industryOk && keywordOk
   })
 })
-
-const normalizedRecommendations = computed(() =>
-  recommendations.value.map((item, index) => {
-    const normalized = {
-      uid: `recommend-${item.jd_id || index}`,
-      id: item.jd_id || null,
-      title: item.job_title || '推荐岗位',
-      company: item.company || '未知公司',
-      location: item.location || '',
-      salary: item.salary_range || '薪资面议',
-      industry: item.industry || '',
-      summary: item.match_reason || '',
-      rawText: '',
-      source: 'recommend',
-      sourceUrl: '',
-      local: true,
-      experience: '',
-      education: '',
-      skillTags: uniqueList([...(item.skill_overlap || []), ...(item.skill_gap || [])]),
-      skillOverlap: item.skill_overlap || [],
-      skillGap: item.skill_gap || [],
-      matchScore: item.match_score || 0,
-      recommendationType: item.recommendation_type || '值得一试',
-      matchReason: item.match_reason || '',
-      salaryMatch: item.salary_match !== false,
-      locationMatch: item.location_match !== false,
-      experienceMatch: item.experience_match !== false,
-      compareText: item.match_reason || '',
-    }
-    const priority = calculateApplicationPriority(normalized, city.value)
-    return { ...normalized, ...priority }
-  })
-)
 
 const comparedJobs = computed(() => {
   const map = new Map(marketDataset.value.map((job) => [job.uid, job]))
@@ -1349,35 +1307,6 @@ async function loadLocalJobs() {
   }
 }
 
-async function loadRecommendations() {
-  // 令牌在进入时领取：新一次的意图（含"没选简历所以清空"）都应作废仍在途的旧请求
-  const isCurrent = latestRecommendCall()
-  recommendError.value = ''
-  if (!selectedResumeId.value) {
-    recommendations.value = []
-    return
-  }
-  recommendLoading.value = true
-  try {
-    const params = {
-      resume_id: selectedResumeId.value,
-      limit: 12,
-    }
-    if (recommendFilters.value.location) params.location = recommendFilters.value.location
-    if (recommendFilters.value.industry) params.industry = recommendFilters.value.industry
-
-    const data = await getJobRecommendations(params)
-    if (!isCurrent()) return
-    recommendations.value = data?.recommendations || []
-  } catch (e) {
-    if (!isCurrent()) return
-    recommendations.value = []
-    recommendError.value = e?.userMessage || e?.message || '暂时取不到推荐结果，请稍后重试'
-  } finally {
-    if (isCurrent()) recommendLoading.value = false
-  }
-}
-
 async function refreshActiveTab() {
   if (activeTab.value === 'warehouse') {
     await loadLocalJobs()
@@ -1410,10 +1339,11 @@ async function seedDemoData() {
 
 async function handleResumeChange() {
   if (!selectedResumeId.value) {
-    recommendations.value = []
-    recommendError.value = ''
-    // 走 loadResumeDetail(null) 而不是就地清空：清空也是一次意图，要作废仍在途的那份旧详情，
-    // 否则它随后落地会把上一个简历的技能重新填回摘要
+    // 清空也是一次意图：两条链都要在入口领走自己的令牌，而不是就地写空值。
+    // 详情那条 D28 已经改成走 loadResumeDetail(null)；推荐这条原本漏了，
+    // 于是旧简历那一发随后落地会把推荐填回"已经没选简历"的屏幕
+    // （jobRecommendClear.test.js 钉的就是这条）。
+    await loadRecommendations()
     await loadResumeDetail(null)
     return
   }
