@@ -13,6 +13,12 @@ const BUDGET = {
     'src/features/jobs/views/JobSearch.vue': 45,
     'src/features/jobs/components/JobCompareDialog.vue': 1,
     'src/features/jobs/components/JobDetailDrawer.vue': 1,
+    /* D44 搬两个面板时的**复制成本**，不是新写的色值：scoped 样式不跨组件边界，父页面那 27 条
+       `.warehouse-*` / `.pipeline-*` 规则只能原样拷一份进子组件，于是同一份 rgba 同时存在于
+       两个文件里，本维度的总数因此**上涨**（父页面仍是 45，一条没删）。
+       WarehousePane 的拷贝里没有一个色值（全是 var()），所以它不进这张表——未知的路径预算就是 0。
+       这笔债的正确还法是把它们换成主题 token 并逐路由 getComputedStyle 差分，见 §7 阶段 2 的说明。 */
+    'src/features/jobs/components/PipelinePane.vue': 5,
     'src/layouts/DefaultLayout.vue': 34,
     'src/features/shell/views/Profile.vue': 31,
     'src/features/planning/views/CareerPlanning.vue': 27,

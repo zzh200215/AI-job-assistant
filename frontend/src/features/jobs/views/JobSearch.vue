@@ -534,182 +534,23 @@
             </el-tab-pane>
 
             <el-tab-pane label="投递流程" name="pipeline">
-              <div class="pipeline-toolbar">
-                <div class="recommend-left">
-                  <span class="toolbar-title">用一个看板推进真实投递流程</span>
-                  <span class="toolbar-sub">
-                    {{ pipelineEntries.length }} 条记录，{{ pipelineActiveCount }} 条仍在推进
-                  </span>
-                </div>
-                <div class="recommend-actions">
-                  <el-input
-                    v-model="pipelineFilters.keyword"
-                    clearable
-                    size="small"
-                    placeholder="搜索岗位、公司、备注或下一步动作"
-                    class="pipeline-search"
-                  />
-                  <el-select
-                    v-model="pipelineFilters.stage"
-                    placement="bottom-start"
-                    :fallback-placements="['bottom-start']"
-                    size="small"
-                    class="pipeline-stage-select"
-                  >
-                    <el-option label="全部阶段" value="all" />
-                    <el-option
-                      v-for="stage in pipelineStages"
-                      :key="stage.key"
-                      :label="stage.label"
-                      :value="stage.key"
-                    />
-                  </el-select>
-                  <el-button
-                    text
-                    :disabled="!pipelineStats.rejected"
-                    @click="clearRejectedPipeline"
-                  >
-                    清理已淘汰
-                  </el-button>
-                </div>
-              </div>
-
-              <div class="pipeline-overview">
-                <button
-                  v-for="stage in pipelineStages"
-                  :key="stage.key"
-                  type="button"
-                  class="pipeline-stage-pill"
-                  :class="{ active: pipelineFilters.stage === stage.key }"
-                  @click="
-                    pipelineFilters.stage = pipelineFilters.stage === stage.key ? 'all' : stage.key
-                  "
-                >
-                  <strong>{{ pipelineStats[stage.key] || 0 }}</strong>
-                  <span>{{ stage.label }}</span>
-                </button>
-              </div>
-
-              <div class="pipeline-board">
-                <section
-                  v-for="stage in visiblePipelineStages"
-                  :key="stage.key"
-                  class="pipeline-column"
-                >
-                  <div class="pipeline-column-head">
-                    <div>
-                      <strong>{{ stage.label }}</strong>
-                      <small>{{ pipelineByStage[stage.key]?.length || 0 }} 个岗位</small>
-                    </div>
-                    <el-tag size="small" effect="plain">{{ stage.hint }}</el-tag>
-                  </div>
-                  <p class="pipeline-column-note">{{ stage.description }}</p>
-
-                  <div v-if="pipelineByStage[stage.key]?.length" class="pipeline-cards">
-                    <article
-                      v-for="entry in pipelineByStage[stage.key]"
-                      :key="entry.entryId"
-                      class="pipeline-card"
-                    >
-                      <div class="pipeline-card-head">
-                        <div>
-                          <h3>{{ entry.title }}</h3>
-                          <p>{{ entry.company }} · {{ entry.salary }}</p>
-                        </div>
-                        <el-tag
-                          :type="priorityTagType(entry.priorityLabel)"
-                          effect="dark"
-                          size="small"
-                        >
-                          {{ entry.priorityLabel || '跟进中' }}
-                        </el-tag>
-                      </div>
-
-                      <div class="pipeline-meta">
-                        <span>{{ entry.location || '地点待补充' }}</span>
-                        <span v-if="entry.resumeName">{{ entry.resumeName }}</span>
-                        <span>更新于 {{ compactDateTime(entry.updatedAt, '--') }}</span>
-                      </div>
-
-                      <el-input
-                        v-model="entry.nextAction"
-                        size="small"
-                        placeholder="下一步动作，例如：周四前完成定制简历"
-                        @change="touchPipelineEntry(entry)"
-                      />
-
-                      <div class="pipeline-form-row">
-                        <el-date-picker
-                          v-model="entry.followUpAt"
-                          type="date"
-                          value-format="YYYY-MM-DD"
-                          size="small"
-                          placeholder="下次跟进日期"
-                          class="pipeline-date"
-                          @change="touchPipelineEntry(entry)"
-                        />
-                        <el-select
-                          :model-value="entry.stage"
-                          placement="bottom-start"
-                          :fallback-placements="['bottom-start']"
-                          size="small"
-                          class="pipeline-stage-select"
-                          @change="(value) => updatePipelineStage(entry, value)"
-                        >
-                          <el-option
-                            v-for="option in pipelineStages"
-                            :key="option.key"
-                            :label="option.label"
-                            :value="option.key"
-                          />
-                        </el-select>
-                      </div>
-
-                      <el-input
-                        v-model="entry.note"
-                        type="textarea"
-                        :rows="3"
-                        resize="none"
-                        placeholder="记录内推、沟通反馈、风险点或面试结论"
-                        @change="touchPipelineEntry(entry)"
-                      />
-
-                      <div class="pipeline-history" v-if="entry.stageHistory.length">
-                        <span>{{ pipelineHistoryText(entry.stageHistory) }}</span>
-                      </div>
-
-                      <div class="pipeline-actions">
-                        <el-button size="small" @click="openPipelineJob(entry)">详情</el-button>
-                        <el-button size="small" @click="prefillAnalysis(pipelineEntryToJob(entry))"
-                          >带入分析</el-button
-                        >
-                        <el-button
-                          size="small"
-                          type="primary"
-                          @click="startAnalysisForJob(pipelineEntryToJob(entry))"
-                        >
-                          直接分析
-                        </el-button>
-                        <el-button text type="danger" @click="removePipelineEntry(entry.entryId)"
-                          >移除</el-button
-                        >
-                      </div>
-                    </article>
-                  </div>
-
-                  <el-empty v-else :image-size="68" :description="stage.emptyText" />
-                </section>
-              </div>
-
-              <AppLoadError
-                v-if="pipelineError"
-                title="跟进记录拉取失败"
-                :message="pipelineError"
-                @retry="loadPipelineEntries"
-              />
-              <el-empty
-                v-else-if="!pipelineEntries.length"
-                description="先从实时搜索、岗位仓库或智能推荐里把岗位加入流程，页面会自动保存你的跟进记录。"
+              <PipelinePane
+                :entries="pipelineEntries"
+                :active-count="pipelineActiveCount"
+                :stats="pipelineStats"
+                :by-stage="pipelineByStage"
+                :visible-stages="visiblePipelineStages"
+                :filters="pipelineFilters"
+                :error="pipelineError"
+                @update:filters="(value) => (pipelineFilters = value)"
+                @refresh="loadPipelineEntries"
+                @clear-rejected="clearRejectedPipeline"
+                @touch="touchPipelineEntry"
+                @update-stage="updatePipelineStage"
+                @remove="removePipelineEntry"
+                @open="openPipelineJob"
+                @prefill="prefillAnalysis"
+                @analyze="startAnalysisForJob"
               />
             </el-tab-pane>
           </el-tabs>
@@ -894,12 +735,12 @@ import { explainMatch } from '@/api/analysis'
 import { queryRewriteTest } from '@/api/knowledge'
 import { getJobDetail, seedDemoJobs, startFullAnalysis } from '@/api/jobs'
 import { priorityTagType } from '@/utils/statusTone'
-import { compactDateTime } from '@/utils/format/date'
 import { rememberResume } from '@/utils/lastSelection'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import JobCompareDialog from '@/features/jobs/components/JobCompareDialog.vue'
 import JobDetailDrawer from '@/features/jobs/components/JobDetailDrawer.vue'
+import PipelinePane from '@/features/jobs/components/PipelinePane.vue'
 import WarehousePane from '@/features/jobs/components/WarehousePane.vue'
 import { useJobPipeline } from '@/features/jobs/composables/useJobPipeline'
 import { useJobRecommend } from '@/features/jobs/composables/useJobRecommend'
@@ -908,8 +749,6 @@ import { useJobShortlist } from '@/features/jobs/composables/useJobShortlist'
 import { useJobWarehouse } from '@/features/jobs/composables/useJobWarehouse'
 import {
   normalizeJob,
-  pipelineEntryToJob,
-  pipelineHistoryText,
   pipelineStageLabel,
   pipelineStages,
   rankMap,
@@ -1426,6 +1265,11 @@ function goToSmartAnalysis() {
 </script>
 
 <style scoped>
+/* D44 把仓库面板与投递流程面板搬出去了，但这里的规则一条都没删：
+   静态切分看不见 `:class="signalClass(...)"` 这类函数生成的类名（本页 494-500 行有 3 处），
+   删错了是没人能看见的视觉回归。所以两个面板的样式是**复制**进子组件的，本文件里留下 27 条
+   只指向 `.warehouse-*` / `.pipeline-*` 的死选择器（两个面板都是多根片段，父作用域 id 落不到
+   子组件元素上，因此它们今天不影响渲染）。要清这 27 条，先在真浏览器里逐路由差分确认。 */
 .page-shell {
   max-width: 1480px;
   margin: 0 auto;
@@ -1756,6 +1600,7 @@ function goToSmartAnalysis() {
 .panel-header,
 .board-header,
 .result-toolbar,
+.warehouse-toolbar,
 .recommend-toolbar,
 .board-row,
 .panel-header h2,
@@ -1770,11 +1615,13 @@ function goToSmartAnalysis() {
 .toolbar-sub,
 .toolbar-meta,
 .job-summary,
+.warehouse-summary,
 .recommend-reason {
   color: var(--app-muted);
 }
 
 .result-toolbar,
+.warehouse-toolbar,
 .recommend-toolbar {
   margin-bottom: 14px;
 }
@@ -1825,14 +1672,16 @@ function goToSmartAnalysis() {
   align-items: flex-start;
 }
 
-.job-title-row {
+.job-title-row,
+.warehouse-title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 
-.job-title-row h3 {
+.job-title-row h3,
+.warehouse-title-row h3 {
   margin: 0;
   font-size: 20px;
 }
@@ -1854,7 +1703,8 @@ function goToSmartAnalysis() {
   color: var(--app-success, #14b8a6);
 }
 
-.job-company {
+.job-company,
+.warehouse-meta {
   margin: 8px 0 0;
   display: flex;
   align-items: center;
@@ -1930,6 +1780,33 @@ function goToSmartAnalysis() {
 
 .bookmark-btn {
   padding: 8px 12px;
+}
+
+.warehouse-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.warehouse-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 16px;
+  padding: 16px;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+}
+
+.warehouse-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.warehouse-search {
+  width: 260px;
 }
 
 .recommend-card {
@@ -2248,6 +2125,7 @@ function goToSmartAnalysis() {
   .layout-grid,
   .control-top,
   .search-stack,
+  .warehouse-item,
   .result-grid,
   .recommend-grid,
   .pipeline-overview {
@@ -2288,6 +2166,7 @@ function goToSmartAnalysis() {
   .panel-header,
   .board-header,
   .result-toolbar,
+  .warehouse-toolbar,
   .recommend-toolbar,
   .rewrite-head,
   .pipeline-toolbar,
@@ -2301,6 +2180,7 @@ function goToSmartAnalysis() {
   .source-select,
   .search-input,
   .mini-input,
+  .warehouse-search,
   .skill-filter,
   .pipeline-search,
   .pipeline-stage-select,
@@ -2309,6 +2189,7 @@ function goToSmartAnalysis() {
   }
 
   .job-title-row h3,
+  .warehouse-title-row h3,
   .pipeline-card-head h3 {
     font-size: 18px;
   }

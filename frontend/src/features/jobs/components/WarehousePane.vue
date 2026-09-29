@@ -114,19 +114,43 @@ function patch(key, value) {
 </script>
 
 <style scoped>
-/* 以下每条都来自 JobSearch.vue 的选择器组，只保留本面板自己的那一个：
-   scoped 样式不跨组件边界生效，搬开就必须各自留一份。 */
+/* 以下每条都来自 JobSearch.vue 的选择器组，final 复合命中的才是本面板的：父页面那份样式**刻意留着没删**（静态切分看不见 `:class="signalClass(...)"` 这类动态类名，删错了就是没人能看见的视觉回归）。 */
 .warehouse-toolbar {
   margin: 0;
   font-size: 20px;
+}
+
+.warehouse-summary {
+  color: var(--app-muted);
 }
 
 .warehouse-toolbar {
   margin-bottom: 14px;
 }
 
-.warehouse-search {
-  width: 260px;
+.state-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 140px;
+  justify-content: center;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  color: var(--app-muted);
+}
+
+.warehouse-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.warehouse-meta {
+  margin: 8px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .warehouse-list {
@@ -144,29 +168,6 @@ function patch(key, value) {
   background: var(--app-bg);
 }
 
-.warehouse-title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.warehouse-title-row h3 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.warehouse-meta {
-  margin: 8px 0 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.warehouse-summary {
-  color: var(--app-muted);
-}
-
 .warehouse-actions {
   display: flex;
   gap: 8px;
@@ -175,16 +176,8 @@ function patch(key, value) {
   flex-wrap: wrap;
 }
 
-/* 与搜索/推荐面板同名的这块加载态，父页面仍要留一份（它们的面板还没搬） */
-.state-box {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 140px;
-  justify-content: center;
-  border-radius: var(--app-radius-sm, 12px);
-  background: var(--app-bg);
-  color: var(--app-muted);
+.warehouse-search {
+  width: 260px;
 }
 
 @media (max-width: 1180px) {
@@ -192,7 +185,6 @@ function patch(key, value) {
     grid-template-columns: 1fr;
   }
 }
-
 @media (max-width: 768px) {
   .warehouse-toolbar {
     flex-direction: column;
@@ -201,10 +193,6 @@ function patch(key, value) {
 
   .warehouse-search {
     width: 100%;
-  }
-
-  .warehouse-title-row h3 {
-    font-size: 18px;
   }
 }
 </style>
