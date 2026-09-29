@@ -10,7 +10,8 @@ const BUDGET = {
   hardcodedColorLiterals: {
     'src/features/interview/views/InterviewRoom.vue': 69,
     'src/features/shell/views/Home.vue': 71,
-    'src/features/jobs/views/JobSearch.vue': 46,
+    'src/features/jobs/views/JobSearch.vue': 45,
+    'src/features/jobs/components/JobCompareDialog.vue': 1,
     'src/layouts/DefaultLayout.vue': 34,
     'src/features/shell/views/Profile.vue': 31,
     'src/features/planning/views/CareerPlanning.vue': 27,

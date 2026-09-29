@@ -1010,45 +1010,15 @@
       </template>
     </el-drawer>
 
-    <el-dialog v-model="compareVisible" width="980px" title="岗位对比">
-      <div v-if="comparedJobs.length" class="compare-grid">
-        <div v-for="job in comparedJobs" :key="job.uid" class="compare-card">
-          <div class="compare-head">
-            <h3>{{ job.title }}</h3>
-            <el-tag :type="priorityTagType(job.priorityLabel)" effect="dark" size="small">
-              {{ job.priorityLabel }} · {{ job.priorityScore }}
-            </el-tag>
-          </div>
-          <p class="compare-company">{{ job.company }}</p>
-          <div class="compare-meta">
-            <span>{{ job.salary }}</span>
-            <span>{{ job.location || '地点待补充' }}</span>
-            <span>{{ job.experience || '经验不限' }}</span>
-          </div>
-          <p class="compare-reason">{{ job.priorityReason }}</p>
-          <div class="compare-tags" v-if="job.skillTags?.length">
-            <el-tag
-              v-for="tag in job.skillTags.slice(0, 8)"
-              :key="tag"
-              size="small"
-              effect="plain"
-              >{{ tag }}</el-tag
-            >
-          </div>
-          <p class="compare-summary">{{ job.summary || '暂无摘要' }}</p>
-          <div class="compare-actions">
-            <el-button size="small" @click="openJobDetail(job, 'compare')">详情</el-button>
-            <el-button size="small" @click="handlePipelineAction(job)">
-              {{ pipelineStatusText(job) || '加入流程' }}
-            </el-button>
-            <el-button size="small" @click="toggleCompare(job)">移出对比</el-button>
-            <el-button size="small" type="primary" @click="startAnalysisForJob(job)"
-              >分析</el-button
-            >
-          </div>
-        </div>
-      </div>
-    </el-dialog>
+    <JobCompareDialog
+      v-model="compareVisible"
+      :jobs="comparedJobs"
+      :status-text="pipelineStatusText"
+      @detail="(job) => openJobDetail(job, 'compare')"
+      @pipeline="handlePipelineAction"
+      @remove="toggleCompare"
+      @analyze="startAnalysisForJob"
+    />
   </div>
 </template>
 
@@ -1082,10 +1052,12 @@ import {
   deleteJobPipelineEntry,
   updateJobPipelineEntry,
 } from '@/api/jobs'
+import { priorityTagType } from '@/utils/statusTone'
 import { compactDateTime } from '@/utils/format/date'
 import { rememberResume } from '@/utils/lastSelection'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
+import JobCompareDialog from '@/features/jobs/components/JobCompareDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -2237,15 +2209,6 @@ function recommendTagType(value) {
   return 'info'
 }
 
-function priorityTagType(value) {
-  // 投递优先级标签：优先投递 / 值得投递 / 先观察；兼容遗留 强烈/可以/谨慎
-  const v = value || ''
-  if (v.includes('优先') || v.includes('强烈')) return 'success'
-  if (v.includes('值得') || v.includes('可以')) return 'warning'
-  if (v.includes('谨慎')) return 'danger'
-  return 'info'
-}
-
 function signalClass(flag) {
   return flag ? 'signal positive' : 'signal neutral'
 }
@@ -2642,10 +2605,7 @@ function saveLocalArray(key, value) {
 
 .rewrite-note,
 .rewrite-meta,
-.priority-reason,
-.compare-reason,
-.compare-summary,
-.compare-company {
+.priority-reason {
   color: var(--app-muted);
 }
 
@@ -3112,64 +3072,6 @@ function saveLocalArray(key, value) {
   color: var(--app-muted);
 }
 
-.compare-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.compare-card {
-  padding: 16px;
-  border-radius: var(--app-radius-sm, 12px);
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid var(--app-line);
-}
-
-.compare-head {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.compare-head h3 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.compare-company {
-  margin: 8px 0 0;
-}
-
-.compare-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.compare-meta span {
-  padding: 5px 8px;
-  border-radius: 999px;
-  background: var(--app-bg);
-  font-size: 12px;
-}
-
-.compare-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.compare-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-
 .pipeline-toolbar,
 .pipeline-form-row {
   display: flex;
@@ -3347,7 +3249,6 @@ function saveLocalArray(key, value) {
   .warehouse-item,
   .result-grid,
   .recommend-grid,
-  .compare-grid,
   .pipeline-overview {
     grid-template-columns: 1fr;
   }

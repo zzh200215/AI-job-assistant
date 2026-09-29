@@ -1409,6 +1409,23 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 **顺带补掉 D15 欠的一条浏览器复核**（后端不在恰好就是失败态）：`/jobs/search` 的简历工具条在真浏览器里量到 `.resume-row` 198×173、里面 `.app-load-error` 198×106、选择器 198×32，**纵向堆叠、`scrollWidth == clientWidth` 没有横向溢出**，文案读作"目标简历 / 选择用于推荐和分析的简历 / 简历列表拉取失败 / Request failed with status code 500 / 重试"。量这个是在窄视口（约 515px）下做的，所以它证明的是"不溢出"，不是"好看"。**仍然没验的**：D15 说的"列表失败与详情失败连着两条 `AppLoadError`"——那要求列表成功、只有详情失败，而两块是 `v-if`/`v-else-if` 一条链，后端不在时永远只能出现上面那一条，所以这条得等活的 API。EP 组件的视觉回归同样没做（本轮只删了零使用的组件）。
 
 
+#### 已交付：D36 阶段 2 的第一次真拆：搬出对比弹窗，代价是总行数涨了 25 行
+
+**先按耦合度挑块，不按计划挑**（D34 已经把计划那一刀量掉了）。`JobSearch.vue` 模板 1054 行分四块：hero 50 行 / 24 条父级规则、`layout-grid` 869 行 / 107 条、详情抽屉 91 行 / 16 条、对比弹窗 43 行 / 10 条。第一刀取耦合最低的**对比弹窗** → `src/features/jobs/components/JobCompareDialog.vue`。
+
+**数字要说全，包括难看的那个**：`JobSearch.vue` 3422 → **3323 行（−99）**，新组件 124 行，**两个文件合计 3447 行，比拆之前多 25 行**。多出来的是两条**不能整条搬走**的分组规则——`.compare-reason/.compare-summary/.compare-company` 原本和留在父级的 `.rewrite-note/.priority-reason` 共用一条 `color: var(--app-muted)`，`.compare-grid` 又在一条 8 类共用的 `@media (max-width: 1180px)` 里，两边都只能**拆成两份声明**而不是搬一份。所以"拆巨页"买到的是**单文件变小 + 边界显式**，不是代码变少；这条要写进计划，否则后面每一刀都会被"总行数没降"质疑。
+
+**接缝的形状**：props `jobs` + `statusText`，emits `detail/pipeline/remove/analyze`。`statusText` 是**函数 prop**——投递阶段标签只有父页面那份 pipeline 状态知道（`findPipelineEntry`），把结果复制成 job 上的字段等于造第二份会过期的真相。`priorityTagType` 原本是 JobSearch 的局部函数（全站仅 1 份、6 处调用），子组件也要用，所以移进 `utils/statusTone.js`（52 行）而不是再传一个函数 prop；同形的 `recommendTagType` **没动**，不需要就不顺手搬。
+
+**棘轮按 D34 预言的方式生效了**：新文件带着 `background: rgba(255, 255, 255, 0.98)` 当场红（新路径预算是 0），同时要求把 `JobSearch.vue` 的 46 降到 45。处理是**登记 1 而不是抹掉**——这条字面量确实还在那儿。
+
+**顺着这条量出一个白卡疑点**：那个值恰好等于 `--app-surface` 的浅色定义，而深色 token 挂在 `.workspace-theme`（`DefaultLayout.vue:2`）；EP 的 `el-dialog` `appendToBody` 默认 false ⇒ **弹窗在那棵树内**，所以把字面量换成 token 会把这张卡从近白变成 `#171922`。**那是改观感，不是等价重构**，本轮保留字面量。同一值全站还有 3 处（`JobSearch.vue:2739`、`CareerPlanning.vue:1589`、新组件）——D6 当年把 61 处 `#fff` 从白块修成深色，这三处是同类漏网，改不改是观感决定，**记为待拍**。
+
+**验证与它的边界**：`test:unit` 152 → **155 passed / 32 files**（+3 条子组件接缝测试：每张卡的字段与按钮文案、四个按钮各带自己那条 job 发事件、空选择时不渲染网格）、lint **0 error**、build ok。**EP 的 `el-dialog` 在 jsdom 里被它自己的 `rendered` 门挡住**（外壳渲染出来是空的 `el-overlay-dialog`），所以测试把外壳桩成透传插槽——**测的是我搬进去的那段，不是 EP 的外壳**；弹窗在真浏览器里的实际渲染仍未验（要活的 API 才能选出 2 个岗位）。
+
+**下一刀**：详情抽屉（91 行 / 16 条规则 / 14 类），然后才是 4 个标签页（88–179 行，各 6–7 个处理器，父级规则 9–28 条）——抽屉之后每往标签页走一步，props/emits 面都会更宽，所以顺序保持"先浮层、后面板"。
+
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
@@ -2079,6 +2096,8 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 15. **同步 db 的 135 条 async 路由走哪条路，以及连接池那三个数**（E15 留下的）。E15 只收了"`async def` 里直接出网"这一类；剩下的形状是"async 路由 + 同步 SQLAlchemy 会话"，两种改法互斥：① **逐处 `run_in_threadpool`**——改动可控，但要 135 次判断"这段能不能整体搬走"（事务边界跨多次 await 就会坏）；② **把路由改成 `def`**——FastAPI 自动丢线程池，一行改完，代价是并发取连接的线程从"几乎为 0"变成 anyio 默认上限 **40 根**。而 `core/database.py` 设了 `pool_pre_ping=True` 与 `pool_recycle=3600`（**所以债表旧说法"未配置连接池"不准确**），没设的只有 `pool_size` / `max_overflow` / `pool_timeout`，即走默认 **5 + 10 + 排队 30 秒**。② 一落地就是 40 根线程抢 5 个连接，尾延迟会先变差。所以这两个输入（目标并发、实例数）得先有人给，E15 没有顺手填。现状：`anyio` 线程上限同样没显式设过。
 
 16. **加载态要不要换成骨架屏**（D27 量出来的位置）。今天全站 **0 个** `el-skeleton`；异步列表已有三种表达——spinner + "加载中…"（`PipelineKanban`、`JobRecommend`）、加载期间**什么都不渲染**（`SalaryInsight`、`RecommendationEval`：整块在 `v-if="数据到了"` 里）、以及 `AnalysisResult` 那种进度面板。三者都不是说谎（没有一处把"加载中"说成"暂无数据"），所以**这条不是修 bug，是选观感**：骨架屏能让"结构已定、内容未到"看得出来，代价是要给 15 个有表格的文件各写一套占位形状，而那形状本身就是设计决定（占几行、宽度按什么给）。三条路：① 不动，spinner 与"空窗"并存；② 只给"什么都不渲染"的那两页补 spinner（几行改动，纯增加可见反馈，风险最低）；③ 全站上骨架屏（要先定占位规范，属视觉设计工作，且要逐路由 diff 才能证明没把布局改坏）。**②③ 我都没动**，等你点。
+
+17. **深色工作台里的 3 张白卡要不要一起改成深色面**（D36 量到的）。`background: rgba(255, 255, 255, 0.98)` 在 `JobSearch.vue:2739`、`CareerPlanning.vue:1589` 与 `features/jobs/components/JobCompareDialog.vue` 各一处。这个值**正好等于** `--app-surface` 的浅色定义，而深色 token 挂在 `.workspace-theme`（`DefaultLayout.vue:2`），EP 的 `el-dialog` 又默认不 teleport 到 body（`appendToBody` 无默认值 ⇒ false），所以这三处**换成 `var(--app-surface)` 是等价替换还是改观感，取决于它们渲染在哪个作用域里**——D6 那轮把 61 处 `#fff` 从白块修成深色，这三处像同一类漏网，但也可能是刻意留的"读作浅色卡片"。三条路：① 不动；② 逐处换成 token 并做逐路由 `getComputedStyle` 差分（要先能拿到数据态，也就是得先解决"没有活 API 就打不开这些浮层"）；③ 只换弹窗里那张（它一定在 `.workspace-theme` 内，行为最确定）。**我一条都没动**，等你点。
 
 ---
 

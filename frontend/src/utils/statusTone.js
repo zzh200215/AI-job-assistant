@@ -40,3 +40,13 @@ export const INTERVIEW_STATUS_TAGS = {
 export function tagTypeFor(table, status) {
   return table[status] || 'info'
 }
+
+/** 投递优先级标签：优先投递 / 值得投递 / 先观察，还要兼容遗留的 强烈/可以/谨慎 两套词。
+    用子串匹配而不是查表：标签文案带前后缀（"优先投递 · 82"），历史值又是另一套形容词。 */
+export function priorityTagType(value) {
+  const v = value || ''
+  if (v.includes('优先') || v.includes('强烈')) return 'success'
+  if (v.includes('值得') || v.includes('可以')) return 'warning'
+  if (v.includes('谨慎')) return 'danger'
+  return 'info'
+}
