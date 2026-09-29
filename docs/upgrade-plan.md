@@ -1456,6 +1456,22 @@ D5 的判据只数"catch 里清值"，所以**注释型 catch whole 类是它的
 **覆盖的边界**：这批函数现在只被视图测试**间接**覆盖（没有 `jobModel` 的单元测试）。本轮不补，因为它们的行为没变、也没有已知缺陷要钉；如果将来要改某个归一化分支，先给它补一条直测再动。
 
 
+#### 已交付：D39 第四刀：投递流程那一簇 19 个成员进 composable，两把门各抓到对方抓不到的错
+
+**为什么不是标签页**：标签页要 30 个 props/emits 且再复制一批共享规则；而脚本里"投递流程"这一簇是 19 个成员、210 行，外部依赖只有三样（`activeTab`、`selectedResumeId`/`selectedResumeName`、`openJobDetail`）——适合注入式 composable，零样式风险。搬进 `src/features/jobs/composables/useJobPipeline.js`（271 行），`JobSearch.vue` **3009 → 2794 行**。
+
+**四刀累计**：`JobSearch.vue` 3422 → **2794（−628，−18%）**，分出 4 个文件（`lib/jobModel.js` 205、`composables/useJobPipeline.js` 271、`JobCompareDialog.vue` 124、`JobDetailDrawer.vue` 215）。**五个文件合计 3609 行，比原来单文件多 187 行**——这 187 行是边界本身的代价（导入/导出/注入参数/说明注释），不是代码变多了别的来源。**"拆页让代码变少"这个说法不成立，成立的是"让单个文件小到能一次读完"**，这句得留在计划里，否则后面每一刀都会被错的目标衡量。
+
+**两把门各抓到对方抓不到的错（这条是本刀真正的收获）**：
+1. 上一刀（D38）搬纯函数后，`test:unit` 160 条全绿、`eslint` 0 error，**只有 `build` 红**——`pipelineStageMap` 忘了 `export`，dev 把缺失的具名导入当 `undefined` 放过，Rollup 不放过。
+2. 这一刀反过来：`build` 一次通过，**`test:unit` 红了 8 条** `Cannot access 'selectedResumeName' before initialization`——我把 `useJobPipeline({...})` 的解构插在了 `const shortlist = ...` 之前，而它注入的 `selectedResumeName` 定义在后面，**TDZ**。lint 也不报（它不知道求值顺序）。
+   ⇒ 结论不是"哪道门更好"，而是**三道门都得跑完才能报**：`build` 管模块图的形状，`test:unit` 管运行时的求值顺序与接线，`eslint` 管未定义/未使用。这次我把 destructure 移到依赖之后，三道门一起绿：**160 passed / 33 files、lint 0 error、build ok**。
+
+**顺手收掉的两个死出口**：`filteredPipelineEntries` 与 `findPipelineEntry` 只有簇内自用，父页面一处不读，所以从 composable 的返回值里去掉（返回没人用的东西，等于把内部结构又变成一份对外契约）。
+
+**下一刀**：剩下的搜索/推荐/清单簇（`runSearch` + `filteredExternalJobs` + `recentSearches` + shortlist 那套 localStorage），以及 4 个标签页——标签页那一步要先定"面板状态归谁"，是 API 设计，我会在动之前把两种归属的代价列出来再问。
+
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
