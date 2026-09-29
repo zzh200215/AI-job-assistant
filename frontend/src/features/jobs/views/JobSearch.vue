@@ -919,96 +919,21 @@
       </aside>
     </section>
 
-    <el-drawer v-model="detailVisible" size="48%" :title="detailJob?.title || '职位详情'">
-      <div v-if="detailLoading" class="drawer-loading">
-        <el-icon class="is-loading"><Loading /></el-icon>
-        <span>正在加载职位详情...</span>
-      </div>
-      <template v-else-if="detailJob">
-        <div class="drawer-header">
-          <div>
-            <p class="drawer-company">{{ detailJob.company }}</p>
-            <div class="job-facts compact">
-              <span class="fact-emphasis">{{ detailJob.salary }}</span>
-              <span>{{ detailJob.location || '地点待补充' }}</span>
-              <span>{{ detailJob.experience || '经验不限' }}</span>
-              <span>{{ detailJob.education || '学历不限' }}</span>
-            </div>
-          </div>
-          <div class="drawer-actions">
-            <el-button size="small" @click="toggleShortlist(detailJob)">
-              {{ isShortlisted(detailJob) ? '移出清单' : '加入清单' }}
-            </el-button>
-            <el-button size="small" @click="handlePipelineAction(detailJob)">
-              {{ pipelineStatusText(detailJob) || '加入流程' }}
-            </el-button>
-            <el-button size="small" @click="toggleCompare(detailJob)">
-              {{ isCompared(detailJob) ? '取消对比' : '加入对比' }}
-            </el-button>
-            <el-button size="small" @click="explainCurrentJob" :loading="explainLoading">
-              投递解读
-            </el-button>
-            <el-button size="small" type="primary" @click="startAnalysisForJob(detailJob)">
-              直接分析
-            </el-button>
-          </div>
-        </div>
-
-        <div v-if="detailJob.skillTags.length" class="drawer-tags">
-          <el-tag v-for="tag in detailJob.skillTags" :key="tag" effect="plain" size="small">{{
-            tag
-          }}</el-tag>
-        </div>
-
-        <div class="drawer-section">
-          <h4>岗位摘要</h4>
-          <p>{{ detailJob.summary || '暂无岗位摘要' }}</p>
-        </div>
-
-        <div v-if="explainResult" class="drawer-section">
-          <h4>投递判断</h4>
-          <div class="explain-box">
-            <div class="explain-top">
-              <el-tag :type="priorityTagType(explainResult.recommendation)" effect="dark">
-                {{ explainResult.recommendation }}
-              </el-tag>
-              <strong>{{ explainResult.overall_score }} 分</strong>
-            </div>
-            <p>{{ explainResult.overall_reason }}</p>
-            <div v-if="explainResult.risk_points?.length" class="explain-list">
-              <span>风险点</span>
-              <ul>
-                <li v-for="item in explainResult.risk_points.slice(0, 3)" :key="item">
-                  {{ item }}
-                </li>
-              </ul>
-            </div>
-            <div v-if="explainResult.optimization_suggestions?.length" class="explain-list">
-              <span>建议</span>
-              <ul>
-                <li v-for="item in explainResult.optimization_suggestions.slice(0, 3)" :key="item">
-                  {{ item }}
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        <div class="drawer-section">
-          <h4>完整 JD</h4>
-          <pre class="drawer-content">{{
-            detailJob.rawText || detailJob.summary || '暂无完整内容'
-          }}</pre>
-        </div>
-
-        <div v-if="detailJob.sourceUrl" class="drawer-section">
-          <h4>来源链接</h4>
-          <el-link :href="detailJob.sourceUrl" target="_blank" type="primary">
-            打开原始职位链接
-          </el-link>
-        </div>
-      </template>
-    </el-drawer>
+    <JobDetailDrawer
+      v-model="detailVisible"
+      :job="detailJob"
+      :loading="detailLoading"
+      :status-text="detailStatusText"
+      :shortlisted="detailShortlisted"
+      :compared="detailCompared"
+      :explain-result="explainResult"
+      :explain-loading="explainLoading"
+      @shortlist="toggleShortlist(detailJob)"
+      @pipeline="handlePipelineAction(detailJob)"
+      @compare="toggleCompare(detailJob)"
+      @explain="explainCurrentJob"
+      @analyze="startAnalysisForJob(detailJob)"
+    />
 
     <JobCompareDialog
       v-model="compareVisible"
@@ -1058,6 +983,7 @@ import { rememberResume } from '@/utils/lastSelection'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import JobCompareDialog from '@/features/jobs/components/JobCompareDialog.vue'
+import JobDetailDrawer from '@/features/jobs/components/JobDetailDrawer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -1379,6 +1305,13 @@ const comparedJobs = computed(() => {
   const map = new Map(marketDataset.value.map((job) => [job.uid, job]))
   return compareSelection.value.map((uid) => map.get(uid)).filter(Boolean)
 })
+
+// 抽屉一次只看一个岗位，所以这三个由父页面算好传值，而不是把函数传下去
+const detailStatusText = computed(() =>
+  detailJob.value ? pipelineStatusText(detailJob.value) : ''
+)
+const detailShortlisted = computed(() => (detailJob.value ? isShortlisted(detailJob.value) : false))
+const detailCompared = computed(() => (detailJob.value ? isCompared(detailJob.value) : false))
 
 const priorityQueue = computed(() =>
   [...marketDataset.value]
@@ -2660,13 +2593,6 @@ function saveLocalArray(key, value) {
 .warehouse-toolbar,
 .recommend-toolbar,
 .board-row,
-.drawer-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: flex-start;
-}
-
 .panel-header h2,
 .board-header h3 {
   margin: 0;
@@ -2680,9 +2606,7 @@ function saveLocalArray(key, value) {
 .toolbar-meta,
 .job-summary,
 .warehouse-summary,
-.recommend-reason,
-.drawer-company,
-.drawer-section p {
+.recommend-reason {
   color: var(--app-muted);
 }
 
@@ -2801,7 +2725,6 @@ function saveLocalArray(key, value) {
 }
 
 .job-tags,
-.drawer-tags,
 .recommend-tags {
   display: flex;
   flex-wrap: wrap;
@@ -3016,60 +2939,6 @@ function saveLocalArray(key, value) {
   align-items: center;
   padding: 12px 14px;
   text-align: left;
-}
-
-.drawer-loading {
-  min-height: 180px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: var(--app-muted);
-}
-
-.drawer-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.drawer-section + .drawer-section {
-  margin-top: 18px;
-}
-
-.drawer-section h4 {
-  margin: 0 0 10px;
-}
-
-.drawer-content {
-  margin: 0;
-  padding: 14px;
-  border-radius: var(--app-radius-xs, 8px);
-  background: var(--app-bg);
-  white-space: pre-wrap;
-  line-height: 1.7;
-  font-family: inherit;
-}
-
-.explain-box {
-  padding: 14px;
-  border-radius: var(--app-radius-xs, 8px);
-  background: var(--app-bg);
-}
-
-.explain-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-}
-
-.explain-list span {
-  display: block;
-  margin-top: 10px;
-  margin-bottom: 6px;
-  font-size: 12px;
-  color: var(--app-muted);
 }
 
 .pipeline-toolbar,
@@ -3289,7 +3158,6 @@ function saveLocalArray(key, value) {
   .result-toolbar,
   .warehouse-toolbar,
   .recommend-toolbar,
-  .drawer-header,
   .rewrite-head,
   .pipeline-toolbar,
   .pipeline-form-row {

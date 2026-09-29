@@ -12,6 +12,7 @@ const BUDGET = {
     'src/features/shell/views/Home.vue': 71,
     'src/features/jobs/views/JobSearch.vue': 45,
     'src/features/jobs/components/JobCompareDialog.vue': 1,
+    'src/features/jobs/components/JobDetailDrawer.vue': 1,
     'src/layouts/DefaultLayout.vue': 34,
     'src/features/shell/views/Profile.vue': 31,
     'src/features/planning/views/CareerPlanning.vue': 27,
