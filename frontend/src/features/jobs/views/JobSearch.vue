@@ -359,91 +359,21 @@
             </el-tab-pane>
 
             <el-tab-pane label="岗位仓库" name="warehouse">
-              <div class="warehouse-toolbar">
-                <el-input
-                  v-model="warehouseFilters.keyword"
-                  clearable
-                  size="small"
-                  class="warehouse-search"
-                  placeholder="按职位名、公司、城市筛选本地 JD"
-                />
-                <el-select
-                  v-model="warehouseFilters.source"
-                  placement="bottom-start"
-                  :fallback-placements="['bottom-start']"
-                  clearable
-                  size="small"
-                  placeholder="来源"
-                >
-                  <el-option label="全部来源" value="" />
-                  <el-option label="导入" value="imported" />
-                  <el-option label="爬取" value="crawled" />
-                  <el-option label="API" value="api" />
-                  <el-option label="手工创建" value="manual" />
-                </el-select>
-                <el-select
-                  v-model="warehouseFilters.industry"
-                  placement="bottom-start"
-                  :fallback-placements="['bottom-start']"
-                  clearable
-                  size="small"
-                  placeholder="行业"
-                >
-                  <el-option label="互联网 / 科技" value="互联网" />
-                  <el-option label="人工智能" value="人工智能" />
-                  <el-option label="电商" value="电商" />
-                  <el-option label="通信" value="通信" />
-                </el-select>
-                <el-button text @click="loadLocalJobs">刷新仓库</el-button>
-              </div>
-
-              <div v-if="localLoading" class="state-box">
-                <el-icon class="is-loading"><Loading /></el-icon>
-                <span>正在加载本地岗位仓库...</span>
-              </div>
-
-              <div v-else-if="filteredLocalJobs.length" class="warehouse-list">
-                <div v-for="job in filteredLocalJobs" :key="job.uid" class="warehouse-item">
-                  <div class="warehouse-main">
-                    <div class="warehouse-title-row">
-                      <h3>{{ job.title }}</h3>
-                      <el-tag size="small" effect="plain">{{ sourceText(job.source) }}</el-tag>
-                      <el-tag :type="priorityTagType(job.priorityLabel)" effect="dark" size="small">
-                        {{ job.priorityLabel }}
-                      </el-tag>
-                    </div>
-                    <p class="warehouse-meta">
-                      {{ job.company }} / {{ job.location || '地点待补充' }} / {{ job.salary }}
-                    </p>
-                    <p class="warehouse-summary">{{ job.summary || '暂无摘要' }}</p>
-                  </div>
-                  <div class="warehouse-actions">
-                    <el-button size="small" @click="openJobDetail(job, 'warehouse')"
-                      >详情</el-button
-                    >
-                    <el-button size="small" @click="handlePipelineAction(job)">
-                      {{ pipelineStatusText(job) || '加入流程' }}
-                    </el-button>
-                    <el-button size="small" @click="toggleCompare(job)">
-                      {{ isCompared(job) ? '取消对比' : '加入对比' }}
-                    </el-button>
-                    <el-button size="small" @click="prefillAnalysis(job)">带入分析</el-button>
-                    <el-button size="small" type="primary" @click="startAnalysisForJob(job)"
-                      >分析</el-button
-                    >
-                  </div>
-                </div>
-              </div>
-
-              <!-- 失败态与"仓库是空的"是两回事 -->
-              <AppLoadError
-                v-else-if="localError"
-                title="本地岗位仓库加载失败"
-                :message="localError"
-                @retry="loadLocalJobs"
+              <WarehousePane
+                :jobs="filteredLocalJobs"
+                :loading="localLoading"
+                :error="localError"
+                :filters="warehouseFilters"
+                :compared-uids="compareSelection"
+                :pipeline-status-text="pipelineStatusText"
+                @update:filters="(value) => (warehouseFilters = value)"
+                @refresh="loadLocalJobs"
+                @detail="(job) => openJobDetail(job, 'warehouse')"
+                @pipeline="handlePipelineAction"
+                @compare="toggleCompare"
+                @prefill="prefillAnalysis"
+                @analyze="startAnalysisForJob"
               />
-
-              <el-empty v-else description="岗位仓库还是空的，可以先搜索外部岗位或导入演示数据。" />
             </el-tab-pane>
 
             <el-tab-pane label="智能推荐" name="recommend">
@@ -970,6 +900,7 @@ import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import JobCompareDialog from '@/features/jobs/components/JobCompareDialog.vue'
 import JobDetailDrawer from '@/features/jobs/components/JobDetailDrawer.vue'
+import WarehousePane from '@/features/jobs/components/WarehousePane.vue'
 import { useJobPipeline } from '@/features/jobs/composables/useJobPipeline'
 import { useJobRecommend } from '@/features/jobs/composables/useJobRecommend'
 import { useJobSearch } from '@/features/jobs/composables/useJobSearch'
@@ -1825,7 +1756,6 @@ function goToSmartAnalysis() {
 .panel-header,
 .board-header,
 .result-toolbar,
-.warehouse-toolbar,
 .recommend-toolbar,
 .board-row,
 .panel-header h2,
@@ -1840,13 +1770,11 @@ function goToSmartAnalysis() {
 .toolbar-sub,
 .toolbar-meta,
 .job-summary,
-.warehouse-summary,
 .recommend-reason {
   color: var(--app-muted);
 }
 
 .result-toolbar,
-.warehouse-toolbar,
 .recommend-toolbar {
   margin-bottom: 14px;
 }
@@ -1897,16 +1825,14 @@ function goToSmartAnalysis() {
   align-items: flex-start;
 }
 
-.job-title-row,
-.warehouse-title-row {
+.job-title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 
-.job-title-row h3,
-.warehouse-title-row h3 {
+.job-title-row h3 {
   margin: 0;
   font-size: 20px;
 }
@@ -1928,8 +1854,7 @@ function goToSmartAnalysis() {
   color: var(--app-success, #14b8a6);
 }
 
-.job-company,
-.warehouse-meta {
+.job-company {
   margin: 8px 0 0;
   display: flex;
   align-items: center;
@@ -2005,33 +1930,6 @@ function goToSmartAnalysis() {
 
 .bookmark-btn {
   padding: 8px 12px;
-}
-
-.warehouse-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.warehouse-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 220px;
-  gap: 16px;
-  padding: 16px;
-  border-radius: var(--app-radius-sm, 12px);
-  background: var(--app-bg);
-}
-
-.warehouse-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.warehouse-search {
-  width: 260px;
 }
 
 .recommend-card {
@@ -2350,7 +2248,6 @@ function goToSmartAnalysis() {
   .layout-grid,
   .control-top,
   .search-stack,
-  .warehouse-item,
   .result-grid,
   .recommend-grid,
   .pipeline-overview {
@@ -2391,7 +2288,6 @@ function goToSmartAnalysis() {
   .panel-header,
   .board-header,
   .result-toolbar,
-  .warehouse-toolbar,
   .recommend-toolbar,
   .rewrite-head,
   .pipeline-toolbar,
@@ -2405,7 +2301,6 @@ function goToSmartAnalysis() {
   .source-select,
   .search-input,
   .mini-input,
-  .warehouse-search,
   .skill-filter,
   .pipeline-search,
   .pipeline-stage-select,
@@ -2414,7 +2309,6 @@ function goToSmartAnalysis() {
   }
 
   .job-title-row h3,
-  .warehouse-title-row h3,
   .pipeline-card-head h3 {
     font-size: 18px;
   }
