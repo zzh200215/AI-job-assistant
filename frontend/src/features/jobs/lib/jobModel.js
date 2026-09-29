@@ -1,8 +1,9 @@
 /* 岗位搜索页的数据形状层：从 JobSearch.vue 搬出来的一组纯函数与常量。
    搬它们是因为这页 1312 行脚本里，光是"把后端返回的 JD 归一成本地形状、把投递记录归一成卡片、
    给状态/来源/优先级配色配文案"就占了 ~150 行，而它们不读任何 ref、不发请求。
-   注意：normalizeJob / calculateApplicationPriority **没搬**——后者读 `city.value`
-   （优先级里藏着一个 UI 字段），搬它得先把它变成显式参数，那是语义改动，不混在拆页里做。 */
+   `normalizeJob` / `calculateApplicationPriority` 是 D41 才搬的：前者调后者，后者原本直接读视图上的
+   `city.value`（投递优先级里藏着一个 UI 字段）。搬的时候只把那一次读取改成调用方传进来的参数，
+   **加分规则一个字没动**——分数与搬之前逐条相同，变的只是"谁去读那个字段"可见了。 */
 import { compactDateTime } from '@/utils/format/date'
 
 export const pipelineStages = [
@@ -202,4 +203,79 @@ export function pipelineEntryToJob(entry) {
     priorityLabel: entry.priorityLabel,
     priorityReason: entry.note || entry.nextAction || '',
   }
+}
+
+/* 投递优先级。`city` 是调用方在取数那一刻传进来的 UI 城市筛选，命中它加 8 分——
+   这一条加分是否该存在是产品问题（见 docs/upgrade-plan.md §10），这里只负责让它可见。 */
+export function calculateApplicationPriority(job, city) {
+  let score = 45
+  const reasons = []
+
+  const salaryScore = salaryMid(job.salary)
+  if (salaryScore >= 35) {
+    score += 16
+    reasons.push('薪资带更强')
+  } else if (salaryScore >= 25) {
+    score += 10
+    reasons.push('薪资有竞争力')
+  }
+
+  if ((job.skillTags || []).length >= 6) {
+    score += 10
+    reasons.push('技能画像完整')
+  } else if ((job.skillTags || []).length >= 3) {
+    score += 6
+  }
+
+  if (job.location && city && job.location.includes(city)) {
+    score += 8
+    reasons.push('城市匹配')
+  }
+
+  if (job.local) {
+    score += 6
+    reasons.push('已落库可直接分析')
+  }
+
+  if (typeof job.matchScore === 'number' && job.matchScore > 0) {
+    score += Math.round(job.matchScore * 0.28)
+    reasons.push('推荐匹配度较高')
+  }
+
+  if (job.salaryMatch) score += 4
+  if (job.locationMatch) score += 4
+  if (job.experienceMatch) score += 4
+
+  const finalScore = Math.max(0, Math.min(100, score))
+  const label = finalScore >= 82 ? '优先投递' : finalScore >= 66 ? '值得投递' : '先观察'
+  return {
+    priorityScore: finalScore,
+    priorityLabel: label,
+    priorityReason: reasons.slice(0, 3).join(' / ') || '信息尚不完整，建议先观察',
+  }
+}
+
+/** 后端 JD（搜索 / 仓库 / 详情三种形状）归一成页面上的卡片。`city` 透传给优先级算式。 */
+export function normalizeJob(item, seed, city) {
+  const salary = item.salary || item.salary_range || '薪资面议'
+  const skillTags = uniqueList(item.skill_tags || item.skillTags || [])
+  const normalized = {
+    uid: `${seed}-${item.id || item.external_id || item.title || 'job'}`,
+    id: item.id || null,
+    title: item.title || item.job_title || '未知岗位',
+    company: item.company || '未知公司',
+    location: item.location || '',
+    salary,
+    experience: item.experience || item.experience_requirement || '',
+    education: item.education || item.education_requirement || '',
+    industry: item.industry || '',
+    skillTags,
+    summary: item.jd_summary || item.match_reason || '',
+    rawText: item.raw_text || '',
+    source: item.source || 'local',
+    sourceUrl: item.source_url || '',
+    local:
+      !!item._local_db || ['local', 'imported', 'api', 'manual', 'crawled'].includes(item.source),
+  }
+  return { ...normalized, ...calculateApplicationPriority(normalized, city) }
 }

@@ -143,7 +143,7 @@
               :key="item"
               type="button"
               class="preset-chip"
-              @click="usePresetKeyword(item)"
+              @click="searchWithKeyword(item)"
             >
               {{ item }}
             </button>
@@ -203,7 +203,7 @@
               :key="item"
               type="button"
               class="history-chip"
-              @click="reuseSearch(item)"
+              @click="searchWithKeyword(item)"
             >
               {{ item }}
             </button>
@@ -227,7 +227,7 @@
                 :key="item"
                 type="button"
                 class="history-chip"
-                @click="applyRewriteSuggestion(item)"
+                @click="searchWithKeyword(item)"
               >
                 {{ item }}
               </button>
@@ -963,11 +963,9 @@ import { getResume, getResumeList } from '@/api/resume'
 import { explainMatch } from '@/api/analysis'
 import { queryRewriteTest } from '@/api/knowledge'
 import {
-  getCities,
   getJobDetail,
   getJobList,
   getJobRecommendations,
-  searchExternalJobs,
   seedDemoJobs,
   startFullAnalysis,
 } from '@/api/jobs'
@@ -979,8 +977,11 @@ import AppLoadError from '@/components/ui/AppLoadError.vue'
 import JobCompareDialog from '@/features/jobs/components/JobCompareDialog.vue'
 import JobDetailDrawer from '@/features/jobs/components/JobDetailDrawer.vue'
 import { useJobPipeline } from '@/features/jobs/composables/useJobPipeline'
+import { useJobSearch } from '@/features/jobs/composables/useJobSearch'
 import { useJobShortlist } from '@/features/jobs/composables/useJobShortlist'
 import {
+  calculateApplicationPriority,
+  normalizeJob,
   pipelineEntryToJob,
   pipelineHistoryText,
   pipelineStageLabel,
@@ -997,10 +998,6 @@ const route = useRoute()
 const router = useRouter()
 
 const activeTab = ref('search')
-const keyword = ref('Python')
-const city = ref('')
-const source = ref('boss')
-const cities = ref([])
 const selectedResumeId = ref(null)
 const resumeList = ref([])
 const resumesError = ref('')
@@ -1008,15 +1005,6 @@ const selectedResumeDetail = ref(null)
 // 详情失败与列表失败要分开：`selectedResumeSummary` 只从详情算，读不到又不出声的话，
 // 它会让"改写搜索词"对一个已经选了简历的人说"先输入岗位关键词，或先选择一份简历"。
 const resumeDetailError = ref('')
-
-const searching = ref(false)
-const hasSearched = ref(false)
-const searchHint = ref('正在搜索最新岗位...')
-const searchError = ref('')
-const isDemo = ref(false)
-const resultMode = ref('')
-const savedCount = ref(0)
-const externalJobs = ref([])
 
 const localLoading = ref(false)
 const localJobs = ref([])
@@ -1028,7 +1016,6 @@ const localError = ref('')
 const latestLocalJobsCall = useLatestCall()
 const latestRecommendCall = useLatestCall()
 const latestResumeDetailCall = useLatestCall()
-const latestSearchCall = useLatestCall()
 const latestJobDetailCall = useLatestCall()
 
 const recommendLoading = ref(false)
@@ -1052,13 +1039,6 @@ const rewriteLoading = ref(false)
 const rewrittenKeywords = ref([])
 const rewriteMeta = ref('')
 
-const searchFilters = ref({
-  experience: '',
-  education: '',
-  skill: '',
-})
-const searchSort = ref('default')
-
 const warehouseFilters = ref({
   keyword: '',
   source: '',
@@ -1080,6 +1060,32 @@ const {
   clearShortlist,
   pushRecentSearch,
 } = useJobShortlist()
+
+const {
+  keyword,
+  city,
+  source,
+  cities,
+  searching,
+  hasSearched,
+  searchHint,
+  searchError,
+  isDemo,
+  resultMode,
+  savedCount,
+  externalJobs,
+  searchFilters,
+  searchSort,
+  filteredExternalJobs,
+  searchStateText,
+  sourceBannerTitle,
+  sourceBannerDesc,
+  sourceBannerClass,
+  loadCities,
+  runSearch,
+  searchWithKeyword,
+  resetSearchFilters,
+} = useJobSearch({ pushRecentSearch })
 
 const selectedResumeName = computed(() => {
   const resume = resumeList.value.find((item) => item.id === selectedResumeId.value)
@@ -1128,67 +1134,6 @@ const activeTabLabel = computed(
     })[activeTab.value] || '实时搜索'
 )
 
-const searchStateText = computed(() => {
-  if (searching.value) return '抓取中'
-  if (!hasSearched.value) return '未搜索'
-  if (resultMode.value === 'local_fallback') return '本地职位库'
-  if (resultMode.value === 'demo_fallback') return '演示数据'
-  return isDemo.value ? '演示数据' : '最新结果'
-})
-
-const sourceBannerTitle = computed(() => {
-  if (searching.value) return '正在获取岗位数据'
-  if (!hasSearched.value) return '优先展示真实岗位结果'
-  if (resultMode.value === 'local_fallback') return '当前展示本地职位库'
-  if (resultMode.value === 'demo_fallback' || isDemo.value) return '当前展示演示岗位数据'
-  return '当前展示实时搜索结果'
-})
-
-const sourceBannerDesc = computed(() => {
-  if (searching.value) return '系统会优先抓取外部岗位，失败时再回退到本地或演示数据。'
-  if (!hasSearched.value) return '点击“搜索最新岗位”后，系统会优先使用外部搜索结果。'
-  if (resultMode.value === 'local_fallback')
-    return '外部抓取未返回可用结果，已切换到本地职位库，适合继续做分析和筛选。'
-  if (resultMode.value === 'demo_fallback' || isDemo.value)
-    return '当前结果主要用于演示流程，建议补充真实搜索或导入岗位后再做判断。'
-  return '这些岗位来自当前搜索渠道，可直接加入流程、对比或带入分析。'
-})
-
-const sourceBannerClass = computed(() => {
-  if (resultMode.value === 'demo_fallback' || isDemo.value) return 'is-demo'
-  if (resultMode.value === 'local_fallback') return 'is-local'
-  if (searching.value) return 'is-loading'
-  return 'is-live'
-})
-
-const filteredExternalJobs = computed(() => {
-  const skillNeedle = searchFilters.value.skill.trim().toLowerCase()
-  const list = externalJobs.value.filter((job) => {
-    const exp = job.experience || ''
-    const edu = job.education || ''
-    const skillText = job.skillTags.join(' ').toLowerCase()
-    const expOk =
-      !searchFilters.value.experience ||
-      exp.includes(searchFilters.value.experience.replace('+', ''))
-    const eduOk = !searchFilters.value.education || edu.includes(searchFilters.value.education)
-    const skillOk =
-      !skillNeedle ||
-      skillText.includes(skillNeedle) ||
-      (job.summary || '').toLowerCase().includes(skillNeedle)
-    return expOk && eduOk && skillOk
-  })
-
-  const sorted = [...list]
-  if (searchSort.value === 'salary_desc') {
-    sorted.sort((a, b) => salaryMid(b.salary) - salaryMid(a.salary))
-  } else if (searchSort.value === 'salary_asc') {
-    sorted.sort((a, b) => salaryMid(a.salary) - salaryMid(b.salary))
-  } else if (searchSort.value === 'skill_desc') {
-    sorted.sort((a, b) => b.skillTags.length - a.skillTags.length)
-  }
-  return sorted
-})
-
 const filteredLocalJobs = computed(() => {
   const keywordNeedle = warehouseFilters.value.keyword.trim().toLowerCase()
   return localJobs.value.filter((job) => {
@@ -1230,7 +1175,7 @@ const normalizedRecommendations = computed(() =>
       experienceMatch: item.experience_match !== false,
       compareText: item.match_reason || '',
     }
-    const priority = calculateApplicationPriority(normalized)
+    const priority = calculateApplicationPriority(normalized, city.value)
     return { ...normalized, ...priority }
   })
 )
@@ -1348,22 +1293,6 @@ async function openRequestedJobDetailFromRoute() {
   )
 }
 
-async function loadCities() {
-  try {
-    const data = await getCities()
-    cities.value = data?.cities || []
-  } catch {
-    cities.value = [
-      { name: '北京', code: '101010100' },
-      { name: '上海', code: '101020100' },
-      { name: '深圳', code: '101280600' },
-      { name: '杭州', code: '101210100' },
-      { name: '广州', code: '101280100' },
-      { name: '全国', code: '' },
-    ]
-  }
-}
-
 async function loadResumes() {
   resumesError.value = ''
   try {
@@ -1408,7 +1337,9 @@ async function loadLocalJobs() {
   try {
     const data = await getJobList({ page: 1, page_size: 100 })
     if (!isCurrent()) return
-    localJobs.value = (data?.items || []).map((item, index) => normalizeJob(item, `local-${index}`))
+    localJobs.value = (data?.items || []).map((item, index) =>
+      normalizeJob(item, `local-${index}`, city.value)
+    )
   } catch (e) {
     if (!isCurrent()) return
     localJobs.value = []
@@ -1444,46 +1375,6 @@ async function loadRecommendations() {
     recommendError.value = e?.userMessage || e?.message || '暂时取不到推荐结果，请稍后重试'
   } finally {
     if (isCurrent()) recommendLoading.value = false
-  }
-}
-
-async function runSearch() {
-  if (!keyword.value.trim()) {
-    ElMessage.warning('请输入搜索关键词')
-    return
-  }
-  // 快速搜索标签和"刷新当前视图"在搜索期间照样可点（都没有 disabled），两次点击就是两个在途请求
-  const isCurrent = latestSearchCall()
-  searching.value = true
-  hasSearched.value = true
-  searchError.value = ''
-  isDemo.value = false
-  resultMode.value = ''
-  searchHint.value = `正在搜索 ${sourceText(source.value)} 的 ${keyword.value} 岗位...`
-
-  try {
-    const data = await searchExternalJobs({
-      keyword: keyword.value.trim(),
-      city: city.value,
-      source: source.value,
-      page: 1,
-    })
-    if (!isCurrent()) return
-    externalJobs.value = (data?.jobs || []).map((item, index) =>
-      normalizeJob(item, `search-${index}`)
-    )
-    savedCount.value = data?.saved_count || 0
-    searchError.value = data?.error || ''
-    isDemo.value = !!data?.is_demo
-    resultMode.value = data?.result_mode || 'external'
-    pushRecentSearch(keyword.value.trim())
-  } catch {
-    if (!isCurrent()) return
-    externalJobs.value = []
-    searchError.value = '搜索失败，请稍后重试'
-    resultMode.value = ''
-  } finally {
-    if (isCurrent()) searching.value = false
   }
 }
 
@@ -1531,11 +1422,6 @@ async function handleResumeChange() {
   await loadPipelineEntries()
 }
 
-function usePresetKeyword(value) {
-  keyword.value = value
-  runSearch()
-}
-
 async function generateRewriteSuggestions() {
   if (!keyword.value.trim() && !selectedResumeSummary.value) {
     ElMessage.warning('先输入岗位关键词，或先选择一份简历')
@@ -1565,49 +1451,6 @@ async function generateRewriteSuggestions() {
   } finally {
     rewriteLoading.value = false
   }
-}
-
-function applyRewriteSuggestion(value) {
-  keyword.value = value
-  runSearch()
-}
-
-function reuseSearch(value) {
-  keyword.value = value
-  runSearch()
-}
-
-function resetSearchFilters() {
-  searchFilters.value = {
-    experience: '',
-    education: '',
-    skill: '',
-  }
-  searchSort.value = 'default'
-}
-
-function normalizeJob(item, seed) {
-  const salary = item.salary || item.salary_range || '薪资面议'
-  const skillTags = uniqueList(item.skill_tags || item.skillTags || [])
-  const normalized = {
-    uid: `${seed}-${item.id || item.external_id || item.title || 'job'}`,
-    id: item.id || null,
-    title: item.title || item.job_title || '未知岗位',
-    company: item.company || '未知公司',
-    location: item.location || '',
-    salary,
-    experience: item.experience || item.experience_requirement || '',
-    education: item.education || item.education_requirement || '',
-    industry: item.industry || '',
-    skillTags,
-    summary: item.jd_summary || item.match_reason || '',
-    rawText: item.raw_text || '',
-    source: item.source || 'local',
-    sourceUrl: item.source_url || '',
-    local:
-      !!item._local_db || ['local', 'imported', 'api', 'manual', 'crawled'].includes(item.source),
-  }
-  return { ...normalized, ...calculateApplicationPriority(normalized) }
 }
 
 async function openJobDetail(job, origin) {
@@ -1647,7 +1490,8 @@ async function openJobDetail(job, origin) {
           experience_requirement: data?.parsed?.experience_requirement || job.experience,
           source: data?.source || job.source,
         },
-        `${origin}-detail`
+        `${origin}-detail`,
+        city.value
       ),
     }
   } catch {
@@ -1757,54 +1601,6 @@ function openShortlistedJob(job) {
 
 function goToSmartAnalysis() {
   router.push('/smart-analysis')
-}
-
-function calculateApplicationPriority(job) {
-  let score = 45
-  const reasons = []
-
-  const salaryScore = salaryMid(job.salary)
-  if (salaryScore >= 35) {
-    score += 16
-    reasons.push('薪资带更强')
-  } else if (salaryScore >= 25) {
-    score += 10
-    reasons.push('薪资有竞争力')
-  }
-
-  if ((job.skillTags || []).length >= 6) {
-    score += 10
-    reasons.push('技能画像完整')
-  } else if ((job.skillTags || []).length >= 3) {
-    score += 6
-  }
-
-  if (job.location && city.value && job.location.includes(city.value)) {
-    score += 8
-    reasons.push('城市匹配')
-  }
-
-  if (job.local) {
-    score += 6
-    reasons.push('已落库可直接分析')
-  }
-
-  if (typeof job.matchScore === 'number' && job.matchScore > 0) {
-    score += Math.round(job.matchScore * 0.28)
-    reasons.push('推荐匹配度较高')
-  }
-
-  if (job.salaryMatch) score += 4
-  if (job.locationMatch) score += 4
-  if (job.experienceMatch) score += 4
-
-  const finalScore = Math.max(0, Math.min(100, score))
-  const label = finalScore >= 82 ? '优先投递' : finalScore >= 66 ? '值得投递' : '先观察'
-  return {
-    priorityScore: finalScore,
-    priorityLabel: label,
-    priorityReason: reasons.slice(0, 3).join(' / ') || '信息尚不完整，建议先观察',
-  }
 }
 </script>
 
