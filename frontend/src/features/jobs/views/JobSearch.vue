@@ -959,7 +959,6 @@ import {
   RefreshRight,
   Search,
 } from '@element-plus/icons-vue'
-import { useAuthStore } from '@/stores/auth'
 import { getResume, getResumeList } from '@/api/resume'
 import { explainMatch } from '@/api/analysis'
 import { queryRewriteTest } from '@/api/knowledge'
@@ -980,6 +979,7 @@ import AppLoadError from '@/components/ui/AppLoadError.vue'
 import JobCompareDialog from '@/features/jobs/components/JobCompareDialog.vue'
 import JobDetailDrawer from '@/features/jobs/components/JobDetailDrawer.vue'
 import { useJobPipeline } from '@/features/jobs/composables/useJobPipeline'
+import { useJobShortlist } from '@/features/jobs/composables/useJobShortlist'
 import {
   pipelineEntryToJob,
   pipelineHistoryText,
@@ -995,7 +995,6 @@ import {
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
 
 const activeTab = ref('search')
 const keyword = ref('Python')
@@ -1073,10 +1072,14 @@ const recommendFilters = ref({
 
 const presetKeywords = ['Python 后端', '前端架构', '大模型应用', '算法工程师', '数据分析', 'DevOps']
 
-const marketStorageKey = (key) => `recruit.market.${key}.${authStore.user?.id || 'guest'}`
-
-const shortlist = ref(loadLocalArray(marketStorageKey('shortlist')))
-const recentSearches = ref(loadLocalArray(marketStorageKey('history')))
+const {
+  shortlist,
+  recentSearches,
+  toggleShortlist,
+  isShortlisted,
+  clearShortlist,
+  pushRecentSearch,
+} = useJobShortlist()
 
 const selectedResumeName = computed(() => {
   const resume = resumeList.value.find((item) => item.id === selectedResumeId.value)
@@ -1723,34 +1726,6 @@ function persistAnalysisContext(job) {
   )
 }
 
-function toggleShortlist(job) {
-  const existing = shortlist.value.findIndex(
-    (item) => item.uid === job.uid || (job.id && item.id === job.id)
-  )
-  if (existing >= 0) {
-    shortlist.value.splice(existing, 1)
-  } else {
-    shortlist.value.unshift({
-      uid: job.uid,
-      id: job.id || null,
-      title: job.title,
-      company: job.company,
-      location: job.location,
-      salary: job.salary,
-      summary: job.summary,
-      rawText: job.rawText,
-      source: job.source,
-      sourceUrl: job.sourceUrl,
-      skillTags: job.skillTags || [],
-      experience: job.experience || '',
-      education: job.education || '',
-      local: job.local,
-    })
-  }
-  shortlist.value = shortlist.value.slice(0, 20)
-  saveLocalArray(marketStorageKey('shortlist'), shortlist.value)
-}
-
 function toggleCompare(job) {
   const exists = compareSelection.value.includes(job.uid)
   if (exists) {
@@ -1776,27 +1751,12 @@ function openComparePanel() {
   compareVisible.value = true
 }
 
-function isShortlisted(job) {
-  return shortlist.value.some((item) => item.uid === job.uid || (job.id && item.id === job.id))
-}
-
 function openShortlistedJob(job) {
   openJobDetail(job, 'shortlist')
 }
 
-function clearShortlist() {
-  shortlist.value = []
-  saveLocalArray(marketStorageKey('shortlist'), shortlist.value)
-}
-
 function goToSmartAnalysis() {
   router.push('/smart-analysis')
-}
-
-function pushRecentSearch(value) {
-  const next = [value, ...recentSearches.value.filter((item) => item !== value)].slice(0, 8)
-  recentSearches.value = next
-  saveLocalArray(marketStorageKey('history'), next)
 }
 
 function calculateApplicationPriority(job) {
@@ -1845,20 +1805,6 @@ function calculateApplicationPriority(job) {
     priorityLabel: label,
     priorityReason: reasons.slice(0, 3).join(' / ') || '信息尚不完整，建议先观察',
   }
-}
-
-function loadLocalArray(key) {
-  try {
-    const raw = localStorage.getItem(key)
-    const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-function saveLocalArray(key, value) {
-  localStorage.setItem(key, JSON.stringify(value))
 }
 </script>
 
