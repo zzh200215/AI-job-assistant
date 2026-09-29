@@ -962,7 +962,7 @@ import {
 import { getResume, getResumeList } from '@/api/resume'
 import { explainMatch } from '@/api/analysis'
 import { queryRewriteTest } from '@/api/knowledge'
-import { getJobDetail, getJobList, seedDemoJobs, startFullAnalysis } from '@/api/jobs'
+import { getJobDetail, seedDemoJobs, startFullAnalysis } from '@/api/jobs'
 import { priorityTagType } from '@/utils/statusTone'
 import { compactDateTime } from '@/utils/format/date'
 import { rememberResume } from '@/utils/lastSelection'
@@ -974,6 +974,7 @@ import { useJobPipeline } from '@/features/jobs/composables/useJobPipeline'
 import { useJobRecommend } from '@/features/jobs/composables/useJobRecommend'
 import { useJobSearch } from '@/features/jobs/composables/useJobSearch'
 import { useJobShortlist } from '@/features/jobs/composables/useJobShortlist'
+import { useJobWarehouse } from '@/features/jobs/composables/useJobWarehouse'
 import {
   normalizeJob,
   pipelineEntryToJob,
@@ -999,14 +1000,8 @@ const selectedResumeDetail = ref(null)
 // 它会让"改写搜索词"对一个已经选了简历的人说"先输入岗位关键词，或先选择一份简历"。
 const resumeDetailError = ref('')
 
-const localLoading = ref(false)
-const localJobs = ref([])
-// 与"仓库为空"分开：GET 失败不弹提示，只清空列表会让候选人以为岗位库是空的
-const localError = ref('')
-// 每条链各一个令牌实例。`useLatestCall()` 的计数器是整个实例共享的，共用一个的话，切到「智能推荐」
-// 会把仍在途的岗位仓库响应一起判为过期，而 `finally` 里的解 loading 也带着同一个条件——
-// 结果是仓库数字永久停在 0 且转圈不停。
-const latestLocalJobsCall = useLatestCall()
+// 剩下的两条链各一把令牌：`useLatestCall()` 的计数器是整个实例共享的，共用会让两条链互相当场作废
+// 对方在途的响应（D28 量到的就是这条），仓库与推荐那两条已随各自的 composable 搬走。
 const latestResumeDetailCall = useLatestCall()
 const latestJobDetailCall = useLatestCall()
 
@@ -1025,12 +1020,6 @@ const detailRouteKey = ref('')
 const rewriteLoading = ref(false)
 const rewrittenKeywords = ref([])
 const rewriteMeta = ref('')
-
-const warehouseFilters = ref({
-  keyword: '',
-  source: '',
-  industry: '',
-})
 
 const presetKeywords = ['Python 后端', '前端架构', '大模型应用', '算法工程师', '数据分析', 'DevOps']
 
@@ -1078,6 +1067,9 @@ const {
   loadRecommendations,
 } = useJobRecommend({ selectedResumeId, city })
 
+const { localLoading, localJobs, localError, warehouseFilters, filteredLocalJobs, loadLocalJobs } =
+  useJobWarehouse({ city })
+
 const selectedResumeName = computed(() => {
   const resume = resumeList.value.find((item) => item.id === selectedResumeId.value)
   return resume?.file_name || resume?.name || ''
@@ -1124,19 +1116,6 @@ const activeTabLabel = computed(
       pipeline: '投递流程',
     })[activeTab.value] || '实时搜索'
 )
-
-const filteredLocalJobs = computed(() => {
-  const keywordNeedle = warehouseFilters.value.keyword.trim().toLowerCase()
-  return localJobs.value.filter((job) => {
-    const text = `${job.title} ${job.company} ${job.location} ${job.summary}`.toLowerCase()
-    const sourceOk = !warehouseFilters.value.source || job.source === warehouseFilters.value.source
-    const industryOk =
-      !warehouseFilters.value.industry ||
-      (job.industry || '').includes(warehouseFilters.value.industry)
-    const keywordOk = !keywordNeedle || text.includes(keywordNeedle)
-    return sourceOk && industryOk && keywordOk
-  })
-})
 
 const comparedJobs = computed(() => {
   const map = new Map(marketDataset.value.map((job) => [job.uid, job]))
@@ -1285,25 +1264,6 @@ async function loadResumeDetail(resumeId) {
     if (!isCurrent()) return
     selectedResumeDetail.value = null
     resumeDetailError.value = e?.userMessage || e?.message || '暂时读不到这份简历的详情'
-  }
-}
-
-async function loadLocalJobs() {
-  const isCurrent = latestLocalJobsCall()
-  localLoading.value = true
-  localError.value = ''
-  try {
-    const data = await getJobList({ page: 1, page_size: 100 })
-    if (!isCurrent()) return
-    localJobs.value = (data?.items || []).map((item, index) =>
-      normalizeJob(item, `local-${index}`, city.value)
-    )
-  } catch (e) {
-    if (!isCurrent()) return
-    localJobs.value = []
-    localError.value = e?.userMessage || e?.message || '本地岗位仓库加载失败，请稍后重试'
-  } finally {
-    if (isCurrent()) localLoading.value = false
   }
 }
 
