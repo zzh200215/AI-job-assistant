@@ -160,24 +160,50 @@ const BUDGET = {
   viewsBypassingApiLayer: 7,
 }
 
-function vueFiles(dir) {
+function vueFiles(dir, exts = ['.vue']) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) return vueFiles(full)
-    return entry.name.endsWith('.vue') ? [full] : []
+    if (entry.isDirectory()) return vueFiles(full, exts)
+    return exts.some((e) => entry.name.endsWith(e)) ? [full] : []
   })
 }
 
-const viewSources = [...vueFiles('src/features'), ...vueFiles('src/layouts')].map((full) => {
+/* 拆页的落点：§7 阶段 2 把视图的逻辑往 `src/features/<域>/{lib,components,composables}` 和
+   `src/composables/` 里搬。所有预算原先只数 .vue，于是"把一段债搬进 .js"既能躲过色值尺子，
+   又能让"还完债必须调小预算"那条把少掉的数字当成新基线——同一把尺子的第五种盲区，且这次是
+   我们自己即将造成的。把这两个根一起纳入扫描后实测：目前 .js 层的色值 / 静默 catch / 令牌 /
+   状态色表 / 日期格式化全部为 0，纳管不需要任何预算数字。
+   刻意不扫 src/utils、src/api 等：那里 scoreTone/statusTone 是色表的**法定归宿**、format/date 与
+   lastSelection 是被这些尺子指定出去的替代品、api/* 本来就该 import request.js——纳入会把解药当病计数。 */
+const toRel = (full) => full.split(path.sep).join('/')
+
+/* 拆页的落点：§7 阶段 2 把视图的逻辑往 `src/features/<域>/{lib,components,composables}` 和
+   `src/composables/` 里搬。所有预算原先只数 .vue，于是"把一段债搬进 .js"既能躲过色值尺子，
+   又能让"还完债必须调小预算"那条把少掉的数字当成新基线——同一把尺子的第五种盲区，且这次是我们
+   自己即将造成的。所以 .js 默认全扫，只列出**法定解药所在的根**：scoreTone/statusTone 是色表被
+   指定过去的归宿、format/date 与 lastSelection 是这几把尺子指定出去的替代品、api/* 本来就该
+   import request.js——把它们当病计数会把解药算成债。实测纳入后 .js 层的色值 / 静默 catch /
+   令牌 / 状态色表 / 日期格式化为 0，纳管不需要新增任何预算数字。 */
+const JS_OUT_OF_SCOPE_ROOTS = ['src/api', 'src/plugins', 'src/router', 'src/stores', 'src/utils']
+const isOutScope = (rel) => JS_OUT_OF_SCOPE_ROOTS.some((root) => rel.startsWith(`${root}/`))
+
+const viewSources = [
+  ...vueFiles('src/features'),
+  ...vueFiles('src/layouts'),
+  ...vueFiles('src', ['.js'])
+    .map(toRel)
+    .filter((rel) => !isOutScope(rel)),
+].map((full) => {
   const source = readFileSync(full, 'utf8')
   // The template block is everything before <script: a lazy `</template>` match would
   // stop at the first slot template (`<template #default>`), under-counting views.
   const scriptAt = source.search(/<script/)
+  if (scriptAt < 0) return { rel: toRel(full), style: '', script: source, template: '', source }
   return {
-    rel: full.split(path.sep).join('/'),
+    rel: toRel(full),
     style: (source.match(/<style[\s\S]*?<\/style>/g) || []).join('\n'),
     script: (source.match(/<script[\s\S]*?<\/script>/g) || []).join('\n'),
-    template: scriptAt < 0 ? source : source.slice(0, scriptAt),
+    template: source.slice(0, scriptAt),
     source,
   }
 })
@@ -770,6 +796,21 @@ describe('style debt ratchet', () => {
       missing,
       `这些 .vue 不在任何预算的扫描范围里：把它们纳入 viewSources，或在这里写明为什么不进预算：${missing.join(', ')}`
     ).toEqual(UNSCANNED)
+  })
+
+  /* 上一条只管 .vue。拆页搬出去的是 .js，所以"新根没人管"这条路要单独钉：
+     src 下任何 .js 默认被扫，除非它在 JS_OUT_OF_SCOPE_ROOTS 列出的法定解药根里。
+     新开一个放逻辑的根却没在这里出现，这条会红。 */
+  it('scans every .js outside the listed helper roots', () => {
+    const scanned = viewSources.map(({ rel }) => rel)
+    const unswept = vueFiles('src', ['.js'])
+      .map(toRel)
+      .filter((rel) => !scanned.includes(rel) && !isOutScope(rel))
+      .sort()
+    expect(
+      unswept,
+      `这些 .js 既没进预算扫描，也不在 JS_OUT_OF_SCOPE_ROOTS 里：${unswept.join(', ')}`
+    ).toEqual([])
   })
 
   it('does not let views bypass the api layer', () => {
