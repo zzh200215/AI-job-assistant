@@ -39,7 +39,6 @@ import { ElRate } from 'element-plus/es/components/rate/index.mjs'
 import { ElRow } from 'element-plus/es/components/row/index.mjs'
 import { ElOption, ElSelect } from 'element-plus/es/components/select/index.mjs'
 import { ElSlider } from 'element-plus/es/components/slider/index.mjs'
-import { ElStep, ElSteps } from 'element-plus/es/components/steps/index.mjs'
 import { ElSwitch } from 'element-plus/es/components/switch/index.mjs'
 import { ElTabPane, ElTabs } from 'element-plus/es/components/tabs/index.mjs'
 import { ElTable, ElTableColumn } from 'element-plus/es/components/table/index.mjs'
@@ -89,8 +88,6 @@ const components = [
   ElRow,
   ElSelect,
   ElSlider,
-  ElStep,
-  ElSteps,
   ElSwitch,
   ElTabPane,
   ElTable,
