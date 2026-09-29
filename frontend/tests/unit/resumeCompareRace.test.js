@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import ResumeCompare from '@/views/ResumeCompare.vue'
+import ResumeCompare from '@/features/resume/views/ResumeCompare.vue'
 import { installElement } from '@/plugins/element'
 
 /* 简历工作台这页有 3 个"响应落地直接写业务 ref、且用户能把它叠成两个在途"的函数：

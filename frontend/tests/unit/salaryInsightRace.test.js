@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import SalaryInsight from '@/views/SalaryInsight.vue'
+import SalaryInsight from '@/features/jobs/views/SalaryInsight.vue'
 import { installElement } from '@/plugins/element'
 
 /* 薪资洞察的「查询」按钮（`:26`）与两个输入框的 enter（`:17/:24`）都没有锁，而 doSearch 里是

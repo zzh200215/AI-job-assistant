@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import AgentAnalysis from '@/views/AgentAnalysis.vue'
+import AgentAnalysis from '@/features/analysis/views/AgentAnalysis.vue'
 import { installElement } from '@/plugins/element'
 
 /* 多智能体分析面板的 pollSteps 是一条自续的轮询链：从 URL 带 task_id 进来时启动一条，

@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import JobTargets from '@/views/JobTargets.vue'
+import JobTargets from '@/features/jobs/views/JobTargets.vue'
 import { installElement } from '@/plugins/element'
 
 /* 求职目标的「重新加载」(`:60`) 没有锁，新增/设为默认/删除三个动作的尾巴也各调一次 loadTargets，

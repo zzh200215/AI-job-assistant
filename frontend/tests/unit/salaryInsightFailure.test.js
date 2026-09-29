@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import SalaryInsight from '@/views/SalaryInsight.vue'
+import SalaryInsight from '@/features/jobs/views/SalaryInsight.vue'
 import { installElement } from '@/plugins/element'
 
 /* GET 失败请求层不弹提示（request.js 只对非 GET 通知）。这个页面原本的注释写着

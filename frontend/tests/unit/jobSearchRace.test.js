@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import JobSearch from '@/views/JobSearch.vue'
+import JobSearch from '@/features/jobs/views/JobSearch.vue'
 import { installElement } from '@/plugins/element'
 
 /* JobSearch 一页上有 8 个 `await` 后直接写 ref 的加载函数。这一份逐个跑「用户能不能在同一时刻

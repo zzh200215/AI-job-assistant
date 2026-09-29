@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import KnowledgeBase from '@/views/KnowledgeBase.vue'
+import KnowledgeBase from '@/features/knowledge/views/KnowledgeBase.vue'
 import { installElement } from '@/plugins/element'
 
 /* 知识库这一页的列表已经有令牌（D3 那次接的），这轮查的是它没管到的三处：

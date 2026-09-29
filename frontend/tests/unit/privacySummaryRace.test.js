@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import Privacy from '@/views/Privacy.vue'
+import Privacy from '@/features/legal/views/Privacy.vue'
 import { installElement } from '@/plugins/element'
 
 /* 隐私页的三个删除动作（删简历 / 删分析 / 删面试）都在自己那条尾巴上调 loadDataSummary，

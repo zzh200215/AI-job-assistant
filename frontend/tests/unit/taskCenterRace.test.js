@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import TaskCenter from '@/views/TaskCenter.vue'
+import TaskCenter from '@/features/shell/views/TaskCenter.vue'
 import { installElement } from '@/plugins/element'
 
 /* 任务中心每 10 秒轮询一次；loadTasks 在 await 之后直接写 tasks.value，所以

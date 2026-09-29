@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import PipelineKanban from '@/views/PipelineKanban.vue'
+import PipelineKanban from '@/features/pipeline/views/PipelineKanban.vue'
 import { installElement } from '@/plugins/element'
 
 /* 投递看板这一页的「刷新」按钮（`:28`）没有 loading 也没有 disabled，而 loadKanban 在

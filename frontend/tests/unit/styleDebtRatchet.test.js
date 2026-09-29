@@ -8,40 +8,40 @@ import { describe, expect, it } from 'vitest'
 // tells you the new value to write.
 const BUDGET = {
   hardcodedColorLiterals: {
-    'src/views/InterviewRoom.vue': 69,
-    'src/views/Home.vue': 71,
-    'src/views/JobSearch.vue': 46,
+    'src/features/interview/views/InterviewRoom.vue': 69,
+    'src/features/shell/views/Home.vue': 71,
+    'src/features/jobs/views/JobSearch.vue': 46,
     'src/layouts/DefaultLayout.vue': 34,
-    'src/views/Profile.vue': 31,
-    'src/views/CareerPlanning.vue': 27,
-    'src/views/SmartAnalysis.vue': 15,
-    'src/views/JobRecommend.vue': 20,
-    'src/views/Register.vue': 26,
-    'src/views/InterviewReport.vue': 22,
-    'src/views/ResumeCompare.vue': 19,
-    'src/views/Login.vue': 16,
-    'src/views/Interview.vue': 13,
-    'src/views/PipelineKanban.vue': 12,
-    'src/views/ResetPassword.vue': 12,
-    'src/views/InterviewSetup.vue': 11,
-    'src/views/RecommendationEval.vue': 11,
-    'src/views/ExplainMatch.vue': 9,
-    'src/views/NotFound.vue': 5,
-    'src/views/RecommendationConfig.vue': 5,
-    'src/views/Subscription.vue': 5,
-    'src/views/KnowledgeBase.vue': 4,
-    'src/views/WeeklyReport.vue': 4,
-    'src/views/ResumeUpload.vue': 3,
-    'src/views/TaskCenter.vue': 3,
-    'src/views/About.vue': 2,
-    'src/views/AgentAnalysis.vue': 2,
-    'src/views/EvalReport.vue': 2,
-    'src/views/MultiAgentAnalysis.vue': 2,
-    'src/views/OfferCompare.vue': 2,
-    'src/views/PromptTrace.vue': 2,
-    'src/views/SalaryInsight.vue': 2,
-    'src/views/History.vue': 1,
-    'src/views/JobTargets.vue': 1,
+    'src/features/shell/views/Profile.vue': 31,
+    'src/features/planning/views/CareerPlanning.vue': 27,
+    'src/features/analysis/views/SmartAnalysis.vue': 15,
+    'src/features/jobs/views/JobRecommend.vue': 20,
+    'src/features/auth/views/Register.vue': 26,
+    'src/features/interview/views/InterviewReport.vue': 22,
+    'src/features/resume/views/ResumeCompare.vue': 19,
+    'src/features/auth/views/Login.vue': 16,
+    'src/features/interview/views/Interview.vue': 13,
+    'src/features/pipeline/views/PipelineKanban.vue': 12,
+    'src/features/auth/views/ResetPassword.vue': 12,
+    'src/features/interview/views/InterviewSetup.vue': 11,
+    'src/features/eval/views/RecommendationEval.vue': 11,
+    'src/features/analysis/views/ExplainMatch.vue': 9,
+    'src/features/auth/views/NotFound.vue': 5,
+    'src/features/eval/views/RecommendationConfig.vue': 5,
+    'src/features/billing/views/Subscription.vue': 5,
+    'src/features/knowledge/views/KnowledgeBase.vue': 4,
+    'src/features/shell/views/WeeklyReport.vue': 4,
+    'src/features/resume/views/ResumeUpload.vue': 3,
+    'src/features/shell/views/TaskCenter.vue': 3,
+    'src/features/shell/views/About.vue': 2,
+    'src/features/analysis/views/AgentAnalysis.vue': 2,
+    'src/features/eval/views/EvalReport.vue': 2,
+    'src/features/analysis/views/MultiAgentAnalysis.vue': 2,
+    'src/features/jobs/views/OfferCompare.vue': 2,
+    'src/features/admin/views/PromptTrace.vue': 2,
+    'src/features/jobs/views/SalaryInsight.vue': 2,
+    'src/features/shell/views/History.vue': 1,
+    'src/features/jobs/views/JobTargets.vue': 1,
   },
   // 分数→颜色的挑选此前藏在 <script> 的字符串里，style 预算数不到它，于是六处实现
   // 各挑一套阈值与 hex。匹配分与面试分已全部交给 utils/scoreTone.js，此处清零：
@@ -65,9 +65,9 @@ const BUDGET = {
      - ExplainMatch 2 处：D16 查到这个视图**没有路由可达**（`explain-match` 是 redirect），
        改了没人看见，等 §7 阶段 3 决定删不删。 */
   templateColorLiterals: {
-    'src/views/Login.vue': 17,
+    'src/features/auth/views/Login.vue': 17,
     'src/layouts/DefaultLayout.vue': 1,
-    'src/views/ExplainMatch.vue': 2,
+    'src/features/analysis/views/ExplainMatch.vue': 2,
   },
   /* 手写的 `class="panel-header"` 标记数——AppPanel（components/ui/AppPanel.vue）的迁移台账。
      样式早就集中在 styles/panels.css（main.js 全局引入），重复的只是那四层 div，所以这条数的是
@@ -108,27 +108,27 @@ const BUDGET = {
      无法区分，想区分要看数据流（这个值最终有没有喂给 `:type`），不值得为一把尺子上 AST。
      所以这条预算是**上界**：数得多、漏不掉，只许往下走。 */
   statusTagEntries: {
-    'src/views/KnowledgeBase.vue': 13,
-    'src/views/SmartAnalysis.vue': 13,
-    'src/views/admin/Tenants.vue': 9,
-    'src/views/CareerPlanning.vue': 9,
-    'src/views/PipelineKanban.vue': 9,
-    'src/views/PromptTrace.vue': 7,
-    'src/views/AnalysisResult.vue': 5,
-    'src/views/ExplainMatch.vue': 4,
-    'src/views/JobTargets.vue': 4,
-    'src/views/OrganizationWorkspace.vue': 4,
-    'src/views/admin/Orders.vue': 3,
-    'src/views/admin/Overview.vue': 3,
-    'src/views/Privacy.vue': 3,
-    'src/views/ResumeCompare.vue': 3,
-    'src/views/History.vue': 2,
-    'src/views/InterviewRoom.vue': 2,
-    'src/views/ResumeUpload.vue': 2,
-    'src/views/Interview.vue': 1,
-    'src/views/Profile.vue': 1,
-    'src/views/Subscription.vue': 1,
-    'src/views/TaskCenter.vue': 1,
+    'src/features/knowledge/views/KnowledgeBase.vue': 13,
+    'src/features/analysis/views/SmartAnalysis.vue': 13,
+    'src/features/admin/views/Tenants.vue': 9,
+    'src/features/planning/views/CareerPlanning.vue': 9,
+    'src/features/pipeline/views/PipelineKanban.vue': 9,
+    'src/features/admin/views/PromptTrace.vue': 7,
+    'src/features/analysis/views/AnalysisResult.vue': 5,
+    'src/features/analysis/views/ExplainMatch.vue': 4,
+    'src/features/jobs/views/JobTargets.vue': 4,
+    'src/features/billing/views/OrganizationWorkspace.vue': 4,
+    'src/features/admin/views/Orders.vue': 3,
+    'src/features/admin/views/Overview.vue': 3,
+    'src/features/legal/views/Privacy.vue': 3,
+    'src/features/resume/views/ResumeCompare.vue': 3,
+    'src/features/shell/views/History.vue': 2,
+    'src/features/interview/views/InterviewRoom.vue': 2,
+    'src/features/resume/views/ResumeUpload.vue': 2,
+    'src/features/interview/views/Interview.vue': 1,
+    'src/features/shell/views/Profile.vue': 1,
+    'src/features/billing/views/Subscription.vue': 1,
+    'src/features/shell/views/TaskCenter.vue': 1,
   },
   /* 失败被清成空态的存量（见 silentCatchCounts）。D5 把候选人侧 8 处接到了
      components/ui/AppLoadError；剩下的每一条都是明知故留，理由写在行内：
@@ -143,10 +143,10 @@ const BUDGET = {
        "失败演成没有数据"，只是解读块不出来时要用户自己再点一次"投递解读"。判据按形状数、不看
        动词，所以它留在账上；D15 把窗口收到函数作用域后新暴露的三处里，两处 GET 已经修掉了。 */
   silentEmptyCatches: {
-    'src/views/admin/Overview.vue': 2,
-    'src/views/admin/Tenants.vue': 1,
-    'src/views/JobSearch.vue': 1,
-    'src/views/ResumeUpload.vue': 1,
+    'src/features/admin/views/Overview.vue': 2,
+    'src/features/admin/views/Tenants.vue': 1,
+    'src/features/jobs/views/JobSearch.vue': 1,
+    'src/features/resume/views/ResumeUpload.vue': 1,
   },
   themeCompatWildcards: 27,
   themeImportantOverrides: 56,
@@ -162,7 +162,7 @@ function vueFiles(dir) {
   })
 }
 
-const viewSources = [...vueFiles('src/views'), ...vueFiles('src/layouts')].map((full) => {
+const viewSources = [...vueFiles('src/features'), ...vueFiles('src/layouts')].map((full) => {
   const source = readFileSync(full, 'utf8')
   // The template block is everything before <script: a lazy `</template>` match would
   // stop at the first slot template (`<template #default>`), under-counting views.
@@ -582,11 +582,11 @@ describe('style debt ratchet', () => {
     // 这条是 AppPanel 的真正约束：视图自己的 scoped `.panel-header` 规则匹配不到搬进子组件的节点，
     // 所以这些文件必须先解决覆盖才能迁移。清单只准缩短，且必须与实际一致。
     const LOCAL_OVERRIDE_FILES = [
-      'src/views/JobSearch.vue',
-      'src/views/KnowledgeBase.vue',
-      'src/views/OrganizationWorkspace.vue',
-      'src/views/Privacy.vue',
-      'src/views/Register.vue',
+      'src/features/jobs/views/JobSearch.vue',
+      'src/features/knowledge/views/KnowledgeBase.vue',
+      'src/features/billing/views/OrganizationWorkspace.vue',
+      'src/features/legal/views/Privacy.vue',
+      'src/features/auth/views/Register.vue',
     ]
     const overriding = viewSources
       // 先剥掉 CSS 注释：一条"这条规则已搬走"的说明不该被当成还在覆盖（与后端乱码守卫
@@ -715,6 +715,27 @@ describe('style debt ratchet', () => {
     expect(n).toBeLessThanOrEqual(BUDGET.pageShellRedeclarations)
   })
 
+  /* 上面每一条预算都只扫 src/features 与 src/layouts。§7 阶段 2 这轮已经把视图按 feature 搬进 src/features/，
+     搬完忘了改这两个根的话，预算不是报错而是安静地少测一批文件——"还完债必须把预算调小"那条
+     还会把少掉的数字固化成新基线。这条把"根之外还有哪些 .vue"钉死：多出一个不进预算的 .vue，
+     必须先在这里说清它为什么不进。 */
+  it('scans every .vue under src except the listed shell and ui components', () => {
+    const UNSCANNED = [
+      'src/App.vue',
+      'src/components/ui/AppLoadError.vue',
+      'src/components/ui/AppPanel.vue',
+    ]
+    const scanned = viewSources.map(({ rel }) => rel)
+    const missing = vueFiles('src')
+      .map((full) => full.split(path.sep).join('/'))
+      .filter((rel) => !scanned.includes(rel))
+      .sort()
+    expect(
+      missing,
+      `这些 .vue 不在任何预算的扫描范围里：把它们纳入 viewSources，或在这里写明为什么不进预算：${missing.join(', ')}`
+    ).toEqual(UNSCANNED)
+  })
+
   it('does not let views bypass the api layer', () => {
     const offenders = viewSources
       .filter(({ source }) => /from '@\/api\/request'/.test(source))
@@ -739,12 +760,12 @@ describe('style debt ratchet', () => {
     { prefix: 'score-fill', css: themeCss, where: 'src/styles/main.css' },
     {
       prefix: 'score-chip',
-      css: styleOf('src/views/InterviewRoom.vue'),
+      css: styleOf('src/features/interview/views/InterviewRoom.vue'),
       where: 'InterviewRoom.vue',
     },
     {
       prefix: 'score-level',
-      css: styleOf('src/views/PipelineKanban.vue'),
+      css: styleOf('src/features/pipeline/views/PipelineKanban.vue'),
       where: 'PipelineKanban.vue',
     },
   ]

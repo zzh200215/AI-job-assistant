@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import RecommendationConfig from '@/views/RecommendationConfig.vue'
+import RecommendationConfig from '@/features/eval/views/RecommendationConfig.vue'
 import { installElement } from '@/plugins/element'
 
 /* 这一页的「保存配置」与「恢复默认」各自锁自己的 loading 位，于是另一条在途时照样能点；

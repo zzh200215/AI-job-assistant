@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import Interview from '@/views/Interview.vue'
+import Interview from '@/features/interview/views/Interview.vue'
 import { installElement } from '@/plugins/element'
 
 /* 「换一题」按钮（`:62`）既没有 loading 也没有 disabled，而 refreshDaily 是 `await getQuestionBank`

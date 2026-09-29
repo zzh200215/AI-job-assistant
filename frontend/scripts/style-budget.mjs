@@ -9,7 +9,7 @@ function walk(dir) {
   })
 }
 
-const files = [...walk('src/views'), ...walk('src/layouts')]
+const files = [...walk('src/features'), ...walk('src/layouts')]
 
 /* Colour literals hide in three places, and tests/unit/styleDebtRatchet.test.js budgets
    each one separately. Print all three so regenerating a quota cannot quietly drop the

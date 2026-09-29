@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import KnowledgeBase from '@/views/KnowledgeBase.vue'
+import KnowledgeBase from '@/features/knowledge/views/KnowledgeBase.vue'
 import { installElement } from '@/plugins/element'
 
 /* 知识库列表的筛选是 watch 触发的：改类型、再改状态，两次请求可以同时在飞；

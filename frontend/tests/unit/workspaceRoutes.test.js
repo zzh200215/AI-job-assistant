@@ -23,7 +23,7 @@ async function renderWorkspace(path) {
   return wrapper
 }
 
-// Routes picked because they own the largest scoped-style blocks in src/views,
+// Routes picked because they own the largest scoped-style blocks in src/features,
 // i.e. the ones the global theme compatibility layer currently depends on.
 const WORKSPACE_ROUTES = [
   ['/home', '首页'],

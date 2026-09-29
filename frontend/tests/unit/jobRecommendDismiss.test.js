@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import JobRecommend from '@/views/JobRecommend.vue'
+import JobRecommend from '@/features/jobs/views/JobRecommend.vue'
 import { installElement } from '@/plugins/element'
 
 const api = vi.hoisted(() => ({

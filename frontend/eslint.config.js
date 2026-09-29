@@ -67,15 +67,15 @@ export default [
     // auth headers and error toasts stay in one place. The files below still
     // reach for the raw instance; removing one from this list is a cleanup.
     name: 'app/views-use-api-layer',
-    files: ['src/views/**/*.vue', 'src/layouts/**/*.vue'],
+    files: ['src/features/**/*.vue', 'src/layouts/**/*.vue'],
     ignores: [
-      'src/views/admin/Orders.vue',
-      'src/views/admin/Overview.vue',
-      'src/views/admin/Users.vue',
-      'src/views/Privacy.vue',
-      'src/views/Profile.vue',
-      'src/views/Subscription.vue',
-      'src/views/TaskCenter.vue',
+      'src/features/admin/views/Orders.vue',
+      'src/features/admin/views/Overview.vue',
+      'src/features/admin/views/Users.vue',
+      'src/features/legal/views/Privacy.vue',
+      'src/features/shell/views/Profile.vue',
+      'src/features/billing/views/Subscription.vue',
+      'src/features/shell/views/TaskCenter.vue',
     ],
     rules: {
       'no-restricted-imports': [

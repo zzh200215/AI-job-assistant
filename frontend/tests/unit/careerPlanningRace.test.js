@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import CareerPlanning from '@/views/CareerPlanning.vue'
+import CareerPlanning from '@/features/planning/views/CareerPlanning.vue'
 import { installElement } from '@/plugins/element'
 
 /* 换简历时 `watch(selectedResumeId)` 会重发两个请求：/career-path/recommend（职业方向，按简历算）

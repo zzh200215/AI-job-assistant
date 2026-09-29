@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import EvalReport from '@/views/EvalReport.vue'
+import EvalReport from '@/features/eval/views/EvalReport.vue'
 import { installElement } from '@/plugins/element'
 
 /* 评测报告页的报告类型下拉（`:13`）绑的是 `@change="reloadAll"`，那个 select 没有任何锁；

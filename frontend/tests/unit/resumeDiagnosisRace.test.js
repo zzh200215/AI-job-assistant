@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import ResumeUpload from '@/views/ResumeUpload.vue'
+import ResumeUpload from '@/features/resume/views/ResumeUpload.vue'
 import { installElement } from '@/plugins/element'
 
 /* 简历列表页的「AI诊断」是行下拉里的一项，点开弹窗后 `await diagnoseResume(r.id)` 直接写

@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import JobRecommend from '@/views/JobRecommend.vue'
+import JobRecommend from '@/features/jobs/views/JobRecommend.vue'
 import { installElement } from '@/plugins/element'
 
 /* `loadFeedbackStats` 一次 `await` 之后直接写 `feedbackStats`，而它是**每次点喜欢/不喜欢之后**

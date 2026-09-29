@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import Home from '@/views/Home.vue'
+import Home from '@/features/shell/views/Home.vue'
 import { installElement } from '@/plugins/element'
 
 /* 工作台有三处「重新加载」（概览 `:50`、今日任务 `:110`、下一步 `:151`），都调同一个 loadDashboard，

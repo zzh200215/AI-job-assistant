@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import JobSearch from '@/views/JobSearch.vue'
+import JobSearch from '@/features/jobs/views/JobSearch.vue'
 import { installElement } from '@/plugins/element'
 
 /* `request.js` 对 GET 失败默认什么都不弹（`notifyError !== false && method !== 'get'`，

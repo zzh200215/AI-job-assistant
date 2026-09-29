@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
-import JobRecommend from '@/views/JobRecommend.vue'
+import JobRecommend from '@/features/jobs/views/JobRecommend.vue'
 import { installElement } from '@/plugins/element'
 
 /* request.js 对 GET 失败默认不弹提示（method !== 'get' 才 notify，见 request.js:42,56），

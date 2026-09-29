@@ -157,7 +157,7 @@ const BATCH = {
   RecommendationEval: 0,
 }
 const WRITE = process.argv.includes('--write')
-const VIEWS = fileURLToPath(new URL('../src/views/', import.meta.url))
+const VIEWS = fileURLToPath(new URL('../src/features/', import.meta.url))
 if (process.argv.includes('--selftest')) selftest()
 
 /** 返回该 panel-header 的迁移方案，或 null（不合格）。 */
