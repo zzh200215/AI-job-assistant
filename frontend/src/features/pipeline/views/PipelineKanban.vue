@@ -205,7 +205,11 @@
             >
               <div class="card-top">
                 <strong class="card-title">{{ card.title || card.company || '未命名岗位' }}</strong>
-                <el-dropdown trigger="click" @command="(cmd) => handleCardCmd(cmd, card)">
+                <el-dropdown
+                  trigger="click"
+                  :disabled="writeBusy"
+                  @command="(cmd) => handleCardCmd(cmd, card)"
+                >
                   <el-icon class="card-more"><MoreFilled /></el-icon>
                   <template #dropdown>
                     <el-dropdown-menu>
@@ -280,9 +284,26 @@
         <span class="batch-info"
           >已选 <strong>{{ selectedCards.size }}</strong> 项</span
         >
-        <el-button size="small" @click="batchMove('interview')">批量移至面试</el-button>
-        <el-button size="small" @click="batchMove('offer')">批量移至Offer</el-button>
-        <el-button size="small" @click="batchMove('rejected')" style="color: var(--app-danger)"
+        <el-button
+          size="small"
+          :loading="writeBusy"
+          :disabled="writeBusy"
+          @click="batchMove('interview')"
+          >批量移至面试</el-button
+        >
+        <el-button
+          size="small"
+          :loading="writeBusy"
+          :disabled="writeBusy"
+          @click="batchMove('offer')"
+          >批量移至Offer</el-button
+        >
+        <el-button
+          size="small"
+          :loading="writeBusy"
+          :disabled="writeBusy"
+          style="color: var(--app-danger)"
+          @click="batchMove('rejected')"
           >批量标记拒绝</el-button
         >
         <el-button size="small" text @click="clearSelection">取消选择</el-button>
@@ -358,7 +379,11 @@
               @click="router.push('/smart-analysis?jd_id=' + (row.jd_id || ''))"
               >AI</el-button
             >
-            <el-dropdown trigger="click" @command="(cmd) => handleListCmd(cmd, row)">
+            <el-dropdown
+              trigger="click"
+              :disabled="writeBusy"
+              @command="(cmd) => handleListCmd(cmd, row)"
+            >
               <el-button text size="small">
                 <el-icon><MoreFilled /></el-icon>
               </el-button>
@@ -590,6 +615,23 @@ const dragCard = ref(null)
 const viewMode = ref('kanban')
 const showStats = ref(false)
 const selectedCards = ref(new Set())
+
+/* 这一页对投递记录的写，一次只跑一趟。起因是批量移动：三个按钮此前谁都不吃守卫，可以连点、
+   也可以点了「面试」再点「拒绝」——两个循环交叉发请求，卡片最终落在哪一列取决于返回顺序，
+   而屏幕上那句 "成功将 N 项移至「面试」" 讲的是其中一趟的局部结果，它可能是假的。
+   顺着这条判据把整页的写路径过了一遍，实测（探针见 D59）撞上来的不止批量：
+   - 拖拽：看板列在列表模式下**也在 DOM 里**（`.kanban-board` 那层 `v-else` 只挡 loading/失败，
+     不挡 `viewMode`），所以批量在飞时仍能把卡片拖出去——探针当场打出第二条 [1, 'withdrawn']；
+   - 卡片下拉的「标记拒绝 / 放弃 / 删除」：批量在飞时发的是同一个 id 的第二发
+     [1, 'rejected']，而批量的提示照样说"成功将 2/2 项移至「面试」"。
+   守卫按各条路自己的形状给：有按钮的吃 `:loading` + `:disabled`（批量按钮、两个下拉的
+   `:disabled`），拖拽没有按钮可禁，只能函数内提前返回。删除那趟的标记举在确认框**之后**：
+   确认框开着不该把整页冻住。
+   弹窗里那两条写（新增、反馈保存）各自已有 `:loading`，且 `el-dialog` 默认 `modal` ——
+   弹窗开着时批量栏在遮罩背后点不到，所以这次没有把它们串进同一个标记。
+   函数级的提前返回只留在拖拽那一条：批量按钮上的同类提前返回实测证不了承重
+   （变异掉它六条用例照旧全绿），已删。 */
+const writeBusy = ref(false)
 const resumeVersions = ref([])
 const versionError = ref('')
 const versionPerformance = ref([])
@@ -687,7 +729,13 @@ async function onDrop(e, targetStage) {
     return
   }
 
+  if (writeBusy.value) {
+    dragCard.value = null
+    return
+  }
+
   const oldStage = card.stage
+  writeBusy.value = true
   try {
     await movePipelineStage(card.id, targetStage)
     // 乐观更新
@@ -702,6 +750,8 @@ async function onDrop(e, targetStage) {
     ElMessage.success(`已移至「${columns.find((c) => c.key === targetStage)?.label}」`)
   } catch {
     loadKanban()
+  } finally {
+    writeBusy.value = false
   }
   dragCard.value = null
 }
@@ -761,12 +811,15 @@ function goInterviewFor(card) {
 }
 
 async function markStage(card, stage, doneMessage) {
+  writeBusy.value = true
   try {
     await movePipelineStage(card.id, stage)
     ElMessage.success(doneMessage)
     loadKanban()
   } catch {
     // 失败消息由统一请求层提示；看板保持原样
+  } finally {
+    writeBusy.value = false
   }
 }
 
@@ -776,12 +829,15 @@ async function removeCard(card) {
   } catch {
     return // 取消删除不是错误
   }
+  writeBusy.value = true
   try {
     await deleteJobPipelineEntry(card.id)
     ElMessage.success('已删除')
     loadKanban()
   } catch {
     // 失败消息由统一请求层提示
+  } finally {
+    writeBusy.value = false
   }
 }
 
@@ -810,6 +866,9 @@ async function saveFeedback() {
     await updateJobPipelineEntry(detailCard.value.id, feedbackForm.value)
     ElMessage.success('反馈已保存')
     await loadKanban()
+  } catch {
+    // 失败消息由统一请求层提示。这里没有 catch 的话，保存失败的 reject 会一路冒出
+    // `@click` 变成未处理的 Promise 拒绝——控制台报错、界面上什么都没说。
   } finally {
     feedbackSaving.value = false
   }
@@ -830,20 +889,25 @@ function clearSelection() {
 async function batchMove(targetStage) {
   const ids = [...selectedCards.value]
   if (!ids.length) return
+  writeBusy.value = true
   let success = 0
-  for (const id of ids) {
-    try {
-      await movePipelineStage(id, targetStage)
-      success++
-    } catch {
-      // 继续处理剩余投递，并在结束后汇总结果。
+  try {
+    for (const id of ids) {
+      try {
+        await movePipelineStage(id, targetStage)
+        success++
+      } catch {
+        // 继续处理剩余投递，并在结束后汇总结果。
+      }
     }
+    const message = `成功将 ${success}/${ids.length} 项移至「${stageLabel(targetStage)}」`
+    if (success === ids.length) ElMessage.success(message)
+    else ElMessage.warning(message)
+    selectedCards.value = new Set()
+    loadKanban()
+  } finally {
+    writeBusy.value = false
   }
-  const message = `成功将 ${success}/${ids.length} 项移至「${stageLabel(targetStage)}」`
-  if (success === ids.length) ElMessage.success(message)
-  else ElMessage.warning(message)
-  selectedCards.value = new Set()
-  loadKanban()
 }
 
 onMounted(() => {
