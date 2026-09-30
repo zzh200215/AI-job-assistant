@@ -1948,7 +1948,35 @@ A2 的最后一页。动手前实测：`grep InterviewRoom tests/` 只命中棘�
 
 **代价，实测**：视图 1462 → **1345**（脚本 418 → 301，模板 288 与样式 754 不动），lib 163 行，**两文件合计比原单文件多 46 行**（D39 那条老规矩）；`InterviewRoom` 的 js 分块 14.83 → **15.43 kB**（gzip 6.78 → 6.98）、css **12.75 kB 不变**（对照 HEAD 重建量得改前值）。新增 2 个测试文件 491 行 / 30 条用例；门禁 **309 → 339 passed / 57 → 59 files**，两轮全量 33.84 s / 35.46 s，eslint 0 error（仓库 warning 仍是那 1 条），prettier clean，build ok，改动文件 CRLF **0**。
 
-**这一页还剩**：脚本里那 301 行的主要块是**语音识别那条链**（`setupSpeechRecognition` / `toggle` / `stop` / `appendRecognizedText` / `focusAnswerInput` / `clearAnswerDraft`，约 110 行，是这页最后一块成型的逻辑）；模板 288 行与样式 754 行的面板切分按 D44/D45 的复制政策另算。**读链不需要令牌**：这页只有一个 `onMounted` 里的 `getInterviewDetail`，没有用户可连点的第二个入口。至此 A2 那五个巨页全部开过刀。
+**这一页还剩**：脚本里那 301 行的主要块是**语音识别那条链**（`setupSpeechRecognition` / `toggle` / `stop` / `appendRecognizedText` / `focusAnswerInput` / `clearAnswerDraft`，约 110 行，是这页最后一块成型的逻辑）——**D61 已做掉，脚本 301 → 176**；模板 288 行与样式 754 行的面板切分按 D44/D45 的复制政策另算。**读链不需要令牌**：这页只有一个 `onMounted` 里的 `getInterviewDetail`，没有用户可连点的第二个入口。至此 A2 那五个巨页全部开过刀。
+
+
+#### 已交付：D61 语音那条链进 composable——jsdom 里没有 SpeechRecognition，这次自己造了一个
+
+D60 记下"这页还剩语音那条链"，这一刀做掉。**这条链此前在测试里根本跑不到**：jsdom 没有 `SpeechRecognition`/`webkitSpeechRecognition`，`speechSupported` 恒为 false，那四个回调一次也没被调用过——听写开始/停止、识别结果落进草稿、五种 error 的措辞，全部只能读源码相信。
+
+**做法**：6 个 ref + 8 个函数搬进 `features/interview/composables/useAnswerDraft.js`（169 行），连"状态转走就停听写""150ms 后把光标放回回答框""离开页面收尾"那三段副作用一起走。链的入参只有一个 `getStatus`——它需要知道面试还在不在进行中，但"进行中"是 store 的知识，不该由链自己去 import store（同 D56 那条口径：跨链知识走注入）。页面里 `answerInputRef: inputRef` 那一下改名不能动：模板上的 `ref="inputRef"` 靠它绑定。
+
+**测试那边补的是洞，不是生产代码的兜底**：假构造器（`FakeRecognition`）记着 `starts`/`stops` 与四个回调，`start()` 同步触发 `onstart`，于是"点了到底有没有开始"变成可断言的事。另外 `Element.prototype.scrollIntoView` 在本文件顶部补了一次——链里每次聚焦都会调它，不补就攒一堆未处理拒绝（D60 已经记过同一个洞）。
+
+**八次变异**：
+
+| 变异 | 红了谁 |
+|---|---|
+| N1 追加识别结果时不再判断"已有正文就换行" | 1 条：final 进草稿那条 |
+| N2 `isFinal` 的判断取反 | 1 条：同上（interim 与 final 走错出口） |
+| N3 把 `no-speech` 的文案换成兜底那句 | 1 条：五种 error 各说各的话 |
+| N4 状态 watch 只认 `'error'` | 1 条：面试状态一转走就停听写 |
+| N5 去掉链自己的 `onUnmounted` 收尾 | 1 条：离开房间时链自己收尾 |
+| N6 页面忘了调 `setupSpeechRecognition()` | **9 条一起红** |
+| N7 把 `answerInputRef: inputRef` 的改名去掉 | 1 条：识别开始时回答框拿到焦点 |
+| N8 去掉 `onstart` 里的 `placeCursorAtEnd` | **全绿** |
+
+三条读法：**N6 那九条红**说明链搬走之后新出现的大口子只有一个——忘接线，而这种错只有页面级用例看得见；**N7 只红一条**，说明模板 ref 的绑定是承重的、并且被独立钉住了；**N8 全绿**则记成测不出来的一半：jsdom 里 `focus()` 本身就把插入点放到末尾，先 `setSelectionRange(0, 0)` 挪开也一样（浏览器里这两件事不同），所以这一支不宣称是守卫，理由写在用例注释里。
+
+**代价，实测**：视图 1345 → **1220**（脚本 301 → **176**，模板 288 与样式 754 不动），composable 169 行，**两文件合计比原单文件多 44 行**；`InterviewRoom` 的 js 分块 15.43 → **15.87 kB**（gzip 6.98 → 7.17）、css **12.75 kB 不变**。新增 270 行 / 10 条用例；门禁 **339 → 349 passed / 59 → 60 files**，两轮全量 28.59 s / 31.35 s，eslint 0 error（warning 仍是既有的那 1 条），prettier clean，build ok，改动文件 CRLF **0**。
+
+**这页还剩**：脚本只剩 176 行的页面编排（`handleSend` / `handleSkip` / `handleEnd` / `goBack` 那几下 + 两个 watch + `onMounted`），要出去得先拍面板归属；剩下的体积在模板 288 行与样式 754 行的面板切分。**A2 全场还剩**：`PipelineKanban` 模板 551 / 样式 676，`SmartAnalysis` 的 5 个小面板与样式块 1092 行。
 
 
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
