@@ -252,9 +252,223 @@ def test_guard_passes_the_correct_forms(src, label):
 
 
 def test_guard_blind_spots_are_pinned():
-    """两处看不见：传递阻塞与内联闭包。写成测试而不是注释，是为了让限制随代码一起被读到。"""
+    """两处看不见：传递阻塞与内联闭包。写成测试而不是注释，是为了让限制随代码一起被读到。
+
+    改注（A5）：下面第 1 条"传递阻塞"已由 `test_indirect_blocking_matches_the_allowlist` 接管，
+    这把尺子仍然看不见它——保留这条断言是为了说清**每把尺子各自的边界**，而不是说全仓没人管。"""
     assert violations_in_source(transitive_src, "t.py") == []
     assert violations_in_source(closure_src, "c.py") == []
+
+
+# ---- A5：把上面那条"看不见 #1（传递阻塞）"换成一把真的能咬人的尺子 ----
+"""E25 那把尺子只认调用点写了什么名字，所以 `analyze_resume(db, ...)` 这种"路由里调仓内的 sync
+函数、出网发生在那个函数体内"的形状按定义看不见。A5 做的是**传递闭包**：从每条 async 路由的调用点
+出发，顺着仓内函数定义往下走，直到命中阻塞原语。
+
+口径（有意取**上界**，宁可多报不少报）：
+  * 原语集合 = 上面那两张表 + 几类同步重活（PDF 渲染、向量库读写、httpx）；
+  * 只解析 `import a.b [as c]` 与 `from a.b import c [as d]`；动态 getattr 与字符串路由看不见；
+  * `run_in_threadpool(slow, ...):` 里的 `slow` 出现在**参数**位置而不是 `Call.func`，所以
+    E15/E25 修过的那 6 个文件（job_search / knowledge / organization / resume / system / tenant）
+    在这里一条都不出现——这是口径正确，不是漏扫，由
+    `test_indirect_scan_passes_the_threadpool_form` 钉住；
+  * 函数按**限定名**（模块.名）索引，不按短名合并：按短名会把某个模块里阻塞的 `_run` 算到所有
+    同名函数头上。这一轮两种口径都跑过，结果同为 23 条、差集为空。
+
+清单只能往下走：新增一条就要先把那条路由挪进线程池，删一条要同时把名字从表里去掉。"""
+
+TRANSITIVE_PRIMITIVES = set(BLOCKING_DOTTED) | {
+    "httpx.get",
+    "httpx.post",
+    "httpx.Client",
+    "requests.Session",
+}
+# 不加"裸名 add/query"这一类：`seen.add(x)` 与 `collection.add(...)` 在 AST 上只差一个点号，
+# 按裸名匹配会把集合操作判成向量库写入。真要管 Chroma，就按 `xxx.add(...)` 的点号名逐个列。
+
+
+class _Fn:
+    __slots__ = ("qname", "module", "calls", "blocks", "is_route")
+
+    def __init__(self, qname: str):
+        self.qname = qname
+        self.module = qname.rsplit(".", 1)[0]
+        self.calls: list[str] = []
+        self.blocks = False
+        self.is_route = False
+
+
+def _module_of(path: pathlib.Path, root: pathlib.Path) -> str:
+    rel = path.relative_to(root).with_suffix("")
+    parts = [p for p in rel.parts if p != "__init__"]
+    return "app." + ".".join(parts) if parts else "app"
+
+
+def _build_graph(root: pathlib.Path) -> tuple[dict[str, _Fn], dict[str, dict[str, str]]]:
+    """扫给定 app/ 目录，返回 {限定名 -> 函数} 与 {模块 -> {本地名 -> 目标点号名}}"""
+    funcs: dict[str, _Fn] = {}
+    imports: dict[str, dict[str, str]] = {}
+    for path in sorted(root.rglob("*.py")):
+        mod = _module_of(path, root)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        imps = imports.setdefault(mod, {})
+        parts = mod.split(".")
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for a in node.names:
+                    imps[a.asname or a.name.split(".")[0]] = a.name
+            elif isinstance(node, ast.ImportFrom):
+                # `from a.b import c` → a.b.c；`from .x import c`（在 app.api.resume 里）→ app.api.x.c
+                pkg = ".".join(parts[: len(parts) - node.level]) if node.level else ""
+                base = node.module if not node.level else ".".join(p for p in (pkg, node.module) if p)
+                for a in node.names:
+                    imps[a.asname or a.name] = f"{base}.{a.name}" if base else a.name
+
+        def walk(body, prefix: str, module: str) -> None:
+            for n in body:
+                if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef):
+                    fn = _Fn(f"{module}.{prefix}{n.name}")
+                    fn.is_route = any(
+                        (_dotted(d.func) if isinstance(d, ast.Call) else _dotted(d)).split(".")[-1] in HTTP_VERBS
+                        for d in n.decorator_list
+                    )
+                    for call in ast.walk(n):
+                        if not isinstance(call, ast.Call):
+                            continue
+                        name = _dotted(call.func)
+                        last = name.split(".")[-1]
+                        if name in TRANSITIVE_PRIMITIVES or last in BLOCKING_NAMES:
+                            fn.blocks = True
+                        if name:
+                            fn.calls.append(name)
+                    funcs[fn.qname] = fn
+                    walk(n.body, prefix, module)
+                elif isinstance(n, ast.ClassDef):
+                    walk(n.body, f"{prefix}{n.name}.", module)
+
+        walk(tree.body, "", mod)
+    return funcs, imports
+
+
+def _resolve(funcs, imports, module: str, callee: str) -> str | None:
+    imps = imports.get(module, {})
+    head, _, tail = callee.partition(".")
+    if not tail:  # 裸名：同模块函数优先，其次 `from x import fn`
+        if f"{module}.{head}" in funcs:
+            return f"{module}.{head}"
+        for name, target in imps.items():
+            if name == head and target in funcs:
+                return target
+        return None
+    base = imps.get(head, f"{module}.{head}")
+    cand = f"{base}.{tail}" if not base.startswith(f"{module}.") else f"{base}.{tail}"
+    return cand if cand in funcs else None
+
+
+def indirect_offenders(root: pathlib.Path = APP_ROOT) -> tuple[set[str], int]:
+    """返回（间接走到阻塞原语的 async 路由限定名，扫到的 async 路由条数）。"""
+    funcs, imports = _build_graph(root)
+    memo: dict[str, bool] = {}
+
+    def blocks(qname: str, depth: int = 0) -> bool:
+        if qname in memo:
+            return memo[qname]
+        if depth > 12 or qname not in funcs:  # 递归环与超深由步数上限兜住
+            return False
+        fn = funcs[qname]
+        if fn.blocks:
+            memo[qname] = True
+            return True
+        out = False
+        for callee in fn.calls:
+            nxt = _resolve(funcs, imports, fn.module, callee)
+            if nxt and blocks(nxt, depth + 1):
+                out = True
+                break
+        memo[qname] = out
+        return out
+
+    routes = [fn for fn in funcs.values() if fn.is_route]
+    hits = set()
+    for fn in routes:
+        # 直接命中的那类归上面那把尺子管，这里只报"要往下钻才看得见"的
+        if any(c.split(".")[-1] in BLOCKING_NAMES or c in BLOCKING_DOTTED for c in fn.calls):
+            continue
+        for callee in fn.calls:
+            nxt = _resolve(funcs, imports, fn.module, callee)
+            if nxt and blocks(nxt):
+                hits.add(fn.qname)
+                break
+    return hits, len(routes)
+
+
+# A5 量出来的现状：22 条 async 路由在事件循环里**间接**做同步出网/重活。
+# 每一条的正主与两处口径修正写在 §8 那行的记录里（D46）；这份清单只许往下走。
+# 曾有第三条规则"裸调用 add/query/write_pdf 也算重活"，它会把 `seen.add(x)` 判成向量库写入
+# （`career_path.recommend_career_paths → derive_directions` 就是这样被误报成阻塞的——那个函数
+# 只有 DB 查询与纯计算），所以**不要**把它加回来。
+INDIRECT_BLOCKING_ALLOWLIST = {
+    "app.api.analysis.full_match",
+    "app.api.analysis.get_record_references",
+    "app.api.analysis.regen_interview",
+    "app.api.analysis.regen_optimize",
+    "app.api.external.capabilities.external_interview_simulate",
+    "app.api.external.capabilities.external_match_evaluate",
+    "app.api.external.capabilities.external_resume_parse",
+    "app.api.jd.batch_import_jds",
+    "app.api.jd.import_jd_from_url",
+    "app.api.jd.parse_jd",
+    "app.api.job_recommend.apply_feedback_tuning",
+    "app.api.job_recommend.compare_recommend_config",
+    "app.api.job_recommend.export_feedback_tuning_samples",
+    "app.api.job_recommend.feedback_evaluation",
+    "app.api.job_recommend.feedback_tuning_samples",
+    "app.api.resume.analyze_resume_api",
+    "app.api.resume.diagnose_resume",
+    "app.api.resume.generate_optimized_resume",
+    "app.api.resume.parse_resume",
+    "app.api.resume.rewrite_suggestions",
+    "app.api.resume.tailor_resume",
+    "app.api.tenant.import_tenant_jobs",
+}
+
+
+def test_indirect_blocking_matches_the_allowlist():
+    """新增一条就红；把某条挪进线程池之后，也要同时从表里删掉，否则"表比现实松"同样红。"""
+    hits, routes = indirect_offenders()
+    assert hits == INDIRECT_BLOCKING_ALLOWLIST, (
+        f"多出来（新的间接阻塞，改成 await run_in_threadpool(...)）："
+        f"{sorted(hits - INDIRECT_BLOCKING_ALLOWLIST)}；"
+        f"少了（已修，请把这些名字从表里删掉）："
+        f"{sorted(INDIRECT_BLOCKING_ALLOWLIST - hits)}"
+    )
+
+
+def test_indirect_scan_is_not_vacuous():
+    """和上面那条一样要有防空转：真的扫到了路由，而不是解析失败换来的"全绿"。"""
+    _, routes = indirect_offenders()
+    assert routes >= 200, f"只扫到 {routes} 条 async 路由，多半是判据失效了"
+
+
+def _snippet_app(tmp_path, src: str) -> pathlib.Path:
+    """把合成源码摆成一个临时 app/ 目录，让同一套解析逻辑跑在它身上。"""
+    base = pathlib.Path(tmp_path) / "app"
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "x.py").write_text(textwrap.dedent(src), encoding="utf-8")
+    return base
+
+
+def test_indirect_scan_fires_on_the_transitive_case_the_direct_guard_misses(tmp_path):
+    """正面自证：`test_guard_blind_spots_are_pinned` 里那个例子，这把尺子要看得见。"""
+    hits, routes = indirect_offenders(_snippet_app(tmp_path, transitive_src))
+    assert hits == {"app.x.transitive_route"}, hits
+    assert routes == 1, routes
+
+
+def test_indirect_scan_passes_the_threadpool_form(tmp_path):
+    """反证：包进线程池就不该报——否则那 23 条里会混进 E15/E25 已经修好的那些。"""
+    hits, _ = indirect_offenders(_snippet_app(tmp_path, async_src_threadpool))
+    assert hits == set(), hits
 
 
 async def _latency_while_something_blocks(client, slow_path: str, fast_path: str) -> float:
