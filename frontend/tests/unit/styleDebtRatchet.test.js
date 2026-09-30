@@ -46,6 +46,11 @@ const BUDGET = {
        fill-* 整条切没）。这 1 条 `#94a3b8` 是页面那 12 条里重复出来的第二个副本，
        页面一条没删，所以这一维总数 12 → 13，不是新写的色值。 */
     'src/features/pipeline/components/StatsPane.vue': 1,
+    /* D63 搬看板列：同一笔复制成本再记一次。这 9 条是 `.dot-*` 与 `.follow-*` 那些
+       十六进制值从页面**重复**出来的第二份（页面 12 条仍然一条没删——那些类名有一半是
+       拼出来的：`'dot-' + col.accent`、`'card-follow follow-' + followUpLevel(...)`）。
+       这一维在 pipeline 这个域里 12 → 13 → 22。 */
+    'src/features/pipeline/components/BoardPane.vue': 9,
     'src/features/auth/views/ResetPassword.vue': 12,
     'src/features/interview/views/InterviewSetup.vue': 11,
     'src/features/eval/views/RecommendationEval.vue': 11,

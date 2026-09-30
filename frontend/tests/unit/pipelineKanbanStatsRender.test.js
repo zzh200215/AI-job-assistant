@@ -120,6 +120,37 @@ describe('看板上的统计数字来自 lib 的那几条判据', () => {
     expect(statValues(wrapper)).toEqual(['5', '75%', '0%', '0%', '0%', '4d'])
   })
 
+  it('页面把 now 递给看板面板：卡片上那颗"几天未回复"是真的数出来的', async () => {
+    /* D63 之后这颗提醒住在 BoardPane，天数由页面的 `:now="now()"` 供进去。接错不会报错，
+       只会让每张卡的提醒安静地换成别的数字（或者一整列变成同一个数），页面这头的断言
+       原本一条都没碰到它——所以这里补一条。顺序按看板列的渲染顺序。 */
+    const wrapper = await renderKanban({
+      applied: [card(5, 'applied', 3.2), card(6, 'applied', 9.4), card(7, 'applied', 1.1)],
+    })
+    expect(wrapper.findAll('.card-follow').map((n) => n.text().trim())).toEqual([
+      '3天未回复',
+      '9天未回复',
+      '1天未回复',
+    ])
+  })
+
+  it('空态里那颗「手动新增」真的开得出弹窗（emit 的那一头接上了）', async () => {
+    /* 这条被 Q2 打回过一次形：第一版断言的是"屏幕上出现『新增投递记录』这句话"，而空态那段
+       文案本身就写着"…或手动新增投递记录"，于是把 `@open-add` 的处理器换成空函数（Q2）它照旧绿。
+       改成数弹窗节点：点之前 0 个，点之后 1 个。 */
+    const wrapper = await renderKanban({})
+    expect(wrapper.find('.el-empty').exists()).toBe(true)
+    expect(document.querySelectorAll('.el-dialog').length).toBe(0)
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text().trim() === '手动新增')
+      .trigger('click')
+    await flushPromises()
+    expect(document.querySelectorAll('.el-dialog').length).toBe(1)
+    // 「去岗位推荐」那一颗只 pin 到 emit（面板自己的用例钉），页面那头是一次 router.push，
+    // 和这一页其余几个导航按钮同样没有页面级断言，不在 D63 里补。
+  })
+
   it('转化分析默认收着：不点「查看统计」，面板整块都不在 DOM 里', async () => {
     /* D62 之后这块归 `showStats` 挡（面板自己的条件是 totalCards>0）。这条钉的是页面上
        那一句 `v-if="showStats"`：把它改成恒真，下面两条 expect 都会红（实测 P5）。 */

@@ -118,8 +118,20 @@ async function settleRound(index, stages) {
 }
 
 /** jsdom 没有 DataTransfer：dragstart 用最小事件对象走组件自己的入口，drop 打在真实列元素上 */
+/* D63 之后拖动的前半截（记下拖的是哪张卡、写 dataTransfer.effectAllowed）住在 BoardPane 里，
+   所以这里不能再伸进 wrapper.vm 调页面的方法——改成和真实浏览器一样：往那张卡的 DOM 上派发
+   dragstart，再往目标列上派发 drop。覆盖也因此变宽了一格：面板自己的处理器与它发出的那条
+   `move` 现在也在测试路径上。 */
 function dragCardTo(wrapper, cardObj, label) {
-  wrapper.vm.onDragStart({ dataTransfer: { effectAllowed: '' } }, cardObj)
+  const card = [...document.querySelectorAll('.kanban-card')].find((el) =>
+    el.textContent.includes(cardObj.title)
+  )
+  expect(card, `看板上没有「${cardObj.title}」这张卡`).toBeTruthy()
+  card.dispatchEvent(
+    Object.assign(new Event('dragstart', { bubbles: true }), {
+      dataTransfer: { effectAllowed: '' },
+    })
+  )
   return columnByLabel(label).dispatchEvent(new Event('drop', { bubbles: true }))
 }
 

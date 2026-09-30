@@ -91,113 +91,18 @@
       <el-button @click="loadKanban">重新加载</el-button>
     </div>
 
-    <div v-else class="kanban-board">
-      <el-empty v-if="totalCards === 0" :image-size="120" description="还没有任何投递记录">
-        <template #description>
-          <span>去岗位推荐中一键加入看板，或手动新增投递记录</span>
-        </template>
-        <el-button type="primary" @click="router.push('/jobs/recommend')">
-          <el-icon><Search /></el-icon> 去岗位推荐
-        </el-button>
-        <el-button @click="showAddDialog = true">手动新增</el-button>
-      </el-empty>
-
-      <template v-else>
-        <div
-          v-for="col in columns"
-          :key="col.key"
-          class="kanban-col"
-          :class="col.accent"
-          @dragover.prevent
-          @drop="onDrop($event, col.key)"
-        >
-          <div class="col-header">
-            <div class="col-dot" :class="'dot-' + col.accent" />
-            <h3>{{ col.label }}</h3>
-            <span class="col-count">{{ (kanban[col.key] || []).length }}</span>
-          </div>
-
-          <div class="col-body">
-            <div
-              v-for="card in kanban[col.key] || []"
-              :key="card.id"
-              class="kanban-card"
-              draggable="true"
-              @dragstart="onDragStart($event, card)"
-            >
-              <div class="card-top">
-                <strong class="card-title">{{ card.title || card.company || '未命名岗位' }}</strong>
-                <el-dropdown
-                  trigger="click"
-                  :disabled="writeBusy"
-                  @command="(cmd) => handleCardCmd(cmd, card)"
-                >
-                  <el-icon class="card-more"><MoreFilled /></el-icon>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="detail">查看详情</el-dropdown-item>
-                      <el-dropdown-item command="analyze">AI分析</el-dropdown-item>
-                      <el-dropdown-item v-if="col.key === 'interview'" command="interview"
-                        >模拟面试</el-dropdown-item
-                      >
-                      <el-dropdown-item command="reject" divided style="color: var(--app-danger)"
-                        >标记拒绝</el-dropdown-item
-                      >
-                      <el-dropdown-item command="abandon" style="color: var(--app-muted)"
-                        >放弃</el-dropdown-item
-                      >
-                      <el-dropdown-item command="delete" style="color: var(--app-danger)"
-                        >删除</el-dropdown-item
-                      >
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-              </div>
-
-              <div v-if="card.company" class="card-company">
-                <el-icon><OfficeBuilding /></el-icon> {{ card.company }}
-              </div>
-
-              <div class="card-meta">
-                <span v-if="card.salary_range"
-                  ><el-icon><Coin /></el-icon> {{ card.salary_range }}</span
-                >
-                <span v-if="card.match_score" class="card-score">
-                  <el-icon><Histogram /></el-icon> {{ Math.round(card.match_score) }}分
-                </span>
-              </div>
-              <el-tag
-                v-if="card.resume_version_label"
-                class="resume-version-tag"
-                size="small"
-                effect="plain"
-              >
-                {{ card.resume_version_label }}
-              </el-tag>
-
-              <div v-if="card.interview_at && col.key === 'interview'" class="card-interview">
-                <el-icon><Clock /></el-icon>
-                {{ monthDay(card.interview_at) }}
-              </div>
-
-              <div class="card-footer">
-                <!-- 跟进提醒 -->
-                <div
-                  v-if="needsFollowUp(card)"
-                  :class="'card-follow follow-' + followUpLevel(card)"
-                >
-                  <el-icon><WarningFilled /></el-icon> {{ followUpDays(card) }}天未回复
-                </div>
-                <span class="card-date">{{ monthDay(card.create_time) }}</span>
-                <el-tag v-if="card.source" size="small" type="info">{{ card.source }}</el-tag>
-              </div>
-            </div>
-
-            <div v-if="!(kanban[col.key] || []).length" class="col-empty">暂无{{ col.label }}</div>
-          </div>
-        </div>
-      </template>
-    </div>
+    <BoardPane
+      v-else
+      :kanban="kanban"
+      :columns="columns"
+      :total-cards="totalCards"
+      :write-busy="writeBusy"
+      :now="now()"
+      @command="handleCardCmd"
+      @move="moveCard"
+      @go-recommend="router.push('/jobs/recommend')"
+      @open-add="showAddDialog = true"
+    />
 
     <!-- 列表视图 -->
     <div v-if="viewMode === 'list' && totalCards > 0" class="list-view">
@@ -476,19 +381,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  Clock,
-  Coin,
   DataAnalysis,
   Grid,
-  Histogram,
   List,
   Loading,
   Microphone,
   MoreFilled,
-  OfficeBuilding,
   Plus,
   Refresh,
-  Search,
   TrendCharts,
   WarningFilled,
 } from '@element-plus/icons-vue'
@@ -503,7 +403,7 @@ import {
   getPipelineResumeVersionStats,
   updateJobPipelineEntry,
 } from '@/api/targets'
-import { monthDay, monthDayTime } from '@/utils/format/date'
+import { monthDayTime } from '@/utils/format/date'
 import {
   avgResponseDays as boardAvgResponseDays,
   columns,
@@ -522,13 +422,13 @@ import {
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import StatsPane from '@/features/pipeline/components/StatsPane.vue'
+import BoardPane from '@/features/pipeline/components/BoardPane.vue'
 
 const router = useRouter()
 
 const loading = ref(true)
 const kanban = ref({})
 const latestKanbanCall = useLatestCall()
-const dragCard = ref(null)
 const viewMode = ref('kanban')
 const showStats = ref(false)
 const selectedCards = ref(new Set())
@@ -627,23 +527,11 @@ async function loadResumeVersions() {
   }
 }
 
-function onDragStart(e, card) {
-  dragCard.value = card
-  e.dataTransfer.effectAllowed = 'move'
-}
-
-async function onDrop(e, targetStage) {
-  if (!dragCard.value) return
-  const card = dragCard.value
-  if (card.stage === targetStage) {
-    dragCard.value = null
-    return
-  }
-
-  if (writeBusy.value) {
-    dragCard.value = null
-    return
-  }
+/* 面板把"拖的是哪张卡"发过来，这一趟的去留由页面判：同阶段不发、有写在飞不发（D59 那把锁），
+   发出去之后乐观更新改的是页面的 `kanban`——所以这段不能跟着面板走。 */
+async function moveCard(card, targetStage) {
+  if (card.stage === targetStage) return
+  if (writeBusy.value) return
 
   const oldStage = card.stage
   writeBusy.value = true
@@ -664,7 +552,6 @@ async function onDrop(e, targetStage) {
   } finally {
     writeBusy.value = false
   }
-  dragCard.value = null
 }
 
 async function handleAdd() {
