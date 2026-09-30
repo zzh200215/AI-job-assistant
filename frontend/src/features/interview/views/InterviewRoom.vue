@@ -86,7 +86,7 @@
                 v-for="(msg, idx) in store.messages"
                 :key="`${idx}-${msg.type}`"
                 class="msg-row"
-                :class="rowClass(msg)"
+                :class="roomModel.messageRowClass(msg)"
               >
                 <template v-if="msg.type === 'question'">
                   <div class="msg-shell ai-shell">
@@ -114,7 +114,7 @@
                   >
                     <div class="score-top">
                       <strong>本题评分 {{ msg.metadata?.score || 0 }}</strong>
-                      <span>{{ performanceSummary(msg.metadata?.score) }}</span>
+                      <span>{{ roomModel.performanceSummaryOf(msg.metadata?.score) }}</span>
                     </div>
                     <div class="score-dims">
                       <span>完整 {{ msg.metadata?.completeness ?? '-' }}</span>
@@ -294,8 +294,9 @@ import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import { Microphone } from '@element-plus/icons-vue'
 import { getInterviewDetail } from '@/api/interview'
 import { useInterviewStore } from '@/stores/interview'
-import { interviewScoreTone, interviewScoreToneClass } from '@/utils/scoreTone'
+import { interviewScoreToneClass } from '@/utils/scoreTone'
 import { INTERVIEW_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
+import * as roomModel from '@/features/interview/lib/interviewRoomModel'
 
 const route = useRoute()
 const router = useRouter()
@@ -310,162 +311,44 @@ const isListening = ref(false)
 const speechPreview = ref('')
 
 const wsConnecting = computed(() => store.status === 'connecting')
-const canSend = computed(() => {
-  return userInput.value.trim().length > 0 && store.status === 'ongoing' && !wsConnecting.value
-})
-const canToggleSpeech = computed(() => {
-  return speechSupported.value && store.status === 'ongoing' && !wsConnecting.value
-})
-const speechStatusText = computed(() => {
-  if (!speechSupported.value) {
-    return '当前浏览器不支持语音输入，建议使用最新版 Chrome 或 Edge。'
-  }
-  if (isListening.value) {
-    return '正在听写，识别结果会自动追加到回答框。'
-  }
-  return '可使用语音输入，提交前仍可手动修改识别文本。'
-})
-
-const spotlightQuestion = computed(() => {
-  return store.currentQuestion?.content || '正在等待面试官提问...'
-})
-
-const questionCategory = computed(() => {
-  return store.currentQuestion?.metadata?.category || '通用问题'
-})
-
-const sessionTitle = computed(() => {
-  return store.session?.jd_summary?.title || 'AI 模拟面试'
-})
-
-const sessionSubtitle = computed(() => {
-  const company = store.session?.jd_summary?.company || '目标岗位'
-  const candidate = store.session?.resume_summary?.name || '当前候选人'
-  return `${candidate} · ${company}`
-})
-
-const currentPhase = computed(() => {
-  const round = store.currentRound || 1
-  if (round <= 2) {
-    return { title: '开场摸底', desc: '先判断你的表达、基础理解和切题速度。' }
-  }
-  if (store.isFollowUp) {
-    return { title: '追问深挖', desc: '面试官正在确认你是否真正理解刚才提到的内容。' }
-  }
-  if (round <= 6) {
-    return { title: '核心深挖', desc: '进入项目细节、技术原理或行为案例的主体考察。' }
-  }
-  return { title: '收口判断', desc: '通过场景题和综合题判断稳定性、广度与上限。' }
-})
-
-const interviewerPersona = computed(() => {
-  const type = store.session?.interview_type
-  const mapping = {
-    tech: '技术面试官',
-    hr: '招聘经理 / HR',
-    comprehensive: '综合面试官',
-  }
-  return mapping[type] || 'AI 面试官'
-})
-
-const interviewerHint = computed(() => {
-  if (store.isFollowUp) return '你刚才的回答还不够扎实，正在触发追问'
-  const category = questionCategory.value
-  if (category.includes('项目')) return '重点看你做了什么、为什么这么做、结果如何'
-  if (category.includes('技术')) return '重点看原理、边界条件和取舍'
-  if (category.includes('场景')) return '重点看判断思路、风险和落地能力'
-  return '重点看动机、表达和案例完整性'
-})
-
-const answerStructure = computed(() => {
-  const category = questionCategory.value
-  if (category.includes('项目')) {
-    return ['背景', '目标', '动作', '结果', '复盘']
-  }
-  if (category.includes('技术')) {
-    return ['先给结论', '说明原理', '举项目例子', '补充边界和取舍']
-  }
-  if (category.includes('场景')) {
-    return ['先判断', '列方案', '说取舍', '讲风险和落地']
-  }
-  return ['结论', '案例', '动作', '结果', '反思']
-})
-
-const questionHelperText = computed(() => {
-  if (store.isFollowUp) {
-    return '这类追问通常不是再说一遍，而是要补细节、数据、取舍或具体案例。'
-  }
-  if (questionCategory.value.includes('技术')) {
-    return '避免只背概念，最好带一个真实项目中的使用场景。'
-  }
-  if (questionCategory.value.includes('项目')) {
-    return '优先说你的个人贡献，不要只说团队做了什么。'
-  }
-  if (questionCategory.value.includes('场景')) {
-    return '先给思路框架，再展开关键动作。'
-  }
-  return '先说结论，再用一段具体经历支撑。'
-})
-
-const inputPlaceholder = computed(() => {
-  if (store.status === 'evaluating') return '面试官正在评估上一题，请稍等...'
-  if (store.roundRemaining <= 10) return '时间不多了，先给结论，再补关键细节...'
-  return '输入你的回答...'
-})
-
-const answeredCount = computed(() => {
-  return store.messages.filter((msg) => msg.type === 'evaluation').length
-})
-
-const timeoutCount = computed(() => {
-  return store.messages.filter((msg) => msg.type === 'system' && msg.content.includes('超时'))
-    .length
-})
-
-const SIGNAL_BY_TONE = {
-  high: '表现强',
-  good: '较稳',
-  warn: '可继续',
-  risk: '风险偏高',
-  unknown: '待观察',
-}
-
-const recentSignal = computed(() => SIGNAL_BY_TONE[interviewScoreTone(store.lastScore?.score)])
-
-const statusLabel = computed(() => {
-  const mapping = {
-    idle: '未开始',
-    connecting: '连接中',
-    ongoing: '进行中',
-    evaluating: '评估中',
-    completed: '已完成',
-    error: '异常',
-  }
-  return mapping[store.status] || store.status
-})
-
+/* 显示层的规则全部住在 lib/interviewRoomModel.js（D60）：这一层不读 ref、不碰 store，
+   所以"第 3 轮起换核心深挖""没有分数时不能写『回答偏弱』"这些门槛能被逐条钉住。
+   下面每个 computed 都只是把 store 的一个字段递进去。
+   `canSend` / `canToggleSpeech` 以前还各带一条 `!wsConnecting.value`，而 `wsConnecting` 就是
+   `store.status === 'connecting'`：同一个值既等于 'ongoing' 又不等于 'connecting'，那条永不
+   成立，搬家时按定义删掉（`wsConnecting` 本身仍在模板的两处 `:disabled` 上承重）。 */
+const canSend = computed(() =>
+  roomModel.sendEnabled({ text: userInput.value, status: store.status })
+)
+const canToggleSpeech = computed(() =>
+  roomModel.speechEnabled({ supported: speechSupported.value, status: store.status })
+)
+const speechStatusText = computed(() =>
+  roomModel.speechStatusText({ supported: speechSupported.value, listening: isListening.value })
+)
+const spotlightQuestion = computed(() => roomModel.spotlightQuestion(store.currentQuestion))
+const questionCategory = computed(() => roomModel.questionCategory(store.currentQuestion))
+const sessionTitle = computed(() => roomModel.sessionTitle(store.session))
+const sessionSubtitle = computed(() => roomModel.sessionSubtitle(store.session))
+const currentPhase = computed(() =>
+  roomModel.phaseOf({ round: store.currentRound || 1, isFollowUp: store.isFollowUp })
+)
+const interviewerPersona = computed(() => roomModel.interviewerPersona(store.session))
+const interviewerHint = computed(() =>
+  roomModel.interviewerHint({ isFollowUp: store.isFollowUp, category: questionCategory.value })
+)
+const answerStructure = computed(() => roomModel.answerStructure(questionCategory.value))
+const questionHelperText = computed(() =>
+  roomModel.questionHelperText({ isFollowUp: store.isFollowUp, category: questionCategory.value })
+)
+const inputPlaceholder = computed(() =>
+  roomModel.inputPlaceholderOf({ status: store.status, roundRemaining: store.roundRemaining })
+)
+const answeredCount = computed(() => roomModel.answeredCountOf(store.messages))
+const timeoutCount = computed(() => roomModel.timeoutCountOf(store.messages))
+const recentSignal = computed(() => roomModel.recentSignalOf(store.lastScore?.score))
+const statusLabel = computed(() => roomModel.statusLabelOf(store.status))
 const statusTagType = computed(() => tagTypeFor(INTERVIEW_STATUS_TAGS, store.status))
-
-function rowClass(msg) {
-  return {
-    'row-ai': msg.type === 'question',
-    'row-user': msg.type === 'answer',
-    'row-system': msg.type === 'system' || msg.type === 'end',
-  }
-}
-
-const PERFORMANCE_SUMMARY_BY_TONE = {
-  high: '回答有说服力',
-  good: '整体不错，但还能再深入',
-  warn: '基本覆盖，但说服力一般',
-  risk: '回答偏弱，容易触发追问',
-  // 没有分就不写"回答偏弱"——那是把缺数据说成了差评
-  unknown: '评分暂未生成',
-}
-
-function performanceSummary(score) {
-  return PERFORMANCE_SUMMARY_BY_TONE[interviewScoreTone(score)]
-}
 
 function getSpeechRecognitionCtor() {
   if (typeof window === 'undefined') return null
