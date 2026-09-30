@@ -558,21 +558,30 @@ import {
   updateJobPipelineEntry,
 } from '@/api/targets'
 import { monthDay, monthDayTime } from '@/utils/format/date'
+import {
+  avgResponseDays as boardAvgResponseDays,
+  columns,
+  conversionRate as boardConversionRate,
+  flattenCards,
+  followUpCount as boardFollowUpCount,
+  followUpDays as boardFollowUpDays,
+  followUpLevel as boardFollowUpLevel,
+  funnelPercent as boardFunnelPercent,
+  funnelRows,
+  needsFollowUp,
+  pipelineFocusDescription as boardFocusDescription,
+  pipelineFocusTitle as boardFocusTitle,
+  rejectionRate as boardRejectionRate,
+  stageCounts,
+  stageLabel,
+  stageTagType,
+  stageToRate as boardStageToRate,
+  totalCardCount,
+} from '@/features/pipeline/lib/pipelineBoard'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 
 const router = useRouter()
-
-const columns = [
-  { key: 'todo', label: '待投递', accent: 'slate' },
-  { key: 'applied', label: '已投递', accent: 'blue' },
-  { key: 'written_test', label: '笔试', accent: 'amber' },
-  { key: 'interview', label: '面试', accent: 'violet' },
-  { key: 'offer', label: 'Offer', accent: 'green' },
-  { key: 'accepted', label: '已入职', accent: 'green' },
-  { key: 'rejected', label: '已拒绝', accent: 'red' },
-  { key: 'withdrawn', label: '已放弃', accent: 'gray' },
-]
 
 const loading = ref(true)
 const kanban = ref({})
@@ -584,126 +593,32 @@ const selectedCards = ref(new Set())
 const resumeVersions = ref([])
 const versionError = ref('')
 const versionPerformance = ref([])
-const totalCards = computed(() =>
-  columns.reduce((sum, col) => sum + (kanban.value[col.key] || []).length, 0)
-)
+const totalCards = computed(() => totalCardCount(kanban.value))
 
 // 所有卡片扁平列表
-const allCards = computed(() => {
-  const all = []
-  columns.forEach((col) => {
-    ;(kanban.value[col.key] || []).forEach((card) => {
-      all.push(card)
-    })
-  })
-  return all
-})
+const allCards = computed(() => flattenCards(kanban.value))
 
 // 统计计算
-const counts = computed(() => {
-  const map = {}
-  columns.forEach((col) => {
-    map[col.key] = (kanban.value[col.key] || []).length
-  })
-  return map
-})
+const counts = computed(() => stageCounts(kanban.value))
 
-const funnelData = computed(() =>
-  columns
-    .filter((c) => ['todo', 'applied', 'written_test', 'interview', 'offer'].includes(c.key))
-    .map((c) => ({
-      ...c,
-      count: counts.value[c.key] || 0,
-    }))
+const funnelData = computed(() => funnelRows(counts.value))
+
+/* 下面这几个是"把这条链的值递进 lib"的薄包装：规则住在 lib 里，页面只负责supply输入，
+   模板那头的调用形状因此一个字没改。`Date.now()` 也是在这里取的——与搬之前同一处取值时机。 */
+const now = () => Date.now()
+const conversionRate = (stage) => boardConversionRate(counts.value, totalCards.value, stage)
+const funnelPercent = (count) => boardFunnelPercent(count, funnelData.value)
+const stageToRate = (from, to) => boardStageToRate(counts.value, from, to)
+const followUpDays = (card) => boardFollowUpDays(card, now())
+const followUpLevel = (card) => boardFollowUpLevel(card, now())
+
+const rejectionRate = computed(() => boardRejectionRate(counts.value, totalCards.value))
+const avgResponseDays = computed(() => boardAvgResponseDays(kanban.value.applied, now()))
+const followUpCount = computed(() => boardFollowUpCount(allCards.value, now()))
+const pipelineFocusTitle = computed(() => boardFocusTitle(counts.value, followUpCount.value))
+const pipelineFocusDescription = computed(() =>
+  boardFocusDescription(counts.value, followUpCount.value)
 )
-
-function conversionRate(stage) {
-  const total = totalCards.value
-  if (!total) return 0
-  // stages before the target
-  const stageOrder = ['todo', 'applied', 'written_test', 'interview', 'offer']
-  const idx = stageOrder.indexOf(stage)
-  if (idx <= 0) return Math.round(((counts.value[stage] || 0) / total) * 100)
-  const prevTotal = stageOrder.slice(0, idx).reduce((s, k) => s + (counts.value[k] || 0), 0)
-  const current = counts.value[stage] || 0
-  const base = prevTotal + current
-  return base > 0 ? Math.round((current / base) * 100) : 0
-}
-
-const rejectionRate = computed(() => {
-  const total = totalCards.value
-  if (!total) return 0
-  return Math.round((((counts.value.rejected || 0) + (counts.value.withdrawn || 0)) / total) * 100)
-})
-
-const avgResponseDays = computed(() => {
-  const now = Date.now()
-  const applied = kanban.value.applied || []
-  const days = applied
-    .filter((c) => c.update_time)
-    .map((c) => Math.round((now - new Date(c.update_time).getTime()) / 86400000))
-  if (!days.length) return '--'
-  const avg = Math.round(days.reduce((s, d) => s + d, 0) / days.length)
-  return avg + 'd'
-})
-
-const followUpCount = computed(
-  () => allCards.value.filter((card) => needsFollowUp(card) && followUpDays(card) >= 3).length
-)
-const pipelineFocusTitle = computed(() => {
-  if (counts.value.offer) return '优先完成 Offer 取舍与确认。'
-  if (counts.value.interview) return '把面试机会转化为可执行的准备计划。'
-  if (followUpCount.value) return '有投递记录等待跟进，先处理超 3 天未回复的机会。'
-  return '继续补充高匹配岗位，让投递保持稳定节奏。'
-})
-const pipelineFocusDescription = computed(() => {
-  if (counts.value.offer) return 'Offer 已进入决策阶段，比较整体回报、成长空间与截止日期。'
-  if (counts.value.interview) return '从看板直接发起模拟面试，并把准备情况沉淀在对应机会中。'
-  if (followUpCount.value) return '优先处理等待时间较长的投递，避免遗漏有效机会。'
-  return '从岗位推荐中挑选高匹配机会，加入看板后持续追踪。'
-})
-
-function funnelPercent(count) {
-  const max = Math.max(1, ...funnelData.value.map((s) => s.count))
-  return Math.max(2, (count / max) * 100)
-}
-
-function stageToRate(from, to) {
-  const fromCount = counts.value[from] || 0
-  const toCount = counts.value[to] || 0
-  if (!fromCount) return '0%'
-  return Math.round((toCount / fromCount) * 100) + '%'
-}
-
-function stageTagType(stage) {
-  const map = {
-    todo: 'info',
-    applied: 'primary',
-    written_test: 'warning',
-    interview: 'success',
-    offer: 'success',
-    rejected: 'danger',
-    withdrawn: 'info',
-  }
-  return map[stage] || 'info'
-}
-
-// 跟进提醒
-function needsFollowUp(card) {
-  return (card.stage === 'applied' || card.stage === 'written_test') && card.update_time
-}
-
-function followUpDays(card) {
-  if (!card.update_time) return 0
-  return Math.round((Date.now() - new Date(card.update_time).getTime()) / 86400000)
-}
-
-function followUpLevel(card) {
-  const days = followUpDays(card)
-  if (days >= 7) return 'danger'
-  if (days >= 3) return 'warn'
-  return 'ok'
-}
 
 const showAddDialog = ref(false)
 const addSubmitting = ref(false)
@@ -725,20 +640,6 @@ const addForm = ref({
 
 const addRules = {
   title: [{ required: true, message: '请输入岗位名称', trigger: 'blur' }],
-}
-
-function stageLabel(stage) {
-  const map = {
-    todo: '待投递',
-    applied: '已投递',
-    written_test: '笔试',
-    interview: '面试',
-    offer: 'Offer',
-    accepted: '已入职',
-    rejected: '已拒绝',
-    withdrawn: '已放弃',
-  }
-  return map[stage] || stage || '-'
 }
 
 async function loadKanban() {

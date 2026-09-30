@@ -137,7 +137,10 @@ const BUDGET = {
        页面侧只剩任务状态那一支（3 条）。合并计数与搬前一样是 9。 */
     'src/features/planning/lib/planningModel.js': 6,
     'src/features/planning/views/CareerPlanning.vue': 3,
-    'src/features/pipeline/views/PipelineKanban.vue': 9,
+    /* D57 同理：`stageTagType` 那七条阶段色表搬进 pipeline lib，视图侧只剩两处派生。
+       合并计数与搬前一样是 9。 */
+    'src/features/pipeline/lib/pipelineBoard.js': 7,
+    'src/features/pipeline/views/PipelineKanban.vue': 2,
     'src/features/admin/views/PromptTrace.vue': 7,
     'src/features/analysis/views/AnalysisResult.vue': 5,
     'src/features/analysis/views/ExplainMatch.vue': 4,
