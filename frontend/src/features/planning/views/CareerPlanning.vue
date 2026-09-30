@@ -160,7 +160,7 @@
         </div>
         <div class="action-buttons">
           <el-button @click="refreshBaseOptions" :loading="optionsLoading">刷新数据</el-button>
-          <el-button type="primary" :loading="running" @click="startCareerPlanning">
+          <el-button type="primary" :loading="running" @click="onSubmitPlanning">
             {{ running ? '职业规划生成中…' : '开始职业规划' }}
           </el-button>
         </div>
@@ -728,7 +728,7 @@
         <el-button type="primary" @click="router.push(`/analysis/${analysisRecordId}`)"
           >查看完整分析</el-button
         >
-        <el-button @click="startCareerPlanning">重新生成职业规划</el-button>
+        <el-button @click="onSubmitPlanning">重新生成职业规划</el-button>
         <el-button @click="router.push('/jobs/search')">去岗位市场</el-button>
       </div>
     </el-card>
@@ -740,12 +740,11 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
 import { useRouter } from 'vue-router'
 import { createJD } from '@/api/jd'
-import { runFullAnalysis, getAnalysis } from '@/api/analysis'
-import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
 import { useCareerDirections } from '@/features/planning/composables/useCareerDirections'
+import { useCareerPlanningRun } from '@/features/planning/composables/useCareerPlanningRun'
 import { usePlanningOptions } from '@/features/planning/composables/usePlanningOptions'
 import { useSalaryMarket } from '@/features/planning/composables/useSalaryMarket'
-import { localizeSentence, normalizeLocalizedTextList } from '@/utils/analysisLocalization'
+import { normalizeLocalizedTextList } from '@/utils/analysisLocalization'
 import {
   RADAR_CENTER_POINT as centerPoint,
   RADAR_RADIUS as radarRadius,
@@ -765,7 +764,7 @@ import {
   stepType,
 } from '@/features/planning/lib/planningModel'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
-import { forgetJD, rememberJD, rememberRecord, rememberResume } from '@/utils/lastSelection'
+import { forgetJD, rememberJD, rememberResume } from '@/utils/lastSelection'
 
 const router = useRouter()
 
@@ -797,9 +796,6 @@ const targetRole = ref('')
 const focusNotes = ref('')
 const goalNotes = ref('')
 
-const running = ref(false)
-const taskStatus = ref('pending')
-const agentSteps = ref([])
 /* 两条面板链（D54 出页）。各自一把令牌——换简历时它们是同一次意图下**一起**发出的，
    共用一把会让先发的方向被后发的薪资作废（D30 在 JobSearch 量到的正是这个）。 */
 const {
@@ -814,34 +810,30 @@ const { salaryMarket, salaryMarketLoading, salaryMarketError, loadSalaryMarket }
   getPosition: () => targetRole.value || selectedResume.value?.parsed?.current_title || '',
 })
 
-const analysisRecordId = ref(null)
-const analysisResult = ref(null)
-const { pollTask } = useAgentTaskPolling()
-
-const careerResult = computed(() => analysisResult.value?.career_planning || null)
-const latestMatchScore = computed(() => Number(analysisResult.value?.match_score || 0))
-const localizedCurrentStatusSummary = computed(() =>
-  localizeSentence(careerResult.value?.current_status?.summary || '')
-)
-const localizedOverallAdvice = computed(() =>
-  localizeSentence(careerResult.value?.overall_advice || '')
-)
-const analysisStatusLabel = computed(() => {
-  if (running.value) return '分析中'
-  if (careerResult.value) return '已生成'
-  if (analysisRecordId.value && taskStatus.value === 'partial') return '部分完成'
-  if (analysisRecordId.value) return '已完成'
-  if (taskStatus.value === 'failed') return '失败'
-  if (taskStatus.value === 'cancelled') return '已取消'
-  return '待启动'
-})
-const latestMatchLabel = computed(() => {
-  if (running.value) return 'Agent 正在生成职业规划'
-  if (careerResult.value) return `匹配度 ${latestMatchScore.value}`
-  if (analysisRecordId.value) return '完整分析已生成，但职业规划内容为空'
-  if (taskStatus.value === 'failed') return '生成失败，请重试'
-  if (taskStatus.value === 'cancelled') return '任务已取消'
-  return '等待生成职业规划'
+/* 规划运行链（D56 出页）。运行链只持有任务生命周期与那份记录；表单守卫留在本页的
+   `onSubmitPlanning` 里——它们必须在 running 置起来之前拦住，而"用哪个 JD / 跑完刷哪两条链"
+   是通过两个注入函数交给页面的。 */
+const {
+  running,
+  agentSteps,
+  analysisRecordId,
+  careerResult,
+  latestMatchScore,
+  localizedCurrentStatusSummary,
+  localizedOverallAdvice,
+  completedSteps,
+  currentStepName,
+  taskStatusLabel,
+  analysisStatusLabel,
+  latestMatchLabel,
+  startCareerPlanning,
+} = useCareerPlanningRun({
+  getResumeId: () => selectedResumeId.value,
+  resolveJdId: async () => selectedJD.value?.id || (await createGoalJD()),
+  onAnalysisFinished: async () => {
+    await loadCareerPaths()
+    await loadSalaryMarket()
+  },
 })
 
 const selectedResumeLabel = computed(() =>
@@ -856,29 +848,6 @@ const selectedResumeHint = computed(() => {
 const selectedJDLabel = computed(() => (selectedJD.value ? jdOptionLabel(selectedJD.value) : ''))
 const currentStageLabel = computed(
   () => stageOptions.find((item) => item.value === currentStage.value)?.label || '成长期'
-)
-
-const completedSteps = computed(
-  () => agentSteps.value.filter((item) => item.status === 'completed').length
-)
-const currentStepName = computed(() => {
-  const runningStep = agentSteps.value.find((item) => item.status === 'running')
-  if (runningStep) return stepLabel(runningStep.step_name)
-  const pendingStep = agentSteps.value.find((item) => item.status === 'pending')
-  if (pendingStep) return stepLabel(pendingStep.step_name)
-  const lastStep = [...agentSteps.value].reverse().find((item) => item.status === 'completed')
-  return lastStep ? stepLabel(lastStep.step_name) : '等待启动'
-})
-const taskStatusLabel = computed(
-  () =>
-    ({
-      pending: '等待中',
-      running: '执行中',
-      completed: '已完成',
-      partial: '部分完成',
-      cancelled: '已取消',
-      failed: '失败',
-    })[taskStatus.value] || taskStatus.value
 )
 
 const radarDimensions = computed(() => {
@@ -1064,7 +1033,8 @@ onMounted(async () => {
   await refreshBaseOptions()
 })
 
-async function startCareerPlanning() {
+/* 表单守卫留在页面：两句 warning 都必须在 running 亮起来之前拦住，否则按钮会带着空输入转圈。 */
+async function onSubmitPlanning() {
   if (!selectedResumeId.value) {
     ElMessage.warning('请先选择简历')
     return
@@ -1073,59 +1043,9 @@ async function startCareerPlanning() {
     ElMessage.warning('请填写目标岗位，或直接选择一个现有 JD')
     return
   }
-
-  running.value = true
-  taskStatus.value = 'running'
-  analysisResult.value = null
-  analysisRecordId.value = null
-  agentSteps.value = []
-
-  try {
-    const effectiveJdId = selectedJD.value?.id || (await createGoalJD())
-    const startRes = await runFullAnalysis({
-      resume_id: selectedResumeId.value,
-      jd_id: effectiveJdId,
-    })
-
-    if (!startRes?.task_id) {
-      throw new Error('未拿到 task_id')
-    }
-
-    await pollTask(startRes.task_id, {
-      timeoutMessage: '职业规划生成超时，请稍后重试',
-      onProgress(taskData, steps) {
-        taskStatus.value = taskData?.status || 'running'
-        agentSteps.value = steps
-      },
-      async onCompleted(taskData) {
-        taskStatus.value = taskData?.status || 'completed'
-        analysisRecordId.value = taskData?.analysis_record_id || null
-        if (!analysisRecordId.value) {
-          throw new Error('分析完成但没有生成记录')
-        }
-        analysisResult.value = await getAnalysis(analysisRecordId.value)
-        rememberRecord(analysisRecordId.value)
-      },
-      onFailed() {
-        taskStatus.value = 'failed'
-      },
-      onCancelled() {
-        taskStatus.value = 'cancelled'
-      },
-      onTimeout() {
-        taskStatus.value = 'failed'
-      },
-    })
-
-    if (analysisRecordId.value) {
-      await loadCareerPaths()
-      await loadSalaryMarket()
-    }
-  } catch (error) {
-    taskStatus.value = error?.code === 'task_cancelled' ? 'cancelled' : 'failed'
-    ElMessage.error(error?.message || '职业规划生成失败')
-  } finally {
-    running.value = false
+  const outcome = await startCareerPlanning()
+  if (!outcome.ok) {
+    ElMessage.error(outcome.error?.message || '职业规划生成失败')
   }
 }
 
