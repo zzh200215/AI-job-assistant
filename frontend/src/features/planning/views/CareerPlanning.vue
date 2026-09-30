@@ -739,11 +739,11 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
 import { useRouter } from 'vue-router'
-import { getResumeList } from '@/api/resume'
-import { createJD, getJDList } from '@/api/jd'
+import { createJD } from '@/api/jd'
 import { runFullAnalysis, getAnalysis } from '@/api/analysis'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
 import { useCareerDirections } from '@/features/planning/composables/useCareerDirections'
+import { usePlanningOptions } from '@/features/planning/composables/usePlanningOptions'
 import { useSalaryMarket } from '@/features/planning/composables/useSalaryMarket'
 import { localizeSentence, normalizeLocalizedTextList } from '@/utils/analysisLocalization'
 import {
@@ -765,14 +765,7 @@ import {
   stepType,
 } from '@/features/planning/lib/planningModel'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
-import {
-  forgetJD,
-  readJDId,
-  readResumeId,
-  rememberJD,
-  rememberRecord,
-  rememberResume,
-} from '@/utils/lastSelection'
+import { forgetJD, rememberJD, rememberRecord, rememberResume } from '@/utils/lastSelection'
 
 const router = useRouter()
 
@@ -783,16 +776,26 @@ const stageOptions = [
   { value: 'transition', label: '转型期' },
 ]
 
-const resumeOptions = ref([])
-const jdOptions = ref([])
-const selectedResumeId = ref(null)
-const selectedJDId = ref(null)
+/* 选项链（D55 出页）：这一页"选哪份简历 / 哪个 JD"的唯一持有者。
+   放在两条面板链之前，因为它们读的 `selectedResumeId` / `selectedResume` 都由它持有。 */
+const {
+  resumeOptions,
+  jdOptions,
+  selectedResumeId,
+  selectedJDId,
+  selectedResume,
+  selectedJD,
+  optionsLoading,
+  baseOptionsError,
+  restoreSelections,
+  refreshBaseOptions,
+  adoptJD,
+} = usePlanningOptions()
+
 const currentStage = ref('growth')
 const targetRole = ref('')
 const focusNotes = ref('')
 const goalNotes = ref('')
-const optionsLoading = ref(false)
-const baseOptionsError = ref(false)
 
 const running = ref(false)
 const taskStatus = ref('pending')
@@ -815,12 +818,6 @@ const analysisRecordId = ref(null)
 const analysisResult = ref(null)
 const { pollTask } = useAgentTaskPolling()
 
-const selectedResume = computed(
-  () => resumeOptions.value.find((item) => item.id === selectedResumeId.value) || null
-)
-const selectedJD = computed(
-  () => jdOptions.value.find((item) => item.id === selectedJDId.value) || null
-)
 const careerResult = computed(() => analysisResult.value?.career_planning || null)
 const latestMatchScore = computed(() => Number(analysisResult.value?.match_score || 0))
 const localizedCurrentStatusSummary = computed(() =>
@@ -1067,48 +1064,6 @@ onMounted(async () => {
   await refreshBaseOptions()
 })
 
-function restoreSelections() {
-  const resumeId = readResumeId()
-  const jdId = readJDId()
-  if (resumeId) selectedResumeId.value = resumeId
-  if (jdId) selectedJDId.value = jdId
-}
-
-async function refreshBaseOptions() {
-  optionsLoading.value = true
-  baseOptionsError.value = false
-  try {
-    const [resumeData, jdData] = await Promise.all([
-      getResumeList({ page_size: 50 }),
-      getJDList({ page_size: 50 }),
-    ])
-    resumeOptions.value = (resumeData?.items || []).filter(
-      (item) => item.parsed && Object.keys(item.parsed).length
-    )
-    jdOptions.value = jdData?.items || []
-
-    if (
-      selectedResumeId.value &&
-      !resumeOptions.value.some((item) => item.id === selectedResumeId.value)
-    ) {
-      selectedResumeId.value = null
-    }
-    if (selectedJDId.value && !jdOptions.value.some((item) => item.id === selectedJDId.value)) {
-      selectedJDId.value = null
-    }
-
-    if (!selectedResumeId.value && resumeOptions.value.length) {
-      selectedResumeId.value = resumeOptions.value[0].id
-    }
-  } catch {
-    resumeOptions.value = []
-    jdOptions.value = []
-    baseOptionsError.value = true
-  } finally {
-    optionsLoading.value = false
-  }
-}
-
 async function startCareerPlanning() {
   if (!selectedResumeId.value) {
     ElMessage.warning('请先选择简历')
@@ -1185,14 +1140,7 @@ async function createGoalJD() {
     throw new Error('目标 JD 创建失败')
   }
   selectedJDId.value = created.id
-  const exists = jdOptions.value.some((item) => item.id === created.id)
-  if (!exists) {
-    jdOptions.value.unshift({
-      id: created.id,
-      title: created.title,
-      company: created.company,
-    })
-  }
+  adoptJD(created)
   return created.id
 }
 
