@@ -27,6 +27,10 @@ const BUDGET = {
     'src/features/shell/views/Profile.vue': 31,
     'src/features/planning/views/CareerPlanning.vue': 27,
     'src/features/analysis/views/SmartAnalysis.vue': 15,
+    /* D51 搬出「职业规划」面板时样式按 D44 的口径**复制**（父页面那 1092 行一行没删，因为静态切分
+       看不见动态类名），所以这 3 个是从页面里**重复**出来的，不是新增的债：这一页面上的色值
+       15 → 18。css 分块实测 17.01 → 19.42 kB、js 分块 46.36 → 48.30 kB。 */
+    'src/features/analysis/components/CareerPlanPane.vue': 3,
     'src/features/jobs/views/JobRecommend.vue': 20,
     'src/features/auth/views/Register.vue': 26,
     'src/features/interview/views/InterviewReport.vue': 22,

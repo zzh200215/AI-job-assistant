@@ -29,7 +29,17 @@ const RECORD = {
     tech: [{ q: '解释事件循环', intent: '基础' }],
   },
   rag_confidence: { score: 0.8, level: 'high' },
-  career_planning: { skill_gaps: [{ skill: 'Rust', priority: '高' }] },
+  career_planning: {
+    skill_gaps: [{ skill: 'Rust', priority: '高' }],
+    /* D51 之后这一段的渲染住在 CareerPlanPane 里，页面只做一件事：把 `visualPhases`
+       （由这条记录推出来的那条链的产物）作为 prop 递进去。递错对象是**不会报错**的，
+       所以这里要有一条屏幕上看得见的断言。 */
+    visual_roadmap: {
+      total_duration_months: 18,
+      career_direction: '平台工程师',
+      phases: [{ id: 'p1', name: '打基础', duration_months: 6, color: '#196bdb' }],
+    },
+  },
 }
 
 /* `weights_used` 不是可选的：`schemas/analysis.py:23` 声明成必填 dict，取的是评分卡里的六个权重，
@@ -152,6 +162,12 @@ describe('SmartAnalysis 的展示形状接线', () => {
     await runAnalysis()
     expect(document.querySelectorAll('.gap-skill').length).toBe(1)
     expect(document.querySelector('.gap-title').textContent).toContain('Rust')
+    /* 路线图那一段的阶段名是页面递进面板的 `visualPhases` 渲染出来的：
+       递 `careerData`（整条记录里的职业规划对象）而不是 `visualPhases` 时，这里就空了。 */
+    expect([...document.querySelectorAll('.phase-name')].map((n) => n.textContent.trim())).toEqual([
+      '打基础',
+    ])
+    expect(document.querySelector('.roadmap-dir').textContent).toContain('平台工程师')
 
     document.body.innerHTML = ''
     await runAnalysis({ ...RECORD, career_planning: { skill_gaps: ['Rust', 'K8s'] } })
