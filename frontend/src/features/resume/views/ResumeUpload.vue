@@ -589,6 +589,7 @@ const diagnosisError = ref('')
 const currentDiagnosis = ref(null)
 // 关掉弹窗不会取消已发出的诊断，再看另一份简历时旧响应会给错人打分
 const latestDiagnosisCall = useLatestCall()
+const latestParseCall = useLatestCall()
 const diagnosisStale = ref(false)
 const diagActivePanels = ref(['structure', 'expression', 'keywords', 'highlights'])
 
@@ -838,39 +839,53 @@ const customUpload = async ({ file }) => {
   }
 }
 
-async function handleCmd(cmd, r) {
-  if (cmd === 'parse') {
-    try {
-      const parsed = await parseResume(r.id)
-      r.parsed = parsed.parsed
-      currentParsed.value = parsed.parsed
-      showParsed.value = true
-      ElMessage.success('解析成功')
-    } catch {
-      ElMessage.error('解析失败')
-    }
-  } else if (cmd === 'optimize') {
-    optimizeResume(r)
-  } else if (cmd === 'diagnose') {
-    showDiagnosisDialog(r)
-  } else if (cmd === 'compare') {
-    router.push(`/resume/compare/${r.id}`)
-  } else if (cmd === 'analyze') {
-    goAnalysis(r)
-  } else if (cmd === 'setDefault') {
-    defaultResumeId.value = r.id
-    localStorage.setItem(LS_DEFAULT_KEY, String(r.id))
-    ElMessage.success('已设为默认简历')
-  } else if (cmd === 'share') {
-    showShareDialog(r)
-  } else if (cmd === 'desensitize') {
-    r._desensitized = !r._desensitized
-    ElMessage.success(r._desensitized ? '已脱敏，联系方式已隐藏' : '已取消脱敏')
-  } else if (cmd === 'exportDocx') {
-    doExport(r, 'docx')
-  } else if (cmd === 'exportPdf') {
-    doExport(r, 'pdf')
-  } else if (cmd === 'delete') {
+// ---- 行下拉的 11 个命令：一个分支一个函数，再由 handleCmd 查表派发 ----
+/* 原来 11 个分支共用一个函数体，D32 要给「解析」加竞态令牌时卡在这里：令牌得按分支领，
+   而分支们挤在同一个 if-else 链里，谁都说不清自己那一份的意图边界。拆开之后每个分支都能
+   单独决定自己要不要令牌——现在只有 parse 需要（它写的是全局唯一的那个抽屉）。 */
+async function parseResumeRow(r) {
+  const isCurrent = latestParseCall()
+  try {
+    const parsed = await parseResume(r.id)
+    // 这一行自己的解析结果是真的，不因为用户后来点了别的行而作废（D29 分的正是这两类）
+    r.parsed = parsed.parsed
+    if (!isCurrent()) return
+    currentParsed.value = parsed.parsed
+    showParsed.value = true
+    ElMessage.success('解析成功')
+  } catch {
+    if (!isCurrent()) return
+    ElMessage.error('解析失败')
+  }
+}
+
+function setDefaultResumeRow(r) {
+  defaultResumeId.value = r.id
+  localStorage.setItem(LS_DEFAULT_KEY, String(r.id))
+  ElMessage.success('已设为默认简历')
+}
+
+function toggleDesensitizeRow(r) {
+  r._desensitized = !r._desensitized
+  ElMessage.success(r._desensitized ? '已脱敏，联系方式已隐藏' : '已取消脱敏')
+}
+
+function openCompareRow(r) {
+  router.push(`/resume/compare/${r.id}`)
+}
+
+const ROW_COMMANDS = {
+  parse: parseResumeRow,
+  optimize: optimizeResume,
+  diagnose: showDiagnosisDialog,
+  compare: openCompareRow,
+  analyze: goAnalysis,
+  setDefault: setDefaultResumeRow,
+  share: showShareDialog,
+  desensitize: toggleDesensitizeRow,
+  exportDocx: (r) => doExport(r, 'docx'),
+  exportPdf: (r) => doExport(r, 'pdf'),
+  delete: async (r) => {
     try {
       await ElMessageBox.confirm('确定删除该简历？', '删除确认', { type: 'warning' })
       await deleteResume(r.id)
@@ -879,7 +894,12 @@ async function handleCmd(cmd, r) {
     } catch {
       // 用户取消删除时不显示错误；请求失败由统一请求层提示。
     }
-  }
+  },
+}
+
+async function handleCmd(cmd, r) {
+  const run = ROW_COMMANDS[cmd]
+  if (run) await run(r)
 }
 
 function goAnalysis(r) {
