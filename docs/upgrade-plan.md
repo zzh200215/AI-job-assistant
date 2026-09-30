@@ -1825,7 +1825,7 @@ D53 把纯函数搬走后，这一页剩下的最重一块是两条按简历触�
 
 **这一页到此清空了三条链**（方向 / 薪资 / 选项 / 运行 = 四条，D54–D56）。剩下的都是"页面剩下的部分"：`strategySummary` 那个 43 行的 computed 与其余派生值读的是 `careerPaths`/`careerResult`，736 行模板面板与 883 行样式还没搬——按 D44/D51/D52 的经验，面板那一刀的代价在 CSS 复制而不在行数，这一页样式里方向/雷达/路线/薪资那几族要按 `SmartAnalysis` 的同一口径逐段复制。
 
-**过程账一条（提交信息写错）**：D56 的代码提交 `6209197` 的标题被我写成了"move SmartAnalysis's career-plan pane out — no, move CareerPlanning's run chain out"——开头半句是上一刀（D51）的标题残留。提交内容无误，是**信息**错。它还没推，改正需要 `git commit --amend`；按仓库纪律"未被明确要求不 amend"，所以我停在这里等一句"改"，没有自作主张。（记在这里是因为一个骗人的标题比一个丑陋的标题更贵。）
+**过程账一条（提交信息写错，已改正）**：D56 的代码提交标题一度被我写成"move SmartAnalysis's career-plan pane out — no, move CareerPlanning's run chain out"——开头半句是上一刀（D51）标题的残留，提交内容没错、是信息骗人。`--amend` 只能改 HEAD，而它当时在 `HEAD~1`，所以改正走的是**软回退 + 按文件重放**：先 `git branch safety/d56-title` 立安全分支、`git reset --soft HEAD~2`、用 `git commit -F .git/tmp-*.txt -- <该提交的文件>` 分两次重放（正文从原提交逐字取出，只换首行）。验证是**树指纹相同**：重放前后 `HEAD^{tree}` 都是 `fc9f5258…`，`git diff safety/d56-title HEAD` 为空。新 SHA：代码 `736e48f`、文档 `d997774`。踩到的小坑还是那一条：驱动脚本写 `/tmp/xxx` 被 Windows Python 解析成 `C:	mp`，改用 `.git/` 下的临时文件（工作树不留垃圾）。
 
 
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
