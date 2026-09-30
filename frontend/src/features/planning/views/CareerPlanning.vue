@@ -742,10 +742,9 @@ import { useRouter } from 'vue-router'
 import { getResumeList } from '@/api/resume'
 import { createJD, getJDList } from '@/api/jd'
 import { runFullAnalysis, getAnalysis } from '@/api/analysis'
-import { recommendCareerPaths } from '@/api/jobs'
-import { getSalaryOverview } from '@/api/salary'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
-import { useLatestCall } from '@/composables/useLatestCall'
+import { useCareerDirections } from '@/features/planning/composables/useCareerDirections'
+import { useSalaryMarket } from '@/features/planning/composables/useSalaryMarket'
 import { localizeSentence, normalizeLocalizedTextList } from '@/utils/analysisLocalization'
 import {
   RADAR_CENTER_POINT as centerPoint,
@@ -798,16 +797,19 @@ const baseOptionsError = ref(false)
 const running = ref(false)
 const taskStatus = ref('pending')
 const agentSteps = ref([])
-const careerPathLoading = ref(false)
-const careerPaths = ref([])
-const careerPathMeta = ref({ summary: '', corpus: {}, message: '' })
-// 换简历会让两个面板各发一次请求，而请求返回的先后不等于发起的先后（见 useLatestCall）。
-// 两个面板要各自一把令牌：换简历时它们是同一次意图下**一起**发出的，共用一把会让先发的方向
-// 被后发的薪资作废。
-const latestPathsCall = useLatestCall()
-const latestSalaryCall = useLatestCall()
-const careerPathError = ref('')
-const salaryMarketError = ref('')
+/* 两条面板链（D54 出页）。各自一把令牌——换简历时它们是同一次意图下**一起**发出的，
+   共用一把会让先发的方向被后发的薪资作废（D30 在 JobSearch 量到的正是这个）。 */
+const {
+  careerPaths,
+  careerPathLoading,
+  careerPathError,
+  careerPathMeta,
+  loadCareerPaths,
+  clearCareerPaths,
+} = useCareerDirections({ getResumeId: () => selectedResumeId.value })
+const { salaryMarket, salaryMarketLoading, salaryMarketError, loadSalaryMarket } = useSalaryMarket({
+  getPosition: () => targetRole.value || selectedResume.value?.parsed?.current_title || '',
+})
 
 const analysisRecordId = ref(null)
 const analysisResult = ref(null)
@@ -950,31 +952,6 @@ const localizedLongTermGoals = computed(() =>
 // 薪资行情：来自岗位库真实分位数统计（GET /salary/overview）。
 // 这里不做任何推算——此前该卡片用 `yearsExp * 5 + 8` 和一组魔法增长率
 // 生成五年薪资曲线并画成柱状图，看起来像预测，实际与数据无关。
-const salaryMarket = ref(null)
-const salaryMarketLoading = ref(false)
-
-async function loadSalaryMarket() {
-  const isCurrent = latestSalaryCall()
-  const position = (targetRole.value || selectedResume.value?.parsed?.current_title || '').trim()
-  if (!position) {
-    salaryMarket.value = null
-    return
-  }
-  salaryMarketLoading.value = true
-  salaryMarketError.value = ''
-  salaryMarket.value = null // 同上：新的一次在飞时，不拿旧区间的数字顶着
-  try {
-    const data = await getSalaryOverview({ position }, { notifyError: false })
-    if (!isCurrent()) return
-    salaryMarket.value = data?.has_data ? data : null
-  } catch (e) {
-    if (!isCurrent()) return
-    salaryMarket.value = null
-    salaryMarketError.value = e?.userMessage || e?.message || '暂时无法读取岗位库薪资样本'
-  } finally {
-    if (isCurrent()) salaryMarketLoading.value = false
-  }
-}
 
 const salaryBands = computed(() => {
   const stats = salaryMarket.value?.statistics
@@ -1066,7 +1043,7 @@ const strategyTagType = computed(
 
 watch(selectedResumeId, async (value) => {
   if (!value) {
-    careerPaths.value = []
+    clearCareerPaths()
     return
   }
   rememberResume(value)
@@ -1129,33 +1106,6 @@ async function refreshBaseOptions() {
     baseOptionsError.value = true
   } finally {
     optionsLoading.value = false
-  }
-}
-
-async function loadCareerPaths() {
-  const isCurrent = latestPathsCall()
-  careerPathError.value = ''
-  if (!selectedResumeId.value) return
-  careerPathLoading.value = true
-  // 新的一次开始，上一份简历的方向先撤下：留着就等于把旧简历的结论挂在新简历下面
-  careerPaths.value = []
-  careerPathMeta.value = { summary: '', corpus: {}, message: '' }
-  try {
-    const data = await recommendCareerPaths(selectedResumeId.value)
-    if (!isCurrent()) return
-    careerPaths.value = data?.career_paths || []
-    careerPathMeta.value = {
-      summary: data?.summary || '',
-      corpus: data?.corpus || {},
-      message: data?.message || '',
-    }
-  } catch (e) {
-    if (!isCurrent()) return
-    careerPaths.value = []
-    careerPathMeta.value = { summary: '', corpus: {}, message: '' }
-    careerPathError.value = e?.userMessage || e?.message || '暂时无法基于岗位库给出职业方向'
-  } finally {
-    if (isCurrent()) careerPathLoading.value = false
   }
 }
 
