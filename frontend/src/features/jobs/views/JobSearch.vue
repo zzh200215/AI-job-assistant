@@ -252,110 +252,31 @@
 
           <el-tabs v-model="activeTab" class="market-tabs">
             <el-tab-pane label="实时搜索" name="search">
-              <div class="result-toolbar">
-                <div>
-                  <strong>{{ filteredExternalJobs.length }}</strong>
-                  <span class="toolbar-sub">个岗位</span>
-                  <span v-if="savedCount" class="toolbar-meta">其中 {{ savedCount }} 个已落库</span>
-                </div>
-                <div class="toolbar-actions">
-                  <el-button
-                    size="small"
-                    plain
-                    :disabled="compareSelection.length < 2"
-                    @click="openComparePanel"
-                  >
-                    对比 {{ compareSelection.length }} 个岗位
-                  </el-button>
-                  <el-tag v-if="resultMode && !isDemo" type="info" effect="plain">{{
-                    searchStateText
-                  }}</el-tag>
-                  <el-tag v-if="isDemo" type="warning" effect="plain">当前为演示数据</el-tag>
-                  <el-tag v-if="searchError && !isDemo" type="danger" effect="plain">{{
-                    searchError
-                  }}</el-tag>
-                </div>
-              </div>
-
-              <div v-if="hasSearched" class="result-source-note" :class="sourceBannerClass">
-                <strong>{{ sourceBannerTitle }}</strong>
-                <span>{{ sourceBannerDesc }}</span>
-              </div>
-
-              <div v-if="searching" class="state-box">
-                <el-icon class="is-loading"><Loading /></el-icon>
-                <span>{{ searchHint }}</span>
-              </div>
-
-              <div v-else-if="filteredExternalJobs.length" class="result-grid">
-                <article v-for="job in filteredExternalJobs" :key="job.uid" class="job-shell">
-                  <div class="job-shell-top">
-                    <div>
-                      <div class="job-title-row">
-                        <h3>{{ job.title }}</h3>
-                        <span class="source-pill">{{ sourceText(job.source) }}</span>
-                        <span v-if="job.local" class="local-pill">已落库</span>
-                      </div>
-                      <p class="job-company">
-                        <el-icon><OfficeBuilding /></el-icon>
-                        {{ job.company }}
-                      </p>
-                    </div>
-                    <button type="button" class="bookmark-btn" @click="toggleShortlist(job)">
-                      {{ isShortlisted(job) ? '移出清单' : '加入清单' }}
-                    </button>
-                  </div>
-
-                  <div class="job-facts">
-                    <span class="fact-emphasis">{{ job.salary }}</span>
-                    <span>{{ job.location || '地点待补充' }}</span>
-                    <span>{{ job.experience || '经验不限' }}</span>
-                    <span>{{ job.education || '学历不限' }}</span>
-                  </div>
-
-                  <div class="priority-row">
-                    <el-tag :type="priorityTagType(job.priorityLabel)" effect="dark" size="small">
-                      {{ job.priorityLabel }} · {{ job.priorityScore }}
-                    </el-tag>
-                    <span class="priority-reason">{{ job.priorityReason }}</span>
-                  </div>
-
-                  <div class="job-tags" v-if="job.skillTags.length">
-                    <el-tag
-                      v-for="tag in job.skillTags.slice(0, 8)"
-                      :key="tag"
-                      size="small"
-                      effect="plain"
-                    >
-                      {{ tag }}
-                    </el-tag>
-                  </div>
-
-                  <p class="job-summary">{{ job.summary || '暂无职位摘要' }}</p>
-
-                  <div class="job-actions">
-                    <el-button size="small" @click="openJobDetail(job, 'search')"
-                      >查看详情</el-button
-                    >
-                    <el-button size="small" @click="handlePipelineAction(job)">
-                      {{ pipelineStatusText(job) || '加入流程' }}
-                    </el-button>
-                    <el-button size="small" @click="toggleCompare(job)">
-                      {{ isCompared(job) ? '取消对比' : '加入对比' }}
-                    </el-button>
-                    <el-button size="small" @click="prefillAnalysis(job)">带入分析</el-button>
-                    <el-button size="small" type="primary" @click="startAnalysisForJob(job)">
-                      直接分析
-                    </el-button>
-                  </div>
-                </article>
-              </div>
-
-              <el-empty
-                v-else-if="hasSearched"
-                description="没有找到更贴近的岗位，换个关键词或城市试试。"
+              <SearchPane
+                :jobs="filteredExternalJobs"
+                :searching="searching"
+                :has-searched="hasSearched"
+                :search-hint="searchHint"
+                :search-error="searchError"
+                :is-demo="isDemo"
+                :result-mode="resultMode"
+                :saved-count="savedCount"
+                :state-text="searchStateText"
+                :banner-title="sourceBannerTitle"
+                :banner-desc="sourceBannerDesc"
+                :banner-class="sourceBannerClass"
+                :compare-count="compareSelection.length"
+                :compared-uids="compareSelection"
+                :is-shortlisted="isShortlisted"
+                :pipeline-status-text="pipelineStatusText"
+                @open-compare="openComparePanel"
+                @detail="(job) => openJobDetail(job, 'search')"
+                @pipeline="handlePipelineAction"
+                @compare="toggleCompare"
+                @shortlist="toggleShortlist"
+                @prefill="prefillAnalysis"
+                @analyze="startAnalysisForJob"
               />
-              <el-empty v-else description="先发起一次搜索，系统会把结果同步到你的岗位工作台。" />
             </el-tab-pane>
 
             <el-tab-pane label="岗位仓库" name="warehouse">
@@ -377,159 +298,23 @@
             </el-tab-pane>
 
             <el-tab-pane label="智能推荐" name="recommend">
-              <div class="recommend-toolbar">
-                <div class="recommend-left">
-                  <span class="toolbar-title">以当前简历为中心的岗位匹配</span>
-                  <span class="toolbar-sub" v-if="selectedResumeName">{{
-                    selectedResumeName
-                  }}</span>
-                </div>
-                <div class="recommend-actions">
-                  <el-input
-                    v-model="recommendFilters.location"
-                    clearable
-                    size="small"
-                    placeholder="地点偏好"
-                    class="mini-input"
-                  />
-                  <el-input
-                    v-model="recommendFilters.industry"
-                    clearable
-                    size="small"
-                    placeholder="行业偏好"
-                    class="mini-input"
-                  />
-                  <el-button
-                    size="small"
-                    type="primary"
-                    @click="loadRecommendations"
-                    :disabled="!selectedResumeId"
-                  >
-                    更新推荐
-                  </el-button>
-                </div>
-              </div>
-
-              <div v-if="recommendLoading" class="state-box">
-                <el-icon class="is-loading"><Loading /></el-icon>
-                <span>正在根据简历生成匹配结果...</span>
-              </div>
-
-              <AppLoadError
-                v-else-if="recommendError"
-                title="推荐结果拉取失败"
-                :message="recommendError"
-                @retry="loadRecommendations"
-              />
-
-              <div v-else-if="normalizedRecommendations.length" class="recommend-grid">
-                <article
-                  v-for="job in normalizedRecommendations"
-                  :key="job.uid"
-                  class="recommend-card"
-                >
-                  <div class="recommend-score">
-                    <strong>{{ job.matchScore }}</strong>
-                    <span>匹配分</span>
-                  </div>
-                  <div class="recommend-body">
-                    <div class="job-title-row">
-                      <h3>{{ job.title }}</h3>
-                      <el-tag
-                        :type="recommendTagType(job.recommendationType)"
-                        effect="dark"
-                        size="small"
-                      >
-                        {{ job.recommendationType }}
-                      </el-tag>
-                    </div>
-
-                    <p class="job-company">
-                      <el-icon><OfficeBuilding /></el-icon>
-                      {{ job.company }} / {{ job.location || '地点待补充' }}
-                    </p>
-
-                    <div class="job-facts compact">
-                      <span class="fact-emphasis">{{ job.salary }}</span>
-                      <span>{{ job.industry || '行业待补充' }}</span>
-                    </div>
-
-                    <div class="priority-row compact">
-                      <el-tag :type="priorityTagType(job.priorityLabel)" effect="dark" size="small">
-                        {{ job.priorityLabel }} / {{ job.priorityScore }}
-                      </el-tag>
-                      <span class="priority-reason">{{ job.priorityReason }}</span>
-                    </div>
-
-                    <p class="recommend-reason">{{ job.matchReason }}</p>
-
-                    <div class="recommend-tags">
-                      <div v-if="job.skillOverlap.length" class="tag-group">
-                        <span class="tag-label ok">重合</span>
-                        <el-tag
-                          v-for="tag in job.skillOverlap.slice(0, 6)"
-                          :key="tag"
-                          size="small"
-                          type="success"
-                          effect="plain"
-                        >
-                          {{ tag }}
-                        </el-tag>
-                      </div>
-                      <div v-if="job.skillGap.length" class="tag-group">
-                        <span class="tag-label gap">缺口</span>
-                        <el-tag
-                          v-for="tag in job.skillGap.slice(0, 6)"
-                          :key="tag"
-                          size="small"
-                          type="danger"
-                          effect="plain"
-                        >
-                          {{ tag }}
-                        </el-tag>
-                      </div>
-                    </div>
-
-                    <div class="recommend-signals">
-                      <span :class="signalClass(job.salaryMatch)"
-                        >薪资{{ job.salaryMatch ? '匹配' : '待评估' }}</span
-                      >
-                      <span :class="signalClass(job.locationMatch)"
-                        >地点{{ job.locationMatch ? '匹配' : '待协商' }}</span
-                      >
-                      <span :class="signalClass(job.experienceMatch)"
-                        >经验{{ job.experienceMatch ? '合适' : '有偏差' }}</span
-                      >
-                    </div>
-
-                    <div class="job-actions">
-                      <el-button size="small" @click="openJobDetail(job, 'recommend')"
-                        >查看详情</el-button
-                      >
-                      <el-button size="small" @click="handlePipelineAction(job)">
-                        {{ pipelineStatusText(job) || '加入流程' }}
-                      </el-button>
-                      <el-button size="small" @click="toggleCompare(job)">
-                        {{ isCompared(job) ? '取消对比' : '加入对比' }}
-                      </el-button>
-                      <el-button size="small" @click="toggleShortlist(job)">
-                        {{ isShortlisted(job) ? '已在清单' : '加入清单' }}
-                      </el-button>
-                      <el-button size="small" type="primary" @click="startAnalysisForJob(job)"
-                        >直接分析</el-button
-                      >
-                    </div>
-                  </div>
-                </article>
-              </div>
-
-              <el-empty
-                v-else
-                :description="
-                  selectedResumeId
-                    ? '还没有足够贴合的推荐结果，可以先补充岗位池。'
-                    : '先选择一份简历，再获取推荐岗位。'
-                "
+              <RecommendPane
+                :jobs="normalizedRecommendations"
+                :loading="recommendLoading"
+                :error="recommendError"
+                :filters="recommendFilters"
+                :resume-name="selectedResumeName"
+                :resume-selected="selectedResumeId"
+                :compared-uids="compareSelection"
+                :is-shortlisted="isShortlisted"
+                :pipeline-status-text="pipelineStatusText"
+                @update:filters="(value) => (recommendFilters = value)"
+                @refresh="loadRecommendations"
+                @detail="(job) => openJobDetail(job, 'recommend')"
+                @pipeline="handlePipelineAction"
+                @compare="toggleCompare"
+                @shortlist="toggleShortlist"
+                @analyze="startAnalysisForJob"
               />
             </el-tab-pane>
 
@@ -722,25 +507,19 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
-import {
-  ArrowRight,
-  Loading,
-  OfficeBuilding,
-  Promotion,
-  RefreshRight,
-  Search,
-} from '@element-plus/icons-vue'
+import { ArrowRight, Promotion, RefreshRight, Search } from '@element-plus/icons-vue'
 import { getResume, getResumeList } from '@/api/resume'
 import { explainMatch } from '@/api/analysis'
 import { queryRewriteTest } from '@/api/knowledge'
 import { getJobDetail, seedDemoJobs, startFullAnalysis } from '@/api/jobs'
-import { priorityTagType } from '@/utils/statusTone'
 import { rememberResume } from '@/utils/lastSelection'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import JobCompareDialog from '@/features/jobs/components/JobCompareDialog.vue'
 import JobDetailDrawer from '@/features/jobs/components/JobDetailDrawer.vue'
 import PipelinePane from '@/features/jobs/components/PipelinePane.vue'
+import RecommendPane from '@/features/jobs/components/RecommendPane.vue'
+import SearchPane from '@/features/jobs/components/SearchPane.vue'
 import WarehousePane from '@/features/jobs/components/WarehousePane.vue'
 import { useJobPipeline } from '@/features/jobs/composables/useJobPipeline'
 import { useJobRecommend } from '@/features/jobs/composables/useJobRecommend'
@@ -752,10 +531,7 @@ import {
   pipelineStageLabel,
   pipelineStages,
   rankMap,
-  recommendTagType,
   salaryMid,
-  signalClass,
-  sourceText,
 } from '@/features/jobs/lib/jobModel'
 
 const route = useRoute()

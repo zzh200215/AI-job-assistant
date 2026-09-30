@@ -19,6 +19,10 @@ const BUDGET = {
        WarehousePane 的拷贝里没有一个色值（全是 var()），所以它不进这张表——未知的路径预算就是 0。
        这笔债的正确还法是把它们换成主题 token 并逐路由 getComputedStyle 差分，见 §7 阶段 2 的说明。 */
     'src/features/jobs/components/PipelinePane.vue': 5,
+    /* D45 又搬出两个面板，同一笔复制成本再记一次：这两份是从父页面**复制**的（父页面 45 条一条没删），
+       所以这一维的总数随拆页上升：45 → 50 → 67。不是新写的色值，是同一份 rgba 现在住在两个文件里。 */
+    'src/features/jobs/components/SearchPane.vue': 8,
+    'src/features/jobs/components/RecommendPane.vue': 9,
     'src/layouts/DefaultLayout.vue': 34,
     'src/features/shell/views/Profile.vue': 31,
     'src/features/planning/views/CareerPlanning.vue': 27,
