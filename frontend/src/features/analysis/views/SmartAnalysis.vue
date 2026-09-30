@@ -1291,9 +1291,12 @@ import {
 } from '@/utils/lastSelection'
 import { uploadResume, parseResume } from '@/api/resume'
 import { createJD, parseJD } from '@/api/jd'
-import { runFullAnalysis, getAnalysis, getAnalysisReferences, explainMatch } from '@/api/analysis'
+import { runFullAnalysis, getAnalysis } from '@/api/analysis'
 import { generateOptimized } from '@/api/resume'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
+import { useAnalysisReferences } from '@/features/analysis/composables/useAnalysisReferences'
+import { useCareerPaths } from '@/features/analysis/composables/useCareerPaths'
+import { useMatchExplain } from '@/features/analysis/composables/useMatchExplain'
 import { scoreToneColor, scoreToneFillClass } from '@/utils/scoreTone'
 import {
   localizeRecommendationText,
@@ -1331,18 +1334,30 @@ const reportTab = ref('skills')
 const agentSteps = ref([])
 const genOptimizing = ref(false)
 const genRedirecting = ref(false)
-const explainLoading = ref(false)
-const explainResult = ref(null)
 const { pollTask: pollAgentTask } = useAgentTaskPolling()
 const taskOutcome = ref('idle')
 
-const references = ref([])
-const referencesLoading = ref(false)
-const refOpenDocs = ref([0])
-const referenceQuery = ref('')
-const referenceConfidence = ref(null)
-
 const jdForm = reactive({ title: '', company: '', raw_text: '' })
+
+/* 三条按标签页触发的链（D50 出页）。"用哪个简历 / 哪个 JD / 哪条记录"仍是页面上的跨链知识，
+   所以传的是取值函数，链自己不持有 refs。 */
+const { explainLoading, explainResult, loadExplainMatch, clearExplain } = useMatchExplain({
+  getResumeId: () => result.value?.resume_id || resumeInfo.value?.id,
+  getJdId: () => result.value?.jd_id || jdInfo.value?.id,
+})
+const {
+  references,
+  referencesLoading,
+  refOpenDocs,
+  referenceQuery,
+  referenceConfidence,
+  loadReferences,
+  clearReferences,
+} = useAnalysisReferences({ getResult: () => result.value })
+const { careerPaths, careerPathsLoading, careerPathSummary, loadCareerPaths, clearCareerPaths } =
+  useCareerPaths({
+    getResumeId: () => result.value?.resume_id || resumeInfo.value?.id,
+  })
 
 const canAnalyze = computed(() => {
   const hasJD = jdInfo.value || (jdForm.title.trim() && jdForm.raw_text.trim())
@@ -1480,14 +1495,14 @@ const customUploadResume = async ({ file }) => {
 
 const clearResume = () => {
   resumeInfo.value = null
-  explainResult.value = null
+  clearExplain()
 }
 const clearJD = () => {
   jdInfo.value = null
   jdForm.title = ''
   jdForm.company = ''
   jdForm.raw_text = ''
-  explainResult.value = null
+  clearExplain()
 }
 
 // ---- Analysis ----
@@ -1515,13 +1530,12 @@ const onStartAnalysis = async () => {
   loading.value = true
   taskOutcome.value = 'idle'
   result.value = null
-  explainResult.value = null
   agentSteps.value = []
-  references.value = []
-  referenceQuery.value = ''
-  referenceConfidence.value = null
-  careerPaths.value = []
-  careerPathSummary.value = ''
+  /* 三条链一起作废，而不是只把值清掉：上一轮的响应可能还在飞，只清值等于让它待会儿
+     把旧简历/旧 JD 的结果写在新一轮的屏幕上。 */
+  clearExplain()
+  clearReferences()
+  clearCareerPaths()
 
   try {
     const startRes = await runFullAnalysis({
@@ -1577,59 +1591,6 @@ const onTabClick = (tab) => {
   if (tab.paneName === 'references') loadReferences()
   else if (tab.paneName === 'explain') loadExplainMatch()
   else if (tab.paneName === 'career-paths') loadCareerPaths()
-}
-
-const loadExplainMatch = async (force = false) => {
-  const resumeId = result.value?.resume_id || resumeInfo.value?.id
-  const jdId = result.value?.jd_id || jdInfo.value?.id
-  if (!resumeId || !jdId) return
-  if (explainResult.value && !force) return
-  explainLoading.value = true
-  try {
-    const data = await explainMatch({ resume_id: resumeId, jd_id: jdId })
-    explainResult.value = data
-  } catch (e) {
-    console.error('加载匹配度解释失败:', e)
-  } finally {
-    explainLoading.value = false
-  }
-}
-
-const careerPaths = ref([])
-const careerPathsLoading = ref(false)
-const careerPathSummary = ref('')
-
-const loadCareerPaths = async () => {
-  const rid = result.value?.resume_id || resumeInfo.value?.id
-  if (!rid) return
-  careerPathsLoading.value = true
-  try {
-    const { recommendCareerPaths } = await import('@/api/jobs')
-    const data = await recommendCareerPaths(rid)
-    careerPaths.value = data?.career_paths || []
-    careerPathSummary.value = data?.summary || ''
-  } catch (e) {
-    console.error('加载职业方向失败:', e)
-  } finally {
-    careerPathsLoading.value = false
-  }
-}
-
-const loadReferences = async (force = false) => {
-  if ((!force && references.value.length > 0) || !result.value?.id) return
-  referencesLoading.value = true
-  try {
-    const data = await getAnalysisReferences(result.value.id)
-    references.value = data?.references || []
-    referenceQuery.value = data?.query || ''
-    if (!result.value?.rag_confidence && data?.rag_confidence) {
-      referenceConfidence.value = data.rag_confidence
-    }
-  } catch (e) {
-    console.error('加载引用来源失败:', e)
-  } finally {
-    referencesLoading.value = false
-  }
 }
 
 const onGenerateOptimized = async () => {
