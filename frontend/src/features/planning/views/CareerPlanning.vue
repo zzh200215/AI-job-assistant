@@ -738,7 +738,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
-import { CircleCloseFilled, Loading, SuccessFilled, WarningFilled } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { getResumeList } from '@/api/resume'
 import { createJD, getJDList } from '@/api/jd'
@@ -748,6 +747,24 @@ import { getSalaryOverview } from '@/api/salary'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
 import { useLatestCall } from '@/composables/useLatestCall'
 import { localizeSentence, normalizeLocalizedTextList } from '@/utils/analysisLocalization'
+import {
+  RADAR_CENTER_POINT as centerPoint,
+  RADAR_RADIUS as radarRadius,
+  complexityTag,
+  coveragePct,
+  gapFacts,
+  jdOptionLabel,
+  joinedText,
+  makeRadarPolygon,
+  priorityTag,
+  resumeOptionLabel,
+  safeScore,
+  sampleIdText,
+  statusText,
+  stepIcon,
+  stepLabel,
+  stepType,
+} from '@/features/planning/lib/planningModel'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import {
   forgetJD,
@@ -795,9 +812,6 @@ const salaryMarketError = ref('')
 const analysisRecordId = ref(null)
 const analysisResult = ref(null)
 const { pollTask } = useAgentTaskPolling()
-
-const centerPoint = 160
-const radarRadius = 116
 
 const selectedResume = computed(
   () => resumeOptions.value.find((item) => item.id === selectedResumeId.value) || null
@@ -1076,17 +1090,6 @@ onMounted(async () => {
   await refreshBaseOptions()
 })
 
-function resumeOptionLabel(item) {
-  const name = item.name || item.parsed?.name || item.file_name
-  const title = item.parsed?.current_title || '待补充职称'
-  return `${name} · ${title}`
-}
-
-function jdOptionLabel(item) {
-  const company = item.company || '未填写公司'
-  return `${item.title} · ${company}`
-}
-
 function restoreSelections() {
   const resumeId = readResumeId()
   const jdId = readJDId()
@@ -1154,25 +1157,6 @@ async function loadCareerPaths() {
   } finally {
     if (isCurrent()) careerPathLoading.value = false
   }
-}
-
-function coveragePct(item) {
-  return Number.isFinite(item?.coverage) ? Math.round(item.coverage * 100) : null
-}
-
-function gapFacts(item) {
-  return (item?.gap_skills || []).map((row) => {
-    const parts = []
-    if (row.required_count) parts.push(`${row.required_count} 条岗位必备`)
-    if (row.nice_count) parts.push(`${row.nice_count} 条列为加分`)
-    return { skill: row.skill, detail: parts.join('，') || '仅个别岗位提及' }
-  })
-}
-
-function sampleIdText(ids) {
-  const list = ids || []
-  if (!list.length) return ''
-  return list.slice(0, 4).join('、') + (list.length > 4 ? ' 等' : '')
 }
 
 async function startCareerPlanning() {
@@ -1282,94 +1266,6 @@ function buildGoalJDText() {
     `当前关注点：${focusNotes.value.trim() || '希望结合现有经验制定成长路径。'}`,
     `目标补充要求：${goalNotes.value.trim() || '优先考虑 AI 工程、后端架构、项目 owner 能力。'}`,
   ].join('\n')
-}
-
-function makeRadarPolygon(scores) {
-  const count = scores.length
-  if (!count) return ''
-  return scores
-    .map((score, index) => {
-      const angle = -Math.PI / 2 + (Math.PI * 2 * index) / count
-      const radius = (safeScore(score) / 100) * radarRadius
-      const x = centerPoint + Math.cos(angle) * radius
-      const y = centerPoint + Math.sin(angle) * radius
-      return `${x.toFixed(2)},${y.toFixed(2)}`
-    })
-    .join(' ')
-}
-
-function safeScore(value) {
-  const number = Number(value || 0)
-  return Math.max(0, Math.min(100, Math.round(number)))
-}
-
-function joinedText(value) {
-  if (!Array.isArray(value) || !value.length) return ''
-  return value.join(' / ')
-}
-
-function priorityTag(priority) {
-  return (
-    {
-      高: 'danger',
-      中: 'warning',
-      低: 'info',
-    }[priority] || 'info'
-  )
-}
-
-function complexityTag(complexity) {
-  return (
-    {
-      困难: 'danger',
-      中等: 'warning',
-      简单: 'success',
-    }[complexity] || 'info'
-  )
-}
-
-function stepLabel(name) {
-  return (
-    {
-      intent_recognition: '意图识别',
-      resume_parse: '简历解析',
-      jd_parse: 'JD 解析',
-      task_planning: '任务规划',
-      knowledge_retrieval: '知识检索',
-      matching_analysis: '匹配分析',
-      resume_optimization: '简历优化',
-      interview_question_generation: '面试题生成',
-      self_check: '自我校验',
-      final_report: '汇总报告',
-      career_planning: '职业规划',
-    }[name] || name
-  )
-}
-
-function statusText(status) {
-  return (
-    {
-      pending: '等待中',
-      running: '执行中',
-      completed: '已完成',
-      failed: '失败',
-      skipped: '跳过',
-    }[status] || status
-  )
-}
-
-function stepType(status) {
-  if (status === 'completed') return 'success'
-  if (status === 'running') return 'primary'
-  if (status === 'failed') return 'danger'
-  return 'info'
-}
-
-function stepIcon(status) {
-  if (status === 'completed') return SuccessFilled
-  if (status === 'running') return Loading
-  if (status === 'failed') return CircleCloseFilled
-  return WarningFilled
 }
 </script>
 

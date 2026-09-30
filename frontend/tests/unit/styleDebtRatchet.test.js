@@ -133,7 +133,10 @@ const BUDGET = {
     'src/features/analysis/lib/analysisModel.js': 9,
     'src/features/analysis/views/SmartAnalysis.vue': 4,
     'src/features/admin/views/Tenants.vue': 9,
-    'src/features/planning/views/CareerPlanning.vue': 9,
+    /* D53 同理：职业规划页的优先级/复杂度两张表搬进 lib，6 条是搬家的账不是新债，
+       页面侧只剩任务状态那一支（3 条）。合并计数与搬前一样是 9。 */
+    'src/features/planning/lib/planningModel.js': 6,
+    'src/features/planning/views/CareerPlanning.vue': 3,
     'src/features/pipeline/views/PipelineKanban.vue': 9,
     'src/features/admin/views/PromptTrace.vue': 7,
     'src/features/analysis/views/AnalysisResult.vue': 5,
