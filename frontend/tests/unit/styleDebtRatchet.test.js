@@ -31,6 +31,9 @@ const BUDGET = {
        看不见动态类名），所以这 3 个是从页面里**重复**出来的，不是新增的债：这一页面上的色值
        15 → 18。css 分块实测 17.01 → 19.42 kB、js 分块 46.36 → 48.30 kB。 */
     'src/features/analysis/components/CareerPlanPane.vue': 3,
+    /* D52 同上：引用来源面板复制的是页面里 "RAG Confidence / References / Loading state" 三段，
+       这 3 个是从 15 里重复出来的第二个副本；匹配度解释面板复制的两段一个色值都没有，所以不列。 */
+    'src/features/analysis/components/ReferencesPane.vue': 3,
     'src/features/jobs/views/JobRecommend.vue': 20,
     'src/features/auth/views/Register.vue': 26,
     'src/features/interview/views/InterviewReport.vue': 22,

@@ -61,7 +61,21 @@ const EXPLAIN = {
 vi.mock('@/api/analysis', () => ({
   runFullAnalysis: vi.fn(async () => ({ task_id: 't1' })),
   getAnalysis: vi.fn(async () => RECORD),
-  getAnalysisReferences: vi.fn(async () => ({ references: [], query: '' })),
+  getAnalysisReferences: vi.fn(async () => ({
+    references: [
+      {
+        doc_title: '简历模板 A',
+        doc_type: 'resume_template',
+        chunks: [{ text: '片段一', score: 0.9 }],
+      },
+      {
+        doc_title: '能力模型 B',
+        doc_type: 'skill_model',
+        chunks: [{ text: '片段二', score: 0.4 }],
+      },
+    ],
+    query: '检索词',
+  })),
   explainMatch: vi.fn(async () => EXPLAIN),
 }))
 
@@ -156,6 +170,21 @@ describe('SmartAnalysis 的展示形状接线', () => {
   it('解释面板把必需列与加分列合成一列，重复的那项留在必需列的位置', async () => {
     await runAnalysis()
     expect(explainMissingTags()).toEqual(['Rust', 'K8s'])
+  })
+
+  it('引用文档默认只展开第一份，点第二份才展开', async () => {
+    await runAnalysis()
+    const wraps = () => [...document.querySelectorAll('#pane-references .el-collapse-item__wrap')]
+    const headers = [...document.querySelectorAll('#pane-references .el-collapse-item__header')]
+    expect(wraps().length).toBe(2)
+    expect(wraps()[1].style.display).toBe('none')
+    headers[1].click()
+    await flushPromises()
+    /* 这条**不是**"`v-model:ref-open-docs` 回写承重"的证据：把那条绑定整行删掉，16 条用例
+       照样全绿——el-collapse 拿不到受控值时仍按自己的内部状态展开。留着它是因为
+       "展开了哪几份"这个值归页面的链持有（面板不该自己改 props，见 analysisResultPanes 那条），
+       而屏幕上要留住的是默认只展开第一份。 */
+    expect(wraps()[1].style.display).not.toBe('none')
   })
 
   it('技能缺口第一项是对象时走结构化那一支，是字符串时走列表那一支', async () => {

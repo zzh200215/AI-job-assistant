@@ -458,110 +458,7 @@
 
             <!-- 匹配度解释 -->
             <el-tab-pane label="匹配度解释" name="explain">
-              <div v-if="explainLoading" class="inline-loading">
-                <el-icon class="is-loading" size="22"><Loading /></el-icon>
-                <p>正在生成匹配度解释...</p>
-              </div>
-              <template v-else-if="explainResult">
-                <div class="explain-hero">
-                  <div class="explain-score-ring">
-                    <el-progress
-                      type="circle"
-                      :percentage="explainResult.overall_score"
-                      :stroke-width="8"
-                      :size="120"
-                      :color="scoreToneColor(explainResult.overall_score)"
-                    >
-                      <template #default>
-                        <div class="big-score data-value">{{ explainResult.overall_score }}</div>
-                        <div class="score-lbl">总分</div>
-                      </template>
-                    </el-progress>
-                  </div>
-                  <div class="explain-score-info">
-                    <el-tag :type="explainRecTag" size="large" effect="dark" class="mb">
-                      {{ localizedExplainRecommendation }}
-                    </el-tag>
-                    <p class="explain-reason">{{ localizedExplainOverallReason }}</p>
-                    <p class="explain-weights">
-                      权重: skill{{ explainResult.weights_used.skill }} / project{{
-                        explainResult.weights_used.project
-                      }}
-                      / exp{{ explainResult.weights_used.experience }} / edu{{
-                        explainResult.weights_used.education
-                      }}
-                      / keyword{{ explainResult.weights_used.keyword }} / bonus{{
-                        explainResult.weights_used.bonus
-                      }}
-                    </p>
-                  </div>
-                </div>
-
-                <h4 class="mt">六维评分详情</h4>
-                <div v-for="dim in explainResult.dimensions" :key="dim.name" class="dim-block">
-                  <div class="dim-header">
-                    <span class="dim-name">{{ dim.name }}</span>
-                    <span class="dim-w">权重 {{ (dim.weight * 100).toFixed(0) }}%</span>
-                    <span
-                      class="dim-score data-value"
-                      :style="{ color: scoreToneColor(dim.score) }"
-                      >{{ dim.score.toFixed(1) }}</span
-                    >
-                  </div>
-                  <div class="dim-bar">
-                    <div
-                      class="dim-fill"
-                      :style="{ width: `${dim.score}%`, background: scoreToneColor(dim.score) }"
-                    />
-                  </div>
-                  <p class="dim-reason">{{ localizeSentence(dim.reason) }}</p>
-                  <div v-if="dim.details?.length" class="dim-details">
-                    <el-tag
-                      v-for="detail in dim.details"
-                      :key="detail"
-                      size="small"
-                      type="info"
-                      effect="plain"
-                      style="margin: 1px"
-                      >{{ localizeSentence(detail) }}</el-tag
-                    >
-                  </div>
-                </div>
-
-                <el-row :gutter="16" class="mt">
-                  <el-col :span="12">
-                    <h4>已匹配技能</h4>
-                    <el-tag
-                      v-for="s in explainMatchedSkills"
-                      :key="s"
-                      type="success"
-                      style="margin: 2px"
-                      >{{ s }}</el-tag
-                    >
-                    <el-empty
-                      v-if="!explainMatchedSkills.length"
-                      description="暂无"
-                      :image-size="40"
-                    />
-                  </el-col>
-                  <el-col :span="12">
-                    <h4>缺失技能</h4>
-                    <el-tag
-                      v-for="s in explainMissingSkills"
-                      :key="s"
-                      type="danger"
-                      style="margin: 2px"
-                      >{{ s }}</el-tag
-                    >
-                    <el-empty
-                      v-if="!explainMissingSkills.length"
-                      description="暂无"
-                      :image-size="40"
-                    />
-                  </el-col>
-                </el-row>
-              </template>
-              <el-empty v-else description="完成智能分析后可在这里查看匹配度解释" />
+              <ExplainPane :loading="explainLoading" :explain-result="explainResult" />
             </el-tab-pane>
 
             <!-- 职业方向 -->
@@ -803,97 +700,13 @@
 
             <!-- 引用来源 -->
             <el-tab-pane label="📚 引用来源" name="references">
-              <div v-if="referencesLoading" class="inline-loading">
-                <el-icon class="is-loading" size="22"><Loading /></el-icon>
-                <p>正在检索引用来源…</p>
-              </div>
-              <template v-else-if="references.length > 0 || analysisConfidence">
-                <div v-if="analysisConfidence" class="rag-confidence">
-                  <div class="rag-confidence-main">
-                    <div class="rag-badge" :class="`badge-${analysisConfidence.level || 'low'}`">
-                      {{ analysisConfidence.score ?? 0 }}
-                    </div>
-                    <div class="rag-confidence-copy">
-                      <div class="rag-confidence-title">
-                        本次检索可信度
-                        <el-tag size="small" :type="confidenceTagType(analysisConfidence.level)">{{
-                          analysisConfidence.label || '-'
-                        }}</el-tag>
-                      </div>
-                      <div class="rag-confidence-summary">
-                        {{ analysisConfidence.summary || '暂无可信度说明' }}
-                      </div>
-                      <div v-if="referenceQuery" class="rag-confidence-query">
-                        检索查询：{{ referenceQuery }}
-                      </div>
-                    </div>
-                  </div>
-                  <div v-if="analysisConfidence.breakdown?.length" class="rag-breakdown">
-                    <div
-                      v-for="item in analysisConfidence.breakdown"
-                      :key="item.name"
-                      class="rag-breakdown-item"
-                    >
-                      <span>{{ item.name }}</span>
-                      <strong class="data-value">{{ item.score }}</strong>
-                      <em>{{ item.detail }}</em>
-                    </div>
-                  </div>
-                  <div v-if="analysisConfidence.risks?.length" class="rag-risk-list">
-                    <span class="rag-risk-label">风险提示</span>
-                    <span
-                      v-for="risk in analysisConfidence.risks"
-                      :key="risk"
-                      class="rag-risk-item"
-                      >{{ risk }}</span
-                    >
-                  </div>
-                </div>
-                <el-alert
-                  v-if="references.length > 0"
-                  title="本次分析参考了以下知识库文档"
-                  type="info"
-                  :closable="false"
-                  show-icon
-                  style="margin-bottom: 16px"
-                />
-                <el-collapse v-if="references.length > 0" v-model="refOpenDocs">
-                  <el-collapse-item
-                    v-for="(doc, i) in references"
-                    :key="i"
-                    :title="`${doc.doc_title}  (${typeLabel(doc.doc_type)})`"
-                    :name="i"
-                  >
-                    <template #title>
-                      <div class="ref-title">
-                        <el-icon><Document /></el-icon>
-                        <span class="ref-doc-title">{{ doc.doc_title }}</span>
-                        <el-tag size="small" type="info" effect="plain">{{
-                          typeLabel(doc.doc_type)
-                        }}</el-tag>
-                      </div>
-                    </template>
-                    <div class="ref-chunks">
-                      <div v-for="(chunk, j) in doc.chunks" :key="j" class="ref-chunk-item">
-                        <div class="ref-chunk-header">
-                          <span class="ref-chunk-num">片段 #{{ j + 1 }}</span>
-                          <el-tag size="small" :type="scoreTagType(chunk.score)" effect="plain"
-                            >相似度 {{ (chunk.score * 100).toFixed(1) }}%</el-tag
-                          >
-                        </div>
-                        <el-input
-                          :model-value="chunk.text"
-                          type="textarea"
-                          :rows="2"
-                          readonly
-                          class="ref-chunk-text"
-                        />
-                      </div>
-                    </div>
-                  </el-collapse-item>
-                </el-collapse>
-              </template>
-              <el-empty v-else description="暂无引用知识（知识库为空或未检索到相关文档）" />
+              <ReferencesPane
+                v-model:ref-open-docs="refOpenDocs"
+                :loading="referencesLoading"
+                :references="references"
+                :reference-query="referenceQuery"
+                :analysis-confidence="analysisConfidence"
+              />
             </el-tab-pane>
           </el-tabs>
         </div>
@@ -914,7 +727,6 @@ import {
   Promotion,
   Loading,
   CircleCloseFilled,
-  Document,
   InfoFilled,
   EditPen,
   Search,
@@ -935,6 +747,8 @@ import { useAnalysisReferences } from '@/features/analysis/composables/useAnalys
 import { useCareerPaths } from '@/features/analysis/composables/useCareerPaths'
 import { useMatchExplain } from '@/features/analysis/composables/useMatchExplain'
 import CareerPlanPane from '@/features/analysis/components/CareerPlanPane.vue'
+import ExplainPane from '@/features/analysis/components/ExplainPane.vue'
+import ReferencesPane from '@/features/analysis/components/ReferencesPane.vue'
 import { scoreToneColor, scoreToneFillClass } from '@/utils/scoreTone'
 import {
   localizeRecommendationText,
@@ -945,18 +759,14 @@ import {
 import {
   confidenceTagType,
   dimensionScore,
-  explainRecommendationTag,
   groupInterviewQuestions,
   groupTitle,
   hasStructuredCareerGaps,
-  mergeMissingSkills,
   normalizeConfidence,
   pickMatchedSkills,
   pickMissingSkills,
-  scoreTagType,
   statusText,
   stepLabel,
-  typeLabel,
 } from '@/features/analysis/lib/analysisModel'
 
 const router = useRouter()
@@ -1082,17 +892,6 @@ const analysisConfidence = computed(
     normalizeConfidence(result.value?.rag_confidence) ||
     normalizeConfidence(referenceConfidence.value)
 )
-
-const localizedExplainRecommendation = computed(() =>
-  localizeRecommendationText(explainResult.value?.recommendation || '')
-)
-const localizedExplainOverallReason = computed(() =>
-  localizeSentence(explainResult.value?.overall_reason || '')
-)
-const explainRecTag = computed(() => explainRecommendationTag(localizedExplainRecommendation.value))
-
-const explainMatchedSkills = computed(() => explainResult.value?.skill_match?.matched || [])
-const explainMissingSkills = computed(() => mergeMissingSkills(explainResult.value?.skill_match))
 
 const careerData = computed(() => result.value?.career_planning || null)
 const visualPhases = computed(() => careerData.value?.visual_roadmap?.phases || [])
