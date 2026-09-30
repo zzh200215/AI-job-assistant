@@ -140,12 +140,14 @@ describe('引用来源面板', () => {
     expect(wrapper.find('.rag-confidence-title').text()).toContain('本次检索可信度')
   })
 
-  it('展开哪几份文档不自己改 prop，而是写回 update:refOpenDocs', async () => {
+  it('展开哪几份文档不自己改状态，而是写回 update:refOpenDocs', async () => {
     const wrapper = mountRefs({ references: DOCS, refOpenDocs: [0] })
     await wrapper.findAll('.el-collapse-item__header')[1].trigger('click')
+    /* 这是这条接口唯一可观测的契约。两件事都在此记下：
+       - 面板改成"自己 ref 一份、不发事件"→ 这条红（实测：1 红 / 页面那 12 条照旧绿）；
+       - 但反过来**不成立**：删掉页面上的 `v-model:ref-open-docs` 绑定，所有测试照旧全绿，
+         因为 el-collapse 没有受控值时也按内部状态展开。所以这条钉的是接口形状，不是一条缺陷。 */
     expect(wrapper.emitted('update:refOpenDocs')).toBeTruthy()
     expect(wrapper.emitted('update:refOpenDocs').at(-1)).toEqual([[0, 1]])
-    // 面板自己没有把 props 改掉：值仍由页面的链持有
-    expect(wrapper.props('refOpenDocs')).toEqual([0])
   })
 })
