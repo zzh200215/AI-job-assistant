@@ -169,6 +169,22 @@ describe('整页的写：一次只跑一趟', () => {
     expect(batchBarButtons().map((b) => b.disabled)).toEqual([false, false, false]) // 标记释放了
   })
 
+  it('删除那一趟也举同一个标记，而且举在确认框之后', async () => {
+    const gate = deferred()
+    api.deleteJobPipelineEntry.mockReturnValue(gate.promise)
+    const wrapper = await renderList()
+    await selectRows(wrapper, CARDS)
+
+    wrapper.findAllComponents(ElDropdown)[0].vm.$emit('command', 'delete')
+    await flushPromises()
+    expect(api.deleteJobPipelineEntry.mock.calls).toEqual([[1]])
+    expect(batchBarButtons().map((b) => b.disabled)).toEqual([true, true, true])
+
+    gate.resolve({ ok: true })
+    await flushPromises()
+    expect(batchBarButtons().map((b) => b.disabled)).toEqual([false, false, false])
+  })
+
   it('批量在飞时两个卡片下拉被禁用（看板列与列表行各一个）', async () => {
     const gate = deferred()
     api.movePipelineStage.mockReturnValue(gate.promise)
