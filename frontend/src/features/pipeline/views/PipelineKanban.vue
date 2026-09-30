@@ -69,92 +69,14 @@
       </div>
     </section>
 
-    <!-- 投递统计面板 -->
-    <div v-if="showStats && totalCards > 0" class="stats-panel">
-      <div class="stats-header">
-        <h3>投递转化分析</h3>
-      </div>
-      <div class="stats-body">
-        <div class="stats-grid">
-          <div class="stat-item">
-            <span class="stat-value">{{ totalCards }}</span>
-            <span class="stat-label">总投递</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ conversionRate('applied') }}%</span>
-            <span class="stat-label">投递率</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ conversionRate('interview') }}%</span>
-            <span class="stat-label">面试率</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ conversionRate('offer') }}%</span>
-            <span class="stat-label">Offer率</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ rejectionRate }}%</span>
-            <span class="stat-label">拒绝率</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ avgResponseDays }}</span>
-            <span class="stat-label">平均响应(天)</span>
-          </div>
-        </div>
-        <div class="stats-funnel">
-          <div v-for="(stage, idx) in funnelData" :key="stage.key" class="funnel-bar-wrapper">
-            <div class="funnel-label-row">
-              <span class="funnel-label">{{ stage.label }}</span>
-              <span class="funnel-count">{{ stage.count }}</span>
-            </div>
-            <div class="funnel-track">
-              <div
-                class="funnel-fill"
-                :style="{ width: funnelPercent(stage.count) + '%' }"
-                :class="'fill-' + stage.accent"
-              />
-            </div>
-            <div v-if="idx < funnelData.length - 1" class="funnel-arrow">
-              <el-icon><ArrowRight /></el-icon>
-              <span class="funnel-rate">{{
-                stageToRate(stage.key, funnelData[idx + 1]?.key)
-              }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showStats && versionPerformance.length" class="version-performance">
-      <div class="version-performance-title">
-        <div>
-          <span class="section-kicker">Resume attribution</span>
-          <h3>简历版本表现</h3>
-        </div>
-        <span>按已投递记录计算</span>
-      </div>
-      <div class="version-performance-list">
-        <div
-          v-for="item in versionPerformance"
-          :key="item.resume_version_id"
-          class="version-performance-row"
-        >
-          <div class="version-name">
-            <strong>{{ item.label }}</strong>
-            <span>{{ item.submitted }} 次投递</span>
-          </div>
-          <div class="version-metric">
-            <strong>{{ item.interview_rate }}%</strong><span>面试率</span>
-          </div>
-          <div class="version-metric">
-            <strong>{{ item.offer_rate }}%</strong><span>Offer 率</span>
-          </div>
-          <div class="version-outcomes">
-            <span>{{ item.interviews }} 面试</span><span>{{ item.offers }} Offer</span>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- 投递统计面板与简历版本表现：D62 出页成 components/StatsPane.vue（纯显示、无 emit） -->
+    <StatsPane
+      v-if="showStats"
+      :counts="counts"
+      :total-cards="totalCards"
+      :avg-response-days="avgResponseDays"
+      :version-performance="versionPerformance"
+    />
 
     <!-- 看板列 -->
     <div v-if="loading" class="loading-state">
@@ -554,7 +476,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  ArrowRight,
   Clock,
   Coin,
   DataAnalysis,
@@ -586,25 +507,21 @@ import { monthDay, monthDayTime } from '@/utils/format/date'
 import {
   avgResponseDays as boardAvgResponseDays,
   columns,
-  conversionRate as boardConversionRate,
   flattenCards,
   followUpCount as boardFollowUpCount,
   followUpDays as boardFollowUpDays,
   followUpLevel as boardFollowUpLevel,
-  funnelPercent as boardFunnelPercent,
-  funnelRows,
   needsFollowUp,
   pipelineFocusDescription as boardFocusDescription,
   pipelineFocusTitle as boardFocusTitle,
-  rejectionRate as boardRejectionRate,
   stageCounts,
   stageLabel,
   stageTagType,
-  stageToRate as boardStageToRate,
   totalCardCount,
 } from '@/features/pipeline/lib/pipelineBoard'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
+import StatsPane from '@/features/pipeline/components/StatsPane.vue'
 
 const router = useRouter()
 
@@ -643,18 +560,12 @@ const allCards = computed(() => flattenCards(kanban.value))
 // 统计计算
 const counts = computed(() => stageCounts(kanban.value))
 
-const funnelData = computed(() => funnelRows(counts.value))
-
 /* 下面这几个是"把这条链的值递进 lib"的薄包装：规则住在 lib 里，页面只负责supply输入，
    模板那头的调用形状因此一个字没改。`Date.now()` 也是在这里取的——与搬之前同一处取值时机。 */
 const now = () => Date.now()
-const conversionRate = (stage) => boardConversionRate(counts.value, totalCards.value, stage)
-const funnelPercent = (count) => boardFunnelPercent(count, funnelData.value)
-const stageToRate = (from, to) => boardStageToRate(counts.value, from, to)
 const followUpDays = (card) => boardFollowUpDays(card, now())
 const followUpLevel = (card) => boardFollowUpLevel(card, now())
 
-const rejectionRate = computed(() => boardRejectionRate(counts.value, totalCards.value))
 const avgResponseDays = computed(() => boardAvgResponseDays(kanban.value.applied, now()))
 const followUpCount = computed(() => boardFollowUpCount(allCards.value, now()))
 const pipelineFocusTitle = computed(() => boardFocusTitle(counts.value, followUpCount.value))

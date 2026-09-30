@@ -41,6 +41,11 @@ const BUDGET = {
     'src/features/auth/views/Login.vue': 16,
     'src/features/interview/views/Interview.vue': 13,
     'src/features/pipeline/views/PipelineKanban.vue': 12,
+    /* D62 把转化分析与版本表现两块面板搬出 PipelineKanban：样式照 D44 的口径**复制不切**
+       （`.funnel-fill` 的配色走 `'fill-' + stage.accent` 这种动态类名，静态切分会把 6 条
+       fill-* 整条切没）。这 1 条 `#94a3b8` 是页面那 12 条里重复出来的第二个副本，
+       页面一条没删，所以这一维总数 12 → 13，不是新写的色值。 */
+    'src/features/pipeline/components/StatsPane.vue': 1,
     'src/features/auth/views/ResetPassword.vue': 12,
     'src/features/interview/views/InterviewSetup.vue': 11,
     'src/features/eval/views/RecommendationEval.vue': 11,

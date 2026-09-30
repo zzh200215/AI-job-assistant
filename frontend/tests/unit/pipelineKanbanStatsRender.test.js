@@ -120,6 +120,14 @@ describe('看板上的统计数字来自 lib 的那几条判据', () => {
     expect(statValues(wrapper)).toEqual(['5', '75%', '0%', '0%', '0%', '4d'])
   })
 
+  it('转化分析默认收着：不点「查看统计」，面板整块都不在 DOM 里', async () => {
+    /* D62 之后这块归 `showStats` 挡（面板自己的条件是 totalCards>0）。这条钉的是页面上
+       那一句 `v-if="showStats"`：把它改成恒真，下面两条 expect 都会红（实测 P5）。 */
+    const wrapper = await renderKanban({ applied: [{ id: 1 }], interview: [{ id: 2 }] })
+    expect(wrapper.find('.stats-panel').exists()).toBe(false)
+    expect(wrapper.find('.version-performance').exists()).toBe(false)
+  })
+
   it('一张卡都没有时不除零：全是 0，天数说没有', async () => {
     const wrapper = await renderKanban({})
     // 一张卡都没有：整条"本周重点"与转化分析都不渲染（后者还要 showStats，但 totalCards=0 就够挡）
