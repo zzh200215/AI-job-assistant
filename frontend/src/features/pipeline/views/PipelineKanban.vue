@@ -351,7 +351,7 @@
         </el-table-column>
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
-            <el-button text size="small" @click="showCardDetail(row)">详情</el-button>
+            <el-button text size="small" @click="openCardDetail(row)">详情</el-button>
             <el-button
               text
               size="small"
@@ -739,49 +739,10 @@ async function handleAdd() {
   }
 }
 
-async function handleCardCmd(cmd, card) {
-  if (cmd === 'detail') {
-    detailCard.value = card
-    feedbackForm.value = {
-      feedback_type: card.feedback_type || '',
-      feedback_score: card.feedback_score || 0,
-      feedback_note: card.feedback_note || '',
-    }
-    showDetailDialog.value = true
-  } else if (cmd === 'analyze') {
-    router.push(`/smart-analysis?jd_id=${card.jd_id || ''}`)
-  } else if (cmd === 'interview') {
-    router.push(`/interview/setup?jd_id=${card.jd_id || ''}`)
-  } else if (cmd === 'reject') {
-    try {
-      await movePipelineStage(card.id, 'rejected')
-      ElMessage.success('已标记为拒绝')
-      loadKanban()
-    } catch {
-      // 失败消息由统一请求层提示。
-    }
-  } else if (cmd === 'abandon') {
-    try {
-      await movePipelineStage(card.id, 'withdrawn')
-      ElMessage.success('已放弃')
-      loadKanban()
-    } catch {
-      // 失败消息由统一请求层提示。
-    }
-  } else if (cmd === 'delete') {
-    try {
-      await ElMessageBox.confirm('确定删除此投递记录？', '删除确认', { type: 'warning' })
-      await deleteJobPipelineEntry(card.id)
-      ElMessage.success('已删除')
-      loadKanban()
-    } catch {
-      // 用户取消删除或请求失败时保持当前看板。
-    }
-  }
-}
-
-// === 列表视图方法 ===
-function showCardDetail(card) {
+/* 卡片命令的实现只有这一份（D58）。之前看板视图与列表视图各写了一遍同样的
+   "移动阶段 → 提示 → 重取"，两份还漂了一处文案（"已标记为拒绝" / "已标记拒绝"）。
+   文案随视图传进来，**没有替谁统一**——那是候选人可见的措辞改动，不是一次搬家该定的事。 */
+function openCardDetail(card) {
   detailCard.value = card
   feedbackForm.value = {
     feedback_type: card.feedback_type || '',
@@ -791,6 +752,56 @@ function showCardDetail(card) {
   showDetailDialog.value = true
 }
 
+function goAnalysisFor(card) {
+  router.push(`/smart-analysis?jd_id=${card.jd_id || ''}`)
+}
+
+function goInterviewFor(card) {
+  router.push(`/interview/setup?jd_id=${card.jd_id || ''}`)
+}
+
+async function markStage(card, stage, doneMessage) {
+  try {
+    await movePipelineStage(card.id, stage)
+    ElMessage.success(doneMessage)
+    loadKanban()
+  } catch {
+    // 失败消息由统一请求层提示；看板保持原样
+  }
+}
+
+async function removeCard(card) {
+  try {
+    await ElMessageBox.confirm('确定删除此投递记录？', '删除确认', { type: 'warning' })
+  } catch {
+    return // 取消删除不是错误
+  }
+  try {
+    await deleteJobPipelineEntry(card.id)
+    ElMessage.success('已删除')
+    loadKanban()
+  } catch {
+    // 失败消息由统一请求层提示
+  }
+}
+
+async function runCardCommand(cmd, card, labels) {
+  if (cmd === 'detail') return openCardDetail(card)
+  if (cmd === 'analyze') return goAnalysisFor(card)
+  if (cmd === 'interview') return goInterviewFor(card)
+  if (cmd === 'reject') return markStage(card, 'rejected', labels.rejected)
+  if (cmd === 'abandon') return markStage(card, 'withdrawn', labels.abandon)
+  if (cmd === 'delete') return removeCard(card)
+}
+
+const KANBAN_COMMAND_LABELS = { rejected: '已标记为拒绝', abandon: '已放弃' }
+const LIST_COMMAND_LABELS = { rejected: '已标记拒绝', abandon: '已放弃' }
+
+async function handleCardCmd(cmd, card) {
+  await runCardCommand(cmd, card, KANBAN_COMMAND_LABELS)
+}
+
+// === 列表视图方法 ===
 async function saveFeedback() {
   if (!detailCard.value || (!feedbackForm.value.feedback_type && !feedbackForm.value.feedback_note))
     return
@@ -804,35 +815,8 @@ async function saveFeedback() {
   }
 }
 
-function handleListCmd(cmd, card) {
-  if (cmd === 'interview') {
-    router.push(`/interview/setup?jd_id=${card.jd_id || ''}`)
-  } else if (cmd === 'reject') {
-    movePipelineStage(card.id, 'rejected')
-      .then(() => {
-        ElMessage.success('已标记拒绝')
-        loadKanban()
-      })
-      .catch(() => {})
-  } else if (cmd === 'abandon') {
-    movePipelineStage(card.id, 'withdrawn')
-      .then(() => {
-        ElMessage.success('已放弃')
-        loadKanban()
-      })
-      .catch(() => {})
-  } else if (cmd === 'delete') {
-    ElMessageBox.confirm('确定删除此投递记录？', '删除确认', { type: 'warning' })
-      .then(() => {
-        deleteJobPipelineEntry(card.id)
-          .then(() => {
-            ElMessage.success('已删除')
-            loadKanban()
-          })
-          .catch(() => {})
-      })
-      .catch(() => {})
-  }
+async function handleListCmd(cmd, card) {
+  await runCardCommand(cmd, card, LIST_COMMAND_LABELS)
 }
 
 function onSelectionChange(rows) {

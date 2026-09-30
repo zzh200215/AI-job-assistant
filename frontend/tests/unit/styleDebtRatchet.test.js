@@ -140,7 +140,7 @@ const BUDGET = {
     /* D57 同理：`stageTagType` 那七条阶段色表搬进 pipeline lib，视图侧只剩两处派生。
        合并计数与搬前一样是 9。 */
     'src/features/pipeline/lib/pipelineBoard.js': 7,
-    'src/features/pipeline/views/PipelineKanban.vue': 2,
+    'src/features/pipeline/views/PipelineKanban.vue': 1,
     'src/features/admin/views/PromptTrace.vue': 7,
     'src/features/analysis/views/AnalysisResult.vue': 5,
     'src/features/analysis/views/ExplainMatch.vue': 4,
