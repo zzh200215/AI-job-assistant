@@ -51,6 +51,11 @@ const BUDGET = {
        拼出来的：`'dot-' + col.accent`、`'card-follow follow-' + followUpLevel(...)`）。
        这一维在 pipeline 这个域里 12 → 13 → 22。 */
     'src/features/pipeline/components/BoardPane.vue': 9,
+    /* D64 搬列表视图：同一笔复制成本第三次记在这个域里。这 7 条是 .follow-* 与
+       .score-level--* 那些十六进制值从页面**重复**出来的第二份（页面 12 条一条没删；
+       这两个类名分别是 'follow-' + followUpLevel(...) 与 scoreToneClass(..., 'score-level')
+       拼出来的，静态切分会整条切错）。pipeline 域这一维：12 → 13 → 22 → 29。 */
+    'src/features/pipeline/components/ListPane.vue': 7,
     'src/features/auth/views/ResetPassword.vue': 12,
     'src/features/interview/views/InterviewSetup.vue': 11,
     'src/features/eval/views/RecommendationEval.vue': 11,

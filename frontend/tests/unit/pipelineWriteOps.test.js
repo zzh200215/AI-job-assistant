@@ -211,6 +211,14 @@ describe('批量移动：一趟只能有一批在飞', () => {
   it('两项都成功 → 逐条移动、提示 2/2、清选择并重取', async () => {
     api.movePipelineStage.mockResolvedValue({ ok: true })
     const wrapper = await renderList()
+    // D64 之后这张表住在 ListPane 里：先确认页面的 allCards 一路走到 el-table 的 data，
+    // 后面那几发请求才是打在真数据上（jsdom 画不出格子，只能这样钉绑定）。
+    expect(
+      wrapper
+        .findComponent(ElTable)
+        .props('data')
+        .map((r) => r.id)
+    ).toEqual([1, 2])
     await selectRows(wrapper, CARDS)
 
     batchButtons()[0].click()

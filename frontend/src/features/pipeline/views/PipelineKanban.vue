@@ -104,133 +104,18 @@
       @open-add="showAddDialog = true"
     />
 
-    <!-- 列表视图 -->
-    <div v-if="viewMode === 'list' && totalCards > 0" class="list-view">
-      <!-- 批量操作栏 -->
-      <div v-if="selectedCards.size > 0" class="batch-bar">
-        <span class="batch-info"
-          >已选 <strong>{{ selectedCards.size }}</strong> 项</span
-        >
-        <el-button
-          size="small"
-          :loading="writeBusy"
-          :disabled="writeBusy"
-          @click="batchMove('interview')"
-          >批量移至面试</el-button
-        >
-        <el-button
-          size="small"
-          :loading="writeBusy"
-          :disabled="writeBusy"
-          @click="batchMove('offer')"
-          >批量移至Offer</el-button
-        >
-        <el-button
-          size="small"
-          :loading="writeBusy"
-          :disabled="writeBusy"
-          style="color: var(--app-danger)"
-          @click="batchMove('rejected')"
-          >批量标记拒绝</el-button
-        >
-        <el-button size="small" text @click="clearSelection">取消选择</el-button>
-      </div>
-
-      <el-table
-        :data="allCards"
-        style="width: 100%"
-        @selection-change="onSelectionChange"
-        border
-        stripe
-        size="small"
-      >
-        <el-table-column type="selection" width="40" />
-        <el-table-column prop="title" label="岗位" min-width="160">
-          <template #default="{ row }">
-            <div class="list-title">{{ row.title || '未命名' }}</div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="company" label="公司" width="120" />
-        <el-table-column label="简历版本" min-width="130">
-          <template #default="{ row }">
-            <span v-if="row.resume_version_label" class="version-cell">{{
-              row.resume_version_label
-            }}</span>
-            <span v-else class="follow-ok">未记录</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="阶段" width="100">
-          <template #default="{ row }">
-            <el-tag size="small" :type="stageTagType(row.stage)">{{
-              stageLabel(row.stage)
-            }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="跟进" width="100">
-          <template #default="{ row }">
-            <span v-if="needsFollowUp(row)" :class="'follow-' + followUpLevel(row)">
-              <el-icon><WarningFilled /></el-icon> {{ followUpDays(row) }}天
-            </span>
-            <span v-else class="follow-ok">-</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="salary_range" label="薪资" width="100" />
-        <el-table-column label="匹配度" width="80" align="center">
-          <template #default="{ row }">
-            <span
-              v-if="row.match_score"
-              :class="scoreToneClass(row.match_score, MATCH_SCORE_BANDS, 'score-level')"
-              >{{ Math.round(row.match_score) }}分</span
-            >
-            <span v-else class="follow-ok">-</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="面试时间" width="110">
-          <template #default="{ row }">
-            <span v-if="row.interview_at" class="follow-interview">{{
-              monthDayTime(row.interview_at)
-            }}</span>
-            <span v-else class="follow-ok">-</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="source" label="来源" width="80" />
-        <el-table-column label="创建时间" width="90">
-          <template #default="{ row }">{{ monthDayTime(row.create_time) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="140" fixed="right">
-          <template #default="{ row }">
-            <el-button text size="small" @click="openCardDetail(row)">详情</el-button>
-            <el-button
-              text
-              size="small"
-              @click="router.push('/smart-analysis?jd_id=' + (row.jd_id || ''))"
-              >AI</el-button
-            >
-            <el-dropdown
-              trigger="click"
-              :disabled="writeBusy"
-              @command="(cmd) => handleListCmd(cmd, row)"
-            >
-              <el-button text size="small">
-                <el-icon><MoreFilled /></el-icon>
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item v-if="row.stage === 'interview'" command="interview"
-                    >模拟面试</el-dropdown-item
-                  >
-                  <el-dropdown-item command="reject">标记拒绝</el-dropdown-item>
-                  <el-dropdown-item command="abandon">放弃</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided style="color: var(--app-danger)"
-                    >删除</el-dropdown-item
-                  >
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
+    <!-- 列表视图：批量栏与那张 11 列的表，D64 出页成 components/ListPane.vue -->
+    <ListPane
+      v-if="viewMode === 'list' && totalCards > 0"
+      :rows="allCards"
+      :selected-count="selectedCards.size"
+      :write-busy="writeBusy"
+      :now="now()"
+      @command="handleListCmd"
+      @selection-change="onSelectionChange"
+      @batch-move="batchMove"
+      @clear-selection="clearSelection"
+    />
 
     <!-- 新增投递对话框 -->
     <el-dialog
@@ -386,14 +271,11 @@ import {
   List,
   Loading,
   Microphone,
-  MoreFilled,
   Plus,
   Refresh,
   TrendCharts,
-  WarningFilled,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
-import { MATCH_SCORE_BANDS, scoreToneClass } from '@/utils/scoreTone'
 import {
   getKanban,
   movePipelineStage,
@@ -409,20 +291,17 @@ import {
   columns,
   flattenCards,
   followUpCount as boardFollowUpCount,
-  followUpDays as boardFollowUpDays,
-  followUpLevel as boardFollowUpLevel,
-  needsFollowUp,
   pipelineFocusDescription as boardFocusDescription,
   pipelineFocusTitle as boardFocusTitle,
   stageCounts,
   stageLabel,
-  stageTagType,
   totalCardCount,
 } from '@/features/pipeline/lib/pipelineBoard'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import StatsPane from '@/features/pipeline/components/StatsPane.vue'
 import BoardPane from '@/features/pipeline/components/BoardPane.vue'
+import ListPane from '@/features/pipeline/components/ListPane.vue'
 
 const router = useRouter()
 
@@ -460,11 +339,10 @@ const allCards = computed(() => flattenCards(kanban.value))
 // 统计计算
 const counts = computed(() => stageCounts(kanban.value))
 
-/* 下面这几个是"把这条链的值递进 lib"的薄包装：规则住在 lib 里，页面只负责supply输入，
-   模板那头的调用形状因此一个字没改。`Date.now()` 也是在这里取的——与搬之前同一处取值时机。 */
+/* 页面读时间的地方只有一个 `now()`：顶部那句摘要与平均响应在这里用它，两块面板（D63 看板列、
+   D64 列表视图）通过 `:now="now()"` 拿同一份口径——模板里现调，所以取值时机和搬之前逐字一致。
+   卡片那颗"几天未回复"的判据本身住在 lib 里，面板各自去调。 */
 const now = () => Date.now()
-const followUpDays = (card) => boardFollowUpDays(card, now())
-const followUpLevel = (card) => boardFollowUpLevel(card, now())
 
 const avgResponseDays = computed(() => boardAvgResponseDays(kanban.value.applied, now()))
 const followUpCount = computed(() => boardFollowUpCount(allCards.value, now()))
