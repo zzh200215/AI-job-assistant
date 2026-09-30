@@ -326,16 +326,16 @@
 
           <el-descriptions :column="4" border size="small" class="dim-table">
             <el-descriptions-item label="技能">
-              <span class="data-value dim-val">{{ dimensionScore('skills') }}</span>
+              <span class="data-value dim-val">{{ dimensionScore(result, 'skills') }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="经验">
-              <span class="data-value dim-val">{{ dimensionScore('experience') }}</span>
+              <span class="data-value dim-val">{{ dimensionScore(result, 'experience') }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="学历">
-              <span class="data-value dim-val">{{ dimensionScore('education') }}</span>
+              <span class="data-value dim-val">{{ dimensionScore(result, 'education') }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="行业">
-              <span class="data-value dim-val">{{ dimensionScore('industry') }}</span>
+              <span class="data-value dim-val">{{ dimensionScore(result, 'industry') }}</span>
             </el-descriptions-item>
           </el-descriptions>
 
@@ -1301,6 +1301,24 @@ import {
   normalizeLocalizedObjectList,
   normalizeLocalizedTextList,
 } from '@/utils/analysisLocalization'
+import {
+  complexityType,
+  confidenceTagType,
+  dimensionScore,
+  explainRecommendationTag,
+  groupInterviewQuestions,
+  groupTitle,
+  hasStructuredCareerGaps,
+  mergeMissingSkills,
+  milestoneIcon,
+  normalizeConfidence,
+  pickMatchedSkills,
+  pickMissingSkills,
+  scoreTagType,
+  statusText,
+  stepLabel,
+  typeLabel,
+} from '@/features/analysis/lib/analysisModel'
 
 const router = useRouter()
 const route = useRoute()
@@ -1385,28 +1403,8 @@ const currentStepName = computed(() => {
   return '准备中'
 })
 
-const getDimension = (key) => {
-  const value = result.value?.match_report?.dimension_scores?.[key]
-  if (value && typeof value === 'object') return value
-  if (typeof value === 'number') return { score: value }
-  return { score: 0 }
-}
-
-const dimensionScore = (key) => getDimension(key).score ?? 0
-
-const pickNonEmptyArray = (...candidates) => {
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate) && candidate.length > 0) return candidate
-  }
-  return []
-}
-
-const matchedSkills = computed(() =>
-  pickNonEmptyArray(getDimension('skills').matched, result.value?.matched_skills)
-)
-const missingSkills = computed(() =>
-  pickNonEmptyArray(getDimension('skills').missing, result.value?.missing_skills)
-)
+const matchedSkills = computed(() => pickMatchedSkills(result.value))
+const missingSkills = computed(() => pickMissingSkills(result.value))
 const finalReport = computed(() => result.value?.final_report || null)
 const rawMatchRecommendation = computed(() => result.value?.match_report?.recommendation || '')
 const rawMatchSummary = computed(() => result.value?.match_report?.summary || '')
@@ -1428,13 +1426,6 @@ const localizedSummaryRecommendation = computed(() =>
 )
 const localizedOverallEvaluation = computed(() => localizeSentence(rawOverallEvaluation.value))
 
-const normalizeConfidence = (value) => {
-  if (!value || typeof value !== 'object') return null
-  if (typeof value.score === 'number') return value
-  if (value.summary) return value
-  return null
-}
-
 const analysisConfidence = computed(
   () =>
     normalizeConfidence(result.value?.rag_confidence) ||
@@ -1447,62 +1438,18 @@ const localizedExplainRecommendation = computed(() =>
 const localizedExplainOverallReason = computed(() =>
   localizeSentence(explainResult.value?.overall_reason || '')
 )
-const explainRecTag = computed(
-  () =>
-    ({
-      强烈推荐: 'success',
-      可以投递: 'primary',
-      谨慎投递: 'warning',
-      不建议投递: 'danger',
-    })[localizedExplainRecommendation.value] || 'info'
-)
+const explainRecTag = computed(() => explainRecommendationTag(localizedExplainRecommendation.value))
 
 const explainMatchedSkills = computed(() => explainResult.value?.skill_match?.matched || [])
-const explainMissingSkills = computed(() => {
-  const skillMatch = explainResult.value?.skill_match || {}
-  const required = Array.isArray(skillMatch.missing_required) ? skillMatch.missing_required : []
-  const nice = Array.isArray(skillMatch.missing_nice) ? skillMatch.missing_nice : []
-  return [...required, ...nice.filter((item) => !required.includes(item))]
-})
+const explainMissingSkills = computed(() => mergeMissingSkills(explainResult.value?.skill_match))
 
 const careerData = computed(() => result.value?.career_planning || null)
 const visualPhases = computed(() => careerData.value?.visual_roadmap?.phases || [])
-const hasStructuredSkillGaps = computed(() => {
-  const gaps = careerData.value?.skill_gaps || []
-  return gaps.length > 0 && typeof gaps[0] === 'object' && gaps[0] !== null
-})
-
-const milestoneIcon = (type) =>
-  ({ skill: '📚', cert: '🎓', project: '🔨', job: '💼' })[type] || '📍'
-
-const complexityType = (level) =>
-  ({ 简单: 'success', 中等: 'warning', 困难: 'danger' })[level] || 'info'
-
-const INTERVIEW_GROUP_DEFS = [
-  { key: 'hr_questions', legacy: 'basic', title: 'HR 题' },
-  { key: 'tech_questions', legacy: 'tech', title: '技术题' },
-  { key: 'project_questions', legacy: 'project', title: '项目题' },
-  { key: 'scenario_questions', legacy: 'scenario', title: '场景题' },
-]
+const hasStructuredSkillGaps = computed(() => hasStructuredCareerGaps(result.value))
 
 const hasInterview = computed(() => Object.keys(interviewGroups.value).length > 0)
 
-const interviewGroups = computed(() => {
-  const iq = result.value?.interview_questions || {}
-  const groups = {}
-  INTERVIEW_GROUP_DEFS.forEach(({ key, legacy }) => {
-    const items =
-      Array.isArray(iq[key]) && iq[key].length
-        ? iq[key]
-        : Array.isArray(iq[legacy])
-          ? iq[legacy]
-          : []
-    if (items.length) groups[key] = items
-  })
-  return groups
-})
-
-const groupTitle = (k) => INTERVIEW_GROUP_DEFS.find((item) => item.key === k)?.title || k
+const interviewGroups = computed(() => groupInterviewQuestions(result.value))
 
 // ---- Resume upload ----
 const beforeUploadResume = (file) => {
@@ -1683,63 +1630,6 @@ const loadReferences = async (force = false) => {
   } finally {
     referencesLoading.value = false
   }
-}
-
-const typeLabel = (t) =>
-  ({
-    resume_template: '简历模板',
-    jd_lib: '岗位描述库',
-    interview_q: '面试题库',
-    skill_model: '能力模型',
-    industry_report: '行业报告',
-    general: '通用',
-  })[t] ||
-  t ||
-  '通用'
-
-const scoreTagType = (score) => (score >= 0.8 ? 'success' : score >= 0.6 ? 'warning' : 'info')
-const confidenceTagType = (level) =>
-  level === 'high' ? 'success' : level === 'medium' ? 'warning' : 'danger'
-
-const STEP_LABELS = {
-  IntentAgent: '意图识别',
-  ResumeParseAgent: '简历解析',
-  JDParseAgent: 'JD 解析',
-  MatchAnalysisAgent: '匹配分析',
-  ResumeOptimizeAgent: '简历优化',
-  InterviewQuestionAgent: '面试题生成',
-  SummaryAgent: '汇总报告',
-  intent_recognition: '意图识别',
-  resume_parse: '简历解析',
-  jd_parse: 'JD 解析',
-  knowledge_retrieval: '知识检索',
-  matching_analysis: '匹配分析',
-  resume_optimization: '简历优化',
-  interview_question_generation: '面试题生成',
-  self_check: '自我校验',
-  final_report: '汇总报告',
-}
-
-const CANONICAL_STEP_LABELS = {
-  intent_recognition: '意图识别',
-  resume_parse: '简历解析',
-  jd_parse: 'JD 解析',
-  knowledge_retrieval: '知识检索',
-  match_analysis: '匹配分析',
-  resume_optimization: '简历优化',
-  interview_questions: '面试题生成',
-  career_planning: '职业规划',
-  self_check: '自我校验',
-  summary_report: '汇总报告',
-}
-
-function stepLabel(name) {
-  return CANONICAL_STEP_LABELS[name] || STEP_LABELS[name] || name
-}
-function statusText(status) {
-  return (
-    { pending: '等待中', running: '执行中', completed: '已完成', failed: '失败' }[status] || status
-  )
 }
 
 const onGenerateOptimized = async () => {

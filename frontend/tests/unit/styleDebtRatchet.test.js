@@ -121,7 +121,10 @@ const BUDGET = {
      所以这条预算是**上界**：数得多、漏不掉，只许往下走。 */
   statusTagEntries: {
     'src/features/knowledge/views/KnowledgeBase.vue': 13,
-    'src/features/analysis/views/SmartAnalysis.vue': 13,
+    /* D49 把三张色表（复杂度、匹配建议、以及两个分数三元式）从视图搬进 lib：这 9 条不是新债，
+       是搬家搬出来的——视图侧只剩 4 条（任务结果那一支）。合并计数与搬家前一样是 13。 */
+    'src/features/analysis/lib/analysisModel.js': 9,
+    'src/features/analysis/views/SmartAnalysis.vue': 4,
     'src/features/admin/views/Tenants.vue': 9,
     'src/features/planning/views/CareerPlanning.vue': 9,
     'src/features/pipeline/views/PipelineKanban.vue': 9,
