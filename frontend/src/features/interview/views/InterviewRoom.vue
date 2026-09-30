@@ -297,18 +297,28 @@ import { useInterviewStore } from '@/stores/interview'
 import { interviewScoreToneClass } from '@/utils/scoreTone'
 import { INTERVIEW_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
 import * as roomModel from '@/features/interview/lib/interviewRoomModel'
+import { useAnswerDraft } from '@/features/interview/composables/useAnswerDraft'
 
 const route = useRoute()
 const router = useRouter()
 const store = useInterviewStore()
 
-const userInput = ref('')
 const chatRef = ref(null)
-const inputRef = ref(null)
-const recognitionRef = ref(null)
-const speechSupported = ref(false)
-const isListening = ref(false)
-const speechPreview = ref('')
+
+/* 回答草稿与语音输入这条链（含 SpeechRecognition 的四个回调、150ms 后聚焦那一下、
+   离开页面时的收尾）住在 composables/useAnswerDraft.js。`inputRef` 这个名字不能改：
+   模板上的 `ref="inputRef"` 靠它绑定。 */
+const {
+  userInput,
+  answerInputRef: inputRef,
+  speechSupported,
+  isListening,
+  speechPreview,
+  setupSpeechRecognition,
+  toggleSpeechRecognition,
+  stopSpeechRecognition,
+  clearAnswerDraft,
+} = useAnswerDraft({ getStatus: () => store.status })
 
 const wsConnecting = computed(() => store.status === 'connecting')
 /* 显示层的规则全部住在 lib/interviewRoomModel.js（D60）：这一层不读 ref、不碰 store，
@@ -349,128 +359,6 @@ const timeoutCount = computed(() => roomModel.timeoutCountOf(store.messages))
 const recentSignal = computed(() => roomModel.recentSignalOf(store.lastScore?.score))
 const statusLabel = computed(() => roomModel.statusLabelOf(store.status))
 const statusTagType = computed(() => tagTypeFor(INTERVIEW_STATUS_TAGS, store.status))
-
-function getSpeechRecognitionCtor() {
-  if (typeof window === 'undefined') return null
-  return window.SpeechRecognition || window.webkitSpeechRecognition || null
-}
-
-function appendRecognizedText(text) {
-  const normalized = text.replace(/\s+/g, ' ').trim()
-  if (!normalized) return
-  const separator = userInput.value.trim() ? '\n' : ''
-  userInput.value = `${userInput.value}${separator}${normalized}`
-  focusAnswerInput({ placeCursorAtEnd: true, keepVisible: true })
-}
-
-function stopSpeechRecognition() {
-  if (recognitionRef.value && isListening.value) {
-    recognitionRef.value.stop()
-  }
-}
-
-function getAnswerTextarea() {
-  return inputRef.value?.textarea || inputRef.value?.$el?.querySelector('textarea') || null
-}
-
-function focusAnswerInput(options = {}) {
-  const { placeCursorAtEnd = false, keepVisible = false } = options
-  nextTick(() => {
-    const textarea = getAnswerTextarea()
-    if (!textarea) return
-
-    if (keepVisible) {
-      textarea.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    }
-
-    textarea.focus()
-
-    if (placeCursorAtEnd) {
-      const length = textarea.value?.length ?? 0
-      textarea.setSelectionRange(length, length)
-    }
-  })
-}
-
-function clearAnswerDraft() {
-  stopSpeechRecognition()
-  userInput.value = ''
-  speechPreview.value = ''
-  focusAnswerInput({ placeCursorAtEnd: true, keepVisible: true })
-}
-
-function toggleSpeechRecognition() {
-  if (!speechSupported.value) {
-    ElMessage.warning('当前浏览器不支持语音输入')
-    return
-  }
-  if (isListening.value) {
-    stopSpeechRecognition()
-    return
-  }
-  speechPreview.value = ''
-  recognitionRef.value?.start()
-}
-
-function setupSpeechRecognition() {
-  const SpeechRecognitionCtor = getSpeechRecognitionCtor()
-  speechSupported.value = Boolean(SpeechRecognitionCtor)
-  if (!SpeechRecognitionCtor) return
-
-  const recognition = new SpeechRecognitionCtor()
-  recognition.continuous = true
-  recognition.interimResults = true
-  recognition.lang = 'zh-CN'
-  recognition.maxAlternatives = 1
-
-  recognition.onstart = () => {
-    isListening.value = true
-    speechPreview.value = ''
-    focusAnswerInput({ placeCursorAtEnd: true, keepVisible: true })
-  }
-
-  recognition.onresult = (event) => {
-    let interimTranscript = ''
-    for (let idx = event.resultIndex; idx < event.results.length; idx += 1) {
-      const result = event.results[idx]
-      const transcript = result?.[0]?.transcript || ''
-      if (result.isFinal) {
-        appendRecognizedText(transcript)
-      } else {
-        interimTranscript += transcript
-      }
-    }
-    speechPreview.value = interimTranscript.trim()
-  }
-
-  recognition.onerror = (event) => {
-    isListening.value = false
-    speechPreview.value = ''
-
-    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-      ElMessage.warning('麦克风权限未开启，无法使用语音输入')
-      return
-    }
-    if (event.error === 'no-speech') {
-      ElMessage.warning('没有识别到语音，请重试')
-      return
-    }
-    if (event.error === 'audio-capture') {
-      ElMessage.warning('未检测到可用麦克风')
-      return
-    }
-
-    ElMessage.warning(`语音输入不可用：${event.error}`)
-  }
-
-  recognition.onend = () => {
-    isListening.value = false
-    speechPreview.value = ''
-    focusAnswerInput({ placeCursorAtEnd: true, keepVisible: true })
-  }
-
-  recognitionRef.value = recognition
-}
 
 function handleSend() {
   const text = userInput.value.trim()
@@ -546,18 +434,6 @@ watch(
   }
 )
 
-watch(
-  () => store.status,
-  (value) => {
-    if (value !== 'ongoing' && isListening.value) {
-      stopSpeechRecognition()
-    }
-    if (value === 'ongoing') {
-      setTimeout(() => focusAnswerInput({ placeCursorAtEnd: true, keepVisible: true }), 150)
-    }
-  }
-)
-
 onMounted(async () => {
   setupSpeechRecognition()
 
@@ -584,7 +460,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  stopSpeechRecognition()
   store.disconnect()
 })
 </script>
