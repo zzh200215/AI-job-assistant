@@ -56,6 +56,12 @@ const BUDGET = {
        这两个类名分别是 'follow-' + followUpLevel(...) 与 scoreToneClass(..., 'score-level')
        拼出来的，静态切分会整条切错）。pipeline 域这一维：12 → 13 → 22 → 29。 */
     'src/features/pipeline/components/ListPane.vue': 7,
+    /* D65 把 SmartAnalysis 剩下 5 个标签页面板搬出视图，其中只有这一页带色值：`.cp-score` 的
+       白色前景（压在 `score-fill--*` 的分数渐变上，那五条渐变规则住在 src/styles/main.css，
+       跨组件边界有效，所以不重复）。这 1 条是从页面那 15 条里**重复**出来的第二份，
+       页面一条没删；其余四块面板复制的四段（Query card / Generate area / Dev card / List）
+       全是 var()，一个 hex 都没有，所以它们不进这张表。 */
+    'src/features/analysis/components/CareerDirectionPane.vue': 1,
     'src/features/auth/views/ResetPassword.vue': 12,
     'src/features/interview/views/InterviewSetup.vue': 11,
     'src/features/eval/views/RecommendationEval.vue': 11,

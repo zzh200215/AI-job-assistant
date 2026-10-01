@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import SmartAnalysis from '@/features/analysis/views/SmartAnalysis.vue'
 import { getAnalysis } from '@/api/analysis'
+import { generateOptimized } from '@/api/resume'
 import { installElement } from '@/plugins/element'
 
 /* 这一页此前**一条测试都没有**：D49 把 16 个纯函数搬进 lib 之后，页面只剩"把 result 传进去"这一层
@@ -22,6 +23,30 @@ const RECORD = {
     recommendation: '可以投递',
     summary: '整体匹配',
     dimension_scores: { skills: 0.72, experience: { score: 0.5 }, education: 3, industry: {} },
+    /* D65 之后这三列住进 SkillsPane：它们要经过页面的两条本地化 computed 才上屏，
+       所以夹具故意混着"对象条目"和"裸字符串"两种形状，递错列（把 gaps 当 strengths 递）会在屏幕上现形。 */
+    strengths: [{ item: 'Go 并发', impact: '命中必需项' }, '有主导项目'],
+    gaps: [{ item: 'Rust', action: '补一个副作用示例', severity: '高' }],
+    risk_points: ['经验年限偏低'],
+  },
+  /* D65 之后 optimize 与 summary 两段各自住进一个面板，中间隔着页面的 `result`：
+     页面少递一个参数不会报错，只会那一整块空掉，所以下面有一条穿过 DOM 的接线断言。 */
+  optimize_suggestions: {
+    overall: '结构可用',
+    sections: [{ section: '工作经历', suggestions: ['量化产出'] }],
+    keywords_to_add: ['K8s'],
+    keywords_to_remove: ['精通'],
+    format_tips: ['一页 A4'],
+  },
+  final_report: {
+    summary: {
+      candidate_name: '张三',
+      target_position: '平台后端',
+      recommendation: '谨慎投递',
+      overall_evaluation: '整体可用',
+    },
+    action_items: [{ priority: '高', action: '补 Go 并发项目', reason: 'JD 必需项' }],
+    development_advice: { short_term: ['两个月补 K8s'], long_term: ['一年内带到 P6'] },
   },
   /* 面试题故意混着两代字段写：新键 hr_questions 有值，legacy 键 tech 才有值。 */
   interview_questions: {
@@ -79,6 +104,16 @@ vi.mock('@/api/analysis', () => ({
   explainMatch: vi.fn(async () => EXPLAIN),
 }))
 
+vi.mock('@/api/resume', () => ({
+  uploadResume: vi.fn(async () => ({ id: 7 })),
+  parseResume: vi.fn(async () => ({ parsed: true })),
+  /* 故意让它**失败**：成功那一支会写 `window.location.href`，jsdom 里那是"Not implemented: navigation"。
+     这条要验的是"面板那颗按钮的出口能不能穿到页面的请求"，与请求之后发生什么无关。 */
+  generateOptimized: vi.fn(async () => {
+    throw new Error('测试内不真的生成')
+  }),
+}))
+
 vi.mock('@/composables/useAgentTaskPolling', () => ({
   useAgentTaskPolling: () => ({
     isPolling: { value: false },
@@ -129,6 +164,20 @@ function interviewQuestions() {
 
 function chips() {
   return [...document.querySelectorAll('.score-chips .chip')].map((n) => n.textContent.trim())
+}
+
+/* D65 之后这两处住在面板组件里，但读的仍是同一个 DOM：优化那颗按钮、综合评价那张表。 */
+function generateButton() {
+  return [...document.querySelectorAll('.generate-area button')][0]
+}
+
+/* el-table 的格子要等一次 flush 才画得出来（D64 学到的：那时以为 jsdom 画不出，
+   其实是探针没等，读早了拿到空文本）。 */
+async function tableRows() {
+  await flushPromises()
+  return [...document.querySelectorAll('.el-table__body tr')].map((tr) =>
+    [...tr.querySelectorAll('td')].map((td) => td.textContent.replace(/\s+/g, ' ').trim())
+  )
 }
 
 /* 解释面板的"缺失技能"那一列：夹具故意让 Rust 同时出现在必需列与加分列。
@@ -205,5 +254,58 @@ describe('SmartAnalysis 的展示形状接线', () => {
       n.textContent.trim()
     )
     expect(gapList).toEqual(['📌 Rust', '📌 K8s'])
+  })
+
+  /* D65 把剩下 5 个标签页搬进 components/，其中「个性化面试题」这一页上头已经有用例在穿
+     （`interviewGroupTitles` / `interviewQuestions` 现在都落在 InterviewQuestionsPane 里），
+     「职业方向」由 smartAnalysisStaleChain 第三条穿过（它点标签页、发请求、按屏幕上的标题判定）。
+     下面这两条补的是剩下三块没人穿过的那部分：入参少递一个不会报错，只会那一整块空掉。 */
+  it('技能匹配面板拿到的就是这条记录里那三列，不是别的列', async () => {
+    await runAnalysis()
+    const colText = (label) => {
+      const col = [...document.querySelectorAll('.el-col')].find((c) =>
+        c.querySelector('h4')?.textContent.trim().startsWith(label)
+      )
+      return col.textContent.replace(/\s+/g, ' ').trim()
+    }
+    expect(colText('已匹配技能')).toBe('已匹配技能GoK8s')
+    expect(colText('缺失技能')).toBe('缺失技能Rust')
+    expect(colText('优势')).toContain('Go 并发：命中必需项')
+    expect(colText('优势')).toContain('有主导项目')
+    expect(colText('差距')).toContain('Rust：补一个副作用示例')
+    expect(colText('风险')).toContain('经验年限偏低')
+  })
+
+  it('简历优化与综合评价两个面板各自吃到记录里那一段，按钮那颗出口也穿到页面', async () => {
+    await runAnalysis()
+    /* 优化段 */
+    expect(document.querySelector('.el-collapse-item__header').textContent.trim()).toBe(
+      '【工作经历】'
+    )
+    expect(
+      [...document.querySelectorAll('.el-collapse-item li')].map((n) => n.textContent.trim())
+    ).toEqual(['量化产出'])
+    expect(
+      [...document.querySelectorAll('.el-tab-pane .el-col .el-tag')].map((n) =>
+        n.textContent.trim()
+      )
+    ).toContain('K8s')
+    expect(generateButton().textContent).toContain('生成优化版简历')
+    generateButton().click()
+    await flushPromises()
+    /* 面板只发事件，请求由页面发：入参是页面的 resumeInfo / jdInfo（路由 query 里的 7 与 3）。 */
+    expect(generateOptimized).toHaveBeenCalledWith(7, 3)
+
+    /* 综合评价段：这一页有**两张** el-descriptions（分数区那张四维表也叫这个类），
+       所以必须按标签页的 pane 作用域查——全局第一条拿到的是四维表。 */
+    const desc = document
+      .querySelector('#pane-summary .el-descriptions')
+      .textContent.replace(/\s+/g, ' ')
+    expect(desc).toContain('张三')
+    expect(desc).toContain('平台后端')
+    expect((await tableRows())[0]).toEqual(['高', '补 Go 并发项目', 'JD 必需项'])
+    expect([...document.querySelectorAll('.dev-card li')].map((n) => n.textContent.trim())).toEqual(
+      ['两个月补 K8s', '一年内带到 P6']
+    )
   })
 })

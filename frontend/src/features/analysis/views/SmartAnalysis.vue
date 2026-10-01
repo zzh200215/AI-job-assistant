@@ -393,67 +393,13 @@
           <el-tabs v-model="reportTab" @tab-click="onTabClick">
             <!-- 技能匹配 -->
             <el-tab-pane label="技能匹配" name="skills">
-              <el-row :gutter="16">
-                <el-col :span="12">
-                  <div class="skill-group">
-                    <h4>已匹配技能</h4>
-                    <el-tag
-                      v-for="s in matchedSkills"
-                      :key="s"
-                      type="success"
-                      style="margin: 2px"
-                      >{{ s }}</el-tag
-                    >
-                    <el-empty v-if="!matchedSkills.length" description="暂无" :image-size="40" />
-                  </div>
-                </el-col>
-                <el-col :span="12">
-                  <div class="skill-group">
-                    <h4>缺失技能</h4>
-                    <el-tag v-for="s in missingSkills" :key="s" type="danger" style="margin: 2px">{{
-                      s
-                    }}</el-tag>
-                    <el-empty v-if="!missingSkills.length" description="暂无" :image-size="40" />
-                  </div>
-                </el-col>
-              </el-row>
-              <el-row :gutter="16" class="mt">
-                <el-col :span="8">
-                  <h4>优势</h4>
-                  <ul>
-                    <li v-for="(x, i) in localizedStrengths" :key="i">
-                      <b>{{ x.item || x }}</b>
-                      <span v-if="x.impact">：{{ x.impact }}</span>
-                      <span v-if="x.evidence" class="muted">（{{ x.evidence }}）</span>
-                    </li>
-                  </ul>
-                </el-col>
-                <el-col :span="8">
-                  <h4>差距</h4>
-                  <ul>
-                    <li v-for="(x, i) in localizedGaps" :key="i">
-                      <b>{{ x.item || x }}</b>
-                      <span v-if="x.action">：{{ x.action }}</span>
-                      <span v-if="x.impact && !x.action">：{{ x.impact }}</span>
-                      <el-tag
-                        v-if="x.severity"
-                        size="small"
-                        :type="
-                          x.severity === '高' ? 'danger' : x.severity === '中' ? 'warning' : 'info'
-                        "
-                        style="margin-left: 4px"
-                        >{{ x.severity }}</el-tag
-                      >
-                    </li>
-                  </ul>
-                </el-col>
-                <el-col :span="8">
-                  <h4>风险</h4>
-                  <ul>
-                    <li v-for="(x, i) in localizedRiskPoints" :key="i">{{ x }}</li>
-                  </ul>
-                </el-col>
-              </el-row>
+              <SkillsPane
+                :matched-skills="matchedSkills"
+                :missing-skills="missingSkills"
+                :strengths="localizedStrengths"
+                :gaps="localizedGaps"
+                :risk-points="localizedRiskPoints"
+              />
             </el-tab-pane>
 
             <!-- 匹配度解释 -->
@@ -463,160 +409,25 @@
 
             <!-- 职业方向 -->
             <el-tab-pane label="🎯 职业方向" name="career-paths">
-              <div v-if="careerPathsLoading" class="inline-loading">
-                <el-icon class="is-loading" size="22"><Loading /></el-icon>
-                <p>正在分析适合您的岗位方向...</p>
-              </div>
-              <template v-else-if="careerPaths.length > 0">
-                <el-alert
-                  :title="
-                    careerPathSummary ||
-                    `根据您的技能和经验，推荐以下 ${careerPaths.length} 个岗位方向`
-                  "
-                  type="success"
-                  :closable="false"
-                  show-icon
-                  style="margin-bottom: 16px"
-                />
-                <div class="career-path-grid">
-                  <div
-                    v-for="(cp, i) in careerPaths"
-                    :key="i"
-                    class="panel cp-card"
-                    :class="'cp-' + (cp.category === '高度匹配' ? 'high' : 'trans')"
-                  >
-                    <div class="panel-body">
-                      <div class="cp-header">
-                        <span
-                          class="cp-score data-value"
-                          :class="scoreToneFillClass(cp.match_score)"
-                          >{{ cp.match_score }}</span
-                        >
-                        <div class="cp-info">
-                          <h4 class="cp-title">{{ cp.title }}</h4>
-                          <el-tag
-                            size="small"
-                            :type="cp.category === '高度匹配' ? 'success' : 'warning'"
-                            effect="dark"
-                            >{{ cp.category }}</el-tag
-                          >
-                          <span class="cp-seniority">{{ cp.seniority }}</span>
-                        </div>
-                      </div>
-                      <p class="cp-reason">{{ cp.reason }}</p>
-                      <div v-if="cp.matched_skills?.length" class="cp-skills">
-                        <span class="cp-skill-label">已具备：</span>
-                        <el-tag
-                          v-for="s in cp.matched_skills"
-                          :key="s"
-                          size="small"
-                          type="success"
-                          effect="plain"
-                          style="margin: 1px"
-                          >{{ s }}</el-tag
-                        >
-                      </div>
-                      <div v-if="cp.gap_skills?.length" class="cp-skills">
-                        <span class="cp-skill-label">需提升：</span>
-                        <el-tag
-                          v-for="s in cp.gap_skills"
-                          :key="s"
-                          size="small"
-                          type="danger"
-                          effect="plain"
-                          style="margin: 1px"
-                          >{{ s }}</el-tag
-                        >
-                      </div>
-                      <div v-if="cp.salary_range" class="cp-salary">💰 {{ cp.salary_range }}</div>
-                    </div>
-                  </div>
-                </div>
-              </template>
-              <el-empty v-else description="暂无职业方向推荐（请先完成一键智能分析）" />
+              <CareerDirectionPane
+                :loading="careerPathsLoading"
+                :paths="careerPaths"
+                :summary="careerPathSummary"
+              />
             </el-tab-pane>
 
             <!-- 简历优化 -->
             <el-tab-pane label="简历优化建议" name="optimize">
-              <el-alert
-                :title="result.optimize_suggestions?.overall || ''"
-                type="success"
-                :closable="false"
+              <ResumeOptimizePane
+                :suggestions="result.optimize_suggestions"
+                :busy="genOptimizing"
+                @generate="onGenerateOptimized"
               />
-              <el-collapse class="mt">
-                <el-collapse-item
-                  v-for="(s, i) in result.optimize_suggestions?.sections || []"
-                  :key="i"
-                  :title="`【${s.section}】`"
-                >
-                  <ul>
-                    <li v-for="(x, j) in s.suggestions" :key="j">{{ x }}</li>
-                  </ul>
-                </el-collapse-item>
-              </el-collapse>
-              <el-row :gutter="16" class="mt">
-                <el-col :span="12">
-                  <h4>建议补充关键词</h4>
-                  <el-tag
-                    v-for="k in result.optimize_suggestions?.keywords_to_add || []"
-                    :key="k"
-                    type="success"
-                    style="margin: 2px"
-                    >{{ k }}</el-tag
-                  >
-                </el-col>
-                <el-col :span="12">
-                  <h4>建议删除</h4>
-                  <el-tag
-                    v-for="k in result.optimize_suggestions?.keywords_to_remove || []"
-                    :key="k"
-                    type="danger"
-                    style="margin: 2px"
-                    >{{ k }}</el-tag
-                  >
-                </el-col>
-              </el-row>
-              <h4 class="mt">排版建议</h4>
-              <ul>
-                <li v-for="(x, i) in result.optimize_suggestions?.format_tips || []" :key="i">
-                  {{ x }}
-                </li>
-              </ul>
-              <el-divider />
-              <div class="generate-area">
-                <p class="generate-desc">基于以上优化建议，AI 可自动生成一份完整的优化版简历</p>
-                <el-button
-                  type="primary"
-                  size="large"
-                  :loading="genOptimizing"
-                  @click="onGenerateOptimized"
-                >
-                  <el-icon><EditPen /></el-icon>
-                  {{ genOptimizing ? '生成中…' : '🚀 生成优化版简历' }}
-                </el-button>
-              </div>
             </el-tab-pane>
 
             <!-- 面试题 -->
             <el-tab-pane label="个性化面试题" name="interview">
-              <el-empty v-if="!hasInterview" description="暂无面试题" />
-              <template v-else>
-                <div v-for="(items, key) in interviewGroups" :key="key">
-                  <h4>{{ groupTitle(key) }}</h4>
-                  <div v-for="(q, i) in items" :key="i" class="q-card">
-                    <div class="q">
-                      <b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}
-                    </div>
-                    <div class="q-intent">考察点：{{ q.focus || q.intent }}</div>
-                    <div class="q-answer">
-                      参考答案：{{ q.suggested_answer || q.expected_answer || q.ref_answer }}
-                    </div>
-                    <div v-if="q.preparation_tips" class="q-tip">
-                      备考建议：{{ q.preparation_tips }}
-                    </div>
-                  </div>
-                </div>
-              </template>
+              <InterviewQuestionsPane :groups="interviewGroups" />
             </el-tab-pane>
 
             <!-- 职业规划 -->
@@ -630,72 +441,11 @@
 
             <!-- 综合评价 -->
             <el-tab-pane label="综合评价" name="summary">
-              <div v-if="finalReport">
-                <el-descriptions :column="2" border size="small">
-                  <el-descriptions-item label="候选人">{{
-                    finalReport.summary?.candidate_name || '-'
-                  }}</el-descriptions-item>
-                  <el-descriptions-item label="目标岗位">{{
-                    finalReport.summary?.target_position || '-'
-                  }}</el-descriptions-item>
-                  <el-descriptions-item label="推荐建议">{{
-                    localizedSummaryRecommendation
-                  }}</el-descriptions-item>
-                  <el-descriptions-item label="综合评价" :span="2">{{
-                    localizedOverallEvaluation
-                  }}</el-descriptions-item>
-                </el-descriptions>
-                <h4 class="mt">投递建议</h4>
-                <el-table :data="finalReport.action_items || []" size="small" class="mt">
-                  <el-table-column prop="priority" label="优先级" width="80">
-                    <template #default="{ row }">
-                      <el-tag
-                        :type="
-                          row.priority === '高'
-                            ? 'danger'
-                            : row.priority === '中'
-                              ? 'warning'
-                              : 'info'
-                        "
-                        size="small"
-                        >{{ row.priority }}</el-tag
-                      >
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="action" label="行动" />
-                  <el-table-column prop="reason" label="原因" show-overflow-tooltip />
-                </el-table>
-                <h4 class="mt">发展建议</h4>
-                <el-row :gutter="16">
-                  <el-col :span="12">
-                    <div class="dev-card">
-                      <h5>短期</h5>
-                      <ul>
-                        <li
-                          v-for="(s, i) in finalReport.development_advice?.short_term || []"
-                          :key="i"
-                        >
-                          {{ s }}
-                        </li>
-                      </ul>
-                    </div>
-                  </el-col>
-                  <el-col :span="12">
-                    <div class="dev-card">
-                      <h5>长期</h5>
-                      <ul>
-                        <li
-                          v-for="(s, i) in finalReport.development_advice?.long_term || []"
-                          :key="i"
-                        >
-                          {{ s }}
-                        </li>
-                      </ul>
-                    </div>
-                  </el-col>
-                </el-row>
-              </div>
-              <el-empty v-else description="暂无综合评价" />
+              <ReportSummaryPane
+                :report="finalReport"
+                :recommendation="localizedSummaryRecommendation"
+                :evaluation="localizedOverallEvaluation"
+              />
             </el-tab-pane>
 
             <!-- 引用来源 -->
@@ -728,7 +478,6 @@ import {
   Loading,
   CircleCloseFilled,
   InfoFilled,
-  EditPen,
   Search,
 } from '@element-plus/icons-vue'
 import {
@@ -746,10 +495,15 @@ import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
 import { useAnalysisReferences } from '@/features/analysis/composables/useAnalysisReferences'
 import { useCareerPaths } from '@/features/analysis/composables/useCareerPaths'
 import { useMatchExplain } from '@/features/analysis/composables/useMatchExplain'
+import CareerDirectionPane from '@/features/analysis/components/CareerDirectionPane.vue'
 import CareerPlanPane from '@/features/analysis/components/CareerPlanPane.vue'
 import ExplainPane from '@/features/analysis/components/ExplainPane.vue'
+import InterviewQuestionsPane from '@/features/analysis/components/InterviewQuestionsPane.vue'
 import ReferencesPane from '@/features/analysis/components/ReferencesPane.vue'
-import { scoreToneColor, scoreToneFillClass } from '@/utils/scoreTone'
+import ReportSummaryPane from '@/features/analysis/components/ReportSummaryPane.vue'
+import ResumeOptimizePane from '@/features/analysis/components/ResumeOptimizePane.vue'
+import SkillsPane from '@/features/analysis/components/SkillsPane.vue'
+import { scoreToneColor } from '@/utils/scoreTone'
 import {
   localizeRecommendationText,
   localizeSentence,
@@ -760,7 +514,6 @@ import {
   confidenceTagType,
   dimensionScore,
   groupInterviewQuestions,
-  groupTitle,
   hasStructuredCareerGaps,
   normalizeConfidence,
   pickMatchedSkills,
@@ -896,8 +649,6 @@ const analysisConfidence = computed(
 const careerData = computed(() => result.value?.career_planning || null)
 const visualPhases = computed(() => careerData.value?.visual_roadmap?.phases || [])
 const hasStructuredSkillGaps = computed(() => hasStructuredCareerGaps(result.value))
-
-const hasInterview = computed(() => Object.keys(interviewGroups.value).length > 0)
 
 const interviewGroups = computed(() => groupInterviewQuestions(result.value))
 
