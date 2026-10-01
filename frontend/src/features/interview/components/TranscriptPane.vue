@@ -212,6 +212,10 @@ watch([() => props.messages.length, () => props.status], scrollToEnd)
   margin-top: 10px !important;
   color: #9a4b1d !important;
 }
+/* D68 补回：D66 抄这条时丢了选择器列表的前半截（页面里是 `.system-shell,` 换行 `.end-shell {…}`，
+   抽取脚本按"选择器行以 { 结尾"找起点，只收进后半截），system 消息因此失去药丸形状——
+   实测 padding 0px / radius 0px，而同一条规则里的 .end-shell 是 10px 16px / 999px。 */
+.system-shell,
 .end-shell {
   padding: 10px 16px;
   border-radius: 999px;

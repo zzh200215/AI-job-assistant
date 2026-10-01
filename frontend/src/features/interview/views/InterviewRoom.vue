@@ -344,22 +344,6 @@ onUnmounted(() => {
   margin-top: 0;
 }
 
-.meta-pill.danger {
-  background: #fff0ea;
-}
-
-.question-badge.follow-up {
-  background: #fff1e7;
-  color: #c55a1f;
-}
-
-.system-shell,
-.end-shell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .answer-head {
   display: flex;
   align-items: flex-start;
@@ -563,24 +547,6 @@ onUnmounted(() => {
   z-index: 1;
 }
 
-.interview-room-page .stage-card {
-  border-top: 3px solid var(--app-cyan);
-}
-
-.interview-room-page .question-card {
-  border-color: #cfd9ea;
-  box-shadow: 0 12px 28px rgba(31, 55, 94, 0.08);
-}
-
-.interview-room-page .interviewer-avatar {
-  background: linear-gradient(135deg, #2359d9, #22a9d8);
-}
-
-.interview-room-page .structure-box {
-  border-color: #d6e5fb;
-  background: #f5f9ff;
-}
-
 .interview-room-page .structure-tips span {
   border-radius: var(--app-radius-xs);
   background: #e7f1ff;
@@ -590,10 +556,6 @@ onUnmounted(() => {
 .interview-room-page .transcript-card,
 .interview-room-page .answer-card {
   border-color: #d9e0eb;
-}
-
-.interview-room-page .user-shell {
-  background: linear-gradient(135deg, #2359d9, #2c72d9);
 }
 
 .interview-room-page .voice-trigger {
@@ -654,15 +616,6 @@ onUnmounted(() => {
   .transcript-header,
   .voice-toolbar {
     flex-direction: column;
-  }
-
-  .stage-meta,
-  .snapshot-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .msg-shell {
-    max-width: 100%;
   }
 
   .answer-actions,

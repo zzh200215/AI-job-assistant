@@ -698,36 +698,6 @@ onMounted(() => {
   gap: 8px;
 }
 
-.version-performance {
-  margin-bottom: 16px;
-  border: 1px solid var(--app-line);
-  border-top: 3px solid var(--app-primary);
-  border-radius: 8px;
-  background: var(--app-surface-strong);
-}
-
-.version-performance-title > span,
-.version-name span,
-.version-metric span,
-.version-name,
-.version-metric {
-  align-items: flex-end;
-}
-
-.version-outcomes {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: 10px;
-}
-
-/* Board */
-.kanban-board {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 16px;
-}
-
 /* Form */
 .form-row {
   display: grid;
@@ -778,14 +748,6 @@ onMounted(() => {
     padding-top: 12px;
     border-top: 1px solid var(--app-line);
   }
-
-  .kanban-board {
-    flex-wrap: wrap;
-  }
-  .kanban-col {
-    max-width: none;
-    min-width: 200px;
-  }
 }
 
 @media (max-width: 768px) {
@@ -817,9 +779,6 @@ onMounted(() => {
   .page-shell .page-header {
     flex-direction: column;
     gap: 12px;
-  }
-  .kanban-col {
-    min-width: 180px;
   }
   .form-row {
     grid-template-columns: 1fr;

@@ -1396,64 +1396,6 @@ function goToSmartAnalysis() {
   color: var(--app-muted);
 }
 
-.result-toolbar,
-.warehouse-toolbar,
-.recommend-toolbar {
-  margin-bottom: 14px;
-}
-
-.toolbar-actions,
-.recommend-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.result-grid,
-.recommend-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-.job-shell,
-.job-title-row,
-.warehouse-title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.job-title-row h3,
-.warehouse-title-row h3 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.source-pill,
-.local-pill {
-  background: rgba(44, 143, 105, 0.12);
-  color: var(--app-success, #14b8a6);
-}
-
-.job-company,
-.warehouse-meta {
-  margin: 8px 0 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.job-tags,
-.recommend-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 12px;
-}
-
 .bookmark-btn,
 .text-btn,
 .short-item,
@@ -1463,12 +1405,6 @@ function goToSmartAnalysis() {
   border-radius: var(--app-radius-xs, 8px);
   cursor: pointer;
   transition: 0.2s ease;
-}
-
-.recommend-card {
-  display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
-  gap: 14px;
 }
 
 .board-card {
@@ -1545,13 +1481,6 @@ function goToSmartAnalysis() {
   text-align: left;
 }
 
-.pipeline-toolbar,
-.pipeline-form-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
 .pipeline-stage-pill,
 .pipeline-summary-item {
   padding: 14px;
@@ -1570,27 +1499,6 @@ function goToSmartAnalysis() {
 .pipeline-summary-item span {
   color: var(--app-muted);
   font-size: 13px;
-}
-
-.pipeline-stage-pill.active,
-.pipeline-stage-pill:hover {
-  transform: translateY(-1px);
-  border-color: rgba(45, 108, 223, 0.28);
-  box-shadow: 0 12px 24px rgba(21, 32, 43, 0.08);
-}
-
-.pipeline-column-head small,
-.pipeline-column-note,
-.pipeline-meta,
-.pipeline-history span {
-  color: var(--app-muted);
-}
-
-.pipeline-form-row,
-.pipeline-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .pipeline-summary-grid {
@@ -1666,12 +1574,6 @@ function goToSmartAnalysis() {
   .pipeline-stage-select,
   .pipeline-date {
     width: 100%;
-  }
-
-  .job-title-row h3,
-  .warehouse-title-row h3,
-  .pipeline-card-head h3 {
-    font-size: 18px;
   }
 
   .pipeline-summary-grid {

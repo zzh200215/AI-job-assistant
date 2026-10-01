@@ -14,9 +14,9 @@ const BUDGET = {
        再叠一把尺子——被删类名一个都不出现在页面自己的模板里（动态拼出来的 `node-*`/`badge-*`/
        `score-tone` 那几族实测全部留在表里，`el-` 那类库里选择器一律不动）。
        下面这四个数就是量完剩下的"页面自己还在用"的那些。 */
-    'src/features/interview/views/InterviewRoom.vue': 54,
+    'src/features/interview/views/InterviewRoom.vue': 43,
     'src/features/shell/views/Home.vue': 71,
-    'src/features/jobs/views/JobSearch.vue': 30,
+    'src/features/jobs/views/JobSearch.vue': 26,
     'src/features/jobs/components/JobCompareDialog.vue': 1,
     'src/features/jobs/components/JobDetailDrawer.vue': 1,
     /* D44 搬两个面板时的**复制成本**，不是新写的色值：scoped 样式不跨组件边界，父页面那 27 条

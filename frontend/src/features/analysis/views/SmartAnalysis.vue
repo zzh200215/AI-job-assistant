@@ -1382,32 +1382,6 @@ onMounted(() => {
   font-size: 16px;
 }
 
-.rag-breakdown-item span,
-.rag-breakdown-item strong,
-.rag-breakdown-item em {
-  color: var(--app-muted);
-  font-size: 11px;
-  font-style: normal;
-  line-height: 1.5;
-}
-
-.q {
-  font-size: 14px;
-}
-
-/* Career content */
-.career-content {
-}
-
-.radar-bar.current {
-  background: var(--app-primary);
-  z-index: 1;
-}
-.radar-val,
-.radar-val-target {
-  color: var(--app-primary);
-}
-
 /* Tab body */
 .tab-body {
   padding: 0;
@@ -1451,9 +1425,6 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
   .rag-confidence-metrics {
-    grid-template-columns: 1fr;
-  }
-  .rag-breakdown {
     grid-template-columns: 1fr;
   }
 }

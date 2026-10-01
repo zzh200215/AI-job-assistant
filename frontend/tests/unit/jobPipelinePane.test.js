@@ -114,6 +114,9 @@ beforeEach(() => {
 })
 
 describe('流程面板的跨边界写', () => {
+  /* 单独跑这一条 1176 ms，是这仓最慢的一条：它要把整个 JobSearch 挂起来。
+     68 个文件并发时同一台机器中位慢 3–4 倍，5 秒默认墙钟就被它撞过两次（两次都是这一条，
+     单独跑与下一轮全量都绿）。这里抬的是**墙钟上限**不是断言：断言错照样红。 */
   it('关键词筛选走 emit，父链的过滤照常生效', async () => {
     const wrapper = await renderSearch([
       entry(1, 'todo', '后端工程师'),
@@ -129,7 +132,7 @@ describe('流程面板的跨边界写', () => {
     expect(wrapper.vm.pipelineFilters.keyword).toBe('分析')
     expect(cardTitles(wrapper)).toEqual(['数据分析师'])
     wrapper.unmount()
-  })
+  }, 20000)
 
   it('阶段药丸：点一枚看那一列，点另一枚是换列，再点当前这枚才回全部', async () => {
     const wrapper = await renderSearch([entry(1, 'todo', '甲岗'), entry(2, 'applied', '乙岗')])
