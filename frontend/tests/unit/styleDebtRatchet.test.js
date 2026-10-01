@@ -8,16 +8,23 @@ import { describe, expect, it } from 'vitest'
 // tells you the new value to write.
 const BUDGET = {
   hardcodedColorLiterals: {
-    'src/features/interview/views/InterviewRoom.vue': 69,
+    /* D67 让这一维第一次**往下走**（此前每次拆页都只往上加）。删的根据不是静态推断：
+       先在真浏览器里数每条规则命中几个元素（0 命中才候选），再把候选规则原样塞回同一份 DOM
+       比一遍全页计算样式，四个页面各自 0 差异（48/77/80/56 条，2270/505/692/267 个元素实例）；
+       再叠一把尺子——被删类名一个都不出现在页面自己的模板里（动态拼出来的 `node-*`/`badge-*`/
+       `score-tone` 那几族实测全部留在表里，`el-` 那类库里选择器一律不动）。
+       下面这四个数就是量完剩下的"页面自己还在用"的那些。 */
+    'src/features/interview/views/InterviewRoom.vue': 54,
     'src/features/shell/views/Home.vue': 71,
-    'src/features/jobs/views/JobSearch.vue': 45,
+    'src/features/jobs/views/JobSearch.vue': 30,
     'src/features/jobs/components/JobCompareDialog.vue': 1,
     'src/features/jobs/components/JobDetailDrawer.vue': 1,
     /* D44 搬两个面板时的**复制成本**，不是新写的色值：scoped 样式不跨组件边界，父页面那 27 条
        `.warehouse-*` / `.pipeline-*` 规则只能原样拷一份进子组件，于是同一份 rgba 同时存在于
        两个文件里，本维度的总数因此**上涨**（父页面仍是 45，一条没删）。
        WarehousePane 的拷贝里没有一个色值（全是 var()），所以它不进这张表——未知的路径预算就是 0。
-       这笔债的正确还法是把它们换成主题 token 并逐路由 getComputedStyle 差分，见 §7 阶段 2 的说明。 */
+       这笔债的正确还法是把它们换成主题 token 并逐路由 getComputedStyle 差分，见 §7 阶段 2 的说明。
+       **D67 起这段里的「父页面一条没删」不再成立**：0 命中那批已从父页面删掉，JobSearch 45 → 30。 */
     'src/features/jobs/components/PipelinePane.vue': 5,
     /* D45 又搬出两个面板，同一笔复制成本再记一次：这两份是从父页面**复制**的（父页面 45 条一条没删），
        所以这一维的总数随拆页上升：45 → 50 → 67。不是新写的色值，是同一份 rgba 现在住在两个文件里。 */
@@ -26,7 +33,7 @@ const BUDGET = {
     'src/layouts/DefaultLayout.vue': 34,
     'src/features/shell/views/Profile.vue': 31,
     'src/features/planning/views/CareerPlanning.vue': 27,
-    'src/features/analysis/views/SmartAnalysis.vue': 15,
+    'src/features/analysis/views/SmartAnalysis.vue': 9,
     /* D51 搬出「职业规划」面板时样式按 D44 的口径**复制**（父页面那 1092 行一行没删，因为静态切分
        看不见动态类名），所以这 3 个是从页面里**重复**出来的，不是新增的债：这一页面上的色值
        15 → 18。css 分块实测 17.01 → 19.42 kB、js 分块 46.36 → 48.30 kB。 */
@@ -40,7 +47,7 @@ const BUDGET = {
     'src/features/resume/views/ResumeCompare.vue': 19,
     'src/features/auth/views/Login.vue': 16,
     'src/features/interview/views/Interview.vue': 13,
-    'src/features/pipeline/views/PipelineKanban.vue': 12,
+    'src/features/pipeline/views/PipelineKanban.vue': 1,
     /* D62 把转化分析与版本表现两块面板搬出 PipelineKanban：样式照 D44 的口径**复制不切**
        （`.funnel-fill` 的配色走 `'fill-' + stage.accent` 这种动态类名，静态切分会把 6 条
        fill-* 整条切没）。这 1 条 `#94a3b8` 是页面那 12 条里重复出来的第二个副本，
@@ -888,28 +895,39 @@ describe('style debt ratchet', () => {
      不是"发了没人接的类名"。这里把视图实际发出的 tone 前缀和五个档位绑成契约。 */
   const TONES = ['high', 'good', 'warn', 'risk', 'unknown']
   const styleOf = (rel) => viewSources.find((v) => v.rel === rel)?.style ?? ''
+  const sourceOf = (rel) => viewSources.find((v) => v.rel === rel)?.source ?? ''
+  /* 前两个前缀的规矩住在主题层；后两个住在**发出这个 class 的那个文件自己**的 <style> 里。
+     D64/D66 把看板列与实录那块搬进组件之后，`.score-level--*` 与 `.score-chip--*` 的规则跟着
+     markup 一起走了（页面里那份成了 0 命中，D67 已删），所以这里改成指向真正的主人，
+     并且额外钉一条"这个文件确实发出这个前缀"——否则下次搬家又会把指针留在一个不再发 class
+     的文件上，这条守卫就悄悄变成永远为真的空检查。 */
   const TONE_CLASS_SITES = [
     { prefix: 'score-tone', css: themeCss, where: 'src/styles/main.css' },
     { prefix: 'score-fill', css: themeCss, where: 'src/styles/main.css' },
     {
       prefix: 'score-chip',
-      css: styleOf('src/features/interview/views/InterviewRoom.vue'),
-      where: 'InterviewRoom.vue',
+      css: styleOf('src/features/interview/components/TranscriptPane.vue'),
+      where: 'TranscriptPane.vue',
+      emitsIn: 'src/features/interview/components/TranscriptPane.vue',
     },
     {
       prefix: 'score-level',
-      css: styleOf('src/features/pipeline/views/PipelineKanban.vue'),
-      where: 'PipelineKanban.vue',
+      css: styleOf('src/features/pipeline/components/ListPane.vue'),
+      where: 'ListPane.vue',
+      emitsIn: 'src/features/pipeline/components/ListPane.vue',
     },
   ]
 
   it('gives every tone a rule for each class prefix a view emits', () => {
     const missing = []
-    for (const { prefix, css, where } of TONE_CLASS_SITES) {
+    for (const { prefix, css, where, emitsIn } of TONE_CLASS_SITES) {
       for (const tone of TONES) {
         if (!new RegExp(`\\.${prefix}--${tone}\\b`).test(css)) {
           missing.push(`${prefix}--${tone} (no rule in ${where})`)
         }
+      }
+      if (emitsIn && !sourceOf(emitsIn).includes(`'${prefix}'`)) {
+        missing.push(`${prefix} (发出方已经不是 ${where}，指针该跟着搬)`)
       }
     }
     expect(missing, `emitted tone class with no rule: ${missing.join(', ')}`).toEqual([])
