@@ -1872,7 +1872,7 @@ A2 第三页（`PipelineKanban.vue` 1645 = 模板 526 + 脚本 441 + 样式 676�
 
 **代价，实测**：视图 1546 → **1530**（脚本 342 → 326）；js 分块 24.07 → **23.83 kB**（gzip 8.43 不变）、css **11.31 kB 不变**——**这一串里第一次让分块变小**，因为删的是重复而不是把代码搬过边界。新增测试 178 行；门禁 **292 → 298 passed / 56 files**，eslint 0 error，build ok，prettier clean。
 
-**这一页还剩**：看板加载与简历版本两条链（前者已有令牌并被 `pipelineKanbanRace` 钉住；后者只有 `onMounted` 一个入口、没有可测的并发，所以我不会给它补令牌）、批量移动与新增/反馈保存、模板 526 行与样式 676 行的面板切分。
+**这一页还剩**：看板加载与简历版本两条链（前者已有令牌并被 `pipelineKanbanRace` 钉住；后者只有 `onMounted` 一个入口、没有可测的并发，所以我不会给它补令牌）、批量移动与新增/反馈保存、模板 526 行与样式 676 行的面板切分（**面板切分由 D62–D64 做掉；样式那 676 行仍没删，属死选择器那笔账**）。
 
 
 #### 已交付：D59 这一页的写一次只跑一趟——三处实测撞车、两种守卫形状、一条被删的提前返回
@@ -1912,7 +1912,7 @@ D58 那份"还剩"里的批量移动，动手前我只写了一句"三个按钮�
 
 **代价，实测**：视图 1530 → **1594**（模板 526 → 551、脚本 326 → 365、样式 676 不变）；新增 `pipelineWriteOps.test.js` 337 行 / 11 条用例；`PipelineKanban` 的 js 分块 23.83 → **24.23 kB**（gzip 8.43 → 8.48）、css **11.31 kB 不变**。门禁 **298 → 309 passed / 56 → 57 files**，两轮全量 30.97 s / 31.51 s 都绿（D59 中途遇到过一次 5 s 超时，之后五条命令里再没复现，按 CPU 争用记账），eslint 0 error（仓库 warning 数回到既有的那 1 条），prettier clean，build ok，改动文件 CRLF **0**。
 
-**这一页还剩**：模板 551 行与样式 676 行的面板切分（D57/D58/D59 之后的最后一类）——**D62 做掉了两块统计**（模板 551 → 473），还剩看板列与列表视图。两条读链没有欠账——看板加载链早有令牌并被 `pipelineKanbanRace` 钉住，简历版本那条只有 `onMounted` 一个入口。A2 全场剩 `InterviewRoom.vue`(1462)。
+**这一页还剩**：模板 551 行与样式 676 行的面板切分（D57/D58/D59 之后的最后一类）——**D62 做掉了两块统计**（模板 551 → 473），看板列由 **D63**、列表视图由 **D64** 接着做掉。两条读链没有欠账——看板加载链早有令牌并被 `pipelineKanbanRace` 钉住，简历版本那条只有 `onMounted` 一个入口。A2 全场剩 `InterviewRoom.vue`(1462)——**D60/D61/D66 已做完，五个巨页到此全部开完刀。**
 
 
 #### 已交付：D60 InterviewRoom 的显示层进 lib——这一页第一次有测试
@@ -1976,7 +1976,7 @@ D60 记下"这页还剩语音那条链"，这一刀做掉。**这条链此前在
 
 **代价，实测**：视图 1345 → **1220**（脚本 301 → **176**，模板 288 与样式 754 不动），composable 169 行，**两文件合计比原单文件多 44 行**；`InterviewRoom` 的 js 分块 15.43 → **15.87 kB**（gzip 6.98 → 7.17）、css **12.75 kB 不变**。新增 270 行 / 10 条用例；门禁 **339 → 349 passed / 59 → 60 files**，两轮全量 28.59 s / 31.35 s，eslint 0 error（warning 仍是既有的那 1 条），prettier clean，build ok，改动文件 CRLF **0**。
 
-**这页还剩**：脚本只剩 176 行的页面编排（`handleSend` / `handleSkip` / `handleEnd` / `goBack` 那几下 + 两个 watch + `onMounted`），要出去得先拍面板归属；剩下的体积在模板 288 行与样式 754 行的面板切分。**A2 全场还剩**（本条写于 D61，此后：`PipelineKanban` 的看板列由 D63、列表视图由 D64 出页，`SmartAnalysis` 的 5 个小面板由 D65 出页）：只剩 `InterviewRoom` 的面板切分（模板 288 / 样式 754），以及三页各自那份**没删的样式块**里的死选择器（`PipelineKanban` 676、`SmartAnalysis` 1092、`JobSearch` 那 27 条），后者要先做逐路由 `getComputedStyle` 差分才敢删。
+**这页还剩**：脚本只剩 176 行的页面编排（`handleSend` / `handleSkip` / `handleEnd` / `goBack` 那几下 + 两个 watch + `onMounted`），要出去得先拍面板归属；剩下的体积在模板 288 行与样式 754 行的面板切分——**D66 已把四块面板搬出（模板 288 → 122），样式那 754 行仍一行没删。****A2 全场还剩**（本条写于 D61，此后：`PipelineKanban` 的看板列由 D63、列表视图由 D64 出页，`SmartAnalysis` 的 5 个小面板由 D65 出页，`InterviewRoom` 的四块面板由 D66 出页——**五个巨页全部做完**）：只剩四页各自那份**没删的样式块**里的死选择器（`PipelineKanban` 676、`SmartAnalysis` 1092、`InterviewRoom` 那 58 条、`JobSearch` 那 27 条），后者要先做逐路由 `getComputedStyle` 差分才敢删。
 
 
 #### 已交付：D62 两块统计面板出页——我手抄的那份样式表被自己的比对脚本抓到整块是错的
@@ -2091,6 +2091,26 @@ R4 与 R6 是有意分开的两刀：这一页有 4 处 `:disabled="writeBusy"`�
 **一轮与本次无关的红要说明白**：满负载那一轮 `jobPipelinePane.test.js` 一条用例 5 s 超时（`tests/…/jobs`，本次一个文件没碰），单独跑 7 条全绿、下一轮全量 68 files / 406 全绿。不把它算成本次的后果，但要记下：**68 个文件并发时那条 5 s 默认超时是会咬人的**，下一次谁撞上要么给它自己的超时、要么降并发，别当成回归。
 
 **这一页到此的形状与那笔没还的债**：页面上剩 hero、输入卡、Agent Pipeline 进度、终态提示、分数区五块页面级区块，加上分析运行链（`loading / result / agentSteps / taskOutcome` 与 `onStartAnalysis`）。样式块 1092 行**一行没删**，而这次能给出一个静态数字：搬完之后**页面模板里对这六段 28 条规则 0 命中**（Query card 5、Career paths 13、Generate area 2、Dev card 1、Loading state 2、List 5；逐类名 grep `<ul` / `<h4` / `<h5` / `.mt` / `.mb` / `q-card` / `cp-` / `career-path-grid` / `generate-` / `dev-card` / `inline-loading` / `skill-group` 全为 0）。这仍是**静态判定**，不足以据此删除——这一页还留着两处拼出来的类名（`` `node-${s.status}` ``、`` `badge-${analysisConfidence.level || 'low'}` ``），与 PipelineKanban 那 676 行、JobSearch 那 27 条死选择器是同一笔债，一起交给逐路由 `getComputedStyle` 差分那一条（下一刀候选，见 D67 的位置）。**A2 的"拆 5 个巨页"到此做完四个页**（`JobSearch` D36–D45、`CareerPlanning` D53–D56、`PipelineKanban` D57–D64、`SmartAnalysis` D49–D65），只剩 `InterviewRoom` 的面板切分（模板 288 / 样式 754）。
+
+#### 已交付：D66 房间页四块面板出页——这页的样式有两层，而被搬走的是"滚动"这件事
+
+A2 五个巨页的最后一刀。`InterviewRoom.vue` 搬出四块：`StagePane`（当前阶段与三格计数）、`QuestionPane`（题卡）、`TranscriptPane`（面试实录，最大的一块）、`RoomAside`（右栏三块合成一块）。视图 1220 → **1037**（模板 288 → 122、脚本 176 → 159、样式 754 不动），四个组件共 **632 行**，两堆合计 1669，比原单文件**多 449 行**。留在页面上的是 hero、回答输入卡（草稿 + 语音那条链的 D61 落点 + 四颗动作按钮）与完成后的两条出口。
+
+**这页的样式比前两页贵一层**：除了基础规则，还有 20 多条 `.interview-room-page .xxx` 的**覆盖层**（头像渐变、卡片顶边、结构框底色、`!important` 的蓝）。覆盖层编译成"祖先 `.interview-room-page` + 目标带本组件 scope id"，而目标元素一搬进子组件就只带子组件的 id，页面那份**再也命中不了**——所以复制时必须连覆盖层一起抄。这一刀的复制成本是这个域至今最大的一次：`hardcodedColorLiterals` 新增 **QuestionPane 19 / TranscriptPane 7 / RoomAside 2 / StagePane 1**，interview 域 **69 → 98**（页面那 69 条仍一条没删）。css 分块因此从 12.75 涨到 **19.44 kB**（gzip 2.72 → 3.24），js 15.87 → **17.85 kB**（gzip 7.17 → 7.73）。基线同样是"备份 → 回退 HEAD 建一次 → 还原后逐文件 sha256 核对（9 个文件全等）"量出来的。
+**右栏为什么合成一块而不是三块**：`.side-column .panel + .panel` 那条间距规则要的是"相邻的两块面板"这种**列内关系**，拆成三个组件就得把它复制三份并指望相邻顺序永远不变。这条判断写进 `RoomAside.vue` 的头注释。
+
+**搬走的其实不止 markup，还有"滚动"**：页面上原来是 `chatRef` + `scrollToBottom()`，在提交、跳过、结束三个动作后面各显式推一次，再加一条 `watch(store.messages.length)`。列表 DOM 归实录面板之后，`chatRef` 无法留在页面，所以**滚动改由面板自己看着两个输入**：`messages.length` 与 `status`。这不是"顺手改设计"，而是有实测支撑的等价替换——`submitAnswer` 与 `skipCurrent` 在那两个函数体里**同步**往 messages 里 push（一条 `answer`、一条 `system`），所以长度那条腿覆盖得住；`end()` 不 push 消息、只把 status 改成 `evaluating`，而那块状态提示就写在面板里，所以另一条腿覆盖得住。两条腿各带一次变异（V9 摘 status 腿 → 1 红、V10 摘 messages 腿 → 3 红），页面那两条"点提交/点跳过之后仍贴底"的用例穿过边界打这条链。
+
+**jsdom 在这里骗了我一次，而且骗法是新的**：第一版把 `scrollHeight` 用 `Object.defineProperty(..., {value: 800})` 写死、然后读 `el.scrollTop` 断言它变成 800，结果**四条滚动断言全红**。原因不是代码没跑，而是 **jsdom 的 `scrollTop` setter 是哑的**（没有布局，写进去读出来永远是 0）。改成"自己定义一个记事的 setter，断言那次写发生、值等于当时的 scrollHeight、且落在面板自己的容器上"之后，五条全绿，另加一条反向用例（两个输入都不变时**不该**有写）。教训与 D64 那次同类但不同病：**"测不出来"的结论要先分清是渲染没等、还是环境根本不实现这个属性**。
+
+**搬家途中我自己造的第二处错**（这次被测试当场抓住）：面板脚本里 `listRef` 定义好了，模板那行仍是页面带来的 `ref="chatRef"`，于是 `listRef` 永远是 null、一次都不滚。V 系列第一条红的就是这个。D65 那两条同族错（`hasInterview` / `interviewGroups`）之后，这是第三次——**模板里的 `ref="..."` 是标识符改名的第四个藏身处**，我的改名清单前两次只点了 v-model 与插值。
+
+**16 次变异，15 红 1 绿**：V1 `:phase` 递空对象、V2 `:question` 不递、V3 `:messages` 递空数组（红 4 条）、V4 右栏 `:structure` 递空数组、V5 `:session` 不递、V6 `:last-score` 不递、V7 `:remaining` 写死 60、V8 `:answered-count` 写死 0、V9/V10 那两条腿、V12 评分芯片不走 utils、V13 右栏技能条那一刀变全取、V14 红色门槛挪到 0、V15 追问徽章永不出现、V16 `:round` 与 `:total` 换错——各红 1 条（V3 红 4、V10 红 3）。
+**两条红的过程要说**：V7 与 V16 **第一次跑是全绿的**。V7（页面把倒计时写死成常数）意味着"屏幕上的倒计时永不发红"，而面板自己的用例只看递进来的数、看不出断线；V16（进度那两个数换错）同理。于是给页面补了两条用例——倒计时那一格从 `store.roundRemaining` 一路走到面板的 `<= 10`、进度那一格点名"3 / 8"两个数各归各——补完再跑，V7 与 V16 各红 1 条。**这是 D51 那条教训的第三次实测：面板级用例的绿，不等于页面接线有人看着。**
+**唯一那条绿的**：V11 把面板贴底前的 `if (listRef.value)` 判空摘掉，10 条全绿——卸载与 nextTick 的那场竞速在 jsdom 里构造不出来（组件一 stop，watch 的 job 直接被跳过，压根走不到那次写）。这条守卫**原样保留**，理由写在面板注释里：它是页面原文带的，搬家不删既不承重也无害的东西。
+
+**门禁**：**406 → 429 passed / 68 → 70 files**（新增 21 条：`interviewRoomPanes` 11、`interviewRoomTranscript` 10；页面级 2 条挂在既有的 `interviewRoomRender` 里，那组从 10 条涨到 12）；eslint 0 error（仍只有既有那 1 条 warning——中途出现过 1 条 `no-setter-return`，是我那个记事 setter 自己写的），prettier clean，build ok，改动文件 CRLF **0**。
+**这一页到此的形状**：页面只剩 hero、回答输入卡、两条完成后的出口，以及 159 行的页面编排（四个动作 + `onMounted` + 语音链的接线）。样式 754 行一行没删，静态判定：**108 条规则里 58 条**点到的类名在页面模板中已 0 命中（这是**下界**——子串判据会把 `{ danger: … }` 这种模板里的对象键当成命中）。至此 **A2 的"拆 5 个巨页"全部做完**（`JobSearch` D36–D45、`SmartAnalysis` D49–D65、`CareerPlanning` D53–D56、`PipelineKanban` D57–D64、`InterviewRoom` D60–D66），剩下的一笔是四页共同的**死样式**（`PipelineKanban` 676 行 / `SmartAnalysis` 1092 行 / `JobSearch` 那 27 条 / `InterviewRoom` 这 58 条），要先做逐路由 `getComputedStyle` 差分才敢删。
 
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
