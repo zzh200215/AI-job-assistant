@@ -247,6 +247,34 @@ describe('房间页面上那些字来自 lib', () => {
     expect(text('.score-shell .score-top span')).toBe('评分暂未生成')
   })
 
+  it('倒计时那一格把 store 的秒数一路递到面板的红色门槛上（D66 之后门槛在 StagePane 里）', async () => {
+    const { store } = await renderRoom()
+    store.currentRound = 3
+    store.roundRemaining = 40
+    await flushPromises()
+    expect(document.querySelectorAll('.meta-pill.danger').length).toBe(0)
+    /* 进度那一格两个数各归各：`:round` 与 `:total` 换错时屏幕上说的是"进度 8 / 3"，
+       而面板自己的用例照样全绿（它只看递进来的两个数），所以这条要在页面上钉。 */
+    expect(texts('.meta-pill')[0]).toBe('进度3 / 8')
+    /* 门在面板里（`remaining <= 10`），值在页面上（`store.roundRemaining`）。
+       这条用例钉的是**两边接上了**：把 `:remaining` 写死成一个常数，屏幕上就永远不红，
+       而面板自己的用例照样全绿——所以只有页面级才看得见这种断线。 */
+    store.roundRemaining = 10
+    await flushPromises()
+    expect(document.querySelectorAll('.meta-pill.danger').length).toBe(1)
+    expect(texts('.meta-pill')[1]).toContain('单题倒计时')
+  })
+
+  it('右栏岗位聚焦那块吃的是会话里的 jd_summary（D66 之后它在 RoomAside 里）', async () => {
+    await renderRoom()
+    expect(text('.side-block strong')).toBe('后端工程师')
+    expect(text('.side-block p')).toBe('某云厂商')
+    expect(texts('.skill-grid span')).toEqual(['Go'])
+    /* 这一条是 D66 的接线断言：把 `:session` 递错（比如递成 currentQuestion）屏幕上不会报错，
+       只会这一块退回两个占位——而占位本身是合法的，所以必须在这里点名。 */
+    expect(texts('.side-title')).toEqual(['岗位聚焦', '表现速览', '本题提醒'])
+  })
+
   it('四种消息行的归类：end 与 system 同一条腿', async () => {
     const { store } = await renderRoom()
     store.messages = [

@@ -62,6 +62,15 @@ const BUDGET = {
        页面一条没删；其余四块面板复制的四段（Query card / Generate area / Dev card / List）
        全是 var()，一个 hex 都没有，所以它们不进这张表。 */
     'src/features/analysis/components/CareerDirectionPane.vue': 1,
+    /* D66 把 InterviewRoom 的四块展示面板搬出视图，同一笔复制成本第四次记在这个域里，而且这次最贵：
+       这页的样式里有**两层**——基础规则之外还有 20 多条 `.interview-room-page .xxx` 的覆盖层，
+       它们的目标元素一搬进子组件就只带子组件的 scope id，页面那份再也命中不了，于是必须连覆盖层
+       一起复制。interview 域这一维 69 → 69+29=98（页面那 69 条仍然一条没删，删除属 D67 那场差分）。
+       其中 QuestionPane 19 条最多，因为它那块把头像、徽章、结构框三个上色的块都带走了。 */
+    'src/features/interview/components/QuestionPane.vue': 19,
+    'src/features/interview/components/TranscriptPane.vue': 7,
+    'src/features/interview/components/RoomAside.vue': 2,
+    'src/features/interview/components/StagePane.vue': 1,
     'src/features/auth/views/ResetPassword.vue': 12,
     'src/features/interview/views/InterviewSetup.vue': 11,
     'src/features/eval/views/RecommendationEval.vue': 11,

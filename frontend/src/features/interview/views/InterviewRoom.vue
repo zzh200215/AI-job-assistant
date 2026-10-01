@@ -14,140 +14,27 @@
 
     <section class="room-grid">
       <div class="main-column">
-        <div class="panel stage-card">
-          <div class="panel-body">
-            <div class="stage-header">
-              <div>
-                <span class="stage-kicker">当前阶段</span>
-                <h2>{{ currentPhase.title }}</h2>
-                <p>{{ currentPhase.desc }}</p>
-              </div>
-              <div class="stage-meta">
-                <div class="meta-pill">
-                  <span>进度</span>
-                  <strong>{{ store.currentRound || 0 }} / {{ store.totalQuestions || 0 }}</strong>
-                </div>
-                <div class="meta-pill" :class="{ danger: store.roundRemaining <= 10 }">
-                  <span>单题倒计时</span>
-                  <strong>{{ store.formattedRoundRemaining }}</strong>
-                </div>
-                <div class="meta-pill">
-                  <span>总用时</span>
-                  <strong>{{ store.formattedTime }}</strong>
-                </div>
-              </div>
-            </div>
-            <el-progress
-              :percentage="store.progress"
-              :show-text="false"
-              :stroke-width="10"
-              class="stage-progress"
-            />
-          </div>
-        </div>
+        <StagePane
+          :phase="currentPhase"
+          :round="store.currentRound"
+          :total="store.totalQuestions"
+          :remaining="store.roundRemaining"
+          :formatted-remaining="store.formattedRoundRemaining"
+          :formatted-time="store.formattedTime"
+          :progress="store.progress"
+        />
 
-        <div class="panel question-card">
-          <div class="panel-body">
-            <div class="interviewer-header">
-              <div class="interviewer-avatar">AI</div>
-              <div>
-                <div class="interviewer-name">{{ interviewerPersona }}</div>
-                <div class="interviewer-role">{{ interviewerHint }}</div>
-              </div>
-            </div>
+        <QuestionPane
+          :persona="interviewerPersona"
+          :hint="interviewerHint"
+          :category="questionCategory"
+          :is-follow-up="store.isFollowUp"
+          :question="spotlightQuestion"
+          :helper-text="questionHelperText"
+          :structure="answerStructure"
+        />
 
-            <div class="question-meta">
-              <span class="question-badge">{{ questionCategory }}</span>
-              <span v-if="store.isFollowUp" class="question-badge follow-up">追问</span>
-            </div>
-
-            <h3>{{ spotlightQuestion }}</h3>
-            <p class="question-helper">{{ questionHelperText }}</p>
-
-            <div class="structure-box">
-              <div class="structure-title">建议回答结构</div>
-              <div class="structure-tips">
-                <span v-for="tip in answerStructure" :key="tip">{{ tip }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel transcript-card">
-          <div class="panel-header">
-            <div class="transcript-header">
-              <span>面试实录</span>
-              <span class="transcript-sub">实时显示提问、作答、评分与超时反馈</span>
-            </div>
-          </div>
-          <div class="panel-body">
-            <div ref="chatRef" class="transcript-list">
-              <div
-                v-for="(msg, idx) in store.messages"
-                :key="`${idx}-${msg.type}`"
-                class="msg-row"
-                :class="roomModel.messageRowClass(msg)"
-              >
-                <template v-if="msg.type === 'question'">
-                  <div class="msg-shell ai-shell">
-                    <div class="msg-head">
-                      <span>面试官</span>
-                      <span>{{ msg.metadata?.category || '通用问题' }}</span>
-                    </div>
-                    <div class="msg-body">{{ msg.content }}</div>
-                  </div>
-                </template>
-
-                <template v-else-if="msg.type === 'answer'">
-                  <div class="msg-shell user-shell">
-                    <div class="msg-head">
-                      <span>我的回答</span>
-                    </div>
-                    <div class="msg-body">{{ msg.content }}</div>
-                  </div>
-                </template>
-
-                <template v-else-if="msg.type === 'evaluation'">
-                  <div
-                    class="score-shell"
-                    :class="interviewScoreToneClass(msg.metadata?.score, 'score-chip')"
-                  >
-                    <div class="score-top">
-                      <strong>本题评分 {{ msg.metadata?.score || 0 }}</strong>
-                      <span>{{ roomModel.performanceSummaryOf(msg.metadata?.score) }}</span>
-                    </div>
-                    <div class="score-dims">
-                      <span>完整 {{ msg.metadata?.completeness ?? '-' }}</span>
-                      <span>准确 {{ msg.metadata?.accuracy ?? '-' }}</span>
-                      <span>深度 {{ msg.metadata?.depth ?? '-' }}</span>
-                      <span>表达 {{ msg.metadata?.expression ?? '-' }}</span>
-                    </div>
-                    <p>{{ msg.content }}</p>
-                    <p v-if="msg.metadata?.improvement" class="score-improvement">
-                      改进建议：{{ msg.metadata.improvement }}
-                    </p>
-                  </div>
-                </template>
-
-                <template v-else-if="msg.type === 'system'">
-                  <div class="system-shell">{{ msg.content }}</div>
-                </template>
-
-                <template v-else-if="msg.type === 'end'">
-                  <div class="end-shell">
-                    <strong>面试已结束</strong>
-                    <span>{{ msg.content }}</span>
-                  </div>
-                </template>
-              </div>
-            </div>
-
-            <div v-if="store.status === 'connecting'" class="state-hint">正在接入面试房间...</div>
-            <div v-else-if="store.status === 'evaluating'" class="state-hint">
-              面试官正在记录你的回答并决定下一问...
-            </div>
-          </div>
-        </div>
+        <TranscriptPane :messages="store.messages" :status="store.status" />
 
         <div v-if="!store.isCompleted" class="panel answer-card">
           <div class="panel-body">
@@ -222,88 +109,36 @@
         </div>
       </div>
 
-      <aside class="side-column">
-        <div class="panel side-panel">
-          <div class="panel-header">
-            <div class="side-title">岗位聚焦</div>
-          </div>
-          <div class="panel-body">
-            <div class="side-block">
-              <strong>{{ store.session?.jd_summary?.title || '目标岗位' }}</strong>
-              <p>{{ store.session?.jd_summary?.company || '未填写公司' }}</p>
-              <div class="skill-grid">
-                <span
-                  v-for="skill in (store.session?.jd_summary?.required_skills || []).slice(0, 6)"
-                  :key="skill"
-                >
-                  {{ skill }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel side-panel">
-          <div class="panel-header">
-            <div class="side-title">表现速览</div>
-          </div>
-          <div class="panel-body">
-            <div class="snapshot-grid">
-              <div class="snapshot-item">
-                <span>已评分题数</span>
-                <strong>{{ answeredCount }}</strong>
-              </div>
-              <div class="snapshot-item">
-                <span>超时次数</span>
-                <strong>{{ timeoutCount }}</strong>
-              </div>
-              <div class="snapshot-item">
-                <span>最近得分</span>
-                <strong>{{ store.lastScore?.score ?? '--' }}</strong>
-              </div>
-              <div class="snapshot-item">
-                <span>当前判断</span>
-                <strong>{{ recentSignal }}</strong>
-              </div>
-            </div>
-            <p v-if="store.lastScore?.improvement" class="snapshot-note">
-              最近一题建议：{{ store.lastScore.improvement }}
-            </p>
-          </div>
-        </div>
-
-        <div class="panel side-panel">
-          <div class="panel-header">
-            <div class="side-title">本题提醒</div>
-          </div>
-          <div class="panel-body">
-            <ul class="hint-list">
-              <li v-for="tip in answerStructure" :key="tip">{{ tip }}</li>
-            </ul>
-          </div>
-        </div>
-      </aside>
+      <RoomAside
+        :session="store.session"
+        :answered-count="answeredCount"
+        :timeout-count="timeoutCount"
+        :last-score="store.lastScore"
+        :recent-signal="recentSignal"
+        :structure="answerStructure"
+      />
     </section>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import { Microphone } from '@element-plus/icons-vue'
 import { getInterviewDetail } from '@/api/interview'
 import { useInterviewStore } from '@/stores/interview'
-import { interviewScoreToneClass } from '@/utils/scoreTone'
 import { INTERVIEW_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
+import RoomAside from '@/features/interview/components/RoomAside.vue'
+import QuestionPane from '@/features/interview/components/QuestionPane.vue'
+import StagePane from '@/features/interview/components/StagePane.vue'
+import TranscriptPane from '@/features/interview/components/TranscriptPane.vue'
 import * as roomModel from '@/features/interview/lib/interviewRoomModel'
 import { useAnswerDraft } from '@/features/interview/composables/useAnswerDraft'
 
 const route = useRoute()
 const router = useRouter()
 const store = useInterviewStore()
-
-const chatRef = ref(null)
 
 /* 回答草稿与语音输入这条链（含 SpeechRecognition 的四个回调、150ms 后聚焦那一下、
    离开页面时的收尾）住在 composables/useAnswerDraft.js。`inputRef` 这个名字不能改：
@@ -366,13 +201,11 @@ function handleSend() {
   stopSpeechRecognition()
   store.submitAnswer(text)
   userInput.value = ''
-  scrollToBottom()
 }
 
 function handleSkip() {
   stopSpeechRecognition()
   store.skipCurrent()
-  scrollToBottom()
 }
 
 function handleEnd() {
@@ -384,7 +217,6 @@ function handleEnd() {
     .then(() => {
       stopSpeechRecognition()
       store.end()
-      scrollToBottom()
     })
     .catch(() => {})
 }
@@ -418,21 +250,6 @@ function goBack() {
   store.disconnect()
   router.push('/interview/setup')
 }
-
-function scrollToBottom() {
-  nextTick(() => {
-    if (chatRef.value) {
-      chatRef.value.scrollTop = chatRef.value.scrollHeight
-    }
-  })
-}
-
-watch(
-  () => store.messages.length,
-  () => {
-    scrollToBottom()
-  }
-)
 
 onMounted(async () => {
   setupSpeechRecognition()
