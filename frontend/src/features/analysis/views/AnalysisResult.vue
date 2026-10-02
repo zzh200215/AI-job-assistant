@@ -197,10 +197,10 @@
                 <section class="detail-block">
                   <h3>优势</h3>
                   <ul>
-                    <li v-for="(x, i) in localizedStrengths" :key="i">
-                      <b>{{ x.item || x }}</b>
-                      <span v-if="x.impact">：{{ x.impact }}</span>
-                      <span v-if="x.evidence" class="muted">（{{ x.evidence }}）</span>
+                    <li v-for="(r, i) in localizedStrengths" :key="i">
+                      <b v-if="r.label">{{ r.label }}</b>
+                      <span v-if="r.impact">{{ r.sep }}{{ r.impact }}</span>
+                      <span v-if="r.evidence" class="muted">（{{ r.evidence }}）</span>
                     </li>
                   </ul>
                 </section>
@@ -208,10 +208,10 @@
                 <section class="detail-block">
                   <h3>差距</h3>
                   <ul>
-                    <li v-for="(x, i) in localizedGaps" :key="i">
-                      <b>{{ x.item || x }}</b>
-                      <span v-if="x.action">：{{ x.action }}</span>
-                      <span v-else-if="x.impact">：{{ x.impact }}</span>
+                    <li v-for="(r, i) in localizedGaps" :key="i">
+                      <b v-if="r.label">{{ r.label }}</b>
+                      <span v-if="r.action">{{ r.sep }}{{ r.action }}</span>
+                      <span v-else-if="r.impact">{{ r.sep }}{{ r.impact }}</span>
                     </li>
                   </ul>
                 </section>
@@ -368,6 +368,7 @@ import {
   localizeSentence,
   normalizeLocalizedObjectList,
   normalizeLocalizedTextList,
+  rubricRow,
 } from '@/utils/analysisLocalization'
 import { readJDId, readResumeId, rememberRecord } from '@/utils/lastSelection'
 
@@ -449,22 +450,22 @@ const localizedMatchSummary = computed(() =>
   localizeSentence(result.value?.match_report?.summary || '')
 )
 const localizedStrengths = computed(() =>
-  normalizeLocalizedObjectList(result.value?.match_report?.strengths)
+  normalizeLocalizedObjectList(result.value?.match_report?.strengths).map(rubricRow)
 )
-const localizedGaps = computed(() => normalizeLocalizedObjectList(result.value?.match_report?.gaps))
+const localizedGaps = computed(() =>
+  normalizeLocalizedObjectList(result.value?.match_report?.gaps).map(rubricRow)
+)
 const localizedRiskPoints = computed(() =>
   normalizeLocalizedTextList(result.value?.match_report?.risk_points)
 )
 const primaryGap = computed(() => {
   const gap = localizedGaps.value[0]
   if (!gap) return '当前没有识别到需要优先补齐的明显差距。'
-  return typeof gap === 'string'
-    ? gap
-    : gap.item || gap.action || gap.impact || '查看完整匹配报告。'
+  return gap.label || gap.action || gap.impact || '查看完整匹配报告。'
 })
 const priorityAction = computed(() => {
   const gap = localizedGaps.value[0]
-  if (gap && typeof gap === 'object' && gap.action) return gap.action
+  if (gap?.action) return gap.action
   return '先生成优化版本，再用目标岗位重新验证匹配度。'
 })
 

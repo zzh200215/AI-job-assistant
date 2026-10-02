@@ -1064,4 +1064,24 @@ describe('style debt ratchet', () => {
     }
     expect(problems, problems.join('\n')).toEqual([])
   })
+
+  it('never lets a rubric entry fall through to printing the whole object', () => {
+    /* `{{ x.item || x }}` 是"两代写法各吃一种"那句话：条目可能是裸字符串，也可能是
+       `normalizeLocalizedObjectList` 写回的对象。生产端对对象**一定**补 `item`（五个名字键
+       都挑不到时给空串），于是 `'' || 对象` 走到右边，Vue 的插值把整个对象序列化成 JSON 印给
+       候选人——D81 拿旧表达式的编译形态量过那一串输出，D82 把剩下两处屏幕一起收掉。
+       现在三处（SkillsPane / AnalysisResult / History）都过 utils 的 `rubricRow` 收成一帧。
+       判据只数 `<template>` 段（注释里允许出现这句话），且要求后面跟着 `}}`，
+       所以钉的是"整颗对象被插值出去"，不是"读了 .item"。 */
+    const offenders = viewSources
+      .filter(({ template }) => /\.item\s*\|\|\s*[\w.]+\s*\}\}/.test(template))
+      .map(({ rel }) => rel)
+    expect(
+      offenders,
+      `rubric entries must be collapsed once by rubricRow (src/utils/analysisLocalization.js), ` +
+        `not per template expression — the || branch prints the whole object to the candidate: ${offenders.join(
+          ', '
+        )}`
+    ).toEqual([])
+  })
 })

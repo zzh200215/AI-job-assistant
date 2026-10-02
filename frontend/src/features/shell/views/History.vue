@@ -158,28 +158,28 @@
                 <el-col :span="12">
                   <h4>✅ 优势</h4>
                   <ul>
-                    <li v-for="(x, i) in localizedStrengths" :key="i">
-                      <b>{{ x.item || x }}</b>
-                      <span v-if="x.impact">：{{ x.impact }}</span>
-                      <span v-if="x.evidence" class="muted">（{{ x.evidence }}）</span>
+                    <li v-for="(r, i) in localizedStrengths" :key="i">
+                      <b v-if="r.label">{{ r.label }}</b>
+                      <span v-if="r.impact">{{ r.sep }}{{ r.impact }}</span>
+                      <span v-if="r.evidence" class="muted">（{{ r.evidence }}）</span>
                     </li>
                   </ul>
                 </el-col>
                 <el-col :span="12">
                   <h4>⚠️ 差距 / 风险</h4>
                   <ul>
-                    <li v-for="(x, i) in localizedGaps" :key="i">
-                      <b>{{ x.item || x }}</b>
-                      <span v-if="x.action">：{{ x.action }}</span>
-                      <span v-if="x.impact && !x.action">：{{ x.impact }}</span>
+                    <li v-for="(r, i) in localizedGaps" :key="i">
+                      <b v-if="r.label">{{ r.label }}</b>
+                      <span v-if="r.action">{{ r.sep }}{{ r.action }}</span>
+                      <span v-if="r.impact && !r.action">{{ r.sep }}{{ r.impact }}</span>
                       <el-tag
-                        v-if="x.severity"
+                        v-if="r.severity"
                         size="small"
                         :type="
-                          x.severity === '高' ? 'danger' : x.severity === '中' ? 'warning' : 'info'
+                          r.severity === '高' ? 'danger' : r.severity === '中' ? 'warning' : 'info'
                         "
                         style="margin-left: 4px"
-                        >{{ x.severity }}</el-tag
+                        >{{ r.severity }}</el-tag
                       >
                     </li>
                     <li v-for="(x, i) in localizedRiskPoints" :key="'r' + i" class="risk">
@@ -284,6 +284,7 @@ import {
   localizeSentence,
   normalizeLocalizedObjectList,
   normalizeLocalizedTextList,
+  rubricRow,
 } from '@/utils/analysisLocalization'
 import { scoreToneTagType } from '@/utils/scoreTone'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
@@ -311,10 +312,14 @@ const localizedRecommendation = computed(() =>
   localizeRecommendationText(detail.value?.match_report?.recommendation || '')
 )
 const localizedSummary = computed(() => localizeSentence(detail.value?.match_report?.summary || ''))
+/* 详情弹窗里这两列与匹配报告页、技能匹配面板同形状，所以收窄也只在这一处：`rubricRow`
+   把两代写法（裸字符串 / 带五个键的对象）收成一帧，模板不再判 `x.item || x`（§10.23 那条 ②）。 */
 const localizedStrengths = computed(() =>
-  normalizeLocalizedObjectList(detail.value?.match_report?.strengths)
+  normalizeLocalizedObjectList(detail.value?.match_report?.strengths).map(rubricRow)
 )
-const localizedGaps = computed(() => normalizeLocalizedObjectList(detail.value?.match_report?.gaps))
+const localizedGaps = computed(() =>
+  normalizeLocalizedObjectList(detail.value?.match_report?.gaps).map(rubricRow)
+)
 const localizedRiskPoints = computed(() =>
   normalizeLocalizedTextList(detail.value?.match_report?.risk_points)
 )

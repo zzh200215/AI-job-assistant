@@ -65,6 +65,8 @@
    不抄进来这些列表就丢间距了；父页面那 1092 行一行没删（D44 的口径）。 */
 import { computed } from 'vue'
 
+import { rubricRow } from '@/utils/analysisLocalization'
+
 const props = defineProps({
   matchedSkills: {
     type: /** @type {import('vue').PropType<string[]>} */ (Array),
@@ -75,23 +77,23 @@ const props = defineProps({
     default: () => [],
   },
   /* strengths / gaps 的条目有两代写法：裸字符串，或 `normalizeLocalizedObjectList` 整出来的
-     带 item/impact/evidence/action/severity 的对象。上一轮为了不给联合类型收窄，把这三条留成
-     unknown（15 条类型错挂在账上，§10.23）。现在按 §10.23 选的那条路收口：`toRow` 一次收成
-     一帧，模板不再判分支。
-     候选人可见的那一处变化只在一支：**对象但没有 item** 时，原来那句 `x.item || x` 会把整个对象
-     打印成 JSON（生产端 localizeSentence 给的是空串，所以这一支真到得了），现在 `<b>` 整颗不出、
+     带 item/impact/evidence/action/severity 的对象。D81 之前这三条留成 unknown（15 条类型错挂在
+     账上，§10.23），现在按 §10.23 选的那条 ② 收口：联合在 `rubricRow` 里收**一次**，模板只读
+     一帧，不再判分支。收口函数住在 `utils/analysisLocalization.js`（生产者旁边），因为
+     `AnalysisResult.vue` 与 `History.vue` 也各画一份这两列（D82），三处共用一条判据；
+     `x.item || x` 那个写法由 tests/unit/styleDebtRatchet.test.js 钉成 0，不许长回来。
+     候选人可见的那一处变化只在一支：**对象但没有 item** 时，旧写法会把整个对象打印成 JSON
+     （生产端 localizeSentence 给的是空串，所以这一支真到得了），现在 `<b>` 整颗不出、
      补语前面那颗冒号跟着撤，行里只剩 impact/action 与严重度标签。断言在
-     tests/unit/skillsPane.test.js。
-     同一族 `x.item || x` 在 AnalysisResult.vue:201/212 与 History.vue:162/172 还有四处，
-     不在本刀里（面板各自收，见 D81）。 */
+     tests/unit/skillsPane.test.js 与 tests/unit/rubricRowsOnScreens.test.js。 */
   strengths: {
-    type: /** @type {import('vue').PropType<import('../lib/analysisModel').RubricEntry[]>} */ (
+    type: /** @type {import('vue').PropType<import('@/utils/analysisLocalization').RubricEntry[]>} */ (
       Array
     ),
     default: () => [],
   },
   gaps: {
-    type: /** @type {import('vue').PropType<import('../lib/analysisModel').RubricEntry[]>} */ (
+    type: /** @type {import('vue').PropType<import('@/utils/analysisLocalization').RubricEntry[]>} */ (
       Array
     ),
     default: () => [],
@@ -102,23 +104,8 @@ const props = defineProps({
   },
 })
 
-/** 两代写法收成一帧。`sep` 是"有没有标签"决定的一颗冒号，收在这里是为了别让模板判三次。 */
-function toRow(entry) {
-  /** @type {import('../lib/analysisModel').RubricPoint} */
-  const point = typeof entry === 'string' ? { item: entry } : entry || {}
-  const label = String(point.item || '')
-  return {
-    label,
-    sep: label ? '：' : '',
-    impact: String(point.impact || ''),
-    evidence: String(point.evidence || ''),
-    action: String(point.action || ''),
-    severity: String(point.severity || ''),
-  }
-}
-
-const strengthRows = computed(() => props.strengths.map(toRow))
-const gapRows = computed(() => props.gaps.map(toRow))
+const strengthRows = computed(() => props.strengths.map(rubricRow))
+const gapRows = computed(() => props.gaps.map(rubricRow))
 </script>
 
 <style scoped>

@@ -131,6 +131,60 @@ export const localizeSeverity = (value) => {
   return text
 }
 
+/**
+ * `normalizeLocalizedObjectList` 对**对象**条目一定写回这五个键，值全是字符串：`item` 从
+ * `item|name|title|skill|point` 里挑，五个都没有就是空串（不是缺字段）。
+ * 键标成可选只因为裸字符串那一代也走同一个列表（见 `RubricEntry`）。
+ * @typedef {Object} LocalizedPoint
+ * @property {string} [item]
+ * @property {string} [impact]
+ * @property {string} [evidence]
+ * @property {string} [action]
+ * @property {string} [severity]
+ */
+
+/**
+ * rubric 的 strengths / gaps 的一条：老一代是裸字符串，新一代是 `LocalizedPoint`。
+ * @typedef {string | LocalizedPoint} RubricEntry
+ */
+
+/**
+ * `rubricRow` 的输出：一代模板要读的那六个字段，全是字符串。
+ * @typedef {Object} RubricRow
+ * @property {string} label
+ * @property {string} sep
+ * @property {string} impact
+ * @property {string} evidence
+ * @property {string} action
+ * @property {string} severity
+ */
+
+/**
+ * 两代写法收成一帧，让渲染侧不再判分支（§10.23 选的那条 ②）。
+ * `sep` 是"有没有标签"决定的一颗冒号：标签整颗撤掉时它必须跟着撤，否则那一行以冒号开头；
+ * 收在这里而不是留在三处模板里，是因为三个屏幕（技能匹配面板 / 匹配报告页 / 历史记录详情）
+ * 共用同一个判据。
+ * @param {RubricEntry} entry
+ * @returns {RubricRow}
+ */
+export const rubricRow = (entry) => {
+  /** @type {LocalizedPoint} */
+  const point = typeof entry === 'string' ? { item: entry } : entry || {}
+  const label = String(point.item || '')
+  return {
+    label,
+    sep: label ? '：' : '',
+    impact: String(point.impact || ''),
+    evidence: String(point.evidence || ''),
+    action: String(point.action || ''),
+    severity: String(point.severity || ''),
+  }
+}
+
+/**
+ * @param {unknown} value
+ * @returns {RubricEntry[]}
+ */
 export const normalizeLocalizedObjectList = (value) => {
   if (!Array.isArray(value)) return []
   return value.map((item) => {
@@ -150,6 +204,10 @@ export const normalizeLocalizedObjectList = (value) => {
   })
 }
 
+/**
+ * @param {unknown} value
+ * @returns {string[]}
+ */
 export const normalizeLocalizedTextList = (value) => {
   if (!Array.isArray(value)) return []
   return value

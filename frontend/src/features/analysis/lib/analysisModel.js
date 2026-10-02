@@ -7,25 +7,10 @@
    给 `calculateApplicationPriority` 加 `city` 参数那一刀）。 */
 
 /* 下面这几份 typedef 覆盖的是**四个面板读走的**字段，不是整份后端负载的契约。
-   这一页的数据有两代写法和一处没有 schema：rubric 的 strengths/gaps 条目可能是裸字符串
-   也可能是对象（模板里那句 `x.item || x` 就是为它写的，不是笔误），而职业规划与方向那一坨
-   是模型直接生成的 JSON、后端不约束（docs/upgrade-plan.md §10.20 讲的就是这件事）。
-   所以这里的键全部可选：它记的是"面板假设有什么"，不是"服务端保证有什么"。 */
-
-/**
- * rubric 里一条优势/差距/风险的新写法。
- * @typedef {Object} RubricPoint
- * @property {string} [item]
- * @property {string} [impact]
- * @property {string} [evidence]
- * @property {string} [action]
- * @property {string} [severity]
- */
-
-/**
- * 两代写法并存的那一份：老的是裸字符串，新的是 `RubricPoint`。
- * @typedef {string | RubricPoint} RubricEntry
- */
+   职业规划与方向那一坨是模型直接生成的 JSON、后端不约束（docs/upgrade-plan.md §10.20 讲的就是
+   这件事），所以这里的键全部可选：它记的是"面板假设有什么"，不是"服务端保证有什么"。
+   rubric 那两条（strengths / gaps 的两代写法）**不在这里了**：D82 把它挪到
+   `src/utils/analysisLocalization.js`，跟写它的那份生产者放在一起，三个屏幕共用一处判据。 */
 
 /**
  * 一条转型方向。后端会剥掉空字段（`career_path_agent.py:191`），所以这里全部可选。
