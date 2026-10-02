@@ -18,9 +18,12 @@ import request from './request'
 
 /**
  * `GET /dashboard/overview` 的载荷，字段抄自 `backend/app/api/dashboard.py:134-158`。
- * 抄本只写后端**真的返回**的键：`Profile.vue:494-499` 读的 `total_sessions` / `sessions` /
- * `resume_count` / `best_score` / `max_score` / `days_active` / `created_at` 一个都不在这里，
- * 所以那几条现在会红——那是报告，不是新坏的代码（见 docs/upgrade-plan.md §10.25）。
+ * 抄本只写后端**真的返回**的键。`Profile.vue` 原先还读 `total_sessions` / `sessions` /
+ * `resume_count` / `days_active` / `created_at` 这五个——D83 已改成读同一份载荷里真存在的
+ * `summary.total_interviews` / `summary.total_resumes`，天数改从 `/auth/me` 的 user 取。
+ * 还剩下 `best_score` / `max_score` 这一条读法**没有任何生产者**（最接近的是面试统计端点的
+ * `avg_overall_score`，是均值不是最高），所以那一行仍在红：它是 docs/upgrade-plan.md §10.25
+ * 未拍那一半的证据，不是新坏的代码。
  * @typedef {DashboardMetrics & {
  *   user?: { id?: number, username?: string, nickname?: string, avatar_url?: string, job_seeking_status?: string },
  *   summary?: DashboardMetrics,

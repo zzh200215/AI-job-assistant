@@ -460,6 +460,16 @@ const achievements = computed(() => {
   ]
 })
 
+/** 「已使用 N 天」= 注册到今天的自然日数，向上取整，当天注册算 1 天（原兜底就是这个口径）。
+ * 这份天数只在 `/auth/me` 的 user 里（这页 :42 已经在打印同一个字段），overview 的载荷里没有它——
+ * 原先那句读的是 `data.created_at`，永远 undefined，于是这一行永远显示"已使用 1 天"。 */
+function daysSinceRegistration(createdAt) {
+  if (!createdAt) return 1
+  const then = new Date(createdAt).getTime()
+  if (!Number.isFinite(then)) return 1
+  return Math.max(1, Math.ceil((Date.now() - then) / 86400000))
+}
+
 // 用户统计数据
 const statsLoading = ref(false)
 const userStats = ref({
@@ -479,6 +489,12 @@ async function loadUserStats() {
   try {
     const data = await getDashboardOverview()
     const funnel = data?.funnel || {}
+    /* 这一页原先读的是 `data.total_sessions` / `data.resume_count` / `data.days_active` /
+       `data.created_at`，而 `GET /dashboard/overview` **一个都不返回**（载荷见
+       `backend/app/api/dashboard.py:134-158`：user / summary / weekly_new / monthly_new / funnel /
+       stage_counts / trend / recent_activities）。落到屏幕上就是"简历数恒 0""已使用 1 天 · 0 次模拟面试"。
+       下面这三条读的是同一份载荷里**真的存在**的键——§10.25 拍的第一类：取错键，不是缺数据。 */
+    const summary = data?.summary || data || {}
     const totalApps =
       (funnel.todo || 0) +
       (funnel.applied || 0) +
@@ -491,13 +507,18 @@ async function loadUserStats() {
       total_applications: totalApps,
       total_interviews: totalInt,
       total_offers: totalOff,
-      total_sessions: data?.total_sessions || data?.sessions || 0,
-      resume_count: data?.resume_count || 0,
+      /* 「N 次模拟面试」= `summary.total_interviews`，后端是 `count(InterviewSession where user_id)`
+         （dashboard.py:64）。它和上面那个从 funnel 推出来的 `totalInt`（走到面试/Offer 阶段的**投递数**）
+         不是一回事，两格各用各的，别合并。 */
+      total_sessions: summary.total_interviews || 0,
+      resume_count: summary.total_resumes || 0,
+      /* 「面试之星 · 综合评分超过80」那颗成就读这一格，而这个值**没有任何生产者**：overview 不返回它，
+         全仓 grep `best_score` / `max_score` 只剩这里的读方；最接近的真值在面试统计那两处返回里
+         （`interview_rest.py:813-814` 与 `:859-860`），是 `avg_overall_score`——**均值，不是最高**，
+         与"综合评分超过80"这句语义对不上。补一个真 max（`max(overall_scores)` 一句）还是把这颗成就
+         摘掉，是 §10.25 剩下的那一半，由产品拍；拍之前这行留着，那 1 条类型错就是它的证据，别顺手清成 0。 */
       best_score: data?.best_score || data?.max_score || 0,
-      days_active:
-        data?.days_active ||
-        Math.ceil((Date.now() - new Date(data?.created_at || Date.now()).getTime()) / 86400000) ||
-        1,
+      days_active: daysSinceRegistration(authStore.user?.created_at),
       interview_rate: totalApps > 0 ? Math.round((totalInt / totalApps) * 100) : 0,
       offer_rate: totalInt > 0 ? Math.round((totalOff / totalInt) * 100) : 0,
     }
