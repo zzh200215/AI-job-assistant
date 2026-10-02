@@ -472,7 +472,10 @@ function extractJDSkills(jd) {
 }
 
 function typeLabel(type) {
-  return typeConfigs[type]?.label || type || '未定义'
+  // `.value` 是这条的一个字改动，但类型层抓不到它：`strict:false` 下用字符串索引一个 Ref
+  // 得到 `any`，不会报错，只会永远落到 `|| type` 那一支，把后端原始键画给候选人。
+  // 屏幕上的字由 tests/unit/interviewSetupTypeLabel.test.js 钉住（§10.24）。
+  return typeConfigs.value[type]?.label || type || '未定义'
 }
 
 function statusLabel(status) {
