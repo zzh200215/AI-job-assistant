@@ -12,6 +12,15 @@ import App from '../src/App.vue'
 import router from '../src/router'
 import { installElement } from '../src/plugins/element'
 import request from '../src/api/request'
+/* 跨页"上一次选择"的键格式由 utils/lastSelection 持有，探针不自己拼键名：
+   它要的是"这一页带着上一次的选择进来"，否则 SmartAnalysis 的 `v-if="result"`（:272）
+   不成立，五个标签页面板根本不挂载——D76 那 9 条子组件副本判不了就是卡在这里。 */
+import {
+  rememberJD,
+  rememberRecord,
+  rememberResume,
+  setSelectionOwner,
+} from '../src/utils/lastSelection'
 import '../src/plugins/element.css'
 import '../src/styles/main.css'
 import '../src/styles/panels.css'
@@ -101,19 +110,46 @@ const FIXTURES = [
   [/\/analysis\/records(\?|$)/, 'get', { items: [ANALYSIS_RECORD], total: 1 }],
   [/\/analysis\/\d+$/, 'get', ANALYSIS_RECORD],
   [/\/analysis\/list(\?|$)/, 'get', { items: [ANALYSIS_RECORD], total: 1 }],
+  /* 面板只有在**跑完一轮分析**之后才挂载：`result` 只在 SmartAnalysis.vue:749 置上，
+     onMounted 只恢复上一次选择、不读记录。所以这条链要三条夹具（启动 → 轮询 completed → 取记录），
+     外加解释与引用那两条，否则标签页根本不存在，matched=0 就又是一次假阴性（D76 的坑第二次）。 */
+  [/\/analysis\/full/, 'post', { task_id: 'probe-task' }],
+  [/\/agent\/task\/probe-task\/steps/, 'get', { steps: [], items: [] }],
   [
-    /\/analysis\/references/,
+    /\/agent\/task\/probe-task/,
     'get',
     {
-      query: 'K8s',
-      confidence: { level: 'high', score: 0.82 },
-      documents: [
+      status: 'completed',
+      task_status: 'completed',
+      analysis_record_id: 99,
+    },
+  ],
+  [
+    /\/analysis\/explain-match/,
+    'post',
+    {
+      explain_mode: 'rules',
+      recommendation: '可以投递',
+      overall_reason: '技能命中两条',
+      dimension_explain: [],
+    },
+  ],
+  [
+    /* 引用来源：消费者是 useAnalysisReferences.js:37-41，读的是 `data.references` /
+       `data.query` / `data.rag_confidence`。第一版给的是 documents + confidence，
+       面板会拿到空数组——D76 那条"形状要照消费者写"在这里第二次差点成立。 */
+    /\/analysis\/\d+\/references/,
+    'get',
+    {
+      query: 'K8s 怎么落地',
+      references: [
         {
           doc_title: '云原生笔记',
           doc_type: 'guide',
           chunks: [{ text: '一次部署的三步', score: 0.71 }],
         },
       ],
+      rag_confidence: { level: 'high', score: 0.82 },
     },
   ],
   [
@@ -229,6 +265,12 @@ request.defaults.adapter = async (config) => {
     config,
   }
 }
+
+/* 上一次的选择：uid 与夹具里的 user.id 一致（1），简历/JD/记录 id 与 FIXTURES 对得上。 */
+setSelectionOwner(1)
+rememberResume(1)
+rememberJD(7)
+rememberRecord(99)
 
 /* ---------- 快照与判据 ---------- */
 const PROPS = [
