@@ -2372,6 +2372,31 @@ D76 留的 10 条候选（`ReferencesPane` 4、`InterviewQuestionsPane` 2、`Rep
 
 **门禁**：`test:unit` **71 files / 436 passed**、`npm test` exit 0、`eslint` exit 0、`prettier --check` 先是 **exit 1** 抓到 `InterviewQuestionsPane` 删末条后留下的空行（`--write` 之后 exit 0，且 436 条与 `--selftest` 在重排后重跑仍成立）、`vite build` exit 0、改动文件 CRLF **0**、`.d77` 与两侧临时目录删净；探针用的那台 5199 dev server 按命令行核对后**定点停 PID**，不是 `/IM`。**没做的事**：9 条不可判的拼接类名要真判，得让后端只发那三个值（或前端把值域写成一个 union 类型 + 一个 `dot-${tone}` 的穷尽检查）——那是类型层的活，不是样式层的，本轮不动。
 
+#### 已交付：D78 拼接类名的值域进代码、双向守卫，9 条"不可判"清零——顺手咬出一个真缺口
+
+D77 留的那 9 条不是样式问题，是**没人声明"后端能发哪些值"**。所以这轮不删规则，把域写进代码，让 CSS 去对齐它。
+
+**交付三件**：① `src/constants/states.js` —— 四个域（`PRIORITY_LEVELS` / `AGENT_TASK_STATUSES` / `CONFIDENCE_LEVELS` / `SEVERITY_LEVELS`）+ 一份 `@typedef` 联合，**每个域标了它的后端出处**；② `styleDebtRatchet` 里一条**双向**守卫 `keeps concatenated state classes aligned with their backend value domain`；③ `dead-style.mjs` 第八条腿读同一份域（不是再写一把尺子——域的唯一读者不该是测试，所以守卫与尺子共用一份事实：守卫管"域 ↔ 规则"双向对齐，尺子管"这条规则值不值得留"）。结果：尺子的 `undecidable` **9 → 0**、候选仍是 0，测试 436 → **437**。
+
+**域不是抄来的**，逐条查到生产者：`priority` 在 `dashboard.py` 的 today-tasks 里三分支都发（high×2 / medium×2 / low×1）；`level` 在 `rag_confidence_service.py:54-62` 按 final_score 分三档；`severity` 在 `job_recommend.py:110-151`；`status` 的 `cancelled` 与 `partial` 都在 `strategies.py:459,602` 与 `langgraph_flow.py:438,500` 里被赋值。
+
+**双向守卫当场咬出一条真缺口（→ §10.28）**：TaskCenter 的点色规则只有 `pending/running/completed/failed/cancelled` 五档，**没有 `partial`**，而后端四条路径都会把状态写成 `partial`（`task.status = "partial" if failed_steps else "completed"`）。所以一次部分完成的任务在列表里那颗点是**没颜色**的。我没补样式——那是候选人可见的变化；守卫里以 `unstyled: ['partial']` 显式挂着，配一句理由，等拍。
+
+**三个方向都做了变异**（每次都 grep 确认变异真落盘，再跑，再从备份还原并 `git diff --numstat` 核对）：
+| | 落法 | 红在哪 |
+|---|---|---|
+| M1 | 往 `CONFIDENCE_LEVELS` 加一个 `ultra` | `KnowledgeBase.vue: 值域里有 ultra，但没有 .confidence-ultra 规则` |
+| M2 | 往 `Home.vue` 加一条 `.dot-quantum` | `Home.vue: .dot-quantum 不在值域里 = 死样式` |
+| M3 | 给 `TaskCenter.vue` 补一条 `.dot-partial` | `TaskCenter.vue: .dot-partial 已经有规则了，把 unstyled 里那条删掉` |
+
+M3 是这套设计里最要紧的一条：**豁免会过期**。补了样式却不删豁免，守卫就红——否则 `unstyled` 会变成第二个"永远为真的空检查"。同理 `siblings`（`KnowledgeBase` 的 `grid/main/score/signals`、`JobRecommend` 的 `list/item/detail/title` 这些非状态类）也要么在文件里、要么红。
+
+**顺手量到、不算决定的一条**：`TaskCenter.vue:66` 的卡片绑定 `'status-' + task.status` 在**全仓没有任何 `.status-*` 规则**（搜到的 `.status-select/list/row/label` 都在 admin、语义无关）——六个值各拼出一个没人用的类名。这是 D68 记的"markup 钩子没有规则"那一类，且删绑定没有任何视觉差值可测，所以只记不动。
+
+**为什么这一族今天不需要浏览器**：域的出处是生产者，不是屏幕。D76/D77 那两次假阴性（Home 的夹具、SmartAnalysis 的空标签页）说明快照只能证明"这一屏没渲染到"；而"`partial` 有规则吗"这种问题，域 + 一条正则就能定。浏览器差分留给它的强项：**规则存在但没人命中**（那 13 条是它判的）。
+
+**门禁**：`test:unit` **71 files / 437 passed**、`npm test` exit 0、`npm run typecheck` **65**（新增的 `src/constants/states.js` 一条错都没引入——域是 `Object.freeze` 的字面量数组 + `@typedef` 联合，不需要放宽任何编译选项）、`eslint` exit 0、`prettier --check` exit 0、`vite build` exit 0、改动文件 CRLF **0**、变异用的 `.st.bak` / `.home.bak` 与临时脚本删净。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
@@ -3065,6 +3090,8 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 25. **`Profile.vue` 那格简历数、那句"已使用 N 天 · M 次模拟面试"和两个成就**（D74 翻出来，7 条类型错就是它的证据）。`loadUserStats()` 打的是 `getDashboardOverview()`，然后读 `data.total_sessions || data.sessions`、`data.resume_count`、`data.best_score || data.max_score`、`data.days_active`、`data.created_at`（`Profile.vue:494-499`）——**这些键 `GET /dashboard/overview` 一个都不返回**（`backend/app/api/dashboard.py:134-158`）。于是：简历数那一格恒为 **0**（同一份响应里真值在 `summary.total_resumes`，没人读它）、那句"已使用 1 天 · 0 次模拟面试"是兜底值不是实测值、`:402` 的"注册第一份简历"与 `:458` 的"拿到 80 分以上"两个成就**永不解锁**。三条路：① 前端改读 `summary.*`（`resume_count` → `summary.total_resumes`；模拟面试次数这一项响应里没有，得从 `stage_counts`/面试接口另取）；② 后端补上那几个键（则前端一个字不改）；③ 把这几格与两个成就从页面上摘掉，因为目前没有数据源支持它们。**我一条都没动**——三条里任何一条都会改变候选人看到的数字与成就状态，按本节惯例由你定。
 
 **逐个键查过生产者，所以这条不是"前端写错了"一句话**：`total_sessions` **有人产**，但不在 Profile 调的那个端点上——`interview_rest.py:813` / `:859` 的会话统计里给的是 `"total_sessions": len(sessions)`，所以那一格是**取错了接口**，不是无中生有；`resume_count` 全仓只出现在配额语境（`resume.py:198` 的 `check_quota(..., "resume_count")` 与 `subscription_service.py:320`），没有任何响应把它作为键返回；`best_score` / `max_score` / `days_active` 三个名字在后端 **grep 为 0**，没有任何响应产出。所以"拿到 80 分以上"那个成就与"已使用 N 天"这句话，是从设计那天起就没有数据源的——这句我是按上面三条 grep 的结果写的，不是推测。
+
+28. **`TaskCenter` 那颗点没有 `partial` 档**（D78 的双向守卫咬出来的，现在以 `unstyled: ['partial']` 挂在守卫里）。后端四条路径都会把任务状态写成 `partial`（`strategies.py:459`、`:602`，`langgraph_flow.py:438`、`:500`，判据都是"有失败步骤但整体跑完"），而 `TaskCenter.vue` 的 `.dot-*` 只有 pending / running / completed / failed / cancelled 五档。所以**一次部分完成的任务，列表里那个状态点是没颜色的**——不是坏了，是从来没人给它画过。三条路：① 补一条 `.dot-partial`（配色选哪一档要定：它既不是成功也不是失败，我倾向用 warn 那一档，因为"有失败步骤"就是它的语义）；② 确认这个列表接口不会返回 partial（那就收窄 `AGENT_TASK_STATUSES`，并把守卫里的豁免删掉——**注意**：不能靠"从域里删掉 partial"来让守卫闭嘴，那是把发现藏起来，收窄要有生产者证据）；③ 保持现状，让豁免常驻（今天的形状，代价是每次看这条守卫都要想起它背后是一个没修的视觉缺口）。我一条都没动：① 会改变候选人看到的颜色，② 要后端事实而我看到的四处赋值指向相反方向。
 
 ## 11. 附录：本方案未采纳的一条建议
 
