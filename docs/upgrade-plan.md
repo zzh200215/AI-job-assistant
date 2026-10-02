@@ -2269,6 +2269,25 @@ D71 那条棘轮点名 154 之前，先按你拍的方向把 `jobs` 域收掉。
 
 **下一刀的形状**：154 条里的大头已经换成别的域了——`TranscriptPane` 21、`SkillsPane` 15、`CareerDirectionPane` 14、`CareerPlanPane` 12、`BoardPane` 11，是 interview / analysis / pipeline 三个域的同一刀，照 D72 做就行，只是每域要先找到它自己的生产者。
 
+#### 已交付：D73 interview / pipeline / analysis 三域同形状推完，154 → 78——两次是我自己写错，一条是读出来的
+
+D72 那一刀在 `jobs` 域的形状，这轮推到剩下三个域。**154 → 78**，其中三域自己清零（interview 25、pipeline 19、analysis 46，共 −90 里落地 −76，剩下 15 条是被停在 §10.23 的那族）。
+
+**每域的 typedef 都住在它自己的形状层**，跟 D72 一致：`pipelineBoard.js` 给 `BoardColumn` / `PipelineCard` / `Kanban` / `StageCounts` / `VersionPerformance`，`interviewRoomModel.js` 给 `InterviewMessage` / `AnswerStructure` / `InterviewTypeConfig`，`analysisModel.js` 给 `RubricPoint` / `RubricEntry` / `CareerPath` / `RoadmapPhase` / `ReferenceDoc`。生产者一侧也补了：`stageCounts` / `totalCardCount` / `flattenCards` 带 `@param`/`@returns`，`stores/interview.js:17` 那条 `messages` ref 标成 `Ref<InterviewMessage[]>`（消息真正的生产者是那个 store，不是面板），`PipelineKanban.vue:309` 的 `kanban` ref 标成 `Ref<Kanban>`。
+
+**两次是我的类型写错，不是代码的错，都记下来**：
+1. `VersionPerformance` 我第一版漏了 `label`，于是 `StatsPane.vue:115` 报"属性不存在"。回到后端看 `job_pipeline.py:266-279`——`label` 是后端兜底出来的（`entry.resume_version_label or f"版本 #{id}"`），还带 `total` / `accepted` / `rejected` / `latest_activity`。补齐之后那一族归零。**教训是"抄本要去后端抄，别从模板猜"**。
+2. `ReferenceDoc.chunks` 我猜成 `{score, content}`，`ReferencesPane.vue:76` 读的是 `chunk.text`。生产者在 `agents/tools/__init__.py:57`：`"text": (...)[:800]`。改成 `text` 即零错。同一篇里 `doc_title` / `doc_type` 也是从 `analysis.py:160` 那侧确认的，不是我编的。
+3. 顺带一条**类型抓不到、只有读代码才看得见**的：`stageCounts` 声明 `@returns {StageCounts}` 之后，函数体里 `const map = {}` 仍是 `{}`，TS 在**函数内部**报不可分配——修法是给累加器本身写 `/** @type {StageCounts} */`。声明返回类型不等于声明中间值的类型，这条值得留着，因为下一次一定会踩。
+
+**停手的那一处，是判断不是遗漏**：`SkillsPane` 的 `strengths` / `gaps` / `riskPoints` 我先是上了 `RubricEntry[] = (string | RubricPoint)[]`，然后**撤回来_unknown 了**，留 15 条错在账上。原因是联合要求模板先收窄，而收窄的写法在"对象但没有 `item`"那一支会把"打印整个对象"变成"打印空"——候选人可见。升为 **§10.23**。同一轮里读出来的另一条更直接的挂成 **§10.24**：`InterviewSetup.vue:473` 写的是 `typeConfigs[type]?.label`，而 `typeConfigs` 是个 ref（同文件 :386 用的是 `.value`），所以那一行永远落到 `|| type`，模板 :248 画出来的是 `'tech'` 而不是配置里的 `'技术深挖'`。**类型门对这条完全无声**——`strict:false` 下用字符串索引一个 Ref 拿到的是 `any`，不是错误。这是"78 条清零不等于这类问题有解"的一条实测反例。
+
+**一次我自己的验收偷懒，被 eslint 逮住**：`npm run format:check` 我用 `| tail -2` 看结果，于是把 prettier 的 `[warn]` 行截掉了，报告里写成"全树 clean"。`npm run lint` 同时报了 3 条 `prettier/prettier` warning（`SkillsPane.vue:67`、`interviewRoomModel.js:132`、`BoardPane.vue:33`——都是我手写的 `PropType` 折行不是 prettier 的形状）。`--write` 那三个文件之后 eslint 回到"0 error + 既有那 1 条 warning"、`format:check` 真 clean。**纪律版本：门禁的输出要用退出码判，不要用我瞄过的最后几行判。**
+
+**门禁**：`test:unit` **71 files / 435 passed**（一条用例没动），`npm test` **14/14**，棘轮按 **78** 绿（新值是它自己点名的，不是我叫的），eslint **0 error** + 既有那 1 条 warning，`prettier --check` 全树 clean（这次按退出码核），build ok，改动文件 CRLF **0**，`.d73*.txt` 之类的临时清单删净。运行时零改动这件事的证据仍是测试计数与 build，不是浏览器。
+
+**剩下的 78 条长什么样**（下一轮的地图）：`admin` 那一族 **42** 条（`SystemStatus` 29 + `PromptTrace` 6 + `Overview` 5 + `Tenants` 2）——§2 把企业侧冻结了，这 42 条按现状就是"知道且不动"；`Home.vue` 10、`OfferCompare.vue` 6、`shell`/`resume`/`knowledge`/`auth`/`router` 共 10 条零散，加 §10.23 那 15 条等拍的。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
@@ -2954,6 +2973,10 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 21. **"标记拒绝"的提示文案统一成哪一句**。同一动作在看板视图说"已标记为拒绝"、在列表视图说"已标记拒绝"（D58 合并实现时保留了两句，因为改措辞是候选人可见的）。两句说的都是对的事实，选哪个都行，但**只能选一个**——否则这两处以后还会继续漂。要拍的只是：统一成"已标记拒绝"（更短）还是"已标记为拒绝"（更像完成态），以及要不要顺带把这一页其他动作的措辞一起过一遍。
 
 22. **`src/stores` 那 5 处裸 `request` 要不要一起收进 api 层**（D69 量到的，也是 D69 没动的）。`viewsBypassingApiLayer` 现在是 **0**，但这个 0 只覆盖视图：这一维复用 `viewSources`，而它为了让色值/色表/日期那几把尺子不去数法定解药，把 `src/stores` 整根豁免了，于是这 5 处顺手也被豁免——`stores/auth.js` 的 `/auth/login`、`/auth/register`、`/auth/reset-password`、`/auth/me`，加 `stores/tenant.js:78` 的 `/tenant/brand`。**为什么这条不是缺陷**：这些 store 用的就是同一个共享实例，拦截器、`Authorization` 头、错误 toast 三样并没有第二套，所以边界规则真正要防的东西一件没漏；剩下的只是"端点写在哪个文件里"。**为什么没顺手修**：真要收就得先拍凭据端点住在哪。**先记下量的结果，因为我原本以为这里有一条统一规则可违反——没有**：D69 之前 `src/api/` 是 18 个模块，多数按后端 router 文件起名（`salary.js`←`salary_insight.py`、`targets.js`←`job_target.py`、`promptTrace.js`←`prompt_trace.py`），但 `jobs.js` 一条对着 `job_search` / `job_recommend` / `job_pipeline` / `job_journal` 四条 router，而且里面还打着 `/analysis/` 与 `/career-path/` 两个不属于它的前缀——也就是"按消费域聚合"这一族本来就在。**所以 D69 新起的 `account.js`（自助那半）与 `admin.js`（只装 `/auth/admin/users` 一条）没有发明第二种切法，只是加了两个名字。**于是 stores 那 4 条凭据端点的真问题是谁跟 `account.js` 合：并成一个 `auth.js` 与后端 `auth.py` 对齐（那 `account.js` 这个名字就白起了一次），或再开第三个名字。三条路：① 不动，把 0 的含义在棘轮注释里写清楚（现状就是这么做的）；② 收拢成 `api/auth.js` 一个模块（凭据 + 自助 + admin 用户列表）+ `/tenant/brand` 归已有 `tenant.js`，并把这一维换成自带文件集（只豁免 `src/api` 与 `src/plugins`），这样"0"才真的说得出"只有 api 层出网"；③ 只把守卫拓宽、代码不动，于是棘轮立刻红、要按 5 重新点名。建议 ② 或 ①；**我一条都没动**。
+
+23. **`SkillsPane` 那三条列表的两代写法要不要归一**（D73 停手处，15 条类型错挂在账上）。`strengths` / `gaps` / `riskPoints` 的条目**既可能是裸字符串，也可能是带 `item` / `impact` / `evidence` / `action` / `severity` 的对象**，模板 `SkillsPane.vue:27` 那句 `x.item || x` 就是为这件事写的，不是笔误。类型只能写成 `string | RubricPoint` 的联合，而联合要求模板先把分支收窄，收窄之后**"是对象但没有 `item`"那一支会从"打印整个对象"变成"打印空"**——那是候选人可见的变化。三条路：① 不动，那 15 条按 unknown 留着（现状，源文件里写了为什么）；② 面板里加一个归一函数（`typeof x === 'string' ? { label: x } : x`）+ 一条页面级断言（D51 那条教训在这里同样成立：改完不报错、只是少画）；③ 后端把 rubric 输出 coerce 成单一形状，那要动 AI 输出契约，与 §10.20 是同一族决定。我按"搬家与类型不夹带口径"的规矩**一条都没动**。
+
+24. **`InterviewSetup.vue:473` 少一个 `.value`，面试类型标签一直显示原始英文键**（D73 读出来的，不是门抓到的）。`const typeConfigs = ref(defaultTypeConfigs)` 在 :357，而 `function typeLabel(type) { return typeConfigs[type]?.label || type || '未定义' }` 在 :473 ——索引的是 **Ref 对象本身**，永远 `undefined`，于是模板 :248 的 `{{ typeLabel(item.interview_type) }}` 画出来是 `'tech'` / `'hr'` 而不是配置里的 `'技术深挖'` / `'HR / 行为面'`。同一个文件 :386 用的是 `typeConfigs.value[...]`，正确写法就在 40 行之外。**为什么类型门完全无声**：`strict:false` 下 `noImplicitAny` 是关的，用字符串索引一个 Ref 得到 `any`，不成错误。所以这条既是对一个 bug 的记录，也是"78 条清零不等于这类问题有解"的实测反例。修法是一行加 `.value`，但它改变候选人看到的文案（英文键 → 中文标签），按本节惯例由你定。要顺带问一句的是：这一页现在显示英文键，用户有没有已经习惯了——如果有，修它反而是一次可见变化。
 
 ## 11. 附录：本方案未采纳的一条建议
 
