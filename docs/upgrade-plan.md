@@ -2460,6 +2460,28 @@ D73 停手的那一处，这次按 §10.23 自己的菜单走了 **②**（面�
 
 **§10 复测**：划掉 23 之后 open **19**（判据与算法写在上面 D80 那条引用块里）。
 
+#### 已交付：D82 那一族 `x.item || x` 收完：剩下两处屏幕跟着收，收口搬到生产者旁边（50 → 75 → 50）
+
+D81 留的四处（`AnalysisResult.vue` 与 `History.vue` 各两处）这一刀收掉，顺带把"三处共用一条判据"这件事落到正确的文件里。
+
+**落点是量出来的**：`grep -rn "from '@/features/" src/features/shell` 是 **0 处**——shell 从来没有跨进过某个 feature，所以共享收口不能住 `features/analysis/lib/analysisModel.js`；它住 `src/utils/analysisLocalization.js`（**7 个文件、5 个 feature 已经在 import 它**，这两页就在里面）。连带把 `RubricPoint` / `RubricEntry` 两份 typedef 从 `analysisModel.js` 搬进 utils（跟写这份形状的生产者放一起），那边只留一句指向。`rubricRow` 现在有三个屏幕消费者。
+
+**这一刀最值钱的一个数字是中途那个 75**：只给两条 normalizer 上返回类型（`RubricEntry[]` / `string[]`）、模板一个字不动，typecheck **50 → 75**，新增的 25 条正好落在 `History.vue` **15** 与 `AnalysisResult.vue` **10** 上——这两页此前是 0 条，因为它们的列表一路是 `any[]`。所以"类型门开始盯这两屏"不是我推断的，是量出来的；把站点收完回到 **50**，逐文件核对 `History` / `AnalysisResult` / `SkillsPane` 各 **0**。
+
+**两处跟着搬的读法在脚本里，不在模板里**：`AnalysisResult.vue` 的 `primaryGap`（原 `typeof gap === 'string' ? gap : gap.item || gap.action || gap.impact || 兜底句`）与 `priorityAction`（原 `gap && typeof gap === 'object' && gap.action`）。收帧之后各剩一行，而且**逐支等价**：字符串那一代以前返回字符串本身、现在返回 `label`（同一串），对象那一代链条一字未改。等价不是我说出来的，是新加的第三条断言钉的——差距第一项喂裸字符串时 hero 那句仍然是 `'缺 K8s'`，不是兜底文案。
+
+**屏幕断言**：新文件 `tests/unit/rubricRowsOnScreens.test.js`，3 条，挂的是**真页面**（真路由记录 `/analysis/:id`、真 `onMounted` / `openDetail`，api 用 `importOriginal` 摊开再覆盖那三个名字）。这两页此前**没有任何页面级测试**：`analysisResultPanes.test.js` 只挂面板，History 一份都没有。
+
+**一次到位没有发生，三条断言第一版全红，且都红在我自己身上**：① 路由登记成 `/analysis/9` 而不是 `/analysis/:id`，于是 `route.params.id` 永远为空、页面压根没加载（屏幕上是一句"填充最近 ID 重新发起分析"）；② 我以为标签与严重度标签之间有个空格，实际 `el-tag` 只有 4px 的 margin；③ 我忘了 History 的"风险"那几条 `<li class="risk">` 本来就并进差距那一列，不是单独一列。这三条留在账上的理由是反过来的那一句：**页面级测试第一次就绿，通常说明它没测到东西**。
+
+**一条新守卫**（`styleDebtRatchet`）：`never lets a rubric entry fall through to printing the whole object`，只数 `<template>` 段里 `.item || <标识符> }}` 这个形状。**反向证据不动工作树**：同一条正则打在 git 里的旧版本（`SkillsPane.vue` @ `67ccb60`、两页 @ `HEAD~1`）三份**全部命中**，打在新 markup 与源码注释上都不命中。判据为什么带 `}}`：钉的是"整颗对象被插值出去"，不是"读了 `.item`"——注释里允许出现这句话（D81 那两条注释就是）。**残留的洞写在源文件与这里**：类型门挡得住 `r.item`（`RubricRow` 上没这个键），挡不住有人新写 `{{ r.label || r }}`，这条正则也不覆盖后者。
+
+**没有顺手统一的地方**：`AnalysisResult` 的差距列没有严重度标签、`History` 有；`SkillsPane` 用 `r.impact && !r.action`、`AnalysisResult` 用 `v-else-if`。**统一会改屏幕**，所以这一刀只统一"读法"，不统一"画法"。
+
+**门禁**：`npm run typecheck` **50**（中途 75，见上）、`test:unit` **73 files / 443 passed**（+3 页面断言、+1 守卫）、`npm test` exit 0、`eslint` exit 0（既有那 1 条 warning）、`prettier --check` exit 0、`vite build` exit 0、`node scripts/dead-style.mjs --selftest` exit 0（模板改动没造出新的死选择器候选，全仓候选仍 0）、六个文件 CR **0**（用 `file` + perl 数，`grep -c $'\r'` 那条假尺子见 D81）。真实 diff **5 改 1 新**：`analysisLocalization.js` +58/−0、`SkillsPane.vue` +11/−25、`analysisModel.js` +4/−19、`AnalysisResult.vue` +15/−14、`History.vue` +18/−13、新测试 166 行。**没做真浏览器复核**：两页是 jsdom + 真 EP 组件（`.el-dialog` 在 DOM 里），但不是浏览器。
+
+**§10.23 到此全部落地**：三处屏幕、六个站点（D81 两处 + 这一刀四处），模板里 `x.item || x` 为 **0** 且钉进守卫。§10 open 仍 **19**。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
@@ -3146,7 +3168,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 22. **`src/stores` 那 5 处裸 `request` 要不要一起收进 api 层**（D69 量到的，也是 D69 没动的）。`viewsBypassingApiLayer` 现在是 **0**，但这个 0 只覆盖视图：这一维复用 `viewSources`，而它为了让色值/色表/日期那几把尺子不去数法定解药，把 `src/stores` 整根豁免了，于是这 5 处顺手也被豁免——`stores/auth.js` 的 `/auth/login`、`/auth/register`、`/auth/reset-password`、`/auth/me`，加 `stores/tenant.js:78` 的 `/tenant/brand`。**为什么这条不是缺陷**：这些 store 用的就是同一个共享实例，拦截器、`Authorization` 头、错误 toast 三样并没有第二套，所以边界规则真正要防的东西一件没漏；剩下的只是"端点写在哪个文件里"。**为什么没顺手修**：真要收就得先拍凭据端点住在哪。**先记下量的结果，因为我原本以为这里有一条统一规则可违反——没有**：D69 之前 `src/api/` 是 18 个模块，多数按后端 router 文件起名（`salary.js`←`salary_insight.py`、`targets.js`←`job_target.py`、`promptTrace.js`←`prompt_trace.py`），但 `jobs.js` 一条对着 `job_search` / `job_recommend` / `job_pipeline` / `job_journal` 四条 router，而且里面还打着 `/analysis/` 与 `/career-path/` 两个不属于它的前缀——也就是"按消费域聚合"这一族本来就在。**所以 D69 新起的 `account.js`（自助那半）与 `admin.js`（只装 `/auth/admin/users` 一条）没有发明第二种切法，只是加了两个名字。**于是 stores 那 4 条凭据端点的真问题是谁跟 `account.js` 合：并成一个 `auth.js` 与后端 `auth.py` 对齐（那 `account.js` 这个名字就白起了一次），或再开第三个名字。三条路：① 不动，把 0 的含义在棘轮注释里写清楚（现状就是这么做的）；② 收拢成 `api/auth.js` 一个模块（凭据 + 自助 + admin 用户列表）+ `/tenant/brand` 归已有 `tenant.js`，并把这一维换成自带文件集（只豁免 `src/api` 与 `src/plugins`），这样"0"才真的说得出"只有 api 层出网"；③ 只把守卫拓宽、代码不动，于是棘轮立刻红、要按 5 重新点名。建议 ② 或 ①；**我一条都没动**。
 
-23. ~~**`SkillsPane` 那三条列表的两代写法要不要归一**~~ —— **已定并落地（D81，选 ②）**：`toRow` 在面板边界收一次（`typeof entry === 'string' ? { item: entry } : entry`），模板不再判分支，三条 props 全部上类型（`strengths`/`gaps` = `RubricEntry[]`、`riskPoints` = `string[]`），**typecheck 65 → 50、SkillsPane 自己那 15 条清零**。那一支候选人可见的变化如约发生：对象而 `item` 为空串时，旧那句 `x.item || x` 会往右走到对象上，屏幕上是一坨 JSON（`toDisplayString` 实测输出 `{ "item": "", "impact": "命中必需项" }`），现在 `<b>` 整颗不出、补语前面那颗冒号跟着撤。断言在 `tests/unit/skillsPane.test.js` 第六条。原始观察在 D73。
+23. ~~**`SkillsPane` 那三条列表的两代写法要不要归一**~~ —— **已定并落地（D81，选 ②；D82 收完剩下两处屏幕）**：`rubricRow`（住 `src/utils/analysisLocalization.js`，跟生产者同一文件）在两代写法进渲染之前收一次（`typeof entry === 'string' ? { item: entry } : entry`），模板不再判分支，三条 props 全部上类型（`strengths`/`gaps` = `RubricEntry[]`、`riskPoints` = `string[]`），**typecheck 65 → 50、`SkillsPane` 自己那 15 条清零**。那一支候选人可见的变化如约发生：对象而 `item` 为空串时，旧那句 `x.item || x` 会往右走到对象上，屏幕上是一坨 JSON（`toDisplayString` 实测输出 `{ "item": "", "impact": "命中必需项" }`），现在 `<b>` 整颗不出、补语前面那颗冒号跟着撤。断言：`tests/unit/skillsPane.test.js` 第六条 + `tests/unit/rubricRowsOnScreens.test.js` 三条（匹配报告页与历史记录详情各一份，这两页此前没有页面级测试）。同写法在 `AnalysisResult.vue` 与 `History.vue` 各还剩两处，D82 一起收了：**模板里 `x.item || x` 现为 0**，并由 `styleDebtRatchet` 一条不变量钉住（反向证据打在 git 里的三个旧版本上，全部命中）。原始观察在 D73。
 
 24. ~~**`InterviewSetup.vue:473` 少一个 `.value`，面试类型标签一直显示原始英文键**~~ —— **已定并落地（D80，选"修"）**：`.value` 补上（现 :475），屏幕断言 `tests/unit/interviewSetupTypeLabel.test.js` 先红在 `expected "后端三年 · tech" to contain "技术深挖"`、修完绿。类型层全程无声：`strict:false` 下用字符串索引一个 Ref 得到 `any`，typecheck 计数 65 → 65 一点没动，所以这条是"清零类型错兜不住这类 bug"的第一手证据（原始观察在 D73 / D80）。
 
