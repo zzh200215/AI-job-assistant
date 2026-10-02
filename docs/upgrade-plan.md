@@ -2432,7 +2432,33 @@ M3 是这套设计里最要紧的一条：**豁免会过期**。补了样式却�
 
 **§10 还剩 22 条 open**：这轮划掉 24；剩 23（`SkillsPane` 两代写法，收窄会改渲染，需要一条同形状的屏幕断言）与 25（`Profile` 那格简历数恒 0、两个永不解锁的成就，逐键的生产者已在条目里列清）。
 
+> **D81 复测这条计数：22 不对，当时是 20**。判据是 §10 区间里 `^[0-9]+\. ` 的行、不看前缀 `~~` 的算 open：编号 1–28 共 26 条在册，open 20 / 已划 6。我写"22"时没扣掉 D79 划的 28，也没扣本条自己划的 24。D81 划掉 23 之后 open **19**。原句不改，因为它是当时那句决定的组成部分；这条更正挂在下面那条 D81 的门禁里。
+
 **门禁**：`test:unit` **72 files / 438 passed**、`npm test` exit 0、`eslint` exit 0、`prettier --check` exit 0、`vite build` exit 0、`npm run typecheck` **65**（原样）、改动文件 CRLF **0**。
+
+#### 已交付：D81 §10.23 选了那条 ②：两代写法在面板边界塌成一帧，那一坨 JSON 到不了候选人（65 → 50）
+
+D73 停手的那一处，这次按 §10.23 自己的菜单走了 **②**（面板加归一 + 一条屏幕断言），没走 ③（改 AI 输出契约）。动手前先把前提量出来，因为这一条的全部理由是"收窄会改渲染"——**"改坏"是"从打印一坨 JSON 改成不打印"还是"从打印一句话改成打印空"**，这两句听起来一样，屏幕上不是一回事。
+
+**前提，第一手**：`{{ x.item || x }}` 编译后就是 `toDisplayString(x.item || x)`。用一次性夹具喂 `{ item: '', impact: '命中必需项' }`（**这就是生产端给的形状**，见下），实际渲染出来的是 `'{\n  "item": "",\n  "impact": "命中必需项"\n}'`——一整坨带缩进的 JSON 印在"优势"那一列里。裸字符串那一支同时验了一下，`toDisplayString('项目主导')` 就是 `'项目主导'`，一字不差。夹具跑完删净，没留在树里。
+
+**生产端读清楚了，D73 当时的判断只对了了一半**：`normalizeLocalizedObjectList`（`src/utils/analysisLocalization.js:134-151`）对**对象**条目一定写回五个键、值全是字符串（`item` 从 `item|name|title|skill|point` 里挑，挑不到给 `''`），对**裸字符串**原样放行。所以联合是真的，但**"不保证键齐"是错的**——不键齐的是另一代（字符串）。这条差别决定了收窄该放在哪：联合该在面板边界收**一次**，而不是每个模板表达式各收一次（那 15 条错全落在 :26-47 那两段 `v-for` 里，读的就是 `item` / `impact` / `evidence` / `action` / `severity` 这五个键，其中 `severity` 在一行里被读两遍）。
+
+**落地的形状**：`SkillsPane.vue` 里一个 `toRow(entry)`，`RubricEntry` 进、`{ label, sep, impact, evidence, action, severity }` 出，`strengthRows` / `gapRows` 两个 computed 各过一遍；模板不再判分支，`<b v-if="r.label">` 之后补语写成 `{{ r.sep }}{{ r.impact }}`。**`sep` 是必须的**：冒号原来焊在模板字面量里，标签整颗撤掉之后不留它会顶着一个冒号开头——这一颗跟着 `label` 一起撤，收在 `toRow` 里而不是模板里，因为三条补语共用同一个判据。三条 props 全部上了类型：`strengths` / `gaps` = `RubricEntry[]`（用的就是 `analysisModel.js` 里那份现成的联合，没新造 typedef）、`riskPoints` = `string[]`。
+
+**类型账，逐文件核过**：**65 → 50**，`SkillsPane` 自己 **15 → 0**，其余文件的计数**一条没动**（admin 29+6+5+2 = 42、`Profile` 7、`router` 1，加起来正好 50）。所以这一刀没往别处漏新错——这一点值得单独记，因为上一轮我给 `getSalaryOverview` 加返回类型时是真的把另一页的错误改了形状的。`riskPoints` 那条清 **0** 条（15 条全在前两条的 `x.item` / `x.impact` / `x.action` / `x.severity` 上），上类型是白拿的一致性，不是计数手段。棘轮自己点名 50，`BUDGET` 抄进去；`MIN_PROGRAM_FILES` / `MIN_BY_EXTENSION` 不动，因为这刀既没建文件也没删文件（临时夹具在 `tests/unit/` 之外，且已删）。
+
+**候选人可见的那一支**（他拍的就是这个）：对象而 `item` 为空串 → 原来打印 JSON，现在 `<b>` 不出、只剩补语与那颗严重度标签。裸字符串那一支一字未变。守卫是 `tests/unit/skillsPane.test.js` 第六条，断 `items('优势')` 等于 `['命中必需项', '（JD 第 4 条）']`、差距列 `querySelectorAll('b').length === 0`、以及整页 `not.toMatch(/[{}"]/)`。
+
+**反向证据这次的拿法换了，得说明白**：把 `<b v-if="r.label">` 改回 `<b>{{ r.label || r }}</b>` 的那次源文件变异**被权限拦下**（它属于"撤销刚落地的修复"），所以这条守卫的承重不是用源文件变异证的，是用上面那台一次性夹具证的——旧写法确实产出 `{`，而那条 `[{}"]` 断言就是照着那串输出写的。**它的边界也一起写在这**：如果以后有人删掉 `v-if` 但 `label` 仍非空，这条不会红；它保证的是"对象不会到屏幕"，不是"`<b>` 一定有条件"。
+
+**没做的，四处**：同族 `x.item || x` 还剩 **`AnalysisResult.vue:201` / `:212`** 与 **`History.vue:162` / `:172`**，同样的输入在那两页上**仍会打印 JSON**（那两个是页面自己的模板，不是面板）。收法与这一刀一模一样，且**不需要新决定**——§10.23 拍的就是这一支。挂在下一刀，不等拍。（`AnalysisResult.vue:463` 那句 `gap.item || gap.action || gap.impact || '查看完整匹配报告。'` 不算在这一族里：它每一步都读字段、最后落到一句固定文案，打印不出对象。）
+
+**顺手修掉一把量具**：这一轮我用 `grep -c $'\r'` 数 CRLF，它报"三个文件各有 140 / 127 / 92 行带 CR"——正好等于三个文件的**总行数**。Git Bash 里 `$'\r'` 进到 grep 会被吃成空模式，于是匹配每一行。改用 `file`（不报 CRLF）+ perl 单遍计数（CR 行 **0**）之后才对。**"改动文件 CRLF 0"这一项凡是过去用那条命令量过的，都该当成没量**。
+
+**门禁**：`npm run typecheck` **50**、`npm test` exit 0（三条腿全绿：真跑判定 / 上限 / 必须点名下调）、`test:unit` **72 files / 439 passed**（+1 条：那坨 JSON）、`eslint` exit 0（既有那 1 条 `paidOrders` warning）、`prettier --check` exit 0、`vite build` exit 0、改动文件 CR **0**、真实 diff **3 个文件**（`SkillsPane.vue` +58/−20、`skillsPane.test.js` +21/−2、`typeDebtRatchet.test.mjs` +1/−1）。**没做真浏览器复核**：这一支的判据是 `toDisplayString` 的直接调用加 jsdom 挂载，比 D79 那条色块弱一档（那时有计算样式正向对照）。
+
+**§10 复测**：划掉 23 之后 open **19**（判据与算法写在上面 D80 那条引用块里）。
 
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
@@ -3120,7 +3146,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 22. **`src/stores` 那 5 处裸 `request` 要不要一起收进 api 层**（D69 量到的，也是 D69 没动的）。`viewsBypassingApiLayer` 现在是 **0**，但这个 0 只覆盖视图：这一维复用 `viewSources`，而它为了让色值/色表/日期那几把尺子不去数法定解药，把 `src/stores` 整根豁免了，于是这 5 处顺手也被豁免——`stores/auth.js` 的 `/auth/login`、`/auth/register`、`/auth/reset-password`、`/auth/me`，加 `stores/tenant.js:78` 的 `/tenant/brand`。**为什么这条不是缺陷**：这些 store 用的就是同一个共享实例，拦截器、`Authorization` 头、错误 toast 三样并没有第二套，所以边界规则真正要防的东西一件没漏；剩下的只是"端点写在哪个文件里"。**为什么没顺手修**：真要收就得先拍凭据端点住在哪。**先记下量的结果，因为我原本以为这里有一条统一规则可违反——没有**：D69 之前 `src/api/` 是 18 个模块，多数按后端 router 文件起名（`salary.js`←`salary_insight.py`、`targets.js`←`job_target.py`、`promptTrace.js`←`prompt_trace.py`），但 `jobs.js` 一条对着 `job_search` / `job_recommend` / `job_pipeline` / `job_journal` 四条 router，而且里面还打着 `/analysis/` 与 `/career-path/` 两个不属于它的前缀——也就是"按消费域聚合"这一族本来就在。**所以 D69 新起的 `account.js`（自助那半）与 `admin.js`（只装 `/auth/admin/users` 一条）没有发明第二种切法，只是加了两个名字。**于是 stores 那 4 条凭据端点的真问题是谁跟 `account.js` 合：并成一个 `auth.js` 与后端 `auth.py` 对齐（那 `account.js` 这个名字就白起了一次），或再开第三个名字。三条路：① 不动，把 0 的含义在棘轮注释里写清楚（现状就是这么做的）；② 收拢成 `api/auth.js` 一个模块（凭据 + 自助 + admin 用户列表）+ `/tenant/brand` 归已有 `tenant.js`，并把这一维换成自带文件集（只豁免 `src/api` 与 `src/plugins`），这样"0"才真的说得出"只有 api 层出网"；③ 只把守卫拓宽、代码不动，于是棘轮立刻红、要按 5 重新点名。建议 ② 或 ①；**我一条都没动**。
 
-23. **`SkillsPane` 那三条列表的两代写法要不要归一**（D73 停手处，15 条类型错挂在账上）。`strengths` / `gaps` / `riskPoints` 的条目**既可能是裸字符串，也可能是带 `item` / `impact` / `evidence` / `action` / `severity` 的对象**，模板 `SkillsPane.vue:27` 那句 `x.item || x` 就是为这件事写的，不是笔误。类型只能写成 `string | RubricPoint` 的联合，而联合要求模板先把分支收窄，收窄之后**"是对象但没有 `item`"那一支会从"打印整个对象"变成"打印空"**——那是候选人可见的变化。三条路：① 不动，那 15 条按 unknown 留着（现状，源文件里写了为什么）；② 面板里加一个归一函数（`typeof x === 'string' ? { label: x } : x`）+ 一条页面级断言（D51 那条教训在这里同样成立：改完不报错、只是少画）；③ 后端把 rubric 输出 coerce 成单一形状，那要动 AI 输出契约，与 §10.20 是同一族决定。我按"搬家与类型不夹带口径"的规矩**一条都没动**。
+23. ~~**`SkillsPane` 那三条列表的两代写法要不要归一**~~ —— **已定并落地（D81，选 ②）**：`toRow` 在面板边界收一次（`typeof entry === 'string' ? { item: entry } : entry`），模板不再判分支，三条 props 全部上类型（`strengths`/`gaps` = `RubricEntry[]`、`riskPoints` = `string[]`），**typecheck 65 → 50、SkillsPane 自己那 15 条清零**。那一支候选人可见的变化如约发生：对象而 `item` 为空串时，旧那句 `x.item || x` 会往右走到对象上，屏幕上是一坨 JSON（`toDisplayString` 实测输出 `{ "item": "", "impact": "命中必需项" }`），现在 `<b>` 整颗不出、补语前面那颗冒号跟着撤。断言在 `tests/unit/skillsPane.test.js` 第六条。原始观察在 D73。
 
 24. ~~**`InterviewSetup.vue:473` 少一个 `.value`，面试类型标签一直显示原始英文键**~~ —— **已定并落地（D80，选"修"）**：`.value` 补上（现 :475），屏幕断言 `tests/unit/interviewSetupTypeLabel.test.js` 先红在 `expected "后端三年 · tech" to contain "技术深挖"`、修完绿。类型层全程无声：`strict:false` 下用字符串索引一个 Ref 得到 `any`，typecheck 计数 65 → 65 一点没动，所以这条是"清零类型错兜不住这类 bug"的第一手证据（原始观察在 D73 / D80）。
 
