@@ -1050,12 +1050,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
 .hero-card,
 .workspace-card,
 .panel-card {

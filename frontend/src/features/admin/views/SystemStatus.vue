@@ -258,12 +258,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
 .hero-card,
 .panel-card {
   border-radius: var(--app-radius-md, 16px);

@@ -220,7 +220,10 @@ const BUDGET = {
      某个 .css** 就能全部绕过——而视图预算按文件路径记账，上提还会让它看起来"还了债"。
      这条按整个样式层记一笔总量，与视图侧同尺子（`#hex` + `rgba(`）。 */
   themeColorLiterals: 124,
-  pageShellRedeclarations: 22,
+  /* D76 用浏览器探针把三条"视图自己重写 .page-shell"判死并删掉（KnowledgeBase /
+     DeliveryGuide / SystemStatus，各自 matched=0、删→比 46 条计算属性+rect=0 差异、塞回=0 差异），
+     22 → 19。这一维以前只有上限、没有"还完必须调小"，所以那 3 的下降本来会静悄悄。 */
+  pageShellRedeclarations: 19,
   /* D69 清零。这一维看不见 src/stores（JS_OUT_OF_SCOPE_ROOTS 为色值/色表那几把尺子豁免了它），
      而 stores/auth.js 至今有 4 条裸调用——别把这里的 0 读成"全仓只有一处出网"。 */
   viewsBypassingApiLayer: 0,
@@ -299,6 +302,11 @@ function themeColorLiteralCount() {
         (src.match(/\brgba?\(/g) || []).length
       )
     }, 0)
+}
+
+/* 视图自己重写 `.page-shell` 的文件数——它本该只由 `styles/panels.css` 给一次。 */
+function pageShellCount() {
+  return viewSources.filter(({ style }) => /^\s*\.page-shell\s*[,{]/m.test(style)).length
 }
 
 /* 失败被清成空态：`request.js` 只对**非 GET** 弹提示（`notifyError !== false && method !== 'get'`），
@@ -839,8 +847,17 @@ describe('style debt ratchet', () => {
   })
 
   it('does not let views re-declare the shared .page-shell chrome', () => {
-    const n = viewSources.filter(({ style }) => /^\s*\.page-shell\s*[,{]/m.test(style)).length
-    expect(n).toBeLessThanOrEqual(BUDGET.pageShellRedeclarations)
+    expect(pageShellCount()).toBeLessThanOrEqual(BUDGET.pageShellRedeclarations)
+  })
+
+  /* D76 之前这一维只有上限、没有"还完必须调小"的同伴断言，所以删掉三条重复声明之后
+     全套测试照样绿——天花板只是安静地松了 3。补上这一条，形状与其它四把尺子一致。 */
+  it('forces the page-shell budget to be tightened once paid down', () => {
+    const n = pageShellCount()
+    expect(
+      n < BUDGET.pageShellRedeclarations,
+      `视图里 .page-shell 的重复声明少了——把 BUDGET.pageShellRedeclarations 降到 ${n}`
+    ).toBe(false)
   })
 
   /* 上面每一条预算都只扫 src/features 与 src/layouts。§7 阶段 2 这轮已经把视图按 feature 搬进 src/features/，
