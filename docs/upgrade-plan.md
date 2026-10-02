@@ -2418,6 +2418,22 @@ M3 是这套设计里最要紧的一条：**豁免会过期**。补了样式却�
 
 **门禁**：`test:unit` **71 files / 437 passed**、`npm test` exit 0、`eslint` exit 0、`prettier --check` exit 0、`npm run typecheck` **65**（原样，探针不在 tsconfig 的 include 里）、`vite build` exit 0、改动文件 CRLF **0**；探针用的 5199 那台 dev server 按命令行核对后定点停，再确认 0 监听。
 
+#### 已交付：D80 §10.24 那一行的红→绿：屏幕上的字是 `后端三年 · tech`，修完是 `后端三年 · 技术深挖`
+
+一行改动（`InterviewSetup.vue:475` 的 `typeConfigs[type]` → `typeConfigs.value[type]`），但按这个仓库的规矩，**没有一条会红的断言就不算修**：`tests/unit/interviewSetupTypeLabel.test.js` 挂真页面、走真 `onMounted`，断言 `.history-meta` 那行的文本。
+
+**红在什么上，抄原文**：`expected '后端三年 · tech' to contain '技术深挖'`。这不是我推演的形状 —— 是修之前跑出来的第一手失败。改完之后同一条断言绿，`test:unit` **72 files / 438 passed**。
+
+**typecheck 一个数字都没动（65 → 65）**，这是这条最值得记的地方：**类型门对它完全无声**。`strict:false` 下 `noImplicitAny` 关着，用字符串去索引一个 `Ref` 拿到的是 `any` 而不是错误，所以这个 bug 从写下来那天起就没有任何静态信号；D73/D74 那两轮的 154 → 65 帮不上它，能帮上的只有屏幕。这正是 D73 记的那条"清零计数不是这类问题的解药"的一个具体实例，也是为什么它当时被我挂成 §10 而不是顺手改掉。
+
+**又一次夹具形状要从消费者取，不是从 API 名字猜**（这条纪律第四次成立）：我第一版把 `getInterviewList` mock 成 `{ items: [...], total: 1 }`，于是 `historyList.value.filter` 直接炸 —— 而 `fetchHistory()` 是 `historyList.value = await getInterviewList()`（:470），后端 `interview_rest.py:159-163` 返回的是 `data=[...]` **数组**。给对形状之后，断言才红在该红的位置（标签），而不是红在我的 mock 上。这一步值得留在账上：如果我把那条炸掉当成"测试写错了"绕过去，这条守卫就会变成一条永远测不到标签的空壳。
+
+**这条改动是候选人可见的**（他拍的正是这个）：面试类型从原始键 `'tech'` 变成配置里的 `'技术深挖'`，同页其余四档同理（`hr` / `comprehensive` / `stress` / `group`）。数据源就是页面里那份 `defaultTypeConfigs`（或 `getInterviewConfigTypes` 返回的租户自定义配置，测试里我让后者返回空 items，所以走的是内置那一套 —— 两条生产者共用同一个 `typeLabel`，两条都有断言覆盖）。
+
+**§10 还剩 22 条 open**：这轮划掉 24；剩 23（`SkillsPane` 两代写法，收窄会改渲染，需要一条同形状的屏幕断言）与 25（`Profile` 那格简历数恒 0、两个永不解锁的成就，逐键的生产者已在条目里列清）。
+
+**门禁**：`test:unit` **72 files / 438 passed**、`npm test` exit 0、`eslint` exit 0、`prettier --check` exit 0、`vite build` exit 0、`npm run typecheck` **65**（原样）、改动文件 CRLF **0**。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
@@ -3106,7 +3122,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 23. **`SkillsPane` 那三条列表的两代写法要不要归一**（D73 停手处，15 条类型错挂在账上）。`strengths` / `gaps` / `riskPoints` 的条目**既可能是裸字符串，也可能是带 `item` / `impact` / `evidence` / `action` / `severity` 的对象**，模板 `SkillsPane.vue:27` 那句 `x.item || x` 就是为这件事写的，不是笔误。类型只能写成 `string | RubricPoint` 的联合，而联合要求模板先把分支收窄，收窄之后**"是对象但没有 `item`"那一支会从"打印整个对象"变成"打印空"**——那是候选人可见的变化。三条路：① 不动，那 15 条按 unknown 留着（现状，源文件里写了为什么）；② 面板里加一个归一函数（`typeof x === 'string' ? { label: x } : x`）+ 一条页面级断言（D51 那条教训在这里同样成立：改完不报错、只是少画）；③ 后端把 rubric 输出 coerce 成单一形状，那要动 AI 输出契约，与 §10.20 是同一族决定。我按"搬家与类型不夹带口径"的规矩**一条都没动**。
 
-24. **`InterviewSetup.vue:473` 少一个 `.value`，面试类型标签一直显示原始英文键**（D73 读出来的，不是门抓到的）。`const typeConfigs = ref(defaultTypeConfigs)` 在 :357，而 `function typeLabel(type) { return typeConfigs[type]?.label || type || '未定义' }` 在 :473 ——索引的是 **Ref 对象本身**，永远 `undefined`，于是模板 :248 的 `{{ typeLabel(item.interview_type) }}` 画出来是 `'tech'` / `'hr'` 而不是配置里的 `'技术深挖'` / `'HR / 行为面'`。同一个文件 :386 用的是 `typeConfigs.value[...]`，正确写法就在 40 行之外。**为什么类型门完全无声**：`strict:false` 下 `noImplicitAny` 是关的，用字符串索引一个 Ref 得到 `any`，不成错误。所以这条既是对一个 bug 的记录，也是"78 条清零不等于这类问题有解"的实测反例。修法是一行加 `.value`，但它改变候选人看到的文案（英文键 → 中文标签），按本节惯例由你定。要顺带问一句的是：这一页现在显示英文键，用户有没有已经习惯了——如果有，修它反而是一次可见变化。
+24. ~~**`InterviewSetup.vue:473` 少一个 `.value`，面试类型标签一直显示原始英文键**~~ —— **已定并落地（D80，选"修"）**：`.value` 补上（现 :475），屏幕断言 `tests/unit/interviewSetupTypeLabel.test.js` 先红在 `expected "后端三年 · tech" to contain "技术深挖"`、修完绿。类型层全程无声：`strict:false` 下用字符串索引一个 Ref 得到 `any`，typecheck 计数 65 → 65 一点没动，所以这条是"清零类型错兜不住这类 bug"的第一手证据（原始观察在 D73 / D80）。
 
 25. **`Profile.vue` 那格简历数、那句"已使用 N 天 · M 次模拟面试"和两个成就**（D74 翻出来，7 条类型错就是它的证据）。`loadUserStats()` 打的是 `getDashboardOverview()`，然后读 `data.total_sessions || data.sessions`、`data.resume_count`、`data.best_score || data.max_score`、`data.days_active`、`data.created_at`（`Profile.vue:494-499`）——**这些键 `GET /dashboard/overview` 一个都不返回**（`backend/app/api/dashboard.py:134-158`）。于是：简历数那一格恒为 **0**（同一份响应里真值在 `summary.total_resumes`，没人读它）、那句"已使用 1 天 · 0 次模拟面试"是兜底值不是实测值、`:402` 的"注册第一份简历"与 `:458` 的"拿到 80 分以上"两个成就**永不解锁**。三条路：① 前端改读 `summary.*`（`resume_count` → `summary.total_resumes`；模拟面试次数这一项响应里没有，得从 `stage_counts`/面试接口另取）；② 后端补上那几个键（则前端一个字不改）；③ 把这几格与两个成就从页面上摘掉，因为目前没有数据源支持它们。**我一条都没动**——三条里任何一条都会改变候选人看到的数字与成就状态，按本节惯例由你定。
 
