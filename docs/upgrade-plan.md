@@ -2354,6 +2354,24 @@ A1 按你点的走：重搭浏览器差分，**这次把仪器留在仓库里**�
 
 **门禁**：`test:unit` **71 files / 436 passed**、`npm test` exit 0、`eslint` exit 0、`prettier --check` exit 0、`dead-style.mjs --selftest` exit 0（答案卷四页 0 候选，全仓 10）、`vite build` exit 0、改动文件 CRLF **0**、`.d76ab` 与 `dist-a` 删净；探针页里的 `window.__job` 只活在浏览器内存，不落盘。
 
+#### 已交付：D77 剩下 10 条判死并删掉，全仓静态候选归 0——卡住它们的不是判据，是夹具
+
+D76 留的 10 条候选（`ReferencesPane` 4、`InterviewQuestionsPane` 2、`ReportSummaryPane` / `ResumeOptimizePane` / `SkillsPane` / `DefaultLayout` 各 1）这轮全部删掉。**让它能量起来的关键一步不是判据，是夹具**。
+
+**先记一次"还没发生的假阴性"**：第一版探针跑 `/smart-analysis` 报 10 条全部 `matched=0`，看着像判死。日志里那行 **`标签数=0`** 把它戳穿了 —— 五个面板**根本没挂载**。根因是这一页的 `result` 只在**跑完一轮分析**时才置上（`SmartAnalysis.vue:749`；`onMounted` 只恢复上一次的选择、不读记录，:801-808）。这是 D76 那条"这一屏没命中 ≠ 没有元素能命中"的第二次发作，区别是这次我在下结论前先看了状态数，所以没写进账。
+
+**补的东西分两块**：① 播"上一次的选择"走 `utils/lastSelection` 的公开 API（`setSelectionOwner(1)` + `rememberResume/rememberJD/rememberRecord`），**不自己拼键名** —— 键格式是那个模块的财产，探针抄一遍就会在下次它改格式时静默失效；② 把"点一次一键智能分析"接进链里，于是需要 `POST /analysis/full` → `{task_id}`、`GET /agent/task/probe-task[/steps]` → `completed` + `analysis_record_id: 99`、`POST /analysis/explain-match`，还有引用来源那条按消费者改对（`useAnalysisReferences.js:37-41` 读 `data.references` / `data.query` / `data.rag_confidence`，我第一版给的是 `documents` + `confidence`）。补完之后 **8 个页签全部出现**，五个面板真挂载。
+
+**判据形状也改了一条**：每条规则**在它自己那个面板激活时**测，而不是"点完所有页签再测一次"。`el-tab-pane` 的内容是懒挂载的，切走之后那些元素就不在 DOM 里 —— 用"最后那一屏"去测前面五个面板，等价于没测。10 条各自 `matched=0 / diffs=0 / restored=0`，每次快照覆盖 **530 个元素 × 46 条计算属性 + rect 四项**。
+
+**删掉的 44 行 / 604 字节**：`.rag-confidence-metrics`、`.rag-metric`、`.rag-metric span`、`.rag-metric strong`（`ReferencesPane`）；`.mb`（`SkillsPane`、`ResumeOptimizePane`、`ReportSummaryPane`）；`.mt` + `.mb`（`InterviewQuestionsPane`）；`.dot-violet`（`DefaultLayout`）。`SmartAnalysis` 的 css 分块 **19.03 → 18.40 kB**（gzip 3.31 → 3.26）；`.dot-violet` 那 3 行在 layout 分块里低于 kB 报告粒度。**A/B 的两侧各建一次**（A 侧是 `git show HEAD:` 写回六个文件），中途我把删除脚本的文件名打错成 `.d77-del.mjs`，node 报 `MODULE_NOT_FOUND`、什么都没改，用 `git diff --numstat` 确认形状后才用对名字重跑 —— 删除类操作的第一步永远是看 diff 是不是我以为的样子（本次：44 删 0 增）。
+
+**这一族为什么会在仓库里存在**：D52/D65 拆面板时的规矩是"父页面样式全保留、子组件复制一份"，而这些类的 markup 至今住在父页面（`.rag-metric` 在 `SmartAnalysis.vue:361-379`）—— 子组件那份**永远命不中**，scoped 规则只打自己 scope id 的元素。D67/D68 那两轮只查了"**父页面剩下的副本**"，没查"**子组件多带的那份**"，所以当时报的"候选 0"是有方向的 0。这一条就是那次的余额。
+
+**棘轮这次一个数字都没往下走**：`.dot-violet` 用的是 `var(--app-*)`，其余 9 条不含色值，`hardcodedColorLiterals` 全部原地不动（435 → 436 只来自 D76 补的那条 must-tighten 断言）。所以 **A1 这条路到此没有可自动压的数字了**：尺子的全仓候选 = **0**，`--selftest` 仍 exit 0，另有 **9 条记为不可判**（拼接类名，值域在后端；实测 `"priority"` / `"severity"` 发的是 high / medium / low，所以它们是活的，而静态与单屏快照对这一族只能证活）。
+
+**门禁**：`test:unit` **71 files / 436 passed**、`npm test` exit 0、`eslint` exit 0、`prettier --check` 先是 **exit 1** 抓到 `InterviewQuestionsPane` 删末条后留下的空行（`--write` 之后 exit 0，且 436 条与 `--selftest` 在重排后重跑仍成立）、`vite build` exit 0、改动文件 CRLF **0**、`.d77` 与两侧临时目录删净；探针用的那台 5199 dev server 按命令行核对后**定点停 PID**，不是 `/IM`。**没做的事**：9 条不可判的拼接类名要真判，得让后端只发那三个值（或前端把值域写成一个 union 类型 + 一个 `dot-${tone}` 的穷尽检查）——那是类型层的活，不是样式层的，本轮不动。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
