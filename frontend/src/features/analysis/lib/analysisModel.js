@@ -6,6 +6,62 @@
    读取改成调用方传进来的参数，**判定规则一个字没动**——变的只是"谁去读那条记录"可见了（同 D41
    给 `calculateApplicationPriority` 加 `city` 参数那一刀）。 */
 
+/* 下面这几份 typedef 覆盖的是**四个面板读走的**字段，不是整份后端负载的契约。
+   这一页的数据有两代写法和一处没有 schema：rubric 的 strengths/gaps 条目可能是裸字符串
+   也可能是对象（模板里那句 `x.item || x` 就是为它写的，不是笔误），而职业规划与方向那一坨
+   是模型直接生成的 JSON、后端不约束（docs/upgrade-plan.md §10.20 讲的就是这件事）。
+   所以这里的键全部可选：它记的是"面板假设有什么"，不是"服务端保证有什么"。 */
+
+/**
+ * rubric 里一条优势/差距/风险的新写法。
+ * @typedef {Object} RubricPoint
+ * @property {string} [item]
+ * @property {string} [impact]
+ * @property {string} [evidence]
+ * @property {string} [action]
+ * @property {string} [severity]
+ */
+
+/**
+ * 两代写法并存的那一份：老的是裸字符串，新的是 `RubricPoint`。
+ * @typedef {string | RubricPoint} RubricEntry
+ */
+
+/**
+ * 一条转型方向。后端会剥掉空字段（`career_path_agent.py:191`），所以这里全部可选。
+ * @typedef {Object} CareerPath
+ * @property {string} [title]
+ * @property {string} [direction_key]
+ * @property {string} [category]
+ * @property {string} [seniority]
+ * @property {string} [reason]
+ * @property {number} [match_score]
+ * @property {Record<string, any> | string} [salary_range]
+ * @property {string[]} [matched_skills]
+ * @property {string[]} [gap_skills]
+ */
+
+/**
+ * 成长路线图的一段（`visualPhases` 的条目）。
+ * @typedef {Object} RoadmapPhase
+ * @property {number | string} [id]
+ * @property {string} [color]
+ * @property {number} [order]
+ * @property {string} [name]
+ * @property {number} [duration_months]
+ * @property {string[]} [skills]
+ * @property {{ name?: string, type?: string }[]} [milestones]
+ * @property {{ name?: string, description?: string, tech_stack?: string[] }[]} [projects]
+ */
+
+/**
+ * 引用来源的一篇文档及其命中的片段。
+ * @typedef {Object} ReferenceDoc
+ * @property {string} [doc_title]
+ * @property {string} [doc_type]
+ * @property {{ score?: number, text?: string }[]} [chunks]
+ */
+
 /** 维度分：后端可能给对象（`{score, matched, missing}`），也可能只给一个数字。 */
 function getDimension(result, key) {
   const value = result?.match_report?.dimension_scores?.[key]

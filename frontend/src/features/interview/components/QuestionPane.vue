@@ -37,7 +37,12 @@ defineProps({
   isFollowUp: { type: Boolean, default: false },
   question: { type: String, default: '' },
   helperText: { type: String, default: '' },
-  structure: { type: Array, default: () => [] },
+  structure: {
+    type: /** @type {import('vue').PropType<import('../lib/interviewRoomModel').AnswerStructure>} */ (
+      Array
+    ),
+    default: () => [],
+  },
 })
 </script>
 

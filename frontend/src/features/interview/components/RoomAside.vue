@@ -71,7 +71,12 @@ defineProps({
   timeoutCount: { type: Number, default: 0 },
   lastScore: { type: Object, default: null },
   recentSignal: { type: String, default: '' },
-  structure: { type: Array, default: () => [] },
+  structure: {
+    type: /** @type {import('vue').PropType<import('../lib/interviewRoomModel').AnswerStructure>} */ (
+      Array
+    ),
+    default: () => [],
+  },
 })
 </script>
 

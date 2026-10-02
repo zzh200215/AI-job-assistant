@@ -306,6 +306,7 @@ import ListPane from '@/features/pipeline/components/ListPane.vue'
 const router = useRouter()
 
 const loading = ref(true)
+/** @type {import('vue').Ref<import('../lib/pipelineBoard').Kanban>} */
 const kanban = ref({})
 const latestKanbanCall = useLatestCall()
 const viewMode = ref('kanban')

@@ -103,7 +103,12 @@ import { confidenceTagType, scoreTagType, typeLabel } from '@/features/analysis/
    样式是从页面**复制**的（"RAG Confidence / References / Loading state" 三段），页面那 1092 行没删。 */
 const props = defineProps({
   loading: { type: Boolean, default: false },
-  references: { type: Array, default: () => [] },
+  references: {
+    type: /** @type {import('vue').PropType<import('../lib/analysisModel').ReferenceDoc[]>} */ (
+      Array
+    ),
+    default: () => [],
+  },
   referenceQuery: { type: String, default: '' },
   analysisConfidence: { type: Object, default: null },
   refOpenDocs: { type: Array, default: () => [0] },

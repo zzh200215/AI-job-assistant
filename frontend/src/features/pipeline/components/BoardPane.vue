@@ -25,8 +25,16 @@ import { followUpDays, followUpLevel, needsFollowUp } from '@/features/pipeline/
    时机和搬之前一模一样（也是每次渲染现取），面板自己不调 Date.now()。
    `:disabled="writeBusy"` 那两个下拉是 D59 那把锁的一部分：锁在页面，这里只是把值传进来。 */
 defineProps({
-  kanban: { type: Object, required: true },
-  columns: { type: Array, required: true },
+  kanban: {
+    type: /** @type {import('vue').PropType<import('../lib/pipelineBoard').Kanban>} */ (Object),
+    required: true,
+  },
+  columns: {
+    type: /** @type {import('vue').PropType<import('../lib/pipelineBoard').BoardColumn[]>} */ (
+      Array
+    ),
+    required: true,
+  },
   totalCards: { type: Number, required: true },
   writeBusy: { type: Boolean, required: true },
   now: { type: Number, required: true },

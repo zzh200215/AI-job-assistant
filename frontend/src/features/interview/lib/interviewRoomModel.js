@@ -5,6 +5,35 @@ import { interviewScoreTone } from '@/utils/scoreTone'
    核心深挖""没有分数时不能写『回答偏弱』"这类门槛第一次能被逐条钉住（D57 在同一页
    PipelineKanban 上做的是同一件事）。页面上的 computed 只是这里的一层薄包装。 */
 
+/**
+ * 一条面试会话消息。生产者只有 `stores/interview.js`（后端 `detail.messages` 原样进来 +
+ * WS 到了自己 push 一条，字段就是这五个）。`metadata` 是后端那坨没有 schema 的负载
+ * （问题的 round/total、评估的分数都在里面），所以它只能是 Record，不许在这里装精确。
+ * @typedef {Object} InterviewMessage
+ * @property {string} [role]
+ * @property {string} [type]
+ * @property {string} [content]
+ * @property {Record<string, any>} [metadata]
+ * @property {string} [timestamp]
+ */
+
+/**
+ * `answerStructure` 给的那三行"先结论再细节"，面板按字符串数组渲染。
+ * @typedef {string[]} AnswerStructure
+ */
+
+/**
+ * 一种面试类型的题头配置：`InterviewSetup.vue` 里那五条内置 + 后端返回覆盖，
+ * 面板与页面都读同一份，所以缺一个键就会画成 undefined。
+ * @typedef {Object} InterviewTypeConfig
+ * @property {string} label
+ * @property {string} persona
+ * @property {string} description
+ * @property {string[]} focus
+ * @property {string[]} [tags]
+ * @property {boolean} [is_custom]
+ */
+
 export function speechStatusText({ supported, listening }) {
   if (!supported) {
     return '当前浏览器不支持语音输入，建议使用最新版 Chrome 或 Edge。'
@@ -101,7 +130,6 @@ export function inputPlaceholderOf({ status, roundRemaining }) {
 export function answeredCountOf(messages) {
   return messages.filter((msg) => msg.type === 'evaluation').length
 }
-
 export function timeoutCountOf(messages) {
   return messages.filter((msg) => msg.type === 'system' && msg.content.includes('超时')).length
 }

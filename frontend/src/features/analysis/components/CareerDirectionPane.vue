@@ -81,7 +81,12 @@ import { scoreToneFillClass } from '@/utils/scoreTone'
    这里不写那个 hex 本身：棘轮的 scriptColorLiterals 数 <script> 块里的字面量，分不清注释里的散文。 */
 defineProps({
   loading: { type: Boolean, default: false },
-  paths: { type: Array, default: () => [] },
+  paths: {
+    type: /** @type {import('vue').PropType<import('../lib/analysisModel').CareerPath[]>} */ (
+      Array
+    ),
+    default: () => [],
+  },
   summary: { type: String, default: '' },
 })
 </script>

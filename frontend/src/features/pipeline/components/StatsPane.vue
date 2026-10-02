@@ -19,10 +19,20 @@ import {
    由页面统一挡住面板根节点，所以两块各自的 `v-if` 里少掉这一项）。规则仍然只在
    `lib/pipelineBoard.js` 里有一份，这里是把 props 递进去的那只手——同 D52 的口径。 */
 const props = defineProps({
-  counts: { type: Object, required: true },
+  counts: {
+    type: /** @type {import('vue').PropType<import('../lib/pipelineBoard').StageCounts>} */ (
+      Object
+    ),
+    required: true,
+  },
   totalCards: { type: Number, required: true },
   avgResponseDays: { type: [String, Number], required: true },
-  versionPerformance: { type: Array, default: () => [] },
+  versionPerformance: {
+    type: /** @type {import('vue').PropType<import('../lib/pipelineBoard').VersionPerformance[]>} */ (
+      Array
+    ),
+    default: () => [],
+  },
 })
 
 const funnelData = computed(() => funnelRows(props.counts))

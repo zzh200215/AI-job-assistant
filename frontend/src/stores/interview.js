@@ -14,6 +14,7 @@ const ROUND_SECONDS = 30
 
 export const useInterviewStore = defineStore('interview', () => {
   const session = ref(null)
+  /** @type {import('vue').Ref<import('@/features/interview/lib/interviewRoomModel').InterviewMessage[]>} */
   const messages = ref([])
   const currentRound = ref(0)
   const totalQuestions = ref(0)

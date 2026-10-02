@@ -20,7 +20,10 @@ export function useAnswerDraft({ getStatus }) {
 
   function getSpeechRecognitionCtor() {
     if (typeof window === 'undefined') return null
-    return window.SpeechRecognition || window.webkitSpeechRecognition || null
+    // 这两个构造器名不在 TS 的 DOM lib 里（只有 webkit 前缀那条在部分版本里有），
+    // 运行时探测本来就要两个都试，所以这里按"查表"读，而不是给 window 编一个假的全局声明。
+    const w = /** @type {Record<string, any>} */ (window)
+    return w.SpeechRecognition || w.webkitSpeechRecognition || null
   }
 
   function getAnswerTextarea() {

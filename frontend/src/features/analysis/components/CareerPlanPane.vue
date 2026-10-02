@@ -333,7 +333,12 @@ import { complexityType, milestoneIcon } from '@/features/analysis/lib/analysisM
    它们只是 markup 里的钩子，所以既不在复制范围里，也不在页面样式里。 */
 defineProps({
   careerData: { type: Object, default: null },
-  visualPhases: { type: Array, default: () => [] },
+  visualPhases: {
+    type: /** @type {import('vue').PropType<import('../lib/analysisModel').RoadmapPhase[]>} */ (
+      Array
+    ),
+    default: () => [],
+  },
   hasStructuredSkillGaps: { type: Boolean, default: false },
 })
 </script>

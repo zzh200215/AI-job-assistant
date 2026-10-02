@@ -22,7 +22,12 @@ import {
      · `:disabled="writeBusy"` 那两个绑定吃页面的锁（D59）——批量三颗与行内下拉共用一把。
    跟进那颗和看板一样吃入参 `now`：页面在模板里 `:now="now()"`，每次渲染现取，与搬之前同时机。 */
 defineProps({
-  rows: { type: Array, required: true },
+  rows: {
+    type: /** @type {import('vue').PropType<import('../lib/pipelineBoard').PipelineCard[]>} */ (
+      Array
+    ),
+    required: true,
+  },
   selectedCount: { type: Number, required: true },
   writeBusy: { type: Boolean, required: true },
   now: { type: Number, required: true },

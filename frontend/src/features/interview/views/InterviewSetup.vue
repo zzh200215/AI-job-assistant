@@ -354,6 +354,7 @@ const defaultTypeConfigs = {
 
 // T3-2：题型配置从后端拉取（租户自定义优先），失败回落内置静态配置
 const typeOptions = ref(defaultTypeOptions)
+/** @type {import('vue').Ref<Record<string, import('../lib/interviewRoomModel').InterviewTypeConfig>>} */
 const typeConfigs = ref(defaultTypeConfigs)
 
 async function loadTypeConfigs() {
@@ -361,6 +362,7 @@ async function loadTypeConfigs() {
     const data = await getInterviewConfigTypes()
     if (!data?.items?.length) return
     const options = []
+    /** @type {Record<string, import('../lib/interviewRoomModel').InterviewTypeConfig>} */
     const configs = {}
     for (const item of data.items) {
       const t = item.type

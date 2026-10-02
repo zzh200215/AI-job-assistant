@@ -85,7 +85,12 @@ import { interviewScoreToneClass } from '@/utils/scoreTone'
 import * as roomModel from '@/features/interview/lib/interviewRoomModel'
 
 const props = defineProps({
-  messages: { type: Array, default: () => [] },
+  messages: {
+    type: /** @type {import('vue').PropType<import('../lib/interviewRoomModel').InterviewMessage[]>} */ (
+      Array
+    ),
+    default: () => [],
+  },
   status: { type: String, default: 'idle' },
 })
 
