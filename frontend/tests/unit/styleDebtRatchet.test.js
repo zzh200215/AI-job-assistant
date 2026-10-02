@@ -157,7 +157,8 @@ const BUDGET = {
      口径是 **token**（`键: '颜色'`），不是整行。按行数吃过两次亏：
      `{ a: 'success', b: 'danger' }` 写在一行只算 1，被 prettier 折开又变 2，
      所以同一份代码的计数会随换行漂。2026-09-23 一次性格式化把它戳穿：按行口径只看见 52 条，
-     换成 token 口径是 99 条，其中 47 条（admin/Tenants 9、JobTargets 4、Privacy 3…）从来没有
+     换成 token 口径是 99 条（D70 复算是 **98**：D58 把看板那两处卡片派生合并成一处实现之后
+     就没回到 99；本文件的"预算比现实松就失败"全绿，所以 98 是实数），其中 47 条（admin/Tenants 9、JobTargets 4、Privacy 3…）从来没有
      进入过任何预算——就是本文件上面那句"预算看不见"第四次复发。
      已知噪声（不要把它当精确值）：99 条里 17 条是 `ElMessageBox.confirm(..., { type: 'warning' })`
      的对话框图标色。它和 PromptTrace 的 `RESPONSE_SOURCES`（真色表，键也叫 `type`）在 token 层

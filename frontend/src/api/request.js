@@ -15,7 +15,7 @@ const request = axios.create({
 request.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token')
-    config.headers = config.headers || {}
+    config.headers = config.headers || /** @type {import('axios').AxiosRequestHeaders} */ ({})
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -42,6 +42,7 @@ request.interceptors.response.use(
       if (resp.config?.notifyError !== false && method !== 'get') {
         ElMessage.error(msg)
       }
+      /** @type {import('./http-client').ApiError} */
       const error = new Error(body.message || 'error')
       error.requestId = requestId
       error.payload = body
@@ -74,6 +75,7 @@ request.interceptors.response.use(
       if (shouldNotify) {
         ElMessage.error(formatApiErrorMessage(msg, requestId, '请求参数错误'))
       }
+      /** @type {import('./http-client').ApiError} */
       const error = new Error(msg)
       error.requestId = requestId
       error.payload = body
@@ -96,4 +98,7 @@ request.interceptors.response.use(
   }
 )
 
-export default request
+/** @type {import('./http-client').HttpClient} */
+const client = request
+
+export default client

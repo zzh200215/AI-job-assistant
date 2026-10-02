@@ -1,4 +1,11 @@
+/**
+ * 这条链自己挂在 Error 上的三个字段；`code` 是 'task_cancelled' / 'task_failed' 这类
+ * 调用方拿来分流的字符串，与 ApiError 那四个字段是两套约定。
+ * @typedef {Error & { code?: string, taskStatus?: string | null, task?: any }} PollingError
+ */
+
 function createPollingError(message, code, taskData = null) {
+  /** @type {PollingError} */
   const error = new Error(message)
   error.code = code
   error.taskStatus = taskData?.status || null
