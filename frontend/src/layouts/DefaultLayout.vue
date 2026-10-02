@@ -652,9 +652,6 @@ onMounted(async () => {
 .dot-blue {
   background: #22b8e8;
 }
-.dot-violet {
-  background: var(--app-violet);
-}
 
 /* User chip */
 .user-chip {

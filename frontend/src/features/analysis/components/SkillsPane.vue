@@ -99,7 +99,4 @@ h5 {
 .mt {
   margin-top: 16px;
 }
-.mb {
-  margin-bottom: 8px;
-}
 </style>

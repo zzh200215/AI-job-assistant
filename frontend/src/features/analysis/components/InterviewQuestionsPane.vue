@@ -72,11 +72,4 @@ h4 {
 h5 {
   margin: 0 0 8px;
 }
-
-.mt {
-  margin-top: 16px;
-}
-.mb {
-  margin-bottom: 8px;
-}
 </style>

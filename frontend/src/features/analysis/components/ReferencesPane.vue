@@ -178,31 +178,6 @@ const openDocs = computed({
   word-break: break-all;
 }
 
-.rag-confidence-metrics {
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.rag-metric {
-  padding: 10px;
-  border-radius: var(--app-radius-xs, 8px);
-  background: var(--app-surface-strong);
-  border: 1px solid var(--el-border-color);
-}
-
-.rag-metric span {
-  display: block;
-  color: var(--app-muted);
-  font-size: 11px;
-  margin-bottom: 4px;
-}
-
-.rag-metric strong {
-  font-size: 16px;
-}
-
 .rag-breakdown {
   margin-top: 12px;
   display: grid;
