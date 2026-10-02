@@ -467,7 +467,7 @@ agent.SummaryAgent           real  tokens=3215
 - **棘轮守卫** `tests/unit/styleDebtRatchet.test.js`：逐文件写死色配额 + 通配选择数/`!important`/`.page-shell` 重复声明/API 越权的天花板。预算**只能下调**，还完债不降会失败并提示新值
 - 61 处 `background:#fff` → `var(--app-surface-strong)`，30 个文件。用逐路由 `getComputedStyle` diff 验证：4/5 路由逐字节零差异，`/jobs/search` 恰好 10 处由白块 bug 修正为深色
 - `panels.css` token 化并删除零引用死代码
-- ESLint 边界规则：禁裸 `axios`；views 必须走 `src/api/*`（7 个现存越权文件列入豁免清单）
+- ESLint 边界规则：禁裸 `axios`；views 必须走 `src/api/*`（**豁免清单已在 D69 整段删除**——那 7 个文件的 19 处裸调用全部出账，这条从"预算"变成了"错误"）
 - **通配网实测为承重结构**：5 条路由上兜住 157 个元素实例 / 约 60 个类名，故未在本阶段删除，转为棘轮跟踪
 
 ### 待做
@@ -2187,6 +2187,25 @@ D67 的账上写着"没做完的部分"：55 条"0 命中但类名还在页面�
 
 **门禁**：`test:unit` **429 passed / 70 files**（用例数一条没动），eslint 0 error（既有那 1 条 warning），prettier clean，build ok，改动文件 CRLF **0**。探针与所有临时脚本用完即删，工作区只剩这五个产品文件与两份测试文件。
 
+#### 已交付：D69 视图不再直接摸 axios 实例——顺带量到"这 0 不是全仓的 0"
+
+§7 阶段 0 那条 ESLint 边界规则一直挂着**7 个文件的豁免清单**，棘轮 `viewsBypassingApiLayer` 也就一直按 7 收着。这一条把清单整段删掉。
+**19 处调用点、17 条端点**（`Privacy` 5、`Profile` 3、`TaskCenter` 4、`admin/Overview` 4、`admin/Users` 1、`admin/Orders` 1、`Subscription` 1）。两个数字之间差的是两条**已经写了两遍**的端点：`/auth/export-data` 在 `Privacy` 与 `Profile` 里各写了一次**同一份** `{ responseType: 'blob' }`（两边函数体也逐字相同，那属于另一维、没动），`/subscription/admin/orders` 在 `admin/Overview` 与 `admin/Orders` 各写一次。
+
+**其中 4 处不是"搬进 api 层"，是"停止绕过已有的 api 层"**：`src/api/agent.js` 早就有 `getAgentTasks` / `getAgentTaskSummary` / `retryAgentTask` / `cancelAgentTask`，URL 与参数一字不差，而 `TaskCenter.vue` 一直自己写一份。所以这条豁免清单保护的不是"还没来得及建函数"的页，是**同一条端点在仓库里有两个真相**的页。新建的只有三个模块：`account.js`（`/auth/*` 自助，8 处）、`analytics.js`（3 处）、`admin.js`（1 处），另给 `subscription.js` 补 2 条。
+
+**`notifyError: false` 在 GET 上不是装饰**，这是搬之前要先量的那条：`request.js:42` 与 `:56` 两个通知分支都写着 `&& method !== 'get'`，所以 GET 的失败本来就不弹——但 `:62` 那条 401 分支**没有**这个动词条件，于是这个标记在 GET 上恰好只剩一处承重：**登录过期时不弹那句 toast**。四处（`analytics` 三条 + `admin/users` + `admin/orders`）逐字保留，并且因为它是调用方的策略而不是端点的属性，api 函数收**第二个入参**透传，没写死在层里。
+
+**守卫**：`tests/unit/apiLayerMove.test.js` 6 条，mock 的是 `@/api/request` 本身、按 axios 的**槽位**记（`get/delete` 第二参是 config，`post` 第二参是 body、第三参才是 config）。每条用例断言的是**整张请求表**而不是逐条挑，所以它同时钉住"这个函数只发这一条、不多发一条"。**五次变异，每次只红自己那一条**（都是 `1 failed | 5 passed`）：M1 把 `/admin/analytics/revenue` 写成 `/analytics/revenue`（后端确实挂在独立 `admin_router` 上，`analytics.py:72`，前缀与另两条不同，这是最容易抄错的一处）；M2 去掉 `responseType: 'blob'`；M3/M5 让 `analytics.js` / `subscription.js` 不再透传第二个入参；M4 让 `getAgentTasks` 丢掉 params。**反向证据**（把守卫种回去）：往 `Privacy.vue` 塞回一行 `import request from '@/api/request'`，eslint 报 `no-restricted-imports` 那句、棘轮 `does not let views bypass the api layer` 同时红，删掉两边归绿。豁免清单删空之后，这条边界**是错误而不是预算**。
+
+**量到但没修的一条：这个 0 只覆盖视图。** 这一维复用 `viewSources`，而 `viewSources` 为了让色值/色表/日期那几把尺子不去数法定解药，把 `src/stores` 整个豁免了——于是它同时也看不见 `src/stores` 里的裸调用：**5 处**（`stores/auth.js` 的 `/auth/login`、`/auth/register`、`/auth/reset-password`、`/auth/me`，加 `stores/tenant.js:78` 的 `/tenant/brand`）。没顺手修有两个理由：① 这些 store 用的**就是同一个共享实例**，拦截器、`Authorization` 头、错误 toast 三样本来就没有第二套，所以这条豁免不会漏掉边界规则真正要防的东西，剩下的只是"端点写在哪个文件里"；② 真要收，得先拍凭据端点住在哪——`account.js` 的契约是"读/删自己的数据"，把登录/注册塞进去会把它变成"什么都装"，单开一个 session 模块又是第四种切法。升为 §10.22 由你拍。棘轮那个 0 上方就地写明了这件事，别把它读成"全仓只有 api 层出网"。
+
+**代价实测（A/B 两次 build，A 侧是把 HEAD 版写进工作树、build、再 cp 还原）**：七个视图的 js 分块 **52.79 → 52.67 kB**，加上新出的共享 `account` 分块 **0.39 kB**，净 **+0.27 kB / gzip +0.06**；css 一条没动。方向不一致这件事有解释：**只有一个消费者的新模块会被就地内联，包一层比原来那条字面量贵**——`Overview` +0.09、`Users` +0.02（`analytics.js` / `admin.js` 各自只有它们一个消费者）；**共享的那个把自己付给了自己**——`account.js` 被两个视图用，抽成独立分块之后 `Privacy` −0.09、`Profile` −0.05、`TaskCenter` −0.05（走已有的 `agent`）、`Subscription` −0.04。
+
+**我自己造的一次事故，被 D33 那条守卫逮住**：A/B 的还原循环里有一段写坏的 `cp` 目标（子 shell 展开成空串），把七个视图的副本落成了 `src/Privacy.vue` 这类**根外 .vue**。当场 `test:unit` 从 435 掉到 434 绿，红的是 `scans every .vue under src except the listed shell and ui components` 那条点名守卫——它原本是为"搬完忘改根会让尺子安静地少测文件"加的，这次是第二次证明会咬。七个副本删掉即全绿。
+
+**门禁**：`test:unit` **70 → 71 files / 429 → 435 passed**（新增的 6 条全在新文件里，既有 429 条一条没动、一条没改）；eslint **0 error**、1 warning 仍是 `admin/Overview` 那条 `paidOrders`（已核实在 HEAD 就在）；`prettier --check` 全树 clean；build ok；改动文件 CRLF **0**；临时脚本与备份目录用完即删。**没做真浏览器复核**：这一刀只改 import 行与调用表达式，没碰模板与样式，且 `privacySummaryRace` / `taskCenterRace` 两条既有竞态测试仍按 URL 认路并全绿——它们能过就说明搬完之后打的还是那两条端点。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
@@ -2869,6 +2888,8 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 20. **AI 给出的分数读不懂时，候选人面前应该显示什么**。D53 把 `safeScore` 的 NaN 夹成 0，是因为原来的行为更糟（"NaN 分提升空间"、`width: NaN%`），但**夹成 0 本身是一种说谎**：它把"这条数据我没读懂"讲成"你这项能力是 0"。两边都有代价，所以留给你拍。可达性已确认——`career_planning` 是 `chat_json` 的原始返回，分数字段没有任何 schema 约束（`backend/app/agents/career_agent.py:55`）。三条路：① 保持现在的"读不懂就当 0"，只在内部日志里记一条（与 §5 那条"降级对候选人静默"一致）；② 该维度标成"暂无数据"并**不参与**雷达与提升空间的计算（图形会少一个角，需要定形状）；③ 在后端把分数 coerce/拒绝，让这类值根本到不了前端（改的是 AI 输出契约，牵连评测门）。我按"搬家不夹带口径决定"的规矩做了最小的一步：只把 NaN 挡住，没有改任何文案与图形形状。
 
 21. **"标记拒绝"的提示文案统一成哪一句**。同一动作在看板视图说"已标记为拒绝"、在列表视图说"已标记拒绝"（D58 合并实现时保留了两句，因为改措辞是候选人可见的）。两句说的都是对的事实，选哪个都行，但**只能选一个**——否则这两处以后还会继续漂。要拍的只是：统一成"已标记拒绝"（更短）还是"已标记为拒绝"（更像完成态），以及要不要顺带把这一页其他动作的措辞一起过一遍。
+
+22. **`src/stores` 那 5 处裸 `request` 要不要一起收进 api 层**（D69 量到的，也是 D69 没动的）。`viewsBypassingApiLayer` 现在是 **0**，但这个 0 只覆盖视图：这一维复用 `viewSources`，而它为了让色值/色表/日期那几把尺子不去数法定解药，把 `src/stores` 整根豁免了，于是这 5 处顺手也被豁免——`stores/auth.js` 的 `/auth/login`、`/auth/register`、`/auth/reset-password`、`/auth/me`，加 `stores/tenant.js:78` 的 `/tenant/brand`。**为什么这条不是缺陷**：这些 store 用的就是同一个共享实例，拦截器、`Authorization` 头、错误 toast 三样并没有第二套，所以边界规则真正要防的东西一件没漏；剩下的只是"端点写在哪个文件里"。**为什么没顺手修**：真要收就得先拍凭据端点住在哪。**先记下量的结果，因为我原本以为这里有一条统一规则可违反——没有**：D69 之前 `src/api/` 是 18 个模块，多数按后端 router 文件起名（`salary.js`←`salary_insight.py`、`targets.js`←`job_target.py`、`promptTrace.js`←`prompt_trace.py`），但 `jobs.js` 一条对着 `job_search` / `job_recommend` / `job_pipeline` / `job_journal` 四条 router，而且里面还打着 `/analysis/` 与 `/career-path/` 两个不属于它的前缀——也就是"按消费域聚合"这一族本来就在。**所以 D69 新起的 `account.js`（自助那半）与 `admin.js`（只装 `/auth/admin/users` 一条）没有发明第二种切法，只是加了两个名字。**于是 stores 那 4 条凭据端点的真问题是谁跟 `account.js` 合：并成一个 `auth.js` 与后端 `auth.py` 对齐（那 `account.js` 这个名字就白起了一次），或再开第三个名字。三条路：① 不动，把 0 的含义在棘轮注释里写清楚（现状就是这么做的）；② 收拢成 `api/auth.js` 一个模块（凭据 + 自助 + admin 用户列表）+ `/tenant/brand` 归已有 `tenant.js`，并把这一维换成自带文件集（只豁免 `src/api` 与 `src/plugins`），这样"0"才真的说得出"只有 api 层出网"；③ 只把守卫拓宽、代码不动，于是棘轮立刻红、要按 5 重新点名。建议 ② 或 ①；**我一条都没动**。
 
 ## 11. 附录：本方案未采纳的一条建议
 
