@@ -149,13 +149,22 @@ import { recommendTagType, signalClass } from '@/features/jobs/lib/jobModel'
    两个规则留在链上、以函数 prop 传进来的原因与搜索面板一样：`isShortlisted` 按 uid 或 id 匹配，
    抄进面板就是两份真相。 */
 const props = defineProps({
-  jobs: { type: Array, required: true },
+  jobs: {
+    type: /** @type {import('vue').PropType<import('../lib/jobModel').Job[]>} */ (Array),
+    required: true,
+  },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
-  filters: { type: Object, required: true },
+  filters: {
+    type: /** @type {import('vue').PropType<Record<string, string>>} */ (Object),
+    required: true,
+  },
   resumeName: { type: String, default: '' },
   resumeSelected: { type: [Number, String, Boolean], default: null },
-  comparedUids: { type: Array, default: () => [] },
+  comparedUids: {
+    type: /** @type {import('vue').PropType<string[]>} */ (Array),
+    default: () => [],
+  },
   isShortlisted: { type: Function, required: true },
   pipelineStatusText: { type: Function, required: true },
 })

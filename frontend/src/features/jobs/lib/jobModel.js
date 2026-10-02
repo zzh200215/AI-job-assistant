@@ -6,6 +6,89 @@
    **加分规则一个字没动**——分数与搬之前逐条相同，变的只是"谁去读那个字段"可见了。 */
 import { compactDateTime } from '@/utils/format/date'
 
+/* 这一族形状是这个域的单一真相：卡片字段由 `normalizeJob` 与 `useJobRecommend` 两个生产者给出，
+   面板组件的 props 从这里取，不再各写一份。带 `?` 的那些只有推荐那一条会给（`matchScore`、
+   `recommendationType`、`skillGap`…），所以搜索/仓库的卡片读它们是 undefined——这不是笔误，
+   是两条生产者本来就有的差集，写进类型比在模板里各自兜住要便宜。 */
+
+/**
+ * @typedef {Object} Job
+ * @property {string} uid
+ * @property {number | null} id
+ * @property {string} title
+ * @property {string} company
+ * @property {string} location
+ * @property {string} salary
+ * @property {string} experience
+ * @property {string} education
+ * @property {string} industry
+ * @property {string[]} skillTags
+ * @property {string} summary
+ * @property {string} rawText
+ * @property {string} source
+ * @property {string} sourceUrl
+ * @property {boolean} local
+ * @property {number} priorityScore
+ * @property {string} priorityLabel
+ * @property {string} priorityReason
+ * @property {string[]} [skillOverlap]
+ * @property {string[]} [skillGap]
+ * @property {number} [matchScore]
+ * @property {string} [recommendationType]
+ * @property {string} [matchReason]
+ * @property {string} [compareText]
+ * @property {boolean} [salaryMatch]
+ * @property {boolean} [locationMatch]
+ * @property {boolean} [experienceMatch]
+ */
+
+/**
+ * @typedef {Object} PipelineStage
+ * @property {string} key
+ * @property {string} label
+ * @property {string} hint
+ * @property {string} description
+ * @property {string} emptyText
+ */
+
+/**
+ * @typedef {Object} PipelineHistory
+ * @property {string} stage
+ * @property {string} at
+ */
+
+/**
+ * @typedef {Object} PipelineEntry
+ * @property {string} entryId
+ * @property {string} uid
+ * @property {number | null} jobId
+ * @property {string} title
+ * @property {string} company
+ * @property {string} location
+ * @property {string} salary
+ * @property {string} summary
+ * @property {string} rawText
+ * @property {string} source
+ * @property {string} sourceUrl
+ * @property {string} experience
+ * @property {string} education
+ * @property {string} industry
+ * @property {string[]} skillTags
+ * @property {boolean} local
+ * @property {number} priorityScore
+ * @property {string} priorityLabel
+ * @property {string} stage
+ * @property {string} note
+ * @property {string} nextAction
+ * @property {string} followUpAt
+ * @property {number | null} resumeId
+ * @property {string} resumeName
+ * @property {string} createdAt
+ * @property {string} updatedAt
+ * @property {PipelineHistory[]} stageHistory
+ */
+
+/** @type {PipelineStage[]} */
 export const pipelineStages = [
   {
     key: 'todo',
@@ -133,6 +216,10 @@ export function pipelineHistoryText(history) {
     .join(' / ')
 }
 
+/**
+ * @param {any} item
+ * @returns {PipelineEntry}
+ */
 export function normalizePipelineEntry(item) {
   const stage = pipelineStageMap[item?.stage] ? item.stage : 'todo'
   const createdAt =
@@ -182,6 +269,11 @@ export function normalizePipelineEntry(item) {
   }
 }
 
+/**
+ * 投递记录倒回成卡片形状，让"看流程"与"看岗位"共用同一个消费者。
+ * @param {PipelineEntry} entry
+ * @returns {Job}
+ */
 export function pipelineEntryToJob(entry) {
   return {
     uid: entry.uid,
@@ -255,7 +347,13 @@ export function calculateApplicationPriority(job, city) {
   }
 }
 
-/** 后端 JD（搜索 / 仓库 / 详情三种形状）归一成页面上的卡片。`city` 透传给优先级算式。 */
+/**
+ * 后端 JD（搜索 / 仓库 / 详情三种形状）归一成页面上的卡片。`city` 透传给优先级算式。
+ * @param {any} item
+ * @param {string} seed
+ * @param {string} city
+ * @returns {Job}
+ */
 export function normalizeJob(item, seed, city) {
   const salary = item.salary || item.salary_range || '薪资面议'
   const skillTags = uniqueList(item.skill_tags || item.skillTags || [])

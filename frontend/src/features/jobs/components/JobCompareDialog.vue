@@ -5,7 +5,10 @@ import { priorityTagType } from '@/utils/statusTone'
    `statusText` 是一个函数 prop——投递阶段标签只有父页面那份 pipeline 状态知道，
    把它复制成 job 上的字段会造出一份会过期的第二真相，所以让调用方把唯一来源传进来。 */
 const props = defineProps({
-  jobs: { type: Array, default: () => [] },
+  jobs: {
+    type: /** @type {import('vue').PropType<import('../lib/jobModel').Job[]>} */ (Array),
+    default: () => [],
+  },
   statusText: { type: Function, required: true },
 })
 const emit = defineEmits(['detail', 'pipeline', 'remove', 'analyze'])

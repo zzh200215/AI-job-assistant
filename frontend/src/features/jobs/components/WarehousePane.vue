@@ -97,11 +97,20 @@ import { sourceText } from '@/features/jobs/lib/jobModel'
    「加入流程」按钮的文案是流程链的事实，不归这里算，所以 `pipelineStatusText` 作为函数 prop 传进来——
    与 D36 的 `JobCompareDialog` 同一个做法。 */
 const props = defineProps({
-  jobs: { type: Array, required: true },
+  jobs: {
+    type: /** @type {import('vue').PropType<import('../lib/jobModel').Job[]>} */ (Array),
+    required: true,
+  },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
-  filters: { type: Object, required: true },
-  comparedUids: { type: Array, default: () => [] },
+  filters: {
+    type: /** @type {import('vue').PropType<Record<string, string>>} */ (Object),
+    required: true,
+  },
+  comparedUids: {
+    type: /** @type {import('vue').PropType<string[]>} */ (Array),
+    default: () => [],
+  },
   pipelineStatusText: { type: Function, required: true },
 })
 

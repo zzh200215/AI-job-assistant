@@ -95,7 +95,10 @@ import { sourceText } from '@/features/jobs/lib/jobModel'
    岗位造的 uid 前缀不同），把这两条规则抄进面板就会造成两份真相，所以函数传进来。
    对比那条只需要 uid，所以传的是 `comparedUids` 数组。 */
 defineProps({
-  jobs: { type: Array, required: true },
+  jobs: {
+    type: /** @type {import('vue').PropType<import('../lib/jobModel').Job[]>} */ (Array),
+    required: true,
+  },
   searching: { type: Boolean, default: false },
   hasSearched: { type: Boolean, default: false },
   searchHint: { type: String, default: '' },
@@ -108,7 +111,10 @@ defineProps({
   bannerDesc: { type: String, default: '' },
   bannerClass: { type: String, default: '' },
   compareCount: { type: Number, default: 0 },
-  comparedUids: { type: Array, default: () => [] },
+  comparedUids: {
+    type: /** @type {import('vue').PropType<string[]>} */ (Array),
+    default: () => [],
+  },
   isShortlisted: { type: Function, required: true },
   pipelineStatusText: { type: Function, required: true },
 })

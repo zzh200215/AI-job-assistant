@@ -173,11 +173,17 @@ import {
     单向数据流。要不要改成 emit 回写，是行为改动，不混在拆页里做。
  2) 筛选（关键词与阶段）走 update:filters 抛整份新对象，与仓库面板同一套做法。 */
 const props = defineProps({
-  entries: { type: Array, required: true },
+  entries: {
+    type: /** @type {import('vue').PropType<import('../lib/jobModel').PipelineEntry[]>} */ (Array),
+    required: true,
+  },
   activeCount: { type: Number, default: 0 },
   stats: { type: Object, required: true },
   byStage: { type: Object, required: true },
-  visibleStages: { type: Array, required: true },
+  visibleStages: {
+    type: /** @type {import('vue').PropType<import('../lib/jobModel').PipelineStage[]>} */ (Array),
+    required: true,
+  },
   filters: { type: Object, required: true },
   error: { type: String, default: '' },
 })

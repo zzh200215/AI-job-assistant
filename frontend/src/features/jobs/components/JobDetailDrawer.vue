@@ -6,7 +6,10 @@ import { priorityTagType } from '@/utils/statusTone'
    与对比弹窗不同，这里一次只看一个岗位，所以"是否在清单里 / 在不在对比里 / 走到哪个阶段"
    都由父页面算成普通值传进来，而不是传函数——保持单一真相，又不需要函数 prop。 */
 defineProps({
-  job: { type: Object, default: null },
+  job: {
+    type: /** @type {import('vue').PropType<import('../lib/jobModel').Job | null>} */ (Object),
+    default: null,
+  },
   loading: { type: Boolean, default: false },
   statusText: { type: String, default: '' },
   shortlisted: { type: Boolean, default: false },
