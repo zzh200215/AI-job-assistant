@@ -2288,6 +2288,26 @@ D72 那一刀在 `jobs` 域的形状，这轮推到剩下三个域。**154 → 7
 
 **剩下的 78 条长什么样**（下一轮的地图）：`admin` 那一族 **42** 条（`SystemStatus` 29 + `PromptTrace` 6 + `Overview` 5 + `Tenants` 2）——§2 把企业侧冻结了，这 42 条按现状就是"知道且不动"；`Home.vue` 10、`OfferCompare.vue` 6、`shell`/`resume`/`knowledge`/`auth`/`router` 共 10 条零散，加 §10.23 那 15 条等拍的。
 
+#### 已交付：D74 非冻结那 21 条见底，78 → 65——四条是类型/读码翻出来的真缺陷，其中我只修了一条
+
+`Home` 10、`OfferCompare` 6 加 5 处零散，是 D73 之后不在"企业侧冻结"和"等拍"里的那一批。逐条清完，**棘轮自己点名 65**。这一刀翻出四条东西，其中**只有一条我动了行为**，其余三条挂成报告——理由是它们改的都是候选人看到的数字。
+
+**① 我修的那一条（唯一的行为变化）**：`api/salary.js:4` 的 `getSalaryOverview(params = {})` 只有一个入参，而 `useSalaryMarket.js:32` 传的是 `getSalaryOverview({ position }, { notifyError: false })`——**第二个参数被丢掉**。D69 那批搬进 api 层的函数都特意透传第二个入参（并把理由写在注释里），salary 这三条不在那批里，所以那个标记一直没生效。影响按 D69 已经量过的口径只有一处：GET 的失败本来就不弹 toast，`notifyError` 在 GET 上唯一承重的是 **401 那句"登录已过期"**。所以修法（加 `config = {}` 并 `{ params, ...config }` 透传）恢复的是调用方已经写明的意图，代价是**少弹一次本就不该弹的 toast**——这条变化我写在这儿，不当它是惰性的。
+
+**② 删掉的一个死参数**：`stores/auth.js:80` 的 `register(username, email, password)` 只有三个形参，而 `Register.vue:216-221` 传了第四个 `form.value.role`，**静默丢弃**。往两头查：模板里没有任何角色选择器（`grep form.role` = 0 处），后端 `RegisterReq`（`schemas/auth.py:63-66`）**根本没有 role 字段**。所以那个 `role: 'candidate'` 常量存在的唯一意义就是喂一个被丢掉的位置。删掉实参与常量，**零行为变化**（注册请求体一直只有 username/email/password）。
+
+**③ 挂成 §10.25 的那一条，量级最大**：`Profile.vue:494-499` 读 `total_sessions` / `sessions` / `resume_count` / `best_score` / `max_score` / `days_active` / `created_at`，而 `GET /dashboard/overview` **一个都不返回**（`backend/app/api/dashboard.py:134-158` 只有 `user` / `summary` / `weekly_new` / `monthly_new` / `funnel` / `stage_counts` / `trend` / `recent_activities`）。落到屏幕上：简历数那一格永远是 **0**（真值在 `summary.total_resumes` 里没人读）、那句"已使用 N 天 · M 次模拟面试"永远是 **1 天 / 0 次**、`:402` 与 `:458` 两个成就（`resume_count >= 1`、`best_score >= 80`）**永不解锁**。**这不是我改坏的**：`getDashboardOverview` 之前返回 `Promise<any>`，这些读法在类型层一直合法；是"给载荷写一份只含后端真的返回的键"的形状之后它们才现形。所以那 7 条错**是报告不是回归**，我按规矩没动代码。**逐键的生产者我查过**（写在 §10.25 里）：`total_sessions` 其实有人产，只是在 `interview_rest.py:813` 那个会话统计端点上——所以那一格是取错接口；`best_score` / `max_score` / `days_active` 后端 grep 为 0，连数据源都没有。
+
+**④ 留了一条错没修**：`router/index.js:319`——vue-router 的类型记录分成"带 `component`"与"带 `redirect`"两条臂，不许同时出现，而根路由 `/` 正是 `component: DefaultLayout + redirect: '/home' + children`（运行时成立：children 仍渲染在布局里）。两条出路我都没在没跑浏览器之前动：**先把元素级 `@type` 注解写上去，实测无效**（TS 不认数组元素上的 `@type`，错照旧），而它一旦留在文件里就是一句"这里做了断言"的假注释，所以随本刀删掉。真选项是 ① 改成规范写法——父记录去掉 redirect，加一条 `{ path: '', redirect: '/home' }` 子记录（改的是路由解析形状）；② 在 `createRouter({ routes: ... })` 处断言（代价是**一起失去对那 43 条记录的形状检查**，而本项目的 `routeContracts` 守卫是运行时的，补不上这一层）。留 1 条在账上，等下一刀连着浏览器复核一起做。
+
+**其余 12 条是标注**：`Home.vue:339` 的 `overview` ref（`DashboardOverview` = 指标交叉 + 顶层键，因为两页都写 `data.summary || data` 那句两代回退）、`ResumeCompare.vue:323`（初值只有四个键、装载后赋七个 → `ResumeVersion` 记在 `api/resume.js`）、`KnowledgeBase.vue:700` 的 `daily_trend`（后端 `knowledge.py:373` 确实给，初值漏了，装载靠 `|| []` 兜）、`OfferCompare` 三处 `new Date(a) - new Date(b)` → `.getTime() - Date.now()`（TS 的算术约束，运行时同值）。
+
+**一次我自己的类型写错，被第二跑纠正**：`DashboardOverview` 第一版把 `summary` 写成 `Record<string, any>`、顶层没并那批指标键，于是 `Home` 的 9 条从"读不到 `weekly_new`"换成"在 `Record<string, any> | DashboardOverview` 上读不到 `active_applications`"。这恰好证明 `data.summary || data` 那句回退是**真两代形状**，交叉类型才是对的写法——改完 `Home` 清零。
+
+**门禁**（D73 那条教训之后全部按退出码判，不再 `tail` 我瞄过的最后几行）：`npm test` exit 0（棘轮按 65 绿）、`test:unit` exit 0（71 files / 435 passed，一条用例没动）、`eslint .` exit 0、`prettier --check` exit 0、`vite build` exit 0，改动文件 CRLF 0。**没做真浏览器复核**：① 那条 toast、④ 那条路由都没在浏览器里验，所以一个只按调用方意图修、一个干脆没修。
+
+**65 条的构成，也是这条棘轮今天到底在数什么**：`admin` 42（§2 冻结，"知道且不动"）+ `SkillsPane` 15（§10.23 等拍）+ `Profile` 7（§10.25 等拍）+ `router` 1（等一次路由复核）。**非冻结、不等拍的已经见底**——剩下这四个桶没有一个能靠"再标一个 typedef"清掉，它们分别是决定、决定、决定和一次浏览器验证。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
@@ -2977,6 +2997,10 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 23. **`SkillsPane` 那三条列表的两代写法要不要归一**（D73 停手处，15 条类型错挂在账上）。`strengths` / `gaps` / `riskPoints` 的条目**既可能是裸字符串，也可能是带 `item` / `impact` / `evidence` / `action` / `severity` 的对象**，模板 `SkillsPane.vue:27` 那句 `x.item || x` 就是为这件事写的，不是笔误。类型只能写成 `string | RubricPoint` 的联合，而联合要求模板先把分支收窄，收窄之后**"是对象但没有 `item`"那一支会从"打印整个对象"变成"打印空"**——那是候选人可见的变化。三条路：① 不动，那 15 条按 unknown 留着（现状，源文件里写了为什么）；② 面板里加一个归一函数（`typeof x === 'string' ? { label: x } : x`）+ 一条页面级断言（D51 那条教训在这里同样成立：改完不报错、只是少画）；③ 后端把 rubric 输出 coerce 成单一形状，那要动 AI 输出契约，与 §10.20 是同一族决定。我按"搬家与类型不夹带口径"的规矩**一条都没动**。
 
 24. **`InterviewSetup.vue:473` 少一个 `.value`，面试类型标签一直显示原始英文键**（D73 读出来的，不是门抓到的）。`const typeConfigs = ref(defaultTypeConfigs)` 在 :357，而 `function typeLabel(type) { return typeConfigs[type]?.label || type || '未定义' }` 在 :473 ——索引的是 **Ref 对象本身**，永远 `undefined`，于是模板 :248 的 `{{ typeLabel(item.interview_type) }}` 画出来是 `'tech'` / `'hr'` 而不是配置里的 `'技术深挖'` / `'HR / 行为面'`。同一个文件 :386 用的是 `typeConfigs.value[...]`，正确写法就在 40 行之外。**为什么类型门完全无声**：`strict:false` 下 `noImplicitAny` 是关的，用字符串索引一个 Ref 得到 `any`，不成错误。所以这条既是对一个 bug 的记录，也是"78 条清零不等于这类问题有解"的实测反例。修法是一行加 `.value`，但它改变候选人看到的文案（英文键 → 中文标签），按本节惯例由你定。要顺带问一句的是：这一页现在显示英文键，用户有没有已经习惯了——如果有，修它反而是一次可见变化。
+
+25. **`Profile.vue` 那格简历数、那句"已使用 N 天 · M 次模拟面试"和两个成就**（D74 翻出来，7 条类型错就是它的证据）。`loadUserStats()` 打的是 `getDashboardOverview()`，然后读 `data.total_sessions || data.sessions`、`data.resume_count`、`data.best_score || data.max_score`、`data.days_active`、`data.created_at`（`Profile.vue:494-499`）——**这些键 `GET /dashboard/overview` 一个都不返回**（`backend/app/api/dashboard.py:134-158`）。于是：简历数那一格恒为 **0**（同一份响应里真值在 `summary.total_resumes`，没人读它）、那句"已使用 1 天 · 0 次模拟面试"是兜底值不是实测值、`:402` 的"注册第一份简历"与 `:458` 的"拿到 80 分以上"两个成就**永不解锁**。三条路：① 前端改读 `summary.*`（`resume_count` → `summary.total_resumes`；模拟面试次数这一项响应里没有，得从 `stage_counts`/面试接口另取）；② 后端补上那几个键（则前端一个字不改）；③ 把这几格与两个成就从页面上摘掉，因为目前没有数据源支持它们。**我一条都没动**——三条里任何一条都会改变候选人看到的数字与成就状态，按本节惯例由你定。
+
+**逐个键查过生产者，所以这条不是"前端写错了"一句话**：`total_sessions` **有人产**，但不在 Profile 调的那个端点上——`interview_rest.py:813` / `:859` 的会话统计里给的是 `"total_sessions": len(sessions)`，所以那一格是**取错了接口**，不是无中生有；`resume_count` 全仓只出现在配额语境（`resume.py:198` 的 `check_quota(..., "resume_count")` 与 `subscription_service.py:320`），没有任何响应把它作为键返回；`best_score` / `max_score` / `days_active` 三个名字在后端 **grep 为 0**，没有任何响应产出。所以"拿到 80 分以上"那个成就与"已使用 N 天"这句话，是从设计那天起就没有数据源的——这句我是按上面三条 grep 的结果写的，不是推测。
 
 ## 11. 附录：本方案未采纳的一条建议
 

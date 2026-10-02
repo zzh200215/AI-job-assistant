@@ -34,12 +34,6 @@ export const routes = [
     component: () => import('@/features/auth/views/NotFound.vue'),
     meta: { title: '页面不存在', public: true },
   },
-  /**
-   * vue-router 的类型把记录分成"带 component 的单视图/多视图"与"带 redirect 的重定向"两种，
-   * 不许同时出现；而运行时"布局 + 访问 `/` 跳 /home + children 仍渲染在 DefaultLayout 里"是成立的。
-   * 所以只给这一条记录做一次断言，其余 42 条继续被检查。
-   * @type {import('vue-router').RouteRecordRaw}
-   */
   {
     path: '/',
     component: DefaultLayout,
