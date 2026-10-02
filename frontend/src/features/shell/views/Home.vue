@@ -336,6 +336,7 @@ const greeting = computed(() => {
 })
 
 // ---- 数据 ----
+/** @type {import('vue').Ref<import('@/api/dashboard').DashboardOverview>} */
 const overview = ref({})
 const overviewLoaded = ref(false)
 const overviewError = ref(false)

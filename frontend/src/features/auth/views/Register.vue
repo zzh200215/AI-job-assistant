@@ -146,7 +146,6 @@ const formRef = ref()
 const loading = ref(false)
 
 const form = ref({
-  role: 'candidate',
   username: '',
   email: '',
   password: '',
@@ -213,12 +212,7 @@ const handleRegister = async () => {
 
   loading.value = true
   try {
-    await authStore.register(
-      form.value.username,
-      form.value.email,
-      form.value.password,
-      form.value.role
-    )
+    await authStore.register(form.value.username, form.value.email, form.value.password)
     ElMessage.success('注册成功')
     router.replace(authStore.homeRoute)
   } finally {

@@ -320,6 +320,7 @@ const exporting = ref(false)
 const atsLoading = ref(false)
 const recommending = ref(false)
 const errorMsg = ref('')
+/** @type {import('vue').Ref<import('@/api/resume').ResumeVersion>} */
 const originalVersion = ref({
   id: 'original',
   version_type: 'original',

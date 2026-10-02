@@ -707,6 +707,9 @@ const embeddingStats = reactive({
   provider_totals: {},
   model_totals: {},
   last_call_at: null,
+  // 后端确实给这个键（`knowledge.py:373` 的近 7 天序列），初值漏了它，
+  // 于是装载前的 `dailyTrend` 只能靠 `|| []` 兜着。补进初值，让初值和装载形状一致。
+  daily_trend: [],
 })
 
 const stats = computed(() => [

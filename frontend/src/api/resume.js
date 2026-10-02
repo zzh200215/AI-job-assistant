@@ -1,5 +1,20 @@
 import request from './request'
 
+/**
+ * 一份简历版本：`original` 那一份是前端造的（`change_log` 空、`suggestion_decisions` 空对象），
+ * 持久化那几份由后端给。`ResumeCompare.vue:323` 的初值原本只有四个键，导致装载后的整份赋值
+ * 被 TS 判"多出来的键不存在"，所以形状记在这里——消费者的初值与响应是同一个形状。
+ * @typedef {Object} ResumeVersion
+ * @property {string | number} id
+ * @property {string} [version_type]
+ * @property {string} [label]
+ * @property {string} [content]
+ * @property {string} [created_at]
+ * @property {any[]} [change_log]
+ * @property {Record<string, any>} [suggestion_decisions]
+ * @property {string} [format]
+ */
+
 export const uploadResume = (file, onUploadProgress) => {
   const form = new FormData()
   form.append('file', file)

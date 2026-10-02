@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 // 全仓类型错的计数棘轮。跑的是 vue-tsc 本身，不是缓存、不是抽样。
 // 一次约 24 秒，所以它住在 node --test 这一层（CI 的 `npm test`），不进 vitest 那 71 个文件。
-const BUDGET = 78
+const BUDGET = 65
 
 // 编译器"看到多少个文件"。D40 那次的教训是尺子会跟着搬家安静地少测文件，所以这条不是装饰：
 // include 少一根、或某类文件改了扩展名，先在这里红，而不是等到"债清完了"才发现量的是空气。

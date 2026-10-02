@@ -482,7 +482,7 @@ const urgentOfferCount = computed(
   () =>
     offers.value.filter((offer) => {
       if (!offer.offer_deadline) return false
-      const days = Math.ceil((new Date(offer.offer_deadline) - new Date()) / 86400000)
+      const days = Math.ceil((new Date(offer.offer_deadline).getTime() - Date.now()) / 86400000)
       return days >= 0 && days <= 3
     }).length
 )
@@ -540,7 +540,7 @@ function formatK(v) {
 
 function deadlineUrgency(d) {
   if (!d) return 'info'
-  const days = (new Date(d) - new Date()) / 86400000
+  const days = (new Date(d).getTime() - Date.now()) / 86400000
   if (days <= 1) return 'danger'
   if (days <= 3) return 'warning'
   return 'success'
@@ -548,7 +548,7 @@ function deadlineUrgency(d) {
 
 function deadlineLabel(d) {
   if (!d) return '无截止日期'
-  const days = Math.ceil((new Date(d) - new Date()) / 86400000)
+  const days = Math.ceil((new Date(d).getTime() - Date.now()) / 86400000)
   if (days < 0) return '已过期'
   if (days === 0) return '今天到期'
   return `${days}天后到期`
