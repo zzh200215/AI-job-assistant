@@ -23,26 +23,26 @@
     <el-col :span="8">
       <h4>优势</h4>
       <ul>
-        <li v-for="(x, i) in strengths" :key="i">
-          <b>{{ x.item || x }}</b>
-          <span v-if="x.impact">：{{ x.impact }}</span>
-          <span v-if="x.evidence" class="muted">（{{ x.evidence }}）</span>
+        <li v-for="(r, i) in strengthRows" :key="i">
+          <b v-if="r.label">{{ r.label }}</b>
+          <span v-if="r.impact">{{ r.sep }}{{ r.impact }}</span>
+          <span v-if="r.evidence" class="muted">（{{ r.evidence }}）</span>
         </li>
       </ul>
     </el-col>
     <el-col :span="8">
       <h4>差距</h4>
       <ul>
-        <li v-for="(x, i) in gaps" :key="i">
-          <b>{{ x.item || x }}</b>
-          <span v-if="x.action">：{{ x.action }}</span>
-          <span v-if="x.impact && !x.action">：{{ x.impact }}</span>
+        <li v-for="(r, i) in gapRows" :key="i">
+          <b v-if="r.label">{{ r.label }}</b>
+          <span v-if="r.action">{{ r.sep }}{{ r.action }}</span>
+          <span v-if="r.impact && !r.action">{{ r.sep }}{{ r.impact }}</span>
           <el-tag
-            v-if="x.severity"
+            v-if="r.severity"
             size="small"
-            :type="x.severity === '高' ? 'danger' : x.severity === '中' ? 'warning' : 'info'"
+            :type="r.severity === '高' ? 'danger' : r.severity === '中' ? 'warning' : 'info'"
             style="margin-left: 4px"
-            >{{ x.severity }}</el-tag
+            >{{ r.severity }}</el-tag
           >
         </li>
       </ul>
@@ -63,7 +63,9 @@
    在这里再本地化一遍就是两份真相。
    样式复制的是页面 "List" 那一段（`ul` / `h4` / `.mt`）——元素选择器在 scoped 下**不跨组件**，
    不抄进来这些列表就丢间距了；父页面那 1092 行一行没删（D44 的口径）。 */
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   matchedSkills: {
     type: /** @type {import('vue').PropType<string[]>} */ (Array),
     default: () => [],
@@ -72,15 +74,51 @@ defineProps({
     type: /** @type {import('vue').PropType<string[]>} */ (Array),
     default: () => [],
   },
-  /* strengths / gaps / riskPoints 这三条**没有**上元素类型，是量过之后停的手：它们的条目有两代写法
-     （裸字符串 或 带 item/impact/evidence/action/severity 的对象），模板里那句 `x.item || x`
-     就是在同时吃两种。类型只能写成 `string | RubricPoint` 的联合，而联合要求模板先收窄——收窄之后
-     "对象但没有 item"那一支会从"打印整个对象"变成"打印空"，那是候选人可见的变化。
-     记在 docs/upgrade-plan.md §10.23，由产品拍；拍之前这里保持 unknown。 */
-  strengths: { type: Array, default: () => [] },
-  gaps: { type: Array, default: () => [] },
-  riskPoints: { type: Array, default: () => [] },
+  /* strengths / gaps 的条目有两代写法：裸字符串，或 `normalizeLocalizedObjectList` 整出来的
+     带 item/impact/evidence/action/severity 的对象。上一轮为了不给联合类型收窄，把这三条留成
+     unknown（15 条类型错挂在账上，§10.23）。现在按 §10.23 选的那条路收口：`toRow` 一次收成
+     一帧，模板不再判分支。
+     候选人可见的那一处变化只在一支：**对象但没有 item** 时，原来那句 `x.item || x` 会把整个对象
+     打印成 JSON（生产端 localizeSentence 给的是空串，所以这一支真到得了），现在 `<b>` 整颗不出、
+     补语前面那颗冒号跟着撤，行里只剩 impact/action 与严重度标签。断言在
+     tests/unit/skillsPane.test.js。
+     同一族 `x.item || x` 在 AnalysisResult.vue:201/212 与 History.vue:162/172 还有四处，
+     不在本刀里（面板各自收，见 D81）。 */
+  strengths: {
+    type: /** @type {import('vue').PropType<import('../lib/analysisModel').RubricEntry[]>} */ (
+      Array
+    ),
+    default: () => [],
+  },
+  gaps: {
+    type: /** @type {import('vue').PropType<import('../lib/analysisModel').RubricEntry[]>} */ (
+      Array
+    ),
+    default: () => [],
+  },
+  riskPoints: {
+    type: /** @type {import('vue').PropType<string[]>} */ (Array),
+    default: () => [],
+  },
 })
+
+/** 两代写法收成一帧。`sep` 是"有没有标签"决定的一颗冒号，收在这里是为了别让模板判三次。 */
+function toRow(entry) {
+  /** @type {import('../lib/analysisModel').RubricPoint} */
+  const point = typeof entry === 'string' ? { item: entry } : entry || {}
+  const label = String(point.item || '')
+  return {
+    label,
+    sep: label ? '：' : '',
+    impact: String(point.impact || ''),
+    evidence: String(point.evidence || ''),
+    action: String(point.action || ''),
+    severity: String(point.severity || ''),
+  }
+}
+
+const strengthRows = computed(() => props.strengths.map(toRow))
+const gapRows = computed(() => props.gaps.map(toRow))
 </script>
 
 <style scoped>
