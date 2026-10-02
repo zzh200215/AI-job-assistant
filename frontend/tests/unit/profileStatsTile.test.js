@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
 
 import Profile from '@/features/shell/views/Profile.vue'
+import { getPerformanceTrend } from '@/api/interview'
 import { installElement } from '@/plugins/element'
 
 /* §10.25 的那半拍：Profile 的统计格与脚注原先读的是 `GET /dashboard/overview` **不返回**的键
@@ -14,8 +15,9 @@ import { installElement } from '@/plugins/element'
    ② **两个"面试次数"不许合并**：格子里那个是 funnel 推出来的（interview + offer 阶段的投递数 2+1=3），
       脚注那个是 `summary.total_interviews`（会话数 7），语义不同；
    ③ 「简历初成」这颗成就随 resume_count 一起活过来（它此前永不解锁）；
-   ④ 「面试之星」仍锁着——`best_score` 全仓没有生产者（最接近的是面试统计端点的**均值**），
-      这一半还没拍，所以这条断言记的是**现状**不是主张。 */
+   ④ 「面试之星」的分数住在另一发请求里（`/interview/performance` 的 `max_overall_score`，
+      §10.25 拍的那条 ①），所以它有三条用例：达标解锁、差一分不解锁、那一发失败时**不许**
+      把已经落好的统计格与脚注一起打回默认值。 */
 
 const CREATED_AT = new Date(Date.now() - 61 * 86400000).toISOString()
 
@@ -43,6 +45,13 @@ vi.mock('@/api/dashboard', async (importOriginal) => ({
     trend: [],
     recent_activities: [],
   })),
+}))
+
+/* 「面试之星」那颗成就的分数在这一发里（§10.25 拍的那条 ①，后端补的是 max_overall_score）。
+   单独 mock 是因为三条用例各要一种结果：达标、差一分、以及整发失败。 */
+vi.mock('@/api/interview', async (importOriginal) => ({
+  ...(await importOriginal()),
+  getPerformanceTrend: vi.fn(),
 }))
 
 async function mounted() {
@@ -81,6 +90,9 @@ beforeEach(() => {
      这一条会红在"已使用 1 天"上——红在夹具上，不是红在该红的位置。 */
   localStorage.setItem('token', 'probe-token')
   localStorage.setItem('user', JSON.stringify({ id: 1, username: 'zzh', created_at: CREATED_AT }))
+  // 面试表现那一发的默认结果：达标。下面两条用例各自改写它。
+  getPerformanceTrend.mockReset()
+  getPerformanceTrend.mockResolvedValue({ total_sessions: 3, max_overall_score: 88 })
 })
 
 describe('个人中心：统计格、脚注与两颗成就', () => {
@@ -103,11 +115,28 @@ describe('个人中心：统计格、脚注与两颗成就', () => {
     expect(footer()).toContain('7 次模拟面试')
   })
 
-  it('「简历初成」随真值解锁；「面试之星」仍锁着，因为 best_score 没有生产者', async () => {
+  it('「简历初成」随真值解锁，「面试之星」随 max_overall_score 解锁', async () => {
     await mounted()
     expect(badge('简历初成').classList.contains('unlocked'), '简历数=3 时这颗成就应当已达成').toBe(
       true
     )
+    expect(badge('面试之星').classList.contains('unlocked')).toBe(true)
+    expect(badge('面试之星').textContent).toContain('已达成')
+  })
+
+  it('差一分就不解锁：阈值真的卡在 80', async () => {
+    getPerformanceTrend.mockResolvedValue({ total_sessions: 3, max_overall_score: 79 })
+    await mounted()
+    expect(badge('面试之星').classList.contains('locked')).toBe(true)
+  })
+
+  it('那一发失败时统计格与脚注仍是真值，只有这颗成就保持未解锁', async () => {
+    /* `loadUserStats` 先把 overview 落好、再单独一发取面试表现，就是为了这一支：
+       第二发失败不许把已经拿到的数字打回 0 / 「1 天」。 */
+    getPerformanceTrend.mockRejectedValue(new Error('暂时读不到面试表现'))
+    await mounted()
+    expect(statNum('简历数')).toBe('3')
+    expect(footer()).toContain('7 次模拟面试')
     expect(badge('面试之星').classList.contains('locked')).toBe(true)
   })
 })

@@ -812,6 +812,11 @@ async def interview_performance(
         {
             "total_sessions": len(sessions),
             "avg_overall_score": avg_overall,
+            # 「面试之星 · 综合评分超过80」要的是**最高一次**，不是均值（§10.25 拍的那条 ①）：
+            # 均值 73.7 / 最高 88 这种形状下，用均值会把真的达成过 80 的人判成没达成。
+            # overall_scores 上面已经收集过一遍，这里只是多取一个最大值；零场有评分的面试时给 0，
+            # 与 avg_overall_score 同口径（零场面试那一支提前返回，两个键都不出现，前端按缺省 0 处理）。
+            "max_overall_score": max(overall_scores) if overall_scores else 0,
             "trend": trend,
             "dimension_averages": avg_dims,
             "strengths": [

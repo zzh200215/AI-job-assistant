@@ -317,6 +317,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { sendVerificationEmail, exportMyData, deleteMyAccount } from '@/api/account'
 import { getSystemStatus } from '@/api/system'
 import { getDashboardOverview } from '@/api/dashboard'
+import { getPerformanceTrend } from '@/api/interview'
 import { getMySubscription } from '@/api/subscription'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import { useAuthStore } from '@/stores/auth'
@@ -512,15 +513,21 @@ async function loadUserStats() {
          不是一回事，两格各用各的，别合并。 */
       total_sessions: summary.total_interviews || 0,
       resume_count: summary.total_resumes || 0,
-      /* 「面试之星 · 综合评分超过80」那颗成就读这一格，而这个值**没有任何生产者**：overview 不返回它，
-         全仓 grep `best_score` / `max_score` 只剩这里的读方；最接近的真值在面试统计那两处返回里
-         （`interview_rest.py:813-814` 与 `:859-860`），是 `avg_overall_score`——**均值，不是最高**，
-         与"综合评分超过80"这句语义对不上。补一个真 max（`max(overall_scores)` 一句）还是把这颗成就
-         摘掉，是 §10.25 剩下的那一半，由产品拍；拍之前这行留着，那 1 条类型错就是它的证据，别顺手清成 0。 */
-      best_score: data?.best_score || data?.max_score || 0,
+      best_score: 0,
       days_active: daysSinceRegistration(authStore.user?.created_at),
       interview_rate: totalApps > 0 ? Math.round((totalInt / totalApps) * 100) : 0,
       offer_rate: totalInt > 0 ? Math.round((totalOff / totalInt) * 100) : 0,
+    }
+    /* 「面试之星 · 综合评分超过80」那颗成就的分数不在 overview 里，在 `/interview/performance` 的
+       `max_overall_score`——§10.25 拍的是那条 ①：后端补**最高一次**，不用同返回里那个
+       `avg_overall_score`（均值 73.7 与最高 88 在 80 这条线上判定相反），代价就是这一发多出来的请求。
+       单独一发、单独兜底：它失败只让这颗成就保持未解锁，不许把上面已经落好的统计整块打回默认值。
+       零场面试那一支后端提前返回、不带这个键（interview_rest.py:758-766），所以 `|| 0` 是常态。 */
+    try {
+      const perf = await getPerformanceTrend()
+      userStats.value.best_score = perf?.max_overall_score || 0
+    } catch {
+      // 读不到面试表现就不解锁这颗成就：那是"不知道"的形状，不该顺手把已知的统计也丢掉。
     }
   } catch {
     // 统计信息不可用时保留默认计数。

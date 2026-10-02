@@ -30,7 +30,24 @@ export const getQuestionCategories = () => request.get('/interview/question-bank
 // 获取针对 JD 的面试准备建议
 export const getInterviewPrep = (jdId) => request.get(`/interview/preparation/${jdId}`)
 
+/**
+ * `GET /interview/performance` 的载荷（`backend/app/api/interview_rest.py` 的
+ * `interview_performance`）。只写后端真的返回的键，且**全部标可选**：零场面试那一支是提前返回
+ * （`:758-766`），`avg_overall_score` / `max_overall_score` 两个键那时根本不会出现。
+ * `max_overall_score` 是 §10.25 拍的那条 ① 新补的：**最高一次**面试综合评分，不是均值——
+ * Profile 的「面试之星 · 综合评分超过80」要的是前者，均值 73.7 / 最高 88 这种形状下两者判定相反。
+ * @typedef {Object} InterviewPerformance
+ * @property {number} [total_sessions]
+ * @property {number} [avg_overall_score]
+ * @property {number} [max_overall_score]
+ * @property {{ session_id?: number, interview_type?: string, overall_score?: number }[]} [trend]
+ * @property {{ dimension?: string, avg_score?: number }[]} [strengths]
+ * @property {{ dimension?: string, avg_score?: number }[]} [weaknesses]
+ * @property {string} [summary]
+ */
+
 // 获取面试表现趋势分析
+/** @returns {Promise<InterviewPerformance>} */
 export const getPerformanceTrend = () => request.get('/interview/performance')
 
 // === WebSocket 连接 ===
