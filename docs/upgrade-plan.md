@@ -2332,6 +2332,28 @@ A1 的第一步按纪律是**先把尺子变成仓库里的东西**：D67/D68 �
 
 **留给下一轮的三条**：① 真要把那 24 条判掉，唯一可信的仍是浏览器"删→比 44 条计算属性+rect→塞回"，而这次请**把探针提交进仓库**（D67 ⑤ 那条欠账到现在还没还）；② `--selftest` 现在只考四页答案卷，随着别的页面被浏览器清过，把它们也点名进 `SWEEPED`，这张卷子才会越来越严；③ 如果哪一轮又看到"某个文件候选数暴涨"，第一反应应该是**怀疑解析器**，不是怀疑代码。
 
+#### 已交付：D76 浏览器探针进仓库、棘轮第一次因为删样式往下走 22 → 19——顺带发现那一维根本没有"还完必须调小"的守卫
+
+A1 按你点的走：重搭浏览器差分，**这次把仪器留在仓库里**（D67/D68 用完即删，于是每一轮都要重搭，D67 ⑤ 那条欠账还挂着）。
+
+**交付的仪器**：`frontend/probe/dead-style.html` + `frontend/probe/dead-style.entry.js`。它把共享 axios 实例换成夹具 adapter，所以页面不需要真后端就能带数据画出来；scope 用 `mod.__scopeId` 现取（`__probe.scopes()`），不猜构建哈希。判据照 D67：`matched`（带 `[data-v-xxx]` 的编译后选择器真实命中多少元素）、`diffs`（把规则从活的样式表里删掉后，全页每个元素 **46 条计算属性 + rect 四项** 的差异数）、`restored`（塞回原位再比一遍）。快照前冻住 `animation/transition`，否则带 transform 的循环动画会让每次快照都不一样。**eslint 没有放宽共享配置**：新加的一块 `files: ['probe/**/*.js']` 只给探针放开 `getComputedStyle / localStorage / requestAnimationFrame / setTimeout / MouseEvent / location` 这六个全局，`src` 与 `tests` 的口径一个字没动（D67 当年正是因为不愿做这件事才没提交探针）。
+
+**删掉的三条**：`KnowledgeBase.vue` / `DeliveryGuide.vue` / `SystemStatus.vue` 各自的 `.page-shell` 重复声明。证据是三条在各自页面上 `matched=0 / diffs=0 / restored=0`（铺开元素数 507 / 218 / 225，管理员角色种子）。
+
+**这一维以前只有上限**：我删完规则跑全套，**435 条全绿**——`pageShellRedeclarations` 的天花板只是从 22 静悄悄松到 19，没有一条断言要求我把它改小。这是本项目"守卫看不见自己"的第五次实例（前四次见 D13 / D15 / D40 / D68）。补上 `forces the page-shell budget to be tightened once paid down` 之后，把预算写回 20 立刻红并点名 **19**（变异已核，测试数 435 → **436**）。
+
+**一次假阴性，比删掉的三条更值钱**：第一遍浏览器计数报 Home 的 `.dot-high/.dot-medium/.dot-low` **全部 matched=0**，看起来像三条死规则。真相是我把 `/dashboard/today-tasks` 的夹具写成 `{items: […]}`，而 Home 的循环是 `v-for="task in tasks.tasks"`（`Home.vue:124`）——任务列表整块根本没画出来。**"这一屏没命中"不等于"没有元素能命中"**，这条写进探针注释，夹具也按消费者改成了三档优先级各一条。
+
+**于是拼接类名从"候选"这一桶里搬出去了**：`dead-style.mjs` 现在把它们记成 `undecidable`（9 条）。理由是值域在后端——实测 dashboard 与推荐那条发的是 `"priority": "high"|"medium"|"low"` 和 `"severity": "high"|"medium"|"low"`，所以 `.dot-high`、`.severity-medium` 这些**是活的**。静态尺子和单屏快照对这一族**只能证活、不能证死**，把它们算进"候选"就是给下一轮留一堆假任务。
+
+**第七条腿**：`<transition name="fade">` 的 `-enter-active` / `-leave-active` / `-enter-from` / `-leave-to` 是 Vue **运行时**加的类，模板文本里没有，而浏览器快照同样抓不到——那些类只存在于动画那几十毫秒。`DefaultLayout.vue:131` 的两条规则就是这么差点被误删的（这一条是"浏览器差分也不是万能判据"的实测例子）。候选数因此 **22 → 13 → 10**。
+
+**代价实测**（A/B 两次 build：A 侧把三个文件按 `git show HEAD:` 写回、`--outDir dist-a`、再从 cp 副本换回并核对 `git diff` 只剩删除行）：DeliveryGuide css 0.64 → **0.53 kB**（gzip 0.35 → 0.30）、SystemStatus 1.27 → **1.20**（0.47 → 0.45）、KnowledgeBase 6.04 → **5.96**（1.25 → 1.24），合计 **−0.26 kB / gzip −0.06**，源码 −20 行。没碰过的 `About` 分块两侧**字节与文件名完全相同**（`About-Ch5HJpWy.css` 3.53 kB），当"构建本身没漂"的对照。
+
+**剩下 10 条候选长什么样，以及为什么它们不是同一件事**：`ReferencesPane` 4 条（`.rag-confidence-metrics`、`.rag-metric`、`.rag-metric span`、`.rag-metric strong`）、`InterviewQuestionsPane` 2 条（`.mt` / `.mb`）、`ReportSummaryPane` / `ResumeOptimizePane` / `SkillsPane` 各 1 条 `.mb`，外加 `Home.vue` 1 条。前九条全是 D52/D65 拆面板时"样式只复制不切"留在**子组件**里的那份副本——`.rag-metric` 的 markup 至今在父页面 `SmartAnalysis.vue:361-379`，子组件那条永远命不中。**这是上一轮四页清扫的方向性盲区**：D67/D68 只查了"父页面剩下的副本"，没查"子组件多带的那份"。要判它们，探针得先把 SmartAnalysis 的面画画出来——`/smart-analysis` 现在只有 174 个节点、`.el-tabs__item` 为 0，因为页面要先有"选中的简历 + JD + 分析记录"（E13 的 `lastSelection` 槽位）。这是探针的下一步夹具，不是尺子的问题。
+
+**门禁**：`test:unit` **71 files / 436 passed**、`npm test` exit 0、`eslint` exit 0、`prettier --check` exit 0、`dead-style.mjs --selftest` exit 0（答案卷四页 0 候选，全仓 10）、`vite build` exit 0、改动文件 CRLF **0**、`.d76ab` 与 `dist-a` 删净；探针页里的 `window.__job` 只活在浏览器内存，不落盘。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
