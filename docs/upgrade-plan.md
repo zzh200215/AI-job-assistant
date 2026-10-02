@@ -2482,6 +2482,26 @@ D81 留的四处（`AnalysisResult.vue` 与 `History.vue` 各两处）这一刀�
 
 **§10.23 到此全部落地**：三处屏幕、六个站点（D81 两处 + 这一刀四处），模板里 `x.item || x` 为 **0** 且钉进守卫。§10 open 仍 **19**。
 
+#### 已交付：D83 §10.25 复测之后不成立：那四个键里三个是取错键，不是缺数据（50 → 45）
+
+D74 把它挂成"三条路都要拍"，因为看上去要么改前端读法、要么改后端载荷、要么把格子摘掉。这一轮先逐键查生产者，结论是**这一半根本没有可拍的**：真值已经在同一份响应里，或者在同一次 `/auth/me` 里，剩下的只是 Profile 读错了键名。
+
+**逐键复测（三处更正了原条目）**：`total_sessions` 原条目写"只在 `interview_rest.py:813` 那个会话统计端点上，属取错接口"——**只对了一半**，`summary.total_interviews` 就在 overview 载荷里，后端是 `count(InterviewSession where user_id)`（`dashboard.py:64`），与被那句脚注要的语义相同；`resume_count` 的真值是 `summary.total_resumes`；`days_active` 更不是后端的事——`/auth/me` 的 user 带着 `created_at`，**这页 `:42` 本来就打印它**，而 `:499` 减的是 `data.created_at`（overview 里没有这个键），于是永远 `undefined → 0 → 兜底 1`。
+
+**反向证据一行命令就够，不动工作树**：把同一份夹具载荷喂给旧的四条读法，`node -e` 直接算出 `{"total_sessions":0,"resume_count":0,"best_score":0,"days_active":1}`。所以新加的三条断言在旧代码下必红，不需要变异。
+
+**落地的读法**：`const summary = data?.summary || data || {}`（这句回退在两代载荷上都成立，`Home.vue` 早就是同形），`total_sessions: summary.total_interviews`、`resume_count: summary.total_resumes`、`days_active: daysSinceRegistration(authStore.user?.created_at)`。**新加的那个小函数只有一条口径**：自然日数向上取整、当天注册算 1 天（原兜底就是这个数），`created_at` 缺失或非法也回 1——不再依赖 overview。
+
+**一条区别必须钉住，因为"顺手统一"是它的自然归宿**：格子里的「面试次数」是 funnel 推出来的（`interview + offer` 阶段的**投递数**），脚注的「N 次模拟面试」是 `summary.total_interviews`（**会话数**）。两个都在页面上、都不该合并，所以第二条断言同时断 3 与 7。
+
+**候选人可见的变化**：简历数 `0 → 真值`；脚注 `已使用 1 天 · 0 次模拟面试 → 真天数 · 真会话数`；「简历初成」这颗成就此前永不解锁，现在会亮。这三样就是 §10.25 挂了一年不到的那一半，他这次点"继续 §10.25"给的正是这个授权。
+
+**剩下没动的那一半是 `best_score`**：全仓 grep 只剩 Profile 的读方；最接近的真值是 `avg_overall_score`，两处（`GET /interview/performance` 的返回 `:813-814` 与 helper `_analyze_past_performance` 的 `:859-860`），**是均值不是最高**，跟"综合评分超过80"这句语义对不上。所以我**没有**为了让棘轮闭嘴把它改成均值、也没有删掉那行——那 2 条类型错继续留在账上（45 = admin 42 + Profile 2 + router 1），三条路与实测成本写在 §10.25 里等拍。
+
+**夹具这一轮又红在我自己身上（第四次同族）**：第一版只往 localStorage 灌了 `user`，而真 store 的 `fetchMe()` 第一行是 `if (!token.value) return null`——那一发 `/auth/me` 根本没发，`created_at` 停在 undefined，断言红在"已使用 1 天"上，**而那时代码已经是对的**。补上 `token` 之后才红在正确的位置。这一条与"fixture 形状从消费者取"是同一件事，但这次消费者是一个 store 的短路条件，不是 API 的返回形状。
+
+**门禁**：`npm run typecheck` **45**（50 → 45，Profile 7 → 2）、`npm test` exit 0（棘轮自己点名 45）、`test:unit` **74 files / 446 passed**（新文件 `tests/unit/profileStatsTile.test.js` 三条：这页此前**没有任何页面级测试**（`tests/unit` 里提到 Profile 的只有日期格式化与棘轮自己））、`eslint` exit 0（既有那 1 条 warning）、`prettier --check` exit 0、`vite build` exit 0、四个文件 CR **0**。真实 diff **3 改 1 新**：`Profile.vue` +27/−6、`api/dashboard.js`（载荷注释跟着改，那句"那几条现在会红"已经不成立）+6/−3、`typeDebtRatchet.test.mjs` +1/−1、新测试 113 行。**没做真浏览器复核**：jsdom 挂载 + 真 pinia store + 真 `/auth/me` 走 mock 的 request，但不是浏览器。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
@@ -3172,7 +3192,9 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 24. ~~**`InterviewSetup.vue:473` 少一个 `.value`，面试类型标签一直显示原始英文键**~~ —— **已定并落地（D80，选"修"）**：`.value` 补上（现 :475），屏幕断言 `tests/unit/interviewSetupTypeLabel.test.js` 先红在 `expected "后端三年 · tech" to contain "技术深挖"`、修完绿。类型层全程无声：`strict:false` 下用字符串索引一个 Ref 得到 `any`，typecheck 计数 65 → 65 一点没动，所以这条是"清零类型错兜不住这类 bug"的第一手证据（原始观察在 D73 / D80）。
 
-25. **`Profile.vue` 那格简历数、那句"已使用 N 天 · M 次模拟面试"和两个成就**（D74 翻出来，7 条类型错就是它的证据）。`loadUserStats()` 打的是 `getDashboardOverview()`，然后读 `data.total_sessions || data.sessions`、`data.resume_count`、`data.best_score || data.max_score`、`data.days_active`、`data.created_at`（`Profile.vue:494-499`）——**这些键 `GET /dashboard/overview` 一个都不返回**（`backend/app/api/dashboard.py:134-158`）。于是：简历数那一格恒为 **0**（同一份响应里真值在 `summary.total_resumes`，没人读它）、那句"已使用 1 天 · 0 次模拟面试"是兜底值不是实测值、`:402` 的"注册第一份简历"与 `:458` 的"拿到 80 分以上"两个成就**永不解锁**。三条路：① 前端改读 `summary.*`（`resume_count` → `summary.total_resumes`；模拟面试次数这一项响应里没有，得从 `stage_counts`/面试接口另取）；② 后端补上那几个键（则前端一个字不改）；③ 把这几格与两个成就从页面上摘掉，因为目前没有数据源支持它们。**我一条都没动**——三条里任何一条都会改变候选人看到的数字与成就状态，按本节惯例由你定。
+25. **`Profile.vue` 那格简历数、那句"已使用 N 天 · M 次模拟面试"和两个成就**（D74 翻出来，7 条类型错就是它的证据）——**D83 落地四分之三，剩下只有那颗成就的一问**。原条目说"三条路都要拍"，复测之后不成立：四个键里**三个是取错键，不是缺数据**，真值就在同一份响应或同一次 `/auth/me` 里，所以那部分不需要产品判断，只需要改读法（已改，见 D83）。逐键复测：`total_sessions` 的原条目说"只在 `interview_rest.py:813` 有、属取错接口"——**只对了一半**，`summary.total_interviews` 就在 overview 里，后端是 `count(InterviewSession where user_id)`（`dashboard.py:64`），语义相同；`resume_count` → `summary.total_resumes`；`days_active` → 不是后端的事，`/auth/me` 的 user 带着 `created_at`，这页 `:42` 本来就在打印它，原先那句减的是 `data.created_at`（overview 里没有）所以永远 0 → 兜底 1。**这三格现在是真值**：简历数、已使用天数、模拟面试次数，连带"简历初成"那颗成就也能解锁了（此前永不）。
+
+    **剩下的这一问是 `best_score`**（`:458`「面试之星 · 综合评分超过80」）：全仓 grep `best_score` / `max_score` 只剩 Profile 的读方，**没有任何生产者**；最接近的真值是 `avg_overall_score`，出现在两处（`GET /interview/performance` 的返回 `interview_rest.py:813-814`，与 helper `_analyze_past_performance` 的 `:859-860`），**是均值不是最高**，与"综合评分超过80"这句语义对不上。三条路，成本实测：① **后端补真 max**（`/interview/performance` 那个函数已经在算 `overall_scores` 列表，加 `"max_overall_score": max(overall_scores)` 是一行）+ `api/interview.js` 加一个两行调用 + Profile 在加载链 `:660` 里多发一个请求，语义与文案对得上，类型错 −2 → **43**；② **摘掉这颗成就**（0 后端、0 请求，网格 8 → 7 颗，候选人看到的唯一变化是少一格——它今天从未点亮过），类型错同样 −2 → 43；③ **改用现成均值**并改文案（"综合评分超过80" → 平均口径），1 个请求、语义变化，且均值 ≥ 80 比最高 ≥ 80 难达成。我按"没有生产者就不凭空造一个"的规矩**一条都没动**，那 2 条类型错留着当证据。
 
 **逐个键查过生产者，所以这条不是"前端写错了"一句话**：`total_sessions` **有人产**，但不在 Profile 调的那个端点上——`interview_rest.py:813` / `:859` 的会话统计里给的是 `"total_sessions": len(sessions)`，所以那一格是**取错了接口**，不是无中生有；`resume_count` 全仓只出现在配额语境（`resume.py:198` 的 `check_quota(..., "resume_count")` 与 `subscription_service.py:320`），没有任何响应把它作为键返回；`best_score` / `max_score` / `days_active` 三个名字在后端 **grep 为 0**，没有任何响应产出。所以"拿到 80 分以上"那个成就与"已使用 N 天"这句话，是从设计那天起就没有数据源的——这句我是按上面三条 grep 的结果写的，不是推测。
 
