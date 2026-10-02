@@ -242,7 +242,20 @@ const FIXTURES = [
   [
     /\/agent\/tasks/,
     'get',
-    { items: [{ id: 4, task_status: 'running', name: '深度分析' }], total: 1 },
+    /* 六档状态各一条，让 `dot-<status>` 这一族的每一档都真能被画到 ——
+       守卫只保证"域 ↔ 规则"对齐，这条夹具保证"规则 ↔ 屏幕"可测（D77 的教训）。
+       status / task_status 两个键名一起给：后端 `to_dict()` 与前端读取过的那份不同名。 */
+    {
+      items: [
+        { id: 1, name: '待跑的深度分析', status: 'pending', task_status: 'pending' },
+        { id: 2, name: '在跑的深度分析', status: 'running', task_status: 'running' },
+        { id: 3, name: '跑完的深度分析', status: 'completed', task_status: 'completed' },
+        { id: 4, name: '部分完成的分析', status: 'partial', task_status: 'partial' },
+        { id: 5, name: '失败的解析', status: 'failed', task_status: 'failed' },
+        { id: 6, name: '取消的解析', status: 'cancelled', task_status: 'cancelled' },
+      ],
+      total: 6,
+    },
   ],
   [
     /\/system\/status/,
@@ -338,7 +351,10 @@ function snapshot() {
     const cs = getComputedStyle(el)
     const r = el.getBoundingClientRect()
     const row = [r.x.toFixed(1), r.y.toFixed(1), r.width.toFixed(1), r.height.toFixed(1)]
-    for (const p of PROPS) row.push(cs.getPropertyValue(p))
+    // 必须用 camel 索引：getPropertyValue() 要 kebab-case，而 PROPS 是 camelCase，
+    // 于是 backgroundColor / borderTopWidth 那一整批在快照里一直是空串 ——
+    // "只改颜色"的删除会被报成 0 差异。D79 撞见的正是这个。
+    for (const p of PROPS) row.push(String(cs[p] ?? ''))
     out.push(row.join('|'))
   }
   return out
@@ -372,8 +388,33 @@ function locate(selector, scopeId) {
   return null
 }
 
+/** 同一条规则在文档里出现几张表 —— vite dev 的 HMR 会把改过的样式块**再注一份**而不撤旧的，
+ *  这时"删掉一处、看不出变化"是重复造成的，不是规则死的证据。D79 量 `.dot-partial` 就是这么撞出来的。 */
+function copies(selector, scopeId) {
+  const want = norm(`${selector}[data-v-${scopeId}]`)
+  let n = 0
+  let first = null
+  for (const sheet of Array.from(document.styleSheets)) {
+    let rules
+    try {
+      rules = sheet.cssRules
+    } catch {
+      continue
+    }
+    for (let i = 0; i < rules.length; i++) {
+      const rule = rules[i]
+      if (rule && rule.selectorText && norm(rule.selectorText) === want) {
+        n++
+        if (!first) first = { sheet, index: i, text: rule.cssText }
+      }
+    }
+  }
+  return { n, first }
+}
+
 const probe = {
   props: PROPS.length,
+  copiesOf: (selector, scope) => copies(selector, String(scope).replace('data-v-', '')).n,
   scopes() {
     return Object.fromEntries(
       Object.entries(COMPONENTS).map(([k, v]) => [k, v && v.__scopeId ? v.__scopeId : null])
@@ -433,6 +474,7 @@ const probe = {
       label,
       selector,
       matched,
+      sheets: copies(selector, scope).n,
       elements: before.length,
       diffs: diffCount(before, after),
       restored: diffCount(before, restored),

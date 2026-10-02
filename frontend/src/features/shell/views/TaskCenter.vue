@@ -406,6 +406,11 @@ onUnmounted(() => {
 .dot-completed {
   background: var(--app-success);
 }
+/* `partial` 是"跑完了但有步骤失败"（后端 `strategies.py:459`），
+   四路编排都会发它，以前这一档没有点色，等于状态点在列表里是隐形的。 */
+.dot-partial {
+  background: var(--app-warning);
+}
 .dot-failed {
   background: var(--app-danger);
 }

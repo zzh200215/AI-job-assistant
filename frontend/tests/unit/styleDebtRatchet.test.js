@@ -987,12 +987,13 @@ describe('style debt ratchet', () => {
       siblings: [],
     },
     {
-      // `partial` 是后端真会发的状态（`strategies.py:459,602`、`langgraph_flow.py:438,500`），
-      // 而这一页从来没给它画过点色 —— 明写在 unstyled 里，等 §10.28 拍。
+      // `partial` 后端会发（`strategies.py:459,602`、`langgraph_flow.py:438,500`）。
+      // D78 咬出这一档没有点色时，它挂在 unstyled 里等拍；D79 已补规则，豁免同步撤掉——
+      // 这条守卫的设计就是"补了规则不删豁免会红"，所以这里必须是空数组。
       prefix: 'dot',
       values: AGENT_TASK_STATUSES,
       file: 'src/features/shell/views/TaskCenter.vue',
-      unstyled: ['partial'],
+      unstyled: [],
       siblings: [],
     },
     {
