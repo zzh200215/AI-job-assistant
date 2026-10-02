@@ -314,12 +314,12 @@
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 
+import { sendVerificationEmail, exportMyData, deleteMyAccount } from '@/api/account'
 import { getSystemStatus } from '@/api/system'
 import { getDashboardOverview } from '@/api/dashboard'
 import { getMySubscription } from '@/api/subscription'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import { useAuthStore } from '@/stores/auth'
-import request from '@/api/request'
 import {
   DataAnalysis,
   List,
@@ -584,7 +584,7 @@ async function refreshAll() {
 async function verifyEmail() {
   verifying.value = true
   try {
-    await request.post('/auth/send-verification-email')
+    await sendVerificationEmail()
     ElMessage.success('验证邮件已发送，请查收')
   } catch {
     ElMessage.error('发送失败')
@@ -596,7 +596,7 @@ async function verifyEmail() {
 async function exportData() {
   exporting.value = true
   try {
-    const res = await request.get('/auth/export-data', { responseType: 'blob' })
+    const res = await exportMyData()
     const url = window.URL.createObjectURL(res)
     const a = document.createElement('a')
     a.href = url
@@ -629,7 +629,7 @@ async function deleteAccount() {
       inputPattern: /确认注销/,
       inputErrorMessage: '请输入"确认注销"',
     })
-    await request.delete('/auth/account')
+    await deleteMyAccount()
     ElMessage.success('账号已注销')
     authStore.logout()
   } catch {

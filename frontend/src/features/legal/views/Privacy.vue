@@ -144,7 +144,13 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
-import request from '@/api/request'
+import {
+  getDataSummary,
+  exportMyData,
+  deleteMyResumes,
+  deleteMyAnalyses,
+  deleteMyInterviews,
+} from '@/api/account'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 
@@ -169,7 +175,7 @@ async function loadDataSummary() {
   const isCurrent = latestSummaryCall()
   summaryError.value = ''
   try {
-    const data = await request.get('/auth/data-summary')
+    const data = await getDataSummary()
     if (!isCurrent()) return
     dataSummary.value = data
   } catch (e) {
@@ -182,7 +188,7 @@ async function loadDataSummary() {
 async function exportData() {
   exporting.value = true
   try {
-    const res = await request.get('/auth/export-data', { responseType: 'blob' })
+    const res = await exportMyData()
     const url = window.URL.createObjectURL(res)
     const a = document.createElement('a')
     a.href = url
@@ -204,7 +210,7 @@ async function deleteResumes() {
       '删除简历',
       { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
     )
-    await request.delete('/auth/data/resumes')
+    await deleteMyResumes()
     ElMessage.success('简历已删除')
     loadDataSummary()
   } catch (error) {
@@ -219,7 +225,7 @@ async function deleteAnalyses() {
       '删除分析记录',
       { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
     )
-    await request.delete('/auth/data/analyses')
+    await deleteMyAnalyses()
     ElMessage.success('分析记录已删除')
     loadDataSummary()
   } catch (error) {
@@ -234,7 +240,7 @@ async function deleteInterviews() {
       '删除面试记录',
       { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
     )
-    await request.delete('/auth/data/interviews')
+    await deleteMyInterviews()
     ElMessage.success('面试记录已删除')
     loadDataSummary()
   } catch (error) {

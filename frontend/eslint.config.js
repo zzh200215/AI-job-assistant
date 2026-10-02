@@ -64,19 +64,11 @@ export default [
   },
   {
     // Views must go through src/api/<domain>.js so the response interceptor,
-    // auth headers and error toasts stay in one place. The files below still
-    // reach for the raw instance; removing one from this list is a cleanup.
+    // auth headers and error toasts stay in one place. D69 closed the last of
+    // the exemptions, so this block has no ignore list: a new raw import here
+    // is a lint error, not a budget.
     name: 'app/views-use-api-layer',
     files: ['src/features/**/*.vue', 'src/layouts/**/*.vue'],
-    ignores: [
-      'src/features/admin/views/Orders.vue',
-      'src/features/admin/views/Overview.vue',
-      'src/features/admin/views/Users.vue',
-      'src/features/legal/views/Privacy.vue',
-      'src/features/shell/views/Profile.vue',
-      'src/features/billing/views/Subscription.vue',
-      'src/features/shell/views/TaskCenter.vue',
-    ],
     rules: {
       'no-restricted-imports': [
         'error',

@@ -107,8 +107,12 @@ import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import { CircleCheckFilled, Close } from '@element-plus/icons-vue'
-import { getSubscriptionPlans, getMySubscription, createOrder } from '@/api/subscription'
-import request from '@/api/request'
+import {
+  getSubscriptionPlans,
+  getMySubscription,
+  createOrder,
+  mockPayOrder,
+} from '@/api/subscription'
 
 const plans = ref([])
 const comparisonRows = ref([])
@@ -263,7 +267,7 @@ async function selectPlan(plan) {
     }
 
     // 调用模拟支付（生产环境替换为真实支付网关跳转）
-    const res = await request.post('/subscription/mock-pay', { order_id: orderData.order_id })
+    const res = await mockPayOrder(orderData.order_id)
     if (res?.message) {
       payResult.value = { success: true, order_id: orderData.order_id, message: res.message }
       ElMessage.success('🎉 升级成功！Pro 权益已生效')

@@ -122,7 +122,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage } from '@/plugins/element-services'
-import request from '@/api/request'
+import { getAdminOrders } from '@/api/subscription'
 import { dateTime } from '@/utils/format/date'
 
 const orders = ref([])
@@ -175,10 +175,10 @@ function openDetail(order) {
 async function loadOrders() {
   loading.value = true
   try {
-    const res = await request.get('/subscription/admin/orders', {
-      params: { page: page.value, page_size: pageSize },
-      notifyError: false,
-    })
+    const res = await getAdminOrders(
+      { page: page.value, page_size: pageSize },
+      { notifyError: false }
+    )
     const data = res?.data || res || {}
     orders.value = data.items || []
     total.value = data.total || 0

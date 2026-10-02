@@ -136,7 +136,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { CreditCard, Refresh, Tickets, User, UserFilled } from '@element-plus/icons-vue'
-import request from '@/api/request'
+import { getAnalyticsSummary, getAdminRevenue, getAnalyticsFunnel } from '@/api/analytics'
+import { getAdminOrders } from '@/api/subscription'
 import { listTenants } from '@/api/tenant'
 import { dateTime } from '@/utils/format/date'
 
@@ -250,9 +251,9 @@ async function loadAnalytics() {
     const params = {}
     if (tenantId.value) params.tenant_id = tenantId.value
     const [summaryRes, revenueRes, funnelRes] = await Promise.all([
-      request.get('/analytics/summary', { params: { ...params }, notifyError: false }),
-      request.get('/admin/analytics/revenue', { params: { ...params }, notifyError: false }),
-      request.get('/analytics/funnel', { params: { ...params }, notifyError: false }),
+      getAnalyticsSummary({ ...params }, { notifyError: false }),
+      getAdminRevenue({ ...params }, { notifyError: false }),
+      getAnalyticsFunnel({ ...params }, { notifyError: false }),
     ])
     summary.value = summaryRes?.data || summaryRes || {}
     revenue.value = revenueRes?.data || revenueRes || {}
@@ -268,10 +269,7 @@ async function loadAnalytics() {
 
 async function loadOrders() {
   try {
-    const res = await request.get('/subscription/admin/orders', {
-      params: { page: 1, page_size: 100 },
-      notifyError: false,
-    })
+    const res = await getAdminOrders({ page: 1, page_size: 100 }, { notifyError: false })
     const data = res?.data || res || {}
     orders.value = data.items || []
   } catch {

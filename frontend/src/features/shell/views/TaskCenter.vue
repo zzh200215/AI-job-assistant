@@ -129,7 +129,7 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Refresh, Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
-import request from '@/api/request'
+import { getAgentTasks, getAgentTaskSummary, retryAgentTask, cancelAgentTask } from '@/api/agent'
 import { TASK_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
 import { dateTime } from '@/utils/format/date'
 import { useLatestCall } from '@/composables/useLatestCall'
@@ -207,8 +207,8 @@ async function loadTasks() {
     const params = { limit: 50 }
     if (statusFilter.value !== 'all') params.status = statusFilter.value
     const [taskData, summaryData] = await Promise.all([
-      request.get('/agent/tasks', { params }),
-      request.get('/agent/tasks/summary'),
+      getAgentTasks(params),
+      getAgentTaskSummary(),
     ])
     if (!isCurrent()) return
     tasks.value = taskData?.items || taskData || []
@@ -237,7 +237,7 @@ function viewResult(task) {
 
 async function retryTask(task) {
   try {
-    await request.post(`/agent/task/${task.id}/retry`)
+    await retryAgentTask(task.id)
     ElMessage.success('已重新提交')
     await loadTasks()
   } catch {
@@ -248,7 +248,7 @@ async function retryTask(task) {
 async function cancelTask(task) {
   try {
     await ElMessageBox.confirm('确定取消此任务？', '取消确认', { type: 'warning' })
-    await request.post(`/agent/task/${task.id}/cancel`)
+    await cancelAgentTask(task.id)
     ElMessage.success('已取消')
     await loadTasks()
   } catch {

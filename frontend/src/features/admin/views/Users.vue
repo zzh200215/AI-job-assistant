@@ -117,7 +117,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage } from '@/plugins/element-services'
-import request from '@/api/request'
+import { getAdminUsers } from '@/api/admin'
 import { dateTime } from '@/utils/format/date'
 
 const users = ref([])
@@ -165,10 +165,10 @@ function openDetail(user) {
 async function loadUsers() {
   loading.value = true
   try {
-    const res = await request.get('/auth/admin/users', {
-      params: { page: page.value, page_size: pageSize },
-      notifyError: false,
-    })
+    const res = await getAdminUsers(
+      { page: page.value, page_size: pageSize },
+      { notifyError: false }
+    )
     const data = res?.data || res || {}
     users.value = data.items || []
     total.value = data.total || 0

@@ -220,7 +220,9 @@ const BUDGET = {
      这条按整个样式层记一笔总量，与视图侧同尺子（`#hex` + `rgba(`）。 */
   themeColorLiterals: 124,
   pageShellRedeclarations: 22,
-  viewsBypassingApiLayer: 7,
+  /* D69 清零。这一维看不见 src/stores（JS_OUT_OF_SCOPE_ROOTS 为色值/色表那几把尺子豁免了它），
+     而 stores/auth.js 至今有 4 条裸调用——别把这里的 0 读成"全仓只有一处出网"。 */
+  viewsBypassingApiLayer: 0,
 }
 
 function vueFiles(dir, exts = ['.vue']) {
