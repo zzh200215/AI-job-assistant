@@ -191,11 +191,13 @@ function measure(file) {
   const dyn = {
     list: prefixes(template, universe),
     literals: stringLiterals(template + '\n' + universe),
+    transitions: [...template.matchAll(/<transition[^>]*\bname="([\w-]+)"/g)].map((m) => m[1]),
   }
   const returned = returnedClassStrings(universe)
   const rules = styles.flatMap(rulesOf)
 
   const candidates = []
+  const undecidable = []
   let protectedStatic = 0
   let protectedDynamic = 0
   for (const rule of rules) {
@@ -215,7 +217,32 @@ function measure(file) {
         protectedDynamic++
         continue
       }
-      candidates.push({ selector: rule.selector, why: '拼接前缀命中、后缀找不到字面量' })
+      /* 前缀认得、后缀找不到字面量 —— 这一族**不能算候选**。拼接类名只能被证明活着，
+         不能被证明死了：后缀的值域在后端。实测（D76）：dashboard/recommendation 那几条
+         发的是 `"priority": "high"|"medium"|"low"` 与 `"severity": "high"|"medium"|"low"`，
+         所以 `.dot-high`、`.severity-medium` 这些全都活着；而浏览器"这一屏 matched=0"
+         只说明我的夹具没把那个状态铺出来（Home 那次就是这么骗过我的）。 */
+      undecidable.push({
+        selector: rule.selector,
+        why: '拼接前缀命中、后缀值域在后端，静态与单屏快照都不能判死',
+      })
+      continue
+    }
+    // 判据 7：`<transition name="X">` 的四个状态类是 **Vue 运行时**加的
+    // （X-enter-active / X-enter-from / X-enter-to / X-leave-*），模板文本里永远看不见，
+    // 而浏览器"删掉→比计算属性"也抓不到它——类只存在于动画那几十毫秒里。
+    // 见 docs/upgrade-plan.md D76：DefaultLayout.vue:131 的 `name="fade"` 就是这一族。
+    const transitionClass = own.some((c) =>
+      dyn.transitions.some(
+        (t) =>
+          c === `${t}-enter-active` ||
+          c === `${t}-leave-active` ||
+          c.startsWith(`${t}-enter-`) ||
+          c.startsWith(`${t}-leave-`)
+      )
+    )
+    if (transitionClass) {
+      protectedDynamic++
       continue
     }
     // 判据 6：`block--modifier` 的两半都作为字面量出现过。加这一条是因为类名可能是**函数参数**
@@ -238,6 +265,7 @@ function measure(file) {
     protectedStatic,
     protectedDynamic,
     candidates,
+    undecidable,
   }
 }
 
@@ -252,6 +280,7 @@ const swept = rows.filter((r) => SWEEPED.has(path.basename(r.file)))
 const rest = rows.filter((r) => !SWEEPED.has(path.basename(r.file)))
 
 const whys = () => rows.flatMap((r) => r.candidates.map((c) => c.why))
+const undec = rows.flatMap((r) => r.undecidable || [])
 const totalCandidates = whys().length
 
 /**
@@ -277,10 +306,10 @@ if (json) {
 } else {
   console.log(`扫了 ${rows.length} 个 .vue：规则 ${sum('rules')} 条，样式 ${sum('styleLines')} 行`)
   console.log(`  静态判据保护 ${sum('protectedStatic')}，动态判据保护 ${sum('protectedDynamic')}`)
-  console.log(`  候选死规则合计 ${totalCandidates} 条`)
+  console.log(`  候选死规则合计 ${totalCandidates} 条（另有 ${undec.length} 条判不了，见下）`)
   console.log(
-    `  候选里"五条腿都不认" ${whys().filter((w) => w === '五条腿都不认').length}，` +
-      `"拼接前缀命中、后缀找不到" ${whys().filter((w) => w.startsWith('拼接')).length}`
+    `  候选全部来自"七条腿都不认"；判不了的那 ${undec.length} 条是拼接类名，` +
+      `后缀值域在后端（high/medium/low…），只能证活不能证死`
   )
   console.log(`\n自检（D67/D68 已清扫的四页，应当接近 0）：`)
   for (const r of swept) {

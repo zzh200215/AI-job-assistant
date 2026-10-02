@@ -48,6 +48,22 @@ export default [
     rules: { 'prettier/prettier': 'warn' },
   },
   {
+    // dev-only 的浏览器探针（probe/）要用这批全局；D67 当年为了不给它们放开**共享**配置，
+    // 干脆没把探针提交进来。这一块的 files 只匹配 probe/**，src 与 tests 的口径一个字没动。
+    name: 'app/probe-globals',
+    files: ['probe/**/*.js'],
+    languageOptions: {
+      globals: {
+        getComputedStyle: 'readonly',
+        localStorage: 'readonly',
+        requestAnimationFrame: 'readonly',
+        setTimeout: 'readonly',
+        MouseEvent: 'readonly',
+        location: 'readonly',
+      },
+    },
+  },
+  {
     name: 'app/no-raw-axios',
     files: ['src/**/*.{js,vue}'],
     ignores: ['src/api/request.js'],

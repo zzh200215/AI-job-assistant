@@ -1,0 +1,11 @@
+<!doctype html>
+<!--
+  死样式判据用的**浏览器探针**（dev-only；不进生产包，也不被任何测试引用）。
+  D67/D68 做过同样的事但把探针删了，于是每一轮都要重搭；这次留在仓库里，
+  用法与判据写在 docs/upgrade-plan.md D76。它需要浏览器全局（performance/CSSRule/
+  localStorage/MouseEvent…），所以 eslint 只在 probe/ 这一小块放开这些全局，共享配置不动。
+-->
+<meta charset="utf-8" />
+<title>dead-style probe</title>
+<div id="app"></div>
+<script type="module" src="./dead-style.entry.js"></script>
