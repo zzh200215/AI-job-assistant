@@ -2397,6 +2397,27 @@ M3 是这套设计里最要紧的一条：**豁免会过期**。补了样式却�
 
 **门禁**：`test:unit` **71 files / 437 passed**、`npm test` exit 0、`npm run typecheck` **65**（新增的 `src/constants/states.js` 一条错都没引入——域是 `Object.freeze` 的字面量数组 + `@typedef` 联合，不需要放宽任何编译选项）、`eslint` exit 0、`prettier --check` exit 0、`vite build` exit 0、改动文件 CRLF **0**、变异用的 `.st.bak` / `.home.bak` 与临时脚本删净。
 
+#### 已交付：D79 `partial` 那颗点补上了色——补它之前先被自己的量具骗了一次
+
+§10.28 拍的是 ①，落法是：`TaskCenter.vue` 加 `.dot-partial { background: var(--app-warning) }`，守卫里 `unstyled: ['partial']` **同步撤掉**（M3 那条变异证明不撤会红，这正是豁免机制的意义）。配色选 warn 的理由写进注释：`partial` 的语义是"整体跑完但有失败步骤"，既不是 `success` 也不是 `danger`，而 `--app-warning: #d99013`（`main.css:34`）与这一族其余五档同源。
+
+**证据不是"我加了规则所以应该有颜色"，是删回去看：**
+| 测法 | 结果 |
+|---|---|
+| 造一个带 TaskCenter `data-v-cc3087bc` 的 `.dot-partial` 节点，读计算样式 | `rgb(217, 144, 19)` = `--app-warning` |
+| 同页造一个没有规则的 `.dot-quantum` 作负对照 | `rgba(0, 0, 0, 0)`（透明） |
+| 手工把 `.dot-partial[data-v-cc3087bc]` 从样式表里**全部删掉**再读同一个节点 | `rgba(0, 0, 0, 0)` —— 颜色确实由这一条规则给出，删掉 `.dot-quantum` 一起透明，说明不是父级或继承带来的 |
+
+**但这一测差点没做出来，因为量具是瞎的**：我第一次直接用探针的 `audit()`，它报 `matched=1 / diffs=0 / restored=0` —— 一个明明在画的规则被删掉却"零差异"。根因是 `snapshot()` 用 `getPropertyValue(p)` 读，而 `PROPS` 是 camelCase：`getPropertyValue('backgroundColor')` 返回空串。所以 **46 条里有 24 条一直是空串**（所有颜色、边框色/宽、四向 margin/padding、`fontSize`、`lineHeight`、`letterSpacing`、`boxShadow`、`flexDirection`、`justifyContent`、`alignItems`、`zIndex`、`textDecorationLine`），"只改颜色"的删除在这套快照里永远看不见。改成 `cs[p]` 索引之后，同一个场景报 **`diffs=1 / restored=0`** —— 这才是这条通道应该有的样子，也顺手变成这一族的**正向对照**（D67/D68 那两轮没有这个对照，只有"删了没变化"）。
+
+**已经删掉的 16 条要不要重来？不用，但理由要说清**：那 16 条（D76 的 3 条 `.page-shell` + D77 的 13 条）判据都是 `matched=0`，而 `matched` 是一次 `document.querySelectorAll('选择器[data-v-xxx]')` 计数，**跟属性读法无关**。所以删除结论站得住；不站得住的是我当时把 `diffs=0` 当成第二把尺子写进账——那一半当时是半瞎的。现在的形状是：`matched` 判"有没有元素带着它"，`diffs` 判"带着它的元素会不会变"，后者有了正向对照才算数。
+
+**顺带给探针加了一条 `sheets` 计数**（同一条规则在文档里出现几张表）。起因是我以为 diffs=0 是 HMR 注了重复样式表造成的——后来证明不是（`sheets=1`），但这个盲区是真的：vite dev 改过样式块之后可能留旧注新，删掉其中一份而另一份还在画，就会把"活着"误判成"可删"。所以任何 `diffs=0` 的结论现在都得同时看 `sheets`。
+
+**一处我没能回头核的**：D68 那 3 条 `matched=1`（打在子组件根元素上的 `.interview-room-page .stage-card` / `.question-card`）用的是当时那台一次性 harness 的 44 条属性清单，我无法确认它读属性的形状；`InterviewRoom` 也没进现在这台探针的组件表。这三条是 16 条里唯一"确实有元素在匹配、却靠 diffs=0 判死"的，所以它们依赖的是**当时那把尺子没瞎**。要彻底放心，就得把 `InterviewRoom` 接进探针、把那 3 条规则插回去做一次正向对照 —— 记在这里，不当它已核。
+
+**门禁**：`test:unit` **71 files / 437 passed**、`npm test` exit 0、`eslint` exit 0、`prettier --check` exit 0、`npm run typecheck` **65**（原样，探针不在 tsconfig 的 include 里）、`vite build` exit 0、改动文件 CRLF **0**；探针用的 5199 那台 dev server 按命令行核对后定点停，再确认 0 监听。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
@@ -3091,7 +3112,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 **逐个键查过生产者，所以这条不是"前端写错了"一句话**：`total_sessions` **有人产**，但不在 Profile 调的那个端点上——`interview_rest.py:813` / `:859` 的会话统计里给的是 `"total_sessions": len(sessions)`，所以那一格是**取错了接口**，不是无中生有；`resume_count` 全仓只出现在配额语境（`resume.py:198` 的 `check_quota(..., "resume_count")` 与 `subscription_service.py:320`），没有任何响应把它作为键返回；`best_score` / `max_score` / `days_active` 三个名字在后端 **grep 为 0**，没有任何响应产出。所以"拿到 80 分以上"那个成就与"已使用 N 天"这句话，是从设计那天起就没有数据源的——这句我是按上面三条 grep 的结果写的，不是推测。
 
-28. **`TaskCenter` 那颗点没有 `partial` 档**（D78 的双向守卫咬出来的，现在以 `unstyled: ['partial']` 挂在守卫里）。后端四条路径都会把任务状态写成 `partial`（`strategies.py:459`、`:602`，`langgraph_flow.py:438`、`:500`，判据都是"有失败步骤但整体跑完"），而 `TaskCenter.vue` 的 `.dot-*` 只有 pending / running / completed / failed / cancelled 五档。所以**一次部分完成的任务，列表里那个状态点是没颜色的**——不是坏了，是从来没人给它画过。三条路：① 补一条 `.dot-partial`（配色选哪一档要定：它既不是成功也不是失败，我倾向用 warn 那一档，因为"有失败步骤"就是它的语义）；② 确认这个列表接口不会返回 partial（那就收窄 `AGENT_TASK_STATUSES`，并把守卫里的豁免删掉——**注意**：不能靠"从域里删掉 partial"来让守卫闭嘴，那是把发现藏起来，收窄要有生产者证据）；③ 保持现状，让豁免常驻（今天的形状，代价是每次看这条守卫都要想起它背后是一个没修的视觉缺口）。我一条都没动：① 会改变候选人看到的颜色，② 要后端事实而我看到的四处赋值指向相反方向。
+28. ~~**`TaskCenter` 那颗点没有 `partial` 档**~~ —— **已定并落地（D79，选 ①）**：补了 `.dot-partial { background: var(--app-warning) }`（`TaskCenter.vue`，配色用 warn 那一档，理由与后端语义一致："有失败步骤但整体跑完"），守卫里的 `unstyled: ['partial']` **同步清空**——那条豁免存在的意义就是"补了规则不删它会红"，M3 变异已经证明它会红。浏览器证据与量具的一件事见 D79。（原始观察保留：后端四条路径都会写 `partial`（`strategies.py:459`、`:602`，`langgraph_flow.py:438`、`:500`），而这一页原先只有五档点色。）
 
 ## 11. 附录：本方案未采纳的一条建议
 
