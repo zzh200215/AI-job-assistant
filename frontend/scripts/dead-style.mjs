@@ -17,6 +17,23 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+/* 判据 8：拼接类名的后缀**看域**，不看运气。域住在 src/constants/states.js，
+   与 tests/unit/styleDebtRatchet.test.js 里那条双向守卫共用同一份（那边钉"域 ↔ CSS 规则"，
+   这边钉"这条规则还值不值得留"）。加了这一条，D77 记的 9 条不可判降到 0。 */
+import {
+  AGENT_TASK_STATUSES,
+  CONFIDENCE_LEVELS,
+  PRIORITY_LEVELS,
+  SEVERITY_LEVELS,
+} from '../src/constants/states.js'
+
+const DOMAIN_BY_PREFIX = {
+  dot: [...new Set([...PRIORITY_LEVELS, ...AGENT_TASK_STATUSES])],
+  confidence: [...CONFIDENCE_LEVELS],
+  severity: [...SEVERITY_LEVELS],
+  action: [...SEVERITY_LEVELS],
+}
+
 const SWEEPED = new Set([
   'JobSearch.vue',
   'PipelineKanban.vue',
@@ -200,6 +217,7 @@ function measure(file) {
   const undecidable = []
   let protectedStatic = 0
   let protectedDynamic = 0
+  let protectedDomain = 0
   for (const rule of rules) {
     const own = rule.classes.filter((c) => !LIBRARY.test(c))
     if (!own.length) continue
@@ -215,6 +233,18 @@ function measure(file) {
       )
       if (suffixKnown) {
         protectedDynamic++
+        continue
+      }
+      /* 判据 8：后缀在**已声明的值域**里 —— 这一条把"后缀字面量不在本文件"那 9 条从不可判变成判活。 */
+      const byDomain = own.some((c) =>
+        dyn.list.some((p) => {
+          if (!c.startsWith(p)) return false
+          const values = DOMAIN_BY_PREFIX[p.replace(/-$/, '')]
+          return Boolean(values) && values.includes(c.slice(p.length))
+        })
+      )
+      if (byDomain) {
+        protectedDomain++
         continue
       }
       /* 前缀认得、后缀找不到字面量 —— 这一族**不能算候选**。拼接类名只能被证明活着，
@@ -264,6 +294,7 @@ function measure(file) {
     styleLines: styles.reduce((a, s) => a + s.split(/\r?\n/).length, 0),
     protectedStatic,
     protectedDynamic,
+    protectedDomain,
     candidates,
     undecidable,
   }
@@ -305,11 +336,12 @@ if (json) {
   process.stdout.write(JSON.stringify(rows, null, 1))
 } else {
   console.log(`扫了 ${rows.length} 个 .vue：规则 ${sum('rules')} 条，样式 ${sum('styleLines')} 行`)
-  console.log(`  静态判据保护 ${sum('protectedStatic')}，动态判据保护 ${sum('protectedDynamic')}`)
+  console.log(
+    `  静态判据保护 ${sum('protectedStatic')}，动态判据保护 ${sum('protectedDynamic')}，值域判据保护 ${sum('protectedDomain')}`
+  )
   console.log(`  候选死规则合计 ${totalCandidates} 条（另有 ${undec.length} 条判不了，见下）`)
   console.log(
-    `  候选全部来自"七条腿都不认"；判不了的那 ${undec.length} 条是拼接类名，` +
-      `后缀值域在后端（high/medium/low…），只能证活不能证死`
+    `  候选全部来自"八条腿都不认"；另有 ${undec.length} 条前缀认得、但后缀不在已声明值域里（要判它，先把值域加进 src/constants/states.js）`
   )
   console.log(`\n自检（D67/D68 已清扫的四页，应当接近 0）：`)
   for (const r of swept) {

@@ -2,6 +2,13 @@ import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
+import {
+  AGENT_TASK_STATUSES,
+  CONFIDENCE_LEVELS,
+  PRIORITY_LEVELS,
+  SEVERITY_LEVELS,
+} from '../../src/constants/states.js'
+
 // Ratchet guards. Every ceiling below is a measurement of existing debt, not an
 // approval of it. A count may only move DOWN: when you fix some, lower the
 // number in this file in the same commit, otherwise `staleBudgets` fails and
@@ -963,5 +970,97 @@ describe('style debt ratchet', () => {
       }
     }
     expect(missing, `main.css is missing score tokens: ${missing.join(', ')}`).toEqual([])
+  })
+
+  /* 拼出来的类名（`'dot-' + task.priority`、`` `severity-${item.severity}` ``）这一族，
+     D76/D77 用静态尺子和浏览器快照都判不了：静态看不见后端的值域，单屏快照只证明"这一屏没渲染到"。
+     所以域写在 `src/constants/states.js`（每个值标了后端出处），这里正反两个方向各钉一遍：
+       正向 域里有的值，该文件必须有一条规则（或明写在 unstyled 里并给出理由）；
+       反向 该文件里有的 `prefix-*` 规则，值必须在域内（或明写在 siblings 里 = 它不是状态类）。
+     任何一侧多出来或删除，都会把另一侧的豁免条目要求同步删掉，所以豁免不会过期。 */
+  const STATE_CLASS_SITES = [
+    {
+      prefix: 'dot',
+      values: PRIORITY_LEVELS,
+      file: 'src/features/shell/views/Home.vue',
+      unstyled: [],
+      siblings: [],
+    },
+    {
+      // `partial` 是后端真会发的状态（`strategies.py:459,602`、`langgraph_flow.py:438,500`），
+      // 而这一页从来没给它画过点色 —— 明写在 unstyled 里，等 §10.28 拍。
+      prefix: 'dot',
+      values: AGENT_TASK_STATUSES,
+      file: 'src/features/shell/views/TaskCenter.vue',
+      unstyled: ['partial'],
+      siblings: [],
+    },
+    {
+      prefix: 'confidence',
+      values: CONFIDENCE_LEVELS,
+      file: 'src/features/knowledge/views/KnowledgeBase.vue',
+      unstyled: [],
+      // 这四个是布局类，不是状态类
+      siblings: ['grid', 'main', 'score', 'signals'],
+    },
+    {
+      prefix: 'severity',
+      values: SEVERITY_LEVELS,
+      file: 'src/features/eval/views/RecommendationEval.vue',
+      unstyled: [],
+      siblings: [],
+    },
+    {
+      prefix: 'action',
+      values: SEVERITY_LEVELS,
+      file: 'src/features/jobs/views/JobRecommend.vue',
+      unstyled: [],
+      siblings: ['list', 'item', 'detail', 'title'],
+    },
+  ]
+
+  it('keeps concatenated state classes aligned with their backend value domain', () => {
+    const problems = []
+    for (const site of STATE_CLASS_SITES) {
+      const css = styleOf(site.file)
+      const source = sourceOf(site.file)
+      if (!css) {
+        problems.push(`${site.file}: 尺子看不见这个文件了（搬家没改根）`)
+        continue
+      }
+      if (!source.includes(`'${site.prefix}-'`) && !source.includes('`' + site.prefix + '-${')) {
+        problems.push(
+          `${site.file}: 这里已经不再发 .${site.prefix}-* 了，指针该跟着搬（否则这条守卫会退化成空检查）`
+        )
+      }
+      for (const value of site.values) {
+        const has = new RegExp(`\\.${site.prefix}-${value}\\b`).test(css)
+        const waived = site.unstyled.includes(value)
+        if (has && waived) {
+          problems.push(
+            `${site.file}: .${site.prefix}-${value} 已经有规则了，把 unstyled 里那条删掉`
+          )
+        }
+        if (!has && !waived) {
+          problems.push(`${site.file}: 值域里有 ${value}，但没有 .${site.prefix}-${value} 规则`)
+        }
+      }
+      for (const sibling of site.siblings) {
+        if (!new RegExp(`\\.${site.prefix}-${sibling}\\b`).test(css)) {
+          problems.push(
+            `${site.file}: siblings 里的 .${site.prefix}-${sibling} 已经不在这个文件里，删掉这个豁免`
+          )
+        }
+      }
+      const extra = [...css.matchAll(new RegExp(`^\\.${site.prefix}-([a-z]+)\\b`, 'gm'))]
+        .map((m) => m[1])
+        .filter((v) => !site.values.includes(v) && !site.siblings.includes(v))
+      for (const v of extra) {
+        problems.push(
+          `${site.file}: .${site.prefix}-${v} 不在值域里 = 死样式（要么删它，要么说明后端会发它并加进域里）`
+        )
+      }
+    }
+    expect(problems, problems.join('\n')).toEqual([])
   })
 })
