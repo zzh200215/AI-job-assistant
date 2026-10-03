@@ -119,6 +119,91 @@ function selftest() {
     null
   )
   chk('拒无 h3 的拒因', w.r.startsWith('5'), true)
+  /* ---- #heading 那一支（决定 ①）：正反各两条，两向都要有，否则"新形状"只是没判 ---- */
+  const HEADING_ONE = [
+    '    <div class="panel side-panel">',
+    '      <div class="panel-header">',
+    '        <div class="side-title">岗位聚焦</div>',
+    '      </div>',
+    '      <div class="panel-body">',
+    '        <p>正文</p>',
+    '      </div>',
+    '    </div>',
+  ]
+  const h1 = plan(HEADING_ONE, 1, w)
+  chk('plan heading 一行式容器', h1 && { from: h1.from, to: h1.to, block: h1.block }, {
+    from: 0,
+    to: 8,
+    block: [
+      '    <AppPanel class="side-panel">',
+      '      <template #heading>',
+      '        <div class="side-title">岗位聚焦</div>',
+      '      </template>',
+      '      <p>正文</p>',
+      '    </AppPanel>',
+    ],
+  })
+  const HEADING_MULTI = [
+    '    <div class="panel transcript-card">',
+    '      <div class="panel-header">',
+    '        <div class="transcript-header">',
+    '          <span>面试实录</span>',
+    '          <span class="transcript-sub">副标题</span>',
+    '        </div>',
+    '      </div>',
+    '      <div class="panel-body">',
+    '        <p>正文</p>',
+    '      </div>',
+    '    </div>',
+  ]
+  const h2 = plan(HEADING_MULTI, 1, w)
+  chk('plan heading 跨行容器（内含两个 span 也认，容器自己是一个 div）', !!h2, true)
+  chk('plan heading 的容器与正文都整体平移', h2 && h2.block.slice(1, 6), [
+    '      <template #heading>',
+    '        <div class="transcript-header">',
+    '          <span>面试实录</span>',
+    '          <span class="transcript-sub">副标题</span>',
+    '        </div>',
+  ])
+  chk(
+    'heading 拒 span 标题（那属决定 ②）',
+    plan(
+      [
+        '    <div class="panel">',
+        '      <div class="panel-header">',
+        '        <span>技能雷达</span>',
+        '      </div>',
+        '      <div class="panel-body">',
+        '        <p>正文</p>',
+        '      </div>',
+        '    </div>',
+      ],
+      1,
+      w
+    ),
+    null
+  )
+  chk('span 那一支的拒因', w.r.startsWith('10'), true)
+  chk(
+    'heading 拒两个并列容器',
+    plan(
+      [
+        '    <div class="panel">',
+        '      <div class="panel-header">',
+        '        <div class="a">x</div>',
+        '        <div class="b">y</div>',
+        '      </div>',
+        '      <div class="panel-body">',
+        '        <p>正文</p>',
+        '      </div>',
+        '    </div>',
+      ],
+      1,
+      w
+    ),
+    null
+  )
+  chk('并列容器的拒因', w.r.startsWith('11'), true)
   // 没有图标时不能凭空冒出 icon-color 属性
   chk(
     'plan 无图标站点',
@@ -155,6 +240,14 @@ const BATCH = {
   History: 0,
   RecommendationConfig: 0,
   RecommendationEval: 0,
+  /* D98 写盘之后这四个全归 0：`InterviewReport`(8) 与 `RoomAside`(3) 已经搬进 AppPanel，
+     `CareerPlanPane: 0` 与 `TranscriptPane: 0` 是**防复发**的边界断言。
+     `CareerPlanPane: 0` 是**边界断言**——它那两处 span 标题必须继续被拒（属决定 ②），
+     否则这条批处理会在"顺手"之间把一次可见的语义改动混进搬家。 */
+  InterviewReport: 0,
+  RoomAside: 0,
+  CareerPlanPane: 0,
+  TranscriptPane: 0,
 }
 const WRITE = process.argv.includes('--write')
 const FEATURES = fileURLToPath(new URL('../src/features/', import.meta.url))
@@ -190,6 +283,37 @@ const VIEW_PATHS = (() => {
   return byName
 })()
 
+/**
+ * `#heading` 那一支（§10.14 决定 ①，D97/D98）：`.panel-header` 里面**不是** `.panel-title-row`，
+ * 而是调用方自持的一个容器（`.side-title` / `.transcript-header` …）。这种站点搬进 AppPanel 之后
+ * 仍然安全，因为槽内容编译在**调用方**作用域里，那条容器自己的 scoped 规则继续匹配（D97 实测）。
+ *
+ * 判据比默认那一支严：只认"头部里正好一个元素"，而且必须是 `<div>` 起的容器——
+ * `<span>` 标题属决定 ②（span→h3 是候选人可见的），两处并列的容器也没有一个槽能装。
+ */
+function planHeading(L, i, w, headInd, why) {
+  const bail = (r) => {
+    if (why) why.r = r
+    return null
+  }
+  const closeHeader = `${sp(headInd)}</div>`
+  let k = i + 1
+  while (k < L.length && L[k] !== closeHeader) k++
+  if (k >= L.length) return bail('9 heading 未收尾')
+  const inner = L.slice(i + 1, k).filter((l) => l.trim())
+  if (inner.length === 0) return bail('9 heading 空')
+  const first = inner[0].trim()
+  const last = inner[inner.length - 1].trim()
+  const oneLiner = inner.length === 1 && /^<div\b[^>]*>.*<\/div>$/.test(first)
+  const blockForm =
+    inner.length > 1 && /^<div\b/.test(first) && last === '</div>' && !/<div\b/.test(inner[1])
+  if (!oneLiner && !blockForm) {
+    if (/^<span\b/.test(first)) return bail('10 标题是 span（属决定 ②）')
+    return bail('11 heading 不是单个容器')
+  }
+  return { inner, headerEnd: k }
+}
+
 /** 返回该 panel-header 的迁移方案，或 null（不合格）。 */
 function plan(L, i, why) {
   const bail = (r) => {
@@ -199,7 +323,37 @@ function plan(L, i, why) {
   const headInd = L[i].match(/^ */)[0].length
   const w = wrap(L, i)
   if (!w) return bail('2 包裹')
-  if (L[i + 1] !== `${sp(headInd + 2)}<div class="panel-title-row">`) return bail('3 title-row 行')
+  const titleRow = L[i + 1] === `${sp(headInd + 2)}<div class="panel-title-row">`
+  if (!titleRow) {
+    const h = planHeading(L, i, w, headInd, why)
+    if (!h) return null
+    // 头部收尾之后必须紧跟 panel-body，面板收尾按同一对配对规则找
+    if (L[h.headerEnd + 1] !== `${sp(headInd)}<div class="panel-body">`)
+      return bail('7 后面不是 panel-body')
+    const wInd = w.ind
+    let e = -1
+    for (let q = h.headerEnd + 2; q < L.length - 1; q++) {
+      if (L[q] === `${sp(headInd)}</div>` && L[q + 1] === `${wInd}</div>`) {
+        e = q
+        break
+      }
+    }
+    if (e < 0) return bail('8 面板收尾不配对')
+    const wi = wInd.length
+    const reind = (lines, delta) =>
+      lines.map((l) =>
+        !l.trim() ? l : sp(Math.max(0, l.match(/^ */)[0].length + delta)) + l.trimStart()
+      )
+    const attrs = `${w.vifs.map((v) => ` ${v}`).join('')}${w.mod ? ` class="${w.mod}"` : ''}`
+    const block = [`${wInd}<AppPanel${attrs}>`]
+    block.push(
+      `${sp(wi + 2)}<template #heading>`,
+      ...reind(h.inner, wi + 4 - (headInd + 2)),
+      `${sp(wi + 2)}</template>`
+    )
+    block.push(...reind(L.slice(h.headerEnd + 2, e), wi + 2 - (headInd + 2)), `${wInd}</AppPanel>`)
+    return { from: i - 1, to: e + 2, block }
+  }
 
   let k = i + 2
   let icon = null
@@ -354,12 +508,28 @@ for (const [name, expect] of Object.entries(TARGETS)) {
   }
   if (WRITE) {
     const importLine = "import AppPanel from '@/components/ui/AppPanel.vue'"
-    if (!L.includes(importLine))
-      L.splice(
-        L.findIndex((l) => /^import /.test(l)),
-        0,
-        importLine
-      )
+    if (!L.includes(importLine)) {
+      /* 原先是一句 `L.splice(L.findIndex(/^import /), 0, importLine)`。脚本里**一条 import 都没有**的
+         组件（`RoomAside` 就是——它只用 `defineProps`）会让 findIndex 返回 -1，而 `splice(-1,0,x)`
+         把 x 插到**数组尾部**，也就是掉在 `</style>` 后面。Vue 对未注册的组件不报错、只把它当未知
+         元素原样画出来（`<apppanel>`），于是默认槽的内容还在、`#heading` 那一支整个消失——
+         测试里表现为"少画三个字"，浏览器里表现为 `<apppanel>` 标签。这类失败没有一条会红，
+         所以锚点必须显式落在 `<script>` 与 `</script>` 之间，并且写盘后复核一次。 */
+      const scriptAt = L.findIndex((l) => /^<script\b/.test(l))
+      if (scriptAt < 0) {
+        console.error(`${name}: 找不到 <script> 块，import 无处可插 —— 中止`)
+        process.exit(1)
+      }
+      const scriptEnd = L.findIndex((l) => /^<\/script>/.test(l))
+      const firstImport = L.findIndex((l, k) => k > scriptAt && /^import /.test(l))
+      const at = firstImport > -1 ? firstImport : scriptAt + 1
+      L.splice(at, 0, importLine)
+      const after = L.findIndex((l) => l === importLine)
+      if (!(after > scriptAt && (scriptEnd < 0 || after < scriptEnd))) {
+        console.error(`${name}: import 落到了脚本块之外（行 ${after + 1}）—— 中止`)
+        process.exit(1)
+      }
+    }
     writeFileSync(p, L.join('\n'))
   }
   grand += done

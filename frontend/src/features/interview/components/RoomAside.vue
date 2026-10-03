@@ -1,68 +1,64 @@
 <template>
   <aside class="side-column">
-    <div class="panel side-panel">
-      <div class="panel-header">
+    <AppPanel class="side-panel">
+      <template #heading>
         <div class="side-title">岗位聚焦</div>
-      </div>
-      <div class="panel-body">
-        <div class="side-block">
-          <strong>{{ session?.jd_summary?.title || '目标岗位' }}</strong>
-          <p>{{ session?.jd_summary?.company || '未填写公司' }}</p>
-          <div class="skill-grid">
-            <span
-              v-for="skill in (session?.jd_summary?.required_skills || []).slice(0, 6)"
-              :key="skill"
-            >
-              {{ skill }}
-            </span>
-          </div>
+      </template>
+      <div class="side-block">
+        <strong>{{ session?.jd_summary?.title || '目标岗位' }}</strong>
+        <p>{{ session?.jd_summary?.company || '未填写公司' }}</p>
+        <div class="skill-grid">
+          <span
+            v-for="skill in (session?.jd_summary?.required_skills || []).slice(0, 6)"
+            :key="skill"
+          >
+            {{ skill }}
+          </span>
         </div>
       </div>
-    </div>
+    </AppPanel>
 
-    <div class="panel side-panel">
-      <div class="panel-header">
+    <AppPanel class="side-panel">
+      <template #heading>
         <div class="side-title">表现速览</div>
-      </div>
-      <div class="panel-body">
-        <div class="snapshot-grid">
-          <div class="snapshot-item">
-            <span>已评分题数</span>
-            <strong>{{ answeredCount }}</strong>
-          </div>
-          <div class="snapshot-item">
-            <span>超时次数</span>
-            <strong>{{ timeoutCount }}</strong>
-          </div>
-          <div class="snapshot-item">
-            <span>最近得分</span>
-            <strong>{{ lastScore?.score ?? '--' }}</strong>
-          </div>
-          <div class="snapshot-item">
-            <span>当前判断</span>
-            <strong>{{ recentSignal }}</strong>
-          </div>
+      </template>
+      <div class="snapshot-grid">
+        <div class="snapshot-item">
+          <span>已评分题数</span>
+          <strong>{{ answeredCount }}</strong>
         </div>
-        <p v-if="lastScore?.improvement" class="snapshot-note">
-          最近一题建议：{{ lastScore.improvement }}
-        </p>
+        <div class="snapshot-item">
+          <span>超时次数</span>
+          <strong>{{ timeoutCount }}</strong>
+        </div>
+        <div class="snapshot-item">
+          <span>最近得分</span>
+          <strong>{{ lastScore?.score ?? '--' }}</strong>
+        </div>
+        <div class="snapshot-item">
+          <span>当前判断</span>
+          <strong>{{ recentSignal }}</strong>
+        </div>
       </div>
-    </div>
+      <p v-if="lastScore?.improvement" class="snapshot-note">
+        最近一题建议：{{ lastScore.improvement }}
+      </p>
+    </AppPanel>
 
-    <div class="panel side-panel">
-      <div class="panel-header">
+    <AppPanel class="side-panel">
+      <template #heading>
         <div class="side-title">本题提醒</div>
-      </div>
-      <div class="panel-body">
-        <ul class="hint-list">
-          <li v-for="tip in structure" :key="tip">{{ tip }}</li>
-        </ul>
-      </div>
-    </div>
+      </template>
+      <ul class="hint-list">
+        <li v-for="tip in structure" :key="tip">{{ tip }}</li>
+      </ul>
+    </AppPanel>
   </aside>
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
+
 /* 右栏三块（岗位聚焦 / 表现速览 / 本题提醒）：D66 从 InterviewRoom.vue 整列搬出来。合成一个组件而不是三个，是因为这一列的耦合就在列上——`.side-column .panel + .panel` 那条间距规则要的是"相邻的两块面板"，拆成三个组件就得把它复制三份。 */
 
 defineProps({

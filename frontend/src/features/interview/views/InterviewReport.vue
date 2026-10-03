@@ -48,218 +48,194 @@
 
       <section class="report-grid">
         <div class="main-column">
-          <div class="panel">
-            <div class="panel-header">
+          <AppPanel>
+            <template #heading>
               <div class="card-header">
                 <span>面试结论</span>
                 <span class="sub">把分数翻译成更接近真实面试判断的语言</span>
               </div>
-            </div>
-            <div class="panel-body">
-              <div
-                class="decision-strip"
-                :style="{ borderColor: scoreColor(report.overall_score) }"
-              >
-                <div>
-                  <div class="decision-label">当前判断</div>
-                  <strong>{{ verdictTitle }}</strong>
-                </div>
-                <p>{{ localizedOverallEvaluation || fallbackEvaluation }}</p>
+            </template>
+            <div class="decision-strip" :style="{ borderColor: scoreColor(report.overall_score) }">
+              <div>
+                <div class="decision-label">当前判断</div>
+                <strong>{{ verdictTitle }}</strong>
               </div>
+              <p>{{ localizedOverallEvaluation || fallbackEvaluation }}</p>
             </div>
-          </div>
+          </AppPanel>
 
-          <div class="panel">
-            <div class="panel-header">
+          <AppPanel>
+            <template #heading>
               <div class="card-header">
                 <span>能力画像</span>
                 <span class="sub">看清楚强项和最容易失分的点</span>
               </div>
-            </div>
-            <div class="panel-body">
-              <div class="dimension-list">
-                <div
-                  v-for="(score, key) in report.dimension_scores"
-                  :key="key"
-                  class="dimension-item"
-                >
-                  <div class="dimension-top">
-                    <span>{{ dimLabels[key] || key }}</span>
-                    <strong :style="{ color: scoreColor(score) }">{{ score }}</strong>
-                  </div>
-                  <div class="dimension-track">
-                    <div
-                      class="dimension-fill"
-                      :style="{ width: `${score}%`, background: scoreColor(score) }"
-                    ></div>
-                  </div>
-                  <p>{{ dimensionComment(key, score) }}</p>
+            </template>
+            <div class="dimension-list">
+              <div
+                v-for="(score, key) in report.dimension_scores"
+                :key="key"
+                class="dimension-item"
+              >
+                <div class="dimension-top">
+                  <span>{{ dimLabels[key] || key }}</span>
+                  <strong :style="{ color: scoreColor(score) }">{{ score }}</strong>
                 </div>
+                <div class="dimension-track">
+                  <div
+                    class="dimension-fill"
+                    :style="{ width: `${score}%`, background: scoreColor(score) }"
+                  ></div>
+                </div>
+                <p>{{ dimensionComment(key, score) }}</p>
               </div>
             </div>
-          </div>
+          </AppPanel>
 
           <div class="two-col">
-            <div class="panel">
-              <div class="panel-header">
+            <AppPanel>
+              <template #heading>
                 <div class="card-header">
                   <span>亮点</span>
                 </div>
-              </div>
-              <div class="panel-body">
-                <ul class="plain-list">
-                  <li
-                    v-for="item in localizedStrengths.length
-                      ? localizedStrengths
-                      : fallbackStrengths"
-                    :key="item"
-                  >
-                    {{ item }}
-                  </li>
-                </ul>
-              </div>
-            </div>
+              </template>
+              <ul class="plain-list">
+                <li
+                  v-for="item in localizedStrengths.length ? localizedStrengths : fallbackStrengths"
+                  :key="item"
+                >
+                  {{ item }}
+                </li>
+              </ul>
+            </AppPanel>
 
-            <div class="panel">
-              <div class="panel-header">
+            <AppPanel>
+              <template #heading>
                 <div class="card-header">
                   <span>风险点</span>
                 </div>
-              </div>
-              <div class="panel-body">
-                <ul class="plain-list warning">
-                  <li
-                    v-for="item in localizedWeaknesses.length
-                      ? localizedWeaknesses
-                      : fallbackWeaknesses"
-                    :key="item"
-                  >
-                    {{ item }}
-                  </li>
-                </ul>
-              </div>
-            </div>
+              </template>
+              <ul class="plain-list warning">
+                <li
+                  v-for="item in localizedWeaknesses.length
+                    ? localizedWeaknesses
+                    : fallbackWeaknesses"
+                  :key="item"
+                >
+                  {{ item }}
+                </li>
+              </ul>
+            </AppPanel>
           </div>
 
-          <div class="panel">
-            <div class="panel-header">
+          <AppPanel>
+            <template #heading>
               <div class="card-header">
                 <span>逐题时间线</span>
                 <span class="sub">比单纯堆分数更接近真实面试复盘</span>
               </div>
-            </div>
-            <div class="panel-body">
-              <div class="timeline-list">
-                <div
-                  v-for="(item, index) in report.question_evaluations"
-                  :key="`${index}-${item.question_index}`"
-                  class="timeline-item"
-                >
-                  <div class="timeline-badge">{{ index + 1 }}</div>
-                  <div class="timeline-content">
-                    <div class="timeline-top">
-                      <div>
-                        <strong>{{ item.category || '通用问题' }}</strong>
-                        <p>{{ item.question }}</p>
-                      </div>
-                      <div
-                        class="timeline-score"
-                        :style="{ color: scoreColor(item.overall_score) }"
-                      >
-                        {{ item.overall_score }}
-                      </div>
+            </template>
+            <div class="timeline-list">
+              <div
+                v-for="(item, index) in report.question_evaluations"
+                :key="`${index}-${item.question_index}`"
+                class="timeline-item"
+              >
+                <div class="timeline-badge">{{ index + 1 }}</div>
+                <div class="timeline-content">
+                  <div class="timeline-top">
+                    <div>
+                      <strong>{{ item.category || '通用问题' }}</strong>
+                      <p>{{ item.question }}</p>
                     </div>
+                    <div class="timeline-score" :style="{ color: scoreColor(item.overall_score) }">
+                      {{ item.overall_score }}
+                    </div>
+                  </div>
 
-                    <div class="timeline-tags">
-                      <span>完整 {{ item.completeness }}</span>
-                      <span>准确 {{ item.accuracy }}</span>
-                      <span>深度 {{ item.depth }}</span>
-                      <span>表达 {{ item.expression }}</span>
-                    </div>
+                  <div class="timeline-tags">
+                    <span>完整 {{ item.completeness }}</span>
+                    <span>准确 {{ item.accuracy }}</span>
+                    <span>深度 {{ item.depth }}</span>
+                    <span>表达 {{ item.expression }}</span>
+                  </div>
 
-                    <div class="timeline-answer">
-                      <div class="field-label">你的回答</div>
-                      <p>{{ item.user_answer || '本题超时或未作答' }}</p>
-                    </div>
+                  <div class="timeline-answer">
+                    <div class="field-label">你的回答</div>
+                    <p>{{ item.user_answer || '本题超时或未作答' }}</p>
+                  </div>
 
-                    <div class="timeline-answer">
-                      <div class="field-label">面试官反馈</div>
-                      <p>{{ item.feedback || '暂无反馈' }}</p>
-                    </div>
+                  <div class="timeline-answer">
+                    <div class="field-label">面试官反馈</div>
+                    <p>{{ item.feedback || '暂无反馈' }}</p>
+                  </div>
 
-                    <div v-if="item.improvement" class="timeline-answer">
-                      <div class="field-label">如何补强</div>
-                      <p class="improvement">{{ item.improvement }}</p>
-                    </div>
+                  <div v-if="item.improvement" class="timeline-answer">
+                    <div class="field-label">如何补强</div>
+                    <p class="improvement">{{ item.improvement }}</p>
+                  </div>
 
-                    <div v-if="item.evidence" class="timeline-answer evidence-block">
-                      <div class="field-label">评分证据</div>
-                      <p>{{ item.evidence.answer_excerpt || '已保留本题回答和评分维度。' }}</p>
-                    </div>
+                  <div v-if="item.evidence" class="timeline-answer evidence-block">
+                    <div class="field-label">评分证据</div>
+                    <p>{{ item.evidence.answer_excerpt || '已保留本题回答和评分维度。' }}</p>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          </AppPanel>
         </div>
 
         <aside class="side-column">
-          <div class="panel">
-            <div class="panel-header">
+          <AppPanel>
+            <template #heading>
               <div class="card-header">
                 <span>下一步训练</span>
               </div>
-            </div>
-            <div class="panel-body">
-              <div class="training-list">
-                <div
-                  v-for="(item, index) in trainingPlan"
-                  :key="`${index}-${item}`"
-                  class="training-item"
-                >
-                  <span>{{ String(index + 1).padStart(2, '0') }}</span>
-                  <p>{{ item }}</p>
-                </div>
+            </template>
+            <div class="training-list">
+              <div
+                v-for="(item, index) in trainingPlan"
+                :key="`${index}-${item}`"
+                class="training-item"
+              >
+                <span>{{ String(index + 1).padStart(2, '0') }}</span>
+                <p>{{ item }}</p>
               </div>
             </div>
-          </div>
+          </AppPanel>
 
-          <div class="panel">
-            <div class="panel-header">
+          <AppPanel>
+            <template #heading>
               <div class="card-header">
                 <span>岗位对照</span>
               </div>
-            </div>
-            <div class="panel-body">
-              <div class="job-panel">
-                <strong>{{ report.jd_summary?.title || '目标岗位' }}</strong>
-                <p>{{ report.jd_summary?.company || '未填写公司' }}</p>
-                <div class="job-skills">
-                  <span
-                    v-for="skill in (report.jd_summary?.required_skills || []).slice(0, 8)"
-                    :key="skill"
-                  >
-                    {{ skill }}
-                  </span>
-                </div>
+            </template>
+            <div class="job-panel">
+              <strong>{{ report.jd_summary?.title || '目标岗位' }}</strong>
+              <p>{{ report.jd_summary?.company || '未填写公司' }}</p>
+              <div class="job-skills">
+                <span
+                  v-for="skill in (report.jd_summary?.required_skills || []).slice(0, 8)"
+                  :key="skill"
+                >
+                  {{ skill }}
+                </span>
               </div>
             </div>
-          </div>
+          </AppPanel>
 
-          <div class="panel">
-            <div class="panel-header">
+          <AppPanel>
+            <template #heading>
               <div class="card-header">
                 <span>复盘摘要</span>
               </div>
-            </div>
-            <div class="panel-body">
-              <ul class="plain-list">
-                <li>如果只看一项，先补 {{ weakestDimension.label }}。</li>
-                <li>当前最稳定的能力维度是 {{ strongestDimension.label }}。</li>
-                <li>{{ localizedHiringRecommendation || '系统当前未给出明确推进建议。' }}</li>
-              </ul>
-            </div>
-          </div>
+            </template>
+            <ul class="plain-list">
+              <li>如果只看一项，先补 {{ weakestDimension.label }}。</li>
+              <li>当前最稳定的能力维度是 {{ strongestDimension.label }}。</li>
+              <li>{{ localizedHiringRecommendation || '系统当前未给出明确推进建议。' }}</li>
+            </ul>
+          </AppPanel>
         </aside>
       </section>
 
@@ -277,6 +253,7 @@
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
