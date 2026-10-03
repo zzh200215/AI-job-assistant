@@ -2553,6 +2553,24 @@ D79 留的最后一件"我没能回头核的事"：D67/D68 删的 16 条里，�
 
 **门禁**：`npm run typecheck` **43**（探针不在 tsconfig 的 include 里，所以这一刀的代码改动不进类型账——这是**故意的**，也意味着探针本身没有类型门保护）、`npm test` exit 0、`test:unit` 74 files / 448 passed、`eslint` exit 0、`prettier --check` exit 0、`node scripts/dead-style.mjs --selftest` exit 0（全仓候选仍 0）、探针文件 CR **0**。**一台 dev server 我没能停下来**：`taskkill //PID 11864 //F`（vite 本体）与 npx 包装 `25828` 都被动作分类器拦下，两个 PID 都按 CommandLine 核过确实是本轮 `vite --port 5199 --strictPort` 起的；按规矩没绕道，所以 5199 现在仍在监听。
 
+#### 已交付：D86 §10 逐条复测：第二条"其实是取错键"藏在那里——薄弱项那一屏从上线起就一直在画随机数
+
+他给的第二项是"§10 那 18 条里的可推进项"。做法跟 D83 一样：**先把每条条目自带的前提对着树重量一遍**，再决定哪些真的需要拍。结果：open 从 18 降到 **17**（划掉 §10.6），另有两条的站点清单本身就是错的（§10.5、§10.17，已按现测改），其余没有第二条"其实不用拍"。
+
+**§10.6 那条的前提是错的，而且错得让它一直没被当成缺陷**：条目写"当前**无趋势数据时**用 `Math.random()*40+30` 造分"。实测 `loadWeakAreas` 主分支读的是 `perf.dimensions`，而 `GET /interview/performance` 返回的是 `dimension_averages` 与 `weaknesses`（`interview_rest.py:821-829`）——**`dimensions` 这个键在这份响应里根本不存在**（同名键属于匹配解释那份载荷，`match_explainer_service.py:79`；`ExplainPane.vue:42` 读它是正确的）。后果：真数据那条路**一次都没走过**，只要本地有 ≥2 场带分会话就必然掉进随机段。所以这不是"没数据时怎么办"的口径问题，而是 §10.24 那一族的**错读键名**，只是它造成的不是少画一个字，是**把三个假分数连颜色带"建议加强 X 方向训练"一起端给候选人**。顺手扫了同族：全仓 `.dimensions` 读方 8 处 → 修完剩 6 处，那 6 处读的都是真有这个键的载荷。
+
+**修法取条目自己的第一支**：读服务端那份 `weaknesses`（已按维度均分 <65 挑好、并按 `dim_labels` 本地化成"完整性/准确性/深度/表达力"），随机段整块删。阈值从页面自己抄的 70 回到服务端那把 65——**这里没有"改口径"的争议，因为那条路从来没跑过，70 也从来没生效过**。
+
+**守卫把我逼对了，这条最值得记**：第一版我写成"那一发失败 → 空态"，跑全套时 `silentEmptyCatches` 当场红：`a failed load now reads as "no data" — GET failures are never toasted, render AppLoadError instead: [["src/features/interview/views/Interview.vue",1]]`。这一维钉的正是"失败被清成没数据"，而我刚写的就是一个。**改成 `weakError` 报出消息**，空态只在"真读到了、且没有弱项"时出现；测试第四条现在断的是失败那一发写的是 `trend unavailable` 而**不是** `暂无薄弱项数据`。**如果我循着"少改点东西"的直觉把 catch 干脆去掉，守卫会红在别处**——所以这不是"守卫太严"，是它替我做了一次 code review。
+
+**反向证据不用变异**：同一份夹具挂两次，两遍文字一模一样（旧写法 5 个维度各掷 30~69，两次全等的概率可忽略），并断这一屏不再出现那五个假维度名（技术深度/表达能力/逻辑思维/项目经验/行为面试）。这是 D81 的夹具复刻、D82 的"先涨 25 条再收平"之后**第三种拿法**，也是唯一不需要动源码的那种。
+
+**另外两条只是账不准、不需要拍，所以直接改**：§10.5 四处 80 分界被 D82/D83/D84 拖走了行号（`JobRecommend.vue:380→:392`，且计数在 `:680`；`History.vue:318→:331`；`Profile.vue:492→:403/:459`——原引的 492 其实指到了 `loadUserStats` 而不是成就；`CareerPlanning.vue:968→:963`）；§10.17 说"3 张白卡"，实测是 **4 处、且不在那三个文件里**（`JobSearch.vue:1665` 那处早已随拆页搬进 `SearchPane.vue:195` 与 `RecommendPane.vue:233`，另两处漂到 `CareerPlanning.vue:1303`、`JobCompareDialog.vue:64`），顺带确认 `--app-surface` 的定义（`main.css:11`）就是同一个字面值。
+
+**复测过、结论仍是"等你点"的**：§10.22 那 5 处裸 `request` 原样（`stores/auth.js:66/81/93/104` + `tenant.js:78`）；§10.16 全站 `el-skeleton` 仍为 0；§10.19 / §10.15 / §10.18 / §10.20 未动。**没有第二条"其实是取错键"**——它们改的都是候选人看到的数字、文案或产品契约。
+
+**门禁**：`npm run typecheck` **43**（未动）、`npm test` exit 0、`test:unit` **75 files / 452 passed**（新 `tests/unit/interviewWeakAreas.test.js` 4 条）、`eslint` exit 0（既有那 1 条 warning）、`prettier --check` exit 0、`vite build` exit 0、两个改动文件 CR **0**。真实 diff **1 改 1 新**：`Interview.vue` +23/−24、新测试 135 行。**没做真浏览器复核**：这 4 条是 jsdom 挂真页面 + 走真 `setTimeout(…, 500)` 那条链，不是浏览器。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
@@ -3191,8 +3209,8 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 2. **企业侧是冻结还是删除**。本方案建议冻结。若将来要真删，§2.3 两处地雷与 migration `0018`–`0021` 是前置。
 3. **是否引入服务端向量库**（Qdrant / pgvector）。当前 Chroma 是嵌入式 persistent client（`core/chroma_client.py:16,47-50`），每个 uvicorn worker/副本各持一份（`docker-compose.prod.yml:100` 挂 volume）——多副本部署下这是一致性隐患，与 B3 一并决策。
 4. **`docs/` 归档策略**（§2.5）。
-5. **"优先投递"这类产品口径是否跟随后端档位（85）**。D1 只统一颜色；下面几处 80 分界表达的是徽章、统计数与解锁，改了会改变候选人看到的数字与文案，需本人定：`JobRecommend.vue:380`（优先投递徽章，配 `:655` 的计数）、`History.vue:318`（"高匹配记录"）、`Profile.vue:492`（成就解锁）、`CareerPlanning.vue:968-990`（投递策略 80/70/60 分档）。徽章与卡片上后端给的推荐标签现已可能相反（82 分：徽章"优先投递" + 标签"可以投递"）。
-6. **`Interview.vue:464` 的随机"薄弱项"分数怎么处置**。当前无趋势数据时用 `Math.random()*40+30` 造分并配颜色与训练建议；选项是按真实会话维度聚合，或删掉该块改显式空态。两者都改变候选人所见。
+5. **"优先投递"这类产品口径是否跟随后端档位（85）**。D1 只统一颜色；下面几处 80 分界表达的是徽章、统计数与解锁，改了会改变候选人看到的数字与文案，需本人定。**站点行号在 D86 重新量过（D82/D83/D84 改过 `History.vue` 与 `Profile.vue`，旧引用全漂）**：`JobRecommend.vue:392`（优先投递徽章；计数是 `:680` 的 `priorityJobCount`，模板出口在 `:43-44`——原文写的 :380 / :655 已不是）、`History.vue:331` 的 `highMatchCount` 配 `:27` 的那一格（原文 :318）、`Profile.vue:403`（`resume_count >= 1`）与 `:459`（`best_score >= 80`）（原文 :492 指的是 `loadUserStats` 那几行，不是成就）、`CareerPlanning.vue:963` 起的投递策略分档（原文 968-990）。徽章与卡片上后端给的推荐标签现已可能相反（82 分：徽章"优先投递" + 标签"可以投递"）。**另外这一条的射程在 D83/D84 之后窄了一格**：Profile 那两颗成就的输入第一次变成真值，所以它们里只有 `best_score` 那颗还涉及"80 还是 85"的口径问题。
+6. ~~**`Interview.vue:464` 的随机"薄弱项"分数怎么处置**~~ —— **已定并落地（D86，走"按真实会话维度聚合"那一支）**，但**条目原文的前提是错的**：它写"当前**无趋势数据时**用 `Math.random()*40+30` 造分"。复测：`loadWeakAreas` 的主分支读 `perf.dimensions`，而 `GET /interview/performance` 给的是 `dimension_averages` 与 `weaknesses`（`interview_rest.py:821-829`）；**`dimensions` 这个键在这份响应里不存在**（同名的属于匹配解释那份，`match_explainer_service.py:79`，那边 `ExplainPane.vue:42` 读它是对的）。于是真数据分支从上线起一次都没进过，**只要有 ≥2 场带分会话，这一屏永远在画随机数**——不是"没数据才造"。修法：读服务端那份 `weaknesses`（已按维度均分 <65 挑好、名字本地化成"完整性/准确性/深度/表达力"），随机段整块删掉，空与失败分开报（失败要报成失败，见 D86）。可见变化：这一格从三个假维度变成真实的两项弱项；反向证据不靠变异——同一份夹具挂两次，字一模一样。
 7. ~~**前端 `format:check` 门走哪条路**~~ —— **已定并落地（D13，`5662916`）**：选了"一次性 `npm run format`"而不是把 prettier 钉回 3.3。CI 口径的不过文件数从 **17 → 0**（原来记的 95 是本机 CRLF 噪音，见 `docs/engineering-quality.md` 同节）。附带代价与收获写在 D13：两把按行数数的棘轮尺子被这次折行戳穿。
 8. ~~**埋点：补上调用方，还是删掉 SDK**~~ —— **已定并执行：删（E29，2026-09-28）**。管道两端在 E10 都修好且各有测试锁住，但 `track()` 的调用方到删除那天仍然是 0，而且实测 `frontend/src/utils/tracker.js` 除了自己的测试之外无人 import；端点本身只把 `user_id` + `username` 写进日志文件（无存储、无消费方，`db` 参数收了不用）。所以留着它不只是维护成本，还在往日志里写身份。已删的 4 个文件：`app/api/tracking.py`、`tests/test_tracking_endpoint.py`、`frontend/src/utils/tracker.js`、`frontend/tests/unit/tracker.test.js`，外加路由挂载与 E19 前缀表里的 `/tracking`。将来真要做分析，是从零按事件清单设计，不是复活这条 stub。
 9. **跨页隐式握手的最终归属**（E13 只做了三个 id）。`recruit.lastX` 现在集中在 `utils/lastSelection` 并按用户分槽，但它仍是 localStorage；§7 原话是"应改由 Pinia 承载"。两件事需要你定：① 要不要把它再收成一个 Pinia store（则 `setSelectionOwner` 变成 store 内部细节，视图少一层 import）；② `recruit.pendingAnalysis`（`JobSearch`→`SmartAnalysis` 的一次性载荷）与 `recruit.defaultResumeId` 是否也进同一套——前者跨账号也会存活，只是窗口小得多。
@@ -3225,7 +3243,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 16. **加载态要不要换成骨架屏**（D27 量出来的位置）。今天全站 **0 个** `el-skeleton`；异步列表已有三种表达——spinner + "加载中…"（`PipelineKanban`、`JobRecommend`）、加载期间**什么都不渲染**（`SalaryInsight`、`RecommendationEval`：整块在 `v-if="数据到了"` 里）、以及 `AnalysisResult` 那种进度面板。三者都不是说谎（没有一处把"加载中"说成"暂无数据"），所以**这条不是修 bug，是选观感**：骨架屏能让"结构已定、内容未到"看得出来，代价是要给 15 个有表格的文件各写一套占位形状，而那形状本身就是设计决定（占几行、宽度按什么给）。三条路：① 不动，spinner 与"空窗"并存；② 只给"什么都不渲染"的那两页补 spinner（几行改动，纯增加可见反馈，风险最低）；③ 全站上骨架屏（要先定占位规范，属视觉设计工作，且要逐路由 diff 才能证明没把布局改坏）。**②③ 我都没动**，等你点。
 
-17. **深色工作台里的 3 张白卡要不要一起改成深色面**（D36 量到的）。`background: rgba(255, 255, 255, 0.98)` 在 `JobSearch.vue:1665`（这行随拆页搬了三次：:2739 → :2000 → :1665，每次引用前重新量过）、`CareerPlanning.vue:1589` 与 `features/jobs/components/JobCompareDialog.vue:61` 各一处。这个值**正好等于** `--app-surface` 的浅色定义，而深色 token 挂在 `.workspace-theme`（`DefaultLayout.vue:2`），EP 的 `el-dialog` 又默认不 teleport 到 body（`appendToBody` 无默认值 ⇒ false），所以这三处**换成 `var(--app-surface)` 是等价替换还是改观感，取决于它们渲染在哪个作用域里**——D6 那轮把 61 处 `#fff` 从白块修成深色，这三处像同一类漏网，但也可能是刻意留的"读作浅色卡片"。三条路：① 不动；② 逐处换成 token 并做逐路由 `getComputedStyle` 差分（要先能拿到数据态，也就是得先解决"没有活 API 就打不开这些浮层"）；③ 只换弹窗里那张（它一定在 `.workspace-theme` 内，行为最确定）。**我一条都没动**，等你点。
+17. **深色工作台里的白卡要不要一起改成深色面**（D36 量到的；**D86 重新数过：不是 3 处、也不是原来那三个文件**）。`background: rgba(255, 255, 255, 0.98)` 现在实测四处：`SearchPane.vue:195`、`RecommendPane.vue:233`（这两处就是原文说的 `JobSearch.vue:1665`——D36/D45 把它随拆页搬进两个面板，`JobSearch.vue` 里现在是 0 处）、`CareerPlanning.vue:1303`（原文 1589）、`JobCompareDialog.vue:64`（原文 61）。这个值**正好等于** `--app-surface` 的定义（`src/styles/main.css:11`），而深色 token 挂在 `.workspace-theme`（`DefaultLayout.vue:2`），EP 的 `el-dialog` 又默认不 teleport 到 body（`appendToBody` 无默认值 ⇒ false），所以这几处**换成 `var(--app-surface)` 是等价替换还是改观感，取决于它们渲染在哪个作用域里**——D6 那轮把 61 处 `#fff` 从白块修成深色，这三处像同一类漏网，但也可能是刻意留的"读作浅色卡片"。三条路：① 不动；② 逐处换成 token 并做逐路由 `getComputedStyle` 差分（要先能拿到数据态，也就是得先解决"没有活 API 就打不开这些浮层"）；③ 只换弹窗里那张（它一定在 `.workspace-theme` 内，行为最确定）。**我一条都没动**，等你点。
 
 18. **投递优先级里那 8 分"城市匹配"要不要留，以及它该在什么时刻算**（D41 量到的，不是 D41 造成的）。今天 `calculateApplicationPriority(job, city)` 命中调用方传进来的 UI 城市筛选就加 8 分并写进 `priorityReason`，而**两个求值时机不一致**：智能推荐页的分数在 computed 里算，所以**动一下城市筛选，卡片分数与 hero 的「优先投递」队列立刻变**；搜索页/仓库页的分数是 `runSearch`/`loadLocalJobs` 落地那一刻算好存进列表的，**换了城市筛选要等下一次搜索才变**。三条路：① 城市不参与优先级（把那 8 分从算式里去掉，两条时机自然一致）；② 城市改成用**求职目标里的城市**而不是搜索表单的筛选（语义更站得住，但要把 target 读进算式，且没有目标时得定义清楚）；③ 保持算式不动，把两处时机统一成"取数那一刻"或"随筛选重算"（前者要推荐页也存分数，后者要让搜索/仓库列表变成 computed）。**我一条都没选**：这一刀只把那一次隐式读取变成显式参数，加分规则与求值时机逐字保留，并有 45 360 次逐字段差分证明没变。要改就是产品判断，不是拆页的顺路。**D42 已经把这条耦合钉住了**：`tests/unit/jobRecommendPriority.test.js` 前两条测的是「推荐卡多这 8 分」与「它随筛选即时重算」，选定 ① 或 ② 要改的就是那两条（它们记录的是现状，不是主张）。D43 又补了对照的另一半：`tests/unit/jobWarehouseChain.test.js` 最后一条钉的是「仓库卡的分数取数那一刻定死、换筛选不重算」——选 ③（统一时机）要动的就是这一对。
 
