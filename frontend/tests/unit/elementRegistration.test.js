@@ -95,7 +95,11 @@ describe('Element 注册表与真实使用必须互相对得上', () => {
   })
 
   it('every registered component is actually used by some view', () => {
-    const declared = [...new Set([...registeredNames, ...autoComponents])]
+    const declared = [...new Set([...registeredNames, ...autoComponents])].filter(
+      // 解析器会把**指令**也写进 components.d.ts（实测多出来的是 `ElLoadingDirective`）。
+      // "有没有被用"这条判据是按 `<el-*>` 标签写的，表达不了指令，所以走下面那条专门的判据。
+      (name) => !name.endsWith('Directive')
+    )
     const dead = declared
       .filter((name) => {
         const kebab = name
@@ -110,6 +114,21 @@ describe('Element 注册表与真实使用必须互相对得上', () => {
       dead,
       `注册表里有没人用的组件（连样式一起白进包），删掉或说明为什么留：${dead.join(', ')}`
     ).toEqual([])
+  })
+
+  it('每一条声明出来的**指令**也真的有 v-* 用法在（上面那条按标签判，判不了指令）', () => {
+    const directives = [...autoComponents].filter((n) => n.endsWith('Directive'))
+    const unused = directives.filter((name) => {
+      // `ElLoadingDirective` → `v-loading`
+      const kebab = name
+        .replace(/Directive$/, '')
+        .slice(2)
+        .replace(/([A-Z])/g, '-$1')
+        .toLowerCase()
+        .replace(/^-/, '')
+      return !sources.some(({ src }) => new RegExp(`\\sv-${kebab}[\\s=]`).test(src))
+    })
+    expect(unused, `解析器声明了这些指令却没有 v-* 用法：${unused.join(', ')}`).toEqual([])
   })
 
   it('every element.css import belongs to a component the app can render', () => {

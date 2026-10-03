@@ -1,108 +1,13 @@
-import { ElAlert } from 'element-plus/es/components/alert/index.mjs'
-import { ElBadge } from 'element-plus/es/components/badge/index.mjs'
-import { ElButton } from 'element-plus/es/components/button/index.mjs'
-import { ElCard } from 'element-plus/es/components/card/index.mjs'
-import { ElCheckbox } from 'element-plus/es/components/checkbox/index.mjs'
-import { ElCol } from 'element-plus/es/components/col/index.mjs'
-import { ElCollapse, ElCollapseItem } from 'element-plus/es/components/collapse/index.mjs'
-import {
-  ElAside,
-  ElContainer,
-  ElHeader,
-  ElMain,
-} from 'element-plus/es/components/container/index.mjs'
-import { ElDatePicker } from 'element-plus/es/components/date-picker/index.mjs'
-import {
-  ElDescriptions,
-  ElDescriptionsItem,
-} from 'element-plus/es/components/descriptions/index.mjs'
-import { ElDialog } from 'element-plus/es/components/dialog/index.mjs'
-import { ElDivider } from 'element-plus/es/components/divider/index.mjs'
-import { ElDrawer } from 'element-plus/es/components/drawer/index.mjs'
-import {
-  ElDropdown,
-  ElDropdownItem,
-  ElDropdownMenu,
-} from 'element-plus/es/components/dropdown/index.mjs'
-import { ElEmpty } from 'element-plus/es/components/empty/index.mjs'
-import { ElForm, ElFormItem } from 'element-plus/es/components/form/index.mjs'
-import { ElIcon } from 'element-plus/es/components/icon/index.mjs'
-import { ElInput } from 'element-plus/es/components/input/index.mjs'
-import { ElInputNumber } from 'element-plus/es/components/input-number/index.mjs'
-import { ElLink } from 'element-plus/es/components/link/index.mjs'
 import { vLoading } from 'element-plus/es/components/loading/index.mjs'
-import { ElMenu, ElMenuItem } from 'element-plus/es/components/menu/index.mjs'
-import { ElPagination } from 'element-plus/es/components/pagination/index.mjs'
-import { ElProgress } from 'element-plus/es/components/progress/index.mjs'
-import { ElRadio, ElRadioButton, ElRadioGroup } from 'element-plus/es/components/radio/index.mjs'
-import { ElRate } from 'element-plus/es/components/rate/index.mjs'
-import { ElRow } from 'element-plus/es/components/row/index.mjs'
-import { ElOption, ElSelect } from 'element-plus/es/components/select/index.mjs'
-import { ElSlider } from 'element-plus/es/components/slider/index.mjs'
-import { ElSwitch } from 'element-plus/es/components/switch/index.mjs'
-import { ElTabPane, ElTabs } from 'element-plus/es/components/tabs/index.mjs'
-import { ElTable, ElTableColumn } from 'element-plus/es/components/table/index.mjs'
-import { ElTag } from 'element-plus/es/components/tag/index.mjs'
-import { ElText } from 'element-plus/es/components/text/index.mjs'
-import { ElTimeline, ElTimelineItem } from 'element-plus/es/components/timeline/index.mjs'
-import { ElUpload } from 'element-plus/es/components/upload/index.mjs'
 
-const components = [
-  ElAlert,
-  ElAside,
-  ElBadge,
-  ElButton,
-  ElCard,
-  ElCheckbox,
-  ElCol,
-  ElCollapse,
-  ElCollapseItem,
-  ElContainer,
-  ElDatePicker,
-  ElDescriptions,
-  ElDescriptionsItem,
-  ElDialog,
-  ElDivider,
-  ElDrawer,
-  ElDropdown,
-  ElDropdownItem,
-  ElDropdownMenu,
-  ElEmpty,
-  ElForm,
-  ElFormItem,
-  ElHeader,
-  ElIcon,
-  ElInput,
-  ElInputNumber,
-  ElLink,
-  ElMain,
-  ElMenu,
-  ElMenuItem,
-  ElOption,
-  ElPagination,
-  ElProgress,
-  ElRadio,
-  ElRadioButton,
-  ElRadioGroup,
-  ElRate,
-  ElRow,
-  ElSelect,
-  ElSlider,
-  ElSwitch,
-  ElTabPane,
-  ElTable,
-  ElTableColumn,
-  ElTabs,
-  ElTag,
-  ElText,
-  ElTimeline,
-  ElTimelineItem,
-  ElUpload,
-]
+/* D90（§9.1 那条覆盖）：`<el-*>` 的组件解析交给 `unplugin-vue-components` + `ElementPlusResolver`
+   （配置与代价都写在 `vite.config.js`），这里原先那份 **59 项手写组件列表**删除。
 
+   为什么这个文件不整个删掉：`v-loading` 是**指令**，不是标签——模板里的指令没有组件名可让解析器去
+   解析，本项目 6 处 `v-loading` 全靠这里的全局注册；`ElMessage` / `ElMessageBox` 两个服务同理住在
+   `element-services.js`。所以"删手写注册表"不等于"注册表整个消失"，这条判据由
+   `tests/unit/elementRegistration.test.js` 的双源断言（`5ef7f68`）钉着：可解析集 = 这里的注册 ∪
+   解析器生成的 `components.d.ts`，且两个来源不许同时为空。 */
 export function installElement(app) {
-  components.forEach((component) => {
-    app.use(component)
-  })
   app.directive('loading', vLoading)
 }

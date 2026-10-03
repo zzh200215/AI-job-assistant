@@ -1,9 +1,26 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    /* D90（§9.1 那条覆盖）：`<el-*>` 的组件解析交给解析器，`src/plugins/element.js` 里 59 项手写
+       列表随之删除。**`importStyle: false` 是量出来的选择**——样式仍走 `plugins/element.css` 那 47 行，
+       因为 `importStyle: 'css'` 更贵（2298.89 vs 2242.63 kB）而 js 侧成因相同（解析器从
+       `element-plus` 全量入口引组件，vendor-element 451.75 → 774.63 kB）。
+       两个刻意的收敛：`dirs: []` 不去自动注册本项目自己的 `src/components/**`（那 3 个共享组件仍走
+       显式 import，否则它们的解析方式会在同一刀里悄悄换掉）；`dts` 生成的 `components.d.ts` 是
+       注册守卫的第二来源（双源判据在 `5ef7f68`）。
+       代价写进账：构建总量 1894.58 → 约 2242.63 kB（+18.4%），由产品负责人指令覆盖测量建议。 */
+    Components({
+      dirs: [],
+      resolvers: [ElementPlusResolver({ importStyle: false })],
+      dts: 'components.d.ts',
+    }),
+  ],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
