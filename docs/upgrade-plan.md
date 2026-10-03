@@ -2889,6 +2889,45 @@ B 桶复测第二批（任务 B②：§10.1 / 10.3 / 10.15 / 10.19）。逐条�
 
 **门禁**：`test:unit` **82 files / 491 passed**（489 → 491，新增即上面两条）；`npm test` 14 pass / exit 0；`eslint` 0 error（仅 `Overview.vue:163 paidOrders` 那条既有 warning）；`prettier --check` clean；`vue-tsc` **42**（未动，admin 之外 **0**）；`vite build` exit 0，js+css 合计 **2239.75 → 2239.79 kB**（+0.04 kB，就是 `lastSelection` 多出的那两条导出）。§10 的 open **14 → 14**：10.9 的口径变了（一半落地、一半仍是他的），其余四条本来就是"复测"不是"决定"。
 
+#### 复测结论：D103 B④ §10.29 的 422 现状表——英文不是一句"Field required"，是一副**英文骨架**，而且今天就能让候选人看到
+
+三把仪器，全部跑在一次性内存 SQLite 上，**一个 handler 都没执行**（body 校验失败发生在进函数之前；离线那把更是直接对模型调 `model_validate`）：
+- **HTTP 空 body 那把**：按 OpenAPI 枚举出 **16 条**"带必填 body 字段"的写端点，逐条 `POST {}` → **16 条全 422**，30 条错误明细里 **29 条 `missing` + 1 条 `int_parsing`**（后者是 `path.entry_id`）。
+- **离线六副 junk 那把**：挂在 router 上的请求模型 **25 个**，喂 abs/junk-string/int/list/object/long-string 六种形状，得到 **11 个不同 `(type, msg)`**——**9 个纯英文、2 个中文但套着英文前缀**。
+- **16 个贴近真实输入的用例那把**：把 payload 换成候选人真会填的东西（"abc" 当邮箱、8 位纯小写+数字的密码、空 `raw_text`…），逐条渲染成屏幕上那句话。
+
+**链路只有一处出口**：`normalizeValidationMessage`（`utils/requestTracing.js:16`）是全仓**唯一**读 `detail` 的地方（`request.js:75`）；`shouldNotify = notifyError !== false && method !== 'get'` ⇒ **任何写操作的 422 自动弹 toast**，全仓固定 `notifyError:false` 的只有 `/auth/login` 一处；toast 再过一道 `formatApiErrorMessage`，末尾带 `[web-<uuid>]`。**下游 `userErrorCopy(err, 中文兜底)` 共 52 处**，而 422 分支把那句英文写进了 `error.userMessage`——非空 ⇒ **这 52 处的中文兜底一条都不触发**。这就是 D92 给传输层修掉的病，422 这一支还带着。
+
+**实测到的屏幕文本**（左边是候选人做什么，右边是他看到什么）：
+
+| 输入 | 状态 | 屏幕上 |
+|---|---|---|
+| 注册·用户名 1 个字 | 422 | `body.username: String should have at least 2 characters [web-…]` |
+| 注册·用户名带空格 | 422 | `body.username: Value error, 用户名仅支持中文、字母、数字、下划线和短横线 [web-…]` |
+| 注册·`abcd1234` | 422 | `body: Value error, 密码需至少包含大写字母、小写字母、数字、特殊字符中的 3 种 [web-…]` |
+| 注册·邮箱写 `abc` | 422 | `body.email: value is not a valid email address: An email address must have an @-sign. [web-…]` |
+| 重置密码·两次不一致 | 422 | `body: Value error, 两次输入的密码不一致 [web-…]` |
+| 新建投递·非法阶段 | 422 | `body.target_stage: Value error, 非法的目标阶段，可选值: accepted, applied, … [web-…]` |
+| 投递·`entry_id=abc` | 422 | `path.entry_id: Input should be a valid integer, unable to parse string as an integer [web-…]` |
+| 建 JD·`raw_text` 空串 | **200** | `{'code': -2, 'message': 'JD 内容不能为空'}` ⇒ 中文（另一族） |
+| 知识库检索·`query` 空串 | 通过校验 | 空串**合法**，这条不是 422 族 |
+
+**三条要记住的结构事实**：① 内置约束是**纯英文**，而且模板**不是定值**——`String should have at most {N} characters` 实测出现 N=50/100/200 三种；② 自定义 `ValueError` 是**中文句子外面套英文骨架**（`Value error, …`），所以"翻不翻"这个问题在今天就已经是混的；③ `model_validator(mode="after")` 的 `loc` 会**塌成 `body`**，字段名直接丢失——密码那一族连"哪一格错了"都没给，所以选项 ③ 说的"代价是丢掉字段级定位"对这一族**已经丢了**。
+
+**一条今天就可达的实证（不是假想）**：注册页客户端只要求"字母 + 数字"（`Register.vue:163-177`），服务端 `_validate_password_strength` 对 **<12 位**要求 4 类里 **3 类**（`app/schemas/auth.py:38-41`）。离线实测 `abcd1234` / `zhang1234` / `password123` **客户端放行、服务端 422**，屏幕上就是上表第三行。所以这一条不是"要不要防未来自欺"，是**当前表单承诺的规则与服务端规则不一致**，422 只是那不一致漏出来的样子。
+
+**三条路的实测成本**（按现量，不按感觉）：
+
+| 路 | 要动的东西 | 实测半径 |
+|---|---|---|
+| ① 前端映射表 | `normalizeValidationMessage` 一处（出口只有一个）+ **新建一份字段字典** | 翻译面 = **102 个 `body.<field>` 前缀**（必填 14 个）× 约 8 个模板族，且模板带**随字段变的数字**（MinLen 14 字段 / MaxLen 61 / Ge 25 / Le 13 / 枚举 12）。加一个字段就静默漏一条 |
+| ② 后端出中文 | 一个 `RequestValidationError` handler + 同一份字段字典 | **契约面比条目里说的薄得多**：backend 全量测试里出现 422 的只有 **1 个文件**（`status_code == 422` 1 次、`["detail"]` 3 次、**断言 "Field required" 0 次**）；前端读 `detail` 的只有 1 处。**"牵连前端各处按 `loc` 定位的写法"这句在仓里找不到证据**——除 request.js 外没人按 loc 定位。真实代价变成：英文原文对开发者消失（现在 curl 与日志里能直接读到 pydantic 规范句） |
+| ③ 归内部可读 | `request.js` 的 422 分支不再把英文当 `userMessage` 下发（原文留 `err.message` 给日志），toast 退中文兜底 | 改动最小（一处），52 处 `userErrorCopy` 的中文兜底立刻全部生效。**但 ③ 不是"维持现状"**：现状就是它已经上屏。代价是那句泛泛中文替代字段级提示——而密码那一族本来就没有字段级提示 |
+
+**没加守卫，理由要写清**：任何守卫今天都只能二选一——钉住"注册 8 位纯小写+数字必须 422"（把一个 bug 固化成期望），或钉住"屏幕上就是这句英文"（把待拍的东西写成事实）。所以这一条的产物是**表**，决定仍在他手上；要拍的其实比原条目更具体：**先定"客户端与服务端的密码规则谁跟谁"（那是缺陷，不是口径），再定 422 那句话怎么显示（那才是口径）**。
+
+**门禁**：本轮无代码改动；三条仪器都是 `C:\Users\TX\AppData\Local\Temp` 里的一次性脚本（未入库，跑完删除），backend 侧只读、不落库。§10 open **14 → 14**（§10.29 仍 open，但从"没量过"变成"有表"）。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
@@ -3590,7 +3629,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 28. ~~**`TaskCenter` 那颗点没有 `partial` 档**~~ —— **已定并落地（D79，选 ①）**：补了 `.dot-partial { background: var(--app-warning) }`（`TaskCenter.vue`，配色用 warn 那一档，理由与后端语义一致："有失败步骤但整体跑完"），守卫里的 `unstyled: ['partial']` **同步清空**——那条豁免存在的意义就是"补了规则不删它会红"，M3 变异已经证明它会红。浏览器证据与量具的一件事见 D79。（原始观察保留：后端四条路径都会写 `partial`（`strategies.py:459`、`:602`，`langgraph_flow.py:438`、`:500`），而这一页原先只有五档点色。）
 
-29. **422 校验消息是英文，要不要也走"给人看的那一句"这条路**（D92 顺路量到的，**没动**）。D92 把传输层失败的文案收成了单一出口（`networkFailureCopy` / `userErrorCopy`，见该条），但 422 这一支没收：`normalizeValidationMessage`（`utils/requestTracing.js:16`）把 FastAPI/Pydantic 的 `detail` **逐字**拼成 `"loc.msg"`，非 GET 还会 `ElMessage.error` 弹出来——候选人能看到的是 "Field required"、"Input should be a valid integer" 这类英文。三条路：① 建一张校验消息映射表（要定哪些翻、翻成什么，以及未覆盖的怎么办：留英文还是退"请求参数错误"）；② 后端出中文校验文案（改的是所有 API 消费者看得见的契约，牵连前端各处按 `loc` 定位的写法）；③ 承认它属"内部可读"，候选人侧只保留那句中文兜底（那 422 就要与传输层同口径处理，代价是丢掉字段级定位）。**为什么没顺手改**：这一族的修法本身就是口径决定，不像 D92 那条有"代码里已经写好的中文兜底"可以当证据。现状：英文照旧上屏，`requestTracing.test.mjs` 钉的是当前拼接行为。
+29. **422 校验消息是英文，要不要也走"给人看的那一句"这条路**（D92 顺路量到的，**没动**）。D92 把传输层失败的文案收成了单一出口（`networkFailureCopy` / `userErrorCopy`，见该条），但 422 这一支没收：`normalizeValidationMessage`（`utils/requestTracing.js:16`）把 FastAPI/Pydantic 的 `detail` **逐字**拼成 `"loc.msg"`，非 GET 还会 `ElMessage.error` 弹出来——候选人能看到的是 "Field required"、"Input should be a valid integer" 这类英文。三条路：① 建一张校验消息映射表（要定哪些翻、翻成什么，以及未覆盖的怎么办：留英文还是退"请求参数错误"）；② 后端出中文校验文案（改的是所有 API 消费者看得见的契约，牵连前端各处按 `loc` 定位的写法）；③ 承认它属"内部可读"，候选人侧只保留那句中文兜底（那 422 就要与传输层同口径处理，代价是丢掉字段级定位）。**为什么没顺手改**：这一族的修法本身就是口径决定，不像 D92 那条有"代码里已经写好的中文兜底"可以当证据。现状：英文照旧上屏，`requestTracing.test.mjs` 钉的是当前拼接行为。**D103 把这条量成了表（见该条），三处前提要按现量改写**：① **"是英文"这句话不准**——量到的是**一副英文骨架**：内置约束纯英文（且模板带随字段变的数字，`String should have at most {N} characters` 实测 N=50/100/200 三种），自定义 `ValueError` 是**中文句子外面套 `Value error, `**，而 `model_validator(mode="after")` 的 `loc` **塌成 `body`**（密码那一族连"哪一格错了"都没给）；② **路 ② 说的代价在仓里找不到证据**——"牵连前端各处按 `loc` 定位的写法"实测**除 `request.js:75` 外无人读 `detail`**，backend 全量测试里出现 422 的只有 1 个文件（断言 `"Field required"` 0 次），所以契约面比这句写的薄得多；③ **路 ③ 不是"维持现状"**——`shouldNotify = notifyError !== false && method !== 'get'` 让**每个写操作的 422 自动弹 toast**（全仓固定 `notifyError:false` 只有 `/auth/login` 一处），而下游 **52 处 `userErrorCopy(err, 中文兜底)` 因为 `userMessage` 非空而一条都不触发**，所以 ③ 要动代码、动完那 52 处才第一次说得上话。**更要紧的是量出一条今天就可达的路径**：注册页客户端只要求"字母 + 数字"（`Register.vue:163-177`），服务端对 **<12 位**要求 4 类里 **3 类**（`app/schemas/auth.py:38-41`），实测 `abcd1234` / `zhang1234` / `password123` **客户端放行、服务端 422**，屏幕上就是 `body: Value error, 密码需至少包含大写字母、小写字母、数字、特殊字符中的 3 种 [web-…]`。**所以这条其实是一个决定套着一个缺陷**：先定"客户端跟服务端还是服务端跟客户端"（那是缺陷，不是口径），再定这句话怎么显示（那才是口径）。翻译面也量出来了：路 ① 的字典是 **102 个 `body.<field>` 前缀**（必填 14 个）× 约 8 个模板族。**没加守卫**——任何守卫今天都只能钉住那个 bug 或钉住那句英文。
 
 ## 11. 附录：本方案未采纳的一条建议
 
