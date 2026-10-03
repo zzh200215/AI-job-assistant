@@ -2606,6 +2606,10 @@ D87 留的最后一项是"`unplugin` 自动导入"，他给的话是"按你说�
 
 **门禁（撤销后）**：`vite build` exit 0 且**分块总量 1894.58 kB = 基线**、119 个分块（并存期是 120）；`test:unit` **76 files / 458 passed**（守卫多出的那条腿 +1）、`npm test` / `eslint` / `prettier --check` exit 0；`git diff --numstat` 对 `package.json` / `package-lock.json` / `vite.config.js` / `src/plugins/element.{js,css}` **全为空**（只剩 autocrlf 那批噪音），`components.d.ts` 已删，本轮唯一落地改动是那 21 行守卫（`5ef7f68`）。A 清单到此五项全部有结论：**①④⑤ 落地、② 按测量挂起、③ 按测量撤销**。
 
+**那一格已量完（D89），A③ 到此收口在"不做"。** 只把组件解析交给解析器、样式仍走手写清单（`importStyle: false`，`element.js` 删成 13 行只留 `v-loading`）：构建总量 **2242.63 kB**，比基线 1894.58 kB 多 **348.05 kB（+18.4%）**，而 `vendor-element` 的 js 仍是 **774.63 kB**——**与 D88 那版一模一样**。所以涨的不是样式，是**解析器从 `element-plus` 全量入口引组件**，D88 那句"两种成因"到此分清。
+顺手试了"那我自己写一个逐组件深路径解析器"行不行，**不行，且有理由**：`element-plus/es/components/<kebab>/` 对**子组件**只有 `style/` 目录、没有入口文件（实测 `table-column/`、`descriptions-item/` 等只含 `style`），也就是说 `ElTableColumn` 这类没有可直引的深路径 —— 自己写解析器就得为 59 个名字维护一张"名字 → 父文件夹 + 导出名"的表，**那比现在这份手写列表更长更容易漂**。
+结论：**A③ 的正确终点是不做**。省下 155 行的两条路都要付出更大的代价（+18.4% 包体积，或一张更糟的映射表），而漂移风险已经被 `5ef7f68` 那双源守卫钉住（它现在是"手写列表 ↔ 视图用法"这份契约的看门人，不是为将来换解析器铺路）。撤销后复核：build 总量 **1894.58 kB = 基线**、`test:unit` 76 files / **458 passed**、`git diff --numstat` 对 `vite.config.js`/`element.js`/`package.json`/`package-lock.json` 全为空、`components.d.ts` 已删。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
