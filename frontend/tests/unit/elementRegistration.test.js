@@ -38,6 +38,23 @@ const app = createApp({ render: () => null })
 installElement(app)
 const installed = new Set(Object.keys(app._context.components))
 
+/* D88 第一步：把"能不能解析"的判据从**单一手写注册表**改成**双源**。
+   §7 阶段 3 要删的正是 `plugins/element.js` 那份手写列表；删掉之后组件由 `unplugin-vue-components`
+   在每个 `.vue` 编译时按需 import，届时的真相是插件生成的 `components.d.ts`。
+   如果不先做这一步，删列表那天这条守卫会因为"两个集合都空"而**静默变绿**（`unresolvable` 恒空）。
+   所以现在：可解析 = 装完 app 的真实注册表 ∪ `components.d.ts` 声明的名字；
+   并且下面 `hasRegistrySource` 那条钉住"两个来源不许同时消失"。 */
+const autoComponentsFile = 'components.d.ts'
+const autoComponents = (() => {
+  try {
+    const text = readFileSync(autoComponentsFile, 'utf8')
+    return new Set([...text.matchAll(/\b(El[A-Z]\w+)\b/g)].map((m) => m[1]))
+  } catch {
+    return new Set()
+  }
+})()
+const resolvable = new Set([...installed, ...autoComponents])
+
 const toPascal = (tag) =>
   'El' +
   tag
@@ -47,7 +64,12 @@ const toPascal = (tag) =>
     .join('')
 
 const registeredNames = (() => {
-  const list = readFileSync('src/plugins/element.js', 'utf8')
+  let list
+  try {
+    list = readFileSync('src/plugins/element.js', 'utf8')
+  } catch {
+    return [] // 手写列表被删掉之后由 components.d.ts 接手，下面两条会用同一套名字
+  }
   const block = list.slice(list.indexOf('const components = ['))
   return [...new Set([...block.matchAll(/\b(El[A-Z]\w+)\b/g)].map((m) => m[1]))].filter(
     (n) => n !== 'components'
@@ -55,9 +77,16 @@ const registeredNames = (() => {
 })()
 
 describe('Element 注册表与真实使用必须互相对得上', () => {
+  it('注册来源不许同时消失（手写列表、或插件生成的 components.d.ts）', () => {
+    expect(
+      installed.size + autoComponents.size,
+      '两个注册来源都是空的：`<el-*>` 将无人解析，而"用了却解析不出来"那条会因为集合为空而静默变绿'
+    ).toBeGreaterThan(0)
+  })
+
   it('every <el-*> used in a view resolves through the installed registry', () => {
     const unresolvable = [...usedTags.entries()]
-      .filter(([tag]) => !installed.has(toPascal(tag)) && !installed.has(tag))
+      .filter(([tag]) => !resolvable.has(toPascal(tag)) && !resolvable.has(tag))
       .map(([tag, rel]) => `${tag} (${rel})`)
     expect(
       unresolvable,
@@ -66,7 +95,8 @@ describe('Element 注册表与真实使用必须互相对得上', () => {
   })
 
   it('every registered component is actually used by some view', () => {
-    const dead = registeredNames
+    const declared = [...new Set([...registeredNames, ...autoComponents])]
+    const dead = declared
       .filter((name) => {
         const kebab = name
           .slice(2)
