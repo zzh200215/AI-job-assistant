@@ -2522,6 +2522,37 @@ D74 把它挂成"三条路都要拍"，因为看上去要么改前端读法、�
 
 **没做的**：真浏览器复核（这一页的统计格从来没进过探针的组件表）；`/interview/performance` 那一发在 Profile 上没有加载态（成就先按 0 渲染，请求回来才可能亮，中间那一瞬是"未解锁"——如果哪天要给它一个骨架屏，是 §10.16 那一族）。
 
+#### 已交付：D85 把 InterviewRoom 接进探针：D68 那笔"没回头核"结掉了，代价是量出第二类死规则
+
+D79 留的最后一件"我没能回头核的事"：D67/D68 删的 16 条里，那几条打在子组件根元素上的规则是**唯一"确实有元素在匹配、却靠 `diffs=0` 判死"**的一批，而当时那台一次性 harness 的属性读法无法确认没瞎（D79 之后才知道快照确实瞎过 24 条属性）。结它的唯一办法是把这一屏接进**仓库里的**探针，再把被删的规则注回去做一次正向对照。这一刀只做仪器与测量，**一行产品代码、一条样式都没改**。
+
+**先修仪器，因为它还有第六种瞎法**：`scopes()` 返回的是 Vue 的 `__scopeId`，那是**带前缀的** `data-v-xxxx`；而 `locate` / `copies` / 元素计数三处各自又拼一次 `[data-v-${scope}]`，于是得到 `[data-v-data-v-xxxx]`——元素匹配 0、规则也找不到。这类失败**会响**（audit 直接报"样式表里找不到这条规则"），所以 D76–D79 那些按裸哈希跑出来的数不被追溯作废；但 `copiesOf` 早就单独 `replace('data-v-','')` 了，说明我当时踩过一次、只修了那一个入口。现在四处统一走 `bare()` / `markOf()`。**又是同一形状的错误：不是判据错，是判据读的东西为空。**
+
+**夹具四条形状全从读方抄**：`hydrateSession`（`stores/interview.js:110-134`）读哪些键；`startWS` 第一句 `Number(session.value?.id) === Number(sessionId)`——**id 不给成路由参数就会把刚灌进去的整块状态清掉**；`.user-shell` 那一支的条件是 `msg.type === 'answer'` 而不是 `'user'`（`TranscriptPane.vue:27`）；status 给 `completed` 会被 `onMounted` 直接 replace 去报告页（`InterviewRoom.vue:266-268`）。
+
+**测量条件**：路由 `/interview/room/12`，223 个元素 × (46 条计算属性 + rect)，每一发 `sheets=1`、`restored=0`，注入的规则在每一发之后都 `dropRule` 掉并复查残留为 0。
+
+| D67 删掉的父侧那条 | 带父 scope 的元素 | 逐字注回 → diffs | 改一个值注回 → diffs | 源码里还在的那份（子组件）→ diffs |
+|---|---|---|---|---|
+| `.interview-room-page .stage-card` | 1 | **0** | **131** | **131** |
+| `.interview-room-page .question-card` | 1 | **0** | 0 | 0 |
+| `.interview-room-page .interviewer-avatar` | 0 | 注回也接不到元素 | 同左 | 1 |
+| `.interview-room-page .structure-box` | 0 | 同左 | 同左 | 0 |
+| `.interview-room-page .user-shell` | 0 | 同左 | 同左 | 1 |
+
+**结论一：那笔账结掉，16 条删除全部站得住。** 两条 `matched=1` 的父侧副本逐字注回都是 `diffs=0`，而**同一发里**把 `border-top` 从 3px 改成 9px 立刻 `diffs=131`（border-top 是布局属性，一改就顺着文档流改后面所有元素的 rect）——所以那个 0 是在一把**证明过自己不瞎**的尺子上量出来的，正是 D79 要的那件事。
+
+**结论二：更正一条计数，五条里只有 2 条 `matched=1`，不是 3 条。** `.interviewer-avatar` / `.structure-box` / `.user-shell` 打在**内层元素**上，而内层元素不带父组件的 scope 属性，所以父侧那三份**从来匹配不到任何东西**（`matched=0`），删它们是平凡无副作用。D68 记的是 3 条；我今天在带着数据的这一屏上量到 2 条，**差别没能复现**（当时那台 harness 的屏幕状态没留下夹具），所以这里只写"现测=2"，不改 D68 原文那句。
+
+**结论三（这一刀的意外，也是新的一类债）**：`.question-card` 那份是 **`matched=1` 且 `diffs=0`，而且两份都死**——不是类名没人用，是声明被主题层整条压住：scoped 那份要 `border-color: #cfd9ea` + `box-shadow: 0 12px 28px`，实测计算值是 `rgb(44, 47, 61)` + `none`，赢家是 `main.css:510-516`（`.workspace-theme .panel { background/border-color/box-shadow: … !important }`）；`.structure-box` 同理被 `main.css:522-541` 那张通配网（`[class*='-box']`）压住。于是死规则有两种，**现有两把尺子只认得第一种**：
+
+- **选择器死**：模板里没有这个类名 —— 静态尺子与 `matched=0` 都抓得到（D67/D68/D76/D77 清的全是这一类）；
+- **级联死**：类名在用、元素在匹配，但声明被 `!important` 层覆盖 —— 表现是 `matched=1` 且 `diffs=0`，**只有正向对照能把它和"量具瞎了"区分开**（这就是 D79 那条教训的第二次变现：同一场测量既结了旧账，又暴露了新的一类）。
+
+**为什么这两条我没顺手删**：它们不是"没人用的样式"，是"被工作台主题暂时压住的浅色设计意图"——`main.css` 那几条 `!important` 一旦收掉（§10.17「深色工作台里的 3 张白卡」正是往那个方向走），删掉的规则回不来，没删的会自己复活。**这是一条主张不是遗漏**；要改成"级联死也算死、照删"就说一声。这一笔不进任何棘轮，只挂在这里。
+
+**门禁**：`npm run typecheck` **43**（探针不在 tsconfig 的 include 里，所以这一刀的代码改动不进类型账——这是**故意的**，也意味着探针本身没有类型门保护）、`npm test` exit 0、`test:unit` 74 files / 448 passed、`eslint` exit 0、`prettier --check` exit 0、`node scripts/dead-style.mjs --selftest` exit 0（全仓候选仍 0）、探针文件 CR **0**。**一台 dev server 我没能停下来**：`taskkill //PID 11864 //F`（vite 本体）与 npx 包装 `25828` 都被动作分类器拦下，两个 PID 都按 CommandLine 核过确实是本轮 `vite --port 5199 --strictPort` 起的；按规矩没绕道，所以 5199 现在仍在监听。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
