@@ -4,15 +4,16 @@ import { defineStore } from 'pinia'
 import request from '@/api/request'
 import { getHomeRouteByRole, getRoleLabel, normalizeRole } from '@/constants/roles'
 import { setSelectionOwner } from '@/utils/lastSelection'
+import {
+  clearSession,
+  readStoredUser,
+  readToken,
+  writeSession,
+  writeStoredUser,
+} from '@/utils/session'
 
-function loadStoredUser() {
-  try {
-    return JSON.parse(localStorage.getItem('user') || 'null')
-  } catch {
-    localStorage.removeItem('user')
-    return null
-  }
-}
+/* 会话键与序列化住在 `utils/session.js`（D87）：这里原先自己读写 `localStorage` 六处，
+   而 `api/request.js` 与 `api/interview.js` 还各有读方——同一对键三个文件各拿一份。 */
 
 function normalizeEmail(email) {
   return String(email || '')
@@ -33,8 +34,8 @@ function normalizeUser(currentUser) {
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref(localStorage.getItem('token') || '')
-  const user = ref(normalizeUser(loadStoredUser()))
+  const token = ref(readToken() || '')
+  const user = ref(normalizeUser(readStoredUser()))
 
   // "上一次选了哪份简历/JD/记录"按登录用户分槽，所以身份一变就要通知它（见 utils/lastSelection）。
   setSelectionOwner(user.value?.id ?? null)
@@ -47,19 +48,19 @@ export const useAuthStore = defineStore('auth', () => {
   function setAuth(accessToken, currentUser) {
     token.value = accessToken
     user.value = normalizeUser(currentUser)
-    localStorage.setItem('token', accessToken)
-    localStorage.setItem('user', JSON.stringify(user.value))
+    writeSession(accessToken, user.value)
     setSelectionOwner(user.value?.id ?? null)
   }
 
   function clearAuth() {
     token.value = ''
     user.value = null
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    clearSession()
     setSelectionOwner(null)
   }
 
+  /* 401 由 `api/request.js` 发事件、这里负责把 store 清干净；存储那一半两条路都走
+     `utils/session.js`，所以不会出现"清了存储没清 ref"的中间态。 */
   window.addEventListener('auth:expired', clearAuth)
 
   async function login(account, password) {
@@ -103,7 +104,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const data = await request.get('/auth/me')
       user.value = normalizeUser(data)
-      localStorage.setItem('user', JSON.stringify(user.value))
+      writeStoredUser(user.value)
       return user.value
     } catch {
       clearAuth()

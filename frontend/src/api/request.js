@@ -6,6 +6,7 @@ import {
   formatApiErrorMessage,
   normalizeValidationMessage,
 } from '../utils/requestTracing'
+import { clearSession, readToken } from '../utils/session'
 
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || '/api',
@@ -14,7 +15,7 @@ const request = axios.create({
 
 request.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
+    const token = readToken()
     config.headers = config.headers || /** @type {import('axios').AxiosRequestHeaders} */ ({})
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
@@ -57,8 +58,9 @@ request.interceptors.response.use(
     const shouldNotify = err?.config?.notifyError !== false && method !== 'get'
 
     if (err?.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
+      /* 清的是存储那一份；store 那边由下面那个 `auth:expired` 事件负责（stores/auth.js 注册了监听）。
+         两个机制仍然要一起走，所以这里只留一条出口：`clearSession()`。 */
+      clearSession()
       window.dispatchEvent(new CustomEvent('auth:expired'))
       if (err?.config?.notifyError !== false) {
         ElMessage.error('登录已过期，请重新登录')

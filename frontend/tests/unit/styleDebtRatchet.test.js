@@ -1065,6 +1065,29 @@ describe('style debt ratchet', () => {
     expect(problems, problems.join('\n')).toEqual([])
   })
 
+  it('keeps the auth session keys inside utils/session', () => {
+    /* D87 之前这两个键散在三个文件 12 处：`api/request.js`（每次请求读 + 401 直接 removeItem 两个键）、
+       `api/interview.js`（拼 WS 地址又读一次）、`stores/auth.js`（建 store 读、setAuth/clearAuth/fetchMe 写）。
+       今天没出事是因为 401 那条路还会 dispatch `auth:expired` 把 store 一起清掉——两个机制靠一个事件对齐，
+       而不是因为有单一出处。现在键名/序列化只住 `utils/session.js`。
+       判据只认这两个字面量键名，别的 localStorage 键（`organization.active_id`、`recruit.last*`、
+       每日任务那两把）不归它管——那一族由 lastSelection 的守卫与各自页面负责。 */
+    const offenders = []
+    for (const full of vueFiles('src', ['.js', '.vue'])) {
+      const rel = toRel(full)
+      if (rel === 'src/utils/session.js') continue
+      const source = readFileSync(full, 'utf8')
+      const hits = source.match(
+        /localStorage\.(?:getItem|setItem|removeItem)\(\s*['"](token|user)['"]/g
+      )
+      if (hits) offenders.push(`${rel}×${hits.length}`)
+    }
+    expect(
+      offenders,
+      `auth keys must be read/written through utils/session.js, not by naming the key again: ${offenders.join(', ')}`
+    ).toEqual([])
+  })
+
   it('never lets a rubric entry fall through to printing the whole object', () => {
     /* `{{ x.item || x }}` 是"两代写法各吃一种"那句话：条目可能是裸字符串，也可能是
        `normalizeLocalizedObjectList` 写回的对象。生产端对对象**一定**补 `item`（五个名字键

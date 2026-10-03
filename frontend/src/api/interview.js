@@ -1,5 +1,6 @@
 // AI 模拟面试 API
 import request from './request'
+import { readToken } from '@/utils/session'
 
 // === REST 接口 ===
 
@@ -80,7 +81,7 @@ const wsError = (...args) => {
  * @returns {WebSocket}
  */
 export function connectInterviewWS(sid, onMessage, onError, onClose) {
-  const token = localStorage.getItem('token')
+  const token = readToken()
   if (!token) {
     if (onError) onError(new Error('未登录'))
     return null

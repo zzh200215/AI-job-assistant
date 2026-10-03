@@ -9,6 +9,15 @@ import { useAuthStore } from '@/stores/auth'
 const CANDIDATE = [USER_ROLES.candidate] // C 端求职者
 const ADMIN = [USER_ROLES.admin] // 系统管理员
 
+/**
+ * 显式给一份 `RouteRecordRaw[]`：不写的话 TS 会把整个数组的元素**推成一个交叉后的对象类型**
+ * （`redirect` 变成可选属性），于是既不是 `RouteRecordRedirect`（那边 redirect 必填）也不是
+ * `RouteComponentRouteRecord`，`createRouter({ routes })` 在 `index.js:313` 报 TS2322。
+ * 这条类型错挂了很久是因为 D74 那轮把它连同"`/` 到底该不该重定向"一起等一次路由复核——
+ * 复核结论在 D87：五条 redirect 记录（`:40/:287/:290/:299/:304`）在浏览器里都真解析到目标，
+ * 形状本身没问题，缺的只是这个标注。
+ * @type {import('vue-router').RouteRecordRaw[]}
+ */
 export const routes = [
   {
     path: '/login',
