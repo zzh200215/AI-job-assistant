@@ -2852,7 +2852,24 @@ B 桶复测（任务 B①：审计每把尺子真正扫到什么）第一次就�
 
 
 
+#### 复测结论：D101 B② 后端四条前提——三条要改写、一条的连接池那一半**已经不需要拍**
+
+B 桶复测第二批（任务 B②：§10.1 / 10.3 / 10.15 / 10.19）。逐条现量：
+
+| 条 | 账上的说法 | 现量 | 结论 |
+|---|---|---|---|
+| **10.15 连接池** | "没设的只有 `pool_size` / `max_overflow` / `pool_timeout`，即走默认 **5 + 10 + 排队 30 秒**"；"这两个输入得先有人给，E15 没有顺手填" | `core/database.py:30-32` **三个都设了**，值来自 `config.py:66-68` = **10 / 10 / 30**，而且是 `engine_kwargs_for()` 这个可测纯函数在做（注释写明 E16 为什么不能让它们只活在默认值里） | **这半条决定已经被做掉了**，剩下的是调参输入而不是"要不要设"。②那条算术也跟着变：改成 `def` 是 anyio 默认 **40 根线程抢 10(+10) 个连接**，不是"抢 5 个" |
+| **10.1 付费墙** | "`check_quota` 仅管简历数量，`deep_analysis`/`ats_check` **从未在服务端生效**" | 服务端**实现了**这两个资源：`subscription_service.py:258-259` 把它们映射到套餐的 `can_use_deep_analysis` / `can_use_ats_check`，逻辑带每日额度与消费计数（`:271/:352`）。缺的是**调用方**——全仓只有 `resume.py:198` 用 `resume_count` 调它，加上一个通用端点 `/subscription/check-quota`（`subscription.py:48-68`）。前端侧这些 `can_use_*` 只出现在**订阅页的权益表**（`Subscription.vue:128-210`），没有任何一个功能入口按它 gating | 措辞要改准：**不是"没有这套逻辑"，是"逻辑有、路由不接、页面在展示"**。所以真实后果是双向的——免费用户实际能用深度分析（付费墙形同虚设），而订阅页此刻正在告诉免费用户"你没有 AI 简历优化"（一句未经证实的话）。这仍是他的决定，但决定面变了：要么接上调用方（两处都真），要么把权益表改成"即将上线/不含"里能证的那种说法 |
+| **10.3 向量库** | "Chroma 是嵌入式 persistent client，**每个 uvicorn worker/副本各持一份**" | `PersistentClient` ✓（`chroma_client.py:34-40`）；但 `Dockerfile:60` 的 CMD **没有 `--workers`**，`docker-compose.prod.yml` **没有任何 `replicas:`** ⇒ 当前形态是"一容器一进程一份库"。多副本一致性是**扩容那一刻才会出现**的隐患，不是现在正在发生的事故 | 前提从"现状有隐患"降级为"扩到 >1 副本前必须先解决"。仍等他点（与 B3 一起），但**紧迫性要按现量改** |
+| **10.19 间接出网 22 条** | allowlist 22 条、只许往下走 | `INDIRECT_BLOCKING_ALLOWLIST` 22 条，`test_indirect_blocking_matches_the_allowlist` 与 `test_indirect_scan_is_not_vacuous` 全绿；扫描仍见 200+ 条 async 路由（不是空转） | 前提**原样成立**，仍是"改不改"的决定 |
+
+**另外量到一条不属于任何桶的东西，按观测记**：`test_readiness_probe_does_not_stall_the_loop` 在一次全文件并行跑里红、**单跑 6.10s 绿**。这与本会话前端那三次"每轮红在不同文件、单跑全绿"是同一族——**墙钟敏感断言在满载下不可信**。两处都不是逻辑回归，但也不能记成偶发：要做的是给这一类断言一个**确定性的时钟上限**（D68 的先例：抬高时钟、不放宽断言），并把"满载全量跑"与"单跑"的差当成一条要修的缺陷。这条我没动，列成 **B⑤**。
+
+（本轮没有代码改动：这四条的产物是**改账**，见下面 §10 的三条就地更正。）
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
+
+
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
 
@@ -3485,9 +3502,9 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 ## 10. 待决策项
 
-1. **付费墙是否保留**（阻塞 A6）。`check_quota` 仅管简历数量，`deep_analysis`/`ats_check` 从未服务端生效。确认不做商业化 → 摘掉 `resume.py:121`，企业侧即可安静冻结；要保留 → 需补齐服务端功能级校验，否则是装饰性付费墙。
+1. **付费墙是否保留**（阻塞 A6）。**D101 把这条的措辞改准了**：`check_quota` **实现了** `deep_analysis` / `ats_check`（映射到套餐的 `can_use_deep_analysis` / `can_use_ats_check`，`subscription_service.py:258-259`，带每日额度与消费计数），缺的是**调用方**——全仓只有 `resume.py:198` 拿 `resume_count` 调它，另有一个通用端点 `/subscription/check-quota`。前端侧这些 `can_use_*` 只出现在**订阅页的权益表**（`Subscription.vue:128-210`），没有任何功能入口按它 gating。**所以后果是双向的**：免费用户实际能用深度分析（付费墙形同虚设），而订阅页同时正在对免费用户说"你没有 AI 简历优化"（一句没被证实的话）。确认不做商业化 → 摘掉装饰的那一侧（含权益表里说不出来的标记），企业侧即可安静冻结；要保留 → 补上路由级调用方，两处才同时为真。
 2. **企业侧是冻结还是删除**。本方案建议冻结。若将来要真删，§2.3 两处地雷与 migration `0018`–`0021` 是前置。
-3. **是否引入服务端向量库**（Qdrant / pgvector）。当前 Chroma 是嵌入式 persistent client（`core/chroma_client.py:16,47-50`），每个 uvicorn worker/副本各持一份（`docker-compose.prod.yml:100` 挂 volume）——多副本部署下这是一致性隐患，与 B3 一并决策。
+3. **是否引入服务端向量库**（Qdrant / pgvector）。当前 Chroma 是嵌入式 persistent client（`core/chroma_client.py:34-40`），**每个进程各持一份**——**D101 把紧迫性按现量改了一次**：`Dockerfile:60` 的 CMD 没有 `--workers`，`docker-compose.prod.yml` 里**没有任何 `replicas:`**，所以当前形态是"一容器一进程一份库"，多副本一致性是**扩到 >1 副本那一刻才会出现**的隐患，不是现在正在发生的事故。与 B3 一并决策。
 4. **`docs/` 归档策略**（§2.5）。
 5. ~~**"优先投递"这类产品口径是否跟随后端档位（85）**~~ —— **已定并落地（D93，选"四处全部跟随顶档"）**。落地时先量到**单一出处早就在**：`utils/scoreTone.js` 的 `MATCH_SCORE_BANDS` 首条 `min` 就是 85（注释对齐 `match_explainer_service._recommendation` 的 85/70/50），这四处不是"没尺子"，是绕过尺子各抄了一个 80。新增的是具名判据 `isTopTier()`，四个站点接回去。三条连带口径写进 D93：**成就文案改成「综合评分达到85」**（判据是 `>=`，写"超过85"会把刚好 85 的人说成没达成）；**`jobModel.js:342` 的 `finalScore >= 82` 刻意不并**（那是本页自合的投递优先级，另一个量，且那张卡不显示匹配徽章、不同屏不打架）；`CareerPlanning` 那张三分法的**下界 `score < 60` 没动**（不在这次拍的范围）。**后端那把证据也跟着挪**：`test_interview_performance_max.py` 的 `avg < 80 <= max` 改成 `avg < 85 <= max`。D1 只统一颜色；下面几处 80 分界表达的是徽章、统计数与解锁，改了会改变候选人看到的数字与文案，需本人定。**站点行号在 D86 重新量过（D82/D83/D84 改过 `History.vue` 与 `Profile.vue`，旧引用全漂）**：`JobRecommend.vue:388`（优先投递徽章；计数是 `:680` 的 `priorityJobCount`，模板出口在 `:43` 与 `:55`——D92 再量过一次，条目原来写的 :380 / :655、以及 D86 写的 :392 都已不是）、`History.vue:331` 的 `highMatchCount`（定义起于 `:330`）配 `:27` 的那一格（原文 :318）、`Profile.vue:403`（`resume_count >= 1`）与 `:459`（`best_score >= 80`）（原文 :492 指的是 `loadUserStats` 那几行，不是成就）、`CareerPlanning.vue:963` 起的投递策略分档（原文 968-990）。徽章与卡片上后端给的推荐标签**曾经**在 80–84 这段相反（82 分：徽章"优先投递" + 标签"可以投递"），D93 之后不再。**另外这一条的射程在 D83/D84 之后窄了一格**：Profile 那两颗成就的输入第一次变成真值，所以它们里只有 `best_score` 那颗还涉及"80 还是 85"的口径问题——而那颗现在写的正是 `isTopTier(s.best_score, INTERVIEW_SCORE_BANDS)`。
 6. ~~**`Interview.vue:464` 的随机"薄弱项"分数怎么处置**~~ —— **已定并落地（D86，走"按真实会话维度聚合"那一支）**，但**条目原文的前提是错的**：它写"当前**无趋势数据时**用 `Math.random()*40+30` 造分"。复测：`loadWeakAreas` 的主分支读 `perf.dimensions`，而 `GET /interview/performance` 给的是 `dimension_averages` 与 `weaknesses`（`interview_rest.py:821-829`）；**`dimensions` 这个键在这份响应里不存在**（同名的属于匹配解释那份，`match_explainer_service.py:79`，那边 `ExplainPane.vue:42` 读它是对的）。于是真数据分支从上线起一次都没进过，**只要有 ≥2 场带分会话，这一屏永远在画随机数**——不是"没数据才造"。修法：读服务端那份 `weaknesses`（已按维度均分 <65 挑好、名字本地化成"完整性/准确性/深度/表达力"），随机段整块删掉，空与失败分开报（失败要报成失败，见 D86）。可见变化：这一格从三个假维度变成真实的两项弱项；反向证据不靠变异——同一份夹具挂两次，字一模一样。
@@ -3519,7 +3536,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
     - 另有 **2 处**判定器建议永久留在原地，不需要决定、只需要别硬迁：`MultiAgentAnalysis:94`（agent 卡片头根本没有 h3，只有 el-tag + span）、`AnalysisResult:54`（`is-loading` 图标写在 h3 **内部**，搬进 `#title` 会变成 h3 嵌 h3）。
 
 
-15. **同步 db 的 async 路由走哪条路，以及连接池那三个数**（E15 留下的）。**条数在 D92 重取过：不是 135，是 179**——判据写清楚，因为这条从没被任何工具钉着，旧那个数现在无法复现（E15 之后新增的路由都进这个形状）：`app/api` 下 194 条带 router 装饰器的 `async def` 里，179 条的参数默认值是 `Depends(get_db)` 且注解不是 `Async*`（`get_db` 是 `core/database.py` 里的同步生成器）。拆法是**非冻结 149 + 冻结 30**，前几名为 `resume.py` 22 / `job_recommend.py` 17 / `auth.py` 15 / `job_pipeline.py` 13 / `knowledge.py` 10 / `organization.py` 10。E15 只收了"`async def` 里直接出网"这一类；剩下的形状是"async 路由 + 同步 SQLAlchemy 会话"，两种改法互斥：① **逐处 `run_in_threadpool`**——改动可控，但要 179 次判断"这段能不能整体搬走"（事务边界跨多次 await 就会坏）；② **把路由改成 `def`**——FastAPI 自动丢线程池，一行改完，代价是并发取连接的线程从"几乎为 0"变成 anyio 默认上限 **40 根**。而 `core/database.py` 设了 `pool_pre_ping=True` 与 `pool_recycle=3600`（**所以债表旧说法"未配置连接池"不准确**），没设的只有 `pool_size` / `max_overflow` / `pool_timeout`，即走默认 **5 + 10 + 排队 30 秒**。② 一落地就是 40 根线程抢 5 个连接，尾延迟会先变差。所以这两个输入（目标并发、实例数）得先有人给，E15 没有顺手填。现状：`anyio` 线程上限同样没显式设过。
+15. **同步 db 的 async 路由走哪条路，以及连接池那三个数**（E15 留下的）。**条数在 D92 重取过：不是 135，是 179**——判据写清楚，因为这条从没被任何工具钉着，旧那个数现在无法复现（E15 之后新增的路由都进这个形状）：`app/api` 下 194 条带 router 装饰器的 `async def` 里，179 条的参数默认值是 `Depends(get_db)` 且注解不是 `Async*`（`get_db` 是 `core/database.py` 里的同步生成器）。拆法是**非冻结 149 + 冻结 30**，前几名为 `resume.py` 22 / `job_recommend.py` 17 / `auth.py` 15 / `job_pipeline.py` 13 / `knowledge.py` 10 / `organization.py` 10。E15 只收了"`async def` 里直接出网"这一类；剩下的形状是"async 路由 + 同步 SQLAlchemy 会话"，两种改法互斥：① **逐处 `run_in_threadpool`**——改动可控，但要 179 次判断"这段能不能整体搬走"（事务边界跨多次 await 就会坏）；② **把路由改成 `def`**——FastAPI 自动丢线程池，一行改完，代价是并发取连接的线程从"几乎为 0"变成 anyio 默认上限 **40 根**。而 `core/database.py` 设了 `pool_pre_ping=True` 与 `pool_recycle=3600`（**所以债表旧说法"未配置连接池"不准确**）。**"没设的只有 `pool_size` / `max_overflow` / `pool_timeout`、走默认 5 + 10 + 排队 30 秒"这句在 D101 之后也不成立了——那三个数已经设了**：`database.py:30-32` 从 `config.py:66-68` 读，值是 **10 / 10 / 30**，而且走 `engine_kwargs_for()` 这个可测纯函数（E16 的理由写在那儿：内存 sqlite 不能传这些、生产 MySQL 必须传，所以不能让数字只活在注释里）。**所以这一条的"连接池"那一半不再是待拍**，只剩"改哪条路"这一半；算术也跟着变：② 一落地是 **40 根 anyio 线程抢 10(+10) 个连接**，不是"抢 5 个"。现状：`anyio` 线程上限确实仍没显式设过（全仓 grep 无 `to_thread.run_sync(..., limiter)` / `total_tokens` 设置）。
 
 16. **加载态要不要换成骨架屏**（D27 量出来的位置）。今天全站 **0 个** `el-skeleton`；异步列表已有三种表达——spinner + "加载中…"（`PipelineKanban`、`JobRecommend`）、加载期间**什么都不渲染**（`SalaryInsight`、`RecommendationEval`：整块在 `v-if="数据到了"` 里）、以及 `AnalysisResult` 那种进度面板。三者都不是说谎（没有一处把"加载中"说成"暂无数据"），所以**这条不是修 bug，是选观感**：骨架屏能让"结构已定、内容未到"看得出来，代价是要给 15 个有表格的文件各写一套占位形状，而那形状本身就是设计决定（占几行、宽度按什么给）。三条路：① 不动，spinner 与"空窗"并存；② 只给"什么都不渲染"的那两页补 spinner（几行改动，纯增加可见反馈，风险最低）；③ 全站上骨架屏（要先定占位规范，属视觉设计工作，且要逐路由 diff 才能证明没把布局改坏）。**已定并落地（D93，选 ②）**：`SalaryInsight.vue` 与 `RecommendationEval.vue` 各补一支 `.loading-state`（样式用 `panels.css:120` 既有那一族，不新增 CSS）。前者的病灶是 `v-else-if="!loading"` 把"在途"与"没有结果"合成同一块空白；后者的空态支与数据支都不成立所以整段不画。**新增那一支刻意排在数据支之后**：点"刷新"时旧结果继续画，不该被 spinner 顶掉——这条单独有断言。三条断言：在途有 spinner 且没有空态、落地后撤掉、刷新不顶掉旧结果。① 与 ③ 仍是要点才动的口径（③ 要先定占位规范）。
 
