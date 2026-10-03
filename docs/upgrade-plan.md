@@ -2749,6 +2749,27 @@ B 桶（"需要你点的"那 17 条）不能整桶做，但可以整桶**复测*
 
 
 
+#### 已交付：D97 §10.14 决定 ①：`#heading` 槽开出来了，这一轮只迁了一处，而且是有原因的
+
+他点的是"加 `#heading` 槽，先只服务组件那 6 处"。开工先把那 6 处的**实际形状**读了一遍，结论是**它们不是同一批活**：
+
+| 组件 | 处数 | 形状 | 属于哪个决定 |
+|---|---|---|---|
+| `RoomAside.vue` | 3 | `.panel-header > .side-title`（调用方自持容器） | ① |
+| `TranscriptPane.vue` | 1 | `.panel-header > .transcript-header`（同上，还带一行副标题） | ① |
+| `CareerPlanPane.vue` | 2（判定器看见的那两处） | `.panel-header > span`，其中一处还是跨行 span | **②**（标题不是 h3） |
+
+所以 ① 的真实射程是 **4 处**，`CareerPlanPane` 那 2 处（连同它另外 5 处一行式）等 ② 一起做——把它们塞进 ① 就是拿"加槽"去掩盖"标题语义"那件还没拍完的事。**这一轮落了 1 处**（`TranscriptPane`），另外 3 处 `RoomAside` 留给下一刀：它们各自的 `.panel-body` 里有 3~14 行结构，逐处要拆 `panel-body` 的配对闭合，我按 D67 那次"行号脚本吃掉标记"的教训不走手改，等把判定器扩到认识 `#heading` 形状之后用 `--write` 的逐文件断言来写盘。
+
+**槽的实现与它的确切理由**（`AppPanel.vue`）：`$slots.heading` 存在时渲染 `<div class="panel-header"><slot name="heading" /></div>`，**不**渲染 `.panel-title-row` 那一支。能成立的根据是 D19 量过的那条：**槽内容编译在调用方作用域里**，所以 `RoomAside` 的 `.side-title`、`TranscriptPane` 的 `.transcript-header` 这些调用方自己的 scoped 规则继续匹配得到；外层 `.panel-header` 仍由 AppPanel 出，全局规格照旧。**代价写在组件注释里**：D23 统一过的 `.panel-header h3` 规格对这一支不再自动生效，"标题由谁渲染"交回调用方——它是可选出口，不是新默认写法。
+
+**验证走 D96 那套（同一次运行两帧 + 会咬的对照）**：备份改后版本 → `git show HEAD:` 写回 → `/interview/room/12` 取基线 → 换回 → 再取。**整页 223 个元素 × 46 条计算属性 + rect：0 差异，且身份键一个没少**（`missingFromB=0`，因为 DOM 结构逐字相同，只是渲染者换了）；正向对照把 `.transcript-header` 的 `font-size` 注成 3px → **111 处差异**，所以那个 0 不是仪器瞎。
+
+**数字**：台账 `handRolledPanelHeaders` **35 → 34**（是棘轮自己点名要的，不是我调的）；判定器 `3 标题行形状` 由 14 → 13、`TranscriptPane` 从列表里消失；typecheck **42**（未动）、`test:unit` **82 files / 488 passed**、`npm test` / `eslint` / `prettier --check` / `vite build` 全 exit 0、构建总量 **2241.02 kB**。
+
+**§10.14 剩下的**：① 还差 `RoomAside` 3 处（同一形状，机械但有配对风险）；② 是 7 处一行式（`SmartAnalysis` 5 + `Privacy` 2）加 `CareerPlanPane` 那 7 处 span 头——span→h3 是候选人可见的，按他点的"先归规格再迁"要走逐路由差分。
+
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
@@ -3409,7 +3430,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
     **执行结果（D23，选了 ③）与一处更正**：上面表格里"包进 title-row → 56.26px"那一列来自**克隆实验，是错的**——克隆出的 Element 按钮不参与同样的布局。真实情况是：规格统一后裸形状是 62.667px，迁移之后**仍然是 62.667px**（438 个既有元素 0 样式差异、页面高不变），也就是**迁移本身零差异**，全部可见变化都集中在"扩 selector"那一次提交里。**D24 收尾**：17 处全部迁完（`Profile` 5 在 `/profile` 上量过 0 差异；其余 12 处靠"同形状先例 + 这 4 个文件无本地 `.panel-header` 规则 + 迁移器逐行断言"成立，**未在这 4 条路由上做真页面 diff**，原因见 D24）。裸 h3 形状清零。
 
-14. **剩下 35 处面板头：`AppPanel` 要不要长出这三样**（D26 之后 `--all` 报"命中 0"，纯 drop-in 已见底）。**D96 把这条重切了一遍，三处更正**：① 那句"命中 0"当时是判定器在**空目录**上跑出来的（它只枚举 `src/features/` 一层的 `.vue`，D33 之后那一层是空的），修好后扫 64 个文件、拒因分布 `9 本地覆盖 / 4 包裹 / 14 标题行形状 / 1 无单行 h3`，另有 7 处一行式写法它看不见，28 + 7 = 35 ✓；② **35 = 24 处视图 + 11 处已在面板组件里**（`CareerPlanPane` 7、`RoomAside` 3、`TranscriptPane` 1），那 11 处过去从来没被判定器看过；③ 下面第 2 项"10 处 span 全在 SmartAnalysis"混了两种形状（`SmartAnalysis` 只有 8 处：5 处一行式 span + 3 处包裹问题；`Privacy` 那 2 处是一行式裸 h3，不是 span），而第 1 项的真实数是 **14 处**不是 12。**决定 ③ 已由他点定并落地（D96）**：候选人侧那 4 处本地覆盖带页根类搬进 `panels.css`，`LOCAL_OVERRIDE_FILES` 5 → 2（剩冻结侧），三条路由整页差分 0 差异并各配会咬的正向对照。**但搬完之后纯 drop-in 仍是 0**：`Register 行4` 与 `JobSearch 行241` 只是从"本地覆盖"改成"包裹不是静态 `div.panel`"（前者 `<section class="register-panel">`、后者在 `<el-card>` 的 `#header` 里 = §10.12），所以这 11 处里的"本地覆盖"从来只是前置条件而非约束本身。① 与 ② 仍待做（① 已点定：先只服务组件那 6 处）。下面是三个独立决定，爆炸半径各不相同：
+14. **剩下 35 处面板头：`AppPanel` 要不要长出这三样**（D26 之后 `--all` 报"命中 0"，纯 drop-in 已见底）。**D96 把这条重切了一遍，三处更正**：① 那句"命中 0"当时是判定器在**空目录**上跑出来的（它只枚举 `src/features/` 一层的 `.vue`，D33 之后那一层是空的），修好后扫 64 个文件、拒因分布 `9 本地覆盖 / 4 包裹 / 14 标题行形状 / 1 无单行 h3`，另有 7 处一行式写法它看不见，28 + 7 = 35 ✓；② **35 = 24 处视图 + 11 处已在面板组件里**（`CareerPlanPane` 7、`RoomAside` 3、`TranscriptPane` 1），那 11 处过去从来没被判定器看过；③ 下面第 2 项"10 处 span 全在 SmartAnalysis"混了两种形状（`SmartAnalysis` 只有 8 处：5 处一行式 span + 3 处包裹问题；`Privacy` 那 2 处是一行式裸 h3，不是 span），而第 1 项的真实数是 **14 处**不是 12。**决定 ③ 已由他点定并落地（D96）**：候选人侧那 4 处本地覆盖带页根类搬进 `panels.css`，`LOCAL_OVERRIDE_FILES` 5 → 2（剩冻结侧），三条路由整页差分 0 差异并各配会咬的正向对照。**但搬完之后纯 drop-in 仍是 0**：`Register 行4` 与 `JobSearch 行241` 只是从"本地覆盖"改成"包裹不是静态 `div.panel`"（前者 `<section class="register-panel">`、后者在 `<el-card>` 的 `#header` 里 = §10.12），所以这 11 处里的"本地覆盖"从来只是前置条件而非约束本身。① 与 ② 仍待做（① 已点定：先只服务组件那 6 处）。**D97 把 ① 开工了，并更正它的射程**：那"6 处"里只有 **4 处**属于 ①（`RoomAside` 3 + `TranscriptPane` 1，形状都是 `.panel-header > 调用方自持容器`），`CareerPlanPane` 那 2 处是 `.panel-header > span`，属 ②。已落 1 处（`TranscriptPane`，整页 223 元素 0 差异 + 111 处会咬的正向对照，台账 35 → 34），`RoomAside` 那 3 处留给下一刀。下面是三个独立决定，爆炸半径各不相同：
     1. **`#heading` 槽**（标题容器由调用方给）—— 真实需求 **12 处**：`InterviewReport` 8 处 `card-header`、`InterviewRoom` 4 处 `transcript-header` / `side-title`。技术上安全（slot 内容带父作用域 id，D19 已证），代价是"标题由谁渲染"从组件契约里溜出去：D23 统一的 `.panel-header h3` 规格对这 12 处不再自动生效，观感回到调用方手里。这与 §10.12 的 `el-card` 归属是同一类问题，建议合并拍。
     2. **`<span>` 标题怎么算** —— **10 处**全在 `SmartAnalysis`，标题一律写成 `<span>` 而不是 h3（3 处的包裹还是 `<section class="panel">`、5 处整个头部就是一行）。要么给 `AppPanel` 加"标题不是 h3"的模式（那它就不再是面板规格的载体），要么承认这 10 处属于另一个组件。附带一条：**迁其中任何一处都会改变渲染**（span → h3 是候选人可见的），所以这里没有"零风险批量"可做。
     3. **5 个视图的本地覆盖** —— **11 处**卡在它们自己的 `.panel-header` 规则上（`KnowledgeBase` 4、`OrganizationWorkspace` 3、`JobSearch` 1、`Register` 1、`Privacy` 2）。要么把覆盖搬进 `panels.css`（棘轮的 `LOCAL_OVERRIDE_FILES` 随之清空，代价是全局层多几条规则），要么给 `AppPanel` 加头部样式 props（多一套 API 面）。**与上面第 1 条和 §10.12 有重叠**：这 11 处里有 5 处正是 `el-card` 描述型头部（`KnowledgeBase` 4 + `JobSearch` 1），另 2 处是 `Privacy` 的裸 h3 一行式头部（判定器根本看不见它们）——三件事按顺序拍，别按三批工做。

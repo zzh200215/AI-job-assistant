@@ -1,84 +1,83 @@
 <template>
-  <div class="panel transcript-card">
-    <div class="panel-header">
+  <AppPanel class="transcript-card">
+    <template #heading>
       <div class="transcript-header">
         <span>面试实录</span>
         <span class="transcript-sub">实时显示提问、作答、评分与超时反馈</span>
       </div>
-    </div>
-    <div class="panel-body">
-      <div ref="listRef" class="transcript-list">
-        <div
-          v-for="(msg, idx) in messages"
-          :key="`${idx}-${msg.type}`"
-          class="msg-row"
-          :class="roomModel.messageRowClass(msg)"
-        >
-          <template v-if="msg.type === 'question'">
-            <div class="msg-shell ai-shell">
-              <div class="msg-head">
-                <span>面试官</span>
-                <span>{{ msg.metadata?.category || '通用问题' }}</span>
-              </div>
-              <div class="msg-body">{{ msg.content }}</div>
+    </template>
+    <div ref="listRef" class="transcript-list">
+      <div
+        v-for="(msg, idx) in messages"
+        :key="`${idx}-${msg.type}`"
+        class="msg-row"
+        :class="roomModel.messageRowClass(msg)"
+      >
+        <template v-if="msg.type === 'question'">
+          <div class="msg-shell ai-shell">
+            <div class="msg-head">
+              <span>面试官</span>
+              <span>{{ msg.metadata?.category || '通用问题' }}</span>
             </div>
-          </template>
+            <div class="msg-body">{{ msg.content }}</div>
+          </div>
+        </template>
 
-          <template v-else-if="msg.type === 'answer'">
-            <div class="msg-shell user-shell">
-              <div class="msg-head">
-                <span>我的回答</span>
-              </div>
-              <div class="msg-body">{{ msg.content }}</div>
+        <template v-else-if="msg.type === 'answer'">
+          <div class="msg-shell user-shell">
+            <div class="msg-head">
+              <span>我的回答</span>
             </div>
-          </template>
+            <div class="msg-body">{{ msg.content }}</div>
+          </div>
+        </template>
 
-          <template v-else-if="msg.type === 'evaluation'">
-            <div
-              class="score-shell"
-              :class="interviewScoreToneClass(msg.metadata?.score, 'score-chip')"
-            >
-              <div class="score-top">
-                <strong>本题评分 {{ msg.metadata?.score || 0 }}</strong>
-                <span>{{ roomModel.performanceSummaryOf(msg.metadata?.score) }}</span>
-              </div>
-              <div class="score-dims">
-                <span>完整 {{ msg.metadata?.completeness ?? '-' }}</span>
-                <span>准确 {{ msg.metadata?.accuracy ?? '-' }}</span>
-                <span>深度 {{ msg.metadata?.depth ?? '-' }}</span>
-                <span>表达 {{ msg.metadata?.expression ?? '-' }}</span>
-              </div>
-              <p>{{ msg.content }}</p>
-              <p v-if="msg.metadata?.improvement" class="score-improvement">
-                改进建议：{{ msg.metadata.improvement }}
-              </p>
+        <template v-else-if="msg.type === 'evaluation'">
+          <div
+            class="score-shell"
+            :class="interviewScoreToneClass(msg.metadata?.score, 'score-chip')"
+          >
+            <div class="score-top">
+              <strong>本题评分 {{ msg.metadata?.score || 0 }}</strong>
+              <span>{{ roomModel.performanceSummaryOf(msg.metadata?.score) }}</span>
             </div>
-          </template>
-
-          <template v-else-if="msg.type === 'system'">
-            <div class="system-shell">{{ msg.content }}</div>
-          </template>
-
-          <template v-else-if="msg.type === 'end'">
-            <div class="end-shell">
-              <strong>面试已结束</strong>
-              <span>{{ msg.content }}</span>
+            <div class="score-dims">
+              <span>完整 {{ msg.metadata?.completeness ?? '-' }}</span>
+              <span>准确 {{ msg.metadata?.accuracy ?? '-' }}</span>
+              <span>深度 {{ msg.metadata?.depth ?? '-' }}</span>
+              <span>表达 {{ msg.metadata?.expression ?? '-' }}</span>
             </div>
-          </template>
-        </div>
-      </div>
+            <p>{{ msg.content }}</p>
+            <p v-if="msg.metadata?.improvement" class="score-improvement">
+              改进建议：{{ msg.metadata.improvement }}
+            </p>
+          </div>
+        </template>
 
-      <div v-if="status === 'connecting'" class="state-hint">正在接入面试房间...</div>
-      <div v-else-if="status === 'evaluating'" class="state-hint">
-        面试官正在记录你的回答并决定下一问...
+        <template v-else-if="msg.type === 'system'">
+          <div class="system-shell">{{ msg.content }}</div>
+        </template>
+
+        <template v-else-if="msg.type === 'end'">
+          <div class="end-shell">
+            <strong>面试已结束</strong>
+            <span>{{ msg.content }}</span>
+          </div>
+        </template>
       </div>
     </div>
-  </div>
+
+    <div v-if="status === 'connecting'" class="state-hint">正在接入面试房间...</div>
+    <div v-else-if="status === 'evaluating'" class="state-hint">
+      面试官正在记录你的回答并决定下一问...
+    </div>
+  </AppPanel>
 </template>
 
 <script setup>
 /* 面试实录面板：D66 从 InterviewRoom.vue 搬出来，是这页最大的一块（含五种消息行的分支）。消息行的归类与"没有分数时不能写回答偏弱"仍住在 lib 与 utils（面板 import 它们，因为它们是规则不是状态）。 */
 
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { nextTick, ref, watch } from 'vue'
 
 import { interviewScoreToneClass } from '@/utils/scoreTone'
