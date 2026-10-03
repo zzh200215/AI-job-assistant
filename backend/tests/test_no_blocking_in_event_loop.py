@@ -497,7 +497,14 @@ async def _latency_while_something_blocks(client, slow_path: str, fast_path: str
 
 def test_readiness_probe_does_not_stall_the_loop(monkeypatch):
     """行为证据（这条在改动前是红的）：/ready 是公开端点，它要做的 DB + Chroma 往返
-    以前同步跑在事件循环里，一个匿名请求就能让别人的请求排队。"""
+    以前同步跑在事件循环里，一个匿名请求就能让别人的请求排队。
+
+    D104 把阈值改成**跟着基线走**：同一条 /ready 在不注入 sleep 时先量一次，判据是
+    `注入之后 < 基线 + stall/2`。原来那句 `elapsed < stall / 2` 把两件事混成了一个数——
+    "事件循环被同步代码卡住"和"这台机器此刻 CPU 饥饿"。实测：空闲单跑 4.32s 绿，
+    旁边并发一份前端全量（`npx vitest run`）就红，而红的这一条里 /ready 的行为什么都没变。
+    改判据不降低分辨率：真卡住循环时 `注入之后 ≈ 基线 + stall`，照样越线。
+    """
     import asyncio
 
     from app.main import app
@@ -505,22 +512,34 @@ def test_readiness_probe_does_not_stall_the_loop(monkeypatch):
     stall = 0.4
 
     class _FakeChroma:
+        def __init__(self, delay: float = 0.0) -> None:
+            self.delay = delay
+
         def heartbeat(self):
-            import time
+            if self.delay:
+                import time
 
-            time.sleep(stall)
+                time.sleep(self.delay)
 
-    monkeypatch.setattr("app.core.chroma_client.get_chroma_client", lambda: _FakeChroma())
-
-    async def _run():
+    async def _measure(delay: float) -> float:
+        monkeypatch.setattr("app.core.chroma_client.get_chroma_client", lambda: _FakeChroma(delay))
         import httpx
         from httpx import ASGITransport
 
         async with httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
             return await _latency_while_something_blocks(client, "/api/system/ready", "/api/system/health")
 
-    elapsed = asyncio.run(_run())
-    assert elapsed < stall / 2, f"/health 被 /ready 停住了 {elapsed:.3f}s，事件循环还在被同步占着"
+    async def _run():
+        baseline = await _measure(0.0)
+        blocked = await _measure(stall)
+        return baseline, blocked
+
+    baseline, blocked = asyncio.run(_run())
+    assert blocked < baseline + stall / 2, (
+        f"/health 被 /ready 停住了：注入 {stall}s 之后排队 {blocked:.3f}s，"
+        f"同一条路径不注入时的基线是 {baseline:.3f}s（多出来的那 {blocked - baseline:.3f}s "
+        f"就是事件循环被同步占着的时长；阈值随基线走，满载时不要把 CPU 饥饿读成回归）"
+    )
 
 
 def test_the_stall_measurement_can_see_a_stall():
