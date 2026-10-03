@@ -3,8 +3,13 @@
    用法（在浏览器里）：
      await __probe.go('/knowledge')
      await __probe.audit({ selector: '.page-shell', scope: 'abcd1234' })
+     // D85：规则已经不在源码里时，先注回去再测（正向对照要的就是这条能力）
+     const P = __probe.scopeOf('InterviewRoom')
+     __probe.injectRule({ selector: '.interview-room-page .stage-card', scope: P, decls: 'border-top: 3px solid var(--app-cyan)' })
+     await __probe.audit({ selector: '.interview-room-page .stage-card', scope: P })
+     __probe.dropRule('.interview-room-page .stage-card', P)
    scope 是那一页自己的 `__scopeId`（`__probe.scopes()` 列出全部），不靠猜构建哈希。
-   判据与限制写在 docs/upgrade-plan.md D76。 */
+   判据与限制写在 docs/upgrade-plan.md D76 / D79 / D85。 */
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
@@ -40,6 +45,15 @@ import KnowledgeBase from '../src/features/knowledge/views/KnowledgeBase.vue'
 import DeliveryGuide from '../src/features/shell/views/DeliveryGuide.vue'
 import SystemStatus from '../src/features/admin/views/SystemStatus.vue'
 import DefaultLayout from '../src/layouts/DefaultLayout.vue'
+/* D85：D67/D68 那两轮唯一没回头核的一笔——三条 `matched=1` 的规则（打在子组件根元素上的
+   `.interview-room-page .stage-card` / `.question-card` / `.interviewer-avatar` /
+   `.structure-box` / `.user-shell`）当时是用一次性 harness 判的，而那台 harness 的属性读法无法确认
+   是否瞎（D79 之后才知道"只改颜色"的删除会被报成 0 差异）。要核它得先让这一屏画出来，
+   所以这四块面板也进组件表：父 scope 用来注入"当时被删的那份"，子 scope 用来测"现在还在画的那份"。 */
+import InterviewRoom from '../src/features/interview/views/InterviewRoom.vue'
+import StagePane from '../src/features/interview/components/StagePane.vue'
+import QuestionPane from '../src/features/interview/components/QuestionPane.vue'
+import TranscriptPane from '../src/features/interview/components/TranscriptPane.vue'
 
 const COMPONENTS = {
   JobSearch,
@@ -57,6 +71,10 @@ const COMPONENTS = {
   DeliveryGuide,
   SystemStatus,
   DefaultLayout,
+  InterviewRoom,
+  StagePane,
+  QuestionPane,
+  TranscriptPane,
 }
 
 /* ---------- 夹具：形状抄自单测，只给"页面要走到那一屏"所需的最小量 ---------- */
@@ -263,6 +281,40 @@ const FIXTURES = [
     { services: [{ name: 'api', ok: true }], queue: { depth: 0, workers: 2 } },
   ],
   [/\/system\/metrics/, 'get', { counters: {}, queues: [] }],
+  /* 面试房间（D85 的正向对照要这一屏）。形状全部照消费者写：
+     - `store.hydrateSession(detail)`（stores/interview.js:110-134）读 status / total_questions /
+       messages / evaluation / evaluation_status / memory_snapshot / answered_count；
+     - `startWS` 第一行是 `Number(session.value?.id) === Number(sessionId)`，**id 与路由参数不一致
+       就把刚灌进去的整块状态清掉**，所以这里必须是 12，与 `go('/interview/room/12')` 对齐；
+     - `.user-shell` 那一支的条件是 `msg.type === 'answer'`（TranscriptPane.vue:27），不是 'user'；
+     - status 不能给 'completed'，否则 onMounted 直接 replace 去报告页（InterviewRoom.vue:266-268）。
+     WS 那一发在探针里没有后端，会连不上——它只改 status/按钮禁用，不影响这一族类名的元素是否存在，
+     所以测量不依赖它（真要测 WS 态得另说）。 */
+  [
+    /\/interview\/sessions\/\d+$/,
+    'get',
+    {
+      id: 12,
+      status: 'ongoing',
+      interview_type: 'tech',
+      total_questions: 5,
+      answered_count: 1,
+      evaluation_status: 'idle',
+      memory_snapshot: {},
+      questions: [{ id: 1, text: '介绍一下你做过的服务', category: 'project' }],
+      messages: [
+        {
+          id: 1,
+          type: 'question',
+          content: '介绍一下你做过的服务',
+          round: 1,
+          metadata: { category: 'project' },
+        },
+        { id: 2, type: 'answer', content: '我负责过一个招聘分析服务', round: 1, metadata: {} },
+      ],
+      evaluation: null,
+    },
+  ],
 ]
 
 request.defaults.adapter = async (config) => {
@@ -337,6 +389,12 @@ const PROPS = [
 
 const FREEZE = '*,*::before,*::after{animation:none!important;transition:none!important}'
 
+/** scope 有两种写法：`__scopeId` 给的是 `data-v-xxxx`（`scopes()` 原样返回），手写调用时常只给 `xxxx`。
+ *  拼两次前缀会得到 `[data-v-data-v-xxxx]`，匹配 0 个元素、0 条规则，而**任何一条判据都会安静地
+ *  把它当成"这条规则没在画"**——与 D79 那条瞎快照同一类仪器错，所以在源头归一，不在调用方绕。 */
+const bare = (scope) => String(scope || '').replace(/^data-v-/, '')
+const markOf = (scope) => `[data-v-${bare(scope)}]`
+
 function norm(text) {
   return String(text).replace(/\s+/g, ' ').trim()
 }
@@ -370,7 +428,7 @@ function diffCount(a, b) {
 /** 找到"属于某个 scopeId 的那条规则"。传 selector（不含 scope 属性），
  *  编译后会变成 `<selector>[data-v-xxx]`；按**精确相等**比，避免 `.rag-metric` 误命中 `.rag-metric span`。 */
 function locate(selector, scopeId) {
-  const mark = `[data-v-${scopeId}]`
+  const mark = markOf(scopeId)
   const want = norm(`${selector}${mark}`)
   for (const sheet of Array.from(document.styleSheets)) {
     let rules
@@ -391,7 +449,7 @@ function locate(selector, scopeId) {
 /** 同一条规则在文档里出现几张表 —— vite dev 的 HMR 会把改过的样式块**再注一份**而不撤旧的，
  *  这时"删掉一处、看不出变化"是重复造成的，不是规则死的证据。D79 量 `.dot-partial` 就是这么撞出来的。 */
 function copies(selector, scopeId) {
-  const want = norm(`${selector}[data-v-${scopeId}]`)
+  const want = norm(`${selector}${markOf(scopeId)}`)
   let n = 0
   let first = null
   for (const sheet of Array.from(document.styleSheets)) {
@@ -414,11 +472,16 @@ function copies(selector, scopeId) {
 
 const probe = {
   props: PROPS.length,
-  copiesOf: (selector, scope) => copies(selector, String(scope).replace('data-v-', '')).n,
+  copiesOf: (selector, scope) => copies(selector, scope).n,
   scopes() {
     return Object.fromEntries(
       Object.entries(COMPONENTS).map(([k, v]) => [k, v && v.__scopeId ? v.__scopeId : null])
     )
+  },
+  scopeOf(name) {
+    const id = COMPONENTS[name] && COMPONENTS[name].__scopeId
+    if (!id) throw new Error(`${name} 不在组件表里，或它没有 scoped 样式块`)
+    return id
   },
   routes: () => router.getRoutes().map((r) => ({ path: r.path, name: r.name || null })),
   async go(target) {
@@ -450,6 +513,55 @@ const probe = {
     }
     return out
   },
+  /** 只数不删：这条"带 scope 的选择器"在屏幕上有没有元素（D85 要先确认父侧那份副本确实没了）。 */
+  matchedCount(selector, scope) {
+    return document.querySelectorAll(norm(`${selector}${markOf(scope)}`)).length
+  },
+  /** 注回一条"当时被删掉的副本"。D68 那三条 `matched=1` 判完之后规则就不在源码里了，
+   *  要做正向对照只能往**活样式表**里造一条同选择器、同 scope 属性的。
+   *  落点选"拥有该 scope 的那张表"的表尾：同特异性时后写的赢，而父页的样式表在子面板之后
+   *  （视图 import 面板，面板的 style 先注），所以变异那一条真能改到屏幕，而不是被后写的对手压掉。 */
+  injectRule({ selector, scope, decls }) {
+    const mark = markOf(scope)
+    const text = norm(`${selector}${mark} { ${decls} }`)
+    for (const sheet of Array.from(document.styleSheets)) {
+      let rules
+      try {
+        rules = sheet.cssRules
+      } catch {
+        continue
+      }
+      const owns = Array.from(rules).some(
+        (r) => r && r.selectorText && r.selectorText.includes(mark)
+      )
+      if (owns) {
+        sheet.insertRule(text, rules.length)
+        return text
+      }
+    }
+    throw new Error(`没有一张表带 ${mark}，injectRule 不知道该注到哪`)
+  },
+  /** 按**精确选择器**删掉注入过的那条（可重复调用，返回删了几条）。 */
+  dropRule(selector, scope) {
+    const want = norm(`${selector}${markOf(scope)}`)
+    let n = 0
+    for (const sheet of Array.from(document.styleSheets)) {
+      let rules
+      try {
+        rules = sheet.cssRules
+      } catch {
+        continue
+      }
+      for (let i = rules.length - 1; i >= 0; i--) {
+        const rule = rules[i]
+        if (rule && rule.selectorText && norm(rule.selectorText) === want) {
+          sheet.deleteRule(i)
+          n++
+        }
+      }
+    }
+    return n
+  },
   async audit({ selector, scope, label }) {
     const found = locate(selector, scope)
     if (!found)
@@ -461,7 +573,7 @@ const probe = {
       }
     let matched = -1
     try {
-      matched = document.querySelectorAll(norm(`${selector}[data-v-${scope}]`)).length
+      matched = document.querySelectorAll(norm(`${selector}${markOf(scope)}`)).length
     } catch {
       matched = -2
     }
