@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import request from '@/api/request'
+import { getTenantBrand } from '@/api/tenant'
 
 const CACHE_KEY = 'tenant.brand'
 
@@ -75,7 +75,7 @@ export const useTenantStore = defineStore('tenant', () => {
     // 先应用缓存品牌，避免默认样式闪一下
     applyCssVariables(brand.value)
     try {
-      const data = await request.get('/tenant/brand', { notifyError: false })
+      const data = await getTenantBrand({ notifyError: false })
       apply(data)
     } catch {
       // 品牌拉取失败时保持默认/缓存，不影响主流程

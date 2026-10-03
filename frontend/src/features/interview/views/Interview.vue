@@ -439,7 +439,7 @@ async function refreshDaily() {
 // 薄弱知识点
 const weakLoading = ref(false)
 const weakAreas = ref([])
-/* 「读不到」不等于「没有」。GET 失败时请求层不弹提示（`viewsBypassingApiLayer` 那一族的历史），
+/* 「读不到」不等于「没有」。GET 失败时请求层不弹提示（`api/request.js` 只对非 GET 通知），
    所以这一格的空态必须自己说清是哪一种——`silentEmptyCatches` 那条守卫钉的就是"失败被清成空数据"。 */
 const weakError = ref('')
 

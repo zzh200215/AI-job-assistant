@@ -117,7 +117,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage } from '@/plugins/element-services'
-import { getAdminUsers } from '@/api/admin'
+import { getAdminUsers } from '@/api/auth'
 import { dateTime } from '@/utils/format/date'
 
 const users = ref([])

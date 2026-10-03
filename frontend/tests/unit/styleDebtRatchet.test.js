@@ -231,9 +231,9 @@ const BUDGET = {
      DeliveryGuide / SystemStatus，各自 matched=0、删→比 46 条计算属性+rect=0 差异、塞回=0 差异），
      22 → 19。这一维以前只有上限、没有"还完必须调小"，所以那 3 的下降本来会静悄悄。 */
   pageShellRedeclarations: 19,
-  /* D69 清零。这一维看不见 src/stores（JS_OUT_OF_SCOPE_ROOTS 为色值/色表那几把尺子豁免了它），
-     而 stores/auth.js 至今有 4 条裸调用——别把这里的 0 读成"全仓只有一处出网"。 */
-  viewsBypassingApiLayer: 0,
+  /* `viewsBypassingApiLayer` 这个键在 §10.22 落地后**删掉了**：那一维以前复用 `viewSources`
+     （被 `JS_OUT_OF_SCOPE_ROOTS` 豁免了 `src/stores`），所以它的 `0` 只说得出"视图没绕过"。
+     现在那条守卫自带文件集、判据是硬零，不需要一个预算数字在旁边。 */
 }
 
 function vueFiles(dir, exts = ['.vue']) {
@@ -928,11 +928,28 @@ describe('style debt ratchet', () => {
     ).toEqual([])
   })
 
-  it('does not let views bypass the api layer', () => {
-    const offenders = viewSources
-      .filter(({ source }) => /from '@\/api\/request'/.test(source))
-      .map(({ rel }) => rel)
-    expect(offenders.length).toBeLessThanOrEqual(BUDGET.viewsBypassingApiLayer)
+  it('does not let anything outside the api layer import the shared request instance', () => {
+    /* §10.22 拍的那条 ②：这一维**不再复用** `viewSources`。`viewSources` 为了让色值/日期那几把尺子
+       不去数法定解药（`src/api`、`src/plugins`、`src/router`、`src/stores`、`src/utils`），把
+       `src/stores` 整根豁免了，于是那 5 处裸 `request` 顺手也被豁免——报出来的 `0` 只说得出"视图没绕过"，
+       说不出"只有 api 层出网"。现在换成自带文件集：扫 `src` 下全部 `.vue` 与 `.js`，
+       只豁免 `src/api` 与 `src/plugins` 两根。豁免面从 5 个根缩到 2 个，是有意的收紧。 */
+    const EXEMPT = ['src/api/', 'src/plugins/']
+    const offenders = [...vueFiles('src', ['.vue', '.js'])]
+      .map(toRel)
+      .filter((rel) => !EXEMPT.some((root) => rel.startsWith(root)))
+      .filter((rel) =>
+        /from '@\/api\/request'|from '\.\/request'|from '\.\.\/request'/.test(
+          readFileSync(rel, 'utf8')
+        )
+      )
+      .sort()
+    expect(
+      offenders,
+      `只有 src/api 与 src/plugins 可以 import 那个共享 axios 实例，这些地方还在绕过 api 层：${offenders.join(
+        ', '
+      )}`
+    ).toEqual([])
   })
 
   it('keeps pure-white surfaces tokenized', () => {

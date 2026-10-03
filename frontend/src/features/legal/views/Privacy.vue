@@ -151,7 +151,7 @@ import {
   deleteMyResumes,
   deleteMyAnalyses,
   deleteMyInterviews,
-} from '@/api/account'
+} from '@/api/auth'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 

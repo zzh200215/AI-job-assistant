@@ -45,7 +45,7 @@ describe('account.js：隐私页与个人中心共用的那批 /auth/* 自助端
       deleteMyInterviews,
       sendVerificationEmail,
       deleteMyAccount,
-    } = await import('@/api/account')
+    } = await import('@/api/auth')
 
     await getDataSummary()
     await deleteMyResumes()
@@ -65,7 +65,7 @@ describe('account.js：隐私页与个人中心共用的那批 /auth/* 自助端
   })
 
   it('导出那条带 responseType: blob——丢掉它页面会把坏东西喂给 createObjectURL', async () => {
-    const { exportMyData } = await import('@/api/account')
+    const { exportMyData } = await import('@/api/auth')
     await exportMyData()
     expect(sent).toEqual([
       {
@@ -103,7 +103,7 @@ describe('analytics.js / admin.js / subscription.js：后台面那五条', () =>
   })
 
   it('admin 用户列表与 admin 订单列表：分页进 params，notifyError 不被挤掉', async () => {
-    const { getAdminUsers } = await import('@/api/admin')
+    const { getAdminUsers } = await import('@/api/auth')
     const { getAdminOrders } = await import('@/api/subscription')
     const paged = { page: 2, page_size: 20 }
     const firstHundred = { page: 1, page_size: 100 }
@@ -158,5 +158,45 @@ describe('agent.js：任务中心那四条是纯 drop-in（api 层早就有，�
       plain('post', '/agent/task/12/retry'),
       plain('post', '/agent/task/12/cancel'),
     ])
+  })
+})
+
+/* D95（§10.22 那条 ②）把凭据四条端点从 `stores/auth.js` 搬进 `api/auth.js`，同时把
+   `normalizeText` / `normalizeEmail` 也搬了过来——**搬的是请求体的形状**，那是与后端的契约。
+   下面钉的是"搬之前 store 发出去的那一份 body"，逐字对照：账号只去空白（不转小写），
+   邮箱去空白并转小写，`login` 固定带 `notifyError: false`（401/密码错都不弹 toast，原因写在表单上方）。 */
+describe('auth.js：凭据端点与它自带的请求体形状', () => {
+  it('四条端点的 URL、方法、body 形状与 config 照抄 store 里那一份', async () => {
+    const { login, register, resetPassword, getCurrentUser } = await import('@/api/auth')
+
+    await login('  Zzh@Example.COM  ', 'pw')
+    await register('  Tom ', '  TOM@X.COM ', 'pw')
+    await resetPassword(' acct ', ' A@B.COM ', 'n', 'n')
+    await getCurrentUser()
+
+    expect(sent[0]).toEqual({
+      method: 'post',
+      url: '/auth/login',
+      second: { account: 'Zzh@Example.COM', password: 'pw' },
+      third: { notifyError: false },
+    })
+    expect(sent[1].second).toEqual({ username: 'Tom', email: 'tom@x.com', password: 'pw' })
+    expect(sent[2].second).toEqual({
+      account: 'acct',
+      email: 'a@b.com',
+      new_password: 'n',
+      confirm_password: 'n',
+    })
+    expect(sent[3]).toEqual(plain('get', '/auth/me'))
+    // 4 个函数正好发 4 条，不多发
+    expect(sent).toHaveLength(4)
+  })
+
+  it('反向证据：账号不做小写折叠，邮箱做', async () => {
+    const { login, register } = await import('@/api/auth')
+    await login('MiXeD', 'pw')
+    await register('MiXeD', 'MiXeD@X.COM', 'pw')
+    expect(sent[0].second.account).toBe('MiXeD')
+    expect(sent[1].second.email).toBe('mixed@x.com')
   })
 })

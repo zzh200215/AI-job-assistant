@@ -314,7 +314,7 @@
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 
-import { sendVerificationEmail, exportMyData, deleteMyAccount } from '@/api/account'
+import { sendVerificationEmail, exportMyData, deleteMyAccount } from '@/api/auth'
 import { getSystemStatus } from '@/api/system'
 import { getDashboardOverview } from '@/api/dashboard'
 import { getPerformanceTrend } from '@/api/interview'
