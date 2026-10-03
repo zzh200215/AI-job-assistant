@@ -2699,7 +2699,7 @@ B 桶（"需要你点的"那 17 条）不能整桶做，但可以整桶**复测*
 结论：**这张卡今天已经是深色**。把 `rgba(255, 255, 255, 0.98)` 换成 `var(--app-surface)` 在两个主题下都是**零变化**——浅色主题里 `--app-surface` 的定义与这个字面量逐字相同（`main.css:11`），深色主题里无论换成什么，那条 `!important` 网都赢。所以这一行不是"改了就更正确"，是**改了等于没改而账上多一条交付**；一行动代码没动。这是 D85 命名的第二种死法（级联死）在本仓的又一例，与前两条（`.question-card`、`.structure-box`）同类同处置：**留着**，因为它是"主题层一收就复活"的 suppressed intent（收网那条动作在 §11）。
 
 **同一轮里另外两件事我没做完，就按没做完记：**
-- `SearchPane.vue:190` 的 `.job-shell`：屏幕上确实有 2 个 `.job-shell` 元素，但**全部 35 张样式表里没有任何一条选择器含 `job-shell`**（两次独立扫描：一次全文正则、一次逐条 `el.matches()`，后者只命中 `*`），元素带的是**父页** scope `data-v-e7d707ef`，计算值 `background: rgba(0,0,0,0)` / `border-radius: 0px`。合起来读就是：这些结果卡此刻没有源码要求的那层底。但 `.job-shell` 的模板与样式都只写在 `SearchPane.vue` 这一个文件里，规则却不在这页的样式表中——**这一条我没诊断到底**（要么这张表根本不是 SearchPane 的那张，要么另有加载时序问题），也没有顺手"修"它。它是一个**未结的观测**，不是结论，也不进任何计数。
+- `SearchPane.vue:190` 的 `.job-shell`：屏幕上确实有 2 个 `.job-shell` 元素，但**全部 35 张样式表里没有任何一条选择器含 `job-shell`**（两次独立扫描：一次全文正则、一次逐条 `el.matches()`，后者只命中 `*`），元素带的是**父页** scope `data-v-e7d707ef`，计算值 `background: rgba(0,0,0,0)` / `border-radius: 0px`。合起来读就是：这些结果卡此刻没有源码要求的那层底。但 `.job-shell` 的模板与样式都只写在 `SearchPane.vue` 这一个文件里，规则却不在这页的样式表中——**这一条我没诊断到底**（要么这张表根本不是 SearchPane 的那张，要么另有加载时序问题），也没有顺手"修"它。它是一个**未结的观测**，不是结论，也不进任何计数。**D105 结了它，两个猜测都不对**：规则确实在 `SearchPane.vue` 的 `<style scoped>` 里，但整块被包在一个**选择器写着 `null`** 的嵌套中（`a55498c` 拆页时把父页面根类插值成了 `null`），编译成 `null .job-shell[data-v-…]`——语法合法、永不命中；而"没有任何选择器含 job-shell"这半句是**被自己的仪器骗出来的**：那一把逐条 `el.matches()` 的扫描只走 `sheet.cssRules` 顶层，没下钻进嵌套规则。死掉的共 **47 条**（`SearchPane` 24 + `RecommendPane` 23）。
 - `RecommendPane.vue:233` 与 `CareerPlanning.vue:1303` 没量到：推荐标签页要先有简历与一次推荐请求才出卡，规划页要有 `result` 才画那些 `*-card`。这一轮没把这两条状态造出来。
 
 **要他点的其实换了个问题**：不是"白卡要不要换深色"（答案：弹窗那张已经是深色），而是"`main.css` 那张 17 个 `[class*=…]` 的 `!important` 网要不要收"——那正是 §11 里被量过不无损的动作（摘掉它 5 条路由出现 157 个元素实例的回归），也是 D85 给级联死下的判语"主题层一收就复活"。网还在，这四处字面量就都是装饰。
@@ -2955,6 +2955,39 @@ B 桶复测第二批（任务 B②：§10.1 / 10.3 / 10.15 / 10.19）。逐条�
 
 **门禁**：backend 全量 **827 passed**（117.92s），`ruff check .` clean，`ruff format --check .` 349 文件 clean；frontend `npm test` **14 → 17 tests / 0 fail**，`test:unit` **82 files / 491 passed**，`eslint` 0 error（仅 `Overview.vue:163` 那条既有 warning），`prettier --check` clean，`vue-tsc` **42**（admin 之外 0），`vite build` exit 0、js+css **2239.79 kB**（未变：配置与测试不进包）。§10 open **14 → 14**（B⑤ 不属于 §10 那 27 条，是 B 桶清单里的第五条）。
 
+
+#### 已交付：D105 D94 那条"没诊断到底"的观测，根因是一整块样式被包在 `null` 这个选择器里——47 条规则从拆页那天就全死
+
+**怎么发现的**：B⑤ 收完后去结 D94 留下的那笔未结观测（`.job-shell` 计算值透明、"35 张样式表里没有任何选择器含 job-shell"）。静态一 grep 就反了：规则**在** `SearchPane.vue` 里。真原因在编译产物里——
+
+```
+null .job-shell[data-v-222de06d]{position:relative;padding:18px;…}
+```
+
+`a55498c`（D45：把最后两个面板搬出 `JobSearch`）复制进两个面板的那两整块 `<style scoped>`，被包在一个**选择器字面上就是 `null`** 的嵌套里（拆页脚本把"父页面根类"插值成了 `null`）。嵌套展开把 `null` 当类型选择器，于是 `null .foo[data-v-x]` 语法合法、**永不命中**。`git log -S"null {"` 只指向那一个提交。
+
+**射程量到 47 条，两把尺子对得上账**：源码侧按大括号深度数（`SearchPane` 24 + `RecommendPane` 23），产物侧按 `null ` 前缀数（同一个 chunk 里 47 条，两个 scope id 各 24/23）。数的方式本身也错了一次：第一版按"行尾是不是 `{`/`}`"判深度，被 `Profile.vue:1018` 那种 `} /* 注释 */` 骗出一个假阳性，改成**剥注释后逐字符**才干净——顺带量到全仓 `&` 嵌套出现 **0 次**，所以这个仓库里所有"嵌套"都是事故，没有一处是设计。
+
+**屏幕上到底变了什么**（同视口、同主题、同一次夹具，`/jobs/search` 实时搜索标签页）：
+
+| 量 | 修前 | 修后 |
+|---|---|---|
+| `.job-shell` `padding` / `border-top-width` / `border-radius` | 0px / 0px / 0px | **18px / 0.667px / 6px** |
+| `.job-shell` `background-color` | `rgba(0,0,0,0)` | `rgb(23,25,34)` |
+| 整页元素实例 | 838 | 838，**身份消失 0** |
+| 46 条计算属性 + rect 的差异数 | — | **670 条**（视口 408px，页高 5117.62 → 5290.7px） |
+
+**顺带把 §10.17 的一处前提改死了**：那四条 `rgba(255, 255, 255, 0.98)` 里，`SearchPane.vue:195` 与 `RecommendPane.vue:233` 这两条**一直是死的**（就住在这两个 `null` 块里）。拆壳之后它们第一次真的上屏，而 `.workspace-theme` 是 `DefaultLayout.vue:2` 上**静态挂着**的深色作用域（不是开关），所以留着字面量等于在深色工作台里画两张白卡——这正是 D6 修过的那类。两处都换成 `var(--app-surface)`（深色下 #171922，已量到 `rgb(23,25,34)`）。§10.17 那句"网还在，这四处字面量就都是装饰"现在只对两条成立。
+
+**代价与盲区，按数记**：色值预算 `SearchPane 8 → 7`、`RecommendPane 9 → 8`。第 14 次"尺子在数文本"这次咬的是我新写的注释——我把原字面量抄进注释解释为什么换 token，`hardcodedColorLiterals` 就把注释里那两处算成两条**新债**（预算当场从达标变超额）。一句话：**给这类文本尺子写注释时，别把被数的东西原样写进去。**
+
+**新守卫（棘轮第 38 条腿，零容忍）**：`never nests a rule under something that is not an at-rule`——样式里只有 at-rule 可以开嵌套，非 at-rule 的 `{` 里再出现 `{` 就红，花括号不平衡也报；并带"扫到的文件数 ≥ 60"这条前提（D96 那一族的解药）。**反向证据实测**：临时塞两个探针文件（一个 `.vue` 写 `.scratch { .inner {…} }`，一个放 `src/` 根），这条腿当场点名两个路径；删掉后 38 条腿全绿。产物侧另有一条自检：`grep -l "null \." dist/assets/*.css` 现在是 **0**。
+
+**这一轮还毁过一次测量，把它变成仪器的一部分**：我用 `classList.remove('workspace-theme')` 试级联，而这个类是静态的——摘掉之后**之后每一帧都在浅色主题里**，那两次差分报出 1216 / 1820 条差异、全是侧栏文字色，与被测改动无关。`__probe.capture` 现在把 `tw = !!document.querySelector('.workspace-theme')` 一起存进快照，`__probe.diff` 在主题作用域不一致时**直接拒比**；这条断言的正向证据就是它当场拒了新旧两帧并打印 `undefined vs true`。
+
+**没做完的，写清没做完**：`RecommendPane` 那 23 条恢复的规则**没有做过屏幕差分**——智能推荐标签页要先有简历再发一次推荐请求才出卡，而探针里没有 `/jobs/recommend` 的夹具。同一块里有一条看着可疑：`.recommend-score` 写的是 `background: linear-gradient(180deg, var(--app-text, …), …)` 配 `color: #fff`，而深色作用域里 `--app-text` 是浅色（#f1f3f8），也就是**白字压在近白的渐变顶上**。这是静态读出来的、**未经屏幕验证**，下一刀应先补那条夹具再判它是不是缺陷。
+
+**门禁**：`test:unit` **491 → 492 passed**（新腿一条），棘轮 38 条腿全绿；`npm test` 17 pass；`eslint` 0 error（仅既有那条 warning）；`prettier --check` clean；`vue-tsc` **42**（admin 之外 0）；`vite build` exit 0、js+css **2239.79 → 2239.55 kB**（拆掉两层 `null{}` 壳、两处字面量换 token）；产物里 `null ` 前缀规则 **0 条**。§10 open **14 → 14**（§10.17 的前提改了，条目本身仍待拍——剩的是那张 `!important` 网要不要收）。
 
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
@@ -3629,7 +3662,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 16. **加载态要不要换成骨架屏**（D27 量出来的位置）。今天全站 **0 个** `el-skeleton`；异步列表已有三种表达——spinner + "加载中…"（`PipelineKanban`、`JobRecommend`）、加载期间**什么都不渲染**（`SalaryInsight`、`RecommendationEval`：整块在 `v-if="数据到了"` 里）、以及 `AnalysisResult` 那种进度面板。三者都不是说谎（没有一处把"加载中"说成"暂无数据"），所以**这条不是修 bug，是选观感**：骨架屏能让"结构已定、内容未到"看得出来，代价是要给 15 个有表格的文件各写一套占位形状，而那形状本身就是设计决定（占几行、宽度按什么给）。三条路：① 不动，spinner 与"空窗"并存；② 只给"什么都不渲染"的那两页补 spinner（几行改动，纯增加可见反馈，风险最低）；③ 全站上骨架屏（要先定占位规范，属视觉设计工作，且要逐路由 diff 才能证明没把布局改坏）。**已定并落地（D93，选 ②）**：`SalaryInsight.vue` 与 `RecommendationEval.vue` 各补一支 `.loading-state`（样式用 `panels.css:120` 既有那一族，不新增 CSS）。前者的病灶是 `v-else-if="!loading"` 把"在途"与"没有结果"合成同一块空白；后者的空态支与数据支都不成立所以整段不画。**新增那一支刻意排在数据支之后**：点"刷新"时旧结果继续画，不该被 spinner 顶掉——这条单独有断言。三条断言：在途有 spinner 且没有空态、落地后撤掉、刷新不顶掉旧结果。① 与 ③ 仍是要点才动的口径（③ 要先定占位规范）。**D102 复测这一族的边界，结论是"没有第四种表达、也没欠账"**：还剩两处 `.length` 门里看不到 loading 字样——`CareerPlanPane.vue`（10 处 `.length` 门、组件内 `loading`/`spinner`/`v-loading` **0 处**）与 `pipeline/components/StatsPane.vue:100`。两者都由**父页面**门着：前者整组标签页在 `SmartAnalysis.vue:272` 的 `v-if="result"` 底下（同页 `:177` 有自己的 spinner），后者由 `PipelineKanban` 的 `showStats`（默认 false）门着、同页 `:81` 就是 `v-if="loading"` 那一支。所以这两处的 `.length` 说的是"这个维度真的没数据"，不是把在途画成空——不必再补 spinner，补了反而会在父级已经门住的地方多画一层。
 
-17. **深色工作台里的白卡要不要一起改成深色面**（D36 量到的；**D86 重新数过：不是 3 处、也不是原来那三个文件**）。`background: rgba(255, 255, 255, 0.98)` 现在实测四处：`SearchPane.vue:195`、`RecommendPane.vue:233`（这两处就是原文说的 `JobSearch.vue:1665`——D36/D45 把它随拆页搬进两个面板，`JobSearch.vue` 里现在是 0 处）、`CareerPlanning.vue:1303`（原文 1589）、`JobCompareDialog.vue:64`（原文 61）。这个值**正好等于** `--app-surface` 的定义（`src/styles/main.css:11`），而深色 token 挂在 `.workspace-theme`（`DefaultLayout.vue:2`），EP 的 `el-dialog` 又默认不 teleport 到 body（`appendToBody` 无默认值 ⇒ false），所以这几处**换成 `var(--app-surface)` 是等价替换还是改观感，取决于它们渲染在哪个作用域里**——D6 那轮把 61 处 `#fff` 从白块修成深色，这三处像同一类漏网，但也可能是刻意留的"读作浅色卡片"。三条路：① 不动；② 逐处换成 token 并做逐路由 `getComputedStyle` 差分（要先能拿到数据态，也就是得先解决"没有活 API 就打不开这些浮层"）；③ 只换弹窗里那张（它一定在 `.workspace-theme` 内，行为最确定）。**他点了 ③，但 D94 把这条的前提改写了**：补好探针夹具真把那张弹窗卡画出来之后量到——规则在页面里、命中 2 个元素、没有 `!important`，**计算值已经是 `rgb(23, 25, 34)`**，赢家是 `main.css` 那张 17 个 `[class*=…]` 的 `!important` 网（特异度 0,3,0 压过作用域选择器的 0,2,0，注入同选择器的 `!important` 品红都压不动它）。所以换 token 在两个主题下都是**零变化**，一行代码没改，这条退回"待拍"，而真正待拍的是**那张网要不要收**（§11 量过：摘掉它 5 条路由出现 157 个元素实例的回归）。同一轮另有一处**未结观测**（不是结论）：`SearchPane.vue:190` 的 `.job-shell` 在屏幕上确实有 2 个元素，但 35 张样式表里没有任何一条选择器含 `job-shell`，计算值透明 / radius 0；诊断没做完，写进 D94 的"没做完"那一节。`RecommendPane:233` 与 `CareerPlanning:1303` 这两处状态这一轮没造出来，仍未量。**D102 复测**：还是四处、值仍等于 `main.css:11` 的 `--app-surface`，只有行号漂了一处——`CareerPlanning` 现在是 **:1308**（原文 1303），`SearchPane:195`、`RecommendPane:233`、`JobCompareDialog:64` 未漂。D94 那一次测量（弹窗那张计算值已经是 `rgb(23,25,34)`，赢家是 `main.css` 那张 `[class*=…]` 的 `!important` 网）**没有被之后的任何改动推翻**，所以这条待拍的仍然是那张网要不要收，而不是这四处换不换 token。
+17. **深色工作台里的白卡要不要一起改成深色面**（D36 量到的；**D86 重新数过：不是 3 处、也不是原来那三个文件**）。`background: rgba(255, 255, 255, 0.98)` 现在实测四处：`SearchPane.vue:195`、`RecommendPane.vue:233`（这两处就是原文说的 `JobSearch.vue:1665`——D36/D45 把它随拆页搬进两个面板，`JobSearch.vue` 里现在是 0 处）、`CareerPlanning.vue:1303`（原文 1589）、`JobCompareDialog.vue:64`（原文 61）。这个值**正好等于** `--app-surface` 的定义（`src/styles/main.css:11`），而深色 token 挂在 `.workspace-theme`（`DefaultLayout.vue:2`），EP 的 `el-dialog` 又默认不 teleport 到 body（`appendToBody` 无默认值 ⇒ false），所以这几处**换成 `var(--app-surface)` 是等价替换还是改观感，取决于它们渲染在哪个作用域里**——D6 那轮把 61 处 `#fff` 从白块修成深色，这三处像同一类漏网，但也可能是刻意留的"读作浅色卡片"。三条路：① 不动；② 逐处换成 token 并做逐路由 `getComputedStyle` 差分（要先能拿到数据态，也就是得先解决"没有活 API 就打不开这些浮层"）；③ 只换弹窗里那张（它一定在 `.workspace-theme` 内，行为最确定）。**他点了 ③，但 D94 把这条的前提改写了**：补好探针夹具真把那张弹窗卡画出来之后量到——规则在页面里、命中 2 个元素、没有 `!important`，**计算值已经是 `rgb(23, 25, 34)`**，赢家是 `main.css` 那张 17 个 `[class*=…]` 的 `!important` 网（特异度 0,3,0 压过作用域选择器的 0,2,0，注入同选择器的 `!important` 品红都压不动它）。所以换 token 在两个主题下都是**零变化**，一行代码没改，这条退回"待拍"，而真正待拍的是**那张网要不要收**（§11 量过：摘掉它 5 条路由出现 157 个元素实例的回归）。同一轮另有一处**未结观测**（不是结论）：`SearchPane.vue:190` 的 `.job-shell` 在屏幕上确实有 2 个元素，但 35 张样式表里没有任何一条选择器含 `job-shell`，计算值透明 / radius 0；诊断没做完，写进 D94 的"没做完"那一节。`RecommendPane:233` 与 `CareerPlanning:1303` 这两处状态这一轮没造出来，仍未量。**D102 复测**：还是四处、值仍等于 `main.css:11` 的 `--app-surface`，只有行号漂了一处——`CareerPlanning` 现在是 **:1308**（原文 1303），`SearchPane:195`、`RecommendPane:233`、`JobCompareDialog:64` 未漂。D94 那一次测量（弹窗那张计算值已经是 `rgb(23,25,34)`，赢家是 `main.css` 那张 `[class*=…]` 的 `!important` 网）**没有被之后的任何改动推翻**，所以这条待拍的仍然是那张网要不要收，而不是这四处换不换 token。**D105 把这一条的四处改成了两处**：`SearchPane.vue:195` 与 `RecommendPane.vue:233` 这两条**从来就没上过屏**——它们住在 `a55498c` 复制出来的、被包在 `null { … }` 嵌套里的那两整块 scoped 样式中，编译成 `null .job-shell[data-v-…]` 之类，语法合法但永不命中（同批共 47 条规则死掉，见 D105）。拆壳之后这两条第一次真的会画出来，而 `.workspace-theme` 是 `DefaultLayout.vue:2` 上静态挂着的深色作用域（**没有开关**，所以"浅色主题下等价替换"那种说法在这一族根本不适用），于是两处已换成 `var(--app-surface)`——**这不是拍板，是不换就在深色工作台里画两张白卡**（D6 那一类的复发）。所以这一条现在真正剩下的只有 `CareerPlanning:1308` 与 `JobCompareDialog:64` 两处字面量，而后者 D94 已量成级联死；待拍的那件事仍是**那张 `!important` 网要不要收**。
 
 18. **投递优先级里那 8 分"城市匹配"要不要留，以及它该在什么时刻算**（D41 量到的，不是 D41 造成的）。今天 `calculateApplicationPriority(job, city)` 命中调用方传进来的 UI 城市筛选就加 8 分并写进 `priorityReason`，而**两个求值时机不一致**：智能推荐页的分数在 computed 里算，所以**动一下城市筛选，卡片分数与 hero 的「优先投递」队列立刻变**；搜索页/仓库页的分数是 `runSearch`/`loadLocalJobs` 落地那一刻算好存进列表的，**换了城市筛选要等下一次搜索才变**。三条路：① 城市不参与优先级（把那 8 分从算式里去掉，两条时机自然一致）；② 城市改成用**求职目标里的城市**而不是搜索表单的筛选（语义更站得住，但要把 target 读进算式，且没有目标时得定义清楚）；③ 保持算式不动，把两处时机统一成"取数那一刻"或"随筛选重算"（前者要推荐页也存分数，后者要让搜索/仓库列表变成 computed）。**我一条都没选**：这一刀只把那一次隐式读取变成显式参数，加分规则与求值时机逐字保留，并有 45 360 次逐字段差分证明没变。要改就是产品判断，不是拆页的顺路。**D42 已经把这条耦合钉住了**：`tests/unit/jobRecommendPriority.test.js` 前两条测的是「推荐卡多这 8 分」与「它随筛选即时重算」，选定 ① 或 ② 要改的就是那两条（它们记录的是现状，不是主张）。D43 又补了对照的另一半：`tests/unit/jobWarehouseChain.test.js` 最后一条钉的是「仓库卡的分数取数那一刻定死、换筛选不重算」——选 ③（统一时机）要动的就是这一对。
 
