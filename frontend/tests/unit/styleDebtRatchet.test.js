@@ -34,9 +34,13 @@ const BUDGET = {
        **D67 起这段里的「父页面一条没删」不再成立**：0 命中那批已从父页面删掉，JobSearch 45 → 30。 */
     'src/features/jobs/components/PipelinePane.vue': 5,
     /* D45 又搬出两个面板，同一笔复制成本再记一次：这两份是从父页面**复制**的（父页面 45 条一条没删），
-       所以这一维的总数随拆页上升：45 → 50 → 67。不是新写的色值，是同一份 rgba 现在住在两个文件里。 */
-    'src/features/jobs/components/SearchPane.vue': 8,
-    'src/features/jobs/components/RecommendPane.vue': 9,
+       所以这一维的总数随拆页上升：45 → 50 → 67。不是新写的色值，是同一份 rgba 现在住在两个文件里。
+       D105 把这两个文件各降一条（8 → 7、9 → 8）：那两块 scoped 样式自 `a55498c` 起被包在一个选择器
+       写着 `null` 的嵌套块里、整块编译成永不命中的 `null .foo[data-v-…]`，拆壳之后那条白底第一次真的
+       上屏，于是按 D6 的口径换成 `var(--app-surface)`。**代价记在这儿**：色值预算此前一直数的是**文本**，
+       所以我在注释里写了一遍原字面量就被算成两条新债（这条尺子咬过我一次，见 D105）。 */
+    'src/features/jobs/components/SearchPane.vue': 7,
+    'src/features/jobs/components/RecommendPane.vue': 8,
     'src/layouts/DefaultLayout.vue': 34,
     'src/features/shell/views/Profile.vue': 31,
     'src/features/planning/views/CareerPlanning.vue': 27,
@@ -1156,6 +1160,68 @@ describe('style debt ratchet', () => {
         `not per template expression — the || branch prints the whole object to the candidate: ${offenders.join(
           ', '
         )}`
+    ).toEqual([])
+  })
+
+  it('never nests a rule under something that is not an at-rule', () => {
+    /* D105：`a55498c` 把 SearchPane / RecommendPane 搬出 JobSearch 时，复制过去的那两整块 scoped
+       样式被包在一个**选择器写着 `null`** 的嵌套里（拆页脚本把父页面根类插值成了 null），编译成
+       `null .job-shell[data-v-…]` 这类——语法合法、永不命中，47 条规则静默全死。
+       当时没有任何尺子看得见它：静态那把问的是"这个类名有没有被用到"（用到了），浏览器那把问的是
+       "这条规则命中几个元素"（0，但被当成"这一页没铺到的状态"记成未结观测，见 D94）。
+       所以这里补的是一把**结构尺**：样式里只允许 at-rule（@media/@supports/@keyframes…）开嵌套，
+       别的任何 `{` 里再出现 `{` 就是这条要拦的形状；花括号不平衡也一起报。
+       扫描本身要能红：文件数低于门槛就失败，别重演"在空目录上跑出一个 0"（D96 那一族）。 */
+    const AT_RE = /^@(media|supports|layer|keyframes|font-face|font-feature-values|import|charset)/
+    let scanned = 0
+    const offenders = []
+    for (const full of vueFiles('src', ['.vue', '.css'])) {
+      const rel = toRel(full)
+      if (JS_OUT_OF_SCOPE_ROOTS.some((root) => rel.startsWith(`${root}/`))) continue
+      const text = readFileSync(full, 'utf8')
+      const bodies = []
+      if (rel.endsWith('.css')) bodies.push(text)
+      else {
+        const re = /<style[^>]*>([\s\S]*?)<\/style>/g
+        let m
+        while ((m = re.exec(text))) bodies.push(m[1])
+      }
+      if (!bodies.length) continue
+      scanned += 1
+      for (const raw of bodies) {
+        const body = raw.replace(/\/\*[\s\S]*?\*\//g, '')
+        let depth = 0
+        let pending = ''
+        const stack = []
+        for (const c of body) {
+          if (c === '{') {
+            const sel = pending.trim()
+            pending = ''
+            depth += 1
+            stack.push(sel)
+            if (!AT_RE.test(sel) && stack.filter((s) => !AT_RE.test(s)).length >= 2) {
+              offenders.push(`${rel}: ${stack.join(' > ').slice(0, 80)}`)
+            }
+          } else if (c === '}') {
+            depth = Math.max(0, depth - 1)
+            stack.pop()
+            pending = ''
+          } else if (depth === 0 && c !== '\n') {
+            pending += c
+          }
+        }
+        if (depth !== 0) offenders.push(`${rel}: 花括号不平衡（收尾时 depth=${depth}）`)
+      }
+    }
+    expect(
+      scanned,
+      `只扫到 ${scanned} 个带样式的文件——这把尺子又在看空目录`
+    ).toBeGreaterThanOrEqual(60)
+    expect(
+      offenders,
+      `scoped styles may not nest a rule under a non-at-rule selector: a55498c shipped a wrapper literally named ` +
+        '`null` and 47 rules stopped applying with no gate able to see it: ' +
+        `${offenders.join(', ')}`
     ).toEqual([])
   })
 })

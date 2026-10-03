@@ -666,6 +666,11 @@ const probe = {
       vw: window.innerWidth,
       vh: window.innerHeight,
       dpr: window.devicePixelRatio,
+      /* D105：深色作用域 `.workspace-theme` 是 `DefaultLayout.vue:2` 上静态写的类，所以在页面里
+         `classList.remove('workspace-theme')` 试级联，会把**之后每一帧**都悄悄换成浅色主题——
+         实测这样拍出来的两帧差 1820 条属性，全是侧栏文字色，与被测改动无关。
+         视口之外还要比主题：主题不同就拒比。 */
+      tw: !!document.querySelector('.workspace-theme'),
     })
     localStorage.setItem(`cap:${label}`, payload)
     return { label, n: nodes.length, kb: Math.round(payload.length / 1024) }
@@ -679,6 +684,12 @@ const probe = {
     if (A.vw !== B.vw || A.vh !== B.vh) {
       return {
         error: `视口不一致：${A.vw}×${A.vh} vs ${B.vw}×${B.vh} —— 差分无效，同一次运行里重取`,
+      }
+    }
+    // D105：主题作用域也要一致，否则整页文字色都会算成"改动带来的差异"。
+    if (A.tw !== B.tw) {
+      return {
+        error: `主题作用域不一致：.workspace-theme 在 A 是 ${A.tw}、在 B 是 ${B.tw} —— 差分无效（比视口更阴，因为它可以是被上一次实验摘掉的）`,
       }
     }
     const bi = new Map(B.ids.map((k, i) => [k, i]))
