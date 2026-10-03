@@ -2722,6 +2722,33 @@ B 桶（"需要你点的"那 17 条）不能整桶做，但可以整桶**复测*
 
 
 
+#### 已交付：D96 §10.14 决定 ③——候选人那 4 处本地覆盖搬进 panels.css，而搬完之后一处都没能自动迁
+
+前置是 `bd64e5e`：面板头判定器自 D33 起在**空目录**上跑（它只枚举 `src/features/` 那一层的 `.vue`，而那一层在 feature 重组之后一个文件都没有），所以"命中 0 = 纯 drop-in 见底"这句话从来没有测量支撑。修复后把覆盖面从 `views/` 扩到 `views/` + `components/`，扫到 **64 个文件**，selftest 13 条照旧全绿。
+
+**重切那 35 处**（台账 35 = `class="panel-header"` 文本出现次数，数的是 `src/features` + `src/layouts` 全部 `.vue`）：
+- **24 处在视图里，11 处已经住在面板组件里**（`CareerPlanPane` 7、`RoomAside` 3、`TranscriptPane` 1）——后者是判定器过去完全没看过的。`AppPanel.vue` 自己那 1 处不算（它是规格本体）。
+- 判定器看得到 28 处，拒因分布 `1 本地覆盖 9 / 2 包裹非静态 div.panel 4 / 3 标题行不是 panel-title-row 14 / 5 无单行 h3 1`；**7 处它看不见**（`SmartAnalysis` 5 处一行式 + `Privacy` 2 处一行式）。28 + 7 = 35 ✓。
+- 条目原来写的 12/10/11/2 里两处对不上：**14 而不是 12**（多出 `CareerPlanPane` 那 2 处，它们在组件里）；"10 处 span 标题全在 `SmartAnalysis`"把两种形状混成一个桶——`SmartAnalysis` 一共只有 8 处，5 处是一行式 span、3 处是包裹问题，而 `Privacy` 那 2 处根本不是 span。
+
+**决定 ③ 落地（只搬候选人侧 4 处）**：`JobSearch`（`.panel-header` + `.panel-header h2` 一组、`.panel-header p` 一组、窄屏 `flex-direction` 一组，共三条组内抽取）、`Register`（`margin-bottom: 28px`）、`Privacy`（`padding` + `border-bottom`）。搬法沿用 `Home` 的先例（`panels.css:86` 的 `.dashboard-page .panel-header`）：**带页根类进全局层**，匹配只看 DOM 结构、与组件边界无关，特异度 (0,2,0) 仍压得住 `.panel-title-row h3` 的 (0,1,1)。两个页根类是新加的（`jobsearch-page` / `privacy-page`，实测全仓此前 0 处占用），`register-page` 本来就有。
+- **刻意不搬成全局** `.panel-header p { color }`：那会一次改到全站每个面板头下面那行小字。
+- `Privacy` 的 `.panel-header h3 { margin:0; font-size:16px; font-weight:700 }` 是**删掉而不是搬**：它与全局规格逐字重复，全局只多一条 `letter-spacing: 0`——这条重复就是"本地覆盖"这个名字的由来之一，实测它早已不承担什么。
+- `LOCAL_OVERRIDE_FILES` 从 5 个文件缩到 **2**（`KnowledgeBase` 4 + `OrganizationWorkspace` 3 留在 §2 冻结侧）。**清单变短不等于债变少**：那 4 处头部标记还在原地，只是不再挡住判定。
+- 实测前提：`src/features/jobs/components/**` 里没有任何 `.panel-header`（那 11 处组件头部全在 planning/interview 域），所以页根作用域不会新兜到组件的头。
+
+**验证用的是同一台仪器里的两帧，且先把 4 个文件写回 HEAD 再取基线**（记忆里"不动分支的 A/B"那套：备份改后副本 → `git show HEAD:<path> | tr -d '\r'` 写入 → 取基线 → 换回副本）。三条路由的整页差分：**0 差异**（`/privacy` 200 个元素、`/jobs/search` 800 个、`/register` 81 个 × 46 条计算属性 + rect）。加类那一处按身份键算"消失 1 个元素"，单独报出、不混进差异数。
+- **正向对照**（0 差异必须配一条会咬的）：`register` 改 `margin-bottom` → 74 处差异；`privacy` 改 `padding-top` → 112 处、改 h3 `letter-spacing` → 6 处；`jobs` 改 `font-size` → 77 处、改 `.panel-header p` 颜色 → 5 处。
+- **有一条对照本身没咬住，而这是这轮最值得记的一条**：注 `.privacy-page .panel-header { border-bottom-color: red !important }` 得到 **0 差异**。不是仪器瞎——`borderBottomColor` 确实在 46 条里；是**这条注入输在特异度**：主题那张 `[class*="-panel"]` 的 `!important` 网是 0,3,0。把注入的特异度抬过网，颜色立刻变红，而现值 `rgb(44, 47, 61)` 是**网的色、不是 `--app-line`**。也就是说搬过去的那条 border **从来没生效过，搬之前也一样**。结论：`0 差异` 为真，但理由比"两条规则等价"更值得写下来——**一条对照不咬时，先怀疑它自己的特异度，再怀疑仪器。**
+
+**结果不是"解锁了迁移"**：重跑判定器，`1 本地覆盖` 由 9 降到 **7**，而 `Register 行4` 与 `JobSearch 行241` 落到 `2 包裹`——前者包的是 `<section class="register-panel">`、后者在 `<el-card>` 的 `#header` 槽里（正是 §10.12 那 5 处）。**所以"11 处卡在本地覆盖"从来只是前置条件，不是那个卡住不动的约束**；搬完覆盖，纯 drop-in 仍是 0 处。
+
+**顺带修的四件仪器事**（都是这一轮真栽过的）：`?to=/privacy` 在挂载**之前**定位路由；`?anon=1` 从"不种凭据"改成**真清会话**（store 的 token 是建 store 时从存储读进 ref 的，只清 localStorage 会被守卫弹回 `/home`）；`capture` 把视口存进每一帧、`diff` 在视口不一致时直接拒绝（D67 那句"跨运行的快照会骗人"变成代码）；`capture`/`diff` 永久装进 `__probe`（这两个函数过去在 D23/D26/D67/D68/D94 各重贴过一遍）。为什么必须修：探针自带的 FREEZE 关了 `transition`，而隐藏标签里 rAF 不触发，Vue 的 `<transition>` 永远等不到收尾——`go()` 之后屏幕是"旧页卡在 `fade-leave-from` + 新页还没挂"的混合体，我连着两次把这种帧当成基线。
+
+**门禁**：typecheck **42**（未动）、`test:unit` **82 files / 488 passed**、`npm test` / `eslint` / `prettier --check` / `vite build` 全 exit 0、构建总量 **2240.91 kB**（+0.06，两个页根类与搬过来的规则）；判定器 selftest 全绿。§10.14 的三个决定里 ③ 已落，①（`#heading` 槽，先服务组件那 6 处）与 ②（7 处一行式归规格后再迁）接下来按顺序做。
+
+
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
@@ -3382,7 +3409,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
     **执行结果（D23，选了 ③）与一处更正**：上面表格里"包进 title-row → 56.26px"那一列来自**克隆实验，是错的**——克隆出的 Element 按钮不参与同样的布局。真实情况是：规格统一后裸形状是 62.667px，迁移之后**仍然是 62.667px**（438 个既有元素 0 样式差异、页面高不变），也就是**迁移本身零差异**，全部可见变化都集中在"扩 selector"那一次提交里。**D24 收尾**：17 处全部迁完（`Profile` 5 在 `/profile` 上量过 0 差异；其余 12 处靠"同形状先例 + 这 4 个文件无本地 `.panel-header` 规则 + 迁移器逐行断言"成立，**未在这 4 条路由上做真页面 diff**，原因见 D24）。裸 h3 形状清零。
 
-14. **剩下 35 处面板头：`AppPanel` 要不要长出这三样**（D26 之后 `--all` 报"命中 0"，纯 drop-in 已见底）。下面是三个独立决定，爆炸半径各不相同，**都没动**：
+14. **剩下 35 处面板头：`AppPanel` 要不要长出这三样**（D26 之后 `--all` 报"命中 0"，纯 drop-in 已见底）。**D96 把这条重切了一遍，三处更正**：① 那句"命中 0"当时是判定器在**空目录**上跑出来的（它只枚举 `src/features/` 一层的 `.vue`，D33 之后那一层是空的），修好后扫 64 个文件、拒因分布 `9 本地覆盖 / 4 包裹 / 14 标题行形状 / 1 无单行 h3`，另有 7 处一行式写法它看不见，28 + 7 = 35 ✓；② **35 = 24 处视图 + 11 处已在面板组件里**（`CareerPlanPane` 7、`RoomAside` 3、`TranscriptPane` 1），那 11 处过去从来没被判定器看过；③ 下面第 2 项"10 处 span 全在 SmartAnalysis"混了两种形状（`SmartAnalysis` 只有 8 处：5 处一行式 span + 3 处包裹问题；`Privacy` 那 2 处是一行式裸 h3，不是 span），而第 1 项的真实数是 **14 处**不是 12。**决定 ③ 已由他点定并落地（D96）**：候选人侧那 4 处本地覆盖带页根类搬进 `panels.css`，`LOCAL_OVERRIDE_FILES` 5 → 2（剩冻结侧），三条路由整页差分 0 差异并各配会咬的正向对照。**但搬完之后纯 drop-in 仍是 0**：`Register 行4` 与 `JobSearch 行241` 只是从"本地覆盖"改成"包裹不是静态 `div.panel`"（前者 `<section class="register-panel">`、后者在 `<el-card>` 的 `#header` 里 = §10.12），所以这 11 处里的"本地覆盖"从来只是前置条件而非约束本身。① 与 ② 仍待做（① 已点定：先只服务组件那 6 处）。下面是三个独立决定，爆炸半径各不相同：
     1. **`#heading` 槽**（标题容器由调用方给）—— 真实需求 **12 处**：`InterviewReport` 8 处 `card-header`、`InterviewRoom` 4 处 `transcript-header` / `side-title`。技术上安全（slot 内容带父作用域 id，D19 已证），代价是"标题由谁渲染"从组件契约里溜出去：D23 统一的 `.panel-header h3` 规格对这 12 处不再自动生效，观感回到调用方手里。这与 §10.12 的 `el-card` 归属是同一类问题，建议合并拍。
     2. **`<span>` 标题怎么算** —— **10 处**全在 `SmartAnalysis`，标题一律写成 `<span>` 而不是 h3（3 处的包裹还是 `<section class="panel">`、5 处整个头部就是一行）。要么给 `AppPanel` 加"标题不是 h3"的模式（那它就不再是面板规格的载体），要么承认这 10 处属于另一个组件。附带一条：**迁其中任何一处都会改变渲染**（span → h3 是候选人可见的），所以这里没有"零风险批量"可做。
     3. **5 个视图的本地覆盖** —— **11 处**卡在它们自己的 `.panel-header` 规则上（`KnowledgeBase` 4、`OrganizationWorkspace` 3、`JobSearch` 1、`Register` 1、`Privacy` 2）。要么把覆盖搬进 `panels.css`（棘轮的 `LOCAL_OVERRIDE_FILES` 随之清空，代价是全局层多几条规则），要么给 `AppPanel` 加头部样式 props（多一套 API 面）。**与上面第 1 条和 §10.12 有重叠**：这 11 处里有 5 处正是 `el-card` 描述型头部（`KnowledgeBase` 4 + `JobSearch` 1），另 2 处是 `Privacy` 的裸 h3 一行式头部（判定器根本看不见它们）——三件事按顺序拍，别按三批工做。
