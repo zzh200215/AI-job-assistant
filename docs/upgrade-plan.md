@@ -2664,8 +2664,50 @@ B 桶（"需要你点的"那 17 条）不能整桶做，但可以整桶**复测*
 
 **门禁**：typecheck **42**（一条没动，全在冻结 admin）、`test:unit` **79 files / 472 passed**（+2 文件、+11 条：`transportErrorCopy` 5、`userCopySingleSource` 4、`interviewWeakAreas` +1、`styleDebtRatchet` 的那条 selftest +1）、`silentEmptyCatches` 判据放宽后逐文件计数与预算**仍然相等**（"松了就报新数"那条腿全绿，说明这一族没有一处被放宽掩掉），`npm test` / `eslint`（0 error，仅既有 `paidOrders` warning）/ `prettier --check` / `vite build` 全 exit 0、构建总量 **2240.55 kB**（比 D91 的 2242.61 **小 2.06 kB**，因为 25 处回落式与一张重复标签表被删）、后端未触碰。红→绿证据：`transportErrorCopy` 三条先收到 `"timeout of 60000ms exceeded"` / `"Request failed with status code 500"` 而**正向对照通过**（证明量的不是 `tests/unit/setup.js:72` 那份 mock）。§10 的 open 按记录过的方法现算**仍是 17**：21 落地划掉（→16），新增的 29 把那一格补回来；在册条目 26 → **27**。
 
-#### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
+#### 已交付：D93 §10.5 那四处 80 接回早就存在的顶档线，§10.16 补两条 spinner，顺带修好一台会假绿的探针（提交见本条末尾）
 
+**§10.5 落地前第一件量到的事：不需要新常数。** `utils/scoreTone.js` 的 `MATCH_SCORE_BANDS` 首条 `min` **本来就是 85**，文件头注释写明它对齐 `match_explainer_service._recommendation` 的 85/70/50（D1 那一轮收的）。所以那四处不是"没尺子"，是**绕过尺子各抄了一个 80**。新增的不是阈值，而是一个具名判据 `isTopTier(value, bands = MATCH_SCORE_BANDS)`（内部就是 `scoreToneAtLeast(value, 'high', bands)`），四个站点接回去：`JobRecommend.vue:388` 徽章、`:683` hero 的 `priorityJobCount`、`History.vue:332` 的 `highMatchCount`、`Profile.vue` 那颗「面试之星」、`CareerPlanning.vue:964` 的投递策略上档。
+
+**三条跟着这条决定的口径，都不是"顺手"：**
+- 成就文案从「综合评分超过80」改成「综合评分**达到**85」。判据是 `>= 85`，写"超过85"会把**刚好 85** 的人说成没达成——文案与判据必须同一把尺。
+- **刻意不并**那一把：`features/jobs/lib/jobModel.js:342` 的 `finalScore >= 82 ? 优先投递`。它数的是本页自己合成的投递优先级（技能/经验/薪资/城市命中 + 匹配分×0.28），与后端匹配分不是同一个量；那张卡上也**不显示**匹配徽章（实测 `JobRecommend.vue` 里没有 `priorityLabel` 消费者），所以两套"优先投递"不同屏、不打架。理由写进 `isTopTier` 的注释，不靠"以后再说"。
+- `CareerPlanning` 那张三分法的**下界** `score < 60` 没跟着动（这次拍的只有上档），源码注释里点名"别把这一页读成已对齐档位"。
+- 后端那把线一起挪：`tests/test_interview_performance_max.py` 里钉"给的是 max 不是均值"的断言原写 `avg < 80 <= max`，改成 `avg < 85 <= max`。夹具 62/88/71 在 80 与 85 两侧都判得开，所以换数仍然咬得住那条决定——这条不是装饰，是"成就线变了而证据还在原线"的漂移。
+
+**守卫的第十次同类自伤，这次是反向证据腿逮的**：新写的扫描 `HAND_COPIED_FLOOR` 第一版漏了 `Number(item.match_score) >= 80`——括号夹在标识符与比较符中间，正则看不见。它自己那条"认得改之前四种写法"的腿当场红，补 `)?` 才收齐。**同一条判据同时暴露另一处**：扫描把 `utils/scoreTone.js` 自己也抓进来了（它的注释里逐字写着历史那三套 80/60），所以判据需要一个"规则的家"白名单，而不是把注释改写掉。屏幕断言三处（推荐页 82/85 各一张卡：徽章 1 颗、hero 计数 1；历史页 82 不数进"高匹配记录"而平均分仍 85；Profile 84 未解锁 / 85 解锁 + 文案），另两处（`CareerPlanning` 的上档、`Profile` 的接线）退成**源码断言**并写明原因：要把 `latestMatchScore` 设到 85 侧得把整条分析历史链喂进夹具，现有 harness 到不了那一层。
+
+**§10.16 选的是 ②**：`SalaryInsight.vue` 与 `RecommendationEval.vue` 在"还没有结果 + 正在取数"的那几秒里**什么都不画**（前者 `v-else-if="!loading"` 把在途与空态合成同一块空白；后者的空态与数据支都不成立）。各补一支 `.loading-state`（样式是 `panels.css:120` 既有的那一族，不新增 CSS）。`RecommendationEval` 那一支**刻意排在数据支之后**：点"刷新"时 `evaluationData` 还在，旧结果继续画，不该被 spinner 顶掉——这条单独有断言。
+
+**这一轮最值钱的不是那两刀，是探针会假绿。** `probe/dead-style.entry.js` 从来不种凭据，所以 `/jobs/search` 这类受守卫的路由被弹回 `/login`：`go()` 里那个 `await router.replace()` **照样 resolve**，返回体里 `path` 还是当前路由，屏幕上却是登录页——`.workspace-theme` 数 0、目标元素 0，任何 `matched=0` / `diffs=0` 都是**真的量到了"什么都没有"**。现在探针在挂载前调 `utils/session.js` 的 `writeSession()` 种一个候选人会话（键名与序列化走 §10.22 那个唯一出处，探针不自己拼 `'token'`）。另外记一条工具事实：**页面在隐藏标签里 `requestAnimationFrame` 不触发**，`go()` 末尾那两级 rAF 于是永不落地，浏览器工具的 `evaluate_script` 必在 15 s 超时——正确用法是"发射后不管，下一次调用再读屏幕"，本条所有测量都是这么来的。
+
+**门禁**：typecheck **42**（一条没动，全在冻结 admin）、`test:unit` **82 files / 486 passed**（+3 文件 +14 条：`topTierFloorIsSingleSource` 8、`priorityBadgeFollowsTopTier` 2、`recommendationEvalLoading` 2，另 `salaryInsightRace` +1、`profileStatsTile` 那条"卡在 80"改写成两条）、`npm test` / `eslint` / `prettier --check` / `vite build` 全 exit 0、构建总量 **2241.08 kB**（比 D92 的 2240.55 多 0.53 kB，就是那两支 spinner）、后端 `test_interview_performance_max.py` **3 passed** + ruff check/format clean。
+
+#### 未交付：D94 §10.17 复测——点"只换弹窗那张"，量出来那张卡今天就是深色，所以一行动代码都没改
+
+他点的是三条路里的 ③（只换 `JobCompareDialog` 那张，理由是它一定在 `.workspace-theme` 内、行为最确定）。要把这句话证成真或假，得先在浏览器里把那张卡画出来，于是补了两件仪器的东西（写在 D93 里）：探针的登录态，以及 `/jobs/search-external` 这条夹具——**探针原先没有它**，勾不满两个岗位就开不了对比弹窗，`matched=0` 会是又一次假阴性（形状按 `useJobSearch.js:136-141` 读的键给：`{jobs, saved_count, is_demo}`）。
+
+量到的是这样一张表：
+
+| 判据 | 实测 |
+|---|---|
+| 规则在不在页面里 | 在：`.compare-card[data-v-cf83611e] { background: rgba(255,255,255,0.98) }`，`background` 的优先级是**空**（没有 `!important`） |
+| 有没有元素命中 | `document.querySelectorAll` 命中 **2** 个（弹窗里两张卡） |
+| 计算值 | **`rgb(23, 25, 34)`** —— 不是那条规则要的 near-white |
+| 正向对照 | 同选择器注入品红并带 `!important`，计算值**仍然不动**；注入行内样式才动 |
+| 赢家 | `main.css` 那条 `.workspace-theme .main-shell [class*="-card"], … [class*="-panel"], …`（17 个属性选择器一张网）声明 `background: var(--app-surface-strong)` **`!important`**，特异度 0,3,0 高于作用域选择器的 0,2,0 |
+
+结论：**这张卡今天已经是深色**。把 `rgba(255, 255, 255, 0.98)` 换成 `var(--app-surface)` 在两个主题下都是**零变化**——浅色主题里 `--app-surface` 的定义与这个字面量逐字相同（`main.css:11`），深色主题里无论换成什么，那条 `!important` 网都赢。所以这一行不是"改了就更正确"，是**改了等于没改而账上多一条交付**；一行动代码没动。这是 D85 命名的第二种死法（级联死）在本仓的又一例，与前两条（`.question-card`、`.structure-box`）同类同处置：**留着**，因为它是"主题层一收就复活"的 suppressed intent（收网那条动作在 §11）。
+
+**同一轮里另外两件事我没做完，就按没做完记：**
+- `SearchPane.vue:190` 的 `.job-shell`：屏幕上确实有 2 个 `.job-shell` 元素，但**全部 35 张样式表里没有任何一条选择器含 `job-shell`**（两次独立扫描：一次全文正则、一次逐条 `el.matches()`，后者只命中 `*`），元素带的是**父页** scope `data-v-e7d707ef`，计算值 `background: rgba(0,0,0,0)` / `border-radius: 0px`。合起来读就是：这些结果卡此刻没有源码要求的那层底。但 `.job-shell` 的模板与样式都只写在 `SearchPane.vue` 这一个文件里，规则却不在这页的样式表中——**这一条我没诊断到底**（要么这张表根本不是 SearchPane 的那张，要么另有加载时序问题），也没有顺手"修"它。它是一个**未结的观测**，不是结论，也不进任何计数。
+- `RecommendPane.vue:233` 与 `CareerPlanning.vue:1303` 没量到：推荐标签页要先有简历与一次推荐请求才出卡，规划页要有 `result` 才画那些 `*-card`。这一轮没把这两条状态造出来。
+
+**要他点的其实换了个问题**：不是"白卡要不要换深色"（答案：弹窗那张已经是深色），而是"`main.css` 那张 17 个 `[class*=…]` 的 `!important` 网要不要收"——那正是 §11 里被量过不无损的动作（摘掉它 5 条路由出现 157 个元素实例的回归），也是 D85 给级联死下的判语"主题层一收就复活"。网还在，这四处字面量就都是装饰。
+
+
+
+
+#### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
 
@@ -3302,7 +3344,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 2. **企业侧是冻结还是删除**。本方案建议冻结。若将来要真删，§2.3 两处地雷与 migration `0018`–`0021` 是前置。
 3. **是否引入服务端向量库**（Qdrant / pgvector）。当前 Chroma 是嵌入式 persistent client（`core/chroma_client.py:16,47-50`），每个 uvicorn worker/副本各持一份（`docker-compose.prod.yml:100` 挂 volume）——多副本部署下这是一致性隐患，与 B3 一并决策。
 4. **`docs/` 归档策略**（§2.5）。
-5. **"优先投递"这类产品口径是否跟随后端档位（85）**。D1 只统一颜色；下面几处 80 分界表达的是徽章、统计数与解锁，改了会改变候选人看到的数字与文案，需本人定。**站点行号在 D86 重新量过（D82/D83/D84 改过 `History.vue` 与 `Profile.vue`，旧引用全漂）**：`JobRecommend.vue:388`（优先投递徽章；计数是 `:680` 的 `priorityJobCount`，模板出口在 `:43` 与 `:55`——D92 再量过一次，条目原来写的 :380 / :655、以及 D86 写的 :392 都已不是）、`History.vue:331` 的 `highMatchCount`（定义起于 `:330`）配 `:27` 的那一格（原文 :318）、`Profile.vue:403`（`resume_count >= 1`）与 `:459`（`best_score >= 80`）（原文 :492 指的是 `loadUserStats` 那几行，不是成就）、`CareerPlanning.vue:963` 起的投递策略分档（原文 968-990）。徽章与卡片上后端给的推荐标签现已可能相反（82 分：徽章"优先投递" + 标签"可以投递"）。**另外这一条的射程在 D83/D84 之后窄了一格**：Profile 那两颗成就的输入第一次变成真值，所以它们里只有 `best_score` 那颗还涉及"80 还是 85"的口径问题。
+5. ~~**"优先投递"这类产品口径是否跟随后端档位（85）**~~ —— **已定并落地（D93，选"四处全部跟随顶档"）**。落地时先量到**单一出处早就在**：`utils/scoreTone.js` 的 `MATCH_SCORE_BANDS` 首条 `min` 就是 85（注释对齐 `match_explainer_service._recommendation` 的 85/70/50），这四处不是"没尺子"，是绕过尺子各抄了一个 80。新增的是具名判据 `isTopTier()`，四个站点接回去。三条连带口径写进 D93：**成就文案改成「综合评分达到85」**（判据是 `>=`，写"超过85"会把刚好 85 的人说成没达成）；**`jobModel.js:342` 的 `finalScore >= 82` 刻意不并**（那是本页自合的投递优先级，另一个量，且那张卡不显示匹配徽章、不同屏不打架）；`CareerPlanning` 那张三分法的**下界 `score < 60` 没动**（不在这次拍的范围）。**后端那把证据也跟着挪**：`test_interview_performance_max.py` 的 `avg < 80 <= max` 改成 `avg < 85 <= max`。D1 只统一颜色；下面几处 80 分界表达的是徽章、统计数与解锁，改了会改变候选人看到的数字与文案，需本人定。**站点行号在 D86 重新量过（D82/D83/D84 改过 `History.vue` 与 `Profile.vue`，旧引用全漂）**：`JobRecommend.vue:388`（优先投递徽章；计数是 `:680` 的 `priorityJobCount`，模板出口在 `:43` 与 `:55`——D92 再量过一次，条目原来写的 :380 / :655、以及 D86 写的 :392 都已不是）、`History.vue:331` 的 `highMatchCount`（定义起于 `:330`）配 `:27` 的那一格（原文 :318）、`Profile.vue:403`（`resume_count >= 1`）与 `:459`（`best_score >= 80`）（原文 :492 指的是 `loadUserStats` 那几行，不是成就）、`CareerPlanning.vue:963` 起的投递策略分档（原文 968-990）。徽章与卡片上后端给的推荐标签**曾经**在 80–84 这段相反（82 分：徽章"优先投递" + 标签"可以投递"），D93 之后不再。**另外这一条的射程在 D83/D84 之后窄了一格**：Profile 那两颗成就的输入第一次变成真值，所以它们里只有 `best_score` 那颗还涉及"80 还是 85"的口径问题——而那颗现在写的正是 `isTopTier(s.best_score, INTERVIEW_SCORE_BANDS)`。
 6. ~~**`Interview.vue:464` 的随机"薄弱项"分数怎么处置**~~ —— **已定并落地（D86，走"按真实会话维度聚合"那一支）**，但**条目原文的前提是错的**：它写"当前**无趋势数据时**用 `Math.random()*40+30` 造分"。复测：`loadWeakAreas` 的主分支读 `perf.dimensions`，而 `GET /interview/performance` 给的是 `dimension_averages` 与 `weaknesses`（`interview_rest.py:821-829`）；**`dimensions` 这个键在这份响应里不存在**（同名的属于匹配解释那份，`match_explainer_service.py:79`，那边 `ExplainPane.vue:42` 读它是对的）。于是真数据分支从上线起一次都没进过，**只要有 ≥2 场带分会话，这一屏永远在画随机数**——不是"没数据才造"。修法：读服务端那份 `weaknesses`（已按维度均分 <65 挑好、名字本地化成"完整性/准确性/深度/表达力"），随机段整块删掉，空与失败分开报（失败要报成失败，见 D86）。可见变化：这一格从三个假维度变成真实的两项弱项；反向证据不靠变异——同一份夹具挂两次，字一模一样。
 7. ~~**前端 `format:check` 门走哪条路**~~ —— **已定并落地（D13，`5662916`）**：选了"一次性 `npm run format`"而不是把 prettier 钉回 3.3。CI 口径的不过文件数从 **17 → 0**（原来记的 95 是本机 CRLF 噪音，见 `docs/engineering-quality.md` 同节）。附带代价与收获写在 D13：两把按行数数的棘轮尺子被这次折行戳穿。
 8. ~~**埋点：补上调用方，还是删掉 SDK**~~ —— **已定并执行：删（E29，2026-09-28）**。管道两端在 E10 都修好且各有测试锁住，但 `track()` 的调用方到删除那天仍然是 0，而且实测 `frontend/src/utils/tracker.js` 除了自己的测试之外无人 import；端点本身只把 `user_id` + `username` 写进日志文件（无存储、无消费方，`db` 参数收了不用）。所以留着它不只是维护成本，还在往日志里写身份。已删的 4 个文件：`app/api/tracking.py`、`tests/test_tracking_endpoint.py`、`frontend/src/utils/tracker.js`、`frontend/tests/unit/tracker.test.js`，外加路由挂载与 E19 前缀表里的 `/tracking`。将来真要做分析，是从零按事件清单设计，不是复活这条 stub。
@@ -3334,9 +3376,9 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 15. **同步 db 的 async 路由走哪条路，以及连接池那三个数**（E15 留下的）。**条数在 D92 重取过：不是 135，是 179**——判据写清楚，因为这条从没被任何工具钉着，旧那个数现在无法复现（E15 之后新增的路由都进这个形状）：`app/api` 下 194 条带 router 装饰器的 `async def` 里，179 条的参数默认值是 `Depends(get_db)` 且注解不是 `Async*`（`get_db` 是 `core/database.py` 里的同步生成器）。拆法是**非冻结 149 + 冻结 30**，前几名为 `resume.py` 22 / `job_recommend.py` 17 / `auth.py` 15 / `job_pipeline.py` 13 / `knowledge.py` 10 / `organization.py` 10。E15 只收了"`async def` 里直接出网"这一类；剩下的形状是"async 路由 + 同步 SQLAlchemy 会话"，两种改法互斥：① **逐处 `run_in_threadpool`**——改动可控，但要 179 次判断"这段能不能整体搬走"（事务边界跨多次 await 就会坏）；② **把路由改成 `def`**——FastAPI 自动丢线程池，一行改完，代价是并发取连接的线程从"几乎为 0"变成 anyio 默认上限 **40 根**。而 `core/database.py` 设了 `pool_pre_ping=True` 与 `pool_recycle=3600`（**所以债表旧说法"未配置连接池"不准确**），没设的只有 `pool_size` / `max_overflow` / `pool_timeout`，即走默认 **5 + 10 + 排队 30 秒**。② 一落地就是 40 根线程抢 5 个连接，尾延迟会先变差。所以这两个输入（目标并发、实例数）得先有人给，E15 没有顺手填。现状：`anyio` 线程上限同样没显式设过。
 
-16. **加载态要不要换成骨架屏**（D27 量出来的位置）。今天全站 **0 个** `el-skeleton`；异步列表已有三种表达——spinner + "加载中…"（`PipelineKanban`、`JobRecommend`）、加载期间**什么都不渲染**（`SalaryInsight`、`RecommendationEval`：整块在 `v-if="数据到了"` 里）、以及 `AnalysisResult` 那种进度面板。三者都不是说谎（没有一处把"加载中"说成"暂无数据"），所以**这条不是修 bug，是选观感**：骨架屏能让"结构已定、内容未到"看得出来，代价是要给 15 个有表格的文件各写一套占位形状，而那形状本身就是设计决定（占几行、宽度按什么给）。三条路：① 不动，spinner 与"空窗"并存；② 只给"什么都不渲染"的那两页补 spinner（几行改动，纯增加可见反馈，风险最低）；③ 全站上骨架屏（要先定占位规范，属视觉设计工作，且要逐路由 diff 才能证明没把布局改坏）。**②③ 我都没动**，等你点。
+16. **加载态要不要换成骨架屏**（D27 量出来的位置）。今天全站 **0 个** `el-skeleton`；异步列表已有三种表达——spinner + "加载中…"（`PipelineKanban`、`JobRecommend`）、加载期间**什么都不渲染**（`SalaryInsight`、`RecommendationEval`：整块在 `v-if="数据到了"` 里）、以及 `AnalysisResult` 那种进度面板。三者都不是说谎（没有一处把"加载中"说成"暂无数据"），所以**这条不是修 bug，是选观感**：骨架屏能让"结构已定、内容未到"看得出来，代价是要给 15 个有表格的文件各写一套占位形状，而那形状本身就是设计决定（占几行、宽度按什么给）。三条路：① 不动，spinner 与"空窗"并存；② 只给"什么都不渲染"的那两页补 spinner（几行改动，纯增加可见反馈，风险最低）；③ 全站上骨架屏（要先定占位规范，属视觉设计工作，且要逐路由 diff 才能证明没把布局改坏）。**已定并落地（D93，选 ②）**：`SalaryInsight.vue` 与 `RecommendationEval.vue` 各补一支 `.loading-state`（样式用 `panels.css:120` 既有那一族，不新增 CSS）。前者的病灶是 `v-else-if="!loading"` 把"在途"与"没有结果"合成同一块空白；后者的空态支与数据支都不成立所以整段不画。**新增那一支刻意排在数据支之后**：点"刷新"时旧结果继续画，不该被 spinner 顶掉——这条单独有断言。三条断言：在途有 spinner 且没有空态、落地后撤掉、刷新不顶掉旧结果。① 与 ③ 仍是要点才动的口径（③ 要先定占位规范）。
 
-17. **深色工作台里的白卡要不要一起改成深色面**（D36 量到的；**D86 重新数过：不是 3 处、也不是原来那三个文件**）。`background: rgba(255, 255, 255, 0.98)` 现在实测四处：`SearchPane.vue:195`、`RecommendPane.vue:233`（这两处就是原文说的 `JobSearch.vue:1665`——D36/D45 把它随拆页搬进两个面板，`JobSearch.vue` 里现在是 0 处）、`CareerPlanning.vue:1303`（原文 1589）、`JobCompareDialog.vue:64`（原文 61）。这个值**正好等于** `--app-surface` 的定义（`src/styles/main.css:11`），而深色 token 挂在 `.workspace-theme`（`DefaultLayout.vue:2`），EP 的 `el-dialog` 又默认不 teleport 到 body（`appendToBody` 无默认值 ⇒ false），所以这几处**换成 `var(--app-surface)` 是等价替换还是改观感，取决于它们渲染在哪个作用域里**——D6 那轮把 61 处 `#fff` 从白块修成深色，这三处像同一类漏网，但也可能是刻意留的"读作浅色卡片"。三条路：① 不动；② 逐处换成 token 并做逐路由 `getComputedStyle` 差分（要先能拿到数据态，也就是得先解决"没有活 API 就打不开这些浮层"）；③ 只换弹窗里那张（它一定在 `.workspace-theme` 内，行为最确定）。**我一条都没动**，等你点。
+17. **深色工作台里的白卡要不要一起改成深色面**（D36 量到的；**D86 重新数过：不是 3 处、也不是原来那三个文件**）。`background: rgba(255, 255, 255, 0.98)` 现在实测四处：`SearchPane.vue:195`、`RecommendPane.vue:233`（这两处就是原文说的 `JobSearch.vue:1665`——D36/D45 把它随拆页搬进两个面板，`JobSearch.vue` 里现在是 0 处）、`CareerPlanning.vue:1303`（原文 1589）、`JobCompareDialog.vue:64`（原文 61）。这个值**正好等于** `--app-surface` 的定义（`src/styles/main.css:11`），而深色 token 挂在 `.workspace-theme`（`DefaultLayout.vue:2`），EP 的 `el-dialog` 又默认不 teleport 到 body（`appendToBody` 无默认值 ⇒ false），所以这几处**换成 `var(--app-surface)` 是等价替换还是改观感，取决于它们渲染在哪个作用域里**——D6 那轮把 61 处 `#fff` 从白块修成深色，这三处像同一类漏网，但也可能是刻意留的"读作浅色卡片"。三条路：① 不动；② 逐处换成 token 并做逐路由 `getComputedStyle` 差分（要先能拿到数据态，也就是得先解决"没有活 API 就打不开这些浮层"）；③ 只换弹窗里那张（它一定在 `.workspace-theme` 内，行为最确定）。**他点了 ③，但 D94 把这条的前提改写了**：补好探针夹具真把那张弹窗卡画出来之后量到——规则在页面里、命中 2 个元素、没有 `!important`，**计算值已经是 `rgb(23, 25, 34)`**，赢家是 `main.css` 那张 17 个 `[class*=…]` 的 `!important` 网（特异度 0,3,0 压过作用域选择器的 0,2,0，注入同选择器的 `!important` 品红都压不动它）。所以换 token 在两个主题下都是**零变化**，一行代码没改，这条退回"待拍"，而真正待拍的是**那张网要不要收**（§11 量过：摘掉它 5 条路由出现 157 个元素实例的回归）。同一轮另有一处**未结观测**（不是结论）：`SearchPane.vue:190` 的 `.job-shell` 在屏幕上确实有 2 个元素，但 35 张样式表里没有任何一条选择器含 `job-shell`，计算值透明 / radius 0；诊断没做完，写进 D94 的"没做完"那一节。`RecommendPane:233` 与 `CareerPlanning:1303` 这两处状态这一轮没造出来，仍未量。
 
 18. **投递优先级里那 8 分"城市匹配"要不要留，以及它该在什么时刻算**（D41 量到的，不是 D41 造成的）。今天 `calculateApplicationPriority(job, city)` 命中调用方传进来的 UI 城市筛选就加 8 分并写进 `priorityReason`，而**两个求值时机不一致**：智能推荐页的分数在 computed 里算，所以**动一下城市筛选，卡片分数与 hero 的「优先投递」队列立刻变**；搜索页/仓库页的分数是 `runSearch`/`loadLocalJobs` 落地那一刻算好存进列表的，**换了城市筛选要等下一次搜索才变**。三条路：① 城市不参与优先级（把那 8 分从算式里去掉，两条时机自然一致）；② 城市改成用**求职目标里的城市**而不是搜索表单的筛选（语义更站得住，但要把 target 读进算式，且没有目标时得定义清楚）；③ 保持算式不动，把两处时机统一成"取数那一刻"或"随筛选重算"（前者要推荐页也存分数，后者要让搜索/仓库列表变成 computed）。**我一条都没选**：这一刀只把那一次隐式读取变成显式参数，加分规则与求值时机逐字保留，并有 45 360 次逐字段差分证明没变。要改就是产品判断，不是拆页的顺路。**D42 已经把这条耦合钉住了**：`tests/unit/jobRecommendPriority.test.js` 前两条测的是「推荐卡多这 8 分」与「它随筛选即时重算」，选定 ① 或 ② 要改的就是那两条（它们记录的是现状，不是主张）。D43 又补了对照的另一半：`tests/unit/jobWarehouseChain.test.js` 最后一条钉的是「仓库卡的分数取数那一刻定死、换筛选不重算」——选 ③（统一时机）要动的就是这一对。
 
