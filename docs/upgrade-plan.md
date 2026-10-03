@@ -2928,6 +2928,34 @@ B 桶复测第二批（任务 B②：§10.1 / 10.3 / 10.15 / 10.19）。逐条�
 
 **门禁**：本轮无代码改动；三条仪器都是 `C:\Users\TX\AppData\Local\Temp` 里的一次性脚本（未入库，跑完删除），backend 侧只读、不落库。§10 open **14 → 14**（§10.29 仍 open，但从"没量过"变成"有表"）。
 
+#### 已交付：D104 B⑤ 满载下不可信的那族时序断言——根因是"整把尺子没有量程"，前端后端各修一处，修法都能反向咬
+
+**复现配方（先能红再谈修）**：
+- 前端：同一台机器**同时跑两份全量** `npx vitest run`。D102 那轮量到红的是 **8–9 个文件、清一色 `Test timed out in 5000ms`**（含 `jobSearchRace`、`knowledgeDetailRace`、`pipelineWriteOps`、`workspaceRoutes` 等），不是某一个测试坏。
+- 后端：`pytest tests/test_no_blocking_in_event_loop.py`（整文件 14 条）旁边挂一份前端全量 → `test_readiness_probe_does_not_stall_the_loop` **1 failed / 13 passed**；同一份配置只跑 `-k readiness` 一条则绿（并发度不够就复现不出来，这点要写死，否则下个人会以为没坏）。
+
+**为什么是"没有量程"而不是"某条测试写坏了"**：`vite.config.js` 的 `test` 段从来没设 `testTimeout`，82 个文件里每一条时序敏感断言共用 vitest 的**隐式 5s** 墙。空闲单跑实测最慢的一条是 **3.88s**——离墙只剩 **1.28 倍**余量，而并发时同一台机器中位慢 3–4 倍。另一条独立证据：`tests/unit/jobPipelinePane.test.js` 早就自己带了个 `, 20000)` 并写着"5 秒默认墙钟就被它撞过两次"——**这堵墙本会话之前就撞过，当时的处置是给那一条单独抬高，于是"全局量程是多少"这个问题变得更没人答得上**。
+
+**前端修法**：`test.testTimeout = 20000`（= 空闲最慢那条的 5 倍，也是那处手工抬高用的同一个数），并把 `jobPipelinePane` 那个 `, 20000)` 撤掉——全局覆盖了它，历史那句话留在注释里。**抬的是墙钟上限，不是断言**：断言错照样红。
+
+**新门 `tests/vitestWallClock.test.mjs`（3 条腿，node --test 层）**：① 量程必须存在且 ≥ 20000；② 任何一条测试不得带比全局更高的墙（否则全局那个数就不再是量程）；③ 读配置的解析器自检——`没设` 读成 `null`、`注释里的 99999` 不得被当成配置。**反向证据实测**：把 `vite.config.js` 改成 `testTimeout: 5000` → ① 红并打印"低于 20000 就等于把 5s 墙换个数字继续撞"；往 `jobPipelinePane` 塞一个 `, 30000)` → ② 红并点名该文件；两处都还原后三条全绿。
+
+**第 13 次"尺子在数文本/看空目录"，这次咬的是我自己写的新门**：`perTestTimeouts()` 第一版把 `if (!name.endsWith('.test.js')) continue` 放在目录判断**之前**，于是 `tests/unit` 这一整个子树被 `continue` 掉——② 那条腿在**空集合**上跑，永远绿。暴露它的方式不是门自己报错，是我做反向证据时"塞了 30000 居然没红"。修法：目录无条件递归、文件才按扩展名过滤，并把**扫到的文件数**变成前提（`scanned > 50` 才允许判）。同族的教训再钉一次：**新写的守卫必须先证明它能红，否则它只是装饰品。**
+
+**后端修法**：那条断言原来写的是 `elapsed < stall / 2`（`stall = 0.4`，注入在线程池里 `time.sleep`），这等于把两件事混成一个数——"**事件循环被同步代码卡住**"和"**这台机器此刻 CPU 饥饿**"。现在同一条 `/ready` 路径先在不注入 sleep 时量一次基线，判据改成 `blocked < baseline + stall / 2`，断言消息把 `baseline` 与差值一起打出来。分辨率没降：真卡住循环时 `blocked ≈ baseline + stall`，照样越线。**反向证据实测**：把 `app/api/system.py` 的 `checks = await run_in_threadpool(_probe_dependencies)` 改回同步直调（E15 之前的形状）→ 这条立刻 **1 failed**；从备份还原后 14 passed。同文件那条正向对照 `test_the_stall_measurement_can_see_a_stall`（`async def + time.sleep` 必须量出停摆）没动，它只在安全方向上受负载影响（饿只会让它更大，仍 ≥ 阈值）。
+
+**前后对照（同一配方）**：
+
+| 配方 | 修前 | 修后 |
+|---|---|---|
+| 两份全量并发（前端） | 8–9 个文件红，全是 `Test timed out in 5000ms` | **两次都是 82 files / 491 tests 全绿** |
+| 整文件 + 旁边一份前端全量（后端） | 1 failed（readiness 那条），13 passed | **14 passed**（同轮 13.75s vs 空闲 7.73s，说明负载真的挂上去了） |
+
+**没做与代价**：没给 82 个文件各配假时钟——jsdom 里挂整页组件的真实耗时压不掉，而"抬高墙钟、不动断言"是 D68 已定的口径。代价是一条**真挂死**的测试现在要 20s 才报红（原来 5s）。另外单跑全量的总时长在 58–87s 之间波动，本轮**没有**把它归因给这次改动，因为改动前也有 61.10s 的单跑；要归因得先量"并发度 × 最慢用例"。
+
+**门禁**：backend 全量 **827 passed**（117.92s），`ruff check .` clean，`ruff format --check .` 349 文件 clean；frontend `npm test` **14 → 17 tests / 0 fail**，`test:unit` **82 files / 491 passed**，`eslint` 0 error（仅 `Overview.vue:163` 那条既有 warning），`prettier --check` clean，`vue-tsc` **42**（admin 之外 0），`vite build` exit 0、js+css **2239.79 kB**（未变：配置与测试不进包）。§10 open **14 → 14**（B⑤ 不属于 §10 那 27 条，是 B 桶清单里的第五条）。
+
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
