@@ -19,7 +19,16 @@ async function renderWorkspace(path) {
     attachTo: document.body,
     global: { plugins: [installElement, createPinia(), router] },
   })
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  /* 路由组件是懒加载的，页面自身还要在 `onMounted` 里发请求，所以"挂载完了"不是一瞬间的事。
+     原来这里只等一个 `setTimeout(0)`：`/jobs/search` 在全量并行跑里红过两次（单跑 13 条全绿），
+     满载时这个 0ms 定时器先于那些微任务/网络桩触发。按 D68 的口径处理——**抬高等待上限、
+     不放宽断言**：最多等 2s，等到了仍然按下面那些原条件判。 */
+  const deadline = Date.now() + 2000
+  while (Date.now() < deadline) {
+    const main = wrapper.find('.main-shell')
+    if (main.exists() && main.element.children.length > 0) break
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
   return wrapper
 }
 
