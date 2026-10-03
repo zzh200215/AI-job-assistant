@@ -335,6 +335,7 @@ import {
   Microphone,
 } from '@element-plus/icons-vue'
 import { dateTime } from '@/utils/format/date'
+import { INTERVIEW_SCORE_BANDS, isTopTier } from '@/utils/scoreTone'
 
 const authStore = useAuthStore()
 const loading = ref(false)
@@ -453,10 +454,12 @@ const achievements = computed(() => {
     {
       id: 'stars',
       name: '面试之星',
-      desc: '综合评分超过80',
+      /* 文案与判据同一把尺：顶档线是 85，而"达到"而不是"超过"——85 分这一发就解锁，
+         写"超过85"会把刚好 85 的人说成没达成。 */
+      desc: '综合评分达到85',
       icon: Star,
       color: 'red',
-      unlocked: s.best_score >= 80,
+      unlocked: isTopTier(s.best_score, INTERVIEW_SCORE_BANDS),
     },
   ]
 })
@@ -518,9 +521,10 @@ async function loadUserStats() {
       interview_rate: totalApps > 0 ? Math.round((totalInt / totalApps) * 100) : 0,
       offer_rate: totalInt > 0 ? Math.round((totalOff / totalInt) * 100) : 0,
     }
-    /* 「面试之星 · 综合评分超过80」那颗成就的分数不在 overview 里，在 `/interview/performance` 的
+    /* 「面试之星 · 综合评分达到85」那颗成就的分数不在 overview 里，在 `/interview/performance` 的
        `max_overall_score`——§10.25 拍的是那条 ①：后端补**最高一次**，不用同返回里那个
-       `avg_overall_score`（均值 73.7 与最高 88 在 80 这条线上判定相反），代价就是这一发多出来的请求。
+       `avg_overall_score`（夹具 62/88/71 的均值 73.7 与最高 88 在成就线两侧判定相反），代价就是这一发多出来的请求。
+       线本身走 `isTopTier(..., INTERVIEW_SCORE_BANDS)`（§10.5：85），不在这里抄数字。
        单独一发、单独兜底：它失败只让这颗成就保持未解锁，不许把上面已经落好的统计整块打回默认值。
        零场面试那一支后端提前返回、不带这个键（interview_rest.py:758-766），所以 `|| 0` 是常态。 */
     try {

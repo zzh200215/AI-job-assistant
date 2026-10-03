@@ -67,6 +67,20 @@ export function scoreToneAtLeast(value, tone, bands = MATCH_SCORE_BANDS) {
   return TONE_ORDER.indexOf(scoreTone(value, bands)) >= TONE_ORDER.indexOf(tone)
 }
 
+/**
+ * "顶档"判据的唯一出处（§10.5 拍定：界面上那几处原先自己抄的 80 全部跟随顶档线）。
+ * 顶档就是 `bands` 里第一条的 `min`，匹配分与面试分今天都是 **85**，分别对齐后端三处：
+ * `match_explainer_service.py:530`（强烈推荐）、`prompts/answer_evaluation.py:22`（优秀）、
+ * `resume_workspace_service.py:87`（A 级）。没有分数（null / NaN）不是"0 分"，也不算顶档。
+ *
+ * 刻意**不包含**的那一把尺：`features/jobs/lib/jobModel.js:342` 的 `finalScore >= 82 ? 优先投递`。
+ * 它数的是本页自己合成的投递优先级（技能/经验/薪资/城市/已落库…再加匹配分的 28%），
+ * 与后端的匹配分不是同一个量；那张卡上也不显示匹配徽章，所以两者同屏不会打架。
+ */
+export function isTopTier(value, bands = MATCH_SCORE_BANDS) {
+  return scoreToneAtLeast(value, 'high', bands)
+}
+
 /* 面试表现分的三个出口。同一个页面里"颜色 / 文案 / 胶囊"必须走同一档位，
    否则会出现芯片是警告黄、旁边文字写"风险偏高"的第 4 种分界。 */
 export function interviewScoreTone(value) {

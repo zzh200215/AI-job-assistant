@@ -331,12 +331,21 @@
         </el-table>
       </AppPanel>
     </template>
+
+    <!-- 首次取数在途（§10.16 拍的那条 ②）。这一支排在数据支**之后**是有意的：点"刷新"时
+         `evaluationData` 还在，旧结果继续画，不该被 spinner 顶掉；只有"还没有任何结果 + 在途"
+         才落在这里。改之前这两种情况都是空白页。 -->
+    <div v-else-if="loading" class="loading-state">
+      <el-icon class="is-loading"><Loading /></el-icon>
+      <span>正在跑反馈评估…</span>
+    </div>
   </div>
 </template>
 
 <script setup>
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { computed, onMounted, ref } from 'vue'
+import { Loading } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 
 import { exportJobTuningSamples, getJobFeedbackEvaluation, getJobTuningSamples } from '@/api/jobs'

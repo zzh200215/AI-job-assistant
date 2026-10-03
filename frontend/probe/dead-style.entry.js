@@ -26,6 +26,7 @@ import {
   rememberResume,
   setSelectionOwner,
 } from '../src/utils/lastSelection'
+import { writeSession } from '../src/utils/session'
 import '../src/plugins/element.css'
 import '../src/styles/main.css'
 import '../src/styles/panels.css'
@@ -125,6 +126,40 @@ const FIXTURES = [
   [/\/resume\/?(\?|$)/, 'get', [{ id: 1, title: '探针简历', created_at: '2026-09-01' }]],
   [/\/resume\/\d+$/, 'get', { id: 1, title: '探针简历', parsed_json: { basics: {} } }],
   [/\/jd\/?(\?|$)/, 'get', [{ id: 7, title: '平台工程师', company: '示例' }]],
+  /* §10.17 要量的那一张卡（`JobCompareDialog` 的 `.compare-card`）只在对比弹窗里存在，而弹窗要
+     先在搜索结果里勾满两个岗位。这一族原先一条夹具都没有，所以 `matched=0` 是**假阴性**（D76 那个坑的
+     第三种形态：不是状态没点开，是数据源就没喂）。形状按 `useJobSearch.js:136-141` 读的键给。 */
+  [
+    /\/jobs\/search-external/,
+    'post',
+    {
+      jobs: [
+        {
+          id: 501,
+          title: '平台后端',
+          company: '示例科技',
+          location: '上海',
+          salary_range: '25-40K',
+          skill_tags: ['Python', 'Go'],
+          source: 'api',
+        },
+        {
+          id: 502,
+          title: '前端架构',
+          company: '示例网络',
+          location: '上海',
+          salary_range: '30-50K',
+          skill_tags: ['Vue', 'TypeScript'],
+          source: 'api',
+        },
+      ],
+      saved_count: 2,
+      is_demo: false,
+    },
+  ],
+  [/\/jobs\/cities/, 'get', { cities: ['上海', '北京'], provinces: [] }],
+  [/\/jobs\/pipeline\/list/, 'get', { items: [], total: 0 }],
+  [/\/jobs\/bookmarks\/list/, 'get', { items: [], total: 0 }],
   [/\/analysis\/records(\?|$)/, 'get', { items: [ANALYSIS_RECORD], total: 1 }],
   [/\/analysis\/\d+$/, 'get', ANALYSIS_RECORD],
   [/\/analysis\/list(\?|$)/, 'get', { items: [ANALYSIS_RECORD], total: 1 }],
@@ -600,6 +635,18 @@ const probe = {
 }
 
 window.__probe = probe
+
+/* 探针要的从来不是"登录流程"，而是"页面带着上一次的选择进来"。原先这里不种凭据，
+   所以 `/jobs/search` 这类受守卫的路由会被弹回 `/login`——`go()` 里那个 `await router.replace()`
+   照样 resolve，但屏幕上是登录页：`.workspace-theme` 数量 0、目标元素 0，量出来的一切都是假的。
+   键名与序列化走 `utils/session.js`（那是唯一出处，§10.22 之前它散在三个文件 12 处），探针不自己拼。 */
+writeSession('probe-token', {
+  id: 1,
+  username: 'probe',
+  role: 'candidate',
+  is_admin: false,
+  created_at: '2026-01-01T00:00:00Z',
+})
 
 const app = createApp(App)
 app.use(createPinia())

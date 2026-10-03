@@ -285,7 +285,7 @@ import {
   normalizeLocalizedTextList,
   rubricRow,
 } from '@/utils/analysisLocalization'
-import { scoreToneTagType } from '@/utils/scoreTone'
+import { isTopTier, scoreToneTagType } from '@/utils/scoreTone'
 import { levelTagType } from '@/utils/statusTone'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 
@@ -329,7 +329,7 @@ const averageMatchScore = computed(() => {
   return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
 })
 const highMatchCount = computed(
-  () => list.value.filter((item) => Number(item.match_score) >= 80).length
+  () => list.value.filter((item) => isTopTier(item.match_score)).length
 )
 
 const loadList = async () => {

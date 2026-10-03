@@ -745,6 +745,7 @@ import { useCareerPlanningRun } from '@/features/planning/composables/useCareerP
 import { usePlanningOptions } from '@/features/planning/composables/usePlanningOptions'
 import { useSalaryMarket } from '@/features/planning/composables/useSalaryMarket'
 import { normalizeLocalizedTextList } from '@/utils/analysisLocalization'
+import { isTopTier } from '@/utils/scoreTone'
 import {
   RADAR_CENTER_POINT as centerPoint,
   RADAR_RADIUS as radarRadius,
@@ -960,7 +961,10 @@ const strategySummary = computed(() => {
   const gaps = skillGapCount.value
   const stage = currentStage.value
 
-  if (score >= 80 && gaps <= 3) {
+  /* §10.5：这一档原先自己抄了个 80，现在走顶档线（85，对齐后端"强烈推荐"那一档）。
+     下面那条 `score < 60` 是同一张三分法的**下界**，它不在这次拍的范围里，也没跟着改成
+     后端的 70/50——记在这里，别当成"这一页已经全部对齐档位"。 */
+  if (isTopTier(score) && gaps <= 3) {
     return {
       mode: '精准投',
       title: '以重点岗位为主线推进',

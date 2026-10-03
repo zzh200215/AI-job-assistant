@@ -36,7 +36,7 @@ export const getInterviewPrep = (jdId) => request.get(`/interview/preparation/${
  * `interview_performance`）。只写后端真的返回的键，且**全部标可选**：零场面试那一支是提前返回
  * （`:758-766`），`avg_overall_score` / `max_overall_score` 两个键那时根本不会出现。
  * `max_overall_score` 是 §10.25 拍的那条 ① 新补的：**最高一次**面试综合评分，不是均值——
- * Profile 的「面试之星 · 综合评分超过80」要的是前者，均值 73.7 / 最高 88 这种形状下两者判定相反。
+ * Profile 的「面试之星 · 综合评分达到85」要的是前者，均值 73.7 / 最高 88 这种形状下两者判定相反。
  * @typedef {Object} InterviewPerformance
  * @property {number} [total_sessions]
  * @property {number} [avg_overall_score]

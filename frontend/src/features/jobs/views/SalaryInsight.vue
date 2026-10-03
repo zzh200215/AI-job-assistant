@@ -140,8 +140,16 @@
       </AppPanel>
     </div>
 
+    <!-- 在途（§10.16 拍的那条 ②）：这一段以前在 loading 期间**什么都不画**——下面那条
+         `v-else-if="!loading"` 把"还在取数"和"确实没有结果"合并成了同一个空白。补 spinner 只增加
+         可见反馈，不动数据分支、不动空态文案。 -->
+    <div v-else-if="loading" class="loading-state">
+      <el-icon class="is-loading"><Loading /></el-icon>
+      <span>正在取该岗位的薪资样本…</span>
+    </div>
+
     <!-- 空状态 -->
-    <div v-else-if="!loading" class="empty-state">
+    <div v-else class="empty-state">
       <div class="empty-layout">
         <div class="empty-copy">
           <el-icon :size="42" color="var(--app-primary)"><Coin /></el-icon>
@@ -225,7 +233,7 @@
 import { userErrorCopy } from '@/utils/requestTracing'
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, computed } from 'vue'
-import { Coin } from '@element-plus/icons-vue'
+import { Coin, Loading } from '@element-plus/icons-vue'
 import { getSalaryCompare, getSalaryOverview, checkSalaryExpectation } from '@/api/salary'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import { useLatestCall } from '@/composables/useLatestCall'

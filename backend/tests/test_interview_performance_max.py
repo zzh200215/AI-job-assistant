@@ -1,10 +1,12 @@
 """§10.25 拍的那条 ①：`GET /interview/performance` 给出**最高一次**面试综合评分。
 
-Profile 的「面试之星 · 综合评分超过80」读的就是这个值，而在这条决定之前全仓没有任何 max 生产者
+Profile 的「面试之星 · 综合评分达到85」读的就是这个值，而在这条决定之前全仓没有任何 max 生产者
 （最接近的是同返回里的 `avg_overall_score`，是均值）。三条断言各管一件事：
 
-1. 三场面试按 62 / 88 / 71 灌进去，均值 73.7 与最高 88 在"80 这条线"上判定**相反**，
-   所以断言 `max_overall_score == 88` 顺带就是"这里给的不是均值"的对照；
+1. 三场面试按 62 / 88 / 71 灌进去，均值 73.7 与最高 88 在**成就线**两侧判定**相反**，
+   所以断言 `max_overall_score == 88` 顺带就是"这里给的不是均值"的对照。线本身在 §10.5 从 80
+   挪到顶档 85（`utils/scoreTone.js` 的 `INTERVIEW_SCORE_BANDS` 首条），这里的常数跟着那条线走：
+   夹具在 80 与 85 两侧都还判得开，所以换了数仍然咬得住"用均值会把达成过的人判成没达成"；
 2. 有会话但没有评分时给 0，不炸（成就保持未解锁）；
 3. 零场面试那一支走的是提前返回，`max_overall_score` 与 `avg_overall_score` 两个键**都不出现**——
    这一条记的是前端的 `|| 0` 依赖的形状，不是主张。键从有到无会让读方拿到 undefined，
@@ -78,8 +80,8 @@ def test_max_overall_score_is_the_best_session_not_the_average(db_factory):
 
     assert data["max_overall_score"] == 88
     assert data["avg_overall_score"] == 73.7
-    # 这一对就是那条 ① 与"改用均值"那条路的分界：80 这条线上两者判定相反。
-    assert data["avg_overall_score"] < 80 <= data["max_overall_score"]
+    # 这一对就是那条 ① 与"改用均值"那条路的分界：成就线（§10.5 起为 85）上两者判定相反。
+    assert data["avg_overall_score"] < 85 <= data["max_overall_score"]
     assert data["total_sessions"] == 3
 
 

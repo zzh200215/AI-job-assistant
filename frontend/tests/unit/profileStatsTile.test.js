@@ -124,10 +124,20 @@ describe('个人中心：统计格、脚注与两颗成就', () => {
     expect(badge('面试之星').textContent).toContain('已达成')
   })
 
-  it('差一分就不解锁：阈值真的卡在 80', async () => {
-    getPerformanceTrend.mockResolvedValue({ total_sessions: 3, max_overall_score: 79 })
+  it('差一分就不解锁：阈值真的卡在顶档 85', async () => {
+    /* §10.5 之前这一条卡的是 80（`s.best_score >= 80`）。线挪到 85 之后 84 才是"差一分"，
+       所以这一条就是那条改动自己的红→绿：把线改回 80，它立刻绿不回来。 */
+    getPerformanceTrend.mockResolvedValue({ total_sessions: 3, max_overall_score: 84 })
     await mounted()
     expect(badge('面试之星').classList.contains('locked')).toBe(true)
+  })
+
+  it('85 分整解锁，且文案说的是"达到85"而不是"超过85"', async () => {
+    /* 判据是 `>= 85`，写"超过85"会把刚好 85 的人说成没达成——文案必须与判据同一条线。 */
+    getPerformanceTrend.mockResolvedValue({ total_sessions: 3, max_overall_score: 85 })
+    await mounted()
+    expect(badge('面试之星').classList.contains('unlocked')).toBe(true)
+    expect(badge('面试之星').textContent).toContain('综合评分达到85')
   })
 
   it('那一发失败时统计格与脚注仍是真值，只有这颗成就保持未解锁', async () => {

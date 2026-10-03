@@ -385,7 +385,7 @@
                     >已收藏</el-tag
                   >
                   <el-tag
-                    v-if="!job._applied && job.match_score >= 80"
+                    v-if="!job._applied && isTopTier(job.match_score)"
                     size="small"
                     type="danger"
                     effect="dark"
@@ -619,7 +619,7 @@ import {
 } from '@element-plus/icons-vue'
 import { OfficeBuilding } from '@element-plus/icons-vue'
 import { createJobPipelineEntry } from '@/api/targets'
-import { scoreToneFillClass } from '@/utils/scoreTone'
+import { isTopTier, scoreToneFillClass } from '@/utils/scoreTone'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import { isoMonthDay } from '@/utils/format/date'
 import { useLatestCall } from '@/composables/useLatestCall'
@@ -679,9 +679,7 @@ const selectedResumeLabel = computed(() => {
   return resume?.name || resume?.file_name || '已选简历'
 })
 const priorityJobCount = computed(
-  () =>
-    recommendations.value.filter((job) => Number(job.match_score || 0) >= 80 && !job._applied)
-      .length
+  () => recommendations.value.filter((job) => isTopTier(job.match_score) && !job._applied).length
 )
 const pipelineJobCount = computed(() => recommendations.value.filter((job) => job._applied).length)
 

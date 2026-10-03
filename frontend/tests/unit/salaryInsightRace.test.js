@@ -111,6 +111,27 @@ beforeEach(() => {
 })
 
 describe('薪资洞察：一次查询的两块屏幕必须来自同一个岗位', () => {
+  it('第一次查询在途时这一段有 spinner，而不是空白（§10.16 那条 ②）', async () => {
+    /* 改之前这里两条都不成立：`v-else-if="!loading"` 让"还在取数"与"确实没有结果"共用一个空白，
+       所以点下查询之后屏幕上是**什么都没有**。这一条钉的是新增的那一支。 */
+    const wrapper = await renderInsight()
+    expect(document.querySelector('.loading-state'), '还没发起查询不该有在途块').toBeNull()
+
+    wrapper.vm.searchPosition = '前端'
+    await buttonByText(wrapper, '查询').trigger('click')
+    expect(
+      document.querySelector('.loading-state'),
+      '在途期间这块仍然空白——那等于把"正在取数"演成"什么都没有"'
+    ).toBeTruthy()
+    expect(document.querySelector('.empty-state'), '在途时不该同时给出空态').toBeNull()
+
+    await settle(lastOf('getSalaryOverview'), overview('前端', 20, 40))
+    await settle(lastOf('getSalaryCompare'), comparison('上海'))
+    expect(document.querySelector('.loading-state'), '数据落地后 spinner 没撤掉').toBeNull()
+    expect(marketRange()).toBe('20K - 40K')
+    wrapper.unmount()
+  })
+
   it('换岗位再查询，旧岗位的区间不能盖掉新岗位的', async () => {
     const wrapper = await renderInsight()
 
