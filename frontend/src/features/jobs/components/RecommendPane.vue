@@ -181,157 +181,158 @@ function patch(key, value) {
 /* 这些规则是从 JobSearch.vue 的样式里**复制**来的：scoped 样式不跨组件边界，
    而父页面那份一条都没删（D44 的结论：静态切分会把 signalClass() 这类动态类名误判成死选择器，
    删掉就是没人能看见的视觉回归）。代价记在棘轮的色值预算里。 */
-null {
-  .priority-reason,
-  .toolbar-sub,
-  .recommend-reason {
-    color: var(--app-muted);
-  }
+.priority-reason,
+.toolbar-sub,
+.recommend-reason {
+  color: var(--app-muted);
+}
 
-  .recommend-toolbar {
-    margin: 0;
-    font-size: 20px;
-  }
+.recommend-toolbar {
+  margin: 0;
+  font-size: 20px;
+}
 
-  .recommend-toolbar {
-    margin-bottom: 14px;
-  }
+.recommend-toolbar {
+  margin-bottom: 14px;
+}
 
-  .recommend-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-  }
+.recommend-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
 
-  .mini-input {
-    width: 140px;
-  }
+.mini-input {
+  width: 140px;
+}
 
-  .state-box {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 140px;
-    justify-content: center;
-    border-radius: var(--app-radius-sm, 12px);
-    background: var(--app-bg);
-    color: var(--app-muted);
-  }
+.state-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 140px;
+  justify-content: center;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  color: var(--app-muted);
+}
 
-  .recommend-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
-  }
+.recommend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
 
-  .recommend-card {
-    position: relative;
-    padding: 18px;
-    border-radius: var(--app-radius-sm, 12px);
-    border: 1px solid var(--app-line);
-    background: rgba(255, 255, 255, 0.98);
-  }
+.recommend-card {
+  position: relative;
+  padding: 18px;
+  border-radius: var(--app-radius-sm, 12px);
+  border: 1px solid var(--app-line);
+  /* 与 `SearchPane.vue` 的 `.job-shell` 同批：这一整块自 `a55498c` 起被包进一个选择器写着
+     `null` 的嵌套块而全死，D105 拆壳后这条第一次真的上屏。深色作用域里留字面量就是白卡，
+     所以换成 `var(--app-surface)`。 */
+  background: var(--app-surface);
+}
 
-  .job-title-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-  }
+.job-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
 
-  .job-company {
-    margin: 8px 0 0;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
+.job-company {
+  margin: 8px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
-  .job-facts {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 14px;
-  }
+.job-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
 
-  .job-facts.compact,
-  .priority-row.compact {
-    margin-top: 10px;
-  }
+.job-facts.compact,
+.priority-row.compact {
+  margin-top: 10px;
+}
 
-  .fact-emphasis {
-    color: var(--app-primary, #7c6cff);
-    font-weight: 700;
-  }
+.fact-emphasis {
+  color: var(--app-primary, #7c6cff);
+  font-weight: 700;
+}
 
-  .recommend-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 12px;
-  }
+.recommend-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
 
-  .priority-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin-top: 12px;
-  }
+.priority-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
 
-  .job-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 16px;
-  }
+.job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
 
-  .recommend-card {
-    display: grid;
-    grid-template-columns: 88px minmax(0, 1fr);
-    gap: 14px;
-  }
+.recommend-card {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 14px;
+}
 
-  .recommend-score {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--app-radius-sm, 12px);
-    background: linear-gradient(180deg, var(--app-text, #18222f), #304151);
-    color: #fff;
-    min-height: 94px;
-  }
+.recommend-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--app-radius-sm, 12px);
+  background: linear-gradient(180deg, var(--app-text, #18222f), #304151);
+  color: #fff;
+  min-height: 94px;
+}
 
-  .tag-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    align-items: center;
-  }
+.tag-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
 
-  .tag-label {
-    font-size: 12px;
-    padding: 4px 8px;
-    border-radius: 999px;
-  }
+.tag-label {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
 
-  .tag-label.ok {
-    background: rgba(44, 143, 105, 0.12);
-    color: var(--app-success, #14b8a6);
-  }
+.tag-label.ok {
+  background: rgba(44, 143, 105, 0.12);
+  color: var(--app-success, #14b8a6);
+}
 
-  .tag-label.gap {
-    background: rgba(217, 111, 50, 0.12);
-    color: var(--app-warning, #7c6cff);
-  }
+.tag-label.gap {
+  background: rgba(217, 111, 50, 0.12);
+  color: var(--app-warning, #7c6cff);
+}
 
-  .recommend-signals {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
-  }
+.recommend-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 @media (max-width: 1180px) {
   .recommend-grid {

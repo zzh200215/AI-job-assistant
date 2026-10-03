@@ -126,164 +126,167 @@ defineEmits(['open-compare', 'detail', 'pipeline', 'compare', 'shortlist', 'pref
 /* 这些规则是从 JobSearch.vue 的样式里**复制**来的：scoped 样式不跨组件边界，
    而父页面那份一条都没删（D44 的结论：静态切分会把 signalClass() 这类动态类名误判成死选择器，
    删掉就是没人能看见的视觉回归）。代价记在棘轮的色值预算里。 */
-null {
-  .result-source-note {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-top: 16px;
-    padding: 12px 14px;
-    border-radius: var(--app-radius-xs, 8px);
-    border: 1px solid var(--app-line);
-    background: rgba(255, 255, 255, 0.58);
-  }
+.result-source-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: var(--app-radius-xs, 8px);
+  border: 1px solid var(--app-line);
+  background: rgba(255, 255, 255, 0.58);
+}
 
-  .result-source-note.is-loading {
-    border-color: rgba(124, 108, 255, 0.16);
-  }
+.result-source-note.is-loading {
+  border-color: rgba(124, 108, 255, 0.16);
+}
 
-  .priority-reason,
-  .toolbar-sub,
-  .toolbar-meta,
-  .job-summary {
-    color: var(--app-muted);
-  }
+.priority-reason,
+.toolbar-sub,
+.toolbar-meta,
+.job-summary {
+  color: var(--app-muted);
+}
 
-  .bookmark-btn:hover {
-    transform: translateY(-1px);
-    border-color: var(--app-line);
-  }
+.bookmark-btn:hover {
+  transform: translateY(-1px);
+  border-color: var(--app-line);
+}
 
-  .result-toolbar {
-    margin: 0;
-    font-size: 20px;
-  }
+.result-toolbar {
+  margin: 0;
+  font-size: 20px;
+}
 
-  .result-toolbar {
-    margin-bottom: 14px;
-  }
+.result-toolbar {
+  margin-bottom: 14px;
+}
 
-  .toolbar-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-  }
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
 
-  .state-box {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 140px;
-    justify-content: center;
-    border-radius: var(--app-radius-sm, 12px);
-    background: var(--app-bg);
-    color: var(--app-muted);
-  }
+.state-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 140px;
+  justify-content: center;
+  border-radius: var(--app-radius-sm, 12px);
+  background: var(--app-bg);
+  color: var(--app-muted);
+}
 
-  .result-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
-  }
+.result-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
 
-  .job-shell {
-    position: relative;
-    padding: 18px;
-    border-radius: var(--app-radius-sm, 12px);
-    border: 1px solid var(--app-line);
-    background: rgba(255, 255, 255, 0.98);
-  }
+.job-shell {
+  position: relative;
+  padding: 18px;
+  border-radius: var(--app-radius-sm, 12px);
+  border: 1px solid var(--app-line);
+  /* 原来是每通道拉满的白面字面量。这一整块规则自 `a55498c`（把两个面板搬出 JobSearch）起就是死的
+     ——它们被包在一个选择器写着 `null` 的嵌套块里，编译成 `null .job-shell[data-v-…]`，永不命中。
+     D105 拆开那层壳之后这条**第一次落到屏幕上**，而登录后的每一页都在 `.workspace-theme` 这个深色
+     作用域里，所以留着字面量就是在深色工作台里画一张白卡（D6 那轮修的正是这类）。注意这里刻意不
+     把原字面量抄进注释：色值预算数的是文本，注释里写一遍就算一条债。 */
+  background: var(--app-surface);
+}
 
-  .job-shell-top {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    align-items: flex-start;
-  }
+.job-shell-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
 
-  .job-title-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-  }
+.job-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
 
-  .source-pill,
-  .local-pill {
-    padding: 4px 8px;
-    border-radius: 999px;
-    font-size: 12px;
-  }
+.source-pill,
+.local-pill {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
 
-  .source-pill {
-    background: rgba(45, 108, 223, 0.1);
-    color: var(--app-primary, #3b82f6);
-  }
+.source-pill {
+  background: rgba(45, 108, 223, 0.1);
+  color: var(--app-primary, #3b82f6);
+}
 
-  .local-pill {
-    background: rgba(44, 143, 105, 0.12);
-    color: var(--app-success, #14b8a6);
-  }
+.local-pill {
+  background: rgba(44, 143, 105, 0.12);
+  color: var(--app-success, #14b8a6);
+}
 
-  .job-company {
-    margin: 8px 0 0;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
+.job-company {
+  margin: 8px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
-  .job-facts {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 14px;
-  }
+.job-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
 
-  .fact-emphasis {
-    color: var(--app-primary, #7c6cff);
-    font-weight: 700;
-  }
+.fact-emphasis {
+  color: var(--app-primary, #7c6cff);
+  font-weight: 700;
+}
 
-  .job-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 12px;
-  }
+.job-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
 
-  .priority-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin-top: 12px;
-  }
+.priority-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
 
-  .job-summary {
-    margin: 14px 0 0;
-    line-height: 1.7;
-    min-height: 48px;
-  }
+.job-summary {
+  margin: 14px 0 0;
+  line-height: 1.7;
+  min-height: 48px;
+}
 
-  .job-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 16px;
-  }
+.job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
 
-  .bookmark-btn {
-    border: 1px solid var(--app-line);
-    background: var(--app-surface-strong);
-    border-radius: var(--app-radius-xs, 8px);
-    cursor: pointer;
-    transition: 0.2s ease;
-  }
+.bookmark-btn {
+  border: 1px solid var(--app-line);
+  background: var(--app-surface-strong);
+  border-radius: var(--app-radius-xs, 8px);
+  cursor: pointer;
+  transition: 0.2s ease;
+}
 
-  .bookmark-btn {
-    padding: 8px 12px;
-  }
+.bookmark-btn {
+  padding: 8px 12px;
 }
 @media (max-width: 1180px) {
   .result-grid {
