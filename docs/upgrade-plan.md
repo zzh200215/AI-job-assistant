@@ -467,7 +467,7 @@ agent.SummaryAgent           real  tokens=3215
 - **棘轮守卫** `tests/unit/styleDebtRatchet.test.js`：逐文件写死色配额 + 通配选择数/`!important`/`.page-shell` 重复声明/API 越权的天花板。预算**只能下调**，还完债不降会失败并提示新值
 - 61 处 `background:#fff` → `var(--app-surface-strong)`，30 个文件。用逐路由 `getComputedStyle` diff 验证：4/5 路由逐字节零差异，`/jobs/search` 恰好 10 处由白块 bug 修正为深色
 - `panels.css` token 化并删除零引用死代码
-- ESLint 边界规则：禁裸 `axios`；views 必须走 `src/api/*`（**豁免清单已在 D69 整段删除**——那 7 个文件的 19 处裸调用全部出账，这条从"预算"变成了"错误"）
+- ESLint 边界规则：禁裸 `axios`；views 必须走 `src/api/*`（**豁免清单已在 D69 整段删除**——那 7 个文件的 19 处裸调用全部出账，这条从"预算"变成了"错误"）。**D95 又收窄了一次**：棘轮那一维以前复用 `viewSources`（`src/stores` 整根被豁免），所以 `0` 只覆盖视图；现在它自带文件集、只豁免 `src/api` 与 `src/plugins`，`stores` 那 5 处也进了 api 层，于是这个 `0` 才真的等于"只有 api 层出网"。
 - **通配网实测为承重结构**：5 条路由上兜住 157 个元素实例 / 约 60 个类名，故未在本阶段删除，转为棘轮跟踪
 
 ### 待做
@@ -2707,6 +2707,21 @@ B 桶（"需要你点的"那 17 条）不能整桶做，但可以整桶**复测*
 
 
 
+#### 已交付：D95 §10.22 那条 ②——凭据端点回到 api 层，而那条守卫的文件集从 5 个根缩到 2 个
+
+`stores/auth.js` 里有四条裸 `request`（`/auth/login`、`/auth/register`、`/auth/reset-password`、`/auth/me`），`stores/tenant.js` 还有一条 `/tenant/brand`。它们**不是漏洞**：用的是同一个共享实例，拦截器、`Authorization` 头、错误 toast 三样都没有第二套。问题是那一维的判据复用 `viewSources`，而 `viewSources` 为了让色值/日期那几把尺子不去数法定解药，把 `src/stores` 整根豁免了——于是棘轮报出的 `viewsBypassingApiLayer = 0` 只说得出"视图没绕过"，**说不出"只有 api 层出网"**，而账面一直按后者在引用它。
+
+按 ② 做的两件事：
+
+1. **模块归位**：新建 `src/api/auth.js`，装凭据四条 + `account.js` 那批自助端点 + `admin.js` 那条 `getAdminUsers`，与后端 `app/api/auth.py` 对齐；`account.js` 与 `admin.js` 删除（`git rm`，六处引用一起改：`Privacy.vue`、`Profile.vue`、`admin/Users.vue`、`apiLayerMove.test.js` ×3）。**冻结侧被牵连的一行是 import 路径**，不是行为演进，按 §2 的口径记在这里。`/tenant/brand` 那条更简单：`api/tenant.js` 里 `getTenantBrand(config)` **早就存在**，store 只是没用它——又一处"生产者在隔壁文件里等着"。
+2. **判据换文件集**：那一维不再复用 `viewSources`，自己扫 `src` 下全部 `.vue` 与 `.js`，只豁免 `src/api/` 与 `src/plugins/` 两根；判据从"预算 0"变成**硬零 + 失败信息点名文件**。`BUDGET.viewsBypassingApiLayer` 这个键随之删除（旁边留着一条注释说明它为什么不再存在，免得下一个人以为被漏掉了）。豁免面从 5 个根缩到 2 个是这次唯一让 `0` 变得有意义的动作——**换了判据，那个数字才开始说真话**。
+
+**搬家搬走的是请求体形状**，所以钉的是形状本身：`normalizeText`（去空白、**不**转小写）与 `normalizeEmail`（去空白 + 转小写）从 store 进 api，`login` 固定 `notifyError: false`。`apiLayerMove.test.js` 补的两条按 D69 那套记录器逐字对照 URL / 方法 / body / config，并且断言"四个函数正好发四条"；另有一条反向证据（`MiXeD` 作账号保持原样、作邮箱转小写）。store 对外的方法名**一个没改**（`login`/`register`/`resetPassword`/`fetchMe` 都是别处在调的），实现改成命名空间导入 `authApi.*` 以避免同名遮蔽——中途我先写成 `submitLogin` 那类改名，那会把 ripple 推给所有调用方，已回退。
+
+**门禁**：typecheck **42**（未动）、`test:unit` **82 files / 488 passed**（+2 条形状断言）、`npm test` / `eslint`（0 error）/ `prettier --check` / `vite build` 全 exit 0。§10.22 关闭，§10 open 现算 **15**。
+
+
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
@@ -3390,7 +3405,9 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 21. ~~**"标记拒绝"的提示文案统一成哪一句**~~ —— **已定并落地（D92，选「已标记为拒绝」）**。同一动作原先在看板说"已标记为拒绝"、在列表说少一个"为"的那句（D58 合并实现时两句都留着）。选了**仓里已有的那一式**作为唯一出处——`ResumeCompare.vue:565` 的"已标记为采纳 / 已标记为忽略"同样是「已标记为 + 动作」，被淘汰的是只出现过一次的那一短写。两张标签表合成一张 `COMMAND_LABELS`，`runCardCommand` 随之不再收 `labels` 参数（两个调用点传的是同一对象）。守卫：`userCopySingleSource.test.js` 钉"全仓只剩一句"与"定义次数为 1"，并带被淘汰写法的反向证据；`pipelineCardCommands.test.js` 那条原样记录现状的断言改成了两条路径**逐字一致**。要换回短的那句是一行。
 
-22. **`src/stores` 那 5 处裸 `request` 要不要一起收进 api 层**（D69 量到的，也是 D69 没动的）。`viewsBypassingApiLayer` 现在是 **0**，但这个 0 只覆盖视图：这一维复用 `viewSources`，而它为了让色值/色表/日期那几把尺子不去数法定解药，把 `src/stores` 整根豁免了，于是这 5 处顺手也被豁免——`stores/auth.js` 的 `/auth/login`、`/auth/register`、`/auth/reset-password`、`/auth/me`，加 `stores/tenant.js:78` 的 `/tenant/brand`。**为什么这条不是缺陷**：这些 store 用的就是同一个共享实例，拦截器、`Authorization` 头、错误 toast 三样并没有第二套，所以边界规则真正要防的东西一件没漏；剩下的只是"端点写在哪个文件里"。**为什么没顺手修**：真要收就得先拍凭据端点住在哪。**先记下量的结果，因为我原本以为这里有一条统一规则可违反——没有**：D69 之前 `src/api/` 是 18 个模块，多数按后端 router 文件起名（`salary.js`←`salary_insight.py`、`targets.js`←`job_target.py`、`promptTrace.js`←`prompt_trace.py`），但 `jobs.js` 一条对着 `job_search` / `job_recommend` / `job_pipeline` / `job_journal` 四条 router，而且里面还打着 `/analysis/` 与 `/career-path/` 两个不属于它的前缀——也就是"按消费域聚合"这一族本来就在。**所以 D69 新起的 `account.js`（自助那半）与 `admin.js`（只装 `/auth/admin/users` 一条）没有发明第二种切法，只是加了两个名字。**于是 stores 那 4 条凭据端点的真问题是谁跟 `account.js` 合：并成一个 `auth.js` 与后端 `auth.py` 对齐（那 `account.js` 这个名字就白起了一次），或再开第三个名字。三条路：① 不动，把 0 的含义在棘轮注释里写清楚（现状就是这么做的）；② 收拢成 `api/auth.js` 一个模块（凭据 + 自助 + admin 用户列表）+ `/tenant/brand` 归已有 `tenant.js`，并把这一维换成自带文件集（只豁免 `src/api` 与 `src/plugins`），这样"0"才真的说得出"只有 api 层出网"；③ 只把守卫拓宽、代码不动，于是棘轮立刻红、要按 5 重新点名。建议 ② 或 ①；**我一条都没动**。
+22. ~~**`src/stores` 那 5 处裸 `request` 要不要一起收进 api 层**~~ —— **已定并落地（D95，选 ②）**：新建 `api/auth.js` 装凭据四条 + 自助那批 + `getAdminUsers`（`account.js`/`admin.js` 两个名字消失，六处引用连带改），`/tenant/brand` 回它早已存在的 `api/tenant.js#getTenantBrand`；**那一维的判据换成自带文件集**（扫 `src` 全部 `.vue`/`.js`，只豁免 `src/api` 与 `src/plugins`），`BUDGET.viewsBypassingApiLayer` 键删除、判据变硬零。**这才是这条的重点**：换判据之前那个 `0` 只覆盖视图，换完之后它才真的说得出"只有 api 层出网"。原始推理（为什么这条不是缺陷、`jobs.js` 那条一模组对四 router 的先例、三条路的成本）留在 D95 与下面的原文里。
+
+    落地前的原文与判据：`viewsBypassingApiLayer` 现在是 **0**，但这个 0 只覆盖视图：这一维复用 `viewSources`，而它为了让色值/色表/日期那几把尺子不去数法定解药，把 `src/stores` 整根豁免了，于是这 5 处顺手也被豁免——`stores/auth.js` 的 `/auth/login`、`/auth/register`、`/auth/reset-password`、`/auth/me`，加 `stores/tenant.js:78` 的 `/tenant/brand`。**为什么这条不是缺陷**：这些 store 用的就是同一个共享实例，拦截器、`Authorization` 头、错误 toast 三样并没有第二套，所以边界规则真正要防的东西一件没漏；剩下的只是"端点写在哪个文件里"。三条路里 ① 是不动并把 `0` 的含义写进注释、③ 是只扩守卫让棘轮立刻红——**② 已由他点定并落地**。
 
 23. ~~**`SkillsPane` 那三条列表的两代写法要不要归一**~~ —— **已定并落地（D81，选 ②；D82 收完剩下两处屏幕）**：`rubricRow`（住 `src/utils/analysisLocalization.js`，跟生产者同一文件）在两代写法进渲染之前收一次（`typeof entry === 'string' ? { item: entry } : entry`），模板不再判分支，三条 props 全部上类型（`strengths`/`gaps` = `RubricEntry[]`、`riskPoints` = `string[]`），**typecheck 65 → 50、`SkillsPane` 自己那 15 条清零**。那一支候选人可见的变化如约发生：对象而 `item` 为空串时，旧那句 `x.item || x` 会往右走到对象上，屏幕上是一坨 JSON（`toDisplayString` 实测输出 `{ "item": "", "impact": "命中必需项" }`），现在 `<b>` 整颗不出、补语前面那颗冒号跟着撤。断言：`tests/unit/skillsPane.test.js` 第六条 + `tests/unit/rubricRowsOnScreens.test.js` 三条（匹配报告页与历史记录详情各一份，这两页此前没有页面级测试）。同写法在 `AnalysisResult.vue` 与 `History.vue` 各还剩两处，D82 一起收了：**模板里 `x.item || x` 现为 0**，并由 `styleDebtRatchet` 一条不变量钉住（反向证据打在 git 里的三个旧版本上，全部命中）。原始观察在 D73。
 
