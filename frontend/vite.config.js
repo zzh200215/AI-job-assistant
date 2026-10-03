@@ -77,6 +77,12 @@ export default defineConfig({
     include: ['tests/unit/**/*.test.js'],
     setupFiles: ['./tests/unit/setup.js'],
     testEnvironmentOptions: { url: 'http://localhost:5173/' },
+    /* D104：这条上限以前没设过，于是 82 个文件里每一条时序敏感断言共用 vitest 的隐式 5s 墙。
+       实测（同一台机器，单跑全量）最慢的一条是 3.88s——离那堵墙只剩 1.28 倍余量；而 `tests/unit/jobPipelinePane.test.js`
+       早就自己抬到 20000ms 并留了注释说它"并发时中位慢 3–4 倍、撞过两次"。故意同时跑两份全量（≈2 倍负载）时，
+       红的是 8–9 个文件、清一色 `Test timed out in 5000ms`。抬的是**墙钟上限**，不是断言：断言错照样红。
+       20000 = 空闲最慢那条的 5 倍，也是那条手工抬高值的同一个数（现在全局覆盖它，那处已撤）。 */
+    testTimeout: 20000,
     server: { deps: { inline: ['element-plus'] } },
   },
 })
