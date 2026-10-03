@@ -214,12 +214,7 @@
           <el-table :data="summaryReport.action_items || []" size="small">
             <el-table-column prop="priority" label="优先级" width="80">
               <template #default="{ row }">
-                <el-tag
-                  :type="
-                    row.priority === '高' ? 'danger' : row.priority === '中' ? 'warning' : 'info'
-                  "
-                  size="small"
-                >
+                <el-tag :type="levelTagType(row.priority)" size="small">
                   {{ row.priority }}
                 </el-tag>
               </template>
@@ -259,7 +254,7 @@ import { ElMessage } from '@/plugins/element-services'
 import { SuccessFilled, WarningFilled, Loading, Clock } from '@element-plus/icons-vue'
 import { startAutoAgent, getMultiAgentDetail } from '@/api/multi_agent'
 import { scoreToneTagType } from '@/utils/scoreTone'
-import { TASK_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
+import { TASK_STATUS_TAGS, levelTagType, tagTypeFor } from '@/utils/statusTone'
 import { readJDId, readResumeId } from '@/utils/lastSelection'
 
 const starting = ref(false)

@@ -175,9 +175,7 @@
                       <el-tag
                         v-if="r.severity"
                         size="small"
-                        :type="
-                          r.severity === '高' ? 'danger' : r.severity === '中' ? 'warning' : 'info'
-                        "
+                        :type="levelTagType(r.severity)"
                         style="margin-left: 4px"
                         >{{ r.severity }}</el-tag
                       >
@@ -287,6 +285,7 @@ import {
   rubricRow,
 } from '@/utils/analysisLocalization'
 import { scoreToneTagType } from '@/utils/scoreTone'
+import { levelTagType } from '@/utils/statusTone'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 
 const router = useRouter()

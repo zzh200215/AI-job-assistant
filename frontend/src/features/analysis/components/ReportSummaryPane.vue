@@ -14,11 +14,7 @@
     <el-table :data="report.action_items || []" size="small" class="mt">
       <el-table-column prop="priority" label="优先级" width="80">
         <template #default="{ row }">
-          <el-tag
-            :type="row.priority === '高' ? 'danger' : row.priority === '中' ? 'warning' : 'info'"
-            size="small"
-            >{{ row.priority }}</el-tag
-          >
+          <el-tag :type="levelTagType(row.priority)" size="small">{{ row.priority }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="action" label="行动" />
@@ -55,6 +51,8 @@
 /* 综合评价面板：D65 从 SmartAnalysis.vue 搬出来。两个字符串是页面 localize 过的成品
    （`localizeRecommendationText` / `localizeSentence`），面板只画；
    `report` 就是页面的 `finalReport`（记录里的 `final_report`，没有则为 null → 走空态那一支）。 */
+import { levelTagType } from '@/utils/statusTone'
+
 defineProps({
   report: { type: Object, default: null },
   recommendation: { type: String, default: '' },

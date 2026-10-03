@@ -62,13 +62,9 @@
             <el-collapse-item v-for="(gap, i) in careerData.skill_gaps" :key="i" :name="i">
               <template #title>
                 <div class="gap-title">
-                  <el-tag
-                    :type="
-                      gap.priority === '高' ? 'danger' : gap.priority === '中' ? 'warning' : 'info'
-                    "
-                    size="small"
-                    >{{ gap.priority }}</el-tag
-                  >
+                  <el-tag :type="levelTagType(gap.priority)" size="small">{{
+                    gap.priority
+                  }}</el-tag>
                   <span class="gap-skill">{{ gap.skill }}</span>
                   <span class="gap-level">{{ gap.current_level }} → {{ gap.target_level }}</span>
                 </div>
@@ -322,6 +318,7 @@
 import { Folder } from '@element-plus/icons-vue'
 
 import { complexityType, milestoneIcon } from '@/features/analysis/lib/analysisModel'
+import { levelTagType } from '@/utils/statusTone'
 
 /* 职业规划面板：D51 从 SmartAnalysis.vue 搬出来（这一页最大的一个标签页）。
    纯展示：只吃三个值，不发请求、不发事件。后两个之所以是 prop 而不是在这里重算，是因为

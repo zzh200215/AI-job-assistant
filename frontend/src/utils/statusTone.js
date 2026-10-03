@@ -50,3 +50,26 @@ export function priorityTagType(value) {
   if (v.includes('谨慎')) return 'danger'
   return 'info'
 }
+
+/**
+ * 中文三档强弱（**高 / 中 / 低**）→ el-tag 颜色的唯一出处（D91）。
+ * 它同时服务两个字段名：rubric 的 `severity`（差距严重度）与 `priority`（行动项优先级）——
+ * 两处的取值域是同一份（`src/constants/states.js` 的 SEVERITY_LEVELS / PRIORITY_LEVELS），
+ * 颜色口径也必须一致，否则"高"在差距列是红、在行动项列成了别的。
+ * 迁移前这五个地方各写各的三元式：`SkillsPane`、`History` 详情、`CareerPlanPane`、
+ * `ReportSummaryPane`、`MultiAgentAnalysis`。
+ * **一件实测出来的事顺带记在这**：迁完之后 `styleDebtRatchet` 的 `statusTagEntries` 预算**一分未动**
+ * ——那把尺子数的是 `键: '颜色'` 那种形态，`x === '高' ? 'danger' : …` 三元式不在它的口径里。
+ * 所以这一族重复是**守卫看不见的重复**：收它的理由是"颜色只有一个出处"，不是"降某个数字"，
+ * 也别以为有门在替我看着这类漂移。
+ * 未知值返回 info，与 `tagTypeFor` 同一口径：**不能因为后端多给一个档位就把它涂成失败色**。
+ *
+ * 刻意不覆盖的两处，别当漏网：`CareerPlanning.vue` 的投递策略标签是**两段式**（高→danger，
+ * 其余→warning，没有 info 档），并进这张表会把它的观感改掉；`analysisModel.js` 的
+ * `complexityType`（简单/中等/困难）是另一个域，名字不同、颜色也不同。
+ */
+const LEVEL_TAGS = { 高: 'danger', 中: 'warning', 低: 'info' }
+
+export function levelTagType(value) {
+  return LEVEL_TAGS[value] || 'info'
+}

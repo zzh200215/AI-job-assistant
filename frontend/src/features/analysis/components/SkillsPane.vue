@@ -40,7 +40,7 @@
           <el-tag
             v-if="r.severity"
             size="small"
-            :type="r.severity === '高' ? 'danger' : r.severity === '中' ? 'warning' : 'info'"
+            :type="levelTagType(r.severity)"
             style="margin-left: 4px"
             >{{ r.severity }}</el-tag
           >
@@ -66,6 +66,7 @@
 import { computed } from 'vue'
 
 import { rubricRow } from '@/utils/analysisLocalization'
+import { levelTagType } from '@/utils/statusTone'
 
 const props = defineProps({
   matchedSkills: {
