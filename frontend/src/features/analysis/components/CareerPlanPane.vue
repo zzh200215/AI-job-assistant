@@ -27,281 +27,261 @@
       </el-col>
     </el-row>
 
-    <div v-if="careerData.skill_radar?.dimensions?.length" class="panel career-section">
-      <div class="panel-header"><span>📊 技能雷达</span></div>
-      <div class="panel-body">
-        <div class="radar-chart">
-          <div v-for="dim in careerData.skill_radar.dimensions" :key="dim.name" class="radar-row">
-            <span class="radar-label">{{ dim.name }}</span>
-            <div class="radar-track">
-              <div class="radar-bar current" :style="{ width: dim.current_score + '%' }">
-                <span class="radar-val">{{ dim.current_score }}</span>
-              </div>
-              <div
-                class="radar-bar target"
-                :style="{
-                  width: dim.target_score - dim.current_score + '%',
-                  left: dim.current_score + '%',
-                }"
-              >
-                <span class="radar-val-target">→{{ dim.target_score }}</span>
-              </div>
+    <AppPanel v-if="careerData.skill_radar?.dimensions?.length" class="career-section">
+      <template #title>📊 技能雷达</template>
+      <div class="radar-chart">
+        <div v-for="dim in careerData.skill_radar.dimensions" :key="dim.name" class="radar-row">
+          <span class="radar-label">{{ dim.name }}</span>
+          <div class="radar-track">
+            <div class="radar-bar current" :style="{ width: dim.current_score + '%' }">
+              <span class="radar-val">{{ dim.current_score }}</span>
+            </div>
+            <div
+              class="radar-bar target"
+              :style="{
+                width: dim.target_score - dim.current_score + '%',
+                left: dim.current_score + '%',
+              }"
+            >
+              <span class="radar-val-target">→{{ dim.target_score }}</span>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </AppPanel>
 
-    <div v-if="careerData.skill_gaps?.length" class="panel career-section">
-      <div class="panel-header">
-        <span>⚠️ 技能提升建议（{{ careerData.skill_gaps.length }} 项）</span>
-      </div>
-      <div class="panel-body">
-        <template v-if="hasStructuredSkillGaps">
-          <el-collapse>
-            <el-collapse-item v-for="(gap, i) in careerData.skill_gaps" :key="i" :name="i">
-              <template #title>
-                <div class="gap-title">
-                  <el-tag :type="levelTagType(gap.priority)" size="small">{{
-                    gap.priority
-                  }}</el-tag>
-                  <span class="gap-skill">{{ gap.skill }}</span>
-                  <span class="gap-level">{{ gap.current_level }} → {{ gap.target_level }}</span>
-                </div>
-              </template>
-              <div class="gap-detail">
-                <p v-if="gap.importance"><b>为什么重要：</b>{{ gap.importance }}</p>
-                <p v-if="gap.acquisition_method"><b>获取途径：</b>{{ gap.acquisition_method }}</p>
-                <div v-if="gap.resources?.length" class="gap-resources">
-                  <b>推荐资源：</b>
-                  <el-tag
-                    v-for="r in gap.resources"
-                    :key="r.name"
-                    size="small"
-                    type="info"
-                    effect="plain"
-                    style="margin: 2px"
-                    >{{ r.name }}{{ r.estimated_hours ? ` (${r.estimated_hours}h)` : '' }}</el-tag
-                  >
-                </div>
+    <AppPanel v-if="careerData.skill_gaps?.length" class="career-section">
+      <template #title>⚠️ 技能提升建议（{{ careerData.skill_gaps.length }} 项）</template>
+      <template v-if="hasStructuredSkillGaps">
+        <el-collapse>
+          <el-collapse-item v-for="(gap, i) in careerData.skill_gaps" :key="i" :name="i">
+            <template #title>
+              <div class="gap-title">
+                <el-tag :type="levelTagType(gap.priority)" size="small">{{ gap.priority }}</el-tag>
+                <span class="gap-skill">{{ gap.skill }}</span>
+                <span class="gap-level">{{ gap.current_level }} → {{ gap.target_level }}</span>
               </div>
-            </el-collapse-item>
-          </el-collapse>
-        </template>
-        <template v-else
-          ><ul>
-            <li v-for="(g, i) in careerData.skill_gaps" :key="i">📌 {{ g }}</li>
-          </ul></template
-        >
-      </div>
-    </div>
-
-    <div v-if="visualPhases.length" class="panel career-section">
-      <div class="panel-header">
-        <span
-          >🛤️ 成长路线图（{{ careerData.visual_roadmap?.total_duration_months || '-' }}个月）</span
-        >
-      </div>
-      <div class="panel-body">
-        <div class="roadmap">
-          <div v-for="phase in visualPhases" :key="phase.id" class="roadmap-phase">
-            <div class="phase-connector" :style="{ borderColor: phase.color }">
-              <div class="phase-dot" :style="{ background: phase.color }">
-                {{ phase.order }}
-              </div>
-            </div>
-            <div class="phase-card" :style="{ borderLeftColor: phase.color }">
-              <div class="phase-header">
-                <span class="phase-name">{{ phase.name }}</span>
-                <el-tag size="small" effect="plain">{{ phase.duration_months }}个月</el-tag>
-              </div>
-              <div class="phase-skills">
+            </template>
+            <div class="gap-detail">
+              <p v-if="gap.importance"><b>为什么重要：</b>{{ gap.importance }}</p>
+              <p v-if="gap.acquisition_method"><b>获取途径：</b>{{ gap.acquisition_method }}</p>
+              <div v-if="gap.resources?.length" class="gap-resources">
+                <b>推荐资源：</b>
                 <el-tag
-                  v-for="s in phase.skills"
-                  :key="s"
+                  v-for="r in gap.resources"
+                  :key="r.name"
                   size="small"
-                  type="success"
+                  type="info"
                   effect="plain"
                   style="margin: 2px"
-                  >{{ s }}</el-tag
+                  >{{ r.name }}{{ r.estimated_hours ? ` (${r.estimated_hours}h)` : '' }}</el-tag
                 >
               </div>
-              <div v-if="phase.milestones?.length" class="phase-milestones">
-                <div v-for="m in phase.milestones" :key="m.name" class="milestone-item">
-                  <span class="ms-icon">{{ milestoneIcon(m.type) }}</span>
-                  <span>{{ m.name }}</span>
-                </div>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </template>
+      <template v-else
+        ><ul>
+          <li v-for="(g, i) in careerData.skill_gaps" :key="i">📌 {{ g }}</li>
+        </ul></template
+      >
+    </AppPanel>
+
+    <AppPanel v-if="visualPhases.length" class="career-section">
+      <template #title
+        >🛤️ 成长路线图（{{
+          careerData.visual_roadmap?.total_duration_months || '-'
+        }}个月）</template
+      >
+      <div class="roadmap">
+        <div v-for="phase in visualPhases" :key="phase.id" class="roadmap-phase">
+          <div class="phase-connector" :style="{ borderColor: phase.color }">
+            <div class="phase-dot" :style="{ background: phase.color }">
+              {{ phase.order }}
+            </div>
+          </div>
+          <div class="phase-card" :style="{ borderLeftColor: phase.color }">
+            <div class="phase-header">
+              <span class="phase-name">{{ phase.name }}</span>
+              <el-tag size="small" effect="plain">{{ phase.duration_months }}个月</el-tag>
+            </div>
+            <div class="phase-skills">
+              <el-tag
+                v-for="s in phase.skills"
+                :key="s"
+                size="small"
+                type="success"
+                effect="plain"
+                style="margin: 2px"
+                >{{ s }}</el-tag
+              >
+            </div>
+            <div v-if="phase.milestones?.length" class="phase-milestones">
+              <div v-for="m in phase.milestones" :key="m.name" class="milestone-item">
+                <span class="ms-icon">{{ milestoneIcon(m.type) }}</span>
+                <span>{{ m.name }}</span>
               </div>
-              <div v-if="phase.projects?.length" class="phase-projects">
-                <div v-for="p in phase.projects" :key="p.name" class="phase-project-item">
-                  <el-icon><Folder /></el-icon>
-                  <b>{{ p.name }}</b
-                  >：<span class="project-desc">{{ p.description }}</span>
-                  <el-tag v-for="t in p.tech_stack" :key="t" size="small" style="margin: 1px">{{
-                    t
-                  }}</el-tag>
-                </div>
+            </div>
+            <div v-if="phase.projects?.length" class="phase-projects">
+              <div v-for="p in phase.projects" :key="p.name" class="phase-project-item">
+                <el-icon><Folder /></el-icon>
+                <b>{{ p.name }}</b
+                >：<span class="project-desc">{{ p.description }}</span>
+                <el-tag v-for="t in p.tech_stack" :key="t" size="small" style="margin: 1px">{{
+                  t
+                }}</el-tag>
               </div>
             </div>
           </div>
         </div>
-        <div class="roadmap-dir" v-if="careerData.visual_roadmap?.career_direction">
-          🏁 最终方向：<strong>{{ careerData.visual_roadmap.career_direction }}</strong>
-        </div>
       </div>
-    </div>
+      <div class="roadmap-dir" v-if="careerData.visual_roadmap?.career_direction">
+        🏁 最终方向：<strong>{{ careerData.visual_roadmap.career_direction }}</strong>
+      </div>
+    </AppPanel>
 
-    <div v-if="careerData.project_recommendations?.length" class="panel career-section">
-      <div class="panel-header"><span>🔨 推荐项目实践</span></div>
-      <div class="panel-body">
-        <el-row :gutter="16">
-          <el-col
-            :span="12"
-            v-for="proj in careerData.project_recommendations"
-            :key="proj.project"
-            style="margin-bottom: 16px"
-          >
-            <div class="panel proj-card">
-              <div class="panel-body">
-                <div class="proj-header">
-                  <h4 class="proj-name">{{ proj.project }}</h4>
-                  <el-tag :type="complexityType(proj.complexity)" size="small" effect="dark">{{
-                    proj.complexity
-                  }}</el-tag>
-                </div>
-                <p class="proj-reason">{{ proj.reason }}</p>
-                <p v-if="proj.description" class="proj-desc">{{ proj.description }}</p>
-                <div class="proj-techs">
-                  <el-tag
-                    v-for="t in proj.tech_stack"
-                    :key="t"
-                    size="small"
-                    type="info"
-                    effect="plain"
-                    >{{ t }}</el-tag
-                  >
-                </div>
-                <div v-if="proj.learning_outcomes?.length" class="proj-outcomes">
-                  <span class="outcome-label">学到的技能：</span>
-                  <span v-for="o in proj.learning_outcomes" :key="o" class="outcome-item">{{
-                    o
-                  }}</span>
-                </div>
-                <div v-if="proj.estimated_time" class="proj-time">
-                  ⏱ 预估：{{ proj.estimated_time }}
-                </div>
+    <AppPanel v-if="careerData.project_recommendations?.length" class="career-section">
+      <template #title>🔨 推荐项目实践</template>
+      <el-row :gutter="16">
+        <el-col
+          :span="12"
+          v-for="proj in careerData.project_recommendations"
+          :key="proj.project"
+          style="margin-bottom: 16px"
+        >
+          <div class="panel proj-card">
+            <div class="panel-body">
+              <div class="proj-header">
+                <h4 class="proj-name">{{ proj.project }}</h4>
+                <el-tag :type="complexityType(proj.complexity)" size="small" effect="dark">{{
+                  proj.complexity
+                }}</el-tag>
+              </div>
+              <p class="proj-reason">{{ proj.reason }}</p>
+              <p v-if="proj.description" class="proj-desc">{{ proj.description }}</p>
+              <div class="proj-techs">
+                <el-tag
+                  v-for="t in proj.tech_stack"
+                  :key="t"
+                  size="small"
+                  type="info"
+                  effect="plain"
+                  >{{ t }}</el-tag
+                >
+              </div>
+              <div v-if="proj.learning_outcomes?.length" class="proj-outcomes">
+                <span class="outcome-label">学到的技能：</span>
+                <span v-for="o in proj.learning_outcomes" :key="o" class="outcome-item">{{
+                  o
+                }}</span>
+              </div>
+              <div v-if="proj.estimated_time" class="proj-time">
+                ⏱ 预估：{{ proj.estimated_time }}
               </div>
             </div>
-          </el-col>
-        </el-row>
-      </div>
-    </div>
+          </div>
+        </el-col>
+      </el-row>
+    </AppPanel>
 
-    <div v-if="careerData.industry_insight" class="panel career-section">
-      <div class="panel-header"><span>📈 行业洞察</span></div>
-      <div class="panel-body">
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <h5>当前趋势</h5>
+    <AppPanel v-if="careerData.industry_insight" class="career-section">
+      <template #title>📈 行业洞察</template>
+      <el-row :gutter="16">
+        <el-col :span="12">
+          <h5>当前趋势</h5>
+          <ul>
+            <li v-for="t in careerData.industry_insight.current_trends || []" :key="t">
+              {{ t }}
+            </li>
+          </ul>
+        </el-col>
+        <el-col :span="12">
+          <h5>热门技能</h5>
+          <el-tag
+            v-for="s in careerData.industry_insight.demanded_skills || []"
+            :key="s"
+            type="warning"
+            style="margin: 2px"
+            >{{ s }}</el-tag
+          >
+        </el-col>
+      </el-row>
+      <div v-if="careerData.industry_insight.career_alternatives?.length" class="mt">
+        <h5>可考虑的其他方向</h5>
+        <el-tag
+          v-for="alt in careerData.industry_insight.career_alternatives"
+          :key="alt"
+          type="info"
+          style="margin: 2px"
+          >{{ alt }}</el-tag
+        >
+      </div>
+      <div v-if="careerData.industry_insight.salary_range" class="mt salary-ref">
+        💰 薪资参考：<strong>{{ careerData.industry_insight.salary_range }}</strong>
+      </div>
+    </AppPanel>
+
+    <AppPanel class="career-section">
+      <template #title>📋 阶段计划</template>
+      <el-row :gutter="16">
+        <el-col :span="8">
+          <div class="plan-card plan-short">
+            <h4>短期计划</h4>
+            <div class="plan-tl">
+              {{ careerData.short_term_plan?.timeline || '1-3月' }}
+            </div>
             <ul>
-              <li v-for="t in careerData.industry_insight.current_trends || []" :key="t">
-                {{ t }}
+              <li v-for="g in careerData.short_term_plan?.goals || []" :key="g">
+                {{ g }}
               </li>
             </ul>
-          </el-col>
-          <el-col :span="12">
-            <h5>热门技能</h5>
-            <el-tag
-              v-for="s in careerData.industry_insight.demanded_skills || []"
-              :key="s"
-              type="warning"
-              style="margin: 2px"
-              >{{ s }}</el-tag
-            >
-          </el-col>
-        </el-row>
-        <div v-if="careerData.industry_insight.career_alternatives?.length" class="mt">
-          <h5>可考虑的其他方向</h5>
-          <el-tag
-            v-for="alt in careerData.industry_insight.career_alternatives"
-            :key="alt"
-            type="info"
-            style="margin: 2px"
-            >{{ alt }}</el-tag
-          >
-        </div>
-        <div v-if="careerData.industry_insight.salary_range" class="mt salary-ref">
-          💰 薪资参考：<strong>{{ careerData.industry_insight.salary_range }}</strong>
-        </div>
-      </div>
-    </div>
+            <div v-if="careerData.short_term_plan?.daily_routine" class="plan-routine">
+              <b>每日安排：</b>{{ careerData.short_term_plan.daily_routine }}
+            </div>
+          </div>
+        </el-col>
+        <el-col :span="8">
+          <div class="plan-card plan-mid">
+            <h4>中期计划</h4>
+            <div class="plan-tl">
+              {{ careerData.mid_term_plan?.timeline || '3-12月' }}
+            </div>
+            <ul>
+              <li v-for="g in careerData.mid_term_plan?.goals || []" :key="g">
+                {{ g }}
+              </li>
+            </ul>
+          </div>
+        </el-col>
+        <el-col :span="8">
+          <div class="plan-card plan-long">
+            <h4>长期计划</h4>
+            <div class="plan-tl">
+              {{ careerData.long_term_plan?.timeline || '1-3年' }}
+            </div>
+            <ul>
+              <li v-for="g in careerData.long_term_plan?.goals || []" :key="g">
+                {{ g }}
+              </li>
+            </ul>
+            <div v-if="careerData.long_term_plan?.target_companies" class="plan-targets">
+              🏢
+              <span v-for="c in careerData.long_term_plan.target_companies" :key="c">{{ c }} </span>
+            </div>
+          </div>
+        </el-col>
+      </el-row>
+    </AppPanel>
 
-    <div class="panel career-section">
-      <div class="panel-header"><span>📋 阶段计划</span></div>
-      <div class="panel-body">
-        <el-row :gutter="16">
-          <el-col :span="8">
-            <div class="plan-card plan-short">
-              <h4>短期计划</h4>
-              <div class="plan-tl">
-                {{ careerData.short_term_plan?.timeline || '1-3月' }}
-              </div>
-              <ul>
-                <li v-for="g in careerData.short_term_plan?.goals || []" :key="g">
-                  {{ g }}
-                </li>
-              </ul>
-              <div v-if="careerData.short_term_plan?.daily_routine" class="plan-routine">
-                <b>每日安排：</b>{{ careerData.short_term_plan.daily_routine }}
-              </div>
-            </div>
-          </el-col>
-          <el-col :span="8">
-            <div class="plan-card plan-mid">
-              <h4>中期计划</h4>
-              <div class="plan-tl">
-                {{ careerData.mid_term_plan?.timeline || '3-12月' }}
-              </div>
-              <ul>
-                <li v-for="g in careerData.mid_term_plan?.goals || []" :key="g">
-                  {{ g }}
-                </li>
-              </ul>
-            </div>
-          </el-col>
-          <el-col :span="8">
-            <div class="plan-card plan-long">
-              <h4>长期计划</h4>
-              <div class="plan-tl">
-                {{ careerData.long_term_plan?.timeline || '1-3年' }}
-              </div>
-              <ul>
-                <li v-for="g in careerData.long_term_plan?.goals || []" :key="g">
-                  {{ g }}
-                </li>
-              </ul>
-              <div v-if="careerData.long_term_plan?.target_companies" class="plan-targets">
-                🏢
-                <span v-for="c in careerData.long_term_plan.target_companies" :key="c"
-                  >{{ c }}
-                </span>
-              </div>
-            </div>
-          </el-col>
-        </el-row>
-      </div>
-    </div>
-
-    <div v-if="careerData.recommended_certifications?.length" class="panel career-section">
-      <div class="panel-header"><span>🎓 推荐证书</span></div>
-      <div class="panel-body">
-        <el-table :data="careerData.recommended_certifications" size="small">
-          <el-table-column prop="name" label="证书" />
-          <el-table-column prop="level" label="难度" width="80" />
-          <el-table-column prop="relevance" label="岗位关联度" width="200" />
-        </el-table>
-      </div>
-    </div>
+    <AppPanel v-if="careerData.recommended_certifications?.length" class="career-section">
+      <template #title>🎓 推荐证书</template>
+      <el-table :data="careerData.recommended_certifications" size="small">
+        <el-table-column prop="name" label="证书" />
+        <el-table-column prop="level" label="难度" width="80" />
+        <el-table-column prop="relevance" label="岗位关联度" width="200" />
+      </el-table>
+    </AppPanel>
 
     <el-alert
       v-if="careerData.overall_advice"
@@ -315,6 +295,7 @@
 </template>
 
 <script setup>
+import AppPanel from '@/components/ui/AppPanel.vue'
 import { Folder } from '@element-plus/icons-vue'
 
 import { complexityType, milestoneIcon } from '@/features/analysis/lib/analysisModel'

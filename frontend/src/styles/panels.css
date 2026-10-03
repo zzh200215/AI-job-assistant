@@ -198,6 +198,10 @@
   border-bottom: 1px solid var(--app-line);
 }
 
+.privacy-page .panel-body {
+  padding: 20px;
+}
+
 .register-page .panel-header {
   margin-bottom: 28px;
 }

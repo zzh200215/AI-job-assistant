@@ -119,6 +119,38 @@ function selftest() {
     null
   )
   chk('拒无 h3 的拒因', w.r.startsWith('5'), true)
+  // D99：prettier 把长标题折成三行的 h3，是同一条内容的另一种排版，必须照样认
+  const wrappedH3 = plan(
+    GOOD.flatMap((l) =>
+      l === '          <h3>标题</h3>'
+        ? ['          <h3>', '            标题', '          </h3>']
+        : [l]
+    ),
+    1,
+    w
+  )
+  chk(
+    '折成三行的 h3 仍算合格站点',
+    wrappedH3 && wrappedH3.block.includes('      <template #title>标题</template>'),
+    true
+  )
+  // 但"h3 里带图标"的那种（AnalysisResult:54）必须继续拒——并成一行会吞掉那个节点
+  const iconInH3 = plan(
+    GOOD.flatMap((l) =>
+      l === '          <h3>标题</h3>'
+        ? [
+            '          <h3>',
+            '            <el-icon class="is-loading"><Loading /></el-icon>',
+            '            标题',
+            '          </h3>',
+          ]
+        : [l]
+    ),
+    1,
+    w
+  )
+  chk('折行 h3 里有节点时仍然拒', iconInH3, null)
+  chk('那一处的拒因仍是 5', w.r.startsWith('5'), true)
   /* ---- #heading 那一支（决定 ①）：正反各两条，两向都要有，否则"新形状"只是没判 ---- */
   const HEADING_ONE = [
     '    <div class="panel side-panel">',
@@ -246,8 +278,9 @@ const BATCH = {
      否则这条批处理会在"顺手"之间把一次可见的语义改动混进搬家。 */
   InterviewReport: 0,
   RoomAside: 0,
-  CareerPlanPane: 0,
+  CareerPlanPane: 7,
   TranscriptPane: 0,
+  Privacy: 0,
 }
 const WRITE = process.argv.includes('--write')
 const FEATURES = fileURLToPath(new URL('../src/features/', import.meta.url))
@@ -362,7 +395,21 @@ function plan(L, i, why) {
   while (k < L.length && L[k] !== `${sp(headInd + 2)}</div>`) {
     const rel = sp(4) + L[k].slice(headInd + 4)
     if (!title && H3.test(rel)) title = rel.match(H3)[1]
-    else if (!icon && ICON.test(rel)) {
+    /* D99：标题文本长的时候 prettier 会把 h3 折成三行（`<h3>` / 文本 / `</h3>`），
+       那是**同一条内容**的另一种排版，不该被当成"无 h3"。收进来了就并成一行。
+       （判据此前只认单行，D99 在 CareerPlanPane 的"成长路线图"那一处上是它自己拒绝了一处真站点。） */
+    else if (!title && rel.trim() === '<h3>') {
+      const parts = []
+      k++
+      while (k < L.length && L[k].trim() !== '</h3>') {
+        parts.push(L[k].trim())
+        k++
+      }
+      /* 只并**纯文本**的折行 h3。AnalysisResult:54 那一处把 `is-loading` 图标写在 h3 **内部**
+         （§10.14 明写它"不需要决定、只需要别硬迁"）：并成一行会把那个节点当文本吞掉，
+         而且搬进 #title 之后会变成 h3 嵌 h3。所以带标签就仍然拒——保持原来的拒因 5。 */
+      if (parts.length && !parts.some((p) => p.includes('<'))) title = parts.join(' ')
+    } else if (!icon && ICON.test(rel)) {
       const mi = rel.match(ICON)
       icon = { color: mi[1], node: mi[2] }
     } else badge.push(L[k])
@@ -463,7 +510,10 @@ for (const [name, expect] of Object.entries(TARGETS)) {
   const noComment = L.join('\n')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*(\/\/).*$/gm, '$1')
-  const overrides = /\.panel-header\b/.test(noComment)
+  /* D99 扩了这一族：原来只看 `.panel-header`，于是 Privacy 的 `.panel-body { padding: 20px }`
+     从前提里漏过去，迁完之后每块面板静默少 8px 垂直内边距（是整页差分逮到的，不是判定器）。
+     `.panel` 不在这一族里——AppPanel 的**根**节点仍带调用方的 scope，那条规则照旧生效。 */
+  const overrides = /\.panel-(header|body|title-row)\b/.test(noComment)
   let done = 0
   let skipped = 0
   for (let i = L.length - 1; i >= 0; i--) {

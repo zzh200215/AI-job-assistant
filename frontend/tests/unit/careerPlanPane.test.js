@@ -100,3 +100,36 @@ describe('职业规划面板的四种数据形状', () => {
     expect(types).toEqual(['el-tag--danger', 'el-tag--info'])
   })
 })
+
+/* D99（§10.14 决定 ②）：这一屏的 7 个标题原先写成 `<div class="panel-header"><span>…</span></div>`，
+   判定器看不见这种一行式，于是它既没被迁、也**没有一条测试断言过标题的文字**。
+   span→h3 是候选人可见的改动（实测唯一变化的计算值是 font-weight 400 → 700），
+   所以这里把七个标题逐个钉住——搬进 AppPanel 之后少画任何一个，都会在这里红。 */
+describe('七个标题搬进 AppPanel 之后仍逐个在屏幕上', () => {
+  it('七个都是 .panel-title-row 里的 h3，文字一个都没丢、也没并错', () => {
+    const wrapper = render({
+      careerData: {
+        skill_radar: { dimensions: [{ name: 'Go', score: 6 }] },
+        skill_gaps: [{ skill: 'Rust', priority: '高', current_level: 2, target_level: 4 }],
+        visual_roadmap: { total_duration_months: 9, career_direction: '平台方向' },
+        project_recommendations: [{ name: '项目甲', description: '做一个' }],
+        industry_insight: { trends: ['趋势一'], career_alternatives: [], salary_range: null },
+        recommended_certifications: [{ name: '证书甲' }],
+        overall_advice: '先补并发',
+      },
+      hasStructuredSkillGaps: true,
+      visualPhases: [{ id: 1, title: '打基础', color: '#22b8e8' }],
+    })
+    expect(texts(wrapper, '.panel-title-row h3')).toEqual([
+      '📊 技能雷达',
+      '⚠️ 技能提升建议（1 项）',
+      '🛤️ 成长路线图（9个月）',
+      '🔨 推荐项目实践',
+      '📈 行业洞察',
+      '📋 阶段计划',
+      '🎓 推荐证书',
+    ])
+    // 一行式 span 已经不存在了：整页 `.panel-header` 里不该再有裸 span 当标题
+    expect(wrapper.findAll('.panel-header > span')).toHaveLength(0)
+  })
+})
