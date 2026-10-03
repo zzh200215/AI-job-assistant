@@ -179,7 +179,9 @@
           </div>
         </div>
       </div>
-      <div v-else class="empty-inline">暂无薄弱项数据，完成更多模拟面试后可分析</div>
+      <div v-else class="empty-inline">
+        {{ weakError || '暂无薄弱项数据，完成更多模拟面试后可分析' }}
+      </div>
     </AppPanel>
 
     <!-- 自我介绍生成器对话框 -->
@@ -436,6 +438,9 @@ async function refreshDaily() {
 // 薄弱知识点
 const weakLoading = ref(false)
 const weakAreas = ref([])
+/* 「读不到」不等于「没有」。GET 失败时请求层不弹提示（`viewsBypassingApiLayer` 那一族的历史），
+   所以这一格的空态必须自己说清是哪一种——`silentEmptyCatches` 那条守卫钉的就是"失败被清成空数据"。 */
+const weakError = ref('')
 
 // 薄弱项只分两档，但分界来自面试档位（warn 从 55 起），不再是本页自己抄的 50：
 // 50-54 在面试报告里是"偏弱"，这里就不能还显示成"只是警告"。
@@ -444,35 +449,29 @@ const weakAreaTag = (score) =>
 
 async function loadWeakAreas() {
   weakLoading.value = true
+  weakError.value = ''
   try {
-    // 从面试表现分析中提取薄弱项
+    /* 后端这份响应用的是 `weaknesses`（`interview_rest.py:826-829`：按维度均分 <65 挑好，名字已经过
+       `dim_labels` 本地化成"完整性/准确性/深度/表达力"）。这一页原先读的是 `perf.dimensions`——
+       **那个键在这份响应里不存在**（同名的 `dimensions` 属于匹配解释那份载荷，`match_explainer_service.py:79`），
+       所以这条真数据分支从上线起一次都没进过，每次都掉到下面那段
+       `Math.floor(Math.random() * 40 + 30)` 造的"薄弱项"上（§10.6 挂的就是那段随机数）。
+       阈值也跟着回到服务端那一把尺子（<65），不再用页面自己抄的 70——反正那条路没跑过。 */
     const perf = await import('@/api/interview').then(
       (m) => m.getPerformanceTrend?.() || Promise.resolve(null)
     )
-    if (perf?.dimensions) {
-      weakAreas.value = Object.entries(perf.dimensions)
-        .filter(([, v]) => v < 70)
-        .map(([k, v]) => ({ name: k, score: v, desc: '该维度需要加强训练' }))
-      weakLoading.value = false
-      return
-    }
-  } catch {
-    // 无法获取趋势时继续基于本地面试记录计算。
-  }
-  // fallback: 根据面试记录分析
-  const completed = sessions.value.filter((s) => s.overall_score)
-  if (completed.length >= 2) {
-    const dims = ['技术深度', '表达能力', '逻辑思维', '项目经验', '行为面试']
-    weakAreas.value = dims
-      .map((d) => ({
-        name: d,
-        score: Math.floor(Math.random() * 40 + 30),
-        desc: `建议加强${d}方向训练`,
-      }))
+    const weaknesses = Array.isArray(perf?.weaknesses) ? perf.weaknesses : []
+    weakAreas.value = weaknesses
+      .map((w) => ({ name: w.dimension, score: w.avg_score, desc: '该维度需要加强训练' }))
       .sort((a, b) => a.score - b.score)
-      .slice(0, 3)
+  } catch (e) {
+    /* 读不到就是读不到，不许演成"你没有薄弱项"（那是 silentEmptyCatches 那一维钉的东西），
+       更不许像原来那样用三个随机数顶上去（§10.6 拍的就是那段）。 */
+    weakAreas.value = []
+    weakError.value = e?.userMessage || e?.message || '暂时读不到面试表现，稍后再试'
+  } finally {
+    weakLoading.value = false
   }
-  weakLoading.value = false
 }
 
 function showWeakDetail(_area) {
