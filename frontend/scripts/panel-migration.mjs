@@ -157,8 +157,38 @@ const BATCH = {
   RecommendationEval: 0,
 }
 const WRITE = process.argv.includes('--write')
-const VIEWS = fileURLToPath(new URL('../src/features/', import.meta.url))
+const FEATURES = fileURLToPath(new URL('../src/features/', import.meta.url))
 if (process.argv.includes('--selftest')) selftest()
+
+/**
+ * 视图的真实位置。**这里曾经是一句 `readdirSync(VIEWS).filter(.vue)`**，而 D33 把所有视图搬进
+ * `src/features/<域>/views/` 之后，`src/features/` 这一层里一个 `.vue` 都没有——于是 `--all` 报的
+ * "命中 0 / 纯 drop-in 见底"是**空目录换来的**，那之后关于"剩下的都卡在 API 决定上"的结论没有测量支撑
+ * （写在 D96 的账里）。现在递归找，并且**打印扫到多少个文件**：扫到 0 个就当次运行无效。
+ */
+function discoverViews(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const full = dir + e.name
+    if (e.isDirectory()) return discoverViews(`${full}/`)
+    // 判定原先只认 `/views/`，于是**已抽进面板组件的那 11 处从来没被看过**（D96 量到的 35 = 24 视图
+    // + 11 组件）。判定逻辑与文件所在层无关，所以两群一起扫。
+    return e.name.endsWith('.vue') && /\/(views|components)\//.test(full) ? [full] : []
+  })
+}
+const VIEW_PATHS = (() => {
+  const byName = {}
+  for (const full of discoverViews(FEATURES)) {
+    const name = full.split('/').pop().slice(0, -4)
+    if (byName[name]) {
+      console.error(
+        `视图名撞车：${name}（${byName[name]} 与 ${full}）——判定器按名取文件，先解决歧义`
+      )
+      process.exit(1)
+    }
+    byName[name] = full
+  }
+  return byName
+})()
 
 /** 返回该 panel-header 的迁移方案，或 null（不合格）。 */
 function plan(L, i, why) {
@@ -261,15 +291,18 @@ if (ALL && WRITE) {
   console.error('--all 是统计模式，不能同时 --write')
   process.exit(1)
 }
-const TARGETS = ALL
-  ? Object.fromEntries(
-      readdirSync(VIEWS)
-        .filter((f) => f.endsWith('.vue'))
-        .map((f) => [f.slice(0, -4), null])
-    )
-  : BATCH
+const TARGETS = ALL ? Object.fromEntries(Object.keys(VIEW_PATHS).map((n) => [n, null])) : BATCH
+if (ALL && !Object.keys(TARGETS).length) {
+  console.error('扫到 0 个视图 —— 文件发现坏了，这次的"0"不算结论')
+  process.exit(1)
+}
+if (ALL) console.log(`扫到视图 ${Object.keys(TARGETS).length} 个（按 src/features/**/views/*.vue）`)
 for (const [name, expect] of Object.entries(TARGETS)) {
-  const p = VIEWS + `${name}.vue`
+  const p = VIEW_PATHS[name]
+  if (!p) {
+    console.error(`${name}: 在 src/features/**/views/ 里找不到这个视图 —— 名单过期，先更正`)
+    process.exit(1)
+  }
   let L = readFileSync(p, 'utf8').split('\n')
   // 前提：该视图自己没有 `.panel-header` 的 scoped 规则——标记搬进 AppPanel 后父组件的规则就匹配
   // 不到它了（scoped CSS 只作用于本组件模板节点 + 子组件根）。注释里的类名不算，所以先剥注释。
