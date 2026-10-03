@@ -10,8 +10,17 @@
  */
 
 const PREFIX = 'recruit'
-const LABEL = { resume: 'lastResumeId', jd: 'lastJDId', record: 'lastRecordId' }
-const FIELDS = ['resume', 'jd', 'record']
+/* `defaultResume` 是 D102 加进来的第四个字段。它和另外三个是同一件事（"上一次选了哪份简历"），
+   此前却写在**全局键** `recruit.defaultResumeId` 上：换过账号的浏览器会把上一个人的默认版本
+   带给下一个人，而简历列表里那一行会因此标成"投递中"、`activeResume` 也跟着选错。
+   加进 LABEL 之后它自动享有同一套按用户分槽 + 登录时清 guest 槽与旧全局键的处置。 */
+const LABEL = {
+  resume: 'lastResumeId',
+  jd: 'lastJDId',
+  record: 'lastRecordId',
+  defaultResume: 'defaultResumeId',
+}
+const FIELDS = ['resume', 'jd', 'record', 'defaultResume']
 
 const slot = { uid: null }
 
@@ -53,6 +62,14 @@ export function forgetJD() {
 
 export function rememberRecord(id) {
   writeField('record', id)
+}
+
+export function rememberDefaultResume(id) {
+  writeField('defaultResume', id)
+}
+
+export function readDefaultResumeId() {
+  return readField('defaultResume')
 }
 
 export function readRecordId() {

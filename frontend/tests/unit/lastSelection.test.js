@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   forgetJD,
+  readDefaultResumeId,
   readJDId,
   readRecordId,
   readResumeId,
+  rememberDefaultResume,
   rememberJD,
   rememberRecord,
   rememberResume,
@@ -84,5 +86,30 @@ describe('lastSelection 按登录用户分槽', () => {
 
     rememberResume(undefined)
     expect(readResumeId()).toBeNull()
+  })
+})
+
+/* D102：`recruit.defaultResumeId` 以前是**全局键**，由 ResumeUpload 自己读写。
+   后果不是风格问题：共享浏览器里换过账号，上一个人的默认版本会嫁到下一个人头上——
+   列表里那一行标成"投递中"、`activeResume` 也跟着选错。现在它和另外三个键共用同一套分槽。 */
+describe('默认简历也按登录用户分槽', () => {
+  it('两个账号各记各的，互不嫁人', () => {
+    setSelectionOwner(1)
+    rememberDefaultResume(11)
+    expect(readDefaultResumeId()).toBe(11)
+
+    setSelectionOwner(2)
+    expect(readDefaultResumeId()).toBeNull() // 不是 11
+    rememberDefaultResume(12)
+
+    setSelectionOwner(1)
+    expect(readDefaultResumeId()).toBe(11)
+  })
+
+  it('登录时把旧的全局键一起清掉（迁移期留下的那份）', () => {
+    localStorage.setItem('recruit.defaultResumeId', '11')
+    setSelectionOwner(7)
+    expect(localStorage.getItem('recruit.defaultResumeId')).toBeNull()
+    expect(readDefaultResumeId()).toBeNull()
   })
 })

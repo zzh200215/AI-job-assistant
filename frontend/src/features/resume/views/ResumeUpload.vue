@@ -560,7 +560,7 @@ import {
   scoreToneFillClass,
 } from '@/utils/scoreTone'
 import { monthDay } from '@/utils/format/date'
-import { rememberResume } from '@/utils/lastSelection'
+import { readDefaultResumeId, rememberDefaultResume, rememberResume } from '@/utils/lastSelection'
 
 const router = useRouter()
 
@@ -702,7 +702,8 @@ async function applyRewrites() {
 // 脱敏
 const desensitized = ref(false)
 
-const LS_DEFAULT_KEY = 'recruit.defaultResumeId'
+/* 默认版本走 `utils/lastSelection`：与 lastResumeId 同一套按登录用户分槽的机制（D102）。
+   原先它写在全局键上，换账号后上一个人的默认版本会嫁到下一个人头上。 */
 
 const activeResume = computed(
   () => resumes.value.find((item) => item.id === defaultResumeId.value) || resumes.value[0] || null
@@ -712,7 +713,7 @@ const scoredResumeCount = computed(
 )
 
 onMounted(() => {
-  defaultResumeId.value = Number(localStorage.getItem(LS_DEFAULT_KEY)) || null
+  defaultResumeId.value = readDefaultResumeId()
   loadList()
 })
 
@@ -862,7 +863,7 @@ async function parseResumeRow(r) {
 
 function setDefaultResumeRow(r) {
   defaultResumeId.value = r.id
-  localStorage.setItem(LS_DEFAULT_KEY, String(r.id))
+  rememberDefaultResume(r.id)
   ElMessage.success('已设为默认简历')
 }
 

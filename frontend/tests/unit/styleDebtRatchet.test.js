@@ -732,8 +732,17 @@ describe('style debt ratchet', () => {
 
   it('keeps the cross-page "last selection" handoff inside utils/lastSelection', () => {
     // 匹配字段名而不是完整键名：`storageKey('lastResumeId')` 这种自己拼前缀的写法要一起抓到。
+    /* D102：判据原先只认 `last*`，于是 `recruit.defaultResumeId` 这个**同一种状态**从这条腿底下
+       走了很久——它写在视图里、全局键、跨账号存活。
+       但放宽不能放宽成"认标识符"：第一版写成 /(last|default)(ResumeId|...)/ 之后，它把
+       `defaultResumeId.value = ...` 这种**局部变量名**也判成违规（假阳性，同一族第三次以新面目出现：
+       尺子在数文本而不是数东西）。所以只认**字符串字面量里的键名**。 */
     const offenders = viewSources
-      .filter(({ script, template }) => /last(ResumeId|JDId|RecordId)/.test(`${script}${template}`))
+      .filter(({ script, template }) =>
+        /['"](?:recruit\.)?(?:last|default)(?:ResumeId|JDId|RecordId)['"]/.test(
+          `${script}${template}`
+        )
+      )
       .map(({ rel }) => rel)
     expect(
       offenders,
