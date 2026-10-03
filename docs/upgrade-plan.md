@@ -2623,6 +2623,18 @@ D88/D89 把 A③（`unplugin` 换掉两份手写清单）收在"不做"，依据
 
 **A 的终账（D87–D90）**：① router 类型 + 五条重定向复核 ✅；② 表格/分页共享层 ⏳ 未动代码（测量见 D87：非冻结侧 9 个表格点里 `v-loading` 2、`stripe` 5、列数 3~12，分页只剩 1 处候选人侧）；③ 自动导入 ✅（本条，按指令落地并记账）；④ 会话键收进 `utils/session.js` + 守卫 ✅；⑤ §1/§7/§8 的账改到与树一致 ✅。
 
+#### 已交付：D91 A② 做完了——但做完的不是"AppTable 外壳"，是同一格里那件没收的真活（`993b927`）
+
+开单（D90 末尾）写的是"把三态收进 `AppTable`/`AppPagination`"。开工第一步先把 9 个非冻结表格点的**开标签属性**拉出来对齐，结论是**这层壳不成立**：差别恰好就是外观本身——`stripe` 5 个、`size="small"` 4 个、`v-loading` 只有 2 个、分页候选人侧只剩 `History.vue` 一处（`ListPane` 那格还有 selection + 12 列）。包一层只会转发 `$attrs`，那不是我说的"有内容的层"。
+
+**同一格 §7 阶段 1 里还有半件真没收的**：那句"AppTag（**唯一状态色表**）"。实测 `高/中/低 → danger/warning/info` 这串三元式在 **5 个地方各写一遍**（`SkillsPane`、`History` 详情、`CareerPlanPane`、`ReportSummaryPane`、`MultiAgentAnalysis`），而唯一出处 `utils/statusTone.js` 里只有 `priorityTagType`（管"优先投递/值得投递"那套文案，另一个域）。所以这一刀做的是它：新增 `levelTagType`，未知值与 `tagTypeFor` 同口径退 info；**两处刻意不并**（`CareerPlanning.vue` 的投递策略是两段式、没有 info 档，`complexityType` 是简单/中等/困难另一个域），并在函数注释里点名。
+
+**一条实测的意外，比这一刀本身更该记住**：迁完之后 `statusTagEntries` 预算**一分未动**——那把尺子数的是 `键: '颜色'` 形态，`x === '高' ? 'danger' : …` 三元式**根本不在它口径里**。也就是说这五处重复是**守卫盲区里的重复**，收它的理由是"颜色只有一个出处"，不是"让某个数字下降"；`statusTone.js` 的注释里把这句话写死了，免得下一轮又以为有门在看着这类漂移。补的判据自带防回归：`statusToneLevels.test.js` 一条测**等价**（三档逐字相同 + 未知退 info），一条测**不许长回来**（全仓扫三元式，白名单当前恰好只有 `CareerPlanning.vue`）。既有面板断言（`skillsPane.test.js` 等钉的是渲染出来的 tag 类型）就是"观感没变"的证明。
+
+**顺一条自己造的坑**：新测试第一版用 `process.cwd()` 拼相对路径，`eslint` 直接 error（`tests/**` 没有 `process` 全局，只有 `scripts/**` 有）——`npm run test:unit` 绿、`eslint` 红，再次证明**门禁要一条条按退出码判，不能挑一条绿的报**。改成从 `src` 直接走相对路径。
+
+**门禁**：typecheck **42**（未动）、`test:unit` **77 files / 461 passed**（+2）、`npm test` / `eslint` / `prettier --check` / `vite build` 全 exit 0、构建总量 **2242.61 kB**（与 D90 落地后的 2242.63 kB 同，即这一刀不改变包体积）、7 个文件 CR 0。真实 diff：`statusTone.js` +22、新测试 39 行、5 个页面各减一段三元式。**A 的五项到此全部完成**：① router、② 本条、③ 自动导入（D90 覆盖落地）、④ 会话键、⑤ 改账。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
