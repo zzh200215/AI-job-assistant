@@ -800,7 +800,7 @@ async function seedData() {
       await loadRecommendations()
     }
   } catch (e) {
-    ElMessage.error('生成失败: ' + (e.message || e))
+    ElMessage.error('生成失败: ' + userErrorCopy(e, '网络异常，请稍后重试'))
   } finally {
     loading.seed = false
   }
@@ -814,7 +814,7 @@ async function handleImport(file) {
       await loadRecommendations()
     }
   } catch (e) {
-    ElMessage.error('导入失败: ' + (e.message || e))
+    ElMessage.error('导入失败: ' + userErrorCopy(e, '网络异常，请稍后重试'))
   }
   return false // 阻止默认上传
 }
@@ -831,7 +831,7 @@ async function analyzeJob(jdId) {
     }
     router.push('/smart-analysis')
   } catch (e) {
-    ElMessage.error('分析启动失败: ' + (e.message || e))
+    ElMessage.error('分析启动失败: ' + userErrorCopy(e, '网络异常，请稍后重试'))
   } finally {
     analyzingId.value = null
   }

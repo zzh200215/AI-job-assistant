@@ -340,6 +340,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -563,10 +564,10 @@ const onAnalyze = async () => {
         tab.value = 'match'
       },
       onFailed(error) {
-        ElMessage.error(`分析失败: ${error.message || '未知错误'}`)
+        ElMessage.error(`分析失败: ${userErrorCopy(error, '未知错误')}`)
       },
       onCancelled(error) {
-        ElMessage.warning(error.message || '分析任务已取消')
+        ElMessage.warning(userErrorCopy(error, '分析任务已取消'))
       },
       onTimeout() {
         ElMessage.warning('分析超时，请稍后刷新查看结果')

@@ -1,5 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+
+import { userErrorCopy } from '@/utils/requestTracing'
 import {
   connectInterviewWS,
   createInterview,
@@ -101,7 +103,8 @@ export const useInterviewStore = defineStore('interview', () => {
       totalQuestions.value = data.total_questions || 0
       return data
     } catch (error) {
-      errorMsg.value = `创建面试失败: ${error.message || error}`
+      // 文案走请求层那一句（`userErrorCopy` 只认服务端给的 userMessage），原始串留给 `throw` 之后的日志
+      errorMsg.value = userErrorCopy(error, '创建面试失败，请检查简历和岗位配置后重试')
       status.value = 'error'
       throw error
     }
@@ -159,7 +162,11 @@ export const useInterviewStore = defineStore('interview', () => {
       sessionId,
       (data) => handleWSMessage(data),
       (err) => {
-        errorMsg.value = `连接错误: ${err.message || err}`
+        /* WebSocket 的失败对象走不到请求层（没有 `userMessage` 可读），所以这里不能像其它站点那样
+           直接插 `err.message`：那是一句库内部文案、甚至是一个 CloseEvent 对象。给候选人一句人能读的，
+           原始信息进日志。 */
+        console.error('面试 WebSocket 连接失败', err)
+        errorMsg.value = '面试连接断了，请检查网络后重新进入房间'
         status.value = 'error'
         stopRoundTimer()
       },

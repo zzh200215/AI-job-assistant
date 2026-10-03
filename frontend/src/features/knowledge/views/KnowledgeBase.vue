@@ -603,6 +603,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
@@ -819,7 +820,7 @@ async function doUpload({ file }) {
     ElMessage.success('上传完成')
     await loadList()
   } catch (error) {
-    uploadError.value = error.message || '上传失败'
+    uploadError.value = userErrorCopy(error, '上传失败')
     uploadProgress.value = 0
   } finally {
     uploading.value = false

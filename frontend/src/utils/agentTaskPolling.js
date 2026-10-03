@@ -39,7 +39,7 @@ export function createAgentTaskPoller(apiClient, runtimeOptions = {}) {
       failureStatuses = ['failed'],
       cancelledStatuses = ['cancelled'],
       failedMessage,
-      cancelledMessage = 'Agent task was cancelled',
+      cancelledMessage = '任务已取消',
       timeoutMessage,
       onProgress,
       onCompleted,

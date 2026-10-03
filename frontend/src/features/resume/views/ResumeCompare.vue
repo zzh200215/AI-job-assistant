@@ -394,7 +394,7 @@ async function loadWorkspace(preferredVersionId = null) {
     setDraftsFromSelected()
   } catch (error) {
     if (!isCurrent()) return
-    errorMsg.value = error.message || '加载简历工作台失败'
+    errorMsg.value = userErrorCopy(error, '加载简历工作台失败')
   } finally {
     if (isCurrent()) loading.value = false
   }
@@ -453,7 +453,7 @@ async function onSave() {
       ElMessage.success('版本已保存')
     }
   } catch (error) {
-    errorMsg.value = error.message || '保存失败'
+    errorMsg.value = userErrorCopy(error, '保存失败')
   } finally {
     saving.value = false
   }
@@ -466,7 +466,7 @@ async function onGenerate() {
     await loadWorkspace(result.version_id)
     ElMessage.success('AI 优化版已生成')
   } catch (error) {
-    errorMsg.value = error.message || 'AI 优化失败'
+    errorMsg.value = userErrorCopy(error, 'AI 优化失败')
   } finally {
     generating.value = false
   }
@@ -484,7 +484,7 @@ async function onTailor() {
     if (tailored) selectedId.value = tailored.id
     ElMessage.success('已生成目标岗位定制版')
   } catch (error) {
-    errorMsg.value = error.message || '定制失败'
+    errorMsg.value = userErrorCopy(error, '定制失败')
   } finally {
     tailoring.value = false
   }
@@ -507,7 +507,7 @@ async function onRecommendVersion() {
       ElMessage.success('已切换到推荐版本')
     }
   } catch (error) {
-    errorMsg.value = error.message || '获取版本推荐失败'
+    errorMsg.value = userErrorCopy(error, '获取版本推荐失败')
   } finally {
     recommending.value = false
   }
@@ -529,7 +529,7 @@ async function onPreviewAts() {
       if (version) version.ats_snapshot = atsResult.value
     }
   } catch (error) {
-    errorMsg.value = error.message || 'ATS 预览失败'
+    errorMsg.value = userErrorCopy(error, 'ATS 预览失败')
   } finally {
     atsLoading.value = false
   }
@@ -549,7 +549,7 @@ async function loadDiff() {
     diffResult.value = data
   } catch (error) {
     if (!isCurrent()) return
-    errorMsg.value = error.message || '加载版本差异失败'
+    errorMsg.value = userErrorCopy(error, '加载版本差异失败')
   }
 }
 
@@ -565,7 +565,7 @@ async function setSuggestionDecision(index, decision) {
     if (version) version.suggestion_decisions = result.suggestion_decisions
     ElMessage.success(decision === 'accepted' ? '已标记为采纳' : '已标记为忽略')
   } catch (error) {
-    errorMsg.value = error.message || '保存建议状态失败'
+    errorMsg.value = userErrorCopy(error, '保存建议状态失败')
   } finally {
     decisionBusy.value = false
   }
@@ -597,7 +597,7 @@ async function onExport(format) {
     URL.revokeObjectURL(url)
     ElMessage.success(`${format.toUpperCase()} 已导出`)
   } catch (error) {
-    errorMsg.value = error.message || '导出失败'
+    errorMsg.value = userErrorCopy(error, '导出失败')
   } finally {
     exporting.value = false
   }

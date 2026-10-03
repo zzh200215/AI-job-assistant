@@ -736,6 +736,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
 import { useRouter } from 'vue-router'
@@ -1049,7 +1050,7 @@ async function onSubmitPlanning() {
   }
   const outcome = await startCareerPlanning()
   if (!outcome.ok) {
-    ElMessage.error(outcome.error?.message || '职业规划生成失败')
+    ElMessage.error(userErrorCopy(outcome.error, '职业规划生成失败'))
   }
 }
 

@@ -103,6 +103,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
@@ -274,8 +275,8 @@ async function selectPlan(plan) {
       await loadUserSubscription()
     }
   } catch (e) {
-    payResult.value = { success: false, order_id: null, message: e.message || '支付失败' }
-    ElMessage.error('支付失败: ' + (e.message || '请稍后重试'))
+    payResult.value = { success: false, order_id: null, message: userErrorCopy(e, '支付失败') }
+    ElMessage.error('支付失败: ' + userErrorCopy(e, '请稍后重试'))
   } finally {
     paying.value = false
   }

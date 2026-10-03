@@ -122,6 +122,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
@@ -271,7 +272,7 @@ onMounted(async () => {
     store.hydrateSession(detail)
     store.startWS(sessionId)
   } catch (error) {
-    ElMessage.error(error.message || '加载面试详情失败')
+    ElMessage.error(userErrorCopy(error, '加载面试详情失败'))
     router.push('/interview/setup')
   }
 })

@@ -253,6 +253,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -406,7 +407,7 @@ async function loadReport() {
       reportRefreshTimer = setTimeout(loadReport, 2000)
     }
   } catch (error) {
-    ElMessage.error(`加载报告失败: ${error.message || error}`)
+    ElMessage.error(`加载报告失败: ${userErrorCopy(error, '网络异常，请稍后重试')}`)
   } finally {
     loading.value = false
   }

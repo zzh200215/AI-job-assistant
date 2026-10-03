@@ -834,7 +834,7 @@ const customUpload = async ({ file }) => {
     showUpload.value = false
     await loadList()
   } catch (e) {
-    uploadError.value = e.message || '上传失败'
+    uploadError.value = userErrorCopy(e, '上传失败')
   } finally {
     uploading.value = false
   }

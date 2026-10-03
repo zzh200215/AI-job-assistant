@@ -573,7 +573,7 @@ async function loadById() {
     questionData.value = rec
     rememberRecord(rec?.record_id || rec?.id || recordId.value)
   } catch (e) {
-    ElMessage.error(`加载失败：${e.message}`)
+    ElMessage.error(`加载失败：${userErrorCopy(e, '网络异常，请稍后重试')}`)
   } finally {
     questionLoading.value = false
   }

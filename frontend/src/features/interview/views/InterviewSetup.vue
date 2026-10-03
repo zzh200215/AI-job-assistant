@@ -265,6 +265,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -534,7 +535,7 @@ async function startInterview() {
     ElMessage.success(`面试已创建，共 ${session.total_questions} 道题，正在进入面试房间`)
     router.push(`/interview/room/${session.id}`)
   } catch (error) {
-    ElMessage.error(error?.message || '创建面试失败，请检查简历和岗位配置后重试')
+    ElMessage.error(userErrorCopy(error, '创建面试失败，请检查简历和岗位配置后重试'))
   } finally {
     loading.start = false
   }

@@ -466,6 +466,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
@@ -755,11 +756,11 @@ const onStartAnalysis = async () => {
       },
       onFailed(error) {
         taskOutcome.value = 'failed'
-        ElMessage.error(`智能分析失败: ${error.message || '未知错误'}`)
+        ElMessage.error(`智能分析失败: ${userErrorCopy(error, '未知错误')}`)
       },
       onCancelled(error) {
         taskOutcome.value = 'cancelled'
-        ElMessage.warning(error.message || 'Agent task was cancelled')
+        ElMessage.warning(userErrorCopy(error, '分析任务已取消'))
       },
       onTimeout() {
         taskOutcome.value = 'timeout'

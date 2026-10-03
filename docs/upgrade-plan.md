@@ -2826,9 +2826,33 @@ B 桶（"需要你点的"那 17 条）不能整桶做，但可以整桶**复测*
 
 **门禁**：typecheck **42**（未动）、`test:unit` **82 files / 489 passed**（+1 条七标题断言）、`npm test` / `eslint` / `prettier --check` / `vite build` 全 exit 0、构建总量 **2239.58 kB**（比 D98 的 2240.57 少 0.99）。
 
+#### 已交付：D100 D92 那次"错误文案收口"只收了一半——判据要求前面有 `userMessage ||`，剩下 27 处照旧上屏
+
+B 桶复测（任务 B①：审计每把尺子真正扫到什么）第一次就出东西。D92 的守卫 `RAW_COPY_FALLBACK` 认的是 `x?.userMessage || x?.message || '…'` 这个**形状**，所以它把"已经收干净"报成了"这一族没有了"；把判据换成按**绑定**认之后，当场又扫出 **27 处**：这些站点**连 `userMessage` 都不读**，直接把 `catch (error)` 里的 `error.message` 插进提示——请求层 D92 修得再好也管不到它们，屏幕上照样是 `Network Error` / `timeout of 60000ms exceeded`。
+
+| 形态 | 原写法 | 处数 |
+|---|---|---|
+| A 赋值式 | `errorMsg.value = error.message \|\| '保存失败'` | 15（`ResumeCompare` 9、`Subscription` 2、`ResumeUpload`、`KnowledgeBase`、`ExplainMatch`、`InterviewRoom`） |
+| B 插值式 | `` ElMessage.error(`分析失败: ${error.message || '未知错误'}`) `` | 7（`AnalysisResult` 2、`SmartAnalysis` 2、`Interview`、`InterviewReport`、`InterviewSetup`） |
+| C 拼串 + `\|\| e` | `ElMessage.error('生成失败: ' + (e.message \|\| e))`——`\|\| e` 会把**整个 Error 对象** stringify 上屏 | 3（`JobRecommend`）+ `InterviewReport` 一处 |
+| D 结果对象 | `outcome.error?.message \|\| '职业规划生成失败'`（运行链把异常收进返回值，不是 catch 绑定） | 1（`CareerPlanning`） |
+| E 回调 | `catch (error)` 里 `${error.message \|\| error}` | 1（`stores/interview.js`，脚本没覆盖到、手改） |
+
+**顺带三件**：① `Interview.vue:576` 是 `` `加载失败：${e.message}` ``——**连兜底都没有**，网络层失败时屏幕上是 `加载失败：undefined`；② 英文不是全都来自 Error，`utils/agentTaskPolling.js:42` 的默认值 `cancelledMessage = 'Agent task was cancelled'` 是**我们自己写死的英文**，`SmartAnalysis` 用的是默认值而 `AnalysisResult` 传了中文——同一个动作两种语言，改默认值为「任务已取消」并把 `SmartAnalysis` 的兜底对齐；③ WebSocket 那条失败走不到请求层（没有 `userMessage` 可读），原来 `连接错误: ${err.message || err}` 会把库内部串甚至一个 `CloseEvent` 印给候选人，改成固定中文句 + `console.error` 留原始对象。
+
+**判据跟着换成行为判据**（`userCopySingleSource.test.js`）：认 `catch (X)` / `onFailed(X)` 绑定名与 `.error?.message`，**不认变量名**。附带好处是 `data.message`、`overview.message` 这些**服务端载荷字段**天然不误判，不需要维护白名单（上一版要靠两个文件名的白名单）。反向证据五段：四种旧写法各命中一次、载荷字段与"不是 catch 绑定的同名变量"各命中 0、落地写法命中 0。
+
+**工具**：`scripts/error-copy-phase2.mjs`，逐文件期望计数（14 个文件、共 26 处）+ `.vue` 的 import 落点必须在 `<script>`…`</script>` 之间（这条是 D98 那个"import 掉到 `</style>` 之后"的教训直接搬过来的）。它自己也被计数断言拦过两次：正则把 `?.` 写成 `(?:\?\.)?` 会吃掉点号（InterviewSetup 那处实到 0），以及 `stores/interview.js` 那条回调参数不在绑定族里——两次都是**不写盘**，不是写坏之后再修。
+
+**一条未结的观测，按观测记**：这一轮三次全量跑各红在不同的单个文件（第一次 7 条、第二次 1 条 `workspaceRoutes`、第三次 0 条），红的那些单独跑都是绿的。指向的是 `tests/unit` 并行下的墙钟敏感（竞态用例依赖真实 700ms/秒级 settle），**不是这批改动引入的逻辑错**；但我没有把它当"偶发"划掉——下一轮该量的是"并行度 × 最慢用例"的分布，判据是**抬高时钟上限**而不是放宽断言（D68 的先例）。
+
+**门禁**：typecheck **42**（未动）、`test:unit` **82 files / 489 passed**、`npm test` / `eslint` / `prettier --check` / `vite build` 全 exit 0、构建 **2239.75 kB**。§10 的 open 不变（14），但 B① 这条审计已经证明"0 只覆盖一部分"这一族还有得挖——`statusTagEntries`（D91）、`silentEmptyCatches`（D92）、`viewsBypassingApiLayer`（D95）、迁移前提（D99）、这一条的文案判据（D100）是连续第五次。
+
+
+
+
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
-
-
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
 

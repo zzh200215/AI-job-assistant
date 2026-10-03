@@ -150,6 +150,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import { ref, reactive, computed } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
 import { explainMatch } from '@/api/analysis'
@@ -171,7 +172,7 @@ async function doExplain() {
     const data = await explainMatch({ resume_id: form.resume_id, jd_id: form.jd_id })
     result.value = data
   } catch (e) {
-    ElMessage.error(e.message || '解释失败')
+    ElMessage.error(userErrorCopy(e, '解释失败'))
   } finally {
     loading.value = false
   }
