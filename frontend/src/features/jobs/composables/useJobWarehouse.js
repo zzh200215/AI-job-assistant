@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { userErrorCopy } from '@/utils/requestTracing'
 import { getJobList } from '@/api/jobs'
 import { useLatestCall } from '@/composables/useLatestCall'
 import { normalizeJob } from '@/features/jobs/lib/jobModel'
@@ -47,7 +48,7 @@ export function useJobWarehouse({ city }) {
     } catch (e) {
       if (!isCurrent()) return
       localJobs.value = []
-      localError.value = e?.userMessage || e?.message || '本地岗位仓库加载失败，请稍后重试'
+      localError.value = userErrorCopy(e, '本地岗位仓库加载失败，请稍后重试')
     } finally {
       if (isCurrent()) localLoading.value = false
     }

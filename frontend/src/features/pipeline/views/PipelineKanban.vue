@@ -263,6 +263,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -402,7 +403,7 @@ async function loadResumeVersions() {
     resumeVersions.value = data?.items || []
   } catch (e) {
     resumeVersions.value = []
-    versionError.value = e?.userMessage || e?.message || '暂时无法读取简历版本列表'
+    versionError.value = userErrorCopy(e, '暂时无法读取简历版本列表')
   }
 }
 
@@ -467,8 +468,9 @@ async function handleAdd() {
 }
 
 /* 卡片命令的实现只有这一份（D58）。之前看板视图与列表视图各写了一遍同样的
-   "移动阶段 → 提示 → 重取"，两份还漂了一处文案（"已标记为拒绝" / "已标记拒绝"）。
-   文案随视图传进来，**没有替谁统一**——那是候选人可见的措辞改动，不是一次搬家该定的事。 */
+   "移动阶段 → 提示 → 重取"，两份还漂了一处文案。D58 当时只把**实现**合并、把两句措辞原样留着
+   （那是候选人可见的改动，不该由一次搬家定）；§10.21 现在拍了：两个视图共用下面那份
+   `COMMAND_LABELS`，措辞归到仓里已有的「已标记为 + 动作」那一式。 */
 function openCardDetail(card) {
   detailCard.value = card
   feedbackForm.value = {
@@ -518,20 +520,23 @@ async function removeCard(card) {
   }
 }
 
-async function runCardCommand(cmd, card, labels) {
+async function runCardCommand(cmd, card) {
   if (cmd === 'detail') return openCardDetail(card)
   if (cmd === 'analyze') return goAnalysisFor(card)
   if (cmd === 'interview') return goInterviewFor(card)
-  if (cmd === 'reject') return markStage(card, 'rejected', labels.rejected)
-  if (cmd === 'abandon') return markStage(card, 'withdrawn', labels.abandon)
+  if (cmd === 'reject') return markStage(card, 'rejected', COMMAND_LABELS.rejected)
+  if (cmd === 'abandon') return markStage(card, 'withdrawn', COMMAND_LABELS.abandon)
   if (cmd === 'delete') return removeCard(card)
 }
 
-const KANBAN_COMMAND_LABELS = { rejected: '已标记为拒绝', abandon: '已放弃' }
-const LIST_COMMAND_LABELS = { rejected: '已标记拒绝', abandon: '已放弃' }
+/* §10.21：同一个动作原先有两句提示——看板那句带"为"，列表那句少一个"为"（D58 合并实现时
+   两句都留下了）。既然只能留一句，就按仓里已经在用的那一式：`ResumeCompare.vue:565` 的
+   "已标记为采纳 / 已标记为忽略"也是「已标记为 + 动作」。所以两个视图共用这一份标签，
+   由 `userCopySingleSource.test.js` 钉住"全仓只有一句"。 */
+const COMMAND_LABELS = { rejected: '已标记为拒绝', abandon: '已放弃' }
 
 async function handleCardCmd(cmd, card) {
-  await runCardCommand(cmd, card, KANBAN_COMMAND_LABELS)
+  await runCardCommand(cmd, card)
 }
 
 // === 列表视图方法 ===
@@ -552,7 +557,7 @@ async function saveFeedback() {
 }
 
 async function handleListCmd(cmd, card) {
-  await runCardCommand(cmd, card, LIST_COMMAND_LABELS)
+  await runCardCommand(cmd, card)
 }
 
 function onSelectionChange(rows) {

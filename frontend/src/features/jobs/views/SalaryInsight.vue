@@ -222,6 +222,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, computed } from 'vue'
 import { Coin } from '@element-plus/icons-vue'
@@ -289,7 +290,7 @@ async function doSearch() {
     if (!isCurrent()) return
     // 旧注释写"保留上一次查询结果"，但上面已经把 overview 清空了；GET 失败也不弹提示，
     // 所以真实表现是一片空白 + 没有人告诉你为什么。现在显式失败。
-    searchError.value = e?.userMessage || e?.message || '暂时无法读取该岗位的薪资样本'
+    searchError.value = userErrorCopy(e, '暂时无法读取该岗位的薪资样本')
   } finally {
     if (isCurrent()) loading.value = false
   }
@@ -323,7 +324,7 @@ async function checkExpectation() {
     // GET 失败请求层不弹提示，这条错会被当成正确答案读走。
     if (!isCurrent()) return
     expectResult.value = null
-    expectError.value = e?.userMessage || e?.message || '暂时无法完成期望薪资评估'
+    expectError.value = userErrorCopy(e, '暂时无法完成期望薪资评估')
   }
 }
 </script>

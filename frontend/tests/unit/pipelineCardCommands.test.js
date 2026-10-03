@@ -10,9 +10,10 @@ import { movePipelineStage, deleteJobPipelineEntry, getKanban } from '@/api/targ
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 
 /* D58 把看板视图与列表视图各自的命令分发合成一套实现。合并前漂了一处文案
-   （同一动作在两个视图里分别提示"已标记为拒绝"与"已标记拒绝"）——**这次没有替谁统一**，
-   措辞是候选人可见的，留给一句决定；这个文件钉的是：除文案之外，两条路径必须发出**同样的请求**、
-   同样的重取、同样的"失败就什么都不做"。
+   （同一动作在两个视图里分别提示带"为"的那句与少一个"为"的那句）——D58 **没有替谁统一**，
+   措辞是候选人可见的，留给一句决定；§10.21 现在拍了这一句（D92），两个视图共用一份标签，
+   于是这个文件钉的是：两条路径发出**同样的请求**、同样的重取、同样的"失败就什么都不做"，
+   而提示**逐字相同**。
    注意列表模式下看板列**也还在 DOM 里**（`v-else` 只挡 loading/失败，不挡 viewMode），
    所以每一发命令都要按容器取那一个下拉，否则测的是错的那个视图。 */
 
@@ -95,7 +96,7 @@ describe('两个视图走的是同一套命令实现', () => {
     ElMessageBox.confirm.mockResolvedValue('confirm')
   })
 
-  it('标记拒绝：请求与重取相同，只有提示文案按各自视图的原样', async () => {
+  it('标记拒绝：请求与重取相同，两个视图的提示现在逐字一致', async () => {
     api.movePipelineStage.mockResolvedValue({ ok: true })
     const kanban = kanbanView(await renderKanban('kanban'))
     await fire(kanban, 'reject')
@@ -108,7 +109,8 @@ describe('两个视图走的是同一套命令实现', () => {
     const list = listView(await renderKanban('list'))
     await fire(list, 'reject')
     expect(movePipelineStage).toHaveBeenLastCalledWith(41, 'rejected')
-    expect(ElMessage.success).toHaveBeenLastCalledWith('已标记拒绝') // 漂着的文案，未被顺手统一
+    // §10.21 拍定的那一句（仓里已有的「已标记为 + 动作」那一式，见 ResumeCompare.vue:565）
+    expect(ElMessage.success).toHaveBeenLastCalledWith('已标记为拒绝')
     // 列表视图这一趟同样是"挂载一次 + 移动成功后重取一次"
     expect(getKanban.mock.calls.length).toBe(afterFirstMount + 2)
   })

@@ -276,6 +276,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
@@ -406,7 +407,7 @@ async function loadJobs() {
     jobs.value = data.items || []
   } catch (e) {
     jobs.value = []
-    jobsError.value = e?.userMessage || e?.message || '暂时无法读取岗位列表'
+    jobsError.value = userErrorCopy(e, '暂时无法读取岗位列表')
   }
 }
 

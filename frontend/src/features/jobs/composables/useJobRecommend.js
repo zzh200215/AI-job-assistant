@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { userErrorCopy } from '@/utils/requestTracing'
 import { getJobRecommendations } from '@/api/jobs'
 import { useLatestCall } from '@/composables/useLatestCall'
 import { calculateApplicationPriority, uniqueList } from '@/features/jobs/lib/jobModel'
@@ -78,7 +79,7 @@ export function useJobRecommend({ selectedResumeId, city }) {
     } catch (e) {
       if (!isCurrent()) return
       recommendations.value = []
-      recommendError.value = e?.userMessage || e?.message || '暂时取不到推荐结果，请稍后重试'
+      recommendError.value = userErrorCopy(e, '暂时取不到推荐结果，请稍后重试')
     } finally {
       if (isCurrent()) recommendLoading.value = false
     }

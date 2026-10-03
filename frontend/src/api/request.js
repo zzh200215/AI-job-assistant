@@ -4,6 +4,7 @@ import router from '@/router'
 import {
   createRequestId,
   formatApiErrorMessage,
+  networkFailureCopy,
   normalizeValidationMessage,
 } from '../utils/requestTracing'
 import { clearSession, readToken } from '../utils/session'
@@ -87,11 +88,11 @@ request.interceptors.response.use(
     }
 
     const requestId = err?.response?.data?.request_id || err?.response?.headers?.['x-request-id']
-    const msg =
-      err?.response?.data?.message ||
-      err?.response?.data?.msg ||
-      err.message ||
-      '网络异常，请稍后重试'
+    /* 服务端给了文案就用服务端那句；没给（连不上、超时、5xx 带的是 HTML）就用中文那一句。
+       **不回落 `err.message`**：那是 axios 的英文技术串，而下游二十几处写的是
+       `e?.userMessage || e?.message || '中文兜底'`——userMessage 非空时那句中文永远不触发，
+       候选人看到的就是英文串。原始技术串仍然留在 `err.message` 上，日志照旧可读。 */
+    const msg = err?.response?.data?.message || err?.response?.data?.msg || networkFailureCopy(err)
     if (shouldNotify) {
       ElMessage.error(formatApiErrorMessage(msg, requestId, '网络异常，请稍后重试'))
     }

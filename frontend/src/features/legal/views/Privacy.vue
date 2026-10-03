@@ -142,6 +142,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import {
@@ -181,7 +182,7 @@ async function loadDataSummary() {
   } catch (e) {
     if (!isCurrent()) return
     dataSummary.value = null
-    summaryError.value = e?.userMessage || e?.message || '未能获取你的数据概览'
+    summaryError.value = userErrorCopy(e, '未能获取你的数据概览')
   }
 }
 

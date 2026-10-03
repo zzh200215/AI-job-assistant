@@ -236,6 +236,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Lock, User } from '@element-plus/icons-vue'
@@ -295,7 +296,7 @@ const handleLogin = async () => {
     ElMessage.success('登录成功')
     router.replace(authStore.homeRoute)
   } catch (error) {
-    loginError.value = error?.userMessage || error?.message || '登录失败，请检查账号和密码'
+    loginError.value = userErrorCopy(error, '登录失败，请检查账号和密码')
   } finally {
     loading.value = false
   }

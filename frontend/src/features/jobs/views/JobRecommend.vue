@@ -584,6 +584,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getResumeList } from '@/api/resume'
@@ -769,7 +770,7 @@ async function loadRecommendations() {
     if (!isCurrent()) return
     console.error('获取推荐失败:', e)
     recommendations.value = []
-    recommendError.value = e?.userMessage || e?.message || '推荐加载失败，请稍后重试'
+    recommendError.value = userErrorCopy(e, '推荐加载失败，请稍后重试')
   } finally {
     if (isCurrent()) loading.recommend = false
   }
@@ -787,7 +788,7 @@ async function loadFeedbackStats() {
     if (!isCurrent()) return
     feedbackStats.value = null
     // GET 失败不弹提示，所以"面板消失"曾是它唯一的对外表现——那等于说"你没有反馈数据"。
-    feedbackStatsError.value = e?.userMessage || e?.message || '反馈统计加载失败，请稍后重试'
+    feedbackStatsError.value = userErrorCopy(e, '反馈统计加载失败，请稍后重试')
   }
 }
 
@@ -858,7 +859,7 @@ async function toggleBookmark(job) {
     job._bookmarked = next
     ElMessage.success(next ? '已收藏' : '已取消收藏')
   } catch (e) {
-    ElMessage.error('收藏操作失败: ' + (e.userMessage || e.message || e))
+    ElMessage.error(`收藏操作失败: ${userErrorCopy(e, '网络异常，请稍后重试')}`)
   }
 }
 
@@ -871,7 +872,7 @@ async function dismissJob(job) {
     if (idx >= 0) recommendations.value.splice(idx, 1)
     ElMessage.success('已标记不感兴趣，可在「已忽略」中恢复')
   } catch (e) {
-    ElMessage.error('操作失败: ' + (e.userMessage || e.message || e))
+    ElMessage.error(`操作失败: ${userErrorCopy(e, '网络异常，请稍后重试')}`)
   }
 }
 
@@ -893,7 +894,7 @@ async function loadSuppressed() {
     suppressed.total = 0
     suppressed.orphaned = 0
     suppressed.truncated = 0
-    ElMessage.error('获取已忽略岗位失败: ' + (e.userMessage || e.message || e))
+    ElMessage.error(`获取已忽略岗位失败: ${userErrorCopy(e, '网络异常，请稍后重试')}`)
   } finally {
     suppressed.loading = false
   }
@@ -907,7 +908,7 @@ async function restoreSuppressed(item) {
     await loadSuppressed()
     await loadRecommendations()
   } catch (e) {
-    ElMessage.error('恢复失败: ' + (e.userMessage || e.message || e))
+    ElMessage.error(`恢复失败: ${userErrorCopy(e, '网络异常，请稍后重试')}`)
   } finally {
     suppressed.submittingId = null
   }

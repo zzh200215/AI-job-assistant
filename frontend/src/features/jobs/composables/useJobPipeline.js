@@ -2,6 +2,7 @@
    它需要父页面的三样东西（当前标签页、选中的简历、打开详情的动作），所以由调用方注入，
    而不是在模块里再去读路由或 store——那会让这页唯一一份状态来源变成两处。 */
 import { computed, ref } from 'vue'
+import { userErrorCopy } from '@/utils/requestTracing'
 import { ElMessage } from '@/plugins/element-services'
 import {
   clearRejectedJobPipeline,
@@ -96,7 +97,7 @@ export function useJobPipeline({ activeTab, selectedResumeId, selectedResumeName
       pipelineEntries.value = (data?.items || []).map((item) => normalizePipelineEntry(item))
     } catch (e) {
       pipelineEntries.value = []
-      pipelineError.value = e?.userMessage || e?.message || '暂时无法读取你的跟进记录'
+      pipelineError.value = userErrorCopy(e, '暂时无法读取你的跟进记录')
     }
   }
 

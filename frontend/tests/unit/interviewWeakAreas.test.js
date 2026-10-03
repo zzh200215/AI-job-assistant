@@ -128,8 +128,17 @@ describe('面试工作台：薄弱知识点', () => {
     getPerformanceTrend.mockRejectedValue(new Error('trend unavailable'))
     await mounted()
     expect(weakCards().length).toBe(0)
-    expect(document.body.textContent).toContain('trend unavailable')
+    expect(document.body.textContent).toContain('暂时读不到面试表现')
     expect(document.body.textContent).not.toContain('暂无薄弱项数据')
     expect(document.body.textContent).not.toMatch(/建议加强(技术深度|表达能力|逻辑思维)方向训练/)
+  })
+
+  it('失败那格只说中文，原始技术串不上屏', async () => {
+    /* D92 之前这一格画的就是 `e?.userMessage || e?.message` 里的 `e.message`——也就是
+       下面这个 `'trend unavailable'`，上一条评论区还把它当成"报成失败"的证据钉着。
+       现在失败仍然报成失败，但报的是给人看的那一句；技术串留在 `err.message` 里给日志。 */
+    getPerformanceTrend.mockRejectedValue(new Error('trend unavailable'))
+    await mounted()
+    expect(document.body.textContent).not.toContain('trend unavailable')
   })
 })

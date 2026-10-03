@@ -331,7 +331,11 @@ function pageShellCount() {
    所以这条预算是下限，不是全集；改注释型谎用时请连行为一起改。 */
 const CATCH_HEAD = /^\s*\}\s*catch/
 const CLEARS_VALUE = /=\s*(\[\]|null|''|0)\s*;?\s*$/
-const REPORTS = /userMessage|loadError|\w*Error\.value\s*=|ElMessage|console\./
+/* D92 之后"把失败报出来"的写法换成了单一出口 `userErrorCopy(e, '…')`，它不再在行里留下
+   `userMessage` 这个字面——只认字面的判据会把"其实报了失败"的 catch 数成静默（实测红在
+   `ResumeUpload.vue` 两处）。判据要认的是**行为**：这一族现在有两种写法，都算报了。
+   反向证据在下面那条 selftest 里，两式各测一次。 */
+const REPORTS = /userMessage|userErrorCopy\(|loadError|\w*Error\.value\s*=|ElMessage|console\./
 const BLOCK_HEAD = /^(?:if|for|while|switch|case|catch|else|try|finally|do|with|return)\b/
 const FUNCTION_HEAD = /\bfunction\b|=>|\b[\w$.]+\s*\([^()]*\)\s*\{?\s*$/
 
@@ -791,6 +795,27 @@ describe('style debt ratchet', () => {
       '}',
     ].join('\n')
     expect(silentCatchesIn(src)).toEqual([])
+  })
+
+  it('recognises the single-source copy call as a report (D92)', () => {
+    /* 两式各测一次，谁也不许被当成静默；第三份是"两种都没有"的对照组，
+       否则这条判据可以靠"什么都算报告"变绿。 */
+    const both = (reportLine) =>
+      silentCatchesIn(
+        [
+          'async function loadThings() {',
+          '  try {',
+          '    things.value = await api.get()',
+          '  } catch (e) {',
+          '    things.value = []',
+          '  }',
+          reportLine,
+          '}',
+        ].join('\n')
+      )
+    expect(both("  rewrite.error = userErrorCopy(e, '改写建议生成失败')")).toEqual([])
+    expect(both('  loadError.value = e?.userMessage')).toEqual([])
+    expect(both('  const note = `读不到`')).toEqual([4])
   })
 
   it('does not borrow a report from the next function', () => {

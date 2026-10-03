@@ -293,6 +293,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -468,7 +469,7 @@ async function loadWeakAreas() {
     /* 读不到就是读不到，不许演成"你没有薄弱项"（那是 silentEmptyCatches 那一维钉的东西），
        更不许像原来那样用三个随机数顶上去（§10.6 拍的就是那段）。 */
     weakAreas.value = []
-    weakError.value = e?.userMessage || e?.message || '暂时读不到面试表现，稍后再试'
+    weakError.value = userErrorCopy(e, '暂时读不到面试表现，稍后再试')
   } finally {
     weakLoading.value = false
   }
@@ -541,7 +542,7 @@ async function loadUpcoming() {
     )
   } catch (e) {
     upcomingInterviews.value = []
-    upcomingError.value = e?.userMessage || e?.message || '暂时无法读取你的面试安排'
+    upcomingError.value = userErrorCopy(e, '暂时无法读取你的面试安排')
   } finally {
     upcomingLoading.value = false
   }
@@ -555,7 +556,7 @@ async function loadSessions() {
     sessions.value = Array.isArray(data) ? data : data?.items || []
   } catch (e) {
     sessions.value = []
-    sessionsError.value = e?.userMessage || e?.message || '暂时无法读取你的面试记录'
+    sessionsError.value = userErrorCopy(e, '暂时无法读取你的面试记录')
   } finally {
     sessionsLoading.value = false
   }

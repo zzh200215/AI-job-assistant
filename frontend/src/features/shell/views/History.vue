@@ -267,6 +267,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -359,7 +360,7 @@ const openDetail = async (row) => {
     }
   } catch (e) {
     // 弹窗里此前什么都不渲染：GET 失败请求层不弹提示，用户只会看到一个空对话框
-    detailError.value = e?.userMessage || e?.message || '暂时无法读取这条分析的详情'
+    detailError.value = userErrorCopy(e, '暂时无法读取这条分析的详情')
   } finally {
     detailLoading.value = false
   }

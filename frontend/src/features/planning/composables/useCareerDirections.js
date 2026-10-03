@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { userErrorCopy } from '@/utils/requestTracing'
 
 import { recommendCareerPaths } from '@/api/jobs'
 import { useLatestCall } from '@/composables/useLatestCall'
@@ -45,7 +46,7 @@ export function useCareerDirections({ getResumeId }) {
       if (!isCurrent()) return
       careerPaths.value = []
       careerPathMeta.value = { ...EMPTY_META }
-      careerPathError.value = e?.userMessage || e?.message || '暂时无法基于岗位库给出职业方向'
+      careerPathError.value = userErrorCopy(e, '暂时无法基于岗位库给出职业方向')
     } finally {
       if (isCurrent()) careerPathLoading.value = false
     }

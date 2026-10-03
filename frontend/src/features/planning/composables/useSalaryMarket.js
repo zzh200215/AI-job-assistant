@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { userErrorCopy } from '@/utils/requestTracing'
 
 import { getSalaryOverview } from '@/api/salary'
 import { useLatestCall } from '@/composables/useLatestCall'
@@ -35,7 +36,7 @@ export function useSalaryMarket({ getPosition }) {
     } catch (e) {
       if (!isCurrent()) return
       salaryMarket.value = null
-      salaryMarketError.value = e?.userMessage || e?.message || '暂时无法读取岗位库薪资样本'
+      salaryMarketError.value = userErrorCopy(e, '暂时无法读取岗位库薪资样本')
     } finally {
       if (isCurrent()) salaryMarketLoading.value = false
     }

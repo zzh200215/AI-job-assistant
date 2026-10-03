@@ -504,6 +504,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
@@ -789,7 +790,7 @@ async function loadResumes() {
     }
   } catch (e) {
     resumeList.value = []
-    resumesError.value = e?.userMessage || e?.message || '暂时无法读取你的简历列表'
+    resumesError.value = userErrorCopy(e, '暂时无法读取你的简历列表')
   }
 }
 
@@ -809,7 +810,7 @@ async function loadResumeDetail(resumeId) {
   } catch (e) {
     if (!isCurrent()) return
     selectedResumeDetail.value = null
-    resumeDetailError.value = e?.userMessage || e?.message || '暂时读不到这份简历的详情'
+    resumeDetailError.value = userErrorCopy(e, '暂时读不到这份简历的详情')
   }
 }
 

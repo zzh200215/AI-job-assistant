@@ -524,6 +524,7 @@
 </template>
 
 <script setup>
+import { userErrorCopy } from '@/utils/requestTracing'
 import { computed, reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -660,7 +661,7 @@ async function generateRewrites() {
   } catch (e) {
     rewrite.items = []
     rewrite.dropped = []
-    rewrite.error = e.userMessage || e.message || '改写建议生成失败'
+    rewrite.error = userErrorCopy(e, '改写建议生成失败')
   } finally {
     rewrite.loading = false
   }
@@ -692,7 +693,7 @@ async function applyRewrites() {
       ElMessage.warning('没有改动被应用')
     }
   } catch (e) {
-    rewrite.error = e.userMessage || e.message || '应用改写失败'
+    rewrite.error = userErrorCopy(e, '应用改写失败')
   } finally {
     rewrite.applying = false
   }
