@@ -1,5 +1,5 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell privacy-page">
     <div class="page-header">
       <div>
         <h2>隐私与数据</h2>
@@ -294,15 +294,10 @@ function notifyDeleteFailure(error, action) {
   color: var(--app-muted);
   font-size: 12px;
 }
-.panel-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--app-line);
-}
-.panel-header h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-}
+/* 这两条搬进了 `src/styles/panels.css` 的 `.privacy-page …`（§10.14 决定 ③，D96）。
+   `.panel-header h3` 那一**条没有搬**：它和全局规格 `.panel-header h3 { margin:0; font-size:16px;
+   font-weight:700 }` 逐字重复，唯一多出来的是全局那条的 `letter-spacing: 0`——留着它就是
+   "本地覆盖"这个名字的由来，而它其实只是重复。差分证明两者在这页等价（账在 D96）。 */
 .panel-body {
   padding: 20px;
 }

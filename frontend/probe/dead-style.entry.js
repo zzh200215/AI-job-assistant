@@ -26,7 +26,7 @@ import {
   rememberResume,
   setSelectionOwner,
 } from '../src/utils/lastSelection'
-import { writeSession } from '../src/utils/session'
+import { clearSession, writeSession } from '../src/utils/session'
 import '../src/plugins/element.css'
 import '../src/styles/main.css'
 import '../src/styles/panels.css'
@@ -632,6 +632,76 @@ const probe = {
     for (const it of items) out.push(await probe.audit(it))
     return out
   },
+  /**
+   * 整页计算样式截屏，按**元素身份**（tag|class|前 40 字文本 + 同身份的出现序号）索引，不按序号——
+   * 按序号比会在一刀加进 N 个包裹节点之后把整页都报成"变了"（D18 那轮的假阳性）。
+   * 46 个属性 + rect，字典编码后存 localStorage（一条路由约 100 KB，配额 5 MB 装得下十几份）。
+   * 装在探针里而不是每次现贴，是因为这件事在 D23/D26/D67/D68/D94 各重贴过一遍。
+   */
+  capture(label) {
+    const nodes = elements()
+    const seen = new Map()
+    const ids = []
+    const props = []
+    for (const el of nodes) {
+      const cs = getComputedStyle(el)
+      const key = `${el.tagName}|${el.getAttribute('class') || ''}|${(el.textContent || '').trim().slice(0, 40)}`
+      const occ = seen.get(key) || 0
+      seen.set(key, occ + 1)
+      ids.push(`${key}#${occ}`)
+      const r = el.getBoundingClientRect()
+      props.push(
+        PROPS.map((p) => cs[p]).concat([
+          Math.round(r.width * 100) / 100,
+          Math.round(r.height * 100) / 100,
+          Math.round(r.top),
+          Math.round(r.left),
+        ])
+      )
+    }
+    const payload = JSON.stringify({
+      ids,
+      props,
+      n: nodes.length,
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      dpr: window.devicePixelRatio,
+    })
+    localStorage.setItem(`cap:${label}`, payload)
+    return { label, n: nodes.length, kb: Math.round(payload.length / 1024) }
+  },
+  /** 同一次运行里比两份截屏；`missingFromB` 是身份消失数（删节点要单独解释），`diffs` 是属性差异数。 */
+  diff(a, b) {
+    const A = JSON.parse(localStorage.getItem(`cap:${a}`) || 'null')
+    const B = JSON.parse(localStorage.getItem(`cap:${b}`) || 'null')
+    if (!A || !B) return { error: `缺一帧：${a} ${B ? '' : '或 ' + b}` }
+    // 视口不同就别比了：`vh` 结算出来的值一定不同，而那种"差异"和改动无关（D67 就栽过一次）
+    if (A.vw !== B.vw || A.vh !== B.vh) {
+      return {
+        error: `视口不一致：${A.vw}×${A.vh} vs ${B.vw}×${B.vh} —— 差分无效，同一次运行里重取`,
+      }
+    }
+    const bi = new Map(B.ids.map((k, i) => [k, i]))
+    let missing = 0
+    let diffs = 0
+    const samples = []
+    A.ids.forEach((k, i) => {
+      const j = bi.get(k)
+      if (j === undefined) {
+        missing += 1
+        return
+      }
+      for (let p = 0; p < A.props[i].length; p++) {
+        if (String(A.props[i][p]) === String(B.props[j][p])) continue
+        diffs += 1
+        if (samples.length < 8) {
+          const name = p < PROPS.length ? PROPS[p] : 'rect'
+          samples.push(`${k.slice(0, 44)} [${name}] ${A.props[i][p]} -> ${B.props[j][p]}`)
+        }
+      }
+    })
+    return { a: A.n, b: B.n, missingFromB: missing, diffs, samples }
+  },
 }
 
 window.__probe = probe
@@ -639,17 +709,35 @@ window.__probe = probe
 /* 探针要的从来不是"登录流程"，而是"页面带着上一次的选择进来"。原先这里不种凭据，
    所以 `/jobs/search` 这类受守卫的路由会被弹回 `/login`——`go()` 里那个 `await router.replace()`
    照样 resolve，但屏幕上是登录页：`.workspace-theme` 数量 0、目标元素 0，量出来的一切都是假的。
-   键名与序列化走 `utils/session.js`（那是唯一出处，§10.22 之前它散在三个文件 12 处），探针不自己拼。 */
-writeSession('probe-token', {
-  id: 1,
-  username: 'probe',
-  role: 'candidate',
-  is_admin: false,
-  created_at: '2026-01-01T00:00:00Z',
-})
+   键名与序列化走 `utils/session.js`（那是唯一出处，§10.22 之前它散在三个文件 12 处），探针不自己拼。
+
+   反过来也成立：`/register`、`/login` 这类**访客页**在登录态下会被守卫弹回 `/home`，
+   所以加了 `?anon=1` 这一档——量的对象决定了要不要凭据，不是探针该猜的事。
+   （清 `localStorage` 解不了这一层：store 的 `token` 是建 store 那一刻读进 ref 的。） */
+if (!new URL(location.href).searchParams.has('anon')) {
+  writeSession('probe-token', {
+    id: 1,
+    username: 'probe',
+    role: 'candidate',
+    is_admin: false,
+    created_at: '2026-01-01T00:00:00Z',
+  })
+} else {
+  // 只"不种"不够：localStorage 里上一次种的会话还在，`/register` 这类访客页会被守卫弹回 `/home`
+  // （store 的 token 是建 store 那一刻从存储读进 ref 的，所以必须在挂载前把它清掉）。
+  clearSession()
+}
 
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 installElement(app)
-app.mount('#app')
+
+/* `?to=/privacy` 在**挂载之前**把路由摆好。这不是 convenience：探针自带的 FREEZE 把
+   `transition` 关了，而隐藏标签里 rAF 不触发，Vue 的 `<transition>` 于是永远等不到收尾——
+   `go()` 之后屏幕上是"旧页卡在 fade-leave-from + 新页还没挂"的混合体，截到的每一帧都不是那条路由
+   （D96 连着两次拿这种帧当基线，差分里全是转场噪声）。首屏导航不走出场动画，所以挂载前定位是干净的。
+   注意视口：D67 记过"跨运行的快照会骗人"，所以 capture 把视口一起存进去，diff 在视口不一致时直接拒。 */
+const START_TO = new URL(location.href).searchParams.get('to')
+const boot = START_TO ? router.replace(START_TO) : Promise.resolve()
+boot.finally(() => app.mount('#app'))

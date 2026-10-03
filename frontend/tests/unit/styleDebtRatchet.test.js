@@ -712,12 +712,12 @@ describe('style debt ratchet', () => {
   it('never lets a view style .panel-header locally without saying so in the ledger', () => {
     // 这条是 AppPanel 的真正约束：视图自己的 scoped `.panel-header` 规则匹配不到搬进子组件的节点，
     // 所以这些文件必须先解决覆盖才能迁移。清单只准缩短，且必须与实际一致。
+    /* §10.14 决定 ③（D96）：候选人侧那三页（JobSearch 1 + Register 1 + Privacy 2 处）的本地覆盖
+       搬进了 `panels.css` 的页根作用域，所以这里只剩 §2 冻结侧的两个文件。
+       **清单变短不是"债变少了"的凭证**——那 4 处头部标记还在原地，只是它们不再挡住迁移判定。 */
     const LOCAL_OVERRIDE_FILES = [
-      'src/features/jobs/views/JobSearch.vue',
       'src/features/knowledge/views/KnowledgeBase.vue',
       'src/features/billing/views/OrganizationWorkspace.vue',
-      'src/features/legal/views/Privacy.vue',
-      'src/features/auth/views/Register.vue',
     ]
     const overriding = viewSources
       // 先剥掉 CSS 注释：一条"这条规则已搬走"的说明不该被当成还在覆盖（与后端乱码守卫

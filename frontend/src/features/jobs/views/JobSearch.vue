@@ -1,5 +1,5 @@
 <template>
-  <div class="page-shell">
+  <div class="page-shell jobsearch-page">
     <section class="hero">
       <div class="hero-copy">
         <div class="hero-title-row">
@@ -1374,19 +1374,16 @@ function goToSmartAnalysis() {
   width: 220px;
 }
 
-.panel-header,
 .board-header,
 .result-toolbar,
 .warehouse-toolbar,
 .recommend-toolbar,
 .board-row,
-.panel-header h2,
 .board-header h3 {
   margin: 0;
   font-size: 20px;
 }
 
-.panel-header p,
 .board-header p,
 .board-note,
 .toolbar-sub,
@@ -1552,7 +1549,6 @@ function goToSmartAnalysis() {
   }
 
   .filter-row,
-  .panel-header,
   .board-header,
   .result-toolbar,
   .warehouse-toolbar,

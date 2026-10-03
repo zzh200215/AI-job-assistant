@@ -242,9 +242,9 @@ const handleRegister = async () => {
   box-shadow: 0 24px 64px rgba(15, 23, 42, 0.12);
 }
 
-.panel-header {
-  margin-bottom: 28px;
-}
+/* `.panel-header { margin-bottom: 28px }` 搬进 `src/styles/panels.css` 的
+   `.register-page .panel-header`（§10.14 决定 ③，D96）：这一页的根类本来就是 `.register-page`，
+   作用域与原来那条 scoped 规则一致。 */
 
 .brand {
   display: inline-flex;

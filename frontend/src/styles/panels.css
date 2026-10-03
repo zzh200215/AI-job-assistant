@@ -169,3 +169,43 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- 从三个候选人视图搬进来的面板头覆盖（§10.14 决定 ③，D96） ----
+   原先这些规则写在各视图的 `<style scoped>` 里。标记一旦搬进 `components/ui/AppPanel.vue`，
+   scoped 规则就匹配不到子组件内部的节点（scoped 只覆盖本组件模板节点 + 子组件的根），
+   所以"本地覆盖"是面板头迁不动的第一号原因。按 Home 那条 `.dashboard-page .panel-header`
+   的先例，把它们带**页根类**搬进全局层：匹配只取决于 DOM 结构，与组件边界无关，
+   特异度 (0,2,0) 仍压得住 `.panel-title-row h3` 的 (0,1,1)。
+   刻意只搬候选人这三页：KnowledgeBase(4) 与 OrganizationWorkspace(3) 在 §2 冻结侧，
+   它们的覆盖留在原地（`LOCAL_OVERRIDE_FILES` 随之从 5 个文件缩到 2 个）。
+   实测前提：`src/features/jobs/components/**` 里没有任何 `.panel-header`，
+   所以页根作用域不会新兜到面板组件的头。 */
+.jobsearch-page .panel-header,
+.jobsearch-page .panel-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+/* 这条原本和 `.board-header p, .toolbar-sub, .job-summary …` 挤在同一组里，那些**不是**面板规格的
+   选择器留在视图里；只有 `.panel-header p` 属于头部，按页根作用域搬过来。
+   不搬成全局 `.panel-header p` 是刻意的：那会一次性改到全站所有面板头下面的那行小字。 */
+.jobsearch-page .panel-header p {
+  color: var(--app-muted);
+}
+
+.privacy-page .panel-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.register-page .panel-header {
+  margin-bottom: 28px;
+}
+
+@media (max-width: 768px) {
+  /* JobSearch 那条窄屏规则里只有 `.panel-header` 这一项属于面板规格，其余选择器留在视图里。 */
+  .jobsearch-page .panel-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
