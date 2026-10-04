@@ -38,9 +38,12 @@ const BUDGET = {
        D105 把这两个文件各降一条（8 → 7、9 → 8）：那两块 scoped 样式自 `a55498c` 起被包在一个选择器
        写着 `null` 的嵌套块里、整块编译成永不命中的 `null .foo[data-v-…]`，拆壳之后那条白底第一次真的
        上屏，于是按 D6 的口径换成 `var(--app-surface)`。**代价记在这儿**：色值预算此前一直数的是**文本**，
-       所以我在注释里写了一遍原字面量就被算成两条新债（这条尺子咬过我一次，见 D105）。 */
+       所以我在注释里写了一遍原字面量就被算成两条新债（这条尺子咬过我一次，见 D105）。
+       D106 再降一条（8 → 7）：`.recommend-score` 的渐变第一站从 `var(--app-text, 那个深色 fallback)`
+       换成 `var(--app-surface-muted)`——那个 fallback 从来轮不到生效，而 `--app-text` 在深色作用域里是
+       浅色，白字压上去实测只有 1.11:1。 */
     'src/features/jobs/components/SearchPane.vue': 7,
-    'src/features/jobs/components/RecommendPane.vue': 8,
+    'src/features/jobs/components/RecommendPane.vue': 7,
     'src/layouts/DefaultLayout.vue': 34,
     'src/features/shell/views/Profile.vue': 31,
     'src/features/planning/views/CareerPlanning.vue': 27,

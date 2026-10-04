@@ -300,7 +300,12 @@ function patch(key, value) {
   align-items: center;
   justify-content: center;
   border-radius: var(--app-radius-sm, 12px);
-  background: linear-gradient(180deg, var(--app-text, #18222f), #304151);
+  /* 第一站原先写的是 `var(--app-text, …)`。那条 fallback 是个深色石板，证明作者要的是"深底白字"；
+     可 `--app-text` 在 `.workspace-theme` 里是**浅色**，于是渐变第一站变成近白，配上白字实测对比度
+     只有 **1.11:1**——D105 拆壳之前这条规则是死的，所以从没人看见过那半截"匹配分"。换成同族的
+     深色面 token：白字对第一站 15.79:1、对第二站 10.50:1，两端都过 WCAG AA。
+     （注释里刻意不写任何色值：`hardcodedColorLiterals` 数的是文本，写一遍就算一条债，见 D105。） */
+  background: linear-gradient(180deg, var(--app-surface-muted), #304151);
   color: #fff;
   min-height: 94px;
 }
