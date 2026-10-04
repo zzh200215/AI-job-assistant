@@ -300,7 +300,7 @@ TRANSITIVE_PRIMITIVES = set(BLOCKING_DOTTED) | {
 
 
 class _Fn:
-    __slots__ = ("qname", "module", "calls", "blocks", "is_route")
+    __slots__ = ("qname", "module", "calls", "blocks", "is_route", "is_async")
 
     def __init__(self, qname: str):
         self.qname = qname
@@ -308,6 +308,11 @@ class _Fn:
         self.calls: list[str] = []
         self.blocks = False
         self.is_route = False
+        # D112：只有 `async def` 的路由会占住事件循环。`def` 路由由 FastAPI 丢进 anyio 线程池，
+        # 同样一个 `requests.get` 在那儿只是占一个线程（D111 量过：对照请求因此从 375ms 回到 0.6-2.9ms）。
+        # 这把尺子原先把两种形状一起数（docstring 却写着"async 路由条数"），于是 D110 把 22 条
+        # 主链路改成 def 之后，它照旧报 22 条"间接阻塞"——报的是已经不存在的债。
+        self.is_async = False
 
 
 def _module_of(path: pathlib.Path, root: pathlib.Path) -> str:
@@ -340,6 +345,7 @@ def _build_graph(root: pathlib.Path) -> tuple[dict[str, _Fn], dict[str, dict[str
             for n in body:
                 if isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef):
                     fn = _Fn(f"{module}.{prefix}{n.name}")
+                    fn.is_async = isinstance(n, ast.AsyncFunctionDef)
                     fn.is_route = any(
                         (_dotted(d.func) if isinstance(d, ast.Call) else _dotted(d)).split(".")[-1] in HTTP_VERBS
                         for d in n.decorator_list
@@ -378,7 +384,12 @@ def _resolve(funcs, imports, module: str, callee: str) -> str | None:
 
 
 def indirect_offenders(root: pathlib.Path = APP_ROOT) -> tuple[set[str], int]:
-    """返回（间接走到阻塞原语的 async 路由限定名，扫到的 async 路由条数）。"""
+    """返回（**在 `async def` 路由里**间接走到阻塞原语的限定名，扫到的 async 路由条数）。
+
+    D112：只数 `async def`。`def` 路由里的同一个 `requests.get` 占的是 anyio 线程，不是事件循环——
+    这不是放宽判据，是修一个"把两种形状混在一起数"的口径错误：混数时 D110 把 22 条主链路改成
+    `def` 之后，这条尺子照旧报 22 条，而它报的每一条都已经不再卡循环。
+    """
     funcs, imports = _build_graph(root)
     memo: dict[str, bool] = {}
 
@@ -400,7 +411,7 @@ def indirect_offenders(root: pathlib.Path = APP_ROOT) -> tuple[set[str], int]:
         memo[qname] = out
         return out
 
-    routes = [fn for fn in funcs.values() if fn.is_route]
+    routes = [fn for fn in funcs.values() if fn.is_route and fn.is_async]
     hits = set()
     for fn in routes:
         # 直接命中的那类归上面那把尺子管，这里只报"要往下钻才看得见"的
@@ -414,35 +425,16 @@ def indirect_offenders(root: pathlib.Path = APP_ROOT) -> tuple[set[str], int]:
     return hits, len(routes)
 
 
-# A5 量出来的现状：22 条 async 路由在事件循环里**间接**做同步出网/重活。
-# 每一条的正主与两处口径修正写在 §8 那行的记录里（D46）；这份清单只许往下走。
-# 曾有第三条规则"裸调用 add/query/write_pdf 也算重活"，它会把 `seen.add(x)` 判成向量库写入
-# （`career_path.recommend_career_paths → derive_directions` 就是这样被误报成阻塞的——那个函数
-# 只有 DB 查询与纯计算），所以**不要**把它加回来。
-INDIRECT_BLOCKING_ALLOWLIST = {
-    "app.api.analysis.full_match",
-    "app.api.analysis.get_record_references",
-    "app.api.analysis.regen_interview",
-    "app.api.analysis.regen_optimize",
-    "app.api.external.capabilities.external_interview_simulate",
-    "app.api.external.capabilities.external_match_evaluate",
-    "app.api.external.capabilities.external_resume_parse",
-    "app.api.jd.batch_import_jds",
-    "app.api.jd.import_jd_from_url",
-    "app.api.jd.parse_jd",
-    "app.api.job_recommend.apply_feedback_tuning",
-    "app.api.job_recommend.compare_recommend_config",
-    "app.api.job_recommend.export_feedback_tuning_samples",
-    "app.api.job_recommend.feedback_evaluation",
-    "app.api.job_recommend.feedback_tuning_samples",
-    "app.api.resume.analyze_resume_api",
-    "app.api.resume.diagnose_resume",
-    "app.api.resume.generate_optimized_resume",
-    "app.api.resume.parse_resume",
-    "app.api.resume.rewrite_suggestions",
-    "app.api.resume.tailor_resume",
-    "app.api.tenant.import_tenant_jobs",
-}
+# A5 量出来的现状曾是 22 条 async 路由在事件循环里**间接**做同步出网/重活（每一条的正主与两处口径
+# 修正写在 §8 那行的记录里，D46）。**D110 + D112 之后这张表清空了**，两件事叠在一起：
+#   - D110 把那 22 条里体内没有 await 的全部改成 `def` —— 同一个 `requests.get` 从此占的是 anyio
+#     线程而不是事件循环（D111 量的：对照请求因此从"等满上游延迟 375ms"回到 0.6–2.9ms）；
+#   - D112 修了这把尺子的口径：它过去把 `def` 与 `async def` 一起数（docstring 却写"async 路由条数"），
+#     所以债还掉了它照样报 22 条。
+# 现在这份清单是**空表**：新增一条 `async def` 路由间接走到阻塞原语，就要先 `await run_in_threadpool(...)`，
+# 或者把名字加进来并写清为什么不能挪。**不要**把"裸调用 add/query/write_pdf 算重活"那条规则加回来——
+# `career_path.recommend_career_paths → derive_directions` 就是这样被误报的（纯 DB 查询 + 纯计算）。
+INDIRECT_BLOCKING_ALLOWLIST: set[str] = set()
 
 
 def test_indirect_blocking_matches_the_allowlist():
@@ -457,9 +449,20 @@ def test_indirect_blocking_matches_the_allowlist():
 
 
 def test_indirect_scan_is_not_vacuous():
-    """和上面那条一样要有防空转：真的扫到了路由，而不是解析失败换来的"全绿"。"""
-    _, routes = indirect_offenders()
-    assert routes >= 200, f"只扫到 {routes} 条 async 路由，多半是判据失效了"
+    """和上面那条一样要有防空转：真的扫到了路由，而不是解析失败换来的"全绿"。
+
+    D112 之后阈值不能再挂在"≥200"上——那个数之所以成立，正是因为尺子当时把 `def` 与 `async def`
+    一起数。今天真正的 async 路由群体只有几十条，所以这里同时钉两件事：**扫到了 async 路由**，
+    且**这个群体明显小于全部路由**（后者就是"两种形状又混起来了"的探针）。
+    """
+    _, async_routes = indirect_offenders()
+    assert async_routes >= 20, f"只扫到 {async_routes} 条 async 路由，多半是判据失效了"
+    funcs, _imports = _build_graph(APP_ROOT)
+    all_routes = sum(1 for fn in funcs.values() if fn.is_route)
+    assert all_routes > async_routes * 3, (
+        f"全部路由 {all_routes} 对 async 路由 {async_routes}：比例不像话，"
+        "八成是把 def 路由也当成会卡循环的那一族了（D112 刚修过这个）"
+    )
 
 
 def _snippet_app(tmp_path, src: str) -> pathlib.Path:
