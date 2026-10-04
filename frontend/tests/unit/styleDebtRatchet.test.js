@@ -98,7 +98,9 @@ const BUDGET = {
     'src/features/analysis/views/ExplainMatch.vue': 9,
     'src/features/auth/views/NotFound.vue': 5,
     'src/features/eval/views/RecommendationConfig.vue': 5,
-    'src/features/billing/views/Subscription.vue': 5,
+    /* D109：订阅页摘掉企业版块（那块自带两条渐变字面量）与对比表的 ✗ 图标（一条灰色），
+       5 → 2。剩的是 `#d1d5db` 之外仍在用的那两处。 */
+    'src/features/billing/views/Subscription.vue': 2,
     'src/features/knowledge/views/KnowledgeBase.vue': 4,
     'src/features/shell/views/WeeklyReport.vue': 4,
     'src/features/resume/views/ResumeUpload.vue': 3,
@@ -207,7 +209,8 @@ const BUDGET = {
     'src/features/resume/views/ResumeUpload.vue': 2,
     'src/features/interview/views/Interview.vue': 1,
     'src/features/shell/views/Profile.vue': 1,
-    'src/features/billing/views/Subscription.vue': 1,
+    /* D109：订阅页那条 token 是 `ElMessageBox.confirm(..., { type: 'info' })` 的对话框图标色——
+       就是本文件上面点名的"已知噪声"。摘掉购买入口把这段确认框删了，于是这里归零、整条退出预算。 */
     'src/features/shell/views/TaskCenter.vue': 1,
   },
   /* 失败被清成空态的存量（见 silentCatchCounts）。D5 把候选人侧 8 处接到了

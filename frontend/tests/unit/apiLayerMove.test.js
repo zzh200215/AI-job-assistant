@@ -127,18 +127,9 @@ describe('analytics.js / admin.js / subscription.js：后台面那五条', () =>
     ])
   })
 
-  it('模拟支付发的是 body 里的 order_id（第二槽），不是 query', async () => {
-    const { mockPayOrder } = await import('@/api/subscription')
-    await mockPayOrder('ORD-9')
-    expect(sent).toEqual([
-      {
-        method: 'post',
-        url: '/subscription/mock-pay',
-        second: { order_id: 'ORD-9' },
-        third: undefined,
-      },
-    ])
-  })
+  /* D109：这里原本还有一条腿钉 `mockPayOrder` 的请求形状。订阅页的"模拟支付"入口按 §10.1
+     摘掉之后，那条函数没有任何调用方了——连同 `api/subscription.js` 里的定义一起删。
+     留着一个零调用方 wrapper 加一条测它的测试，就是账上 E21 那种"链修好了但调用方是 0"的形状。 */
 })
 
 describe('agent.js：任务中心那四条是纯 drop-in（api 层早就有，页面一直在绕过去）', () => {

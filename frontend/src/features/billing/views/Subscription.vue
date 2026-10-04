@@ -29,54 +29,13 @@
         <div class="plan-features">
           <div v-for="(group, gIdx) in plan.features" :key="gIdx" class="feature-group">
             <div class="feature-group-title">{{ group.label }}</div>
-            <div
-              v-for="f in group.items"
-              :key="f.text"
-              class="feature-item"
-              :class="{ disabled: !f.available }"
-            >
-              <el-icon v-if="f.available" class="feat-icon feat-yes"><CircleCheckFilled /></el-icon>
-              <el-icon v-else class="feat-icon feat-no"><Close /></el-icon>
-              <span>{{ f.text }}</span>
+            <div v-for="text in group.items" :key="text" class="feature-item">
+              <el-icon class="feat-icon feat-yes"><CircleCheckFilled /></el-icon>
+              <span>{{ text }}</span>
             </div>
           </div>
         </div>
-
-        <div class="plan-action">
-          <el-button
-            :type="plan.popular ? 'primary' : ''"
-            :plain="!plan.popular"
-            size="large"
-            class="plan-btn"
-            :disabled="plan.id === 'free'"
-            @click="selectPlan(plan)"
-          >
-            {{ plan.id === 'free' ? '当前使用中' : plan.id === 'pro' ? '升级到 Pro' : '联系销售' }}
-          </el-button>
-        </div>
       </div>
-    </div>
-
-    <!-- 企业版说明 -->
-    <div class="enterprise-section">
-      <el-card shadow="never" class="enterprise-card">
-        <div class="enterprise-body">
-          <div class="enterprise-info">
-            <h3>企业版 — 为招聘团队量身定制</h3>
-            <ul>
-              <li>批量账号管理与权限控制</li>
-              <li>定制化 AI 面试题库与评估模型</li>
-              <li>招聘数据分析报表与人才看板</li>
-              <li>专属客户成功经理与技术支持</li>
-              <li>私有化部署选项（可选）</li>
-            </ul>
-          </div>
-          <div class="enterprise-action">
-            <el-button type="primary" size="large" @click="contactSales">联系销售团队</el-button>
-            <span class="enterprise-note">2 个工作日内回复</span>
-          </div>
-        </div>
-      </el-card>
     </div>
 
     <!-- 功能对比表 -->
@@ -94,14 +53,11 @@
             <tr v-for="row in comparisonRows" :key="row.label">
               <td class="feat-col">{{ row.label }}</td>
               <td v-for="p in plans" :key="p.id">
-                <!-- 没被任何门执行的行不画 ✓/✗：那两种符号都在陈述一个不存在的事实 -->
-                <span v-if="!row.enforced" class="cmp-same">各套餐一致</span>
-                <template v-else>
-                  <el-icon v-if="row.values[p.id]" class="cmp-yes">
-                    <CircleCheckFilled />
-                  </el-icon>
-                  <el-icon v-else class="cmp-no"><Close /></el-icon>
-                </template>
+                <!-- 真门那一行报出各档的实际数字；其余行不再画 ✓/✗——除了简历数量，
+                     两个符号里哪一个都在陈述一个不存在的事实 -->
+                <span :class="row.enforced ? 'cmp-value' : 'cmp-same'">
+                  {{ row.enforced ? row.values[p.id] : '各套餐一致' }}
+                </span>
               </td>
             </tr>
           </tbody>
@@ -112,17 +68,10 @@
 </template>
 
 <script setup>
-import { userErrorCopy } from '@/utils/requestTracing'
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from '@/plugins/element-services'
-import { CircleCheckFilled, Close } from '@element-plus/icons-vue'
-import {
-  getSubscriptionPlans,
-  getMySubscription,
-  createOrder,
-  mockPayOrder,
-} from '@/api/subscription'
+import { CircleCheckFilled } from '@element-plus/icons-vue'
+import { getSubscriptionPlans, getMySubscription } from '@/api/subscription'
 
 const plans = ref([])
 const comparisonRows = ref([])
@@ -182,60 +131,47 @@ function formatPrice(p) {
 }
 
 function buildFeatureGroups(features) {
-  /* 这一版只说能证的话：没有门在执行的额度不写数字，没有门在执行的权益不画 ✗。
+  /* 只说能证的话：没有门在执行的额度不写数字，没有门在执行的权益不画 ✗（✗ 那一支连同
+     `.feat-no` / `.feature-item.disabled` 样式一起删了——`ENFORCED_PLAN_KEYS` 只有
+     `resume_limit` 一项，这一列今天不可能出现"没有"）。
      简历数量是唯一保留数字的一行，因为 `resume.py` 上传时真的按 `resume_limit` 判。 */
-  const groups = []
-  // 简历
-  const resumeItems = [
+  return [
     {
-      text: `${features.resume_limit === -1 ? '不限' : features.resume_limit} 份简历`,
-      available: true,
+      label: '简历',
+      items: [
+        `${features.resume_limit === -1 ? '不限' : features.resume_limit} 份简历`,
+        '简历解析与评分',
+        'AI 简历优化',
+        'ATS 友好度检测',
+      ],
     },
-    { text: '简历解析与评分', available: true },
-    { text: 'AI 简历优化', available: true },
-    { text: 'ATS 友好度检测', available: true },
+    {
+      label: '面试',
+      items: ['模拟面试', '面试报告与评估', '薄弱知识点训练', '自我介绍生成器'],
+    },
+    { label: '岗位', items: ['岗位推荐', '投递看板', 'Offer 决策助手', '谈薪资建议'] },
+    { label: '其他', items: ['职业规划', '薪资洞察', 'AI 深度分析', '完整报告导出'] },
   ]
-  groups.push({ label: '简历', items: resumeItems })
-
-  // 面试
-  const interviewItems = [
-    { text: '模拟面试', available: true },
-    { text: '面试报告与评估', available: true },
-    { text: '薄弱知识点训练', available: true },
-    { text: '自我介绍生成器', available: true },
-  ]
-  groups.push({ label: '面试', items: interviewItems })
-
-  // 岗位
-  const jobItems = [
-    { text: '岗位推荐', available: true },
-    { text: '投递看板', available: true },
-    { text: 'Offer 决策助手', available: true },
-    { text: '谈薪资建议', available: true },
-  ]
-  groups.push({ label: '岗位', items: jobItems })
-
-  // 其他
-  const otherItems = [
-    { text: '职业规划', available: true },
-    { text: '薪资洞察', available: true },
-    { text: 'AI 深度分析', available: true },
-    { text: '完整报告导出', available: true },
-  ]
-  groups.push({ label: '其他', items: otherItems })
-
-  return groups
 }
 
 function buildComparisonRows(apiPlans) {
+  /* 真门那一行的数字取自 API（`resume_limit`：-1 显示"不限"，否则显示份数），API 没给时退回
+     featuresDisplay 的静态文案——它是 `TIER_FEATURES` 的镜像。其余行显示"各套餐一致"，
+     因为没有任何门按它们判过。 */
+  const tierValue = (key, meta, tier) => {
+    const fromApi = apiPlans.find((p) => p.tier === tier)?.features?.[key]
+    if (key === 'resume_limit' && fromApi !== undefined) {
+      return fromApi === -1 ? '不限' : `${fromApi} 份`
+    }
+    return meta[tier]
+  }
   return Object.entries(featuresDisplay).map(([key, meta]) => ({
     label: meta.label,
     enforced: ENFORCED_PLAN_KEYS.has(key),
     values: {
-      free: !!meta.free || apiPlans.find((p) => p.tier === 'free')?.features?.[key],
-      pro: !!meta.pro || apiPlans.find((p) => p.tier === 'pro')?.features?.[key],
-      enterprise:
-        !!meta.enterprise || apiPlans.find((p) => p.tier === 'enterprise')?.features?.[key],
+      free: tierValue(key, meta, 'free'),
+      pro: tierValue(key, meta, 'pro'),
+      enterprise: tierValue(key, meta, 'enterprise'),
     },
   }))
 }
@@ -249,54 +185,11 @@ async function loadUserSubscription() {
   }
 }
 
-const paying = ref(false)
-const payResult = ref(null) // {success, order_id, message}
-
-async function selectPlan(plan) {
-  if (plan.id === 'free') return
-
-  if (plan.id === 'enterprise') {
-    contactSales()
-    return
-  }
-
-  // Pro 版：确认 → 创建订单 → 模拟支付
-  try {
-    await ElMessageBox.confirm(`确认升级到 ${plan.name} (${plan.price}/月)？`, '升级确认', {
-      confirmButtonText: '确认升级',
-      cancelButtonText: '取消',
-      type: 'info',
-    })
-  } catch {
-    return
-  }
-
-  paying.value = true
-  try {
-    const orderData = await createOrder('pro', 'monthly')
-    if (!orderData?.order_id) {
-      ElMessage.error('订单创建失败')
-      return
-    }
-
-    // 调用模拟支付（生产环境替换为真实支付网关跳转）
-    const res = await mockPayOrder(orderData.order_id)
-    if (res?.message) {
-      payResult.value = { success: true, order_id: orderData.order_id, message: res.message }
-      ElMessage.success('🎉 升级成功！Pro 权益已生效')
-      await loadUserSubscription()
-    }
-  } catch (e) {
-    payResult.value = { success: false, order_id: null, message: userErrorCopy(e, '支付失败') }
-    ElMessage.error('支付失败: ' + userErrorCopy(e, '请稍后重试'))
-  } finally {
-    paying.value = false
-  }
-}
-
-function contactSales() {
-  ElMessage.success('已记录您的需求，销售团队将在 2 个工作日内联系您')
-}
+/* §10.1 他点"抽掉购买入口、保留信息"：`mockPayOrder` 会真的把用户套餐改成 pro（于是 resume_limit
+   从 1 变不限），而 Pro 与免费在代码里除了那一行没有任何行为差别——所以"升级到 Pro"这个按钮
+   本身就是一个装饰。`createOrder` / `mockPayOrder` / 联系销售那几个函数一并撤下；
+   后端 `app/api/subscription.py` 那几个端点没动（E19 的默认拒绝继续盖着它们），
+   这一页也不再是它们的调用方。 */
 
 onMounted(() => {
   loadPlans()
@@ -446,76 +339,12 @@ onMounted(() => {
   font-size: 14px;
 }
 
-.feature-item.disabled {
-  color: var(--app-muted);
-  opacity: 0.6;
-}
-
 .feat-icon {
   font-size: 16px;
   flex-shrink: 0;
 }
 .feat-yes {
   color: var(--app-success);
-}
-.feat-no {
-  color: var(--app-muted);
-}
-
-.plan-action {
-  padding: 16px 24px 24px;
-}
-
-.plan-btn {
-  width: 100%;
-  height: 48px;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-/* Enterprise */
-.enterprise-card {
-  border-radius: 20px;
-  border: 1px solid var(--app-line);
-  background: linear-gradient(135deg, #f0f9ff, #e8f4fd);
-}
-
-.enterprise-body {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  padding: 8px;
-}
-
-.enterprise-info h3 {
-  margin: 0 0 12px;
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.enterprise-info ul {
-  margin: 0;
-  padding-left: 18px;
-}
-
-.enterprise-info li {
-  margin-bottom: 6px;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.enterprise-action {
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.enterprise-note {
-  display: block;
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--app-muted);
 }
 
 /* Comparison table */
@@ -547,13 +376,10 @@ onMounted(() => {
   min-width: 160px;
 }
 
-.cmp-yes {
-  color: var(--app-success);
-  font-size: 18px;
-}
-.cmp-no {
-  color: #d1d5db;
-  font-size: 18px;
+.cmp-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--app-text);
 }
 .cmp-same {
   font-size: 13px;
