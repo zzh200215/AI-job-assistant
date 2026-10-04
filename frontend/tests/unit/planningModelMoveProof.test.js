@@ -9,7 +9,6 @@ import {
   makeRadarPolygon,
   priorityTag,
   resumeOptionLabel,
-  safeScore,
   sampleIdText,
   statusText,
   stepIcon,
@@ -22,7 +21,10 @@ import { CircleCloseFilled, Loading, SuccessFilled, WarningFilled } from '@eleme
 /* D53 把 14 个纯函数从 CareerPlanning.vue 搬进 lib，判据一个字没改（这一批本来就不读 ref，
    所以不像 D49 那样要把隐式读取改成参数）。下面这组 old* 是**搬家前的原函数**，逐字抄自
    HEAD:frontend/src/features/planning/views/CareerPlanning.vue，只把页面里那两条
-   `const centerPoint = 160` / `const radarRadius = 116` 就地写回它们自己。 */
+   `const centerPoint = 160` / `const radarRadius = 116` 就地写回它们自己。
+   D113（§10.20）之后 `safeScore` 不在这个 lib 里了：它变成 `@/utils/aiScore` 的 `readScore`，
+   判据也**故意**改了（读不懂 → null 而不是 0），所以它由 `aiScore.test.js` 钉。这里留下的
+   是"搬家不夹带口径决定"那一半：`oldSafeScore` 仍然当作**雷达几何**的参照物在比。 */
 
 const OLD_CENTER = 160
 const OLD_RADIUS = 116
@@ -60,6 +62,7 @@ const oldResumeOptionLabel = (item) => {
   return `${name} · ${title}`
 }
 
+/* 这些向量**两端都可读**：新实现只在含读不懂成员时与搬家前不同，其余一个点都不差。 */
 const scoreVectors = [
   [],
   [0],
@@ -69,11 +72,20 @@ const scoreVectors = [
   [95, 60, 40],
   [10, 20, 30, 40, 50, 60],
   [-15, 130, 62.5],
+]
+
+/* D113 之前，这一条向量里混着 `[null, undefined, '42', 0]`——旧实现把 null/undefined 夹成 0
+   照样画得出折线。现在它归到下面那条"故意不同"的用例里，因为把读不懂的分数摆在圆心正是这次
+   要取消的那句谎。 */
+const unreadableVectors = [
   [null, undefined, '42', 0],
+  ['约80', '分数未知'],
+  [80, NaN],
+  [70, true],
 ]
 
 describe('D53 搬家：输出与搬家前逐条相同', () => {
-  it(`雷达折线在 ${scoreVectors.length} 组**有限数字**分数向量上一个点都不差`, () => {
+  it(`雷达折线在 ${scoreVectors.length} 组**两端都可读**的分数向量上一个点都不差`, () => {
     for (const vector of scoreVectors) {
       expect(makeRadarPolygon(vector), `${vector} 的折线变了`).toBe(oldMakeRadarPolygon(vector))
     }
@@ -107,24 +119,20 @@ describe('D53 搬家：输出与搬家前逐条相同', () => {
 })
 
 describe('钉死每条规则', () => {
-  it('安全分数：夹到 0-100，四舍五入，非数字当 0', () => {
-    expect([safeScore(0), safeScore(100), safeScore(-15), safeScore(130)]).toEqual([0, 100, 0, 100])
-    expect([safeScore(62.5), safeScore(62.4), safeScore('42'), safeScore(null)]).toEqual([
-      63, 62, 42, 0,
-    ])
-    expect(safeScore(undefined)).toBe(0)
-    /* 这一条是**故意**与搬家前不同的一处，也是这次唯一改了判据的地方：
-       搬之前 `Number('约80')` → NaN，一路传到页面上那些**只夹一次**的调用点——
-       "95 分提升空间"渲染成"NaN 分提升空间"、分数列 NaN、`width: NaN%` 被忽略。
-       雷达折线当时反而没事，因为页面在 map(safeScore) 之后又在 makeRadarPolygon 里夹了一次，
-       `Number(NaN || 0)` 恰好是 0；这条意外的重夹不该被依赖，所以判据在这里收口。
+  it('雷达折线：混进读不懂的分数就整条不画，而不是把它摆在圆心', () => {
+    /* 这是这次**故意**与搬家前不同的那一处。旧实现把两类形状都"读出了分数"：
+       `Number(null || 0)` 归成 0（于是那个角塌在圆心，等于说"你这项 0 分"），
+       `Number('约80')` 得到 NaN 并一路传进 points 串（于是整张雷达静默不画）。
+       现在 `readScore` 两种都返回 null，调用方（两屏）先把不可读的轴挑出去；这里再守一道，
+       因为"把 null 悄悄当 0"正是这次要取消的谎，lib 不该留下第二条通往它的近路。
        可达性：`career_planning` 是 LLM 原始 JSON（career_agent.py:55 的 chat_json，无 schema 约束）。 */
-    expect(safeScore('约80')).toBe(0)
-    expect(safeScore('abc')).toBe(0)
-    expect(safeScore(NaN)).toBe(0)
-    expect(oldSafeScore('约80')).toBeNaN() // 把"以前会 NaN"这件事钉在纸上，不是口头声称
-    expect(oldSafeScore(NaN)).toBe(0) // 重夹一次才归零——这正是"不能依赖双重夹取"的理由
-    expect(makeRadarPolygon(['约80', '分数未知'])).toBe('160.00,160.00 160.00,160.00')
+    for (const vector of unreadableVectors) {
+      expect(makeRadarPolygon(vector), `${vector} 竟然画出来了`).toBe('')
+      expect(oldMakeRadarPolygon(vector), `${vector} 搬家前本来画得出`).not.toBe('')
+    }
+    // 反向证据：搬家前 NaN 真的会一路传进 points 串（`Number('约80')` 是 NaN，不是假值，
+    // 旧实现那句 `value || 0` 挡不住它），而非法的 points 让整个 SVG 静默不画。
+    expect(oldMakeRadarPolygon(['约80', '分数未知'])).toBe('NaN,NaN NaN,NaN')
   })
 
   it('雷达：没有维度就没有折线；正上方起步；分数按比例长短', () => {

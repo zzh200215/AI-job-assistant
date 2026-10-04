@@ -425,7 +425,13 @@
 
             <div class="radar-layout">
               <div class="radar-svg-shell">
-                <svg viewBox="0 0 320 320" class="radar-svg" aria-hidden="true">
+                <!-- 全部读不懂时不能留一个空白的方框：这一屏"少画了但没说"是最难被发现的红。 -->
+                <el-empty
+                  v-if="!radarPlotted.length"
+                  description="没有可读出的分数"
+                  :image-size="60"
+                />
+                <svg v-else viewBox="0 0 320 320" class="radar-svg" aria-hidden="true">
                   <polygon
                     v-for="(ring, index) in radarRings"
                     :key="`ring-${index}`"
@@ -459,28 +465,26 @@
                 <div v-for="dim in radarDimensions" :key="dim.name" class="radar-row">
                   <div class="radar-copy">
                     <strong>{{ dim.name }}</strong>
-                    <span>{{
-                      dim.gap ||
-                      `${safeScore(dim.target_score) - safeScore(dim.current_score)} 分提升空间`
-                    }}</span>
+                    <!-- 读不懂时**这一行什么都不算**：画一条空轨道等于"0 分"，写一个 0 等于说谎。
+                         顺序也有讲究：模型自己写的 gap 文案排在读不懂之后——那句话说的是
+                         "从 0 提到 95"这类由分数推出来的承诺，分数不可读时它一样不可信。 -->
+                    <span v-if="!dim.readable">
+                      {{ SCORE_UNREADABLE_TEXT }} · 分数无法读取，不计入雷达与提升空间
+                    </span>
+                    <span v-else-if="dim.gapText">{{ dim.gapText }}</span>
+                    <span v-else>{{ dim.gapValue }} 分提升空间</span>
                   </div>
-                  <div class="radar-bars">
+                  <div v-if="dim.readable" class="radar-bars">
                     <div class="bar-track">
-                      <div
-                        class="bar-current"
-                        :style="{ width: `${safeScore(dim.current_score)}%` }"
-                      ></div>
+                      <div class="bar-current" :style="{ width: `${dim.current}%` }"></div>
                     </div>
                     <div class="bar-track target-track">
-                      <div
-                        class="bar-target"
-                        :style="{ width: `${safeScore(dim.target_score)}%` }"
-                      ></div>
+                      <div class="bar-target" :style="{ width: `${dim.target}%` }"></div>
                     </div>
                   </div>
-                  <div class="radar-values">
-                    <span>{{ safeScore(dim.current_score) }}</span>
-                    <span>{{ safeScore(dim.target_score) }}</span>
+                  <div v-if="dim.readable" class="radar-values">
+                    <span>{{ dim.current }}</span>
+                    <span>{{ dim.target }}</span>
                   </div>
                 </div>
               </div>
@@ -747,6 +751,7 @@ import { usePlanningOptions } from '@/features/planning/composables/usePlanningO
 import { useSalaryMarket } from '@/features/planning/composables/useSalaryMarket'
 import { normalizeLocalizedTextList } from '@/utils/analysisLocalization'
 import { isTopTier } from '@/utils/scoreTone'
+import { SCORE_UNREADABLE_TEXT, readScore, scoreGap, scorePairReadable } from '@/utils/aiScore'
 import {
   RADAR_CENTER_POINT as centerPoint,
   RADAR_RADIUS as radarRadius,
@@ -758,7 +763,6 @@ import {
   makeRadarPolygon,
   priorityTag,
   resumeOptionLabel,
-  safeScore,
   sampleIdText,
   statusText,
   stepIcon,
@@ -852,15 +856,29 @@ const currentStageLabel = computed(
   () => stageOptions.find((item) => item.value === currentStage.value)?.label || '成长期'
 )
 
+/* 每一行都还要列出来（候选人有权知道"这一项模型没给可解析的分数"），但**读不懂的不进雷达、
+   不进提升空间**——D113 按 §10.20 的决定把"读不懂就当 0 分"取消了。 */
 const radarDimensions = computed(() => {
   const dimensions = careerResult.value?.skill_radar?.dimensions || []
-  return Array.isArray(dimensions) ? dimensions.slice(0, 6) : []
+  if (!Array.isArray(dimensions)) return []
+  return dimensions.slice(0, 6).map((item) => ({
+    name: item.name,
+    gapText: item.gap,
+    current: readScore(item.current_score),
+    target: readScore(item.target_score),
+    gapValue: scoreGap(item.current_score, item.target_score),
+    readable: scorePairReadable(item.current_score, item.target_score),
+  }))
 })
 
+/** 折线图只画两端都可读的那些轴：少一角比把那一角画在圆心诚实。 */
+const radarPlotted = computed(() => radarDimensions.value.filter((item) => item.readable))
+
 const radarAxes = computed(() => {
-  const count = radarDimensions.value.length
+  const items = radarPlotted.value
+  const count = items.length
   if (!count) return []
-  return radarDimensions.value.map((item, index) => {
+  return items.map((item, index) => {
     const angle = -Math.PI / 2 + (Math.PI * 2 * index) / count
     const x = centerPoint + Math.cos(angle) * radarRadius
     const y = centerPoint + Math.sin(angle) * radarRadius
@@ -877,13 +895,13 @@ const radarAxes = computed(() => {
 })
 
 const radarRings = computed(() =>
-  [25, 50, 75, 100].map((value) => makeRadarPolygon(radarDimensions.value.map(() => value)))
+  [25, 50, 75, 100].map((value) => makeRadarPolygon(radarPlotted.value.map(() => value)))
 )
 const radarCurrentPoints = computed(() =>
-  makeRadarPolygon(radarDimensions.value.map((item) => safeScore(item.current_score)))
+  makeRadarPolygon(radarPlotted.value.map((item) => item.current))
 )
 const radarTargetPoints = computed(() =>
-  makeRadarPolygon(radarDimensions.value.map((item) => safeScore(item.target_score)))
+  makeRadarPolygon(radarPlotted.value.map((item) => item.target))
 )
 
 const roadmapPhases = computed(() => {

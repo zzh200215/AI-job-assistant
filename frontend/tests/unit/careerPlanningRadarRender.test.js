@@ -147,31 +147,68 @@ describe('雷达图上的坐标来自 lib 的那两个常量', () => {
     expect([axis.getAttribute('x2'), axis.getAttribute('y2')]).toEqual(['160', '44'])
   })
 
-  it('模型把分数写成"约80"时，页面上不出现 NaN', async () => {
+  it('模型把分数写成"约60"时：那一角**退出折线**，那一行标暂无数据', async () => {
     /* `career_planning` 是 LLM 原始 JSON，分数字段没有任何约束（career_agent.py:55 的 chat_json）。
-       这条用例一开始是为了钉"NaN 一路传进 SVG 的 points、整张雷达静默消失"——**那个前提是错的**：
-       页面把 `safeScore` 套了两次（`map(safeScore)` 之后 `makeRadarPolygon` 内部又夹一次），
-       而 `Number(NaN || 0)` 恰好是 0，所以折线被这道意外的重夹保护住了。
-       真正没被保护的是**只夹一次**的那几处：`.radar-values` 的两个分数、"N 分提升空间"那行字，
-       以及 `width: NaN%`（非法值被浏览器忽略，条子直接不画）。所以这里钉的是那几处。 */
+       这一条原来钉的是"页面上不出现 NaN"，并且把 `safeScore` 的重夹当成既成事实接受了——
+       D113（§10.20）换成了拍定后的口径：读不懂的维度不进雷达、不算提升空间、不显示分数。
+       三个维度里 middle 那个读不懂，所以折线**只有两个顶点**，而且第二行的文案是"暂无数据"。
+       搬家前这里会是：三角折线 + 一个塌在圆心的角 + "90 分提升空间"（0→90 的假差距）。 */
     state.dimensions = [
-      { name: '工程能力', current_score: '约80', target_score: 95 },
-      { name: '分布式', current_score: 20, target_score: '未知' },
+      { name: '工程能力', current_score: 80, target_score: 95 },
+      { name: '分布式', current_score: '约60', target_score: 90 },
+      { name: '沟通协作', current_score: 20, target_score: 60 },
     ]
     await renderPlanned()
-    const metrics = [...document.querySelectorAll('.radar-row')].map((row) =>
+
+    // 折线：剩下两个可画的轴，顶点与两轴夹具完全一致——少的那个角没有被摆在圆心
+    expect(polygonPoints('.radar-current-shape')).toBe('160.00,67.20 160.00,183.20')
+    expect(polygonPoints('.radar-target-shape')).toBe('160.00,49.80 160.00,229.60')
+    expect(axisLabels()).toEqual([
+      ['160', '20', '工程能力'],
+      ['160', '300', '沟通协作'],
+    ])
+
+    // 列表仍然三行：候选人有权知道是哪一个维度没读出来
+    const rows = [...document.querySelectorAll('.radar-row')]
+    expect(rows).toHaveLength(3)
+    const texts = rows.map((row) => row.textContent.replace(/\s+/g, ' ').trim())
+    expect(texts.join(' | ')).not.toContain('NaN')
+    expect(texts[0]).toContain('15 分提升空间')
+    expect(texts[1]).toContain('分布式')
+    expect(texts[1]).toContain('暂无数据')
+    expect(texts[1]).not.toMatch(/\d+ 分提升空间/)
+    expect(texts[2]).toContain('40 分提升空间')
+
+    // 不可读那一行不给宽度：一条空轨道读起来就是"0 分"，和这次要取消的谎是同一句话
+    expect([...document.querySelectorAll('.bar-current')].map((n) => n.style.width)).toEqual([
+      '80%',
+      '20%',
+    ])
+    expect([...document.querySelectorAll('.bar-target')].map((n) => n.style.width)).toEqual([
+      '95%',
+      '60%',
+    ])
+    // 分数列也只有两行有数字
+    expect(
+      [...document.querySelectorAll('.radar-values')].map((n) => n.textContent.replace(/\s+/g, ''))
+    ).toEqual(['8095', '2060'])
+  })
+
+  it('整份报告都读不懂时：不是一张空白方框，是一个空态', async () => {
+    state.dimensions = [
+      { name: '工程能力', current_score: '约80', target_score: '约95' },
+      { name: '分布式', current_score: null, target_score: 90 },
+    ]
+    await renderPlanned()
+    expect(document.querySelector('.radar-svg')).toBeNull()
+    expect(document.querySelector('.el-empty__description')?.textContent).toContain(
+      '没有可读出的分数'
+    )
+    const texts = [...document.querySelectorAll('.radar-row')].map((row) =>
       row.textContent.replace(/\s+/g, ' ').trim()
     )
-    expect(metrics.join(' | ')).not.toContain('NaN')
-    expect(metrics[0]).toContain('95 分提升空间')
-    expect(metrics[1]).toContain('20 分提升空间')
-    const widths = [...document.querySelectorAll('.bar-current, .bar-target')].map((n) =>
-      n.getAttribute('style')
-    )
-    expect(widths.join(' ')).not.toContain('NaN')
-    /* 折线那两串照旧钉住：它们同时也是"重夹"这一事实的证据——单应用 safeScore 时同样的输入
-       会产出 NaN,NaN（见 planningModelMoveProof 里那条）。 */
-    expect(polygonPoints('.radar-current-shape')).toBe('160.00,160.00 160.00,183.20')
-    expect(polygonPoints('.radar-target-shape')).toBe('160.00,49.80 160.00,160.00')
+    expect(texts).toHaveLength(2)
+    expect(texts.every((t) => t.includes('暂无数据'))).toBe(true)
+    expect(document.querySelectorAll('.bar-current, .bar-target')).toHaveLength(0)
   })
 })

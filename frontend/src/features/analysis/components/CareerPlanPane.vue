@@ -27,25 +27,25 @@
       </el-col>
     </el-row>
 
-    <AppPanel v-if="careerData.skill_radar?.dimensions?.length" class="career-section">
+    <AppPanel v-if="radarRows.length" class="career-section">
       <template #title>📊 技能雷达</template>
       <div class="radar-chart">
-        <div v-for="dim in careerData.skill_radar.dimensions" :key="dim.name" class="radar-row">
+        <div v-for="dim in radarRows" :key="dim.name" class="radar-row">
           <span class="radar-label">{{ dim.name }}</span>
           <div class="radar-track">
-            <div class="radar-bar current" :style="{ width: dim.current_score + '%' }">
-              <span class="radar-val">{{ dim.current_score }}</span>
-            </div>
-            <div
-              class="radar-bar target"
-              :style="{
-                width: dim.target_score - dim.current_score + '%',
-                left: dim.current_score + '%',
-              }"
-            >
-              <span class="radar-val-target">→{{ dim.target_score }}</span>
-            </div>
+            <template v-if="dim.readable">
+              <div class="radar-bar current" :style="{ width: `${dim.current}%` }">
+                <span class="radar-val">{{ dim.current }}</span>
+              </div>
+              <div
+                class="radar-bar target"
+                :style="{ width: `${dim.gapWidth}%`, left: `${dim.current}%` }"
+              >
+                <span class="radar-val-target">→{{ dim.target }}</span>
+              </div>
+            </template>
           </div>
+          <span v-if="!dim.readable" class="radar-unknown">{{ SCORE_UNREADABLE_TEXT }}</span>
         </div>
       </div>
     </AppPanel>
@@ -295,11 +295,14 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { Folder } from '@element-plus/icons-vue'
 
 import { complexityType, milestoneIcon } from '@/features/analysis/lib/analysisModel'
 import { levelTagType } from '@/utils/statusTone'
+import { SCORE_UNREADABLE_TEXT, readScore, scoreGap, scorePairReadable } from '@/utils/aiScore'
 
 /* 职业规划面板：D51 从 SmartAnalysis.vue 搬出来（这一页最大的一个标签页）。
    纯展示：只吃三个值，不发请求、不发事件。后两个之所以是 prop 而不是在这里重算，是因为
@@ -309,7 +312,7 @@ import { levelTagType } from '@/utils/statusTone'
    复制的是页面样式里 "Career content / Radar / Plan cards / Roadmap" 那四段。另有一批类
    （gap-title、proj-card、milestone-item、outcome-item、roadmap-dir、salary-ref…）在全仓**没有任何规则**，
    它们只是 markup 里的钩子，所以既不在复制范围里，也不在页面样式里。 */
-defineProps({
+const props = defineProps({
   careerData: { type: Object, default: null },
   visualPhases: {
     type: /** @type {import('vue').PropType<import('../lib/analysisModel').RoadmapPhase[]>} */ (
@@ -318,6 +321,29 @@ defineProps({
     default: () => [],
   },
   hasStructuredSkillGaps: { type: Boolean, default: false },
+})
+
+/* 技能雷达的三条 bar 宽度以前是模板里的裸算式（`dim.target_score - dim.current_score + '%'`），
+   而这一坨是 LLM 原始 JSON、分数没有任何 schema 约束：写成"约80"时它输出 `width: NaN%`（浏览器
+   整条忽略，那一行的目标段凭空消失），漏写字段时输出 `width: undefined%`。§10.20（D113）把读法
+   收进 `@/utils/aiScore`：读不懂的维度**不给宽度、不算提升空间**，只说"暂无数据"。
+   `gapWidth` 夹在 0 之上：目标分低于当前分时，负宽度同样是非法值，会让"→60"那个标签孤零零地
+   挂在轨道末端——那不是一种形状，是一个半成品。 */
+const radarRows = computed(() => {
+  const dimensions = props.careerData?.skill_radar?.dimensions
+  if (!Array.isArray(dimensions)) return []
+  return dimensions.map((dim) => {
+    const current = readScore(dim.current_score)
+    const target = readScore(dim.target_score)
+    const readable = scorePairReadable(dim.current_score, dim.target_score)
+    return {
+      name: dim.name,
+      current,
+      target,
+      readable,
+      gapWidth: readable ? Math.max(0, scoreGap(dim.current_score, dim.target_score)) : null,
+    }
+  })
 })
 </script>
 
@@ -360,6 +386,12 @@ defineProps({
   font-size: 13px;
   font-weight: 500;
   flex-shrink: 0;
+}
+/* 分数读不懂的那一行：轨道留空，右侧一句话说明为什么空（§10.20）。 */
+.radar-unknown {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--app-muted);
 }
 .radar-track {
   flex: 1;
