@@ -20,7 +20,7 @@ VALID_MOODS = {"great", "good", "neutral", "bad", "terrible"}
 
 
 @router.post("/", summary="创建日记/笔记")
-async def create_journal(
+def create_journal(
     payload: JournalCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -67,7 +67,7 @@ async def create_journal(
 
 
 @router.get("/list", summary="获取日记列表")
-async def list_journals(
+def list_journals(
     entry_type: str = Query("", description="类型过滤"),
     pipeline_id: int = Query(None, description="投递记录ID过滤"),
     jd_id: int = Query(None, description="JD ID过滤"),
@@ -114,7 +114,7 @@ async def list_journals(
 
 
 @router.get("/{journal_id}", summary="获取日记详情")
-async def get_journal(
+def get_journal(
     journal_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -133,7 +133,7 @@ async def get_journal(
 
 
 @router.put("/{journal_id}", summary="更新日记")
-async def update_journal(
+def update_journal(
     journal_id: int,
     payload: JournalUpdate,
     db: Session = Depends(get_db),
@@ -161,7 +161,7 @@ async def update_journal(
 
 
 @router.delete("/{journal_id}", summary="删除日记")
-async def delete_journal(
+def delete_journal(
     journal_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -182,7 +182,7 @@ async def delete_journal(
 
 
 @router.get("/stats/summary", summary="日记统计")
-async def journal_stats(
+def journal_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

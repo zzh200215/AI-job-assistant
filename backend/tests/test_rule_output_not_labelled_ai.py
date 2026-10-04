@@ -99,11 +99,8 @@ def test_diagnose_does_not_invent_issues_when_nothing_matched(db_session, monkey
 
 
 def _call_diagnose(db_session, resume_id, user):
-    import asyncio
-
-    payload = asyncio.run(
-        resume_api.diagnose_resume(resume_id, {"target_position": ""}, db=db_session, current_user=user)
-    )
+    # §10.15：`diagnose_resume` 是 def 路由了，同步调用（这条测的是"规则输出不许挂 AI 名头"）
+    payload = resume_api.diagnose_resume(resume_id, {"target_position": ""}, db=db_session, current_user=user)
     return payload["data"]
 
 
@@ -130,10 +127,9 @@ def test_explain_fallback_declares_itself_rules_and_has_no_key_collision():
 # --------------------------------------------------------------- next actions
 def test_next_actions_declares_rules_mode_and_can_return_nothing(db_session, monkeypatch):
     """The endpoint used to pad to 3 suggestions so the panel always looked busy."""
-    import asyncio
-
     user = _user(db_session)
-    response = asyncio.run(dashboard.next_actions(db=db_session, current_user=user))
+    # §10.15：`next_actions` 现在是 def 路由，同步调用
+    response = dashboard.next_actions(db=db_session, current_user=user)
 
     data = response["data"]
     assert data["mode"] == "rules"

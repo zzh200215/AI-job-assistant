@@ -382,7 +382,7 @@ async def get_cities():
 
 
 @router.post("/seed-demo", summary="一键导入演示岗位数据")
-async def seed_demo_jobs(
+def seed_demo_jobs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

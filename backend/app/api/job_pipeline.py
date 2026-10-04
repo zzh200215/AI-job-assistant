@@ -54,7 +54,7 @@ def _get_owned_resume_version(
 
 
 @router.get("/pipeline/kanban", summary="看板视图（按阶段分组）")
-async def kanban_view(
+def kanban_view(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -101,7 +101,7 @@ async def kanban_view(
 
 
 @router.get("/pipeline/interviews", summary="获取即将面试列表")
-async def upcoming_interviews(
+def upcoming_interviews(
     days: int = Query(7, ge=1, le=30, description="查询未来 N 天内的面试"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -136,7 +136,7 @@ async def upcoming_interviews(
 
 
 @router.get("/pipeline/offers", summary="获取所有 Offer 列表（用于对比）")
-async def list_offers(
+def list_offers(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -164,7 +164,7 @@ async def list_offers(
 
 
 @router.get("/pipeline/list", summary="获取投递流程列表")
-async def list_pipeline_entries(
+def list_pipeline_entries(
     stage: str = Query("", description="流程阶段过滤"),
     keyword: str = Query("", description="岗位/公司/备注关键词"),
     resume_id: int | None = Query(None, description="简历 ID 过滤"),
@@ -216,7 +216,7 @@ async def list_pipeline_entries(
 
 
 @router.get("/pipeline/resume-versions", summary="获取可用于投递追踪的简历版本")
-async def list_pipeline_resume_versions(
+def list_pipeline_resume_versions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -250,7 +250,7 @@ async def list_pipeline_resume_versions(
 
 
 @router.get("/pipeline/resume-version-stats", summary="简历版本投递效果汇总")
-async def pipeline_resume_version_stats(
+def pipeline_resume_version_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -306,7 +306,7 @@ async def pipeline_resume_version_stats(
 
 
 @router.get("/pipeline/recommend-resume-version", summary="为目标岗位推荐简历版本")
-async def recommend_pipeline_resume_version(
+def recommend_pipeline_resume_version(
     jd_id: int = Query(..., description="目标岗位 ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -351,7 +351,7 @@ async def recommend_pipeline_resume_version(
 
 
 @router.post("/pipeline", summary="创建投递流程记录")
-async def create_pipeline_entry(
+def create_pipeline_entry(
     payload: PipelineCreateReq,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -479,7 +479,7 @@ async def create_pipeline_entry(
 
 
 @router.post("/pipeline/{entry_id}/transition", summary="阶段流转")
-async def transition_stage(
+def transition_stage(
     entry_id: int,
     payload: StageTransitionReq,
     db: Session = Depends(get_db),
@@ -558,7 +558,7 @@ async def transition_stage(
 
 
 @router.put("/pipeline/{entry_id}", summary="更新投递流程记录")
-async def update_pipeline_entry(
+def update_pipeline_entry(
     entry_id: int,
     payload: PipelineUpdateReq,
     db: Session = Depends(get_db),
@@ -676,7 +676,7 @@ async def update_pipeline_entry(
 
 
 @router.delete("/pipeline/terminal", summary="清理所有终态记录（rejected/withdrawn）")
-async def clear_terminal_pipeline(
+def clear_terminal_pipeline(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -697,7 +697,7 @@ async def clear_terminal_pipeline(
 
 
 @router.delete("/pipeline/{entry_id}", summary="删除投递流程记录")
-async def delete_pipeline_entry(
+def delete_pipeline_entry(
     entry_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -725,7 +725,7 @@ async def delete_pipeline_entry(
 
 
 @router.get("/pipeline/stats", summary="投递数据统计")
-async def pipeline_stats(
+def pipeline_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

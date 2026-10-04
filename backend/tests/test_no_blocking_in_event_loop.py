@@ -118,12 +118,22 @@ def violations_in_source(src: str, filename: str = "<src>") -> list[str]:
     return out
 
 
-def _scan_app() -> tuple[list[str], int]:
+def _scan_app() -> tuple[list[str], int, int]:
+    """返回（直接阻塞违规、扫到的 async 路由数、扫到的**全部**路由函数数）。
+
+    第三个数是 §10.15 之后加上的：那条"扫描不是空转"的判据原先拿 async 路由的数量当尺子
+    （≥150），而 167 条"体内没有 await 的同步会话路由"改成 `def` 之后，这个群体合法地缩到 28——
+    继续盯 async 数量就会把"债还掉了"误报成"尺子失效"。防空转要盯的是**扫描走没走到路由**，
+    所以钉在全部路由函数上。
+    """
     violations: list[str] = []
     routes = 0
+    all_routes = 0
     for path in sorted(APP_ROOT.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
+            if isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef) and _is_route(node):
+                all_routes += 1
             if isinstance(node, ast.AsyncFunctionDef) and _is_route(node):
                 routes += 1
                 for call in _calls_inside_route_body(node):
@@ -131,12 +141,12 @@ def _scan_app() -> tuple[list[str], int]:
                     last = name.split(".")[-1]
                     if name in BLOCKING_DOTTED or (last in BLOCKING_NAMES and "." not in name):
                         violations.append(f"{path.relative_to(APP_ROOT)}:{call.lineno} {node.name} -> {name}")
-    return violations, routes
+    return violations, routes, all_routes
 
 
 def test_no_async_route_calls_a_blocking_primitive_directly():
     """E15 之后的账：**空清单**。新增一条就要先想清楚为什么不能挪进线程池。"""
-    violations, routes = _scan_app()
+    violations, _routes, _all = _scan_app()
     assert violations == [], (
         "在 async 路由里发现同步出网/慢 CPU 调用，改成 await run_in_threadpool(...)：\n" + "\n".join(violations)
     )
@@ -144,8 +154,10 @@ def test_no_async_route_calls_a_blocking_primitive_directly():
 
 def test_the_scan_actually_looked_at_the_routes():
     """防空转：真的遍历到了路由，而不是因为匹配不上而"全绿"。"""
-    _, routes = _scan_app()
-    assert routes >= 150, f"只扫到 {routes} 条 async 路由，多半是判据失效了"
+    _violations, async_routes, all_routes = _scan_app()
+    assert all_routes >= 150, f"只扫到 {all_routes} 条路由函数，多半是判据失效了"
+    # 记账用：`def` 路由不再是这条尺子的目标（它们在 anyio 线程池里跑），但群体大小要看得见
+    assert 0 < async_routes < all_routes, f"async 路由数 {async_routes} / 总路由数 {all_routes} 不像真的"
 
 
 async_src_blocking = """

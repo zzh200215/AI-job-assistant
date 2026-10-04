@@ -15,7 +15,6 @@ Profile 的「面试之星 · 综合评分达到85」读的就是这个值，而
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime
 
 import pytest
@@ -65,8 +64,10 @@ def _add_completed_session(db, user, overall_score):
     db.commit()
 
 
-async def _performance(db, user):
-    body = await interview_performance(db=db, current_user=user)
+def _performance(db, user):
+    """§10.15：`interview_performance` 现在是 `def` 路由（同步会话在 anyio 线程池里跑），
+    所以这里直接调用。这条测试量的是载荷形状（max/avg 与提前返回），不是路由的 async 形状。"""
+    body = interview_performance(db=db, current_user=user)
     assert body["code"] == 0, body
     return body["data"]
 
@@ -76,7 +77,7 @@ def test_max_overall_score_is_the_best_session_not_the_average(db_factory):
     for score in (62, 88, 71):
         _add_completed_session(db, user, score)
 
-    data = asyncio.run(_performance(db, user))
+    data = _performance(db, user)
 
     assert data["max_overall_score"] == 88
     assert data["avg_overall_score"] == 73.7
@@ -90,7 +91,7 @@ def test_sessions_without_any_score_report_zero_not_a_crash(db_factory):
     for _ in range(2):
         _add_completed_session(db, user, 0)
 
-    data = asyncio.run(_performance(db, user))
+    data = _performance(db, user)
 
     assert data["max_overall_score"] == 0
     assert data["avg_overall_score"] == 0
@@ -101,7 +102,7 @@ def test_no_sessions_at_all_keeps_the_early_return_shape(db_factory):
     如果哪天有人把键补成 0，这条会红——那是**载荷形状的变更**，得连带看读方。"""
     db, user = _seed_candidate(db_factory)
 
-    data = asyncio.run(_performance(db, user))
+    data = _performance(db, user)
 
     assert data["total_sessions"] == 0
     assert "max_overall_score" not in data

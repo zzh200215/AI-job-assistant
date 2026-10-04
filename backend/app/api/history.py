@@ -51,7 +51,7 @@ def _visible_job_map(db: Session, user: User, jd_ids: list[int]) -> dict[int, Jo
 
 
 @router.get("", summary="历史记录列表（按时间倒序）")
-async def list_history(
+def list_history(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
@@ -95,7 +95,7 @@ async def list_history(
 
 
 @router.get("/{record_id}", summary="历史记录详情")
-async def get_history(record_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_history(record_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     rec: AnalysisRecord = (
         db.query(AnalysisRecord)
         .filter(
@@ -130,7 +130,7 @@ async def get_history(record_id: int, db: Session = Depends(get_db), current_use
 
 
 @router.delete("/{record_id}", summary="软删除一条历史记录")
-async def delete_history(record_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_history(record_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     rec = (
         db.query(AnalysisRecord)
         .filter(

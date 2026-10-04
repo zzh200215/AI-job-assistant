@@ -20,7 +20,7 @@ router = APIRouter()
 
 
 @router.get("/overview", summary="求职仪表盘总览")
-async def dashboard_overview(
+def dashboard_overview(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -161,7 +161,7 @@ async def dashboard_overview(
 
 
 @router.get("/weekly-report", summary="求职周报")
-async def weekly_report(
+def weekly_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -276,7 +276,7 @@ def _generate_suggestions(new_apps, stage_changes, interviews):
 
 
 @router.get("/today-tasks", summary="今日待办")
-async def today_tasks(
+def today_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -412,7 +412,7 @@ async def today_tasks(
 
 
 @router.get("/next-actions", summary="下一步建议（基于投递数据规则）")
-async def next_actions(
+def next_actions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

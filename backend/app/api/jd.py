@@ -18,9 +18,7 @@ router = APIRouter()
 
 
 @router.post("", summary="创建岗位 JD（同时可选解析）")
-async def create_jd(
-    payload: JDCreateReq, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def create_jd(payload: JDCreateReq, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # ---- JD 文本非空校验 ----
     if not payload.raw_text or not payload.raw_text.strip():
         return fail(message="JD 内容不能为空", code=ERR_PARAM)
@@ -43,7 +41,7 @@ async def create_jd(
 
 
 @router.post("/parse", summary="解析 JD（调用 LLM）")
-async def parse_jd(payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def parse_jd(payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     jd_id = payload.get("jd_id")
     if not jd_id:
         return fail(message="jd_id 必填", code=ERR_PARAM)
@@ -78,7 +76,7 @@ async def parse_jd(payload: dict, db: Session = Depends(get_db), current_user: U
 
 
 @router.get("/list", summary="JD 列表")
-async def list_jd(
+def list_jd(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -112,7 +110,7 @@ async def list_jd(
 
 
 @router.get("/{jd_id}", summary="获取 JD 详情")
-async def get_jd(jd_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_jd(jd_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     jd = get_accessible_job(db, jd_id, current_user)
     if not jd:
         return fail(message="JD 不存在或无权限", code=ERR_PARAM)
@@ -136,7 +134,7 @@ async def get_jd(jd_id: int, db: Session = Depends(get_db), current_user: User =
 
 
 @router.post("/import-url", summary="从URL粘贴导入JD")
-async def import_jd_from_url(
+def import_jd_from_url(
     payload: dict,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -188,7 +186,7 @@ async def import_jd_from_url(
 
 
 @router.post("/batch-import", summary="批量导入JD")
-async def batch_import_jds(
+def batch_import_jds(
     payload: dict,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

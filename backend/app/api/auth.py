@@ -85,7 +85,7 @@ def _find_user_by_account(db: Session, account: str) -> User | None:
 
 @router.post("/register", summary="用户注册")
 @get_limiter().limit(auth_limit())
-async def register(
+def register(
     request: Request,
     response: Response,
     payload: RegisterReq,
@@ -124,7 +124,7 @@ async def register(
 
 @router.post("/login", summary="用户登录")
 @get_limiter().limit(login_limit())
-async def login(
+def login(
     request: Request,
     response: Response,
     payload: LoginReq,
@@ -141,7 +141,7 @@ async def login(
 
 @router.post("/reset-password", summary="重置密码")
 @get_limiter().limit(login_limit())
-async def reset_password(
+def reset_password(
     request: Request,
     response: Response,
     payload: PasswordResetReq,
@@ -191,7 +191,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 
 @router.put("/me/profile", summary="更新用户个人资料")
-async def update_profile(
+def update_profile(
     payload: UserProfileUpdateReq,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -215,7 +215,7 @@ async def update_profile(
 
 
 @router.get("/admin/users", summary="管理员查询用户列表")
-async def list_users(
+def list_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -246,7 +246,7 @@ async def list_users(
 
 @router.post("/send-verification-email", summary="发送邮箱验证邮件")
 @get_limiter().limit(login_limit())
-async def send_verification_email(
+def send_verification_email(
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -270,7 +270,7 @@ async def send_verification_email(
 
 
 @router.post("/verify-email", summary="验证邮箱")
-async def verify_email(
+def verify_email(
     payload: dict,
     db: Session = Depends(get_db),
 ):
@@ -296,7 +296,7 @@ async def verify_email(
 
 @router.post("/forgot-password", summary="忘记密码（发送重置链接）")
 @get_limiter().limit(login_limit())
-async def forgot_password(
+def forgot_password(
     request: Request,
     payload: dict,
     db: Session = Depends(get_db),
@@ -323,7 +323,7 @@ async def forgot_password(
 
 
 @router.post("/reset-password-with-token", summary="使用 Token 重置密码")
-async def reset_password_with_token(
+def reset_password_with_token(
     payload: dict,
     db: Session = Depends(get_db),
 ):
@@ -351,7 +351,7 @@ async def reset_password_with_token(
 
 
 @router.get("/export-data", summary="导出用户全部数据")
-async def export_user_data(
+def export_user_data(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -384,7 +384,7 @@ async def export_user_data(
 
 
 @router.get("/data-summary", summary="获取个人数据概览")
-async def get_user_data_summary(
+def get_user_data_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -407,7 +407,7 @@ async def get_user_data_summary(
 
 
 @router.delete("/data/resumes", summary="删除用户所有简历")
-async def delete_user_resumes(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_user_resumes(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from app.models.history import Resume, ResumeVersion
     from app.services.audit_service import write_audit_log
 
@@ -423,7 +423,7 @@ async def delete_user_resumes(db: Session = Depends(get_db), current_user: User 
 
 
 @router.delete("/data/analyses", summary="删除用户所有分析记录")
-async def delete_user_analyses(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_user_analyses(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from app.models.history import AnalysisRecord
     from app.services.audit_service import write_audit_log
 
@@ -435,7 +435,7 @@ async def delete_user_analyses(db: Session = Depends(get_db), current_user: User
 
 
 @router.delete("/data/interviews", summary="删除用户所有面试记录")
-async def delete_user_interviews(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_user_interviews(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from app.models.interview_session import InterviewSession
     from app.services.audit_service import write_audit_log
 
@@ -447,7 +447,7 @@ async def delete_user_interviews(db: Session = Depends(get_db), current_user: Us
 
 
 @router.delete("/account", summary="注销账号（永久删除账号与全部数据）")
-async def delete_account(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_account(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """永久注销当前账号：删除其全部关联数据与用户记录本身。
 
     删除范围按 user_id 或间接关联（简历/任务/会话 id）覆盖核心业务表；

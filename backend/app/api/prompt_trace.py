@@ -104,7 +104,7 @@ def _query_rows(
 
 
 @router.get("/summary", summary="Prompt trace summary")
-async def prompt_trace_summary(
+def prompt_trace_summary(
     source: str | None = Query(None),
     prompt_version: str | None = Query(None),
     status: str | None = Query(None),
@@ -169,7 +169,7 @@ async def prompt_trace_summary(
 
 
 @router.get("/list", summary="List prompt traces")
-async def list_prompt_traces(
+def list_prompt_traces(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     source: str | None = Query(None),
@@ -211,7 +211,7 @@ async def list_prompt_traces(
 
 
 @router.get("/compare", summary="Compare prompt versions")
-async def compare_prompt_versions(
+def compare_prompt_versions(
     version_a: str = Query(..., min_length=1),
     version_b: str = Query(..., min_length=1),
     source: str | None = Query(None),
@@ -269,7 +269,7 @@ async def compare_prompt_versions(
 
 
 @router.get("/{trace_id}", summary="Prompt trace detail")
-async def get_prompt_trace_detail(
+def get_prompt_trace_detail(
     trace_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -281,7 +281,7 @@ async def get_prompt_trace_detail(
 
 
 @router.post("/{trace_id}/feedback", summary="Update prompt trace feedback")
-async def update_prompt_trace_feedback(
+def update_prompt_trace_feedback(
     trace_id: int,
     payload: dict,
     db: Session = Depends(get_db),

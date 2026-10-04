@@ -22,7 +22,7 @@ VALID_TYPES = {
 
 
 @router.get("/list", summary="获取消息列表")
-async def list_notifications(
+def list_notifications(
     type: str = Query("", description="消息类型过滤"),
     is_read: int | None = Query(None, description="已读状态: 0-未读 1-已读"),
     page: int = Query(1, ge=1),
@@ -47,7 +47,7 @@ async def list_notifications(
 
 
 @router.get("/unread-count", summary="获取未读消息数")
-async def unread_count(
+def unread_count(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -73,7 +73,7 @@ async def unread_count(
 
 
 @router.post("/{notification_id}/read", summary="标记消息已读")
-async def mark_read(
+def mark_read(
     notification_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -101,7 +101,7 @@ async def mark_read(
 
 
 @router.post("/read-all", summary="全部标记已读")
-async def mark_all_read(
+def mark_all_read(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -118,7 +118,7 @@ async def mark_all_read(
 
 
 @router.delete("/{notification_id}", summary="删除消息")
-async def delete_notification(
+def delete_notification(
     notification_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

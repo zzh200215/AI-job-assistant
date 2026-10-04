@@ -244,7 +244,7 @@ async def probe_model_runtime(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/overview", summary="Get project overview metrics")
-async def get_system_overview(
+def get_system_overview(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -281,7 +281,7 @@ async def get_system_overview(
 
 
 @router.get("/ai-costs", summary="Get AI cost attribution")
-async def get_ai_cost_attribution(
+def get_ai_cost_attribution(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -324,7 +324,7 @@ async def get_ai_cost_attribution(
 
 
 @router.get("/ai-releases", summary="List AI release records")
-async def list_ai_releases(
+def list_ai_releases(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -335,7 +335,7 @@ async def list_ai_releases(
 
 
 @router.post("/ai-releases", summary="Create an AI release candidate")
-async def create_ai_release(
+def create_ai_release(
     payload: dict,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -383,7 +383,7 @@ async def create_ai_release(
 
 
 @router.post("/ai-releases/{release_id}/evaluate", summary="Re-evaluate an AI release gate")
-async def evaluate_ai_release(
+def evaluate_ai_release(
     release_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -408,7 +408,7 @@ async def evaluate_ai_release(
 
 
 @router.post("/ai-releases/{release_id}/approve", summary="Approve a gated AI release")
-async def approve_ai_release(
+def approve_ai_release(
     release_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -437,7 +437,7 @@ async def approve_ai_release(
 
 
 @router.post("/alerts/evaluate", summary="Evaluate operational alert thresholds")
-async def evaluate_system_alerts(
+def evaluate_system_alerts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -449,7 +449,7 @@ async def evaluate_system_alerts(
 
 
 @router.get("/alerts", summary="List operational alerts")
-async def list_system_alerts(
+def list_system_alerts(
     include_resolved: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -465,7 +465,7 @@ async def list_system_alerts(
 
 
 @router.post("/alerts/{alert_id}/acknowledge", summary="Acknowledge an operational alert")
-async def acknowledge_system_alert(
+def acknowledge_system_alert(
     alert_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

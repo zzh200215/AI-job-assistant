@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 @router.get("/preferences", summary="获取用户偏好设置")
-async def get_preferences(
+def get_preferences(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -33,7 +33,7 @@ async def get_preferences(
 
 
 @router.put("/preferences/notification", summary="更新通知偏好")
-async def update_notification_preferences(
+def update_notification_preferences(
     payload: NotificationPrefsUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -52,7 +52,7 @@ async def update_notification_preferences(
 
 
 @router.put("/preferences/privacy", summary="更新隐私设置")
-async def update_privacy_settings(
+def update_privacy_settings(
     payload: PrivacyUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -71,7 +71,7 @@ async def update_privacy_settings(
 
 
 @router.put("/preferences/defaults", summary="更新默认设置")
-async def update_defaults(
+def update_defaults(
     payload: DefaultsUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

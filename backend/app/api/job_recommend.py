@@ -524,7 +524,7 @@ async def reset_recommend_config(
 
 
 @router.post("/recommend-config/compare", summary="Compare two recommendation configs")
-async def compare_recommend_config(
+def compare_recommend_config(
     payload: dict = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -971,7 +971,7 @@ def _compare_scored_variants(left: dict, right: dict) -> dict:
 
 
 @router.get("/recommend", summary="Recommend jobs")
-async def recommend_jobs(
+def recommend_jobs(
     resume_id: int = Query(..., description="Resume ID"),
     limit: int = Query(5, ge=1, le=20, description="Result size"),
     location: str | None = Query(None, description="Location filter"),
@@ -1092,7 +1092,7 @@ async def batch_import(
 
 
 @router.post("/seed", summary="Seed demo jobs")
-async def seed_jobs(
+def seed_jobs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1215,7 +1215,7 @@ async def seed_jobs(
 
 
 @router.post("/feedback", summary="Submit recommendation feedback")
-async def submit_feedback(
+def submit_feedback(
     resume_id: int = Query(...),
     jd_id: int = Query(...),
     feedback_type: str = Query(..., pattern="^(like|dislike)$"),
@@ -1247,7 +1247,7 @@ async def submit_feedback(
 
 
 @router.get("/feedback/stats", summary="Recommendation feedback summary")
-async def feedback_stats(
+def feedback_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1256,7 +1256,7 @@ async def feedback_stats(
 
 
 @router.get("/feedback/evaluation", summary="Recommendation feedback evaluation dashboard")
-async def feedback_evaluation(
+def feedback_evaluation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1271,7 +1271,7 @@ async def feedback_evaluation(
 
 
 @router.get("/feedback/tuning-samples", summary="Recommendation tuning samples")
-async def feedback_tuning_samples(
+def feedback_tuning_samples(
     anomaly_only: bool = Query(True),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1287,7 +1287,7 @@ async def feedback_tuning_samples(
 
 
 @router.get("/feedback/tuning-export", summary="Export recommendation tuning samples")
-async def export_feedback_tuning_samples(
+def export_feedback_tuning_samples(
     format: str = Query("csv", pattern="^(csv|json)$"),
     anomaly_only: bool = Query(True),
     db: Session = Depends(get_db),
@@ -1367,7 +1367,7 @@ async def export_feedback_tuning_samples(
 
 
 @router.post("/feedback/apply-tuning", summary="Apply feedback-driven tuning suggestion")
-async def apply_feedback_tuning(
+def apply_feedback_tuning(
     payload: dict = Body(default={}),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1404,7 +1404,7 @@ async def apply_feedback_tuning(
 
 
 @router.get("/list", summary="List jobs")
-async def list_jobs(
+def list_jobs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     source: str | None = Query(None, description="manual/imported/api"),
@@ -1447,7 +1447,7 @@ async def list_jobs(
 
 
 @router.get("/{jd_id}", summary="Get job detail")
-async def get_jd_detail(
+def get_jd_detail(
     jd_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1493,7 +1493,7 @@ _SUPPRESSED_LIST_MAX = 200
 
 
 @router.post("/bookmarks", summary="收藏/不感兴趣职位")
-async def bookmark_job(
+def bookmark_job(
     payload: dict = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1548,7 +1548,7 @@ async def bookmark_job(
 
 
 @router.delete("/bookmarks/{jd_id}", summary="取消收藏/移除不感兴趣")
-async def remove_bookmark(
+def remove_bookmark(
     jd_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1570,7 +1570,7 @@ async def remove_bookmark(
 
 
 @router.post("/bookmarks/restore", summary="恢复被隐藏的职位")
-async def restore_job(
+def restore_job(
     payload: dict = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1615,7 +1615,7 @@ async def restore_job(
 
 
 @router.get("/bookmarks/list", summary="获取收藏的职位列表")
-async def list_bookmarks(
+def list_bookmarks(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -1657,7 +1657,7 @@ async def list_bookmarks(
 
 
 @router.get("/bookmarks/dismissed", summary="获取被隐藏职位及原因")
-async def list_dismissed(
+def list_dismissed(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/sessions", summary="创建 AI 模拟面试")
-async def create_session(
+def create_session(
     payload: InterviewSessionCreate,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
@@ -132,7 +132,7 @@ async def create_session(
 
 
 @router.get("/sessions", summary="用户面试列表")
-async def list_sessions(
+def list_sessions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -164,7 +164,7 @@ async def list_sessions(
 
 
 @router.get("/sessions/{session_id}", summary="面试详情（含报告）")
-async def get_session(
+def get_session(
     session_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -184,7 +184,7 @@ async def get_session(
 
 
 @router.get("/sessions/{session_id}/evaluations", summary="获取异步逐题评分状态")
-async def get_session_evaluations(
+def get_session_evaluations(
     session_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -210,7 +210,7 @@ async def get_session_evaluations(
 
 
 @router.delete("/sessions/{session_id}", summary="删除面试")
-async def delete_session(
+def delete_session(
     session_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -598,7 +598,7 @@ def _map_category(q_type: str) -> str:
 
 
 @router.get("/question-bank", summary="浏览面试题库")
-async def browse_question_bank(
+def browse_question_bank(
     category: str = QueryParam("", description="分类过滤: basic/tech/project/scenario/behavioral"),
     sub_category: str = QueryParam("", description="子分类过滤"),
     difficulty: str = QueryParam("", description="难度过滤: easy/medium/hard"),
@@ -629,7 +629,7 @@ async def browse_question_bank(
 
 
 @router.get("/question-bank/categories", summary="获取题库分类统计")
-async def question_bank_categories(
+def question_bank_categories(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -659,7 +659,7 @@ async def question_bank_categories(
 
 
 @router.get("/preparation/{jd_id}", summary="针对JD的面试准备建议")
-async def interview_preparation(
+def interview_preparation(
     jd_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -738,7 +738,7 @@ async def interview_preparation(
 
 
 @router.get("/performance", summary="面试表现趋势分析")
-async def interview_performance(
+def interview_performance(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

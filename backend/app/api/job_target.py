@@ -16,7 +16,7 @@ router = APIRouter()
 
 
 @router.post("/", summary="创建求职目标")
-async def create_target(
+def create_target(
     payload: TargetCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -71,7 +71,7 @@ async def create_target(
 
 
 @router.get("/list", summary="获取求职目标列表")
-async def list_targets(
+def list_targets(
     status: str = Query("", description="状态过滤: active/paused/achieved/archived"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -93,7 +93,7 @@ async def list_targets(
 
 
 @router.get("/{target_id}", summary="获取求职目标详情")
-async def get_target(
+def get_target(
     target_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -116,7 +116,7 @@ async def get_target(
 
 
 @router.put("/{target_id}", summary="更新求职目标")
-async def update_target(
+def update_target(
     target_id: int,
     payload: TargetUpdate,
     db: Session = Depends(get_db),
@@ -154,7 +154,7 @@ async def update_target(
 
 
 @router.delete("/{target_id}", summary="删除求职目标")
-async def delete_target(
+def delete_target(
     target_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -181,7 +181,7 @@ async def delete_target(
 
 
 @router.post("/{target_id}/set-primary", summary="设为主目标")
-async def set_primary(
+def set_primary(
     target_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -209,7 +209,7 @@ async def set_primary(
 
 
 @router.get("/{target_id}/applications", summary="获取目标下的投递记录")
-async def target_applications(
+def target_applications(
     target_id: int,
     stage: str = Query("", description="阶段过滤"),
     page: int = Query(1, ge=1),
@@ -248,7 +248,7 @@ async def target_applications(
 
 
 @router.get("/{target_id}/progress", summary="目标进度分析")
-async def target_progress(
+def target_progress(
     target_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

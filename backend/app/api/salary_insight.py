@@ -21,7 +21,7 @@ router = APIRouter()
 
 
 @router.get("/overview", summary="薪资总览")
-async def salary_overview(
+def salary_overview(
     position: str = Query("", description="岗位关键词"),
     city: str = Query("", description="城市"),
     industry: str = Query("", description="行业"),
@@ -37,7 +37,7 @@ async def salary_overview(
 
 
 @router.get("/compare", summary="薪资对比")
-async def salary_compare(
+def salary_compare(
     position: str = Query("", description="岗位关键词"),
     cities: str = Query("", description="城市列表，逗号分隔"),
     db: Session = Depends(get_db),
@@ -58,7 +58,7 @@ async def salary_compare(
 
 
 @router.get("/expectation-check", summary="期望薪资合理性评估")
-async def salary_expectation_check(
+def salary_expectation_check(
     position: str = Query(..., description="目标岗位"),
     city: str = Query("", description="目标城市"),
     expected_min: float = Query(..., description="期望最低薪资(K/月)"),

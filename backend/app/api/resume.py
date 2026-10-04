@@ -228,7 +228,7 @@ async def upload_resume(
 
 
 @router.post("/parse", summary="Parse resume")
-async def parse_resume(
+def parse_resume(
     payload: dict,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -263,7 +263,7 @@ async def parse_resume(
 
 
 @router.get("/list", summary="List resumes")
-async def list_resume(
+def list_resume(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -307,7 +307,7 @@ async def list_resume(
 
 
 @router.get("/accessible-list", summary="获取所有可筛选的简历（企业端使用）")
-async def accessible_resume_list(
+def accessible_resume_list(
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -557,7 +557,7 @@ SEED_CANDIDATES = [
 
 
 @router.post("/seed-demo", summary="一键生成演示候选人简历")
-async def seed_demo_resumes(
+def seed_demo_resumes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -610,7 +610,7 @@ async def seed_demo_resumes(
 
 
 @router.get("/{resume_id}", summary="Get resume detail")
-async def get_resume(
+def get_resume(
     resume_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -637,7 +637,7 @@ async def get_resume(
 
 
 @router.delete("/{resume_id}", summary="Soft delete resume")
-async def delete_resume(
+def delete_resume(
     resume_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -654,7 +654,7 @@ async def delete_resume(
 
 
 @router.post("/{resume_id}/generate-optimized", summary="Generate optimized resume")
-async def generate_optimized_resume(
+def generate_optimized_resume(
     resume_id: int,
     payload: dict | None = None,
     db: Session = Depends(get_db),
@@ -682,7 +682,7 @@ async def generate_optimized_resume(
 
 
 @router.get("/{resume_id}/versions", summary="Get resume versions")
-async def get_resume_versions(
+def get_resume_versions(
     resume_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -713,7 +713,7 @@ async def get_resume_versions(
 
 
 @router.post("/{resume_id}/versions", summary="Create editable resume version")
-async def create_resume_version(
+def create_resume_version(
     resume_id: int,
     payload: dict,
     db: Session = Depends(get_db),
@@ -755,7 +755,7 @@ async def create_resume_version(
 
 
 @router.get("/{resume_id}/versions/diff", summary="Compare editable resume versions")
-async def compare_resume_versions(
+def compare_resume_versions(
     resume_id: int,
     compare_version_id: int = Query(...),
     base_version_id: int | None = Query(None),
@@ -789,7 +789,7 @@ async def compare_resume_versions(
 
 
 @router.patch("/{resume_id}/versions/{version_id}", summary="Update editable resume version")
-async def update_resume_version(
+def update_resume_version(
     resume_id: int,
     version_id: int,
     payload: dict,
@@ -827,7 +827,7 @@ async def update_resume_version(
 
 
 @router.post("/{resume_id}/versions/{version_id}/suggestions", summary="Persist resume suggestion decision")
-async def save_suggestion_decision(
+def save_suggestion_decision(
     resume_id: int,
     version_id: int,
     payload: dict,
@@ -854,7 +854,7 @@ async def save_suggestion_decision(
 
 
 @router.post("/{resume_id}/ats-preview", summary="Preview ATS quality for current resume content")
-async def preview_resume_ats(
+def preview_resume_ats(
     resume_id: int,
     payload: dict | None = None,
     db: Session = Depends(get_db),
@@ -886,7 +886,7 @@ async def preview_resume_ats(
 
 
 @router.post("/{resume_id}/export", summary="Prepare resume export")
-async def export_resume(
+def export_resume(
     resume_id: int,
     payload: dict,
     db: Session = Depends(get_db),
@@ -980,7 +980,7 @@ async def download_resume_export(
 
 
 @router.post("/{resume_id}/tailor", summary="针对目标JD自适应改写简历")
-async def tailor_resume(
+def tailor_resume(
     resume_id: int,
     payload: dict,
     db: Session = Depends(get_db),
@@ -1023,7 +1023,7 @@ async def tailor_resume(
 
 
 @router.post("/{resume_id}/rewrite-suggestions", summary="生成行级简历改写建议")
-async def rewrite_suggestions(
+def rewrite_suggestions(
     resume_id: int,
     payload: dict | None = None,
     db: Session = Depends(get_db),
@@ -1042,7 +1042,7 @@ async def rewrite_suggestions(
 
 
 @router.post("/{resume_id}/apply-rewrites", summary="应用行级改写并重算匹配分")
-async def apply_rewrites(
+def apply_rewrites(
     resume_id: int,
     payload: dict | None = None,
     db: Session = Depends(get_db),
@@ -1076,7 +1076,7 @@ async def apply_rewrites(
 
 
 @router.get("/{resume_id}/quick-score", summary="简历完整度检查（基于规则）")
-async def get_resume_quick_score(
+def get_resume_quick_score(
     resume_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1095,7 +1095,7 @@ async def get_resume_quick_score(
 
 
 @router.post("/{resume_id}/analyze", summary="简历深度分析（AI）")
-async def analyze_resume_api(
+def analyze_resume_api(
     resume_id: int,
     payload: dict = None,
     db: Session = Depends(get_db),
@@ -1128,7 +1128,7 @@ async def analyze_resume_api(
 
 
 @router.post("/{resume_id}/diagnose", summary="简历诊断（快速评分+AI分析聚合）")
-async def diagnose_resume(
+def diagnose_resume(
     resume_id: int,
     payload: dict = None,
     db: Session = Depends(get_db),

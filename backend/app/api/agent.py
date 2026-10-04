@@ -26,7 +26,7 @@ router = APIRouter()
 
 
 @router.post("/start", summary="[Deprecated] Start agent workflow", deprecated=True)
-async def start_analysis(
+def start_analysis(
     payload: AgentStartReq,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -56,7 +56,7 @@ async def start_analysis(
 
 
 @router.get("/tasks", summary="List current user's agent tasks")
-async def get_task_list(
+def get_task_list(
     status: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -67,7 +67,7 @@ async def get_task_list(
 
 
 @router.get("/tasks/summary", summary="Get current user's agent task summary")
-async def get_task_summary(
+def get_task_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -75,7 +75,7 @@ async def get_task_summary(
 
 
 @router.post("/task/{task_id}/cancel", summary="Cancel a running task")
-async def cancel_agent_task(
+def cancel_agent_task(
     task_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -87,7 +87,7 @@ async def cancel_agent_task(
 
 
 @router.post("/task/{task_id}/retry", summary="Retry a finished task")
-async def retry_agent_task(
+def retry_agent_task(
     task_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -106,7 +106,7 @@ async def retry_agent_task(
 
 
 @router.get("/task/{task_id}", summary="Get task status")
-async def get_task(
+def get_task(
     task_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -118,7 +118,7 @@ async def get_task(
 
 
 @router.get("/task/{task_id}/steps", summary="Get task step details")
-async def get_task_steps(
+def get_task_steps(
     task_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

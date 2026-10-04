@@ -11,8 +11,6 @@ the keywords panel told candidates "覆盖良好" about a resume with five named
 
 from __future__ import annotations
 
-import asyncio
-
 from app.api import resume as resume_api
 from app.core.security import hash_password
 from app.models.user import User
@@ -65,7 +63,9 @@ def _user(db):
 
 def _diagnose(db, resume_id, user, analysis, monkeypatch):
     monkeypatch.setattr(resume_api, "analyze_resume", lambda *a, **k: analysis)
-    body = asyncio.run(resume_api.diagnose_resume(resume_id, {"target_position": ""}, db=db, current_user=user))
+    # §10.15：`diagnose_resume` 改成 def 路由（同步会话进 anyio 线程池），这里同步调用即可——
+    # 这条测试量的是报告形状，不是路由的 async 形状。
+    body = resume_api.diagnose_resume(resume_id, {"target_position": ""}, db=db, current_user=user)
     assert body["code"] == 0, body
     return body["data"]
 

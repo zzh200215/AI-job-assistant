@@ -44,7 +44,7 @@ def _get_user_run(db: Session, run_id: int, user_id: int) -> AgentRun | None:
 
 
 @router.post("/auto", summary="Deprecated auto-dispatch multi-agent entry", deprecated=True)
-async def auto_analyze(
+def auto_analyze(
     payload: AutoStartReq,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -82,7 +82,7 @@ async def auto_analyze(
 
 
 @router.post("/start", summary="Deprecated full multi-agent entry", deprecated=True)
-async def start_multi_agents(
+def start_multi_agents(
     payload: MultiAgentStartReq,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -103,7 +103,7 @@ async def start_multi_agents(
 
 
 @router.get("/run/{run_id}", summary="Get legacy multi-agent run")
-async def get_run(
+def get_run(
     run_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -115,7 +115,7 @@ async def get_run(
 
 
 @router.get("/run/{run_id}/detail", summary="Get legacy multi-agent run detail")
-async def get_run_detail(
+def get_run_detail(
     run_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

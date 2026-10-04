@@ -175,7 +175,7 @@ async def upload_knowledge(
 
 
 @router.get("/list", summary="List knowledge documents")
-async def list_knowledge(
+def list_knowledge(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     doc_type: str | None = Query(None),
@@ -212,7 +212,7 @@ async def list_knowledge(
 
 
 @router.get("/{doc_id}", summary="Get knowledge document detail")
-async def get_document(
+def get_document(
     doc_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -226,7 +226,7 @@ async def get_document(
 
 
 @router.get("/{doc_id}/chunks", summary="Get indexed chunks for a document")
-async def get_document_chunks(
+def get_document_chunks(
     doc_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -246,7 +246,7 @@ async def get_document_chunks(
 
 
 @router.delete("/{doc_id}", summary="Delete a knowledge document")
-async def delete_document(
+def delete_document(
     doc_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -283,7 +283,7 @@ async def reprocess_document(
 
 
 @router.get("/{doc_id}/download", summary="Download a knowledge document")
-async def download_document(
+def download_document(
     doc_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

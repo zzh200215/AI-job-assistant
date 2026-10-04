@@ -173,7 +173,7 @@ router = APIRouter()
 
 
 @router.post("/full", summary="一键智能分析：统一编排 Agent 工作流")
-async def full_smart_analysis(
+def full_smart_analysis(
     payload: FullAnalysisReq,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -204,7 +204,7 @@ async def full_smart_analysis(
 
 
 @router.post("/match", summary="一键分析：匹配度 + 优化 + 面试题")
-async def full_match(
+def full_match(
     payload: MatchReq,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -245,7 +245,7 @@ async def full_match(
 
 
 @router.post("/{record_id}/optimize/regenerate", summary="重新生成简历优化建议")
-async def regen_optimize(
+def regen_optimize(
     record_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -276,7 +276,7 @@ async def regen_optimize(
 
 
 @router.post("/{record_id}/interview/regenerate", summary="重新生成面试题")
-async def regen_interview(
+def regen_interview(
     record_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -307,7 +307,7 @@ async def regen_interview(
 
 
 @router.get("/{record_id}", summary="获取单条分析结果详情")
-async def get_record(
+def get_record(
     record_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -371,7 +371,7 @@ async def get_record(
 
 
 @router.get("/{record_id}/references", summary="获取分析引用的知识库来源")
-async def get_record_references(
+def get_record_references(
     record_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -409,7 +409,7 @@ async def get_record_references(
 
 
 @router.post("/explain-match", summary="匹配度解释器")
-async def explain_match(
+def explain_match(
     payload: ExplainMatchReq,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

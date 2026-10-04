@@ -24,7 +24,7 @@ router = APIRouter()
 
 
 @router.post("/recommend", summary="职业方向推荐")
-async def recommend_career_paths(
+def recommend_career_paths(
     resume_id: int,
     limit: int = Query(8, ge=1, le=20, description="最多返回几个方向"),
     db: Session = Depends(get_db),

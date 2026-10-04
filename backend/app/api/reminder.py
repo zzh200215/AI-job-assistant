@@ -20,7 +20,7 @@ router = APIRouter()
 
 
 @router.post("/trigger", summary="手动触发提醒检查（管理员）")
-async def trigger_reminders(
+def trigger_reminders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -32,7 +32,7 @@ async def trigger_reminders(
 
 
 @router.get("/upcoming", summary="获取即将到来的提醒列表")
-async def upcoming_reminders(
+def upcoming_reminders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -151,7 +151,7 @@ async def upcoming_reminders(
 
 
 @router.post("/match-jds", summary="为求职目标匹配新JD")
-async def match_jds_for_target(
+def match_jds_for_target(
     payload: MatchJdsRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -178,7 +178,7 @@ async def match_jds_for_target(
 
 
 @router.get("/preview-matches/{target_id}", summary="预览目标匹配的JD（不发通知）")
-async def preview_matches(
+def preview_matches(
     target_id: int,
     limit: int = Query(10, ge=1, le=30),
     db: Session = Depends(get_db),

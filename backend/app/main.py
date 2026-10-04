@@ -29,6 +29,7 @@ from app.core.runtime_metrics import record_request
 from app.core.scheduler import shutdown_scheduler, start_scheduler
 from app.core.schema_drift import log_drift
 from app.core.tenant_context import tenant_context_middleware
+from app.core.threadpool import apply_thread_limit
 from app.services.interview_evaluation_service import shutdown_interview_evaluation_executor
 from app.services.orchestration_runner import mark_stale_running_tasks_failed, shutdown_orchestration_executor
 from app.utils.response import ERR_AUTH, ERR_COMMON, ERR_PARAM, fail, ok
@@ -43,6 +44,9 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # §10.15：路由改 `def` 之后，并发取连接的线程数必须有上限，否则一半线程会消失在
+    # SQLAlchemy 的 30 秒等待队列里。上限 = DB_POOL_SIZE + DB_MAX_OVERFLOW，见 core/threadpool.py。
+    apply_thread_limit()
     if settings.AUTO_CREATE_TABLES:
         Base.metadata.create_all(bind=engine)
     # 两种模式都体检：开发态能发现"模型改了但表没建全"，生产态（AUTO_CREATE_TABLES=false）

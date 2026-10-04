@@ -19,7 +19,7 @@ router = APIRouter()
 
 
 @router.get("/events", summary="求职时间线事件列表")
-async def timeline_events(
+def timeline_events(
     start_date: str = Query("", description="开始日期 YYYY-MM-DD"),
     end_date: str = Query("", description="结束日期 YYYY-MM-DD"),
     event_types: str = Query("", description="事件类型过滤，逗号分隔: application/interview/offer/journal"),
@@ -253,7 +253,7 @@ async def timeline_events(
 
 
 @router.get("/by-date", summary="按日期聚合的时间线")
-async def timeline_by_date(
+def timeline_by_date(
     start_date: str = Query("", description="开始日期 YYYY-MM-DD"),
     end_date: str = Query("", description="结束日期 YYYY-MM-DD"),
     db: Session = Depends(get_db),
@@ -374,7 +374,7 @@ async def timeline_by_date(
 
 
 @router.get("/story", summary="求职故事生成")
-async def generate_story(
+def generate_story(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

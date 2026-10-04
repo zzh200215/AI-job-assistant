@@ -74,7 +74,7 @@ def get_active_organization(
 
 
 @router.get("", summary="List current user's organizations")
-async def list_organizations(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_organizations(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     rows = (
         db.query(Organization, OrganizationMembership)
         .join(OrganizationMembership, OrganizationMembership.organization_id == Organization.id)
@@ -91,9 +91,7 @@ async def list_organizations(db: Session = Depends(get_db), current_user: User =
 
 
 @router.post("", summary="Create an organization workspace")
-async def create_organization(
-    payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def create_organization(payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     name = str(payload.get("name") or "").strip()
     slug = re.sub(r"[^a-z0-9-]+", "-", str(payload.get("slug") or name).strip().lower()).strip("-")
     if not name or not slug or len(name) > 100 or len(slug) > 80:
@@ -115,9 +113,7 @@ async def create_organization(
 
 
 @router.put("/current", summary="Switch current organization workspace")
-async def switch_organization(
-    payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def switch_organization(payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     organization_id = int(payload.get("organization_id") or 0)
     if not _membership(db, organization_id, current_user.id):
         raise api_error(403, "无权切换至该组织", ERR_AUTH)
@@ -127,9 +123,7 @@ async def switch_organization(
 
 
 @router.get("/{organization_id}/members", summary="List organization members")
-async def list_members(
-    organization_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
-):
+def list_members(organization_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _require_manager(db, organization_id, current_user)
     rows = (
         db.query(OrganizationMembership, User)
@@ -149,7 +143,7 @@ async def list_members(
 
 
 @router.post("/{organization_id}/members", summary="Add an existing user to organization")
-async def add_member(
+def add_member(
     organization_id: int, payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     _require_manager(db, organization_id, current_user)
@@ -175,7 +169,7 @@ async def add_member(
 
 
 @router.put("/{organization_id}/members/{user_id}", summary="Change an organization member role")
-async def change_member_role(
+def change_member_role(
     organization_id: int,
     user_id: int,
     payload: dict,
@@ -204,7 +198,7 @@ async def change_member_role(
 
 
 @router.delete("/{organization_id}/members/{user_id}", summary="Remove an organization member")
-async def remove_member(
+def remove_member(
     organization_id: int,
     user_id: int,
     db: Session = Depends(get_db),
@@ -233,7 +227,7 @@ async def remove_member(
 
 
 @router.put("/{organization_id}/sso", summary="Configure organization SSO provider")
-async def configure_sso(
+def configure_sso(
     organization_id: int, payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     _require_manager(db, organization_id, current_user)
@@ -257,7 +251,7 @@ async def configure_sso(
 
 
 @router.get("/sso/feishu/{slug}/start", summary="Start Feishu SSO")
-async def start_feishu_sso(slug: str, db: Session = Depends(get_db)):
+def start_feishu_sso(slug: str, db: Session = Depends(get_db)):
     if not settings.FEISHU_APP_ID or not settings.FEISHU_APP_SECRET or not settings.FEISHU_REDIRECT_URI:
         raise api_error(503, "飞书 SSO 尚未配置应用凭据", ERR_PARAM)
     organization = db.query(Organization).filter(Organization.slug == slug, Organization.status == "active").first()
