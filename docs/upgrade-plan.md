@@ -157,7 +157,7 @@
 
 **遗留（不阻塞 B）**：
 - `chat_with_tools` 轮次耗尽时把工具回执当最终答案返回（已标 `tool_output` 可辨识，修复归入阶段 C）
-- A6 仍等付费墙决策（见 §10.1）
+- A6 的付费墙那一半已按 §10.1 的执行结果落地（**D108 权益表措辞 + D109 摘掉购买入口与企业版块**，页面上按钮归 0、真门那行改成数字）；原文捆着的另一半（`tenant_context` 中间件、`X-Organization-ID` 头）与 §2"企业侧冻结不删除"冲突，**记为"按 §2 不做"，不是欠账**（D109 末段）。
 - `.card-actions` 6 个按钮已换行成 2 排（本次改动前即如此），归入阶段 D 共享层处理
 
 ---
@@ -3063,6 +3063,30 @@ null .job-shell[data-v-222de06d]{position:relative;padding:18px;…}
 
 **门禁**：backend **852 → 857 passed**、`ruff check .` clean、`ruff format --check` 351 文件 clean；frontend `test:unit` 515 passed、`npm test` 17、`eslint` 0 error、`prettier --check` clean、`vue-tsc` 42、`vite build` exit 0、js+css **2240.98 → 2241.02 kB**。§10 open **12 → 12**（§10.1 落地的是措辞那一半、条目仍 open——还剩模拟支付与企业版那 5 条描述这两个入口级装饰等他点）。
 
+#### 已交付：D109 购买入口与企业版描述一起摘掉：这一页现在一个按钮都没有，而能证的那一行还是数字
+
+他点的两件事一起做：抽掉购买入口保留信息、摘掉企业版块。
+
+**屏幕实测**（`/subscription`，D108 那两条夹具、同一份视口）：
+
+| 量 | 改前 | 改后 |
+|---|---|---|
+| 页面上的按钮 | 4（每张卡一个 + 企业版"联系销售团队"） | **0** |
+| 企业版块（`enterprise-card` / `enterprise-section`） | 1 块（含 5 条无实现的能力描述） | **0** |
+| 对比表里的 ✓/✗ 图标 | 3 ✓（真门那一行三个档都是 ✓——等于没在报差异） | **0**，真门那行改成数字：`简历数量 / 1 份 / 不限 / 不限`（数字取自 API，不是静态表） |
+| "各套餐一致"格 | 24 | 24（不变） |
+| 正面陈述那句 | 在 | 在 |
+
+**删掉的东西**：套餐卡底部的 `plan-action`（含 `:disabled="plan.id === 'free'"` 那句"当前使用中"——它按 `plan.id` 猜，不看用户真实套餐）；`selectPlan` / `contactSales` / `paying` / `payResult`；`ElMessage`、`ElMessageBox`、`userErrorCopy` 三个因此不再被引用的导入；企业版块整块；卡片里 ✗ 那一支（`v-else` + `.feat-no` + `.feature-item.disabled`）——`ENFORCED_PLAN_KEYS` 只有 `resume_limit` 一项，这一列今天不可能出现"没有"，所以 `buildFeatureGroups` 顺手从 `{text, available}` 拍平成字符串列表；`api/subscription.js` 的 `createOrder` / `mockPayOrder`（改动后零调用方）与 `apiLayerMove.test.js` 里唯一测 `mockPayOrder` 形状的那条腿（`test:unit` **515 → 514**）。
+
+**色值预算随之下调**：`Subscription.vue` 的 style 块 **5 → 2**（企业版渐变两条 + `.cmp-no` 的灰一条）；`statusTagEntries` 里属于这个文件的 **1 → 0** 并整条退出预算——那 1 条正是本文件点名过的"已知噪声"：`ElMessageBox.confirm(..., { type: 'info' })` 的对话框图标色，确认框随入口一起删掉了。
+
+**没动的，写清理由**：后端 `/subscription/create-order`、`/mock-pay`、`/orders`、`/check-quota` 四个端点保留（E19 的默认拒绝继续盖着，删端点属 §2/商业化的另一件事）；`api/subscription.js` 里 `checkQuota` 与 `getMyOrders` **在我这次改动之前就已经是零调用方**，没有顺手删——同样的"装饰"判定要按 §2 的口径单独拍，记在这儿免得下轮当成新账。D108 的 `test_plan_gating_inventory.py` 5 条腿继续绿，它读的 `ENFORCED_PLAN_KEYS` 与"各套餐一致"两个标记这轮都还在（删掉任何一个它就红）。
+
+**A6 随之收口**：§10.1 决定"不做商业化 → 摘装饰侧"到此执行完毕，条目关闭。A6 原文捆着的另一半——移除 `tenant_context` 中间件与 `request.js:22-25` 的 `X-Organization-ID` 头——与 §2"企业侧冻结不删除"直接冲突，所以**从 A6 里摘出来记为"按 §2 不做"**，不是欠账。
+
+**门禁**：frontend `test:unit` **514 passed**、`npm test` 17、`eslint` 0 error、`prettier --check` clean、`vue-tsc` 42（admin 外 0）、`vite build` exit 0、js+css **2237.26 kB**（−3.76 kB）；backend **857 passed**、`ruff check .` clean。§10 open **12 → 11**（§10.1 关闭）。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
@@ -3698,7 +3722,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 ## 10. 待决策项
 
-1. **付费墙是否保留**（阻塞 A6）。**D101 把这条的措辞改准了**：`check_quota` **实现了** `deep_analysis` / `ats_check`（映射到套餐的 `can_use_deep_analysis` / `can_use_ats_check`，`subscription_service.py:258-259`，带每日额度与消费计数），缺的是**调用方**——全仓只有 `resume.py:198` 拿 `resume_count` 调它，另有一个通用端点 `/subscription/check-quota`。前端侧这些 `can_use_*` 只出现在**订阅页的权益表**（`Subscription.vue:128-210`），没有任何功能入口按它 gating。**所以后果是双向的**：免费用户实际能用深度分析（付费墙形同虚设），而订阅页同时正在对免费用户说"你没有 AI 简历优化"（一句没被证实的话）。确认不做商业化 → 摘掉装饰的那一侧（含权益表里说不出来的标记），企业侧即可安静冻结；要保留 → 补上路由级调用方，两处才同时为真。**2026-10-04 他点"摘掉装饰那侧，含权益表措辞"**，D108 落了措辞那一半：订阅页的 8 个 ✗ 与对比表 5 个 ✗ 全部撤下（屏幕实测 `feat-no` 8 → 0、`cmp-no` 5 → 0、24 格改说"各套餐一致"），没被执行过的 `N 次/日` 后缀整批撤下，`resume_limit` 那一行逐字保留（它是唯一真门），页面正面陈述"所有 AI 能力对各档开放，实际差别只有可管理的简历数量"；`check_quota` 的调用方清单钉进 `test_plan_gating_inventory.py`（5 条腿，两条反向证据实测）。**这条还没关**：还剩两个入口级的装饰等他点——`mockPayOrder` 那条"模拟支付真能改套餐"的路径（点了就升级到 Pro，而 Pro 与免费的实际差别只有简历数量），以及"企业版 — 为招聘团队量身定制"下面那 5 条能力描述（批量账号管理／定制题库／报表／客户成功经理／私有化部署，全仓没有对应实现）。A6 原文捆着的另外两件（`tenant_context` 中间件、`X-Organization-ID` 头）属 §2 冻结的企业侧、不是付费墙的装饰，没动。
+1. ~~**付费墙是否保留**（阻塞 A6）~~ —— **已定并执行完（2026-10-04 他点"摘掉装饰那侧"：D108 改了权益表措辞，D109 摘掉购买入口与企业版块）**。**D101 把这条的措辞改准了**：`check_quota` **实现了** `deep_analysis` / `ats_check`（映射到套餐的 `can_use_deep_analysis` / `can_use_ats_check`，`subscription_service.py:258-259`，带每日额度与消费计数），缺的是**调用方**——全仓只有 `resume.py:198` 拿 `resume_count` 调它，另有一个通用端点 `/subscription/check-quota`。前端侧这些 `can_use_*` 只出现在**订阅页的权益表**（`Subscription.vue:128-210`），没有任何功能入口按它 gating。**所以后果是双向的**：免费用户实际能用深度分析（付费墙形同虚设），而订阅页同时正在对免费用户说"你没有 AI 简历优化"（一句没被证实的话）。确认不做商业化 → 摘掉装饰的那一侧（含权益表里说不出来的标记），企业侧即可安静冻结；要保留 → 补上路由级调用方，两处才同时为真。**2026-10-04 他点"摘掉装饰那侧，含权益表措辞"**，D108 落了措辞那一半：订阅页的 8 个 ✗ 与对比表 5 个 ✗ 全部撤下（屏幕实测 `feat-no` 8 → 0、`cmp-no` 5 → 0、24 格改说"各套餐一致"），没被执行过的 `N 次/日` 后缀整批撤下，`resume_limit` 那一行逐字保留（它是唯一真门），页面正面陈述"所有 AI 能力对各档开放，实际差别只有可管理的简历数量"；`check_quota` 的调用方清单钉进 `test_plan_gating_inventory.py`（5 条腿，两条反向证据实测）。**这条还没关**：还剩两个入口级的装饰等他点——`mockPayOrder` 那条"模拟支付真能改套餐"的路径（点了就升级到 Pro，而 Pro 与免费的实际差别只有简历数量），以及"企业版 — 为招聘团队量身定制"下面那 5 条能力描述（批量账号管理／定制题库／报表／客户成功经理／私有化部署，全仓没有对应实现）。A6 原文捆着的另外两件（`tenant_context` 中间件、`X-Organization-ID` 头）属 §2 冻结的企业侧、不是付费墙的装饰，没动。
 2. **企业侧是冻结还是删除**。本方案建议冻结。若将来要真删，§2.3 两处地雷与 migration `0018`–`0021` 是前置。
 3. **是否引入服务端向量库**（Qdrant / pgvector）。当前 Chroma 是嵌入式 persistent client（`core/chroma_client.py:34-40`），**每个进程各持一份**——**D101 把紧迫性按现量改了一次**：`Dockerfile:60` 的 CMD 没有 `--workers`，`docker-compose.prod.yml` 里**没有任何 `replicas:`**，所以当前形态是"一容器一进程一份库"，多副本一致性是**扩到 >1 副本那一刻才会出现**的隐患，不是现在正在发生的事故。与 B3 一并决策。
 4. **`docs/` 归档策略**（§2.5）。
