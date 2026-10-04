@@ -124,6 +124,18 @@ const ANALYSIS_RECORD = {
 const FIXTURES = [
   [/\/auth\/me$/, 'get', { id: 1, username: 'probe', role: 'candidate', nickname: '探针' }],
   [/\/resume\/?(\?|$)/, 'get', [{ id: 1, title: '探针简历', created_at: '2026-09-01' }]],
+  /* D105：`getResumeList` 打的是 `/resume/list`（`api/resume.js:83`），上面那条正则匹配不到它，
+     所以 `JobSearch.loadResumes` 拿到 `{}` → 简历列表空 → `selectedResumeId` 一直是 null →
+     智能推荐标签页永远停在"先选择一份简历"（`JobSearch.vue:785-788`）。补这一条之前，
+     `RecommendPane` 的卡片在探针里根本画不出来。 */
+  [
+    /\/resume\/list/,
+    'get',
+    {
+      items: [{ id: 1, title: '探针简历', file_name: '探针简历.pdf', created_at: '2026-09-01' }],
+      total: 1,
+    },
+  ],
   [/\/resume\/\d+$/, 'get', { id: 1, title: '探针简历', parsed_json: { basics: {} } }],
   [/\/jd\/?(\?|$)/, 'get', [{ id: 7, title: '平台工程师', company: '示例' }]],
   /* §10.17 要量的那一张卡（`JobCompareDialog` 的 `.compare-card`）只在对比弹窗里存在，而弹窗要
@@ -160,6 +172,52 @@ const FIXTURES = [
   [/\/jobs\/cities/, 'get', { cities: ['上海', '北京'], provinces: [] }],
   [/\/jobs\/pipeline\/list/, 'get', { items: [], total: 0 }],
   [/\/jobs\/bookmarks\/list/, 'get', { items: [], total: 0 }],
+  /* 智能推荐那条链（D105）：消费者是 `useJobRecommend.js:23-52`，读 `data.recommendations`，
+     每条按 `jd_id / job_title / company / location / salary_range / match_score / recommendation_type /
+     match_reason / skill_overlap / skill_gap / salary_match / location_match / experience_match` 取。
+     没有这条夹具时 `RecommendPane` 永远画不出卡片，它那 23 条被 `null {…}` 判死的规则就没法上屏验证——
+     D76 那句话第三次成立：形状要照消费者写，不然 `matched=0` 是假阴性。
+     两条卡片、重合与缺口都非空，好让 `.tag-group` / `.tag-label.ok|.gap` / `.recommend-signals` 全出现。 */
+  [
+    /\/jobs\/recommend$/,
+    'get',
+    {
+      recommendations: [
+        {
+          jd_id: 701,
+          job_title: '推荐后端岗',
+          company: '示例科技',
+          location: '上海',
+          salary_range: '25-40K',
+          industry: '互联网',
+          match_score: 88,
+          recommendation_type: '强烈推荐',
+          match_reason: '命中两项必需技能，缺口集中在编排',
+          skill_overlap: ['Python', 'SQL'],
+          skill_gap: ['Kubernetes'],
+          salary_match: true,
+          location_match: true,
+          experience_match: false,
+        },
+        {
+          jd_id: 702,
+          job_title: '推荐数据岗',
+          company: '示例网络',
+          location: '北京',
+          salary_range: '30-45K',
+          industry: '数据服务',
+          match_score: 62,
+          recommendation_type: '值得一试',
+          match_reason: '技能重合一半，薪资与地点都贴合',
+          skill_overlap: ['ETL'],
+          skill_gap: ['Airflow', 'dbt'],
+          salary_match: true,
+          location_match: false,
+          experience_match: true,
+        },
+      ],
+    },
+  ],
   [/\/analysis\/records(\?|$)/, 'get', { items: [ANALYSIS_RECORD], total: 1 }],
   [/\/analysis\/\d+$/, 'get', ANALYSIS_RECORD],
   [/\/analysis\/list(\?|$)/, 'get', { items: [ANALYSIS_RECORD], total: 1 }],
