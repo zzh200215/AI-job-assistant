@@ -3148,6 +3148,27 @@ null .job-shell[data-v-222de06d]{position:relative;padding:18px;…}
 
 **门禁**：backend **863 passed**（与 D111 同数：本轮无新增测试，只改判据）、`ruff check .` clean、`ruff format --check` 357 文件 clean。§10 open **10 → 9**（§10.19 关闭：结论是"不需要改，需要修尺子"）。
 
+#### 已交付：D113 §10.20 落地：读不懂的分数不再被讲成 0 分，而分析页那一屏从来没人夹过
+
+他点"标『暂无数据』并不参与计算"。开工前先把两屏各自的现状读了一遍，**D53 那句"只夹一次的那些调用点"漏了一整屏**：
+
+**`safeScore` 只活在职业规划页。** 分析页的 `CareerPlanPane.vue` 是 D51 从 `SmartAnalysis.vue` 搬出来的那一块，它的技能雷达是**模板里的裸算式**——`width: dim.current_score + '%'`、`width: dim.target_score - dim.current_score + '%'`、`left: dim.current_score + '%'`，加上两处直接把字段打进文案，一共 5 处引用（4 行）。这份 JSON 后端不约束（`career_agent.py:55` 的 `chat_json`），所以三种坏形状都直接落进 CSS：`约80%`、`undefined%`、`NaN%` 全是非法值，浏览器整条忽略——**目标段那一根条静默消失**；而 `.radar-bar` 是 `position: absolute` 且没有宽度时按内容收缩，所以 `undefined` / `约80` 这两个字**是会印在屏幕上的**。也就是说 §10.20 在两屏上有两种不同的谎：职业规划页把读不懂夹成 0（"0 分""95 分提升空间"、雷达那个角塌在圆心），分析页干脆什么都不画并且把 `undefined` 给人看。
+
+**改了什么**：
+1. 新增 `src/utils/aiScore.js`：`readScore`（读不懂 → `null`，布尔也挡掉——`Number(true)` 是 1，旧实现把它读成一个 1 分的合法分数）、`scoreGap`（任一端不知道就是不知道）、`scorePairReadable`、`SCORE_UNREADABLE_TEXT`。放 `src/utils` 而不是让分析页去 import 职业规划页的 lib：全仓跨 feature 引用实测只有 `router/index.js` 一处，共享层一直是 `src/utils/`（`scoreTone`/`statusTone`/`passwordRules`/`lastSelection`）。
+2. `planningModel.js` 里那三个函数**没有留下转发导出**：这一层只剩雷达几何，外加一道闸——`makeRadarPolygon` 只要混进不可读的分数就整条不画，因为"把 `null` 当 0"正是这次要取消的谎，lib 不该留第二条通往它的近路。
+3. 职业规划页：新增 `radarPlotted`（两端都可读的那些轴），折线、参考环、轴线与轴标签**全部**从它算；`.radar-metrics` 仍然逐条列出全部维度（候选人有权知道是哪一项没读出来），不可读那一行不给宽度、不给分数、不给"N 分提升空间"；全部不可读时那个 320×320 的方框换成 `el-empty`——"少画了但没说"是这一族最难被发现的红。顺序上还有一处判断：模型自己写的 `gap` 文案排在"读不懂"之后，因为那句话说的是由分数推出来的承诺，分数不可读时它一样不可信。
+4. 分析页：模板那 4 行换成 `radarRows` 计算属性，`gapWidth` 夹在 0 之上（**负宽度同样是非法值**：目标分低于当前分时，以前 `→70` 那个标签会孤零零挂在轨道末端，那不是一个形状，是一个半成品），不可读那一行右侧一句 `暂无数据`（新增 `.radar-unknown`，只有 `flex-shrink`/`font-size`/`var(--app-muted)` 三条，没有新硬编码色）。
+
+**反向证据**：
+- 旧 `safeScore` 的两族形状要分开记，不能一句"以前都归零"糊过去：`null`/`undefined`/`''`/`NaN` 是假值，`value || 0` 先换成 0，所以旧实现归零；`约80`/`abc` 是真字符串，`Number(...)` 得 NaN、`Math.min/max(NaN)` 还是 NaN，所以旧实现把 **NaN** 一路传出去。搬家前那份 `makeRadarPolygon(['约80','分数未知'])` 实测产出 `NaN,NaN NaN,NaN`（非法 points ⇒ 整个 SVG 静默不画）。两条都写进了断言，不是口头声称。
+- 变异实测两轮：**M1** 把 `readScore` 的第一道 `return null` 改回 `return 0` → 5 条红（`aiScore` 3 条 + 两屏各 1 条，两屏都红说明这条判据真的落到了屏幕上）；**M2** 把 `CareerPlanPane` 模板换回裸 `dim.current_score` → 2 条红（源扫描那条 + 屏幕宽度那条）。两轮都用 `cp` 副本还原，还原后与备份 `diff` 逐字节一致。
+- 源扫描那条判据自带防空转：先确认这一族字段在 `src` 里**只有那两屏**读（且扫描覆盖 100+ 文件），再要求每一处引用都套在那三个函数里；注释按行数补空剥掉，否则守卫会把自己钉死（同 `userCopySingleSource` 的白名单）。
+
+**门禁**：`test:unit` **514 → 530 passed**（84 files；+16 = `aiScore` 10 条、`careerPlanPane` +5、`careerPlanningRadarRender` +1，`planningModelMoveProof` 12 条持平），`npm test` 17、`eslint` 0 error（仅既有 `paidOrders` warning）、`prettier --check` clean、`vue-tsc` **42**（admin 外 0）、`vite build` exit 0；backend 未触碰。**包体积这次先把尺子定死再报数**：`dist/assets/*.js|css` 逐文件 kB 相加、键剥掉哈希名，同一棵 HEAD（detached worktree + `node_modules` junction）实测 **2235.80 → 2237.05 kB（+1.25）**，构成是新共享块 `aiScore.js` 0.32 + `CareerPlanning.js` +0.40 + `SmartAnalysis.js` +0.41 + `SmartAnalysis.css` +0.09 + `index.js` +0.03。顺手一条口径修正：D111 记的 **2237.26** 与今天在同一棵 HEAD 上量到的 2235.80 差 1.46 kB，说明"构建总量"这把尺历史上没写下算法、前后不可比——从这一条起算法写在纸上。量完先 `cmd /c rmdir` 拆 junction（真 `node_modules` 拆前拆后都是 252 项），再 `git worktree remove --force`，`git worktree list` 只剩主目录。
+
+**没验的那一半**：只在 jsdom 里断言了 `points` 串、`style.width` 字符串与文案，**没有在真浏览器里量过** `el-empty` 那一支和"少一条 bar"之后的行高/栅格（`.radar-layout` 是 grid，左格 `minmax(320px, .9fr)` 在换成空态后仍占位）。这一条留给下一次跑 `probe/dead-style` 时顺手补一帧。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
@@ -3829,7 +3850,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 19. ~~**D47 量出的这 22 条"间接在事件循环里出网"要不要动手修**~~ —— **已关闭（D112）**：他点"22 条全改"，开工前按源码复核发现**这 22 条早已是 `def` 路由**（D110 转的），事件循环上已经没有它们；尺子照旧报 22 是因为 `_build_graph` 把 `def`/`async def` 一起收、`indirect_offenders` 只按 `is_route` 过滤（docstring 却写"async 路由条数"）。修的是判据不是代码：allowlist 清成空表、只数 `async def`、防空转改成"async ≥20 且 全部 > async×3"，并用"把 `import_tenant_jobs` 改回 async → 当场红"做反向证据。D111 的量具与自检留在仓里。下面是原始三条路与当时的判断，保留是因为**"清单没动 ≠ 债没动"这件事只有靠复核源码才知道**。清单已经钉进守卫（`test_indirect_blocking_matches_the_allowlist`，只许往下走），所以"不知道有哪些"这件事已经解决；剩下的问题是**改不改**：每条的改法都是 `await run_in_threadpool(...)` 一行，但它们落在候选人主链路上（简历解析/诊断/AI 优化、JD 解析与批量导入、推荐调参样本导出、外部能力 API 的 `_run` 包装），而且与 §10.15 那个已拍"不改"的形状（135 条 async 路由持同步 db 会话）是同一个决定面。三条路：① 全不改，让它作为已知限制常驻清单；② 只改真出网那几条（provider/爬虫/导出），DB 那部分按 §10.15 的决定继续不动；③ 先做一次并发压测拿到尾延迟证据，再按证据挑。我按纪律**一条都没改**——没有性能证据支持一次性铺开 22 处主链路改动。**2026-10-04 他点"先压测拿证据"，证据在 D111**：单 worker 下发真出网让同 worker **所有在途请求排队 ≈ 上游全延迟（375ms 桩）且与并发无关**，包进线程池后对照掉回 0.6–2.9ms；同步 DB 那族同样是这个形状，只是 45–70ms。所以原来的 ②（"只改真出网"）在证据下偏小——DB 那部分是同一行修法。绝对毫秒不是结论（本机、桩上游、sqlite），**相对收益与"排队 = 上游延迟"是结论**。改哪几条仍待点。
 ---
 
-20. **AI 给出的分数读不懂时，候选人面前应该显示什么**。D53 把 `safeScore` 的 NaN 夹成 0，是因为原来的行为更糟（"NaN 分提升空间"、`width: NaN%`），但**夹成 0 本身是一种说谎**：它把"这条数据我没读懂"讲成"你这项能力是 0"。两边都有代价，所以留给你拍。可达性已确认——`career_planning` 是 `chat_json` 的原始返回，分数字段没有任何 schema 约束（`backend/app/agents/career_agent.py:55`）。三条路：① 保持现在的"读不懂就当 0"，只在内部日志里记一条（与 §5 那条"降级对候选人静默"一致）；② 该维度标成"暂无数据"并**不参与**雷达与提升空间的计算（图形会少一个角，需要定形状）；③ 在后端把分数 coerce/拒绝，让这类值根本到不了前端（改的是 AI 输出契约，牵连评测门）。我按"搬家不夹带口径决定"的规矩做了最小的一步：只把 NaN 挡住，没有改任何文案与图形形状。
+20. ~~**AI 给出的分数读不懂时，候选人面前应该显示什么**~~ —— **已定并落地（D113，选 ②「标暂无数据且不参与计算」）**。落地时先量到一件被这条原文遮住的事：**"读不懂就当 0"只发生在职业规划页**，分析页的 `CareerPlanPane` 从来没夹过——技能雷达那三根条子是模板里的裸算式（5 处引用），于是坏形状直接落进 CSS：`约80%` / `undefined%` / `NaN%` 全是非法值、目标段静默消失，而 `undefined` / `约80` 这两个字是会印在屏幕上的。现在的口径：`readScore` 读不懂返回 `null`（0 仍是合法分数，两值不许混），不可读的维度**不进折线、不进参考环、不算提升空间、不给宽度**，那一行只说"暂无数据"；全部不可读时方框换成空态而不是留一张白图。判据收在 `src/utils/aiScore.js`（两屏共用；跨 feature import 全仓只有 router 一处，共享层是 `src/utils/`），并由一条源扫描钉住"分数字段只能出现在那三个函数的参数里"。反向证据两族分开记：旧实现遇 `null`/`undefined`/`''`/`NaN` 归零（所以是"0 分"那句谎），遇 `约80`/`abc` 得到 NaN 并一路传进文案与 points 串（搬家前实测 `NaN,NaN NaN,NaN`，整张 SVG 不画）。**没验的那一半**：只在 jsdom 断言了坐标与 `style.width`，没在真浏览器量过空态那一支与少一条 bar 后的行高。原文（为什么留拍而不是当场改）：夹成 0 是 D53 为了挡住更糟的"NaN 分提升空间"才做的，两种画法都有代价，而 ③（后端 coerce）动的是 AI 输出契约、牵连评测门——他点的是 ②。
 
 21. ~~**"标记拒绝"的提示文案统一成哪一句**~~ —— **已定并落地（D92，选「已标记为拒绝」）**。同一动作原先在看板说"已标记为拒绝"、在列表说少一个"为"的那句（D58 合并实现时两句都留着）。选了**仓里已有的那一式**作为唯一出处——`ResumeCompare.vue:565` 的"已标记为采纳 / 已标记为忽略"同样是「已标记为 + 动作」，被淘汰的是只出现过一次的那一短写。两张标签表合成一张 `COMMAND_LABELS`，`runCardCommand` 随之不再收 `labels` 参数（两个调用点传的是同一对象）。守卫：`userCopySingleSource.test.js` 钉"全仓只剩一句"与"定义次数为 1"，并带被淘汰写法的反向证据；`pipelineCardCommands.test.js` 那条原样记录现状的断言改成了两条路径**逐字一致**。要换回短的那句是一行。
 
