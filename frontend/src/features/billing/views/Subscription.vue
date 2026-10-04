@@ -3,6 +3,9 @@
     <div class="hero">
       <h2>选择适合您的方案</h2>
       <p>AI 驱动的求职教练，从简历到 Offer 全程陪伴</p>
+      <!-- §10.1：当前代码里唯一真正按套餐区分的行为是简历数量，其余能力对所有用户开放。
+           这一句是"权益表里说不出来的标记"被摘掉之后，页面对现状的正面陈述。 -->
+      <p class="hero-note">现在所有 AI 能力对各档套餐都开放，实际差别只有可管理的简历数量。</p>
     </div>
 
     <!-- 定价卡片 -->
@@ -91,8 +94,14 @@
             <tr v-for="row in comparisonRows" :key="row.label">
               <td class="feat-col">{{ row.label }}</td>
               <td v-for="p in plans" :key="p.id">
-                <el-icon v-if="row.values[p.id]" class="cmp-yes"><CircleCheckFilled /></el-icon>
-                <el-icon v-else class="cmp-no"><Close /></el-icon>
+                <!-- 没被任何门执行的行不画 ✓/✗：那两种符号都在陈述一个不存在的事实 -->
+                <span v-if="!row.enforced" class="cmp-same">各套餐一致</span>
+                <template v-else>
+                  <el-icon v-if="row.values[p.id]" class="cmp-yes">
+                    <CircleCheckFilled />
+                  </el-icon>
+                  <el-icon v-else class="cmp-no"><Close /></el-icon>
+                </template>
               </td>
             </tr>
           </tbody>
@@ -118,6 +127,15 @@ import {
 const plans = ref([])
 const comparisonRows = ref([])
 const userSubscription = ref(null)
+
+/* §10.1 他点"不做商业化 → 摘掉装饰那侧"。这份名单就是"装饰"与"能证"的分界：
+   全仓 `check_quota` 只有两个调用方（`resume.py:198` 的 `resume_count`、以及通用端点
+   `/subscription/check-quota`），所以**套餐在代码里真正造成的差别只有简历数量这一项**。
+   `daily_*_limit` 与 `can_use_*` 在服务端都实现了（`subscription_service.py:258-259` 等），
+   缺的是调用方——于是这一页此前正在对免费用户画 ✗ 说"你没有 AI 简历优化"，而那是一句没被证实的话。
+   名单由 `backend/tests/test_plan_gating_inventory.py` 反向钉着：谁新接了一个额度门，那边就红，
+   逼着两边一起改。 */
+const ENFORCED_PLAN_KEYS = new Set(['resume_limit'])
 
 const featuresDisplay = {
   resume_limit: { label: '简历数量', free: '1份', pro: '不限', enterprise: '不限' },
@@ -164,6 +182,8 @@ function formatPrice(p) {
 }
 
 function buildFeatureGroups(features) {
+  /* 这一版只说能证的话：没有门在执行的额度不写数字，没有门在执行的权益不画 ✗。
+     简历数量是唯一保留数字的一行，因为 `resume.py` 上传时真的按 `resume_limit` 判。 */
   const groups = []
   // 简历
   const resumeItems = [
@@ -172,32 +192,26 @@ function buildFeatureGroups(features) {
       available: true,
     },
     { text: '简历解析与评分', available: true },
-    { text: 'AI 简历优化', available: features.can_use_deep_analysis },
-    { text: 'ATS 友好度检测', available: features.can_use_ats_check },
+    { text: 'AI 简历优化', available: true },
+    { text: 'ATS 友好度检测', available: true },
   ]
   groups.push({ label: '简历', items: resumeItems })
 
   // 面试
-  const interviewLimit =
-    features.daily_interview_limit === -1 ? '不限' : `${features.daily_interview_limit} 次/日`
   const interviewItems = [
-    { text: `模拟面试 (${interviewLimit})`, available: true },
+    { text: '模拟面试', available: true },
     { text: '面试报告与评估', available: true },
-    { text: '薄弱知识点训练', available: features.can_use_deep_analysis },
-    { text: '自我介绍生成器', available: features.can_use_deep_analysis },
+    { text: '薄弱知识点训练', available: true },
+    { text: '自我介绍生成器', available: true },
   ]
   groups.push({ label: '面试', items: interviewItems })
 
   // 岗位
-  const recLimit =
-    features.daily_recommendation_limit === -1
-      ? '不限'
-      : `${features.daily_recommendation_limit} 次/日`
   const jobItems = [
-    { text: `岗位推荐 (${recLimit})`, available: true },
+    { text: '岗位推荐', available: true },
     { text: '投递看板', available: true },
-    { text: 'Offer 决策助手', available: features.can_use_offer_decision },
-    { text: '谈薪资建议', available: features.can_use_salary_negotiation },
+    { text: 'Offer 决策助手', available: true },
+    { text: '谈薪资建议', available: true },
   ]
   groups.push({ label: '岗位', items: jobItems })
 
@@ -205,11 +219,8 @@ function buildFeatureGroups(features) {
   const otherItems = [
     { text: '职业规划', available: true },
     { text: '薪资洞察', available: true },
-    {
-      text: `AI 深度分析 (${features.daily_analysis_limit === -1 ? '不限' : `${features.daily_analysis_limit} 次/日`})`,
-      available: features.can_use_deep_analysis,
-    },
-    { text: '完整报告导出', available: features.can_export_full_report },
+    { text: 'AI 深度分析', available: true },
+    { text: '完整报告导出', available: true },
   ]
   groups.push({ label: '其他', items: otherItems })
 
@@ -219,6 +230,7 @@ function buildFeatureGroups(features) {
 function buildComparisonRows(apiPlans) {
   return Object.entries(featuresDisplay).map(([key, meta]) => ({
     label: meta.label,
+    enforced: ENFORCED_PLAN_KEYS.has(key),
     values: {
       free: !!meta.free || apiPlans.find((p) => p.tier === 'free')?.features?.[key],
       pro: !!meta.pro || apiPlans.find((p) => p.tier === 'pro')?.features?.[key],
@@ -317,6 +329,13 @@ onMounted(() => {
   margin-top: 12px;
   font-size: 16px;
   color: var(--app-muted);
+}
+
+.hero-note {
+  font-size: 14px;
+  color: var(--app-muted);
+  border-left: 3px solid var(--app-line);
+  padding-left: 10px;
 }
 
 /* Pricing grid */
@@ -535,6 +554,10 @@ onMounted(() => {
 .cmp-no {
   color: #d1d5db;
   font-size: 18px;
+}
+.cmp-same {
+  font-size: 13px;
+  color: var(--app-muted);
 }
 
 @media (max-width: 900px) {

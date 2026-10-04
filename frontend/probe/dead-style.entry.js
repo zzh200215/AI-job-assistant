@@ -170,6 +170,66 @@ const FIXTURES = [
     },
   ],
   [/\/jobs\/cities/, 'get', { cities: ['上海', '北京'], provinces: [] }],
+  /* D108：订阅页此前在探针里是**空白**的——`loadPlans` 请求 `/subscription/plans`，没有夹具就落到
+     `catch {}`，而那句注释写着"fallback 到静态数据"其实什么也没做（plans 保持 []）。
+     features 逐条抄自后端 `subscription_service.TIER_FEATURES`，价格为分。 */
+  [
+    /\/subscription\/plans/,
+    'get',
+    {
+      items: [
+        {
+          tier: 'free',
+          name: '免费版',
+          price_monthly: 0,
+          features: {
+            resume_limit: 1,
+            daily_analysis_limit: 3,
+            daily_interview_limit: 5,
+            daily_recommendation_limit: 10,
+            can_export_full_report: false,
+            can_use_deep_analysis: false,
+            can_use_ats_check: false,
+            can_use_offer_decision: false,
+            can_use_salary_negotiation: false,
+          },
+        },
+        {
+          tier: 'pro',
+          name: 'Pro 版',
+          price_monthly: 9900,
+          features: {
+            resume_limit: -1,
+            daily_analysis_limit: 50,
+            daily_interview_limit: 100,
+            daily_recommendation_limit: 200,
+            can_export_full_report: true,
+            can_use_deep_analysis: true,
+            can_use_ats_check: true,
+            can_use_offer_decision: true,
+            can_use_salary_negotiation: true,
+          },
+        },
+        {
+          tier: 'enterprise',
+          name: '企业版',
+          price_monthly: 0,
+          features: {
+            resume_limit: -1,
+            daily_analysis_limit: -1,
+            daily_interview_limit: -1,
+            daily_recommendation_limit: -1,
+            can_export_full_report: true,
+            can_use_deep_analysis: true,
+            can_use_ats_check: true,
+            can_use_offer_decision: true,
+            can_use_salary_negotiation: true,
+          },
+        },
+      ],
+    },
+  ],
+  [/\/subscription\/my/, 'get', { tier: 'free', quota_usage: {}, expires_at: null }],
   [/\/jobs\/pipeline\/list/, 'get', { items: [], total: 0 }],
   [/\/jobs\/bookmarks\/list/, 'get', { items: [], total: 0 }],
   /* 智能推荐那条链（D105）：消费者是 `useJobRecommend.js:23-52`，读 `data.recommendations`，
