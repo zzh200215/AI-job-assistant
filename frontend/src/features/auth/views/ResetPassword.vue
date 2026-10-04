@@ -79,6 +79,7 @@ import { Lock, Message, User } from '@element-plus/icons-vue'
 
 import { ElMessage } from '@/plugins/element-services'
 import { useAuthStore } from '@/stores/auth'
+import { passwordProblem } from '@/utils/passwordRules'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -97,8 +98,10 @@ const validatePassword = (_rule, value, callback) => {
     callback(new Error('请输入新密码'))
     return
   }
-  if (value.length < 8 || !/[A-Za-z]/.test(value) || !/\d/.test(value)) {
-    callback(new Error('密码至少 8 位，且包含字母和数字'))
+  // 与 `PasswordResetReq` 同源：它把 strength 校验喂的是 account 与 email（不是用户名）。
+  const problem = passwordProblem(value, { username: form.account, email: form.email })
+  if (problem) {
+    callback(new Error(problem))
     return
   }
   callback()

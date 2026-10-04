@@ -139,6 +139,7 @@ import { Lock, Message, User } from '@element-plus/icons-vue'
 
 import { ElMessage } from '@/plugins/element-services'
 import { useAuthStore } from '@/stores/auth'
+import { passwordProblem } from '@/utils/passwordRules'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -165,16 +166,15 @@ const validatePassword = (_rule, value, callback) => {
     callback(new Error('请输入密码'))
     return
   }
-  if (value.length < 8) {
-    callback(new Error('密码至少 8 位'))
-    return
-  }
-  if (!/[A-Za-z]/.test(value) || !/\d/.test(value)) {
-    callback(new Error('密码需同时包含字母和数字'))
-    return
-  }
-  if (value !== value.trim()) {
-    callback(new Error('密码首尾不能包含空格'))
+  /* 规则本身在 utils/passwordRules（后端 `RegisterReq` 的镜像）。这里原来抄了一份只要求
+     "字母 + 数字" 的弱版本，于是 8–11 位的小写+数字密码表单放行、服务端 422，
+     候选人看到的是 `body: Value error, 密码需至少包含…中的 3 种 [web-…]`（D103 量到那一行）。 */
+  const problem = passwordProblem(value, {
+    username: form.value.username,
+    email: form.value.email,
+  })
+  if (problem) {
+    callback(new Error(problem))
     return
   }
   callback()
