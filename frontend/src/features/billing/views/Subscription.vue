@@ -396,9 +396,5 @@ onMounted(() => {
   .pricing-card.popular:hover {
     transform: translateY(-4px);
   }
-  .enterprise-body {
-    flex-direction: column;
-    text-align: center;
-  }
 }
 </style>
