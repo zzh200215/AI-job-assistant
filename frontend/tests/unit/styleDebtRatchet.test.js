@@ -166,6 +166,10 @@ const BUDGET = {
      ——拿"命中 0"当"没有可迁的了"就错了，那是同一把尺子量两种形状的差别。
      全仓 `:deep(.panel-header)` 为 0 处，所以没有第三种隐藏耦合。 */
   handRolledPanelHeaders: 14,
+  /* D118（§10.12 决定 ③）：这 14 现在拆成**两个具名桶**——`el-card` 的 `#header` 槽里 5 处
+     （KnowledgeBase 4 + JobSearch 1，见下面的 `IN_EL_CARD_PANEL_HEADERS`）长期留在视图里，
+     因为那属于"卡片与面板是两个组件"这一族；剩下 9 处才是可以继续往下还的那批。
+     上面那条总预算仍然有效，并且有一条组合判据盯着"两桶相加 == 这个数"，防止拆分本身藏住第三种形状。 */
   /* 状态→el-tag 颜色此前和分数色板同病：17 份手写表、32 个键，其中 `running` 在任务中心
      是蓝、两个 agent 页是橙，`ongoing` 在房间页是绿、设置页是橙。异步任务与面试会话两组
      已收进 utils/statusTone.js；下面数的是**还剩多少条手写映射**，只能往下走。
@@ -702,6 +706,84 @@ describe('style debt ratchet', () => {
         sum + (`${template}${script}`.match(/class="panel-header"/g) || []).length,
       0
     )
+
+  /* §10.12 决定 ③（D118）：`el-card` 的 `#header` 槽里那 5 处**不是待迁的债，是另一个组件**。
+     AppPanel 是 `.panel` 外壳，`el-card` 自带 padding/边框/背景，还被 §11 那张 `[class*='-card']`
+     通配网按类名兜着——把它们并成一个组件要付的是全站面板头的观感差分，而不是几个文件的标记。
+     所以台账从"一条收敛到 0 的线"换成**两个具名桶**：`IN_EL_CARD` 长期留在视图里、`STANDALONE`
+     才是可以继续往下还的那批。判据按结构判，不按窗口大小判：
+     "这一处前面开着的 `<el-card` 比关掉的多"才算在卡片里，且卡片之后、头部之前必须开过 `#header` 槽。 */
+  const lastUnclosedCardIndex = (before) => {
+    const opens = [...before.matchAll(/<el-card\b/g)].map((m) => m.index)
+    const closes = [...before.matchAll(/<\/el-card>/g)].map((m) => m.index)
+    for (let i = opens.length - 1; i >= 0; i--) {
+      if (!closes.some((c) => c > opens[i])) return opens[i]
+    }
+    return -1
+  }
+
+  const classifyHeader = (template, index) => {
+    const before = template.slice(0, index)
+    const cardAt = lastUnclosedCardIndex(before)
+    // 必须"此刻还在一张没关掉的 el-card 里"，且这张卡片之内确实开过 #header 槽
+    return cardAt >= 0 && before.lastIndexOf('<template #header') > cardAt
+  }
+
+  const PANEL_HEADER_SITES = () => {
+    const sites = []
+    for (const { rel, template } of viewSources) {
+      const re = /class="panel-header"/g
+      let match
+      while ((match = re.exec(template))) {
+        sites.push({ rel, inCard: classifyHeader(template, match.index) })
+      }
+    }
+    return sites
+  }
+
+  const IN_EL_CARD_PANEL_HEADERS = {
+    'src/features/knowledge/views/KnowledgeBase.vue': 4,
+    'src/features/jobs/views/JobSearch.vue': 1,
+  }
+  const STANDALONE_PANEL_HEADERS = 9
+
+  it('the panel-header ledger is two named buckets, and they still add up to 14', () => {
+    const sites = PANEL_HEADER_SITES()
+    const perCard = {}
+    for (const s of sites.filter((x) => x.inCard)) perCard[s.rel] = (perCard[s.rel] || 0) + 1
+    expect(perCard).toEqual(IN_EL_CARD_PANEL_HEADERS)
+    const standalone = sites.filter((x) => !x.inCard).length
+    // 组合判据：桶相加必须等于那条总预算，否则"拆分"本身可以藏住第三种形状
+    expect(standalone + Object.values(perCard).reduce((a, b) => a + b, 0)).toBe(
+      BUDGET.handRolledPanelHeaders
+    )
+    expect(standalone).toBe(STANDALONE_PANEL_HEADERS)
+  })
+
+  it('forces the standalone panel-markup bucket down as sites migrate', () => {
+    const standalone = PANEL_HEADER_SITES().filter((x) => !x.inCard).length
+    expect(
+      standalone < STANDALONE_PANEL_HEADERS,
+      `a .panel-header outside an el-card was paid down — lower STANDALONE_PANEL_HEADERS to ${standalone}`
+    ).toBe(false)
+  })
+
+  it('the card classifier is structural, not a window size', () => {
+    // 卡片已经关掉 → 后面那个头部不算在卡片里
+    const closed =
+      '<el-card><template #header><div class="panel-header">a</div></template></el-card><div class="panel-header">b</div>'
+    const re = /class="panel-header"/g
+    const marks = []
+    let m
+    while ((m = re.exec(closed))) marks.push(classifyHeader(closed, m.index))
+    expect(marks).toEqual([true, false])
+    // 不是 el-card 的 #header（普通 div 的具名槽）不算这一族
+    const notCard = '<div><template #header><div class="panel-header">x</div></template></div>'
+    expect(classifyHeader(notCard, notCard.indexOf('class="panel-header"'))).toBe(false)
+    // 卡片里但没开 #header 槽（直接把头部写进 body）也不算——那一处是真的可迁形状
+    const noSlot = '<el-card><div class="panel-header">y</div></el-card>'
+    expect(classifyHeader(noSlot, noSlot.indexOf('class="panel-header"'))).toBe(false)
+  })
 
   it('keeps hand-rolled panel markup from growing past the AppPanel ledger', () => {
     const n = panelHeaderCount()
