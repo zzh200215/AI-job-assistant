@@ -193,6 +193,146 @@ def _score_view(score: dict[str, Any] | None) -> dict[str, Any] | None:
     return {"score": score.get("score"), "raw_score": score.get("raw_score"), "method": score.get("method")}
 
 
+SNAPSHOT_LABEL = "行级改写前快照"
+REVERT_LABEL = "行级改写撤销前快照"
+
+
+def _rewrite_snapshot(db: Session, resume_id: int, version_id: int) -> ResumeVersion:
+    """Fetch the version row an applied rewrite left behind, or refuse.
+
+    The shape check is load-bearing: `format == "json"` rows also come from the
+    optimized and tailored pipelines, whose `content` is a different structure.
+    Restoring one of those over `parsed_json` would push AI-generated text into a
+    candidate's resume through a button labelled "undo". Only a rewrite snapshot is
+    `manual` + `json` + a `change_log`, and `create_resume_version` can only write
+    md rows, so this triple identifies the producer exactly.
+    """
+    row = db.query(ResumeVersion).filter(ResumeVersion.id == version_id, ResumeVersion.resume_id == resume_id).first()
+    if row is None:
+        raise ValueError("快照不存在或不属于这份简历")
+    if row.format != "json" or row.version_type != "manual" or not (row.change_log or []):
+        raise ValueError("这一行不是行级改写前的快照，不能拿来撤销")
+    return row
+
+
+def revert_rewrite_suggestions(
+    db: Session,
+    resume_id: int,
+    snapshot_version_id: int,
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    """Restore the text one applied rewrite overwrote.
+
+    The guard is the same idea as `expected_original`: anchors are positional, so a
+    block the candidate reworked after applying no longer holds the text the revert
+    is about to write back. Reverting then would eat their newer words, so the
+    whole revert is refused and the diverging blocks are reported instead.
+
+    The revert writes a snapshot of the state it is leaving behind, otherwise
+    "undo" becomes the second irreversible action in the same flow. Its change_log
+    is the inverse of the row it read, which makes this function its own inverse:
+    reverting the revert restores the rewrite.
+    """
+    resume: Resume | None = (
+        get_owned_resume(db, resume_id, user_id) if user_id is not None else db.get(Resume, resume_id)
+    )
+    if not resume:
+        raise ValueError("简历不存在或无权限")
+    snapshot = _rewrite_snapshot(db, resume_id, int(snapshot_version_id))
+
+    try:
+        restored = json.loads(snapshot.content)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("快照内容读不出原来的简历，没有恢复它") from exc
+    if not isinstance(restored, dict):
+        raise ValueError("快照内容不是简历对象，没有恢复它")
+
+    entries = [
+        entry
+        for entry in (snapshot.change_log or [])
+        if isinstance(entry, dict) and isinstance(entry.get("block_id"), str)
+    ]
+    if len(entries) != len(snapshot.change_log or []):
+        raise ValueError("快照的变更记录不完整，无法逐块校验当前文本")
+
+    current_parsed = resume.parsed_json or {}
+    texts = {block["block_id"]: block["text"] for block in build_resume_blocks(current_parsed)}
+    stale = [
+        {"block_id": entry["block_id"], "kind": entry.get("kind"), "reason": "stale_block"}
+        for entry in entries
+        if texts.get(entry["block_id"]) != entry.get("after")
+    ]
+    if stale:
+        return {
+            "resume_id": resume_id,
+            "reverted": False,
+            "changed": False,
+            "stale_blocks": stale,
+            "resume_version": resume_version_of(resume),
+            "score": {"before": None, "after": None, "delta": None},
+        }
+
+    jd: JobDescription | None = None
+    score_note = ""
+    if snapshot.target_jd_id:
+        jd = (
+            get_accessible_job_for_user(db, snapshot.target_jd_id, user_id)
+            if user_id is not None
+            else db.get(JobDescription, snapshot.target_jd_id)
+        )
+        if jd is None:
+            # Losing the target job must not block undoing the text change; the
+            # alternative is to refuse the revert for a reason the candidate cannot act on.
+            score_note = "目标岗位已不可见，这次不显示匹配分变化"
+
+    before_score = _score_view(canonical_match_score(db, resume, jd, user_id=user_id)) if jd else None
+
+    undo = ResumeVersion(
+        resume_id=resume.id,
+        version_type="manual",
+        content=json.dumps(current_parsed, ensure_ascii=False),
+        format="json",
+        label=REVERT_LABEL,
+        target_jd_id=snapshot.target_jd_id,
+        change_log=[
+            {
+                "index": entry.get("index"),
+                "block_id": entry["block_id"],
+                "kind": entry.get("kind"),
+                "before": entry.get("after"),
+                "after": entry.get("before"),
+            }
+            for entry in entries
+        ],
+    )
+    db.add(undo)
+    # Reassignment, not mutation — same reason as the apply path above.
+    resume.parsed_json = restored
+    db.add(resume)
+    db.commit()
+    db.refresh(resume)
+
+    after_score = _score_view(canonical_match_score(db, resume, jd, user_id=user_id)) if jd else None
+    delta = (
+        round(after_score["score"] - before_score["score"], 2)
+        if after_score and before_score and after_score["score"] is not None and before_score["score"] is not None
+        else None
+    )
+
+    return {
+        "resume_id": resume_id,
+        "reverted": True,
+        "changed": True,
+        "restored_blocks": [entry["block_id"] for entry in entries],
+        "restored_from_version_id": snapshot.id,
+        "undo_version_id": undo.id,
+        "resume_version": resume_version_of(resume),
+        "block_total": len(build_resume_blocks(resume.parsed_json)),
+        "score": {"before": before_score, "after": after_score, "delta": delta},
+        "score_note": score_note,
+    }
+
+
 def apply_rewrite_suggestions(
     db: Session,
     resume_id: int,
@@ -227,7 +367,7 @@ def apply_rewrite_suggestions(
         version_type="manual",
         content=json.dumps(old_parsed, ensure_ascii=False),
         format="json",
-        label="行级改写前快照",
+        label=SNAPSHOT_LABEL,
         target_jd_id=jd_id,
         change_log=applied,
     )

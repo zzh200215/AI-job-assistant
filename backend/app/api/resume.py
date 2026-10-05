@@ -19,7 +19,11 @@ from app.models.user import User
 from app.schemas.resume import ResumeParseResp, ResumeUploadResp
 from app.services import resume_export_service, resume_service
 from app.services.resume_analysis_service import analyze_resume, quick_score_resume
-from app.services.resume_rewrite_service import apply_rewrite_suggestions, build_rewrite_suggestions
+from app.services.resume_rewrite_service import (
+    apply_rewrite_suggestions,
+    build_rewrite_suggestions,
+    revert_rewrite_suggestions,
+)
 from app.services.resume_tailor_service import tailor_resume_for_jd
 from app.services.resume_workspace_service import build_ats_snapshot, build_markdown_diff
 from app.services.subscription_service import check_quota
@@ -1068,6 +1072,40 @@ def apply_rewrites(
     except Exception as exc:
         traceback.print_exc()
         return fail(message=f"应用改写失败: {exc}", code=ERR_COMMON)
+
+
+@router.post("/{resume_id}/revert-rewrite", summary="撤销一次行级改写")
+def revert_rewrite(
+    resume_id: int,
+    payload: dict | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """payload: {snapshot_version_id} —— apply-rewrites 返回的那一行 id。
+
+    快照在 B1.3 就在写，但一直没有人能把它读回来：`GET /{id}/versions` 会带上它，
+    而界面上唯一列版本的 `ResumeCompare` 按 `format === 'md'` 过滤，json 快照被丢掉。
+    撤销与 `expected_original` 共用一条判据——按 position 锚定，所以候选人应用之后
+    又自己改过其中任何一块时，整单撤销被拒并回报那几处，而不是吃掉他们后写的文字。
+    """
+    version_id = (payload or {}).get("snapshot_version_id")
+    if isinstance(version_id, bool) or version_id is None:
+        return fail(message="snapshot_version_id 必填", code=ERR_PARAM)
+    try:
+        target = int(version_id)
+    except (TypeError, ValueError):
+        return fail(message="snapshot_version_id 必须是版本行 id", code=ERR_PARAM)
+    try:
+        result = revert_rewrite_suggestions(db, resume_id, target, user_id=current_user.id)
+        if not result["changed"]:
+            stale = "、".join(str(item["block_id"]) for item in result["stale_blocks"])
+            return ok(result, message=f"简历里这几处已经又改过，没有撤销：{stale}")
+        return ok(result, message=f"已撤销 {len(result['restored_blocks'])} 处改写")
+    except ValueError as exc:
+        return fail(message=str(exc), code=ERR_PARAM)
+    except Exception as exc:
+        traceback.print_exc()
+        return fail(message=f"撤销改写失败: {exc}", code=ERR_COMMON)
 
 
 # ============================================================

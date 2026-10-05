@@ -428,3 +428,266 @@ def test_the_apply_endpoint_rejects_an_empty_edit_list(db_session, actor):
 
     assert body["code"] != 0
     assert "edits" in body["message"]
+
+
+# ---------------------------------------------------------------- reverting
+#
+# B1.3 wrote the pre-edit snapshot so that "撤销" could exist, and then nothing read
+# that snapshot back: `snapshot_version_id` has no consumer in the frontend, and the
+# one screen that lists versions filters `format === 'md'`, so the JSON row never
+# even reaches the UI. These tests cover the endpoint that finally reads it, plus the
+# shape check that decides *which* rows may be written back — an "optimized"/"tailored"
+# JSON version is AI-authored content in a different shape, and restoring it through a
+# button labelled "undo" would put generated text into a candidate's CV.
+
+
+def _apply_once(
+    db,
+    user,
+    resume,
+    proposed="三年后端开发经验，专注订单链路",
+    block_id="self_evaluation",
+    expected="三年后端开发经验",
+    **kwargs,
+):
+    edit = {"block_id": block_id, "proposed_text": proposed}
+    if expected is not None:
+        edit["expected_original"] = expected
+    return svc.apply_rewrite_suggestions(db, resume.id, [edit], user_id=user.id, **kwargs)
+
+
+def test_revert_restores_the_text_the_rewrite_overwrote(db_session, actor):
+    user, _ = actor
+    resume = _resume_row(db_session, user)
+    before_version = resume_version_of(resume)
+
+    applied = _apply_once(db_session, user, resume)
+    db_session.expire_all()
+    assert db_session.get(Resume, resume.id).parsed_json["self_evaluation"] != "三年后端开发经验"
+
+    result = svc.revert_rewrite_suggestions(db_session, resume.id, applied["snapshot_version_id"], user_id=user.id)
+    db_session.expire_all()
+
+    assert result["changed"] is True
+    assert result["restored_blocks"] == ["self_evaluation"]
+    fresh = db_session.get(Resume, resume.id)
+    assert fresh.parsed_json["self_evaluation"] == "三年后端开发经验"
+    # Restoring also restores the version identity every score cache keys off, so the
+    # candidate sees the same number they saw before the rewrite.
+    assert result["resume_version"] == before_version
+
+
+def test_revert_is_refused_when_the_candidate_reworked_a_block_afterwards(db_session, actor):
+    """Same judgement as `expected_original`: anchors are positional, and a blind
+    restore would eat the newer words the candidate wrote after applying."""
+    user, _ = actor
+    resume = _resume_row(db_session, user)
+    applied = _apply_once(db_session, user, resume)
+    db_session.expire_all()
+
+    resume = db_session.get(Resume, resume.id)
+    resume.parsed_json = {**resume.parsed_json, "self_evaluation": "候选人应用之后自己又改过的那句"}
+    db_session.add(resume)
+    db_session.commit()
+
+    result = svc.revert_rewrite_suggestions(db_session, resume.id, applied["snapshot_version_id"], user_id=user.id)
+    db_session.expire_all()
+
+    assert result["changed"] is False
+    assert result["reverted"] is False
+    assert result["stale_blocks"] == [
+        {"block_id": "self_evaluation", "kind": "self_evaluation", "reason": "stale_block"}
+    ]
+    assert db_session.get(Resume, resume.id).parsed_json["self_evaluation"] == "候选人应用之后自己又改过的那句"
+    # A refused revert must not leave the "撤销前" row behind either.
+    assert db_session.query(ResumeVersion).filter(ResumeVersion.label == svc.REVERT_LABEL).count() == 0
+
+
+def test_reverting_the_revert_restores_the_rewrite(db_session, actor):
+    """The revert writes an inverse change_log, so it is its own inverse."""
+    user, _ = actor
+    resume = _resume_row(db_session, user)
+    applied = _apply_once(db_session, user, resume)
+    db_session.expire_all()
+
+    first = svc.revert_rewrite_suggestions(db_session, resume.id, applied["snapshot_version_id"], user_id=user.id)
+    db_session.expire_all()
+    assert db_session.get(Resume, resume.id).parsed_json["self_evaluation"] == "三年后端开发经验"
+
+    second = svc.revert_rewrite_suggestions(db_session, resume.id, first["undo_version_id"], user_id=user.id)
+    db_session.expire_all()
+
+    assert second["changed"] is True
+    assert db_session.get(Resume, resume.id).parsed_json["self_evaluation"] == "三年后端开发经验，专注订单链路"
+
+
+def test_only_a_rewrite_snapshot_can_be_reverted(db_session, actor):
+    user, _ = actor
+    resume = _resume_row(db_session, user)
+    applied = _apply_once(db_session, user, resume)
+    db_session.expire_all()
+    snapshot_id = applied["snapshot_version_id"]
+
+    def _add(**kwargs):
+        row = ResumeVersion(
+            resume_id=resume.id,
+            version_type=kwargs.pop("version_type", "optimized"),
+            content=kwargs.pop("content", json.dumps({"skills": ["模型生成的内容"]}, ensure_ascii=False)),
+            format=kwargs.pop("format", "json"),
+            label=kwargs.pop("label", "AI 优化版数据"),
+            change_log=kwargs.pop("change_log", None),
+        )
+        db_session.add(row)
+        db_session.commit()
+        db_session.refresh(row)
+        return row
+
+    # 生产 `format == "json"` 行的另两路，和一条 change_log 空的手动行，全部不能被撤销
+    for row in [_add(), _add(version_type="tailored", label="定制版数据"), _add(version_type="manual", change_log=[])]:
+        with pytest.raises(ValueError):
+            svc.revert_rewrite_suggestions(db_session, resume.id, row.id, user_id=user.id)
+
+    # 最险的一种：一条 optimized + json **且 change_log 非空**的行。今天没有生产者这样写
+    # （`resume_export_service` 把 change_log 挂在 md 那行上），但它一旦存在，"只看 change_log"
+    # 那种收窄的判据就会放行，而 content 是模型生成的结构化数据——撤销按钮会把 AI 写的东西
+    # 当成"你原来的文字"塞回简历。挡住它的那一条是 `version_type == "manual"`。
+    with pytest.raises(ValueError):
+        svc.revert_rewrite_suggestions(
+            db_session,
+            resume.id,
+            _add(
+                change_log=[{"block_id": "self_evaluation", "before": "三年后端开发经验", "after": "模型写的句子"}]
+            ).id,
+            user_id=user.id,
+        )
+
+    # 一条 md 行也不行——它是给导出和对比用的另一份投影
+    md_row = _add(version_type="manual", format="md", content="# markdown", change_log=applied["applied"])
+    with pytest.raises(ValueError):
+        svc.revert_rewrite_suggestions(db_session, resume.id, md_row.id, user_id=user.id)
+
+    # 别的简历的快照 id 落在这份简历上查不到
+    other_resume = _resume_row(db_session, actor[1])
+    with pytest.raises(ValueError):
+        svc.revert_rewrite_suggestions(db_session, other_resume.id, snapshot_id, user_id=actor[1].id)
+
+    # 反过来，真快照确实能撤 —— 上面四条红不是因为函数根本跑不通
+    assert svc.revert_rewrite_suggestions(db_session, resume.id, snapshot_id, user_id=user.id)["changed"] is True
+
+
+def test_cross_user_revert_is_refused(db_session, actor):
+    user, other = actor
+    resume = _resume_row(db_session, user)
+    applied = _apply_once(db_session, user, resume)
+    db_session.expire_all()
+
+    with pytest.raises(ValueError):
+        svc.revert_rewrite_suggestions(db_session, resume.id, applied["snapshot_version_id"], user_id=other.id)
+    db_session.expire_all()
+    assert db_session.get(Resume, resume.id).parsed_json["self_evaluation"] == "三年后端开发经验，专注订单链路"
+
+
+def test_revert_moves_the_match_score_back_and_keeps_both_cache_rows(db_session, actor):
+    from app.models.match_score import MatchScore
+
+    user, _ = actor
+    resume = _resume_row(db_session, user)
+    job = _job_row(db_session, user)
+    baseline = canonical_match_score(db_session, resume, job, user_id=user.id, persist=False)["score"]
+
+    applied = _apply_once(
+        db_session,
+        user,
+        resume,
+        block_id="skills",
+        expected=None,
+        proposed="Python、FastAPI、MySQL",
+        jd_id=job.id,
+    )
+    db_session.expire_all()
+    assert applied["score"]["delta"] > 0
+
+    result = svc.revert_rewrite_suggestions(db_session, resume.id, applied["snapshot_version_id"], user_id=user.id)
+
+    assert result["score"]["before"] == applied["score"]["after"]
+    assert result["score"]["after"]["score"] == baseline
+    assert result["score"]["delta"] == -applied["score"]["delta"]
+    # Nothing had to be invalidated: rows are keyed by the parsed_json hash, so both
+    # versions keep their own score and the revert simply reads the older one again.
+    assert db_session.query(MatchScore).filter(MatchScore.resume_id == resume.id).count() == 2
+
+
+def test_revert_still_restores_the_text_when_the_target_job_is_gone(db_session, actor):
+    user, _ = actor
+    resume = _resume_row(db_session, user)
+    job = _job_row(db_session, user)
+    applied = _apply_once(
+        db_session, user, resume, block_id="skills", expected=None, proposed="Python、FastAPI、MySQL", jd_id=job.id
+    )
+    db_session.expire_all()
+
+    db_session.delete(db_session.get(JobDescription, job.id))
+    db_session.commit()
+
+    result = svc.revert_rewrite_suggestions(db_session, resume.id, applied["snapshot_version_id"], user_id=user.id)
+    db_session.expire_all()
+
+    assert result["changed"] is True
+    assert result["score"]["after"] is None
+    assert result["score_note"] == "目标岗位已不可见，这次不显示匹配分变化"
+    assert db_session.get(Resume, resume.id).parsed_json["skills"] == ["Python", "FastAPI"]
+
+
+def test_the_revert_endpoint_persists_through_http_and_checks_its_argument(db_session, actor):
+    user, _ = actor
+    resume = _resume_row(db_session, user)
+    applied = _apply_once(db_session, user, resume)
+    db_session.expire_all()
+
+    with TestClient(_resume_client(db_session, user)) as client:
+        missing = client.post(f"/resume/{resume.id}/revert-rewrite", json={}).json()
+        not_a_number = client.post(f"/resume/{resume.id}/revert-rewrite", json={"snapshot_version_id": "abc"}).json()
+        bool_id = client.post(f"/resume/{resume.id}/revert-rewrite", json={"snapshot_version_id": True}).json()
+        body = client.post(
+            f"/resume/{resume.id}/revert-rewrite",
+            json={"snapshot_version_id": applied["snapshot_version_id"]},
+        ).json()
+
+    assert missing["code"] != 0 and "snapshot_version_id" in missing["message"]
+    assert not_a_number["code"] != 0
+    # `int(True) == 1` would quietly restore whichever row happens to have id 1
+    assert bool_id["code"] != 0
+    assert body["code"] == 0
+    assert body["data"]["changed"] is True
+    db_session.expire_all()
+    assert db_session.get(Resume, resume.id).parsed_json["self_evaluation"] == "三年后端开发经验"
+
+
+def test_the_revert_endpoint_reports_a_stale_snapshot_without_an_error_code(db_session, actor):
+    user, _ = actor
+    resume = _resume_row(db_session, user)
+    applied = _apply_once(db_session, user, resume)
+    db_session.expire_all()
+
+    resume = db_session.get(Resume, resume.id)
+    resume.parsed_json = {**resume.parsed_json, "self_evaluation": "自己改过的一句"}
+    db_session.add(resume)
+    db_session.commit()
+
+    with TestClient(_resume_client(db_session, user)) as client:
+        body = client.post(
+            f"/resume/{resume.id}/revert-rewrite",
+            json={"snapshot_version_id": applied["snapshot_version_id"]},
+        ).json()
+
+    assert body["code"] == 0
+    assert body["data"]["changed"] is False
+    assert "没有撤销" in body["message"]
+
+
+def test_the_revert_endpoint_is_registered():
+    app = FastAPI()
+    app.include_router(resume_router, prefix="/resume")
+    paths = {route.path for route in app.routes}
+
+    assert "/resume/{resume_id}/revert-rewrite" in paths
