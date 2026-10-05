@@ -1,0 +1,228 @@
+{
+  "_note": "由 backend/scripts/collect_validation_shapes.py 从真路由的请求体模型实测导出；不要手改。",
+  "model_total": 24,
+  "loc_tails": [
+    "account",
+    "attachments",
+    "avatar_url",
+    "bio",
+    "cities",
+    "company",
+    "config",
+    "confirm_password",
+    "content",
+    "current_employer",
+    "current_position",
+    "default_resume_id",
+    "default_target_id",
+    "doc_type",
+    "education",
+    "education_requirement",
+    "email",
+    "entry_type",
+    "expected_city",
+    "expected_industry",
+    "expected_position",
+    "expected_salary_max",
+    "expected_salary_min",
+    "experience_requirement",
+    "feedback_note",
+    "feedback_score",
+    "feedback_tags",
+    "feedback_type",
+    "follow_up",
+    "follow_up_at",
+    "industry",
+    "interview_at",
+    "interview_contact",
+    "interview_format",
+    "interview_location",
+    "interview_reminder",
+    "interview_role",
+    "interview_round",
+    "interview_type",
+    "is_primary",
+    "is_private",
+    "jd_id",
+    "jd_push",
+    "jd_push_frequency",
+    "jd_summary",
+    "job_seeking_status",
+    "language",
+    "location",
+    "max_queries",
+    "mood",
+    "name",
+    "new_password",
+    "next_action",
+    "nickname",
+    "note",
+    "notes",
+    "offer_deadline",
+    "offer_details",
+    "offer_reminder",
+    "offer_salary",
+    "original_query",
+    "password",
+    "phone",
+    "pipeline_id",
+    "position",
+    "priority",
+    "priority_label",
+    "priority_score",
+    "profile_visible",
+    "query",
+    "quiet_hours_end",
+    "quiet_hours_start",
+    "rating",
+    "raw_text",
+    "remark",
+    "resume_id",
+    "resume_name",
+    "resume_summary",
+    "resume_version_id",
+    "salary_max",
+    "salary_min",
+    "salary_range",
+    "share_anonymized_stats",
+    "skill_tags",
+    "skills",
+    "social_links",
+    "source",
+    "source_url",
+    "stage",
+    "stage_history",
+    "status",
+    "summary",
+    "tags",
+    "target_id",
+    "target_stage",
+    "theme",
+    "title",
+    "top_k",
+    "top_k_per_query",
+    "user_request",
+    "username",
+    "work_years"
+  ],
+  "english_msgs": [
+    "Field required",
+    "Input should be a valid boolean, unable to interpret input",
+    "Input should be a valid dictionary",
+    "Input should be a valid integer, unable to parse string as an integer",
+    "Input should be a valid list",
+    "Input should be a valid string",
+    "Input should be greater than or equal to 0",
+    "Input should be greater than or equal to 1",
+    "Input should be less than or equal to 1",
+    "Input should be less than or equal to 10",
+    "Input should be less than or equal to 100",
+    "Input should be less than or equal to 20",
+    "Input should be less than or equal to 5",
+    "String should have at least 1 character",
+    "String should have at least 2 characters",
+    "String should have at least 8 characters",
+    "String should have at most 100 characters",
+    "String should have at most 20 characters",
+    "String should have at most 200 characters",
+    "String should have at most 255 characters",
+    "String should have at most 30 characters",
+    "String should have at most 50 characters",
+    "String should match pattern '^([01]\\d|2[0-3]):[0-5]\\d$'",
+    "String should match pattern '^(active|paused|achieved|archived)$'",
+    "String should match pattern '^(daily|weekly|never)$'",
+    "String should match pattern '^(high|medium|low)$'",
+    "String should match pattern '^(light|dark)$'",
+    "String should match pattern '^(note|interview_log|offer_review|reflection)$'",
+    "String should match pattern '^(zh-CN|en-US)$'",
+    "String should match pattern '^(|great|good|neutral|bad|terrible)$'",
+    "value is not a valid email address: An email address must have an @-sign."
+  ],
+  "shapes": [
+    {
+      "type": "bool_parsing",
+      "ctx_keys": [],
+      "sample_msg": "Input should be a valid boolean, unable to interpret input",
+      "hit_count": 2
+    },
+    {
+      "type": "dict_type",
+      "ctx_keys": [],
+      "sample_msg": "Input should be a valid dictionary",
+      "hit_count": 6
+    },
+    {
+      "type": "greater_than_equal",
+      "ctx_keys": [
+        "ge"
+      ],
+      "sample_msg": "Input should be greater than or equal to 0",
+      "hit_count": 10
+    },
+    {
+      "type": "int_parsing",
+      "ctx_keys": [],
+      "sample_msg": "Input should be a valid integer, unable to parse string as an integer",
+      "hit_count": 18
+    },
+    {
+      "type": "less_than_equal",
+      "ctx_keys": [
+        "le"
+      ],
+      "sample_msg": "Input should be less than or equal to 5",
+      "hit_count": 8
+    },
+    {
+      "type": "list_type",
+      "ctx_keys": [],
+      "sample_msg": "Input should be a valid list",
+      "hit_count": 7
+    },
+    {
+      "type": "missing",
+      "ctx_keys": [],
+      "sample_msg": "Field required",
+      "hit_count": 15
+    },
+    {
+      "type": "string_pattern_mismatch",
+      "ctx_keys": [
+        "pattern"
+      ],
+      "sample_msg": "String should match pattern '^(zh-CN|en-US)$'",
+      "hit_count": 6
+    },
+    {
+      "type": "string_too_long",
+      "ctx_keys": [
+        "max_length"
+      ],
+      "sample_msg": "String should have at most 200 characters",
+      "hit_count": 11
+    },
+    {
+      "type": "string_too_short",
+      "ctx_keys": [
+        "min_length"
+      ],
+      "sample_msg": "String should have at least 1 character",
+      "hit_count": 10
+    },
+    {
+      "type": "string_type",
+      "ctx_keys": [],
+      "sample_msg": "Input should be a valid string",
+      "hit_count": 19
+    },
+    {
+      "type": "value_error",
+      "ctx_keys": [
+        "error",
+        "reason"
+      ],
+      "sample_msg": "value is not a valid email address: An email address must have an @-sign.",
+      "hit_count": 6
+    }
+  ]
+}
