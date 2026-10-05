@@ -1230,4 +1230,67 @@ describe('style debt ratchet', () => {
         `${offenders.join(', ')}`
     ).toEqual([])
   })
+
+  /* D117（§10.11 那一族"某页多盖了 1px"）：样式层里能设**面板头自己**内边距的规则只允许一条，
+     就是规格那条 15px。此前全仓唯一还活着的覆盖是 `panels.css` 里 `.privacy-page .panel-header { padding: 16px 20px }`
+     ——D21 记下"要先定哪个是权威"，量完的结论是规格权威：它没有任何记录过的理由，也没有第二页跟着它，
+     而横向内边距两边本来就是同一个 20px（差的是垂直那 1px）。
+     这条守卫防的是"以后再随手盖一层"，所以判据本身要能红，见下面那条自测。 */
+  function headerPaddingRules(css) {
+    const body = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    const found = []
+    const re = /([^{}]+)\{([^{}]*)\}/g
+    let match
+    while ((match = re.exec(body))) {
+      const selector = match[1].trim().replace(/\s+/g, ' ')
+      const last = selector
+        .split(',')
+        .pop()
+        .trim()
+        .replace(/\[[^\]]*\]/g, '')
+      // 只算"面板头自己"的内边距：`.panel-header p` 那类是副标题，不是同一个盒子
+      if (!last.endsWith('.panel-header')) continue
+      if (!/(^|[;{\s])padding(-top|-bottom)?\s*:/.test(match[2])) continue
+      found.push(selector)
+    }
+    return found
+  }
+
+  it('`.panel-header` 的内边距全站只有一个出处', () => {
+    const hits = []
+    let scanned = 0
+    for (const full of vueFiles('src', ['.vue', '.css'])) {
+      const rel = toRel(full)
+      if (JS_OUT_OF_SCOPE_ROOTS.some((root) => rel.startsWith(`${root}/`))) continue
+      const text = readFileSync(full, 'utf8')
+      const bodies = []
+      if (rel.endsWith('.css')) bodies.push(text)
+      else {
+        const re = /<style[^>]*>([\s\S]*?)<\/style>/g
+        let m
+        while ((m = re.exec(text))) bodies.push(m[1])
+      }
+      if (!bodies.length) continue
+      scanned += 1
+      for (const raw of bodies) {
+        for (const selector of headerPaddingRules(raw)) hits.push(`${rel} → ${selector}`)
+      }
+    }
+    // 扫到了东西才算数，别在空目录上报 0（D96 那一族）
+    expect(scanned).toBeGreaterThanOrEqual(60)
+    expect(hits).toEqual(['src/styles/panels.css → .panel-header'])
+  })
+
+  it('这把尺自己会红：把那条 1px 覆盖塞回去就数到两条', () => {
+    const withOverride =
+      '.panel-header { padding: 15px 20px }\n.privacy-page .panel-header { padding: 16px 20px }'
+    expect(headerPaddingRules(withOverride)).toEqual([
+      '.panel-header',
+      '.privacy-page .panel-header',
+    ])
+    // 副标题的内边距不算覆盖（`p` 不是面板头那个盒子）
+    expect(headerPaddingRules('.jobsearch-page .panel-header p { padding: 0 }')).toEqual([])
+    // 注释里写一条也不算
+    expect(headerPaddingRules('/* .privacy-page .panel-header { padding: 16px } */')).toEqual([])
+  })
 })
