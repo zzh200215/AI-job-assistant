@@ -372,6 +372,17 @@
                 >
                   应用已采纳的 {{ acceptedRewrites.length }} 条
                 </el-button>
+                <!-- 快照从 B1.3 就在写，按钮到今天才有 -->
+                <el-button
+                  v-if="rewrite.snapshotId"
+                  size="small"
+                  type="warning"
+                  plain
+                  :loading="rewrite.applying"
+                  @click="revertRewrite"
+                >
+                  {{ rewrite.lastAction === 'reverted' ? '撤销这次撤销' : '撤销这次应用' }}
+                </el-button>
                 <span v-if="rewriteScoreLine" class="rw-score">{{ rewriteScoreLine }}</span>
                 <span v-else-if="rewrite.result?.changed" class="rw-score">
                   未指定目标岗位，本次不显示匹配分变化
@@ -548,6 +559,7 @@ import {
   diagnoseResume,
   getRewriteSuggestions,
   applyResumeRewrites,
+  revertResumeRewrite,
   deleteResume,
   generateOptimized,
   exportResume,
@@ -603,6 +615,10 @@ const rewrite = reactive({
   items: [],
   dropped: [],
   result: null,
+  /* B1 的撤销：`snapshot_version_id` 从 B1.3 起就在返回，但一直没人在这里接住它，
+     所以后端存的那份改写前原文从没被读回来过。`lastAction` 只决定按钮上那两个字。 */
+  snapshotId: null,
+  lastAction: '',
 })
 
 const REJECT_LABELS = {
@@ -648,6 +664,8 @@ async function generateRewrites() {
   rewrite.loading = true
   rewrite.error = ''
   rewrite.result = null
+  rewrite.snapshotId = null
+  rewrite.lastAction = ''
   try {
     const data = await getRewriteSuggestions(resumeId, currentDiagnosis.value?.jd_id || null)
     rewrite.items = (data?.suggestions || []).map((s) => ({ ...s, _accepted: true }))
@@ -681,6 +699,9 @@ async function applyRewrites() {
   try {
     const data = await applyResumeRewrites(resumeId, edits, currentDiagnosis.value?.jd_id || null)
     rewrite.result = data
+    // 撤销的入口只跟着"真的改了"这一步出现；被拒的那些没有覆盖任何原文，也就没有东西可撤
+    rewrite.snapshotId = data?.changed ? (data?.snapshot_version_id ?? null) : null
+    rewrite.lastAction = data?.changed ? 'applied' : ''
     // Only the rows that actually landed leave the list; refused ones stay with
     // their reason, so a no-op cannot read as success.
     const appliedIds = new Set((data?.applied || []).map((a) => a.block_id))
@@ -694,6 +715,42 @@ async function applyRewrites() {
     }
   } catch (e) {
     rewrite.error = userErrorCopy(e, '应用改写失败')
+  } finally {
+    rewrite.applying = false
+  }
+}
+
+/* B1 的撤销。三件事值得写下来：
+   1. 复用 `rewrite.applying` 这一把锁，不给撤销另立一个 busy 位。"应用"与"撤销"写的是同一坨
+      `parsed_json`，两个按钮各自一把锁就是允许它们并发；服务端虽然逐块校验过当前文本，
+      但那只会把后发的那次变成一次拒绝，界面上不该出现那一幕。
+   2. 撤销被拒是 code 0 + `stale_blocks`，不是错误：候选人应用之后自己又改过那几块时，
+      吃掉他们后写的文字才是事故，所以整单不动，只把那几处的种类说出来（block_id 是
+      `work[0].desc` 这种锚点，候选人读不懂，所以要的是 kind）。
+   3. 撤销成功后按钮不消失，改成"撤销这次撤销"：服务端把撤销前那一刻又存了一份快照，
+      撤销因此不是这个流程里的第二个不可逆动作。 */
+async function revertRewrite() {
+  const resumeId = currentDiagnosis.value?.resume_id
+  if (!resumeId || !rewrite.snapshotId || rewrite.applying) return
+
+  rewrite.applying = true
+  rewrite.error = ''
+  try {
+    const data = await revertResumeRewrite(resumeId, rewrite.snapshotId)
+    if (!data?.changed) {
+      const kinds = (data?.stale_blocks || []).map((item) => rewriteKindLabel(item.kind))
+      rewrite.error = kinds.length
+        ? `「${[...new Set(kinds)].join('、')}」在应用之后又被改过，整单撤销没有执行`
+        : '这次撤销没有可恢复的内容'
+      return
+    }
+    rewrite.result = data
+    rewrite.snapshotId = data?.undo_version_id ?? null
+    rewrite.lastAction = 'reverted'
+    diagnosisStale.value = true
+    ElMessage.success(`已撤销 ${(data?.restored_blocks || []).length} 处改写，简历已恢复`)
+  } catch (e) {
+    rewrite.error = userErrorCopy(e, '撤销改写失败')
   } finally {
     rewrite.applying = false
   }

@@ -35,6 +35,9 @@ export const getRewriteSuggestions = (resumeId, jdId = null) =>
 export const applyResumeRewrites = (resumeId, edits, jdId = null) =>
   request.post(`/resume/${resumeId}/apply-rewrites`, { edits, ...(jdId ? { jd_id: jdId } : {}) })
 
+export const revertResumeRewrite = (resumeId, snapshotVersionId) =>
+  request.post(`/resume/${resumeId}/revert-rewrite`, { snapshot_version_id: snapshotVersionId })
+
 export const generateOptimized = (resumeId, targetJdId) =>
   request.post(`/resume/${resumeId}/generate-optimized`, { target_jd_id: targetJdId || null })
 
