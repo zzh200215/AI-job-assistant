@@ -6,6 +6,7 @@ import {
   formatApiErrorMessage,
   networkFailureCopy,
   normalizeValidationMessage,
+  rawValidationText,
 } from '../utils/requestTracing'
 import { clearSession, readToken } from '../utils/session'
 
@@ -74,15 +75,18 @@ request.interceptors.response.use(
       const body = err?.response?.data || {}
       const detail = body?.data?.errors || body?.detail
       const requestId = body?.request_id || err?.response?.headers?.['x-request-id']
-      const msg = normalizeValidationMessage(detail, body?.message || '请求参数错误')
+      // §10.29：上屏的这句由 `VALIDATION_COPY` 按 type+ctx 组出来，全中文；
+      // Pydantic 那句原文只挂在这个字段上供内部排查，不进 toast、不进任何视图。
+      const msg = normalizeValidationMessage(detail, body?.message || '请求参数有误，请检查后重试')
       if (shouldNotify) {
-        ElMessage.error(formatApiErrorMessage(msg, requestId, '请求参数错误'))
+        ElMessage.error(formatApiErrorMessage(msg, requestId, '请求参数有误，请检查后重试'))
       }
       /** @type {import('./http-client').ApiError} */
       const error = new Error(msg)
       error.requestId = requestId
       error.payload = body
       error.userMessage = msg
+      error.validationRaw = rawValidationText(detail)
       error.isApiError = true
       return Promise.reject(error)
     }

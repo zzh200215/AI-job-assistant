@@ -95,3 +95,90 @@ describe('传输层失败的文案来源', () => {
     await expect(client.get('/system/status')).resolves.toEqual({ marked: 'unwrapped' })
   })
 })
+
+/* §10.29（D116）：422 这一支以前不走上面那套收口——`normalizeValidationMessage` 把 Pydantic 的
+   `detail` **逐字**拼成 `"body.<字段>: <英文 msg>"`，而非 GET 又自动弹 toast，所以候选人看到的是
+   "Field required"、"String should have at most 50 characters"。现在上屏那句由 `VALIDATION_COPY`
+   按 type + ctx 组出来，英文原文只留在 `err.validationRaw`。这几条量的还是**真拦截器**。 */
+describe('422 校验消息上屏的那一句是中文', () => {
+  afterEach(() => {
+    document.querySelectorAll('.el-message').forEach((node) => node.remove())
+  })
+
+  function rejectWith422(detail, method = 'post') {
+    client.defaults.adapter = async (config) => {
+      const err = new Error('Request failed with status code 422')
+      err.config = { ...config, method }
+      err.isAxiosError = true
+      err.response = { status: 422, data: { detail }, headers: {} }
+      throw err
+    }
+  }
+
+  async function attempt() {
+    try {
+      await client.post('/auth/register', { username: 'a' })
+      throw new Error('这条请求本该失败')
+    } catch (err) {
+      return err
+    }
+  }
+
+  it('缺字段：屏上是中文一句，英文原文只在 validationRaw 里', async () => {
+    rejectWith422([{ loc: ['body', 'resume_id'], type: 'missing', ctx: {}, msg: 'Field required' }])
+    const err = await attempt()
+
+    expect(err.userMessage).toBe('简历：请填写这一项')
+    expect(err.userMessage).not.toMatch(/Field required|Input should|String should/)
+    expect(err.validationRaw).toBe('body.resume_id: Field required')
+    // toast 里那句也是同一个来源，不是另一套拼装
+    expect(document.querySelector('.el-message')?.textContent).toContain('简历：请填写这一项')
+  })
+
+  it('带数字的约束把数字从 ctx 取，而不是抄英文模板', async () => {
+    rejectWith422([
+      {
+        loc: ['body', 'title'],
+        type: 'string_too_long',
+        ctx: { max_length: 50 },
+        msg: 'String should have at most 50 characters',
+      },
+    ])
+    const err = await attempt()
+    expect(err.userMessage).toBe('名称：最多只能 50 个字')
+  })
+
+  it('未知 type 退通用中文，不把英文原文吐回屏幕', async () => {
+    rejectWith422([
+      {
+        loc: ['body', 'title'],
+        type: 'some_future_pydantic_type',
+        ctx: {},
+        msg: 'Something nobody has seen',
+      },
+    ])
+    const err = await attempt()
+    expect(err.userMessage).toBe('请求参数有误，请检查后重试')
+    expect(err.userMessage).not.toMatch(/[A-Za-z]/)
+  })
+
+  it('GET 的 422 照旧不弹 toast，但 userMessage 仍是中文', async () => {
+    rejectWith422(
+      [
+        {
+          loc: ['query', 'top_k'],
+          type: 'int_parsing',
+          ctx: {},
+          msg: 'Input should be a valid integer, unable to parse string as an integer',
+        },
+      ],
+      'get'
+    )
+    try {
+      await client.get('/knowledge/search')
+    } catch (err) {
+      expect(err.userMessage).toBe('返回条数：这一项要填整数')
+    }
+    expect(document.querySelector('.el-message')).toBeNull()
+  })
+})

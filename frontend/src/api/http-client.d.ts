@@ -29,4 +29,7 @@ export interface ApiError extends Error {
   payload?: unknown
   userMessage?: string
   isApiError?: boolean
+  // 422 的 Pydantic 原文（英文骨架那句）。只供内部排查，视图与 toast 都不读它——
+  // 给人看的那一句由 utils/requestTracing 的 VALIDATION_COPY 组（§10.29 / D116）。
+  validationRaw?: string
 }

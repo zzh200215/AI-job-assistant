@@ -5,3 +5,7 @@ coverage/
 public/
 *.lock
 package-lock.json
+
+# 由 backend/scripts/collect_validation_shapes.py 导出的夹具：内容有一条后端守卫盯着，
+# 但排版归 json.dumps 管——手工 prettier 过一次，下次重新生成就又红了。
+tests/fixtures/*.json
