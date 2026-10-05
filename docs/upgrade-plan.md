@@ -14,7 +14,7 @@
 | 阶段 | 内容 | 工作量 | 为什么排在这个位置 |
 |---|---|---|---|
 | **A** | 诚实性修复（区分真实推理与 mock/模板、统一匹配分、补最小反馈闭环） | 2–3 天 | **已交付（A1–A6，`b5461aa`…`37a1f45` 起，见 §4）**。它同时是测量前提：不做这步，后续所有评测都在量 mock 数据 |
-| **B1** | 行级简历改写闭环 + 改后重打分 | 1–1.5 周 | **已交付（B1.1–B1.4：`019f40c`、`5239d26`、`dfee148`、`37d5766`）**；剩的一条是"改写前快照没有 undo 端点"，挂在 §10 |
+| **B1** | 行级简历改写闭环 + 改后重打分 | 1–1.5 周 | **已交付（B1.1–B1.4：`019f40c`、`5239d26`、`dfee148`、`37d5766`）**；那一格欠的"改写前快照没有 undo 端点"**已由 D114 落地**（端点 + 界面上的撤销按钮）。**顺带修一条账目 bug**：这一行原先写那条欠账"挂在 §10"，而 §10 现算在册 27 条里**没有这一条**（open 是 2、3、4、9、11、12、16、29）——它一直只住在这张表里，没有待决条目，所以"等他拍"这句也没发生过。|
 | **B2** | 证据锚定的职业规划（接 JD 库 + 薪资分位数，产出技能缺口图） | 1–1.5 周 | **已交付（B2.1–B2.4：`d0cc34c`、`a7161de`、`eb539a6`、`a8e5e00`）**；分数读不懂时显示什么属 §10.20 |
 | **C** | 让 "Agentic RAG + 多智能体协作" 这个说法成立 | 1.5–2 周 | **已交付（C1–C7 七条都有"已交付"记录，C7a 在 `fd1272b`）**。原则一直是"只修真实性，不追自主性" |
 | **B3** | 推荐召回升级 —— **已交付主体**（持久向量 / 显式降级 / 多样性，`5d7508a`；可见性下推，`999f509`）。`multi_recall` 接岗位与 ANN 属带理由的延后 | 余 0 | 见 §5 B3 的状态复核 |
@@ -185,7 +185,7 @@
 |---|---|---|
 | B1.1 | `resume_blocks.py`：`build_resume_blocks` 给出 `self_evaluation/skills/work[i].desc/proj[i].desc` 稳定锚点；`apply_block_edits` 按锚点写入并返回 `before/after`。两条约束：空 section 不进清单（否则会诱导模型编造经历），且解析锚点必须走同一份清单；返回值永远是深拷贝（否则 ORM 不标脏、改动不落库） | `test_resume_blocks.py` 12 例 |
 | B1.2 | `POST /resume/{id}/rewrite-suggestions`：只把清单交给模型，服务端逐条复核——未知锚点、`original` 与简历对不上、同块重复、无改动、长度超 2 倍，全部带原因返回而非静默丢弃；建议一律不落库，mock 结果不会比请求活得更久 | `test_resume_rewrite_suggestions.py`、`prompts/resume_rewrite.py`；`blocks_json` 已加入 `rendering` 的不可信字段表 |
-| B1.3 | `POST /resume/{id}/apply-rewrites`：写回 `parsed_json` + 重算目标岗位分差。`expected_original` 拒绝过期锚点（按位置寻址，建议生成后简历又改过就会覆盖新文字）；改写前的 `parsed_json` 存成 JSON 版本行，撤销才可能 | 同上，含快照与 delta 断言 |
+| B1.3 | `POST /resume/{id}/apply-rewrites`：写回 `parsed_json` + 重算目标岗位分差。`expected_original` 拒绝过期锚点（按位置寻址，建议生成后简历又改过就会覆盖新文字）；改写前的 `parsed_json` 存成 JSON 版本行，撤销才可能。**D114 才把"才可能"做成"可以"**：快照存了 3 个版本周期，而 `snapshot_version_id` 在 `src` 里 0 个消费者、唯一列版本的 `ResumeCompare.vue:385` 又按 `format === 'md'` 过滤，所以那份原文从没到达屏幕；现在 `POST /resume/{id}/revert-rewrite` 读它，前端接住 id 并给出撤销按钮 | 同上，含快照与 delta 断言；撤销侧在 D114 |
 | B1.4 | 诊断弹窗内"行级改写"面板：按需生成、逐条勾选、只应用已采纳、被拒条目连同原因展示、无目标岗位时明说不显示分数变化、应用后明确标注上方维度评分仍是改写前 | 浏览器实测：真实模型对 4 个锚点给出建议 → 全部应用 → 新文本入库、原文进快照 |
 
 顺带修掉的两处（都在 B1 的必经之路上）：
@@ -3168,6 +3168,25 @@ null .job-shell[data-v-222de06d]{position:relative;padding:18px;…}
 **门禁**：`test:unit` **514 → 530 passed**（84 files；+16 = `aiScore` 10 条、`careerPlanPane` +5、`careerPlanningRadarRender` +1，`planningModelMoveProof` 12 条持平），`npm test` 17、`eslint` 0 error（仅既有 `paidOrders` warning）、`prettier --check` clean、`vue-tsc` **42**（admin 外 0）、`vite build` exit 0；backend 未触碰。**包体积这次先把尺子定死再报数**：`dist/assets/*.js|css` 逐文件 kB 相加、键剥掉哈希名，同一棵 HEAD（detached worktree + `node_modules` junction）实测 **2235.80 → 2237.05 kB（+1.25）**，构成是新共享块 `aiScore.js` 0.32 + `CareerPlanning.js` +0.40 + `SmartAnalysis.js` +0.41 + `SmartAnalysis.css` +0.09 + `index.js` +0.03。顺手一条口径修正：D111 记的 **2237.26** 与今天在同一棵 HEAD 上量到的 2235.80 差 1.46 kB，说明"构建总量"这把尺历史上没写下算法、前后不可比——从这一条起算法写在纸上。量完先 `cmd /c rmdir` 拆 junction（真 `node_modules` 拆前拆后都是 252 项），再 `git worktree remove --force`，`git worktree list` 只剩主目录。
 
 **没验的那一半**：只在 jsdom 里断言了 `points` 串、`style.width` 字符串与文案，**没有在真浏览器里量过** `el-empty` 那一支和"少一条 bar"之后的行高/栅格（`.radar-layout` 是 grid，左格 `minmax(320px, .9fr)` 在换成空态后仍占位）。这一条留给下一次跑 `probe/dead-style` 时顺手补一帧。
+
+#### 已交付：D114 B1 欠的那半件：快照存了三个版本周期之后，终于有人把它读回来
+
+他从三条路里点了 A（端点 + 界面入口）。开工前先把现状量成一张表，量完第一件事是**修账**：§1 那行说这条欠账"挂在 §10"，而 §10 现算在册 27 条里没有它（open 是 2、3、4、9、11、12、16、29）——它一直只住在 §1 那张表里，从没变成过一条待决条目，所以"等他拍"这句也没发生过。
+
+**量到的四件事**：① 快照自 B1.3 就在写（`resume_rewrite_service.py:225` 那行，`manual` + `json` + `change_log`），但 `snapshot_version_id` 在 `src` 里 **0 个消费者**；② `GET /{id}/versions`（`resume.py:694-699`）**没有 format 过滤**，所以改写前的全文其实一直在响应里，到浏览器之后被 `ResumeCompare.vue:385` 的 `filter(v => v.format === 'md')` 丢掉——**"存了却谁也够不着"**；③ 能认出"这是改写前快照"的三条判据里 `version_type == "manual"` 才是要害：`format == "json"` 的行另有两个生产者（优化版数据、定制版数据），撤销按钮若放行它们，就是把模型写的结构化数据当"你原来的文字"塞回简历；④ 回滚**不欠派生数据的账**——`match_score` 的行按 `resume_version_of()` 的 parsed_json 哈希存（`match_score_service.py:93-104`），恢复原文后哈希自然回到旧值，那条缓存行仍是正确的，不需要任何失效动作。
+
+**改了什么**：
+1. `revert_rewrite_suggestions()`：逐块校验"当前文本仍是那次改写落下的那句"，任何一块被候选人又手改过就**整单不动**并回报那几处——这与 `expected_original` 是同一条判据（锚点按 position，不是按内容），只是方向反过来。撤销成功后再写一行"撤销前快照"，其 `change_log` 是读到的那份的**反向**，因此这个函数是它自己的逆：撤销撤销 = 恢复改写。撤销不是这个流程里的第二个不可逆动作，这是它必须自己留快照的唯一理由。
+2. `POST /resume/{resume_id}/revert-rewrite`（`def` 不是 `async def`，跟 D110 那一刀同侧）：`snapshot_version_id` 必填、必须是整数，**显式挡掉 `true`**（`int(True) == 1`，否则会去恢复恰好 id 为 1 的那一行）。"这单撤销被拒"走 code 0 + `stale_blocks`，不走错误码：吃掉候选人后写的文字才是事故，一次拒绝不是。
+3. 前端：`rewrite.snapshotId` / `lastAction` 接住返回值（这两个位以前不存在，所以那条 id 落地即被丢弃），`.rw-actions` 加一支撤销按钮，文案跟着最近一次动作走。**复用 `rewrite.applying` 这一把锁**而不是给撤销另立 busy 位——应用与撤销写的是同一坨 `parsed_json`，两把锁等于允许它们并发。`block_id`（`work[0].desc` 这种锚点）不上屏，拒因取 `kind` 翻成「工作经历」。
+
+**反向证据（三轮变异，都用 `cp` 副本还原）**：**M3** 把形状判据收窄成"只看 change_log" → 那条手工造的 `optimized + json + change_log 非空` 用例红（它专门盯 `version_type` 那半条，md 行不能当这个证据，因为 `json.loads("# markdown")` 会以另一个理由先拒）；**M4** 禁掉逐块校验 → 服务层与 HTTP 两条红；**M5** 让前端把 snapshot id 继续丢掉 → 6 条屏幕断言红 5 条（第 6 条断言的是"不该出现按钮"，按设计仍绿）。
+
+**门禁**：backend **863 → 873 passed**（+10 条撤销用例）、`ruff check .` clean、`ruff format --check` 357 文件 clean；frontend `test:unit` **530 → 536 passed**（85 files）、`npm test` 17、`eslint` 0 error（仅既有 `paidOrders` warning）、`prettier --check` clean、`vue-tsc` **42**（admin 外 0）、`vite build` exit 0、js+css **2237.05 → 2238.11 kB（+1.06）**，按 D113 写死的那把尺量，长的那块是 `ResumeUpload.js` 25.97 kB。§10 open **8 → 8**（这条本来就不在里面）。
+
+**跑全量时的一条环境陷阱（值得单独记）**：我给 `pytest` 命令加了 `PYTHONIOENCODING=utf-8`，于是 `test_backup_restore.py::test_backup_dry_run_creates_no_files` **假红**了一条——它用 `subprocess(..., text=True)` 捕 `backup.py --dry-run` 的输出，而那输出里含**仓库路径本身的中文**；子进程被 env 逼成 UTF-8 写、父进程按 cp936 解，reader 线程 `UnicodeDecodeError` → `result.stdout` 是 `None` → `AttributeError: 'NoneType' object has no attribute 'lower'`。去掉那个 env，同一个文件 2 passed、全量 873 全绿。**这不是代码坏，是我给命令加的 env 坏**：要往控制台打中文（扫账脚本）就单独那条命令设 env，跑后端全量时不要设。
+
+**没验的那一半**：没有真后端 + 真浏览器跑过一次端到端撤销。前端 6 条用的是 mock 的 api 返回值，服务端那条"撤销撤销 = 恢复改写"的链只由单元级断言覆盖；按钮在真实弹窗里的排版（`.rw-actions` 现在两个按钮 + 一行分数）没在浏览器量过。
 
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
