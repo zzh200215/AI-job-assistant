@@ -4,14 +4,7 @@
     <el-aside width="220px" class="aside-shell">
       <div class="brand" @click="router.push(authStore.homeRoute)">
         <div class="brand-mark">
-          <img
-            v-if="tenantStore.brand?.logo_url"
-            :src="tenantStore.brand.logo_url"
-            alt="logo"
-            class="brand-logo-img"
-          />
           <svg
-            v-else
             width="22"
             height="22"
             viewBox="0 0 32 32"
@@ -37,8 +30,8 @@
           </svg>
         </div>
         <div class="brand-copy">
-          <strong>{{ tenantStore.brand?.name || 'Career Signal' }}</strong>
-          <small>{{ tenantStore.brand?.company || authStore.roleLabel }}</small>
+          <strong>Career Signal</strong>
+          <small>{{ authStore.roleLabel }}</small>
         </div>
       </div>
 
@@ -160,12 +153,10 @@ import { ElMessage } from '@/plugins/element-services'
 import { getSystemStatus } from '@/api/system'
 import { USER_ROLES } from '@/constants/roles'
 import { useAuthStore } from '@/stores/auth'
-import { useTenantStore } from '@/stores/tenant'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const tenantStore = useTenantStore()
 const runtime = reactive({ demoMode: false })
 
 // C 端核心导航 — 8 个一级入口
@@ -434,13 +425,6 @@ onMounted(async () => {
   color: #f6f4ff;
   background: #6d3ce8;
   flex-shrink: 0;
-}
-
-.brand-mark .brand-logo-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  border-radius: 8px;
 }
 
 .brand-copy strong {

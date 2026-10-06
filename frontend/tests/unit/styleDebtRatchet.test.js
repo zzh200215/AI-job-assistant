@@ -228,7 +228,8 @@ const BUDGET = {
        "失败演成没有数据"，只是解读块不出来时要用户自己再点一次"投递解读"。判据按形状数、不看
        动词，所以它留在账上；D15 把窗口收到函数作用域后新暴露的三处里，两处 GET 已经修掉了。 */
   silentEmptyCatches: {
-    'src/features/admin/views/Overview.vue': 2,
+    /* 2026-10-06 真删企业侧（D132）：loadTenants 那个 `catch { tenants.value = [] }` 随函数一起没了，2 → 1。 */
+    'src/features/admin/views/Overview.vue': 1,
     'src/features/jobs/views/JobSearch.vue': 1,
     'src/features/resume/views/ResumeUpload.vue': 1,
   },

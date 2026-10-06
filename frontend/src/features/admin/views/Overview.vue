@@ -7,16 +7,6 @@
         <p class="page-header-sub">统一查看用户增长、订阅转化和需要跟进的订单。</p>
       </div>
       <div class="heading-actions">
-        <el-select
-          v-model="tenantId"
-          class="tenant-select"
-          clearable
-          placeholder="全部租户"
-          @change="loadAnalytics"
-        >
-          <el-option label="全部租户（平台级）" value="" />
-          <el-option v-for="t in tenants" :key="t.id" :label="t.name" :value="t.id" />
-        </el-select>
         <el-button :loading="loading" @click="loadOverview">
           <el-icon><Refresh /></el-icon>
           刷新数据
@@ -41,7 +31,7 @@
           <div class="card-heading">
             <div>
               <h3>转化漏斗</h3>
-              <span>近 30 天{{ tenantLabel }}注册 → 上传 → 分析 → 面试 → 订阅</span>
+              <span>近 30 天注册 → 上传 → 分析 → 面试 → 订阅</span>
             </div>
           </div>
         </template>
@@ -67,7 +57,7 @@
           <div class="card-heading">
             <div>
               <h3>订单状态</h3>
-              <span>{{ tenantLabel }}最近订单</span>
+              <span>最近订单</span>
             </div>
             <el-button text @click="router.push('/admin/orders')">查看订单</el-button>
           </div>
@@ -81,11 +71,7 @@
             <b>{{ item.value }}</b>
           </div>
         </div>
-        <el-empty
-          v-if="!filteredOrders.length && !loading"
-          description="暂无订单数据"
-          :image-size="72"
-        />
+        <el-empty v-if="!orders.length && !loading" description="暂无订单数据" :image-size="72" />
       </el-card>
     </section>
 
@@ -94,17 +80,12 @@
         <div class="card-heading">
           <div>
             <h3>最新订单</h3>
-            <span>最近 6 笔{{ tenantLabel }}订阅记录</span>
+            <span>最近 6 笔订阅记录</span>
           </div>
           <el-button type="primary" plain @click="router.push('/admin/orders')">管理订单</el-button>
         </div>
       </template>
-      <el-table
-        v-if="filteredOrders.length"
-        :data="filteredOrders.slice(0, 6)"
-        size="small"
-        style="width: 100%"
-      >
+      <el-table v-if="orders.length" :data="orders.slice(0, 6)" size="small" style="width: 100%">
         <el-table-column prop="id" label="订单号" width="88"
           ><template #default="{ row }">#{{ row.id }}</template></el-table-column
         >
@@ -138,29 +119,16 @@ import { useRouter } from 'vue-router'
 import { CreditCard, Refresh, Tickets, User, UserFilled } from '@element-plus/icons-vue'
 import { getAnalyticsSummary, getAdminRevenue, getAnalyticsFunnel } from '@/api/analytics'
 import { getAdminOrders } from '@/api/subscription'
-import { listTenants } from '@/api/tenant'
 import { dateTime } from '@/utils/format/date'
 
 const router = useRouter()
 const loading = ref(false)
-const tenants = ref([])
-const tenantId = ref('')
 const summary = ref({})
 const revenue = ref({})
 const funnel = ref({})
 const orders = ref([])
 
-const tenantLabel = computed(() => {
-  if (!tenantId.value) return '平台'
-  const t = tenants.value.find((item) => String(item.id) === String(tenantId.value))
-  return t ? `「${t.name}」` : '当前租户'
-})
-const filteredOrders = computed(() => {
-  if (!tenantId.value) return orders.value
-  const tid = Number(tenantId.value)
-  return orders.value.filter((order) => Number(order.tenant_id) === tid)
-})
-const paidOrders = computed(() => filteredOrders.value.filter((order) => order.status === 'paid'))
+const paidOrders = computed(() => orders.value.filter((order) => order.status === 'paid'))
 const proUsers = computed(() => summary.value.pro_users || 0)
 const totalUsers = computed(() => summary.value.total_users || 0)
 const paidOrderCount = computed(() => summary.value.paid_orders || 0)
@@ -169,7 +137,7 @@ const metricCards = computed(() => [
   {
     label: '注册用户',
     value: totalUsers.value,
-    hint: `${tenantLabel.value}用户口径`,
+    hint: '全量用户口径',
     icon: UserFilled,
     tone: 'blue',
   },
@@ -206,14 +174,14 @@ const funnelSteps = computed(() => {
 })
 
 const orderBreakdown = computed(() => {
-  const total = filteredOrders.value.length || 1
+  const total = orders.value.length || 1
   const states = [
     { key: 'paid', label: '已支付', tone: 'green' },
     { key: 'pending', label: '待支付', tone: 'amber' },
     { key: 'cancelled', label: '已取消', tone: 'slate' },
   ]
   return states.map((state) => {
-    const value = filteredOrders.value.filter((order) => order.status === state.key).length
+    const value = orders.value.filter((order) => order.status === state.key).length
     return {
       ...state,
       value,
@@ -235,25 +203,13 @@ function statusType(status) {
   return { paid: 'success', pending: 'warning', cancelled: 'info' }[status] || 'info'
 }
 
-async function loadTenants() {
-  try {
-    const res = await listTenants({ page: 1, page_size: 100 }, { notifyError: false })
-    const data = res?.data || res || {}
-    tenants.value = data.items || []
-  } catch {
-    tenants.value = []
-  }
-}
-
 async function loadAnalytics() {
   loading.value = true
   try {
-    const params = {}
-    if (tenantId.value) params.tenant_id = tenantId.value
     const [summaryRes, revenueRes, funnelRes] = await Promise.all([
-      getAnalyticsSummary({ ...params }, { notifyError: false }),
-      getAdminRevenue({ ...params }, { notifyError: false }),
-      getAnalyticsFunnel({ ...params }, { notifyError: false }),
+      getAnalyticsSummary({}, { notifyError: false }),
+      getAdminRevenue({}, { notifyError: false }),
+      getAnalyticsFunnel({}, { notifyError: false }),
     ])
     summary.value = summaryRes?.data || summaryRes || {}
     revenue.value = revenueRes?.data || revenueRes || {}
@@ -280,7 +236,7 @@ async function loadOrders() {
 async function loadOverview() {
   loading.value = true
   try {
-    await Promise.all([loadTenants(), loadOrders(), loadAnalytics()])
+    await Promise.all([loadOrders(), loadAnalytics()])
   } finally {
     loading.value = false
   }
@@ -307,9 +263,6 @@ onMounted(loadOverview)
   display: flex;
   align-items: center;
   gap: 10px;
-}
-.tenant-select {
-  width: 200px;
 }
 .section-kicker {
   margin: 0 0 5px;
@@ -527,10 +480,6 @@ onMounted(loadOverview)
   .heading-actions {
     width: 100%;
     flex-wrap: wrap;
-  }
-  .tenant-select {
-    flex: 1;
-    min-width: 160px;
   }
   .metrics-grid {
     grid-template-columns: 1fr;
