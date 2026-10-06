@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   forgetJD,
@@ -8,9 +8,11 @@ import {
   readResumeId,
   rememberDefaultResume,
   rememberJD,
+  rememberPendingAnalysis,
   rememberRecord,
   rememberResume,
   setSelectionOwner,
+  takePendingAnalysis,
 } from '@/utils/lastSelection'
 
 /**
@@ -111,5 +113,57 @@ describe('默认简历也按登录用户分槽', () => {
     setSelectionOwner(7)
     expect(localStorage.getItem('recruit.defaultResumeId')).toBeNull()
     expect(readDefaultResumeId()).toBeNull()
+  })
+})
+
+/* §10.9 决定 ② 走"只统一槽位、不统一形状"那一支（D125，他点的 ①）。`recruit.pendingAnalysis`
+   以前是**全局键**：A 点了"一键智能分析"但没走到目的地，B 在同一台浏览器登录进来，就会看见 A 的
+   岗位名与 JD 原文被预填进自己的表单。窗口比那四把 id 小得多，但形状是同一个，所以处置也一样。
+   这三条钉的是**这次改动唯一改变的行为**（跨账号看不见），其余（取一次就删、坏 JSON 的 warn）
+   是从 `SmartAnalysis.vue` 原样搬过来的口径，不许顺手变。 */
+describe('一次性分析载荷也按登录用户分槽', () => {
+  const CTX = { jdId: 12, title: '平台后端', company: '示例', jd_text: '三年 Go' }
+
+  beforeEach(() => {
+    localStorage.clear()
+    setSelectionOwner(null)
+  })
+
+  it('写在谁的槽里就只有谁取得到，别的账号拿到 null', () => {
+    setSelectionOwner(1)
+    rememberPendingAnalysis(CTX)
+
+    setSelectionOwner(2)
+    expect(takePendingAnalysis()).toBeNull()
+
+    setSelectionOwner(1)
+    expect(takePendingAnalysis()).toEqual(CTX)
+  })
+
+  it('取走就是删：第二次拿不到（原来那句 `finally` 的语义，一字没改）', () => {
+    setSelectionOwner(1)
+    rememberPendingAnalysis(CTX)
+    expect(takePendingAnalysis()).toEqual(CTX)
+    expect(takePendingAnalysis()).toBeNull()
+    expect(localStorage.getItem('recruit.pendingAnalysis.1')).toBeNull()
+  })
+
+  it('登录把 guest 槽里那一坨和迁移前的全局键一起清掉', () => {
+    rememberPendingAnalysis(CTX) // 登录前点的那一发
+    localStorage.setItem('recruit.pendingAnalysis', JSON.stringify(CTX)) // 迁移前留下的全局键
+    setSelectionOwner(7)
+    expect(localStorage.getItem('recruit.pendingAnalysis')).toBeNull()
+    expect(localStorage.getItem('recruit.pendingAnalysis.guest')).toBeNull()
+    expect(takePendingAnalysis()).toBeNull()
+  })
+
+  it('坏 JSON 也算取走：不抛、给 null、键被删、留原来那句 warn', () => {
+    setSelectionOwner(1)
+    localStorage.setItem('recruit.pendingAnalysis.1', '{不是 JSON')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(takePendingAnalysis()).toBeNull()
+    expect(warn).toHaveBeenCalledWith('解析 pendingAnalysis 失败', expect.any(Error))
+    expect(localStorage.getItem('recruit.pendingAnalysis.1')).toBeNull()
+    warn.mockRestore()
   })
 })

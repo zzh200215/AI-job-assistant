@@ -109,4 +109,24 @@ describe('selection store 只是转发，不改变任何一口径', () => {
     // 5 号那一格没有被这次退出动过：清 guest/全局键只在拿到真实 uid 时发生
     expect(localStorage.getItem('recruit.lastResumeId.5')).toBe('11')
   })
+
+  /* §10.9 决定 ②（D125）把第五把键也接进这层壳。两条各管一面：写落对槽、读是"取"而不是"查"。 */
+  it('一次性载荷经壳写进当前账号那一格，形状原样（壳不解析、不重排字段）', () => {
+    const s = store()
+    s.setOwner(5)
+    const ctx = { jdId: 12, title: '平台后端', company: '示例', jd_text: '三年 Go' }
+    s.rememberPendingAnalysis(ctx)
+    expect(JSON.parse(localStorage.getItem('recruit.pendingAnalysis.5'))).toEqual(ctx)
+    expect(s.takePendingAnalysis()).toEqual(ctx)
+    expect(s.takePendingAnalysis()).toBeNull()
+  })
+
+  it('换过账号之后，壳里的 take 拿不到上一个人的那一坨', () => {
+    const a = store()
+    a.setOwner(5)
+    a.rememberPendingAnalysis({ jdId: 12, title: '上一个岗位的' })
+    const b = useSelectionStore() // 同一个 pinia 也算另一个会话的槽
+    b.setOwner(6)
+    expect(b.takePendingAnalysis()).toBeNull()
+  })
 })

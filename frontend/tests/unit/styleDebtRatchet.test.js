@@ -822,6 +822,12 @@ describe('style debt ratchet', () => {
     )
   })
 
+  /* 键名字面量判据。`pendingAnalysis` 是 §10.9 决定 ② 拍完之后加进来的第五把键：
+     它装的不是 id，是一坨一次性表单预填，但**槽位与登录处置和其余四把完全一样**，
+     所以它必须落在同一个尺子底下——否则"以后再往视图里写一个全局 recruit.* 键"这条路又是空的。 */
+  const selectionKeyLiteral =
+    /['"](?:recruit\.)?(?:last|default)(?:ResumeId|JDId|RecordId|PendingAnalysis)['"]|['"](?:recruit\.)?pendingAnalysis['"]/
+
   it('keeps the cross-page "last selection" handoff inside utils/lastSelection', () => {
     // 匹配字段名而不是完整键名：`storageKey('lastResumeId')` 这种自己拼前缀的写法要一起抓到。
     /* D102：判据原先只认 `last*`，于是 `recruit.defaultResumeId` 这个**同一种状态**从这条腿底下
@@ -830,18 +836,28 @@ describe('style debt ratchet', () => {
        `defaultResumeId.value = ...` 这种**局部变量名**也判成违规（假阳性，同一族第三次以新面目出现：
        尺子在数文本而不是数东西）。所以只认**字符串字面量里的键名**。 */
     const offenders = viewSources
-      .filter(({ script, template }) =>
-        /['"](?:recruit\.)?(?:last|default)(?:ResumeId|JDId|RecordId)['"]/.test(
-          `${script}${template}`
-        )
-      )
+      .filter(({ script, template }) => selectionKeyLiteral.test(`${script}${template}`))
       .map(({ rel }) => rel)
     expect(
       offenders,
-      `read/write the last resume / JD / record id through useSelectionStore() (src/stores/selection.js) — it slots these per logged-in user, which a raw localStorage key cannot, and a stale foreign id gets prefilled into a form: ${offenders.join(
+      `read/write the last resume / JD / record id and the one-shot analysis payload through useSelectionStore() (src/stores/selection.js) — it slots these per logged-in user, which a raw localStorage key cannot, and a stale foreign id or a stranger's prefilled JD text gets pushed into this account's form: ${offenders.join(
         ', '
       )}`
     ).toEqual([])
+  })
+
+  it('that key-literal ruler bites: all five keys, and no local variable', () => {
+    const hits = (text) => selectionKeyLiteral.test(text)
+    expect(hits(`localStorage.getItem('recruit.pendingAnalysis')`)).toBe(true)
+    expect(hits(`setItem('pendingAnalysis', raw)`)).toBe(true) // 自己拼前缀的写法
+    expect(hits(`localStorage.setItem('recruit.defaultResumeId', id)`)).toBe(true)
+    expect(hits(`storageKey('lastJDId')`)).toBe(true)
+    expect(hits(`"recruit.lastRecordId"`)).toBe(true)
+    // 反面：局部变量名与 store 方法名不是键名（这条是 D102 那次假阳性的形状，必须一直钉着）
+    expect(hits(`defaultResumeId.value = r.id`)).toBe(false)
+    expect(hits(`const lastResumeId = ref(null)`)).toBe(false)
+    expect(hits(`selection.takePendingAnalysis()`)).toBe(false)
+    expect(hits(`rememberPendingAnalysis(ctx)`)).toBe(false)
   })
 
   /* §10.9 决定 ①（D124）：五个具名函数收成了一个 store，`src/` 里能直接 import
