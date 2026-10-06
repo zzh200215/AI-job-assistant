@@ -3560,6 +3560,29 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **顺手按账上那条正则现数一次**：`## 10.` 到下一个 `## ` 之间 `^[0-9]+. ` 共 **29 条，全部已划（`~~`）**，§10 open **1 → 0**——原来那一条 open 就是 §10.2 自己。但**别把它读成"没事干"**：这一刀收完立刻新挂了 **§10.32**（organization 那一半拆不拆，三条路 + 现取射程都在条目里），所以数又回到 **1**；C 桶那几件不用拍就能做的活也还在原地。以后新出现的待定一律另起条目，不往已划的条目里塞。
 
+**自己又踩了那条写过两次的坑（第三次，同族）**：插入 D136 时 `old_string` 取的正是紧随其后的 `#### 已交付：E19` 那行标题，标题被整行换掉。这次抓它的**不是** D122/D124 定的那条 `grep -c '^#### '`——那条判据在这个形状下**结构性失效**：我"删一条标题 + 加一条标题"，工作树与 HEAD 都是 172，数出来正好对上、看不出任何异常。真正抓到的是 **`git diff --stat` 的删除数**：一次纯插入的记录应该是 `N insertions(+), 0 deletions(-)`，出现 deletion 就说明锚点吃掉了既有内容。补回 E19 标题后复核：**HEAD 172 → 工作树 173（只多 D136 这一条）、`^#### 已交付：E19` 恰好 1 处、diff 为 21 insertions / 0 deletions**。**判据改写**：往后"在两条记录之间插入"用 diff 的删除数当门，别再用标题总数——它只能抓"漏改一处"，抓不住"一进一出"。
+
+#### 待拍已定：D136 §10.32 他点 ②「整族拆到底」——先取半径与"改前形状"那把尺
+
+**决定**（2026-10-06）：organization 这一族按 §10.2 同一条路线走第六增量——**保模型、保列、保 `docs/schema-baseline.sql`，只删暴露面与语义**。动手前先把半径和形状取齐，因为这一族里**有两个候选人正在调的端点**，与前面四刀"数据惰性所以看不见"不同。
+
+**半径（全部现取，2026-10-06）**，四组：
+1. **题库/评分/报告模板的三级回落塌成两级**：`interview_config_service.py` 五个函数都吃 `tenant_id`（`get_question_bank` / `list_question_banks` / `get_scoring_rules` / `scoring_rule_map` / `get_report_template`），语义是"租户自定义 → 平台默认（`tenant_id IS NULL`）→ 内置常量"。生产调用方 4 处：`interview_rest.py:83`、`:475`（读 `session.tenant_id`）、`:909`，`interview_engine.py:383/388`（`tenant_id or 1`）。**产品功能保留**（平台可配 + 内置兜底），删的只是"按租户分区"那一级。
+2. **6 个管理员/外部端点的 `?tenant_id=`**：`analytics.py:29-85`（4 条 + `_resolve_tenant_or_404` + `Organization` import）、`external/billing.py`（`api-keys` / `billing/bills` 两条 + 两个 `ApiKey/ApiBill.tenant_id` 过滤）、`external/webhook.py:37` 的 `tenant_id=1` 打标。分组语义在 `analytics_service.py`（50 处 tenant 引用）。
+3. **`knowledge.py` 的 org 作用域**：42 处引用、两个 helper（`_organization_membership` / `_organization_scope`）、`Header(None)` 那个 `X-Organization-ID`（`:113/:117-121`）、逐文档判定两处（`:75/:81`），以及 `knowledge_access.get_visible_knowledge_doc_ids(organization_id=…)` 那一支。
+4. **`scheduler.py:77-79` 的 `tenant_billing_check`** 那条任务。
+
+**前端消费者地图（逐项 grep + 路由 meta 核过）**——这一张决定哪些删除是"屏幕上看不见的"：
+- **零消费者**（删了不会有任何页面少东西）：`GET /interview/question-bank/categories`、`GET /api/analytics/retention`、`GET /v1/admin/external/{api-keys,billing/bills}`、`PUT /admin/interview-config`（它还是**唯一**能建租户级行的写入端）。全仓 grep `tenant_id|X-Organization|organization_id|by_tenant` 在前端只剩**一处测试夹具** `tests/unit/apiLayerMove.test.js:85` 的 `{ tenant_id: 3 }`。
+- **候选人页在读的两条，但都自带兜底**：`Interview.vue:405` 读 `/question-bank`，`items.length` 为 0 或抛错就落回 `:346-392` 那份**六个硬编码本地题**；`InterviewSetup.vue:363` 读 `/config/types`，`!data?.items?.length` 直接 return、保留内置五档（`:356-387`，`tests/unit/interviewSetupTypeLabel.test.js:36` 钉的就是这个行为）。
+- `is_custom` 是这一族里唯一"租户味"的响应字段，被 `InterviewSetup.vue:364-377` 读；塌掉租户级之后它**恒为 false**——所以要么删字段连着删前端那一处，要么留着当常量。**这一条我按"暴露面"处理，不是按"字段兼容"处理。**
+
+**"改前形状"那把尺（先落盘再动手，`_d136_shape` 已在进程内直调服务层，零 HTTP、零写库）**：`list_question_banks(default)` = **内置五档、全部 `is_custom:false`**；`get_scoring_rules(default)` = 内置四条权重；`get_question_bank` / `get_report_template` = **None**（今天走的就是内置兜底那一级）；`get_summary_metrics(platform)` 里带一个**回声字段 `tenant_id: null`**（响应形状里的租户残留，前端不读）；`get_revenue_summary(platform)` = `{items: [], order_count: 0, total_amount: 0}`——`items` 就是那条"按租户分组"的列表，今天是空的，而 `Overview.vue:160` 只读 `total_amount`。**这一份 JSON 就是删除后必须逐字节复现的东西**，除了明写要拿掉的 `tenant_id` 回声与 `items` 分组。
+
+**两条必须先说的**：① "organization 0 行"只对 dev MySQL 成立，**对测试不成立**——`test_interview_config.py` 与 `test_subscription_plans.py` 各自带一份重复的 `_seed_org`（往自己的 SQLite 里建 `Organization` 行），`tenant_session` 引用 28 + 33 处、两文件 21 条 def。② `X-Tenant-Id` 在 `app/` 源码里已经**一处都没有**（唯一命中是已删模块的孤儿 `.pyc`），可那两份 fixture 的注释仍写着"保证『无 X-Tenant-Id → 回落默认租户』的断言不被自增 id 撞车"——**这句理由守的是一个已经不存在的断言**；而 `tests/test_no_mojibake.py:156` 把这整句注释**逐字当测试输入**，所以动注释会红那一条尺（"尺子引用欠债原文"那一族的再一次实测）。
+
+**切的顺序与门禁**（每一步都跑：backend `pytest` 全量 + `ruff check/format`、前端 `vitest` + `npm test` + `prettier`/`eslint`；对照尺 = 上面那份形状 + D135 的 22/28 与 mock 两臂）：第一步题库三级塌两级 + 删 `PUT /admin/interview-config` 与 `categories`；第二步 6 个参数与 analytics/billing 的分组语义 + `webhook` 打标 + `scheduler` 任务；第三步 `knowledge.py` 的 org 作用域与那个头；第四步两个 fixture 的 `_seed_org` 收掉、21 条 def 逐条判"改"还是"删"、守卫表按实测重取。**不碰的**：模型、列、mixin、migration、`test_tenant_model.py`（它测的就是保留下来的列）。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
