@@ -78,6 +78,40 @@ const COMPONENTS = {
   TranscriptPane,
 }
 
+/* ---------- §10.20（D113）欠的那一帧：职业规划页的四种雷达形状 ----------
+   这一屏读的是 `career_planning.skill_radar.dimensions`，而它到 2026-10-06 之前**根本没有夹具**，
+   所以 `.radar-card` 在探针里从来没画出来过——D113 那句"只在 jsdom 断过坐标"就是这么来的。
+   四种形状：full 四条全读得懂 / partial 四条里一条读不懂（行还在、不进雷达）/ three 少一条行 /
+   empty 四条全读不懂（左格换成 el-empty）。读不懂的取值挑模型真写出来的那一族：中文串、缺字段、
+   布尔、空串——`Number(true)` 会被旧实现读成 1 分，所以布尔单独占一条。
+   夹具用 getter 现取，所以 `__probe.radarShape('empty')` 之后**重新跑一次规划**就换形状，不用重启 dev。 */
+let radarShapeMode = 'full'
+const RADAR_NAMES = ['技术深度', '工程化', '业务理解', '表达力']
+/* 键名抄消费者：`CareerPlanning.vue:870-877` 读的是 `name` / `gap` / `current_score` / `target_score`。
+   第一版我写成 `current` / `target`，四条全被判成读不懂——那次意外量到的正是 empty 那一支，
+   也正是 D113 欠的那一帧，所以两种都留着：`empty` 走的就是这一族读不懂的取值。 */
+const RADAR_READABLE = [
+  { current_score: 72, target_score: 88, gap: '补一次线上值班' },
+  { current_score: 65, target_score: 85, gap: '把一个服务从零带到上线' },
+  { current_score: 58, target_score: 80 },
+  { current_score: 61, target_score: 78 },
+]
+const RADAR_UNREADABLE = [
+  { current_score: '约80', target_score: 90 },
+  { target_score: 88 },
+  { current_score: true, target_score: false },
+  { current_score: '', target_score: null },
+]
+const RADAR_SHAPES = ['full', 'partial', 'three', 'empty']
+function radarDimensionsFixture() {
+  const readable = (i) => ({ name: RADAR_NAMES[i], ...RADAR_READABLE[i] })
+  const unreadable = (i) => ({ name: RADAR_NAMES[i], ...RADAR_UNREADABLE[i] })
+  if (radarShapeMode === 'empty') return RADAR_NAMES.map((_, i) => unreadable(i))
+  if (radarShapeMode === 'partial') return [readable(0), readable(1), readable(2), unreadable(3)]
+  if (radarShapeMode === 'three') return [readable(0), readable(1), readable(2)]
+  return RADAR_NAMES.map((_, i) => readable(i))
+}
+
 /* ---------- 夹具：形状抄自单测，只给"页面要走到那一屏"所需的最小量 ---------- */
 const ANALYSIS_RECORD = {
   id: 99,
@@ -96,6 +130,9 @@ const ANALYSIS_RECORD = {
     interview_questions: { basic: [{ q: '为什么', intent: '动机' }], advanced: [] },
   },
   career_planning: {
+    get skill_radar() {
+      return { dimensions: radarDimensionsFixture() }
+    },
     summary: '往平台方向走',
     directions: [
       { title: '平台工程师', category: '高度匹配', match_score: 78, gap_skills: ['K8s'] },
@@ -132,7 +169,18 @@ const FIXTURES = [
     /\/resume\/list/,
     'get',
     {
-      items: [{ id: 1, title: '探针简历', file_name: '探针简历.pdf', created_at: '2026-09-01' }],
+      items: [
+        {
+          id: 1,
+          title: '探针简历',
+          file_name: '探针简历.pdf',
+          created_at: '2026-09-01',
+          /* §10.20 那一帧要的是职业规划页：`usePlanningOptions.js:50-51` 只把 `parsed` 非空的简历
+             放进选择列表，原来这份夹具没有 `parsed`，那一页的简历下拉是**空的**——按钮点了只是
+             "请先选择简历"，雷达那一屏永远不挂载。键名用 `parsed` 而不是 `parsed_json`，消费者读的是前者。 */
+          parsed: { current_title: '平台后端工程师' },
+        },
+      ],
       total: 1,
     },
   ],
@@ -170,6 +218,58 @@ const FIXTURES = [
     },
   ],
   [/\/jobs\/cities/, 'get', { cities: ['上海', '北京'], provinces: [] }],
+  /* §10.20 那一帧缺的四条（2026-10-06 现取，`__probe.fixtureMisses()` 报出来的）：
+     职业规划页拿的是 `/jd/list`（`api/jd.js:6`，上面那条 `/jd/?` 正则匹配不到它）、
+     POST `/career-path/recommend`、GET `/salary/overview`，以及点"开始职业规划"时
+     `createGoalJD()` 要发的 POST `/jd`——少最后一条就是"职业规划生成失败"那句 toast，
+     而屏幕上完全看不出是数据缺失。形状各自抄消费者：`usePlanningOptions.js:53`（items）、
+     `useCareerDirections.js:39-43`（career_paths/summary/corpus/message）、
+     `useSalaryMarket.js:23-35` + 单测夹具（has_data/filters/statistics）、`createJD` 的 id。
+     `/tenant/brand` 故意**不补**：今天它落到 `{}`，布局走 `|| 'Career Signal'` 那支，
+     补上名字会让探针里每一页的首屏都变，历史帧就没法比了。 */
+  [
+    /\/jd\/list(\?|$)/,
+    'get',
+    { items: [{ id: 7, title: '平台工程师', company: '示例' }], total: 1 },
+  ],
+  [
+    /\/career-path\/recommend/,
+    'post',
+    {
+      career_paths: [
+        {
+          direction_key: 'platform',
+          label: '平台工程师',
+          coverage: 0.62,
+          gap_skills: ['K8s', 'Rust'],
+        },
+        { direction_key: 'backend', label: '后端专家', coverage: 0.55, gap_skills: ['Rust'] },
+      ],
+      summary: '两条方向都有可讲的缺口',
+      corpus: { visible_jds: 18, directions_found: 2 },
+      message: '',
+    },
+  ],
+  [
+    /\/salary\/overview/,
+    'get',
+    {
+      has_data: true,
+      sample_size: 42,
+      filters: { position: '平台后端工程师', city: null },
+      statistics: { p25: 22, p50: 28, p75: 36, p90: 44 },
+    },
+  ],
+  [
+    /\/jd$/,
+    'post',
+    {
+      id: 707,
+      title: '平台后端工程师',
+      company: '职业规划目标',
+      raw_text: '目标岗位：平台后端工程师',
+    },
+  ],
   /* D108：订阅页此前在探针里是**空白**的——`loadPlans` 请求 `/subscription/plans`，没有夹具就落到
      `catch {}`，而那句注释写着"fallback 到静态数据"其实什么也没做（plans 保持 []）。
      features 逐条抄自后端 `subscription_service.TIER_FEATURES`，价格为分。 */
@@ -470,11 +570,16 @@ const FIXTURES = [
   ],
 ]
 
+/* 夹具命中账：这一屏到底发过哪些请求、哪一条没夹具可落（落空就是 `{}`，
+   于是"点了没反应/生成失败"而屏幕上看不出是数据缺失）。§10.20 那一帧就是靠它定位的。 */
+const fixtureLog = []
+
 request.defaults.adapter = async (config) => {
   const method = String(config.method || 'get').toLowerCase()
   const url = String(config.url || '')
   const hit = FIXTURES.find(([re, m]) => re.test(url) && m === method)
   const data = hit ? hit[2] : {}
+  fixtureLog.push({ url, method, hit: !!hit })
   return {
     data: { code: 0, message: 'ok', data },
     status: 200,
@@ -637,6 +742,17 @@ const probe = {
     return id
   },
   routes: () => router.getRoutes().map((r) => ({ path: r.path, name: r.name || null })),
+  /** 这一屏发过的请求与哪些落到空夹具（`{}`）——"点了没反应"先查这里，别猜页面逻辑。 */
+  fixtureLog: () => fixtureLog.slice(),
+  fixtureMisses: () => fixtureLog.filter((l) => !l.hit),
+  /** §10.20 那一帧的开关：换雷达形状后要重新点一次"开始职业规划"，夹具才现取。 */
+  radarShape(mode) {
+    if (!RADAR_SHAPES.includes(mode)) {
+      throw new Error(`未知雷达形状：${mode}，可选 ${RADAR_SHAPES.join(' / ')}`)
+    }
+    radarShapeMode = mode
+    return { shape: mode, dimensions: radarDimensionsFixture() }
+  },
   async go(target) {
     const to =
       typeof target === 'string' && target.startsWith('name:') ? { name: target.slice(5) } : target
