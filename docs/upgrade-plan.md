@@ -3360,7 +3360,7 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **行为测试 +7**：`lastSelection.test.js` 8 → **12**（跨账号取不到 / 取走就是删 / 登录把 guest 槽与迁移前全局键一起清掉 / 坏 JSON 也算取走且 warn 还在），`selectionStore.test.js` 6 → **8**（壳写进当前账号那一格且不重排字段、换账号之后 take 拿不到），`styleDebtRatchet` 47 → **48**。
 
-**门禁**：`test:unit` 86 files / **555 → 562 passed**；`npm test` **33 pass / exit 0**；`vue-tsc` **42**（未动）；`eslint` 0 error（仅既有 `paidOrders` warning）；`prettier --check` clean（新那条长正则先被判红一次，`--write` 单文件修掉，CR 0）；`vite build` exit 0。包体积同法两次构建：**基线 `af2ccff` 2242.63 → 本树 2242.91 kB，+0.28 kB（+0.012%）**，形状不单向——共享块 `index.js` **+0.47**（两个新函数），两个页面块反过来 **−0.16（`SmartAnalysis`）与 −0.03（`JobSearch`）**，因为 try/parse/remove 那段从页面搬进了 util。worktree 按配方拆（junction 先 `cmd /c rmdir`，主 `node_modules` 拆前拆后都是 252 项）。真实 diff：4 个源文件 `+67 −26`、3 个测试文件 `+97 −7`。
+**门禁**：`test:unit` 86 files / **555 → 562 passed**；`npm test` **33 pass / exit 0**；`vue-tsc` **42**（未动）；`eslint` 0 error（仅既有 `paidOrders` warning）；`prettier --check` clean（新那条长正则先被判红一次，`--write` 单文件修掉，CR 0）；`vite build` exit 0。包体积同法两次构建：**基线 `af2ccff` 2242.63 → 本树 2242.91 kB，+0.28 kB（+0.012%）**，形状不单向——共享块 `index.js` **+0.47**（两个新函数），两个页面块反过来 **−0.16（`SmartAnalysis`）与 −0.03（`JobSearch`）**，因为 try/parse/remove 那段从页面搬进了 util。worktree 按配方拆（junction 先 `cmd /c rmdir`，主 `node_modules` 拆前拆后都是 252 项）。真实 diff：**4 个源文件 `+69 −26`、3 个测试文件 `+97 −7`**（`git diff --numstat origin/master` 现取；其中 2 行是事后补进 `stores/selection.js` 头注释的那句"第五把键只统一槽位"——**这一格先前写的是 +67，因为我在报完之后又动了那个文件一次**，数就跟着变了：过程账里的数字必须连同"它是在哪一次编辑之后取的"一起写，否则下一个改动就把上一条变成了假话）。
 
 **§10.9 至此整条关闭**（① D124、② D102 + D125）。§10 现算于本次编辑之后：**在册 29 条不变，open 6 → 5**（2、3、4、11、16）。
 
