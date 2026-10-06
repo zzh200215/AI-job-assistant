@@ -538,15 +538,20 @@ class TestReportGeneration:
         assert "weaknesses" in report
 
     def test_overall_score_normalized_with_heavy_custom_weights(self, engine):
-        """自定义评分权重和≠1 时总分须归一化，overall_score 不超 100（#19）。"""
+        """自定义评分权重和≠1 时总分须归一化，overall_score 不超 100（#19）。
+
+        D136 之前这两行是"租户级"规则（`tenant_id=1` + `session.tenant_id=1` 才对得上）；
+        租户那一级出树后引擎只读平台行，所以夹具改写成 `tenant_id=None`，断言一字未动。
+        """
         from app.models.interview_config import InterviewScoringRule
 
         db = engine.db
-        db.add(InterviewScoringRule(tenant_id=1, dimension="completeness", label="要点覆盖", weight=0.6, sort_order=0))
-        db.add(InterviewScoringRule(tenant_id=1, dimension="expression", label="表达", weight=0.6, sort_order=1))
+        db.add(
+            InterviewScoringRule(tenant_id=None, dimension="completeness", label="要点覆盖", weight=0.6, sort_order=0)
+        )
+        db.add(InterviewScoringRule(tenant_id=None, dimension="expression", label="表达", weight=0.6, sort_order=1))
         db.commit()
 
-        engine.session.tenant_id = 1
         engine.start_time = 0
         engine.question_count = 2
         engine.evaluations = [

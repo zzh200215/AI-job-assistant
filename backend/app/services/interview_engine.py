@@ -376,16 +376,15 @@ class InterviewEngine:
         avg_depth = sum(item["depth"] for item in valid_evals) / len(valid_evals)
         avg_expression = sum(item["expression"] for item in valid_evals) / len(valid_evals)
 
-        # T3-2：租户评分规则权重（未配置回落默认 0.30/0.30/0.25/0.15）
+        # T3-2：平台评分规则权重（未配置回落默认 0.30/0.30/0.25/0.15）
         from app.services.interview_config_service import get_scoring_rules, scoring_rule_map
 
-        tenant_id = self.session.tenant_id if self.session else None
-        scoring_rules = get_scoring_rules(self.db, tenant_id or 1)
-        # 权重归一化：租户自定义权重和可能 ≠ 1（如只配了 0.10+0.60），
+        scoring_rules = get_scoring_rules(self.db)
+        # 权重归一化：配置里的权重和可能 ≠ 1（如只配了 0.10+0.60），
         # 不归一化会导致 overall_score 超过 100。归一化后恒落在 [0,100]。
         _DEFAULT_WEIGHTS = {"completeness": 0.30, "accuracy": 0.30, "depth": 0.25, "expression": 0.15}
         weights = dict(_DEFAULT_WEIGHTS)
-        weights.update({k: v for k, v in scoring_rule_map(self.db, tenant_id or 1).items() if k in _DEFAULT_WEIGHTS})
+        weights.update({k: v for k, v in scoring_rule_map(self.db).items() if k in _DEFAULT_WEIGHTS})
         total_weight = sum(weights.values())
         if total_weight > 0:
             weights = {k: v / total_weight for k, v in weights.items()}

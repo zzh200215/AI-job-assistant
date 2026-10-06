@@ -31,7 +31,6 @@ import { interviewScoreTone } from '@/utils/scoreTone'
  * @property {string} description
  * @property {string[]} focus
  * @property {string[]} [tags]
- * @property {boolean} [is_custom]
  */
 
 export function speechStatusText({ supported, listening }) {

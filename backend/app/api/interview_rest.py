@@ -14,15 +14,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi import Query as QueryParam
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user, require_admin
+from app.api.auth import get_current_user
 from app.core.database import SessionLocal, get_db
-from app.models.base import DEFAULT_TENANT_ID
 from app.models.history import JobDescription, Resume
-from app.models.interview_config import (
-    InterviewQuestionBank,
-    InterviewReportTemplate,
-    InterviewScoringRule,
-)
 from app.models.interview_question import InterviewQuestion
 from app.models.interview_session import InterviewSession
 from app.models.user import User
@@ -79,8 +73,8 @@ def create_session(
     }
     search_types = type_hints.get(payload.interview_type, ["interview_q", "skill_model"])
 
-    # T3-2：租户题库配置优先（自定义静态题覆盖内置 starter 题库）
-    bank = get_question_bank(db, DEFAULT_TENANT_ID, payload.interview_type)
+    # T3-2：平台题库配置优先（自定义静态题覆盖内置 starter 题库）
+    bank = get_question_bank(db, payload.interview_type)
     custom_questions = bank.questions if (bank is not None and bank.questions) else None
     ordered_questions = _fallback_questions(
         jd_title,
@@ -249,7 +243,7 @@ def _fallback_questions(
 ) -> list[dict[str, Any]]:
     """Return a full question set that can start without a model round trip.
 
-    T3-2：custom_questions 来自租户题库配置（InterviewQuestionBank.questions），
+    T3-2：custom_questions 来自平台题库配置（InterviewQuestionBank.questions），
     非空时完全替代内置 starter 题库；否则回落内置模板。
     """
     if custom_questions:
@@ -267,7 +261,7 @@ def _fallback_questions(
                     "question": text,
                     "intent": str(item.get("intent") or ""),
                     "ref_answer": str(item.get("ref_answer") or item.get("expected_answer") or ""),
-                    "source": "tenant_config",
+                    "source": "platform_config",
                 }
             )
         return normalized[:10]
@@ -439,7 +433,7 @@ def _build_personalized_prompt(
         "hr": "重点考察表达、动机、协作、文化匹配，基础题和场景题占比更高。",
         "comprehensive": "兼顾技术、项目、HR、场景四类题，整体分布更均衡。",
     }
-    # T3-2：租户题库配置的 prompt_template 覆盖内置题型指令
+    # T3-2：平台题库配置的 prompt_template 覆盖内置题型指令
     custom_instruction = prompt_template.strip()
     if custom_instruction:
         type_instructions[interview_type] = custom_instruction
@@ -471,10 +465,10 @@ def _personalize_unstarted_questions(
             return
 
         fallback = list(session.questions or _fallback_questions(jd_title, required_skills, interview_type))
-        # T3-2：后台个性化同样读租户题库配置（session.tenant_id 已打标）
-        bank = get_question_bank(db, session.tenant_id, interview_type)
+        # T3-2：后台个性化同样读平台题库配置（列仍在，不再按它分区）
+        bank = get_question_bank(db, interview_type)
         if bank is not None and bank.questions:
-            # T3-2：租户自定义静态题库优先。create_session 已用自定义题建会话，
+            # T3-2：平台自定义静态题库优先。create_session 已用自定义题建会话，
             # 后台 LLM 个性化不得覆盖，否则自定义题库会被换成 10 道通用题。
             snapshot = dict(session.memory_snapshot or {})
             snapshot["question_generation"] = {"status": "custom_bank"}
@@ -897,106 +891,17 @@ def _build_preparation_suggestions(title, required_skills, performance):
 
 
 # ============================================================
-# T3-2 面试配置：题型配置查询 + 管理端配置
+# T3-2 面试配置：题型配置查询（平台配置 → 内置回落）
 # ============================================================
 
 
-@router.get("/config/types", summary="获取当前租户可见的面试题型配置（T3-2）")
-def list_tenant_bank_types(
+@router.get("/config/types", summary="获取面试题型配置")
+def list_bank_types(
     db: Session = Depends(get_db),
 ):
-    """返回当前租户可见的题型配置（租户自定义 → 平台默认 → 内置回落），前端设置页使用。"""
-    return ok({"items": list_question_banks(db, DEFAULT_TENANT_ID)})
+    """题型配置（平台行覆盖内置五档），前端设置页使用。
 
-
-@router.put("/admin/interview-config", summary="管理员：配置租户面试题库/评分规则/报告模板（T3-2）")
-def upsert_interview_config(
-    payload: dict,
-    db: Session = Depends(get_db),
-    _admin: User = Depends(require_admin),
-):
-    """按 config_type 配置租户面试配置：
-
-    - question_bank:  {"tenant_id", "type", "title"?, "prompt_template"?, "questions"?, "tags"?, "is_active"?}
-    - scoring_rules:  {"tenant_id", "rules": [{"dimension","label"?, "weight"}]}（批量重建）
-    - report_template: {"tenant_id", "template"}
-    dimension 限定内置四维：completeness/accuracy/depth/expression（与逐题评分存储列一致）。
-    """
-    config_type = payload.get("config_type", "")
-    tenant_id = payload.get("tenant_id")
-    if not tenant_id or config_type not in ("question_bank", "scoring_rules", "report_template"):
-        return fail(
-            message="config_type(question_bank/scoring_rules/report_template) 与 tenant_id 必填", code=ERR_PARAM
-        )
-
-    if config_type == "question_bank":
-        bank_type = payload.get("type", "")
-        if not bank_type:
-            return fail(message="type 必填", code=ERR_PARAM)
-        row = (
-            db.query(InterviewQuestionBank)
-            .filter(
-                InterviewQuestionBank.tenant_id == tenant_id,
-                InterviewQuestionBank.type == bank_type,
-            )
-            .first()
-        )
-        if row is None:
-            row = InterviewQuestionBank(tenant_id=tenant_id, type=bank_type)
-            db.add(row)
-        if "title" in payload:
-            row.title = str(payload["title"])
-        if "prompt_template" in payload:
-            row.prompt_template = str(payload["prompt_template"])
-        if "questions" in payload:
-            row.questions = payload["questions"] if isinstance(payload["questions"], list) else None
-        if "tags" in payload and isinstance(payload["tags"], list):
-            row.tags = payload["tags"]
-        if "is_active" in payload:
-            row.is_active = 1 if payload["is_active"] else 0
-        db.commit()
-        db.refresh(row)
-        return ok(
-            {
-                "id": row.id,
-                "tenant_id": row.tenant_id,
-                "type": row.type,
-                "title": row.title,
-                "question_count": len(row.questions or []),
-            }
-        )
-
-    if config_type == "scoring_rules":
-        rules = payload.get("rules")
-        if not isinstance(rules, list) or not rules:
-            return fail(message="rules 必填（非空列表）", code=ERR_PARAM)
-        allowed = {"completeness", "accuracy", "depth", "expression"}
-        for rule in rules:
-            if rule.get("dimension") not in allowed:
-                return fail(message=f"dimension 仅支持 {sorted(allowed)}", code=ERR_PARAM)
-        # 批量重建：删除该租户全部规则后插入（简单且原子）
-        db.query(InterviewScoringRule).filter(InterviewScoringRule.tenant_id == tenant_id).delete()
-        for index, rule in enumerate(rules):
-            db.add(
-                InterviewScoringRule(
-                    tenant_id=tenant_id,
-                    dimension=rule["dimension"],
-                    label=str(rule.get("label") or rule["dimension"]),
-                    weight=float(rule.get("weight") or 0),
-                    sort_order=index,
-                )
-            )
-        db.commit()
-        return ok({"tenant_id": tenant_id, "rule_count": len(rules)})
-
-    # report_template
-    row = db.query(InterviewReportTemplate).filter(InterviewReportTemplate.tenant_id == tenant_id).first()
-    if row is None:
-        row = InterviewReportTemplate(tenant_id=tenant_id)
-        db.add(row)
-    row.template = str(payload.get("template") or "")
-    if "is_active" in payload:
-        row.is_active = 1 if payload["is_active"] else 0
-    db.commit()
-    db.refresh(row)
-    return ok({"id": row.id, "tenant_id": row.tenant_id, "template_length": len(row.template or "")})
+    2026-10-06 真删企业侧第六增量（D136）：这里原来是「租户自定义 → 平台默认 → 内置」三级，
+    租户那一级随 organization 出树；同批删掉的 `PUT /admin/interview-config` 是三张表唯一的
+    写入端，所以删完之后这条链在真实数据上恒走内置五档（dev 实测三张表各 0 行）。"""
+    return ok({"items": list_question_banks(db)})

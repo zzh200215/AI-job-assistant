@@ -374,7 +374,6 @@ async function loadTypeConfigs() {
         description: item.description || defaultTypeConfigs[t]?.description || '',
         focus: item.focus?.length ? item.focus : defaultTypeConfigs[t]?.focus || [],
         tags: item.tags || [],
-        is_custom: !!item.is_custom,
       }
     }
     if (options.length) {

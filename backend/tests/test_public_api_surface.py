@@ -85,8 +85,8 @@ def test_the_walk_finds_credentials_on_the_bulk_of_the_api():
     """非空断言：清单测试只有在遍历真的能看到依赖时才有意义。"""
     protected, public = _operations()
     assert (
-        len(protected) >= 199
-    ), f"只有 {len(protected)} 条操作被判为需要凭据——遍历大概失效了（2026-10-06 真删企业侧：两个 router 出树，实测 199）"
+        len(protected) >= 198
+    ), f"只有 {len(protected)} 条操作被判为需要凭据——遍历大概失效了（2026-10-06 第六增量：admin 面试配置端点出树，实测 199→198）"
     assert len(public) < 30, f"匿名可调操作 {len(public)} 条，远超清单规模"
 
 
@@ -110,7 +110,8 @@ def test_metrics_endpoint_is_behind_a_credential():
 # 会话，而不是安静地对公网开放。挂不上的是混着公开端点的前缀（auth / system / jobs /
 # interview / organizations / subscription / tenant / v1），它们仍由上面那张清单钉住。
 # 2026-10-06 真删企业侧（D134）：这行里的 organizations 与 tenant 两个前缀已经不在树上，
-# 清单原文留着是因为它记的是 E19 当时量到的规模；现在的数是 112 / 195。
+# 清单原文留着是因为它记的是 E19 当时量到的规模；现在的数是 112 / 194（2026-10-06 第六增量
+# 删掉 `PUT /interview/admin/interview-config` 之后 195→194，守护前缀那一维没动）。
 CONSTRUCT_PROTECTED_PREFIXES = {
     "/user",
     "/dashboard",
@@ -282,8 +283,8 @@ def test_every_operation_outside_the_two_lists_carries_a_session_credential():
     assert not naked, f"这些操作既不在两张清单里也没有会话凭据：{naked[:8]}"
     # 非空断言：量过是 232 条路由（E29 删掉 /tracking 之前是 233），远低于这个数说明遍历失效。
     assert (
-        len(guarded) >= 195
-    ), f"只核到 {len(guarded)} 条带会话凭据的操作，和真实规模对不上（2026-10-06 真删企业侧之后实测 195）"
+        len(guarded) >= 194
+    ), f"只核到 {len(guarded)} 条带会话凭据的操作，和真实规模对不上（2026-10-06 第六增量：PUT /admin/interview-config 出树，实测 195→194）"
     assert (
         listed == ALL_LISTED
     ), f"清单里有操作其实已被补齐凭据（该删条目）或多出没登记的：{sorted(listed ^ ALL_LISTED)}"

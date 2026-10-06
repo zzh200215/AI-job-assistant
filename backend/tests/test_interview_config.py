@@ -1,39 +1,33 @@
-"""T3-2 面试题型与评分规则配置化测试。
+"""面试题型与评分规则配置化测试（两级回落：平台配置 → 内置常量）。
 
-验收对应：「为租户 A 配置『偏前端技术面』题库与评分权重后，A 的面试题目与报告维度变化，B 租户不变」。
-- 单元：_fallback_questions 租户题注入、_build_personalized_prompt 租户指令注入
-- 服务层：题库/评分规则/报告模板三级回落与覆盖、跨租户隔离
-- API：GET /interview/config/types 租户化、PUT /admin/interview-config 配置与权限
-- 端到端：create_session 使用租户题库（patch SessionLocal 到内存库、mock LLM）
+2026-10-06 真删企业侧第六增量（D136，§10.32 他点「整族拆到底」）之前，这一族是**三级**
+（租户自定义 → 平台默认 → 内置），本文件也就照着那句验收写："给租户 A 配『偏前端技术面』
+后 A 变、B 不变"。租户那一级与 `PUT /admin/interview-config`（三张表唯一的写入端）一起出树之后：
+- 跨租户隔离那三条断言**没有对应行为了**，删；
+- `InterviewReportTemplate` / `get_report_template` 一起删——后者在生产里从来没有调用方，
+  所以"自定义报告模板"这句话从没落到过屏幕上；
+- 留下来的用例测的是"平台行覆盖内置"这一级，以及自定义静态题在创建与后台个性化两条路上
+  都不被通用题替换掉（#8 那条老缺陷）。
 """
 
-# 2026-10-06 真删企业侧（D135）：这里原先给合成 app 挂租户中间件、并把中间件的 Session 工厂指向测试库；
-# 中间件与租户上下文一起出树之后，被测端点固定按内置租户 1 取数，剩下的用例只测端点本身。
 from __future__ import annotations
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.api import interview_rest
-from app.api.auth import get_current_user
 from app.api.interview_rest import _build_personalized_prompt, _fallback_questions
-from app.core.database import Base, get_db
-from app.core.user_roles import ADMIN_ROLE, CANDIDATE_ROLE
+from app.core.database import Base
+from app.core.user_roles import CANDIDATE_ROLE
 from app.models.history import JobDescription, Resume
-from app.models.organization import Organization
 from app.models.user import User
 from app.services.interview_config_service import (
     get_question_bank,
-    get_report_template,
     get_scoring_rules,
     list_question_banks,
 )
 
-_admin_user = User(id=1, username="admin", email="admin@example.com", role=ADMIN_ROLE)
 _normal_user = User(id=2, username="candidate", email="c@example.com", role=CANDIDATE_ROLE)
 
 CUSTOM_QUESTIONS = [
@@ -59,9 +53,7 @@ CUSTOM_QUESTIONS = [
 
 
 @pytest.fixture
-# 2026-10-06 真删企业侧（D135）：3 条按 X-Tenant-Id 分题库/后台写入的用例随能力一起删；
-# 题库读取现在恒走内置租户 1（`subscription`/`interview_rest` 端点用 DEFAULT_TENANT_ID）。
-def tenant_engine():
+def cfg_engine():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(bind=engine)
     yield engine
@@ -69,30 +61,19 @@ def tenant_engine():
 
 
 @pytest.fixture
-def tenant_session(tenant_engine):
-    factory = sessionmaker(bind=tenant_engine)
-    _seed_org(factory, name="默认租户", slug="default-tenant")
+def cfg_session(cfg_engine):
+    factory = sessionmaker(bind=cfg_engine)
     yield factory
 
 
-def _seed_org(factory, *, name: str, slug: str) -> int:
-    session = factory()
-    org = Organization(name=name, slug=slug, owner_id=1, status="active")
-    session.add(org)
-    session.commit()
-    session.refresh(org)
-    org_id = org.id
-    session.close()
-    return org_id
-
-
-def _seed_custom_bank(factory, *, tenant_id: int, bank_type: str = "tech", title: str = "前端技术面", questions=None):
+def _seed_platform_bank(factory, *, bank_type: str = "tech", title: str = "前端技术面", questions=None):
+    """平台级题库行（`tenant_id IS NULL`）——租户级那一档随 organization 出树后唯一的覆盖来源。"""
     session = factory()
     from app.models.interview_config import InterviewQuestionBank
 
     session.add(
         InterviewQuestionBank(
-            tenant_id=tenant_id,
+            tenant_id=None,
             type=bank_type,
             title=title,
             prompt_template="重点考察前端基础：Vue/React、TypeScript、工程化与性能优化。",
@@ -104,30 +85,14 @@ def _seed_custom_bank(factory, *, tenant_id: int, bank_type: str = "tech", title
     session.close()
 
 
-def _build_app(factory, *, user: User):
-    app = FastAPI()
-
-    def _get_db():
-        session = factory()
-        try:
-            yield session
-        finally:
-            session.close()
-
-    app.dependency_overrides[get_db] = _get_db
-    app.dependency_overrides[get_current_user] = lambda: user
-    app.include_router(interview_rest.router, prefix="/interview")
-    return app
-
-
 # ===== 单元：题库注入 =====
 
 
-def test_fallback_questions_use_tenant_custom_questions():
+def test_fallback_questions_use_platform_custom_questions():
     questions = _fallback_questions("前端工程师", ["Vue"], "tech", custom_questions=CUSTOM_QUESTIONS)
     assert len(questions) == len(CUSTOM_QUESTIONS)
     assert questions[0]["question"] == CUSTOM_QUESTIONS[0]["question"]
-    assert all(q["source"] == "tenant_config" for q in questions)
+    assert all(q["source"] == "platform_config" for q in questions)
     # 非法项被过滤
     dirty = CUSTOM_QUESTIONS + [{"type": "tech", "question": ""}]
     assert len(_fallback_questions("x", [], "tech", custom_questions=dirty)) == len(CUSTOM_QUESTIONS)
@@ -139,7 +104,7 @@ def test_fallback_questions_fallback_to_builtin_without_custom():
     assert questions[0]["source"] == "starter"
 
 
-def test_personalized_prompt_injects_tenant_template(mocker):
+def test_personalized_prompt_injects_platform_template(mocker):
     mocker.patch("app.api.interview_rest.search_knowledge", return_value=[])
     prompt = _build_personalized_prompt(
         resume_json={},
@@ -158,153 +123,76 @@ def test_personalized_prompt_injects_tenant_template(mocker):
     assert "技术题和项目题占比更高" in default_prompt
 
 
-# ===== 服务层 =====
+# ===== 服务层：两级回落 =====
 
 
-def test_question_bank_three_level_resolution(tenant_session):
-    org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    _seed_custom_bank(tenant_session, tenant_id=org_a)
+def test_question_bank_platform_row_overrides_builtin(cfg_session):
+    _seed_platform_bank(cfg_session)
 
-    db = tenant_session()
+    db = cfg_session()
     try:
-        assert get_question_bank(db, org_a, "tech").title == "前端技术面"  # 租户自定义
-        assert get_question_bank(db, org_a, "hr") is None  # 未配置 → None（回落内置）
-        assert get_question_bank(db, 999, "tech") is None  # 其他租户不受影响
+        assert get_question_bank(db, "tech").title == "前端技术面"  # 平台行
+        assert get_question_bank(db, "hr") is None  # 未配置 → None（由调用方回落内置）
     finally:
         db.close()
 
 
-def test_list_question_banks_custom_overrides_title(tenant_session):
-    org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    _seed_custom_bank(tenant_session, tenant_id=org_a, bank_type="tech", title="前端技术面")
+def test_list_question_banks_platform_override_and_builtin_rest(cfg_session):
+    _seed_platform_bank(cfg_session, bank_type="tech", title="前端技术面")
 
-    db = tenant_session()
+    db = cfg_session()
     try:
-        banks_a = {b["type"]: b for b in list_question_banks(db, org_a)}
-        banks_default = {b["type"]: b for b in list_question_banks(db, 1)}
+        banks = {b["type"]: b for b in list_question_banks(db)}
     finally:
         db.close()
 
-    assert set(banks_a) == {"tech", "hr", "comprehensive", "stress", "group"}
-    assert banks_a["tech"]["title"] == "前端技术面"
-    assert banks_a["tech"]["is_custom"] is True
-    assert banks_a["hr"]["is_custom"] is False  # 未配置回落内置
-    assert banks_default["tech"]["title"] == "技术深挖"  # 默认租户不变
+    assert set(banks) == {"tech", "hr", "comprehensive", "stress", "group"}
+    assert banks["tech"]["title"] == "前端技术面"  # 平台行覆盖内置
+    assert banks["tech"]["tags"] == ["前端", "技术"]
+    assert banks["hr"]["title"] == "HR / 行为面"  # 未覆盖的那几档仍是内置
+    # `is_custom` 随租户级一起出树：它原来的定义就是"这一行带租户"
+    assert "is_custom" not in banks["tech"]
 
 
-def test_scoring_rules_default_and_custom(tenant_session):
-    org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    session = tenant_session()
+def test_scoring_rules_builtin_default_then_platform_override(cfg_session):
+    session = cfg_session()
     try:
-        defaults = get_scoring_rules(session, org_a)
+        defaults = get_scoring_rules(session)
         assert [r["dimension"] for r in defaults] == ["completeness", "accuracy", "depth", "expression"]
         assert defaults[0]["weight"] == 0.30
 
         from app.models.interview_config import InterviewScoringRule
 
         session.add(
-            InterviewScoringRule(tenant_id=org_a, dimension="completeness", label="要点覆盖", weight=0.10, sort_order=0)
+            InterviewScoringRule(tenant_id=None, dimension="completeness", label="要点覆盖", weight=0.10, sort_order=0)
         )
         session.add(
-            InterviewScoringRule(tenant_id=org_a, dimension="expression", label="表达", weight=0.60, sort_order=1)
+            InterviewScoringRule(tenant_id=None, dimension="expression", label="表达", weight=0.60, sort_order=1)
         )
         session.commit()
 
-        custom = get_scoring_rules(session, org_a)
+        custom = get_scoring_rules(session)
         assert len(custom) == 2
         assert {r["dimension"] for r in custom} == {"completeness", "expression"}
         assert custom[0]["weight"] == 0.10
         assert custom[0]["label"] == "要点覆盖"
-        # 其他租户不受影响
-        other = get_scoring_rules(session, 999)
-        assert len(other) == 4
     finally:
         session.close()
 
 
-def test_report_template_default_and_custom(tenant_session):
-    org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    session = tenant_session()
-    try:
-        assert get_report_template(session, org_a) is None  # 未配置回落内置
-        from app.models.interview_config import InterviewReportTemplate
-
-        session.add(InterviewReportTemplate(tenant_id=org_a, template="# 前端专项面试报告"))
-        session.commit()
-        assert get_report_template(session, org_a) == "# 前端专项面试报告"
-        assert get_report_template(session, 999) is None  # 其他租户不受影响
-    finally:
-        session.close()
+# ===== 端到端：创建面试使用平台题库 =====
 
 
-# ===== API 层 =====
-
-
-def test_api_admin_upsert_scoring_rules_and_report_template(tenant_session):
-    org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-
-    app_admin = _build_app(tenant_session, user=_admin_user)
-    with TestClient(app_admin) as client:
-        resp = client.put(
-            "/interview/admin/interview-config",
-            json={
-                "config_type": "scoring_rules",
-                "tenant_id": org_a,
-                "rules": [
-                    {"dimension": "completeness", "label": "要点覆盖", "weight": 0.10},
-                    {"dimension": "expression", "label": "表达", "weight": 0.60},
-                ],
-            },
-        )
-        resp_tpl = client.put(
-            "/interview/admin/interview-config",
-            json={"config_type": "report_template", "tenant_id": org_a, "template": "# 前端专项面试报告"},
-        )
-        resp_bad = client.put(
-            "/interview/admin/interview-config",
-            json={"config_type": "scoring_rules", "tenant_id": org_a, "rules": [{"dimension": "unknown"}]},
-        )
-    assert resp.status_code == 200
-    assert resp.json()["data"]["rule_count"] == 2
-    assert resp_tpl.status_code == 200
-    # 非法维度被拒绝（fail 惯例：HTTP 200 + code != 0）
-    assert resp_bad.json()["code"] != 0
-
-    db = tenant_session()
-    try:
-        rules = get_scoring_rules(db, org_a)
-        assert len(rules) == 2 and rules[0]["label"] == "要点覆盖" and rules[0]["weight"] == 0.10
-        assert get_report_template(db, org_a) == "# 前端专项面试报告"
-    finally:
-        db.close()
-
-
-def test_api_admin_config_forbidden_for_normal_user(tenant_session):
-    org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    app = _build_app(tenant_session, user=_normal_user)
-    with TestClient(app) as client:
-        resp = client.put(
-            "/interview/admin/interview-config",
-            json={"config_type": "question_bank", "tenant_id": org_a, "type": "tech"},
-        )
-    assert resp.status_code != 200  # 403
-
-
-# ===== 端到端：创建面试使用租户题库 =====
-
-
-def test_background_personalization_does_not_override_custom_bank(tenant_session, mocker):
-    """T3-2：租户自定义题库优先，后台个性化不得把自定义题换成通用题（#8）。"""
+def test_background_personalization_does_not_override_custom_bank(cfg_session, mocker):
+    """平台自定义题库优先，后台个性化不得把自定义题换成通用题（#8）。"""
     from app.api.interview_rest import _fallback_questions, _personalize_unstarted_questions
     from app.models.interview_session import InterviewSession
-    from app.services.interview_config_service import get_question_bank
 
-    org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    _seed_custom_bank(tenant_session, tenant_id=org_a)
-    mocker.patch("app.api.interview_rest.SessionLocal", tenant_session)
+    _seed_platform_bank(cfg_session)
+    mocker.patch("app.api.interview_rest.SessionLocal", cfg_session)
     mocker.patch("app.api.interview_rest.chat_json", return_value={})  # 若被调用不应真实 LLM
 
-    session = tenant_session()
+    session = cfg_session()
     resume = Resume(
         user_id=_normal_user.id,
         file_name="r.pdf",
@@ -322,7 +210,7 @@ def test_background_personalization_does_not_override_custom_bank(tenant_session
     session.refresh(resume)
     session.refresh(jd)
 
-    bank = get_question_bank(session, org_a, "tech")
+    bank = get_question_bank(session, "tech")
     ordered = _fallback_questions("前端工程师", ["Vue"], "tech", custom_questions=bank.questions if bank else None)
     isess = InterviewSession(
         user_id=_normal_user.id,
@@ -338,7 +226,6 @@ def test_background_personalization_does_not_override_custom_bank(tenant_session
         total_questions=len(ordered),
         answered_count=0,
         timeout_count=0,
-        tenant_id=org_a,
     )
     session.add(isess)
     session.commit()
@@ -357,11 +244,11 @@ def test_background_personalization_does_not_override_custom_bank(tenant_session
         ["interview_q", "skill_model"],
     )
 
-    check = tenant_session()
+    check = cfg_session()
     try:
         updated = check.get(InterviewSession, sid)
         assert updated.memory_snapshot["question_generation"]["status"] == "custom_bank"
-        assert updated.questions[0]["source"] == "tenant_config"
+        assert updated.questions[0]["source"] == "platform_config"
         assert len(updated.questions) == len(CUSTOM_QUESTIONS)
     finally:
         check.close()

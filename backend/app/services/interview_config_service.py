@@ -1,8 +1,15 @@
-"""面试配置服务层（T3-2）：题库/评分规则/报告模板按租户覆盖与回落。
+"""面试配置服务层（T3-2）：题库/评分规则的覆盖与回落。
 
-租户约定（与 T3-1 一致）：
-- 租户自定义（tenant_id=当前租户 且 is_active）优先；
-- 未配置时回落平台默认（tenant_id IS NULL），仍无则回落内置常量。
+2026-10-06 真删企业侧第六增量（D136，§10.32 他点「整族拆到底」）之前这里是**三级**回落：
+租户自定义 → 平台默认（`tenant_id IS NULL`）→ 内置常量。租户那一级随 organization 一起出树，
+现在只剩**两级**：平台配置 → 内置常量。列与模型保留（`tenant_id` 仍在那三张表里），
+但没有任何读写侧按它分区了。
+
+同批删掉的 `PUT /admin/interview-config` 是这三张表**唯一的写入端**，且它要求请求体带
+`tenant_id`，所以历史上它能造的只有"租户级"行——也就是说平台级那一今天然是空的（dev 实测三张表
+各 0 行），要填只能靠脚本/SQL 直接写 `tenant_id IS NULL` 的行。`InterviewReportTemplate` 与
+`get_report_template` 一起删掉：前者是那张表的模型，后者**在生产里从来没有调用方**，
+所以"租户自定义报告模板"这句话从没落到过屏幕上。
 """
 
 from __future__ import annotations
@@ -13,7 +20,6 @@ from sqlalchemy.orm import Session
 
 from app.models.interview_config import (
     InterviewQuestionBank,
-    InterviewReportTemplate,
     InterviewScoringRule,
 )
 
@@ -60,19 +66,8 @@ DEFAULT_QUESTION_BANKS: dict[str, dict[str, Any]] = {
 }
 
 
-def get_question_bank(db: Session, tenant_id: int, bank_type: str) -> InterviewQuestionBank | None:
-    """获取租户可见的题库配置：租户自定义 → 平台默认 → None（回落内置）。"""
-    row = (
-        db.query(InterviewQuestionBank)
-        .filter(
-            InterviewQuestionBank.type == bank_type,
-            InterviewQuestionBank.is_active == 1,
-            InterviewQuestionBank.tenant_id == tenant_id,
-        )
-        .first()
-    )
-    if row is not None:
-        return row
+def get_question_bank(db: Session, bank_type: str) -> InterviewQuestionBank | None:
+    """平台题库配置（`tenant_id IS NULL`）；没有就返回 None，由调用方回落内置常量。"""
     return (
         db.query(InterviewQuestionBank)
         .filter(
@@ -84,14 +79,8 @@ def get_question_bank(db: Session, tenant_id: int, bank_type: str) -> InterviewQ
     )
 
 
-def list_question_banks(db: Session, tenant_id: int) -> list[dict[str, Any]]:
-    """租户可见的全部题型配置（供前端设置页），合并租户/平台/内置三级。"""
-    custom = {
-        row.type: row
-        for row in db.query(InterviewQuestionBank)
-        .filter(InterviewQuestionBank.is_active == 1, InterviewQuestionBank.tenant_id == tenant_id)
-        .all()
-    }
+def list_question_banks(db: Session) -> list[dict[str, Any]]:
+    """全部题型配置（供前端设置页）：平台行覆盖内置五档。"""
     platform = {
         row.type: row
         for row in db.query(InterviewQuestionBank)
@@ -101,7 +90,7 @@ def list_question_banks(db: Session, tenant_id: int) -> list[dict[str, Any]]:
 
     banks: list[dict[str, Any]] = []
     for bank_type, default in DEFAULT_QUESTION_BANKS.items():
-        row = custom.get(bank_type) or platform.get(bank_type)
+        row = platform.get(bank_type)
         if row is None:
             banks.append(
                 {
@@ -111,7 +100,6 @@ def list_question_banks(db: Session, tenant_id: int) -> list[dict[str, Any]]:
                     "description": default["description"],
                     "focus": default["focus"],
                     "tags": [],
-                    "is_custom": False,
                 }
             )
             continue
@@ -124,27 +112,19 @@ def list_question_banks(db: Session, tenant_id: int) -> list[dict[str, Any]]:
                 "focus": default["focus"],
                 "tags": row.tags or [],
                 "prompt_template": row.prompt_template or "",
-                "is_custom": row.tenant_id is not None,
             }
         )
     return banks
 
 
-def get_scoring_rules(db: Session, tenant_id: int) -> list[dict[str, Any]]:
-    """获取租户可见评分规则：租户自定义 → 平台默认 → 内置常量。"""
+def get_scoring_rules(db: Session) -> list[dict[str, Any]]:
+    """平台评分规则（`tenant_id IS NULL`）；没有就回落内置常量。"""
     rows = (
         db.query(InterviewScoringRule)
-        .filter(InterviewScoringRule.is_active == 1, InterviewScoringRule.tenant_id == tenant_id)
+        .filter(InterviewScoringRule.is_active == 1, InterviewScoringRule.tenant_id.is_(None))
         .order_by(InterviewScoringRule.sort_order, InterviewScoringRule.id)
         .all()
     )
-    if not rows:
-        rows = (
-            db.query(InterviewScoringRule)
-            .filter(InterviewScoringRule.is_active == 1, InterviewScoringRule.tenant_id.is_(None))
-            .order_by(InterviewScoringRule.sort_order, InterviewScoringRule.id)
-            .all()
-        )
     if not rows:
         return [dict(rule) for rule in DEFAULT_SCORING_RULES]
 
@@ -158,23 +138,6 @@ def get_scoring_rules(db: Session, tenant_id: int) -> list[dict[str, Any]]:
     ]
 
 
-def scoring_rule_map(db: Session, tenant_id: int) -> dict[str, float]:
+def scoring_rule_map(db: Session) -> dict[str, float]:
     """dimension → weight 映射，供报告总分加权计算。"""
-    return {rule["dimension"]: rule["weight"] for rule in get_scoring_rules(db, tenant_id)}
-
-
-def get_report_template(db: Session, tenant_id: int) -> str | None:
-    """获取租户可见报告模板：租户自定义 → 平台默认 → None（回落内置）。"""
-    row = (
-        db.query(InterviewReportTemplate)
-        .filter(InterviewReportTemplate.is_active == 1, InterviewReportTemplate.tenant_id == tenant_id)
-        .first()
-    )
-    if row is not None:
-        return row.template
-    row = (
-        db.query(InterviewReportTemplate)
-        .filter(InterviewReportTemplate.is_active == 1, InterviewReportTemplate.tenant_id.is_(None))
-        .first()
-    )
-    return row.template if row is not None else None
+    return {rule["dimension"]: rule["weight"] for rule in get_scoring_rules(db)}
