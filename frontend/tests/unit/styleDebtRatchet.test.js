@@ -1313,6 +1313,42 @@ describe('style debt ratchet', () => {
     ).toEqual([])
   })
 
+  /* D120（§10.31）：分隔线令牌收口的判据。样式层里 border 用 `--app-line` 的是 215 处、
+     用 `--el-border-color-lighter` 的只有 12 处（含全局规格自己）——数量方向与"规格"方向是反的，
+     所以这次把 12 处并到主导那一族，硬零盯住别再漂回去。
+     **判据只覆盖 border 声明**：`--el-border-color-lighter` 这个变量本身还要留给 Element Plus 自己用，
+     禁的是我们拿它当分隔线颜色。反向证据在下面那条自测里：把 12 处中的任意一条塞回去，这条就红。 */
+  it('no border declaration may use the Element Plus lighter token', () => {
+    const offenders = []
+    let scanned = 0
+    for (const full of vueFiles('src', ['.vue', '.css'])) {
+      const rel = toRel(full)
+      scanned += 1
+      const text = readFileSync(full, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+      text.split(/\r?\n/).forEach((line, index) => {
+        if (!/border/.test(line)) return
+        if (!/var\(--el-border-color-lighter\)/.test(line)) return
+        offenders.push(`${rel}:${index + 1} ${line.trim()}`)
+      })
+    }
+    // 门槛取实测 71（68 个 .vue + 3 个 .css）之下一点；第一版随手写了 200，
+    // 于是这条自测先把"门槛是猜的"这件事红了给我看。
+    expect(scanned, '扫描没跑到整仓，这把尺在看空目录').toBeGreaterThanOrEqual(68)
+    expect(
+      offenders,
+      `分隔线必须用 --app-line（样式层里 227 处都是它）；漂回来的：${offenders.join(', ')}`
+    ).toEqual([])
+  })
+
+  it('that border-token ruler bites: the pre-D120 line it replaced would be caught', () => {
+    const before = '  border-bottom: 1px solid var(--el-border-color-lighter);'
+    const after = '  border-bottom: 1px solid var(--app-line);'
+    const hits = (line) =>
+      /border/.test(line) && /var\(--el-border-color-lighter\)/.test(line) ? [line] : []
+    expect(hits(before)).toHaveLength(1)
+    expect(hits(after)).toHaveLength(0)
+  })
+
   /* D117（§10.11 那一族"某页多盖了 1px"）：样式层里能设**面板头自己**内边距的规则只允许一条，
      就是规格那条 15px。此前全仓唯一还活着的覆盖是 `panels.css` 里 `.privacy-page .panel-header { padding: 16px 20px }`
      ——D21 记下"要先定哪个是权威"，量完的结论是规格权威：它没有任何记录过的理由，也没有第二页跟着它，
