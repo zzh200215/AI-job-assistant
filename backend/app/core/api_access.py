@@ -33,12 +33,11 @@ ANONYMOUS_OPERATIONS = {
     ("POST", "/api/auth/reset-password-with-token"),
     ("GET", "/api/system/health"),
     ("GET", "/api/system/ready"),
+    # 2026-10-06 真删企业侧（D134）：/api/tenant/brand 与两条飞书 SSO 随 organization/tenant 两个 router 出树，
     ("GET", "/api/jobs/cities"),
+    # 清单里删掉三条 = 少三个"匿名可达"的入口；剩下这套构造保证的形状一字未动。
     ("GET", "/api/interview/config/types"),
-    ("GET", "/api/tenant/brand"),
     ("GET", "/api/subscription/plans"),
-    ("GET", "/api/organizations/sso/feishu/{slug}/start"),
-    ("GET", "/api/organizations/sso/feishu/callback"),
     ("POST", "/api/subscription/pay-callback"),
 }
 

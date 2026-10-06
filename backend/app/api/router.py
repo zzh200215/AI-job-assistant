@@ -22,14 +22,12 @@ from app.api import (
     knowledge,
     multi_agent,
     notification,
-    organization,
     prompt_trace,
     reminder,
     resume,
     salary_insight,
     subscription,
     system,
-    tenant,
     timeline,
     user_preferences,
 )
@@ -45,6 +43,8 @@ api_router = APIRouter()
 # tenant / v1 external，共 110 条操作）不能按前缀挂：那会把 `GET /jobs/cities`（登录页要用）
 # 这类公开端点一起关死。它们由文件末尾 `apply_default_deny` 那一趟逐条补齐——按操作判定，
 # 不再按前缀，所以这张表只是历史事实，真正的构造保证在那一趟里。
+# 2026-10-06 真删企业侧（D134）：这段清单里的 organizations 与 tenant 两个前缀已经不在树上，
+# 剩下的混合前缀仍是历史事实——按操作判定的那一趟没变。
 SESSION_GUARD = [Depends(get_current_user)]
 
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -100,7 +100,6 @@ api_router.include_router(
     tags=["notifications"],
     dependencies=SESSION_GUARD,
 )
-api_router.include_router(organization.router, prefix="/organizations", tags=["organizations"])
 api_router.include_router(
     prompt_trace.router,
     prefix="/prompt-traces",
@@ -109,13 +108,6 @@ api_router.include_router(
 )
 api_router.include_router(reminder.router, prefix="/reminders", tags=["reminders"], dependencies=SESSION_GUARD)
 api_router.include_router(subscription.router, prefix="/subscription", tags=["subscription"])
-api_router.include_router(tenant.router, prefix="/tenant", tags=["tenant"])
-api_router.include_router(
-    tenant.admin_router,
-    prefix="/admin/tenants",
-    tags=["tenant-admin"],
-    dependencies=SESSION_GUARD,
-)
 # 外部能力 API（M6）：主 app 挂载前缀 /api + 此处 /v1 → /api/v1/external/...
 # 这一段走 X-API-Key（app/api/external/auth.py），不是会话，不能挂 SESSION_GUARD。
 api_router.include_router(external.external_router, tags=["external-api"])

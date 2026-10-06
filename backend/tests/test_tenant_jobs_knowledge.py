@@ -11,22 +11,17 @@ import contextlib
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.api import tenant as tenant_api
-from app.api.auth import get_current_user
-from app.core.database import Base, get_db
+from app.core.database import Base
 from app.core.tenant_context import (
     TenantContext,
     reset_current_tenant,
     reset_tenant_session_factory,
     set_current_tenant,
     set_tenant_session_factory,
-    tenant_context_middleware,
 )
 from app.core.user_roles import ADMIN_ROLE, CANDIDATE_ROLE
 from app.models.history import JobDescription
@@ -322,158 +317,3 @@ def _seed_org(factory, *, name="客户A", slug="customer-a") -> int:
     org_id = org.id
     session.close()
     return org_id
-
-
-def _build_app(factory, *, user: User):
-    app = FastAPI()
-    app.middleware("http")(tenant_context_middleware)
-
-    def _get_db():
-        session = factory()
-        try:
-            yield session
-        finally:
-            session.close()
-
-    app.dependency_overrides[get_db] = _get_db
-    app.dependency_overrides[get_current_user] = lambda: user
-    app.include_router(tenant_api.admin_router, prefix="/admin/tenants")
-    return app
-
-
-def test_admin_import_tenant_jobs(tenant_session):
-    org_id = _seed_org(tenant_session)
-    app = _build_app(tenant_session, user=_admin_user)
-    with TestClient(app) as client:
-        resp = client.post(
-            f"/admin/tenants/{org_id}/jobs",
-            json={
-                "items": [
-                    {"title": "租户岗位1", "raw_text": "负责前端开发", "industry": "互联网"},
-                    {"title": "租户岗位2", "raw_text": "负责后端开发", "salary_range": "25k-35k"},
-                ]
-            },
-        )
-        assert resp.status_code == 200
-        data = resp.json()["data"]
-        assert data["imported"] == 2
-        assert data["failed"] == 0
-        assert len(data["jd_ids"]) == 2
-        assert data["tenant_id"] == org_id
-
-    # 落库校验：租户隔离
-    session = tenant_session()
-    jds = session.query(JobDescription).filter(JobDescription.id.in_(data["jd_ids"])).all()
-    assert all(jd.tenant_id == org_id for jd in jds)
-    assert all(jd.source == "tenant-import" for jd in jds)
-    session.close()
-
-
-def test_admin_import_tenant_jobs_validation(tenant_session):
-    org_id = _seed_org(tenant_session)
-    app = _build_app(tenant_session, user=_admin_user)
-    with TestClient(app) as client:
-        # items 缺字段 → 逐条报错，合法项继续
-        resp = client.post(
-            f"/admin/tenants/{org_id}/jobs",
-            json={
-                "items": [
-                    {"title": "", "raw_text": "缺标题"},
-                    {"title": "合法岗位", "raw_text": "内容", "company": "X"},
-                    {"raw_text": "缺标题2"},
-                ]
-            },
-        )
-        assert resp.status_code == 200
-        data = resp.json()["data"]
-        assert data["imported"] == 1
-        assert data["failed"] == 2
-        assert len(data["errors"]) == 2
-        assert data["errors"][0]["index"] == 0
-
-        # 空 items → 400
-        empty = client.post(f"/admin/tenants/{org_id}/jobs", json={"items": []})
-        assert empty.status_code == 400
-
-        # 租户不存在 → 404
-        missing = client.post("/admin/tenants/99999/jobs", json={"items": [{"title": "x", "raw_text": "y"}]})
-        assert missing.status_code == 404
-
-
-def test_admin_import_tenant_knowledge(tenant_session):
-    org_id = _seed_org(tenant_session)
-    app = _build_app(tenant_session, user=_admin_user)
-    fake_doc = MagicMock(
-        id=1001,
-        title="租户知识文档",
-        file_name="doc.txt",
-        file_type="txt",
-        file_size=1024,
-        doc_type="general",
-        status="ready",
-        error_msg=None,
-        create_time=None,
-    )
-    with patch("app.services.knowledge_service.save_and_process", return_value=fake_doc) as mock_save:
-        with TestClient(app) as client:
-            resp = client.post(
-                f"/admin/tenants/{org_id}/knowledge",
-                files={"file": ("doc.txt", b"hello world", "text/plain")},
-                data={"title": "租户知识文档", "doc_type": "general"},
-            )
-        assert resp.status_code == 200
-        data = resp.json()["data"]
-        assert data["id"] == 1001
-        assert data["status"] == "ready"
-        assert data["tenant_id"] == org_id
-
-    # 校验 save_and_process 以目标租户写入
-    assert mock_save.call_args.kwargs["tenant_id"] == org_id
-    assert mock_save.call_args.kwargs["organization_id"] == org_id
-
-
-def test_admin_import_tenant_knowledge_validation(tenant_session):
-    org_id = _seed_org(tenant_session)
-    app = _build_app(tenant_session, user=_admin_user)
-    with TestClient(app) as client:
-        # 不支持的文件类型 → 400
-        bad = client.post(
-            f"/admin/tenants/{org_id}/knowledge",
-            files={"file": ("x.exe", b"mz", "application/octet-stream")},
-            data={"title": "t"},
-        )
-        assert bad.status_code == 400
-
-        # 缺少 title → 400
-        no_title = client.post(
-            f"/admin/tenants/{org_id}/knowledge",
-            files={"file": ("x.txt", b"hi", "text/plain")},
-            data={"title": "   "},
-        )
-        assert no_title.status_code == 400
-
-        # 租户不存在 → 404
-        missing = client.post(
-            "/admin/tenants/99999/knowledge",
-            files={"file": ("x.txt", b"hi", "text/plain")},
-            data={"title": "t"},
-        )
-        assert missing.status_code == 404
-
-
-def test_tenant_import_apis_require_admin_role(tenant_session):
-    org_id = _seed_org(tenant_session)
-    app = _build_app(tenant_session, user=_normal_user)
-    with TestClient(app) as client:
-        assert (
-            client.post(f"/admin/tenants/{org_id}/jobs", json={"items": [{"title": "x", "raw_text": "y"}]}).status_code
-            == 403
-        )
-        assert (
-            client.post(
-                f"/admin/tenants/{org_id}/knowledge",
-                files={"file": ("x.txt", b"hi", "text/plain")},
-                data={"title": "t"},
-            ).status_code
-            == 403
-        )

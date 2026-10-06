@@ -50,11 +50,8 @@ PUBLIC_OPERATIONS = {
     # 登录页在拿到 token 之前就要用的静态字典与运行时品牌
     ("GET", "/jobs/cities"),
     ("GET", "/interview/config/types"),
-    ("GET", "/tenant/brand"),
     ("GET", "/subscription/plans"),
-    # 飞书 SSO 由 state 参数自证；支付回调由渠道签名自证（签名在校验在处理体内）
-    ("GET", "/organizations/sso/feishu/{slug}/start"),
-    ("GET", "/organizations/sso/feishu/callback"),
+    # 支付回调由渠道签名自证（签名在校验在处理体内）。/tenant/brand 与飞书 SSO 三条随企业侧 2026-10-06 出树
     ("POST", "/subscription/pay-callback"),
 }
 
@@ -87,7 +84,9 @@ def _operations() -> tuple[set[tuple[str, str]], set[tuple[str, str]]]:
 def test_the_walk_finds_credentials_on_the_bulk_of_the_api():
     """非空断言：清单测试只有在遍历真的能看到依赖时才有意义。"""
     protected, public = _operations()
-    assert len(protected) >= 200, f"只有 {len(protected)} 条操作被判为需要凭据——遍历大概失效了"
+    assert (
+        len(protected) >= 199
+    ), f"只有 {len(protected)} 条操作被判为需要凭据——遍历大概失效了（2026-10-06 真删企业侧：两个 router 出树，实测 199）"
     assert len(public) < 30, f"匿名可调操作 {len(public)} 条，远超清单规模"
 
 
@@ -110,6 +109,8 @@ def test_metrics_endpoint_is_behind_a_credential():
 # 响应。改变的是"以后有人新增一条端点、忘了写 Depends(get_current_user)"的命运：它出生就要求
 # 会话，而不是安静地对公网开放。挂不上的是混着公开端点的前缀（auth / system / jobs /
 # interview / organizations / subscription / tenant / v1），它们仍由上面那张清单钉住。
+# 2026-10-06 真删企业侧（D134）：这行里的 organizations 与 tenant 两个前缀已经不在树上，
+# 清单原文留着是因为它记的是 E19 当时量到的规模；现在的数是 112 / 195。
 CONSTRUCT_PROTECTED_PREFIXES = {
     "/user",
     "/dashboard",
@@ -121,7 +122,6 @@ CONSTRUCT_PROTECTED_PREFIXES = {
     "/knowledge",
     "/analytics",
     "/admin",
-    "/admin/tenants",
     "/agent",
     "/multi-agent",
     "/targets",
@@ -159,8 +159,10 @@ def test_guarded_prefixes_actually_cover_every_operation_under_them():
     covered = {op: ks for op, ks in kinds.items() if _matched_prefix(op[1])}
     naked = sorted(op for op, ks in covered.items() if "session" not in ks)
     assert not naked, f"落在被守护前缀下却没被判为需要会话：{naked}"
-    # 非空断言：量过是 123 条，低于这个数说明前缀表没真的对上前缀（改名/写错）。
-    assert len(covered) >= 120, f"守护前缀只盖到 {len(covered)} 条操作，和量出来的 123 对不上"
+    # 非空断言：2026-10-06 真删企业侧之后重量是 112 条，低于这个数说明前缀表没真的对上前缀（改名/写错）。
+    assert (
+        len(covered) >= 112
+    ), f"守护前缀只盖到 {len(covered)} 条操作，和量出来的 112 对不上（原为 123；organizations/tenant 两个前缀随真删出树）"
 
 
 def _include_level_deps(route) -> set:
@@ -279,7 +281,9 @@ def test_every_operation_outside_the_two_lists_carries_a_session_credential():
     )
     assert not naked, f"这些操作既不在两张清单里也没有会话凭据：{naked[:8]}"
     # 非空断言：量过是 232 条路由（E29 删掉 /tracking 之前是 233），远低于这个数说明遍历失效。
-    assert len(guarded) >= 200, f"只核到 {len(guarded)} 条带会话凭据的操作，和真实规模对不上"
+    assert (
+        len(guarded) >= 195
+    ), f"只核到 {len(guarded)} 条带会话凭据的操作，和真实规模对不上（2026-10-06 真删企业侧之后实测 195）"
     assert (
         listed == ALL_LISTED
     ), f"清单里有操作其实已被补齐凭据（该删条目）或多出没登记的：{sorted(listed ^ ALL_LISTED)}"
@@ -296,7 +300,7 @@ def test_the_pass_attached_nothing_today_because_everyone_already_declares_auth(
 def _naked_probe_router(*, api_prefixed: bool = False):
     """一条挂在混合前缀下、自己完全不写凭据的端点——就是这次要防的那种写法。
 
-    默认按**挂载前**的形状建（前缀 `/organizations`，与 `api_router` 里一致），因为
+    默认按**挂载前**的形状建（前缀 `/auth`；`/organizations` 已随企业侧 router 出树，这里要跟的仍是 api_router 里真实存在的混合前缀），因为
     `apply_default_deny` 要的就是这个形状；`api_prefixed=True` 用来测误用守卫。
     """
     naked = APIRouter()
@@ -347,7 +351,7 @@ def test_the_pass_leaves_alone_routes_that_already_declare_credentials():
         return {"ok": bool(current_user)}
 
     app = FastAPI()
-    app.include_router(declared, prefix="/organizations")
+    app.include_router(declared, prefix="/auth")
     apply_default_deny(app.routes)
 
     route = next(r for r in app.routes if getattr(r, "path", "").endswith("/already"))
@@ -362,7 +366,7 @@ def test_the_pass_leaves_alone_routes_that_already_declare_credentials():
         return object()
 
     app.dependency_overrides[get_current_user] = counting
-    assert TestClient(app).get("/organizations/already").status_code == 200
+    assert TestClient(app).get("/auth/already").status_code == 200
     assert len(calls) == 1, f"get_current_user 每请求跑了 {len(calls)} 次"
 
 
@@ -379,10 +383,10 @@ def test_the_pass_refuses_a_route_object_mixing_public_and_guarded_methods():
         return {"ok": True}
 
     app = FastAPI()
-    app.include_router(mixed, prefix="/organizations")
+    app.include_router(mixed, prefix="/auth")
     # 把 GET 登记成公开、POST 不登记 → 同一个路由对象上混了两种命运
     original = api_access.NEVER_SESSION_GUARDED
-    api_access.NEVER_SESSION_GUARDED = original | {("GET", "/api/organizations/mix")}
+    api_access.NEVER_SESSION_GUARDED = original | {("GET", "/api/auth/mix")}
     try:
         with pytest.raises(ValueError, match="混了公开"):
             apply_default_deny(app.routes)
@@ -403,9 +407,9 @@ def test_the_real_app_blocks_anonymous_and_keeps_public_paths_working():
     mixed_guarded = sorted(
         (m, p)
         for (m, p), kinds in _kinds_by_operation().items()
-        if "session" in kinds and p.startswith("/organizations")
+        if "session" in kinds and p.startswith("/subscription")
     )
-    assert mixed_guarded, "混合前缀下没有受守护的操作，这条测试选不到靶子"
+    assert mixed_guarded, "混合前缀（这里取 /subscription）下没有受守护的操作，这条测试选不到靶子"
     method, path = mixed_guarded[0]
     denied = client.request(method, f"/api{path}")
     assert denied.status_code == 401, f"混合前缀下的受守护操作匿名居然通过：{method} {path} → {denied.status_code}"
