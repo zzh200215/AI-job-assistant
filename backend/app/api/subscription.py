@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user, require_admin
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.tenant_context import require_tenant, stamp_tenant, tenant_filter
+from app.core.tenant_context import require_tenant
 from app.models.user import User
 from app.services.subscription_service import (
     TIER_FEATURES,
@@ -92,16 +92,14 @@ def create_order(
 
     import uuid
 
-    order = stamp_tenant(
-        SubscriptionOrder(
-            user_id=current_user.id,
-            plan_tier=plan_tier,
-            amount=price,
-            currency="cny",
-            status="pending",
-            payment_method="",
-            idempotency_key=str(uuid.uuid4()),
-        )
+    order = SubscriptionOrder(
+        user_id=current_user.id,
+        plan_tier=plan_tier,
+        amount=price,
+        currency="cny",
+        status="pending",
+        payment_method="",
+        idempotency_key=str(uuid.uuid4()),
     )
     db.add(order)
     db.commit()
@@ -119,7 +117,6 @@ def list_orders(
     orders = (
         db.query(SubscriptionOrder)
         .filter(
-            tenant_filter(SubscriptionOrder),
             SubscriptionOrder.user_id == current_user.id,
         )
         .order_by(SubscriptionOrder.created_at.desc())
@@ -217,9 +214,7 @@ def mock_pay(
         return fail(message="order_id 必填", code=ERR_PARAM)
 
     # 校验订单归属
-    order = (
-        db.query(SubscriptionOrder).filter(tenant_filter(SubscriptionOrder), SubscriptionOrder.id == order_id).first()
-    )
+    order = db.query(SubscriptionOrder).filter(SubscriptionOrder.id == order_id).first()
     if not order:
         return fail(message="订单不存在", code=ERR_PARAM)
     if order.user_id != current_user.id:

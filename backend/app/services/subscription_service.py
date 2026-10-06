@@ -7,7 +7,7 @@ from datetime import timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.core.tenant_context import current_tenant_id, stamp_tenant, tenant_filter
+from app.core.tenant_context import current_tenant_id
 from app.models.subscription import (
     OrderStatus,
     SubscriptionOrder,
@@ -154,7 +154,6 @@ def get_user_plan_tier(db: Session, user_id: int) -> str:
     sub = (
         db.query(UserSubscription)
         .filter(
-            tenant_filter(UserSubscription),
             UserSubscription.user_id == user_id,
             UserSubscription.status == "active",
         )
@@ -190,21 +189,18 @@ def get_or_create_subscription(db: Session, user_id: int) -> UserSubscription:
     sub = (
         db.query(UserSubscription)
         .filter(
-            tenant_filter(UserSubscription),
             UserSubscription.user_id == user_id,
         )
         .order_by(UserSubscription.id.desc())
         .first()
     )
     if not sub:
-        sub = stamp_tenant(
-            UserSubscription(
-                user_id=user_id,
-                plan_tier="free",
-                status="active",
-                start_at=utc_now_naive(),
-                quota_usage=dict.fromkeys(DAILY_QUOTA_KEYS, 0),
-            )
+        sub = UserSubscription(
+            user_id=user_id,
+            plan_tier="free",
+            status="active",
+            start_at=utc_now_naive(),
+            quota_usage=dict.fromkeys(DAILY_QUOTA_KEYS, 0),
         )
         db.add(sub)
         db.commit()
@@ -327,7 +323,6 @@ def check_quota(
         current = (
             db.query(Resume)
             .filter(
-                tenant_filter(Resume),
                 Resume.user_id == user_id,
                 Resume.is_deleted == 0,
             )

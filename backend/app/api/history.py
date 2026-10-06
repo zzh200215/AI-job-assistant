@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
-from app.core.tenant_context import tenant_filter
 from app.models.history import AnalysisRecord, JobDescription, Resume
 from app.models.user import User
 from app.utils.job_access import accessible_job_query, get_accessible_job
@@ -38,9 +37,7 @@ def _owned_resume_map(db: Session, user: User, resume_ids: list[int]) -> dict[in
         return {}
     return {
         resume.id: resume
-        for resume in db.query(Resume)
-        .filter(tenant_filter(Resume), Resume.user_id == user.id, Resume.id.in_(resume_ids))
-        .all()
+        for resume in db.query(Resume).filter(Resume.user_id == user.id, Resume.id.in_(resume_ids)).all()
     }
 
 
@@ -60,7 +57,6 @@ def list_history(
     q = (
         db.query(AnalysisRecord)
         .filter(
-            tenant_filter(AnalysisRecord),
             AnalysisRecord.user_id == current_user.id,
             AnalysisRecord.is_deleted == 0,
         )
@@ -99,7 +95,6 @@ def get_history(record_id: int, db: Session = Depends(get_db), current_user: Use
     rec: AnalysisRecord = (
         db.query(AnalysisRecord)
         .filter(
-            tenant_filter(AnalysisRecord),
             AnalysisRecord.id == record_id,
             AnalysisRecord.user_id == current_user.id,
             AnalysisRecord.is_deleted == 0,
@@ -134,7 +129,6 @@ def delete_history(record_id: int, db: Session = Depends(get_db), current_user: 
     rec = (
         db.query(AnalysisRecord)
         .filter(
-            tenant_filter(AnalysisRecord),
             AnalysisRecord.id == record_id,
             AnalysisRecord.user_id == current_user.id,
             AnalysisRecord.is_deleted == 0,

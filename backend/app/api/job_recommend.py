@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.tenant_context import current_tenant_id, stamp_tenant, tenant_filter
+from app.core.tenant_context import current_tenant_id
 from app.models.history import JobDescription, Resume
 from app.models.job_recommend import JobBookmark, JobRecommendationFeedback
 from app.models.user import User
@@ -160,7 +160,7 @@ def _build_feedback_action_items(
 def _build_feedback_analysis(db: Session, *, user_id: int) -> dict:
     rows = (
         db.query(JobRecommendationFeedback)
-        .filter(tenant_filter(JobRecommendationFeedback), JobRecommendationFeedback.user_id == user_id)
+        .filter(JobRecommendationFeedback.user_id == user_id)
         .order_by(JobRecommendationFeedback.created_at.desc())
         .all()
     )
@@ -617,7 +617,7 @@ def _build_tuning_samples(db: Session, *, user_id: int, anomaly_only: bool = Tru
         }
         for row in (
             db.query(JobRecommendationFeedback)
-            .filter(tenant_filter(JobRecommendationFeedback), JobRecommendationFeedback.user_id == user_id)
+            .filter(JobRecommendationFeedback.user_id == user_id)
             .order_by(JobRecommendationFeedback.created_at.desc(), JobRecommendationFeedback.id.desc())
             .all()
         )
@@ -784,7 +784,7 @@ def _build_compare_sample_context(
         }
         for row in (
             db.query(JobRecommendationFeedback)
-            .filter(tenant_filter(JobRecommendationFeedback), JobRecommendationFeedback.user_id == user_id)
+            .filter(JobRecommendationFeedback.user_id == user_id)
             .order_by(JobRecommendationFeedback.created_at.desc(), JobRecommendationFeedback.id.desc())
             .all()
         )
@@ -1039,17 +1039,15 @@ async def batch_import(
                 if not title or not raw_text:
                     continue
                 db.add(
-                    stamp_tenant(
-                        JobDescription(
-                            user_id=current_user.id,
-                            title=title,
-                            company=company,
-                            location=(row.get("location") or row.get("地点") or "").strip(),
-                            salary_range=(row.get("salary_range") or row.get("薪资") or "").strip(),
-                            industry=(row.get("industry") or row.get("行业") or "").strip(),
-                            raw_text=raw_text,
-                            source=source,
-                        )
+                    JobDescription(
+                        user_id=current_user.id,
+                        title=title,
+                        company=company,
+                        location=(row.get("location") or row.get("地点") or "").strip(),
+                        salary_range=(row.get("salary_range") or row.get("薪资") or "").strip(),
+                        industry=(row.get("industry") or row.get("行业") or "").strip(),
+                        raw_text=raw_text,
+                        source=source,
                     )
                 )
                 count += 1
@@ -1065,17 +1063,15 @@ async def batch_import(
                 if not title or not raw_text:
                     continue
                 db.add(
-                    stamp_tenant(
-                        JobDescription(
-                            user_id=current_user.id,
-                            title=title,
-                            company=(item.get("company") or "").strip(),
-                            location=(item.get("location") or "").strip(),
-                            salary_range=(item.get("salary_range") or "").strip(),
-                            industry=(item.get("industry") or "").strip(),
-                            raw_text=raw_text,
-                            source=source,
-                        )
+                    JobDescription(
+                        user_id=current_user.id,
+                        title=title,
+                        company=(item.get("company") or "").strip(),
+                        location=(item.get("location") or "").strip(),
+                        salary_range=(item.get("salary_range") or "").strip(),
+                        industry=(item.get("industry") or "").strip(),
+                        raw_text=raw_text,
+                        source=source,
                     )
                 )
                 count += 1
@@ -1194,17 +1190,15 @@ def seed_jobs(
             continue
 
         db.add(
-            stamp_tenant(
-                JobDescription(
-                    user_id=current_user.id,
-                    title=job["title"],
-                    company=job["company"],
-                    location=job["location"],
-                    salary_range=job["salary_range"],
-                    industry=job["industry"],
-                    raw_text=job["raw_text"],
-                    source="api",
-                )
+            JobDescription(
+                user_id=current_user.id,
+                title=job["title"],
+                company=job["company"],
+                location=job["location"],
+                salary_range=job["salary_range"],
+                industry=job["industry"],
+                raw_text=job["raw_text"],
+                source="api",
             )
         )
         count += 1
@@ -1232,14 +1226,12 @@ def submit_feedback(
         return fail(message="job not found", code=ERR_PARAM)
 
     db.add(
-        stamp_tenant(
-            JobRecommendationFeedback(
-                user_id=current_user.id,
-                resume_id=resume_id,
-                jd_id=jd_id,
-                feedback_type=feedback_type,
-                match_score=match_score,
-            )
+        JobRecommendationFeedback(
+            user_id=current_user.id,
+            resume_id=resume_id,
+            jd_id=jd_id,
+            feedback_type=feedback_type,
+            match_score=match_score,
         )
     )
     db.commit()
@@ -1460,7 +1452,6 @@ def get_jd_detail(
     bookmark = (
         db.query(JobBookmark)
         .filter(
-            tenant_filter(JobBookmark),
             JobBookmark.user_id == current_user.id,
             JobBookmark.jd_id == jd_id,
         )
@@ -1514,7 +1505,6 @@ def bookmark_job(
     existing = (
         db.query(JobBookmark)
         .filter(
-            tenant_filter(JobBookmark),
             JobBookmark.user_id == current_user.id,
             JobBookmark.jd_id == jd_id,
         )
@@ -1533,13 +1523,11 @@ def bookmark_job(
         db.commit()
         return ok(existing.to_dict(), message="已更新")
 
-    bookmark = stamp_tenant(
-        JobBookmark(
-            user_id=current_user.id,
-            jd_id=jd_id,
-            action=action,
-            note=note,
-        )
+    bookmark = JobBookmark(
+        user_id=current_user.id,
+        jd_id=jd_id,
+        action=action,
+        note=note,
     )
     db.add(bookmark)
     db.commit()
@@ -1556,7 +1544,6 @@ def remove_bookmark(
     bookmark = (
         db.query(JobBookmark)
         .filter(
-            tenant_filter(JobBookmark),
             JobBookmark.user_id == current_user.id,
             JobBookmark.jd_id == jd_id,
         )
@@ -1589,7 +1576,6 @@ def restore_job(
         "dismiss": (
             db.query(JobBookmark)
             .filter(
-                tenant_filter(JobBookmark),
                 JobBookmark.user_id == current_user.id,
                 JobBookmark.jd_id == jd_id,
                 JobBookmark.action == "dismiss",
@@ -1599,7 +1585,6 @@ def restore_job(
         "dislike": (
             db.query(JobRecommendationFeedback)
             .filter(
-                tenant_filter(JobRecommendationFeedback),
                 JobRecommendationFeedback.user_id == current_user.id,
                 JobRecommendationFeedback.jd_id == jd_id,
                 JobRecommendationFeedback.feedback_type == "dislike",
@@ -1624,7 +1609,6 @@ def list_bookmarks(
     q = (
         db.query(JobBookmark)
         .filter(
-            tenant_filter(JobBookmark),
             JobBookmark.user_id == current_user.id,
             JobBookmark.action == "bookmark",
         )

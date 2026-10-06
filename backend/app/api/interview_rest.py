@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user, require_admin
 from app.core.database import SessionLocal, get_db
-from app.core.tenant_context import require_tenant, stamp_tenant, tenant_filter
+from app.core.tenant_context import require_tenant
 from app.models.history import JobDescription, Resume
 from app.models.interview_config import (
     InterviewQuestionBank,
@@ -90,22 +90,20 @@ def create_session(
         custom_questions=custom_questions,
     )
 
-    session = stamp_tenant(
-        InterviewSession(
-            user_id=current_user.id,
-            resume_id=payload.resume_id,
-            jd_id=payload.jd_id,
-            interview_type=payload.interview_type,
-            status="created",
-            questions=ordered_questions,
-            messages=[],
-            evaluation={},
-            evaluation_status="idle",
-            memory_snapshot={"question_generation": {"status": "pending"}},
-            total_questions=len(ordered_questions),
-            answered_count=0,
-            timeout_count=0,
-        )
+    session = InterviewSession(
+        user_id=current_user.id,
+        resume_id=payload.resume_id,
+        jd_id=payload.jd_id,
+        interview_type=payload.interview_type,
+        status="created",
+        questions=ordered_questions,
+        messages=[],
+        evaluation={},
+        evaluation_status="idle",
+        memory_snapshot={"question_generation": {"status": "pending"}},
+        total_questions=len(ordered_questions),
+        answered_count=0,
+        timeout_count=0,
     )
     db.add(session)
     db.commit()
@@ -139,7 +137,6 @@ def list_sessions(
     sessions = (
         db.query(InterviewSession)
         .filter(
-            tenant_filter(InterviewSession),
             InterviewSession.user_id == current_user.id,
         )
         .order_by(InterviewSession.created_at.desc())
@@ -172,7 +169,6 @@ def get_session(
     session = (
         db.query(InterviewSession)
         .filter(
-            tenant_filter(InterviewSession),
             InterviewSession.id == session_id,
             InterviewSession.user_id == current_user.id,
         )
@@ -192,7 +188,6 @@ def get_session_evaluations(
     session = (
         db.query(InterviewSession)
         .filter(
-            tenant_filter(InterviewSession),
             InterviewSession.id == session_id,
             InterviewSession.user_id == current_user.id,
         )
@@ -218,7 +213,6 @@ def delete_session(
     session = (
         db.query(InterviewSession)
         .filter(
-            tenant_filter(InterviewSession),
             InterviewSession.id == session_id,
             InterviewSession.user_id == current_user.id,
         )
@@ -703,7 +697,6 @@ def interview_preparation(
     past_sessions = (
         db.query(InterviewSession)
         .filter(
-            tenant_filter(InterviewSession),
             InterviewSession.user_id == current_user.id,
             InterviewSession.status == "completed",
         )
@@ -746,7 +739,6 @@ def interview_performance(
     sessions = (
         db.query(InterviewSession)
         .filter(
-            tenant_filter(InterviewSession),
             InterviewSession.user_id == current_user.id,
             InterviewSession.status == "completed",
         )
