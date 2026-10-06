@@ -3265,6 +3265,25 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **记忆里那条要一起改**：条目 16 的"27 条死选择器"从"欠着"改成"已由 D67 还掉、D119 复测为 0"。
 
+#### 已交付：D120 §10.31 收口：12 处分隔线并到 `--app-line`；差分也量出"这个问法高估了可见分歧"
+
+他点"现在就差分 + 收 12 条"。顺序是先截 A 帧再改：dev（5199）+ 仓里的探针，8 条路由各截一帧，然后做 12 处替换，重新加载后再截 B 帧逐路由 `diff`。
+
+**差分量到的**：4 条路由上共 **4 处属性差异，全部是 `borderTopColor` / `borderBottomColor`**，值 `rgb(37, 40, 51) → rgb(44, 47, 61)`（深色主题里分隔线提亮一档）；**rect 与宽高 0 处变化**，两次拍摄的节点数各自相等（181 / 156 / 205 / 171）。
+
+**三处"换了但屏幕不动"，每一条都有查得清的原因**（这一族比"改完了"更值钱）：
+1. **全局规格 `.panel-header` 那条本来就是 no-op**：`main.css:624` 的 `.workspace-theme .panel-header { border-bottom-color: var(--app-line) !important }` 早把它画成 `--app-line` 了——**这正是 §10.17 他点"那张网不动"的那张网**。所以"12 : 215 谁是从良方"这个问法**高估了可见分歧**：深色主题里落到屏幕上的颜色本来就是主导那一族，12 这个数只是**源码里写了什么**，不是**屏幕上是什么**。
+2. **`.el-card__header` 是 dev 与产物层叠顺序相反的那一条**：dev 里 Element Plus 的组件样式按 chunk 后注入，同特异性后者赢 → 探针量到 0 变化；而产物里顺序是反的（实测 `dist/assets/index.css`：EP 那条在偏移 **34173**、`main.css` 那条在 **232391** → 后写的 `main.css` 赢）。结论要写成仪器限制而不是一句带过：**"dev 里的差分"对跨文件、同特异性的层叠不成立**，这一条在生产是可见的、在探针里量不到。另外 `CareerPlanning-*.css` 里还有一条路由级 `.el-card__header { border-bottom: … var(--app-line) }`，那一页本来就已是 app-line。
+3. `SalaryInsight` 三行只变两行：`.insight-checklist > div:last-child { border-bottom: 0 }`，静态就判得清。
+
+**一条未结观测（不当"已解释"）**：`/resume-center` 的 diff 里有 `missingFromB: 1`（节点总数 156/156 不变，属性差异只有那 1 条 `borderTopColor`）。样式判据没有它，身份抖动的最可能来源是版本数/速评分这类异步回填在两次拍摄之间落库，但**我没测完就被会话的权限门拦住了后续浏览器调用**（`evaluate_script` 被分类器拒；同一次也拦下了一条"用 python 一次改 12 处文件"的动作，之后改成 12 次逐文件 Edit）。这条停在这里。
+
+**判据**：`styleDebtRatchet` 两条新腿（43 → **45**）——border 声明里再出现 `var(--el-border-color-lighter)` 即红（现在是硬零，实测 `--app-line` 用在 border 上 **227** 处），配一条"把任意一条塞回去就红"的自测。**门槛数字也被自测抓了一次**：我先写 `scanned ≥ 200`，实测 `src` 里 `.vue + .css` 只有 **71** 个文件，于是这条自测先红给我看——"门槛是猜的"与"尺子在数空气"是同一族。
+
+**顺手**：`.privacy-page .panel-header` 整条删掉了（1px 与线色两条覆盖都并回规格后它就是重复），`.privacy-page .panel-body { padding: 20px }` 留着——那是这一页正文的真实差异，不是漂移。
+
+**门禁**：`test:unit` **545 → 547 passed**（85 files）、`npm test` 33、`eslint` 0 error（仅既有 warning）、`prettier --check` clean、`vue-tsc` **42**（admin 外 0）、`vite build` exit 0、js+css **2239.78 → 2239.54 kB**（−0.24：删掉那条重复规则 + 令牌名更短）。后端未触碰。§10 open **7 → 6**（31 关闭）。dev server 用完**先核对命令行**（`vite.js --port 5199 --strictPort`）再按 PID 定点关停，`netstat` 确认无监听，日志删掉。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
@@ -3984,7 +4003,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 30. ~~**UI 那一侧的端到端要不要为一发真 LLM 调用付钱**~~ —— **已定（D115 之后他点 ①「保持现状」，不改代码也不花钱）**。这条为什么存在：`ResumeUpload` 的改写面板必须先 `POST /resume/{id}/rewrite-suggestions` 才出建议列表，而那是一发真 provider 调用（`LLM_PROVIDER=qwen` / `qwen-turbo`）；`apply-rewrites` 与 `revert-rewrite` 都不经过 LLM，所以**服务端那一半已经在真 MySQL 上跑通了（D115），界面那一半停在 jsdom**。选 ① 的含义写清楚：账上从此记着"那个撤销按钮从没被真人点过"，且 `.rw-actions` 那一排（两个按钮 + 一行分数）**没有任何真浏览器读数**——这是明知而接受的盲区，不是漏掉的检查。② 与 ③ 没有被"否决"，只是需要他重新点：② 的花费是一发调用加一个有解析简历的账号；③ 是给建议来源抽 seam，代价是为可测性改生产代码的形状（与 §10.9 那一族同一个问题）。
 
-31. **面板分隔线用哪个令牌：12 条 `--el-border-color-lighter` 与 215 条 `--app-line`，谁是从良的那一方**（D117 量出来的）。现状：全局规格 `.panel-header` 的 `border-bottom` 用 `--el-border-color-lighter`（浅色 #f0f2f6、深色 #252833），而 `Privacy` 的覆盖、以及视图里另外 10 条线用的是 `--app-line`（#e0e5ed / #2c2f3d，更深一档）。**数量方向与"规格"方向是反的**：215 : 12。三条路：① 把 12 条都换成 `--app-line`（**改的是颜色，跨 8 个视图 + `main.css:223` + 规格自己**，按本仓规矩要先逐路由 `getComputedStyle` 差分证明没把布局/观感改坏）；② 承认面板头这一族就用 Element Plus 那一档，把 `Privacy` 那条覆盖删掉换取一致（代价是那一页的分隔线变浅，且 215 : 12 这个事实仍然没人解释）；③ 保持并存，但在 `panels.css` 里写清楚"头部线"与"内容线"是两个语义（那需要一条判据说清哪条线属于哪一族，否则下次还是靠数颜色碰）。我一条没动：**只改规格那一条不会让它们一致，只会多一条不一致**，而 ① 的半径要求先有浏览器差分。
+31. ~~**面板分隔线用哪个令牌：12 条 `--el-border-color-lighter` 与 215 条 `--app-line`，谁是从良的那一方**~~ —— **已定并落地（D120，走 ①「12 条并到 `--app-line`」，先做浏览器差分）**。落地实测：**4 处差异全是 `border*Color`、rect 0 变化**；源码计数 215 : 12 变成 **227 : 0**，并由 `styleDebtRatchet` 一条硬零腿盯着（配"塞回去就红"的自测）。**差分同时把这条的前提推翻了一半**：`.panel-header` 那条规格在深色主题下本来就是 no-op——`main.css` 的 `.workspace-theme .panel-header { border-bottom-color: var(--app-line) !important }` 早就画成 app-line 了（§10.17 那张"不动"的网），所以"12 : 215"量的是**源码写了什么**、不是**屏幕上是什么**。另一条仪器限制也记在这：`.el-card__header` 在 dev 里被 EP 的组件样式后注入压住（差分看不到变化），产物里却是 `main.css` 后写、赢（偏移 34173 vs 232391）——**dev 差分对跨文件同特异性的层叠不成立**。未结一条：`/resume-center` 的 `missingFromB: 1`（属性差异里没有它）没解释完，后续的浏览器调用被会话权限门拦下。
 
 ## 11. 附录：本方案未采纳的一条建议
 
