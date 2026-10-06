@@ -22,10 +22,6 @@ request.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    const organizationId = localStorage.getItem('organization.active_id')
-    if (organizationId && !config.headers['X-Organization-ID']) {
-      config.headers['X-Organization-ID'] = organizationId
-    }
     if (!config.headers['X-Request-ID']) {
       config.headers['X-Request-ID'] = createRequestId()
     }

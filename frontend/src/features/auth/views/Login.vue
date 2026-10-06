@@ -211,12 +211,6 @@
               </button>
             </div>
 
-            <div class="feishu-login">
-              <span>飞书组织登录</span>
-              <el-input v-model.trim="feishuSlug" placeholder="组织标识，例如 career-team" />
-              <el-button :disabled="!feishuSlug" @click="startFeishuLogin">继续</el-button>
-            </div>
-
             <p class="signup-link">
               还没有账号？
               <el-link type="primary" :underline="false" @click="goRegister">创建账号</el-link>
@@ -241,13 +235,11 @@ const router = useRouter()
 const authStore = useAuthStore()
 const formRef = ref()
 
-// 登录页无登录态：品牌接口走默认/域名租户，进入即应用品牌
 const loading = ref(false)
 const rememberMe = ref(false)
 const loginError = ref('')
 
 const form = ref({ account: '', password: '' })
-const feishuSlug = ref('')
 
 const rules = {
   account: [
@@ -265,13 +257,6 @@ const goResetPassword = () => router.push('/reset-password')
 
 const handleSocialLogin = (provider) => {
   ElMessage.info(`${provider} 第三方登录暂未开放`)
-}
-
-const startFeishuLogin = () => {
-  const slug = feishuSlug.value.replace(/[^a-z0-9-]/gi, '').toLowerCase()
-  if (!slug) return
-  const base = import.meta.env.VITE_API_BASE || '/api'
-  window.location.assign(`${base}/organizations/sso/feishu/${slug}/start`)
 }
 
 const handleLogin = async () => {
@@ -318,9 +303,9 @@ const handleLogin = async () => {
 .brand-pane {
   position: relative;
   overflow: hidden;
-  /* T2-5：租户配置 login_bg 时用品牌背景图，否则回落默认渐变 */
-  background: var(--app-login-bg, linear-gradient(145deg, #0f1729 0%, #162544 100%)) center / cover
-    no-repeat;
+  /* 白色标签随企业侧一起出树：`--app-login-bg` 全仓 0 处声明、src 里 0 次 setProperty，
+     所以这层 var() 间接恒等于下面那个渐变，直接写死。 */
+  background: linear-gradient(145deg, #0f1729 0%, #162544 100%) center / cover no-repeat;
   color: #f0f4ff;
   padding: 44px 40px;
   display: flex;
@@ -571,20 +556,6 @@ const handleLogin = async () => {
 .social-btn:hover {
   background: var(--el-fill-color-light);
   border-color: var(--el-border-color);
-}
-
-.feishu-login {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  color: var(--app-muted);
-  font-size: 12px;
-}
-
-.feishu-login :deep(.el-input__wrapper) {
-  min-height: 34px;
 }
 
 /* Signup link */
