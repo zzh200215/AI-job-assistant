@@ -803,21 +803,14 @@ onMounted(() => {
   if (rid && !isNaN(rid)) resumeInfo.value = { id: rid, file_name: `简历 #${rid}` }
   if (jid && !isNaN(jid)) jdInfo.value = { id: jid, title: `JD #${jid}` }
 
-  const pending = localStorage.getItem('recruit.pendingAnalysis')
-  if (pending) {
-    try {
-      const ctx = JSON.parse(pending)
-      if (ctx.title) jdForm.title = ctx.title
-      if (ctx.company) jdForm.company = ctx.company
-      if (ctx.jd_text) jdForm.raw_text = ctx.jd_text
-      if (ctx.jdId) {
-        jdInfo.value = { id: Number(ctx.jdId), title: ctx.title || `JD #${ctx.jdId}` }
-        selection.rememberJD(ctx.jdId)
-      }
-    } catch (e) {
-      console.warn('解析 pendingAnalysis 失败', e)
-    } finally {
-      localStorage.removeItem('recruit.pendingAnalysis')
+  const ctx = selection.takePendingAnalysis()
+  if (ctx) {
+    if (ctx.title) jdForm.title = ctx.title
+    if (ctx.company) jdForm.company = ctx.company
+    if (ctx.jd_text) jdForm.raw_text = ctx.jd_text
+    if (ctx.jdId) {
+      jdInfo.value = { id: Number(ctx.jdId), title: ctx.title || `JD #${ctx.jdId}` }
+      selection.rememberJD(ctx.jdId)
     }
   }
 })

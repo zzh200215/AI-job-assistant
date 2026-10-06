@@ -7,9 +7,11 @@ import {
   readResumeId,
   rememberDefaultResume as storeDefaultResume,
   rememberJD as storeJD,
+  rememberPendingAnalysis as storePending,
   rememberRecord as storeRecord,
   rememberResume as storeResume,
   setSelectionOwner,
+  takePendingAnalysis as takePending,
 } from '@/utils/lastSelection'
 
 /**
@@ -44,6 +46,14 @@ export const useSelectionStore = defineStore('selection', () => ({
   },
   rememberDefaultResume(id) {
     storeDefaultResume(id)
+  },
+  /** `JobSearch` → `SmartAnalysis` 的那一坨一次性表单预填（形状没统一，只统一了槽位）。 */
+  rememberPendingAnalysis(payload) {
+    storePending(payload)
+  },
+  /** 取走 = 读到什么就删掉什么，所以这个名字刻意带 take：第二次调用必然拿到 null。 */
+  takePendingAnalysis() {
+    return takePending()
   },
   /** 只由 `stores/auth.js` 调用：身份一变槽就跟着变，guest 槽与旧全局键在这一步被清掉。 */
   setOwner(userOrId) {

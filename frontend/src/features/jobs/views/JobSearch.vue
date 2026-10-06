@@ -997,15 +997,12 @@ async function startAnalysisForJob(job) {
 
 function persistAnalysisContext(job) {
   selection.rememberResume(selectedResumeId.value)
-  localStorage.setItem(
-    'recruit.pendingAnalysis',
-    JSON.stringify({
-      jdId: job.id,
-      title: job.title,
-      company: job.company,
-      jd_text: job.rawText || job.summary || '',
-    })
-  )
+  selection.rememberPendingAnalysis({
+    jdId: job.id,
+    title: job.title,
+    company: job.company,
+    jd_text: job.rawText || job.summary || '',
+  })
 }
 
 function toggleCompare(job) {
