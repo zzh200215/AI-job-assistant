@@ -220,7 +220,7 @@ code,
 
 .el-card__header {
   padding: 16px 20px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--app-line);
 }
 
 .el-card__body {

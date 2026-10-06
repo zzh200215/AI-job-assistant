@@ -47,7 +47,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 15px 20px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--app-line);
 }
 
 .panel-title-row {
@@ -193,14 +193,14 @@
   color: var(--app-muted);
 }
 
-/* 这一条原本还写着 `padding: 16px 20px`（D21 记下"要先定哪个是权威"）。定了：**规格那条 15px 是权威**——
-   全仓 `.panel-header` 只有这里盖过内边距，而这 1px 没有任何记录过的理由，也没有第二页跟着它。
-   分隔线那条保留：`--app-line` 在样式层里用在 border 上是 215 处、`--el-border-color-lighter` 只有 12 处，
-   所以"谁更权威"其实是反的，但那要改的是上面那条全局规格、波及全站每一个面板头，不在这一次的半径里。 */
-.privacy-page .panel-header {
-  border-bottom: 1px solid var(--app-line);
-}
-
+/* 这一条原本写着两件事，两条现在都并回规格了：
+   - `padding: 16px 20px`（D21 记下"要先定哪个是权威"，D117 定了：**规格那条 15px 是权威**——
+     全仓 `.panel-header` 只有这里盖过内边距，而这 1px 没有任何记录过的理由，也没有第二页跟着它）；
+   - `border-bottom: … var(--app-line)`（D117 当时量到"本地覆盖反而更贴近全站"：样式层里 border 用
+     `--app-line` 的是 215 处、用 `--el-border-color-lighter` 的只有 12 处含规格自己。
+     D120 把规格那一侧改过来，这条覆盖就成了重复，删）。
+   两件事都由探针的 A/B 差分量过（D120）：换的只有 `border*Color`，rect 一个没动。
+   `.privacy-page .panel-body { padding: 20px }` 那条留着——它是这一页正文的真实差异，不是漂移。 */
 .privacy-page .panel-body {
   padding: 20px;
 }

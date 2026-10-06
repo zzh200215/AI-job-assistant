@@ -504,7 +504,7 @@ async function checkExpectation() {
   align-items: center;
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--app-line);
 }
 .insight-checklist > div:last-child {
   border-bottom: 0;

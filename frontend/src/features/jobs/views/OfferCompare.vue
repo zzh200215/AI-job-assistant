@@ -919,7 +919,7 @@ onMounted(() => {
 .compare-table th,
 .compare-table td {
   padding: 10px 16px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--app-line);
   text-align: center;
 }
 .compare-table th {

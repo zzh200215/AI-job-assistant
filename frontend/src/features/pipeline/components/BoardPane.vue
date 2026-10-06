@@ -369,7 +369,7 @@ function onDrop(targetStage) {
   justify-content: space-between;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--app-line);
 }
 
 .card-date {

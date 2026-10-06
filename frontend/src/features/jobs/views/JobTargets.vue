@@ -602,7 +602,7 @@ onMounted(loadTargets)
   gap: 20px;
   margin-top: 16px;
   padding-top: 14px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--app-line);
 }
 
 .stat-item {

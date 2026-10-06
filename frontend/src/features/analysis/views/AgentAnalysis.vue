@@ -826,7 +826,7 @@ onUnmounted(() => {
 .trace-section {
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--app-line);
 }
 .trace-stats {
   margin-bottom: 16px;
@@ -882,7 +882,7 @@ onUnmounted(() => {
   padding: 10px 12px;
   border-radius: var(--app-radius-xs, 8px);
   background: var(--app-surface-strong);
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--app-line);
 }
 .trace-result-title {
   font-weight: 600;

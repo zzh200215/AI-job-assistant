@@ -1362,7 +1362,7 @@ async function showDiagnosisDialog(r) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--app-line);
   padding-top: 12px;
 }
 
@@ -1502,7 +1502,7 @@ async function showDiagnosisDialog(r) {
   padding: 6px 0;
   margin: 0;
   font-size: 14px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--app-line);
 }
 
 .diag-issue:last-child {

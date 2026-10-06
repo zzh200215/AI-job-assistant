@@ -1074,7 +1074,7 @@ onMounted(() => {
   gap: 16px;
   margin-top: 18px;
   padding-top: 16px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--app-line);
 }
 
 .action-copy strong {
@@ -1234,7 +1234,7 @@ onMounted(() => {
   align-items: center;
   padding-bottom: 20px;
   margin-bottom: 20px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--app-line);
 }
 
 .score-value {
