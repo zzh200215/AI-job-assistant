@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import AnalysisResult from '@/features/analysis/views/AnalysisResult.vue'
@@ -92,7 +93,7 @@ function mountPage(component, routeRecord, to) {
         attachTo: document.body,
         // Clock 在页面模板里是裸标签，靠 app 级全局注册（main.js 把整套图标注册了一遍）。
         // 测试只装 installElement，不补这一颗就有一条 "Failed to resolve component" 噪音盖住真信号。
-        global: { plugins: [router, installElement], components: { Clock } },
+        global: { plugins: [router, installElement, createPinia()], components: { Clock } },
       })
     )
 }

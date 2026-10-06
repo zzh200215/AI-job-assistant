@@ -371,7 +371,8 @@ import {
   normalizeLocalizedTextList,
   rubricRow,
 } from '@/utils/analysisLocalization'
-import { readJDId, readResumeId, rememberRecord } from '@/utils/lastSelection'
+import { useSelectionStore } from '@/stores/selection'
+const selection = useSelectionStore()
 
 const router = useRouter()
 const route = useRoute()
@@ -403,8 +404,8 @@ watch(
 )
 
 function fillLast() {
-  const rid = readResumeId()
-  const jid = readJDId()
+  const rid = selection.resumeId()
+  const jid = selection.jdId()
   if (rid) form.resume_id = rid
   if (jid) form.jd_id = jid
   if (rid || jid) lastIdsTip.value = { rid, jid }
@@ -415,7 +416,7 @@ async function loadAnalysisById(recordId) {
   try {
     const data = await getAnalysis(recordId)
     result.value = data
-    rememberRecord(data.record_id || data.id || recordId)
+    selection.rememberRecord(data.record_id || data.id || recordId)
     if (data?.record_id || data.id) {
       tab.value = 'match'
     }
@@ -559,7 +560,7 @@ const onAnalyze = async () => {
 
         const data = await getAnalysis(recordId)
         result.value = data
-        rememberRecord(data.record_id || data.id || recordId)
+        selection.rememberRecord(data.record_id || data.id || recordId)
         ElMessage.success(`分析完成，匹配度 ${data.match_score}`)
         tab.value = 'match'
       },

@@ -513,7 +513,7 @@ import { getResume, getResumeList } from '@/api/resume'
 import { explainMatch } from '@/api/analysis'
 import { queryRewriteTest } from '@/api/knowledge'
 import { getJobDetail, seedDemoJobs, startFullAnalysis } from '@/api/jobs'
-import { rememberResume } from '@/utils/lastSelection'
+import { useSelectionStore } from '@/stores/selection'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import JobCompareDialog from '@/features/jobs/components/JobCompareDialog.vue'
@@ -534,6 +534,7 @@ import {
   rankMap,
   salaryMid,
 } from '@/features/jobs/lib/jobModel'
+const selection = useSelectionStore()
 
 const route = useRoute()
 const router = useRouter()
@@ -995,7 +996,7 @@ async function startAnalysisForJob(job) {
 }
 
 function persistAnalysisContext(job) {
-  rememberResume(selectedResumeId.value)
+  selection.rememberResume(selectedResumeId.value)
   localStorage.setItem(
     'recruit.pendingAnalysis',
     JSON.stringify({

@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 
 import * as authApi from '@/api/auth'
 import { getHomeRouteByRole, getRoleLabel, normalizeRole } from '@/constants/roles'
-import { setSelectionOwner } from '@/utils/lastSelection'
+import { useSelectionStore } from '@/stores/selection'
 import {
   clearSession,
   readStoredUser,
@@ -27,8 +27,10 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref(readToken() || '')
   const user = ref(normalizeUser(readStoredUser()))
 
-  // "上一次选了哪份简历/JD/记录"按登录用户分槽，所以身份一变就要通知它（见 utils/lastSelection）。
-  setSelectionOwner(user.value?.id ?? null)
+  // "上一次选了哪份简历/JD/记录"按登录用户分槽，所以身份一变就要通知它。
+  // 槽的规则仍住在 utils/lastSelection，这里只通过 selection store 说话（§10.9 ① / D124）。
+  const selection = useSelectionStore()
+  selection.setOwner(user.value?.id ?? null)
 
   const isLoggedIn = computed(() => !!token.value)
   const role = computed(() => normalizeRole(user.value?.role))
@@ -39,14 +41,14 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = accessToken
     user.value = normalizeUser(currentUser)
     writeSession(accessToken, user.value)
-    setSelectionOwner(user.value?.id ?? null)
+    selection.setOwner(user.value?.id ?? null)
   }
 
   function clearAuth() {
     token.value = ''
     user.value = null
     clearSession()
-    setSelectionOwner(null)
+    selection.setOwner(null)
   }
 
   /* 401 由 `api/request.js` 发事件、这里负责把 store 清干净；存储那一半两条路都走

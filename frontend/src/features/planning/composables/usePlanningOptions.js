@@ -2,7 +2,7 @@ import { computed, ref } from 'vue'
 
 import { getJDList } from '@/api/jd'
 import { getResumeList } from '@/api/resume'
-import { readJDId, readResumeId } from '@/utils/lastSelection'
+import { useSelectionStore } from '@/stores/selection'
 
 /* 选项链：D55 从 CareerPlanning.vue 搬出来，它是这一页"选哪份简历 / 哪个 JD"的唯一持有者。
    规则原样搬，一条没改：
@@ -16,6 +16,7 @@ import { readJDId, readResumeId } from '@/utils/lastSelection'
    读的是 `selectedResumeId` 当前值与刚回来的列表，两次同样内容的刷新做完是同一个结果。
    D52 刚记过一次"加了一条自己证不了承重的守卫"，这次先不加。 */
 export function usePlanningOptions() {
+  const selection = useSelectionStore()
   const resumeOptions = ref([])
   const jdOptions = ref([])
   const selectedResumeId = ref(null)
@@ -32,8 +33,8 @@ export function usePlanningOptions() {
 
   /** 槽里记的上一次选择（按登录用户分槽，规则住在 utils/lastSelection）。 */
   function restoreSelections() {
-    const resumeId = readResumeId()
-    const jdId = readJDId()
+    const resumeId = selection.resumeId()
+    const jdId = selection.jdId()
     if (resumeId) selectedResumeId.value = resumeId
     if (jdId) selectedJDId.value = jdId
   }

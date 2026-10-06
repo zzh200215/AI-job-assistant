@@ -314,10 +314,11 @@ import { getAnalysis } from '@/api/analysis'
 import { getJobPipelineList } from '@/api/jobs'
 import { getInterviewGroupTitle, normalizeInterviewQuestions } from '@/utils/interviewQuestions'
 import { useLatestCall } from '@/composables/useLatestCall'
-import { readRecordId, rememberRecord } from '@/utils/lastSelection'
+import { useSelectionStore } from '@/stores/selection'
 import { INTERVIEW_SCORE_BANDS, scoreToneAtLeast } from '@/utils/scoreTone'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import { monthDayTime } from '@/utils/format/date'
+const selection = useSelectionStore()
 
 const router = useRouter()
 
@@ -571,7 +572,7 @@ async function loadById() {
   try {
     const rec = await getAnalysis(recordId.value)
     questionData.value = rec
-    rememberRecord(rec?.record_id || rec?.id || recordId.value)
+    selection.rememberRecord(rec?.record_id || rec?.id || recordId.value)
   } catch (e) {
     ElMessage.error(`加载失败：${userErrorCopy(e, '网络异常，请稍后重试')}`)
   } finally {
@@ -580,7 +581,7 @@ async function loadById() {
 }
 
 function useLast() {
-  const last = readRecordId()
+  const last = selection.recordId()
   if (!last) {
     ElMessage.warning('暂无最近分析记录')
     return

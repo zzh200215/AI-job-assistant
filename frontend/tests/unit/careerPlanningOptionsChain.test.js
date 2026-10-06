@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 
 import { usePlanningOptions } from '@/features/planning/composables/usePlanningOptions'
 
@@ -64,6 +65,11 @@ async function refreshWith(resumes, jds) {
   await flushPromises()
   return chain
 }
+
+/* §10.9 ①（D124）之后，`usePlanningOptions()` 里那一句 `useSelectionStore()` 要一个活的 pinia。
+   应用里它只从组件 setup 被调用，pinia 那时已经装好；这里**不挂组件**、直接调 composable，
+   所以必须自己把 pinia 摆上——否则不是断言变红，是 composable 在第一行就抛。 */
+beforeEach(() => setActivePinia(createPinia()))
 
 describe('选项链的四条口径', () => {
   beforeEach(() => {

@@ -83,7 +83,8 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
 import { createJD, parseJD } from '@/api/jd'
-import { rememberJD } from '@/utils/lastSelection'
+import { useSelectionStore } from '@/stores/selection'
+const selection = useSelectionStore()
 
 const router = useRouter()
 const loading = ref(false)
@@ -123,7 +124,7 @@ const onSubmit = async () => {
     const res = await parseJD(jd.id)
     createdId.value = jd.id
     parsed.value = res.parsed
-    rememberJD(jd.id)
+    selection.rememberJD(jd.id)
     ElMessage.success('创建并解析成功')
   } catch {
     // request.js 已显示错误信息

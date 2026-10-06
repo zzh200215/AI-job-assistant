@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import Interview from '@/features/interview/views/Interview.vue'
@@ -53,7 +54,7 @@ async function mounted() {
   await router.isReady()
   const wrapper = mount(Interview, {
     attachTo: document.body,
-    global: { plugins: [router, installElement] },
+    global: { plugins: [router, installElement, createPinia()] },
   })
   await flushPromises()
   // 页面用 `setTimeout(loadWeakAreas, 500)` 等会话先到位，这一段是真墙钟

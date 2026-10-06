@@ -4,7 +4,7 @@ import { getAnalysis, runFullAnalysis } from '@/api/analysis'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
 import { stepLabel } from '@/features/planning/lib/planningModel'
 import { localizeSentence } from '@/utils/analysisLocalization'
-import { rememberRecord } from '@/utils/lastSelection'
+import { useSelectionStore } from '@/stores/selection'
 
 /* 规划运行链：D56 从 CareerPlanning.vue 搬出来。这一条是"点一次按钮跑一整条 agent 链路"，
    所以它只持有任务生命周期与那份分析记录。**三样东西留在页面**：
@@ -18,6 +18,7 @@ import { rememberRecord } from '@/utils/lastSelection'
    `:loading="running"` 上，EP 在 running 期间把按钮禁掉，所以同一时刻只会有一趟。
    真要让入口不吃 loading，就得回来补令牌。 */
 export function useCareerPlanningRun({ getResumeId, resolveJdId, onAnalysisFinished }) {
+  const selection = useSelectionStore()
   const running = ref(false)
   const taskStatus = ref('pending')
   const agentSteps = ref([])
@@ -105,7 +106,7 @@ export function useCareerPlanningRun({ getResumeId, resolveJdId, onAnalysisFinis
             throw new Error('分析完成但没有生成记录')
           }
           analysisResult.value = await getAnalysis(analysisRecordId.value)
-          rememberRecord(analysisRecordId.value)
+          selection.rememberRecord(analysisRecordId.value)
         },
         onFailed() {
           taskStatus.value = 'failed'

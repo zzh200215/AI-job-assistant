@@ -255,7 +255,8 @@ import { SuccessFilled, WarningFilled, Loading, Clock } from '@element-plus/icon
 import { startAutoAgent, getMultiAgentDetail } from '@/api/multi_agent'
 import { scoreToneTagType } from '@/utils/scoreTone'
 import { TASK_STATUS_TAGS, levelTagType, tagTypeFor } from '@/utils/statusTone'
-import { readJDId, readResumeId } from '@/utils/lastSelection'
+import { useSelectionStore } from '@/stores/selection'
+const selection = useSelectionStore()
 
 const starting = ref(false)
 const runId = ref(null)
@@ -344,8 +345,8 @@ const agents = computed(() => {
 
 // ---- methods ----
 const fillLast = () => {
-  const rid = readResumeId()
-  const jid = readJDId()
+  const rid = selection.resumeId()
+  const jid = selection.jdId()
   if (rid) form.resume_id = rid
   if (jid) form.jd_id = jid
 }

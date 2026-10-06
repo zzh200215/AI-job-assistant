@@ -481,13 +481,7 @@ import {
   InfoFilled,
   Search,
 } from '@element-plus/icons-vue'
-import {
-  readJDId,
-  readResumeId,
-  rememberJD,
-  rememberRecord,
-  rememberResume,
-} from '@/utils/lastSelection'
+import { useSelectionStore } from '@/stores/selection'
 import { uploadResume, parseResume } from '@/api/resume'
 import { createJD, parseJD } from '@/api/jd'
 import { runFullAnalysis, getAnalysis } from '@/api/analysis'
@@ -522,6 +516,7 @@ import {
   statusText,
   stepLabel,
 } from '@/features/analysis/lib/analysisModel'
+const selection = useSelectionStore()
 
 const router = useRouter()
 const route = useRoute()
@@ -673,7 +668,7 @@ const customUploadResume = async ({ file }) => {
     ElMessage.success('简历上传成功，正在解析…')
     const parsed = await parseResume(data.id)
     resumeInfo.value = { id: data.id, file_name: file.name, parsed: parsed.parsed }
-    rememberResume(data.id)
+    selection.rememberResume(data.id)
     ElMessage.success('简历解析完成')
   } catch {
     /* request.js 已提示 */
@@ -708,7 +703,7 @@ const onStartAnalysis = async () => {
       })
       await parseJD(jd.id)
       jdInfo.value = { id: jd.id, title: jdForm.title }
-      rememberJD(jd.id)
+      selection.rememberJD(jd.id)
     } catch {
       return
     }
@@ -748,7 +743,7 @@ const onStartAnalysis = async () => {
         }
         const data = await getAnalysis(recordId)
         result.value = data
-        rememberRecord(data.record_id || data.id || recordId)
+        selection.rememberRecord(data.record_id || data.id || recordId)
         await loadExplainMatch(true)
         await loadReferences(true)
         ElMessage.success(`智能分析完成，匹配度 ${data.match_score}`)
@@ -803,8 +798,8 @@ onMounted(() => {
   // URL query params take priority (from PipelineKanban / other pages)
   const qRid = route.query.resume_id ? Number(route.query.resume_id) : null
   const qJid = route.query.jd_id ? Number(route.query.jd_id) : null
-  const rid = qRid || readResumeId()
-  const jid = qJid || readJDId()
+  const rid = qRid || selection.resumeId()
+  const jid = qJid || selection.jdId()
   if (rid && !isNaN(rid)) resumeInfo.value = { id: rid, file_name: `简历 #${rid}` }
   if (jid && !isNaN(jid)) jdInfo.value = { id: jid, title: `JD #${jid}` }
 
@@ -817,7 +812,7 @@ onMounted(() => {
       if (ctx.jd_text) jdForm.raw_text = ctx.jd_text
       if (ctx.jdId) {
         jdInfo.value = { id: Number(ctx.jdId), title: ctx.title || `JD #${ctx.jdId}` }
-        rememberJD(ctx.jdId)
+        selection.rememberJD(ctx.jdId)
       }
     } catch (e) {
       console.warn('解析 pendingAnalysis 失败', e)

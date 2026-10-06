@@ -415,7 +415,8 @@ import {
 } from '@/utils/analysisLocalization'
 import { scoreToneAtLeast, scoreToneTagType } from '@/utils/scoreTone'
 import { TASK_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
-import { readJDId, readResumeId } from '@/utils/lastSelection'
+import { useSelectionStore } from '@/stores/selection'
+const selection = useSelectionStore()
 
 const route = useRoute()
 const router = useRouter()
@@ -499,8 +500,8 @@ const localizedLongTermAdvice = computed(() =>
 )
 
 function fillLast() {
-  const rid = readResumeId()
-  const jid = readJDId()
+  const rid = selection.resumeId()
+  const jid = selection.jdId()
   if (rid) form.resume_id = rid
   if (jid) form.jd_id = jid
 }

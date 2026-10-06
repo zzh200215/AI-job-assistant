@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { useCareerPlanningRun } from '@/features/planning/composables/useCareerPlanningRun'
@@ -78,6 +78,9 @@ function makeRun(overrides = {}) {
 
 describe('运行链的四条终止路径都要把 running 放下来', () => {
   beforeEach(() => {
+    /* §10.9 ①（D124）之后 `useCareerPlanningRun()` 里要取 selection store，而这一组测试
+     **不挂组件**、直接调 composable，所以得自己摆一个活的 pinia（应用里它只从 setup 被调用）。 */
+    setActivePinia(createPinia())
     poll.behaviour = 'completed'
     vi.clearAllMocks()
     document.body.innerHTML = ''

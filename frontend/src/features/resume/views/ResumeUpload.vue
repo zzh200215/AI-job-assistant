@@ -572,7 +572,8 @@ import {
   scoreToneFillClass,
 } from '@/utils/scoreTone'
 import { monthDay } from '@/utils/format/date'
-import { readDefaultResumeId, rememberDefaultResume, rememberResume } from '@/utils/lastSelection'
+import { useSelectionStore } from '@/stores/selection'
+const selection = useSelectionStore()
 
 const router = useRouter()
 
@@ -770,7 +771,7 @@ const scoredResumeCount = computed(
 )
 
 onMounted(() => {
-  defaultResumeId.value = readDefaultResumeId()
+  defaultResumeId.value = selection.defaultResumeId()
   loadList()
 })
 
@@ -920,7 +921,7 @@ async function parseResumeRow(r) {
 
 function setDefaultResumeRow(r) {
   defaultResumeId.value = r.id
-  rememberDefaultResume(r.id)
+  selection.rememberDefaultResume(r.id)
   ElMessage.success('已设为默认简历')
 }
 
@@ -962,7 +963,7 @@ async function handleCmd(cmd, r) {
 }
 
 function goAnalysis(r) {
-  rememberResume(r.id)
+  selection.rememberResume(r.id)
   router.push('/analysis')
 }
 

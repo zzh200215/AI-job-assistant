@@ -770,7 +770,8 @@ import {
   stepType,
 } from '@/features/planning/lib/planningModel'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
-import { forgetJD, rememberJD, rememberResume } from '@/utils/lastSelection'
+import { useSelectionStore } from '@/stores/selection'
+const selection = useSelectionStore()
 
 const router = useRouter()
 
@@ -1035,7 +1036,7 @@ watch(selectedResumeId, async (value) => {
     clearCareerPaths()
     return
   }
-  rememberResume(value)
+  selection.rememberResume(value)
   if (!targetRole.value && selectedResume.value?.parsed?.current_title) {
     targetRole.value = selectedResume.value.parsed.current_title
   }
@@ -1045,10 +1046,10 @@ watch(selectedResumeId, async (value) => {
 
 watch(selectedJDId, (value) => {
   if (value) {
-    rememberJD(value)
+    selection.rememberJD(value)
     return
   }
-  forgetJD()
+  selection.forgetJD()
 })
 
 onMounted(async () => {
