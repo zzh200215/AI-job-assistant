@@ -104,12 +104,6 @@ export const routes = [
         meta: { title: '隐私与数据', roles: CANDIDATE },
       },
       {
-        path: 'organizations',
-        name: 'organizations',
-        component: () => import('@/features/billing/views/OrganizationWorkspace.vue'),
-        meta: { title: '团队工作区', roles: CANDIDATE },
-      },
-      {
         path: 'subscription',
         name: 'subscription',
         component: () => import('@/features/billing/views/Subscription.vue'),
@@ -222,12 +216,6 @@ export const routes = [
         name: 'admin-orders',
         component: () => import('@/features/admin/views/Orders.vue'),
         meta: { title: '订单管理', roles: ADMIN },
-      },
-      {
-        path: 'admin/tenants',
-        name: 'admin-tenants',
-        component: () => import('@/features/admin/views/Tenants.vue'),
-        meta: { title: '租户管理', roles: ADMIN },
       },
       {
         path: 'prompt-traces',

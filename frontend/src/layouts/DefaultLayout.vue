@@ -147,7 +147,6 @@ import {
   DataAnalysis,
   Document,
   Grid,
-  OfficeBuilding,
   HomeFilled,
   List,
   MagicStick,
@@ -235,14 +234,6 @@ const candidateNavItems = [
     desc: '账号信息、数据与邀请。',
     matches: ['/profile', '/subscription'],
   },
-  {
-    path: '/organizations',
-    icon: OfficeBuilding,
-    label: '团队工作区',
-    tag: 'Organization',
-    desc: '组织成员、共享知识与单点登录。',
-    matches: ['/organizations'],
-  },
 ]
 
 // 管理员工具导航
@@ -270,14 +261,6 @@ const adminNavItems = [
     tag: 'Orders',
     desc: '订阅订单与支付。',
     matches: ['/admin/orders'],
-  },
-  {
-    path: '/admin/tenants',
-    icon: OfficeBuilding,
-    label: '租户管理',
-    tag: 'Tenant',
-    desc: '租户创建/停用/域名与管理员。',
-    matches: ['/admin/tenants'],
   },
   {
     path: '/prompt-traces',

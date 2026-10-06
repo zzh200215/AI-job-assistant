@@ -165,7 +165,7 @@ const BUDGET = {
      那种写法：上面 SmartAnalysis 的 5 处一行式 + Privacy 的 2 处一共 7 处，扫描器看不见、这条数看得见
      ——拿"命中 0"当"没有可迁的了"就错了，那是同一把尺子量两种形状的差别。
      全仓 `:deep(.panel-header)` 为 0 处，所以没有第三种隐藏耦合。 */
-  handRolledPanelHeaders: 14,
+  handRolledPanelHeaders: 11,
   /* D118（§10.12 决定 ③）：这 14 现在拆成**两个具名桶**——`el-card` 的 `#header` 槽里 5 处
      （KnowledgeBase 4 + JobSearch 1，见下面的 `IN_EL_CARD_PANEL_HEADERS`）长期留在视图里，
      因为那属于"卡片与面板是两个组件"这一族；剩下 9 处才是可以继续往下还的那批。
@@ -190,7 +190,6 @@ const BUDGET = {
        是搬家搬出来的——视图侧只剩 4 条（任务结果那一支）。合并计数与搬家前一样是 13。 */
     'src/features/analysis/lib/analysisModel.js': 9,
     'src/features/analysis/views/SmartAnalysis.vue': 4,
-    'src/features/admin/views/Tenants.vue': 9,
     /* D53 同理：职业规划页的优先级/复杂度两张表搬进 lib，6 条是搬家的账不是新债，
        页面侧只剩任务状态那一支（3 条）。合并计数与搬前一样是 9。 */
     'src/features/planning/lib/planningModel.js': 6,
@@ -203,7 +202,6 @@ const BUDGET = {
     'src/features/analysis/views/AnalysisResult.vue': 5,
     'src/features/analysis/views/ExplainMatch.vue': 4,
     'src/features/jobs/views/JobTargets.vue': 4,
-    'src/features/billing/views/OrganizationWorkspace.vue': 4,
     'src/features/admin/views/Orders.vue': 3,
     'src/features/admin/views/Overview.vue': 3,
     'src/features/legal/views/Privacy.vue': 3,
@@ -231,7 +229,6 @@ const BUDGET = {
        动词，所以它留在账上；D15 把窗口收到函数作用域后新暴露的三处里，两处 GET 已经修掉了。 */
   silentEmptyCatches: {
     'src/features/admin/views/Overview.vue': 2,
-    'src/features/admin/views/Tenants.vue': 1,
     'src/features/jobs/views/JobSearch.vue': 1,
     'src/features/resume/views/ResumeUpload.vue': 1,
   },
@@ -244,7 +241,10 @@ const BUDGET = {
   /* D76 用浏览器探针把三条"视图自己重写 .page-shell"判死并删掉（KnowledgeBase /
      DeliveryGuide / SystemStatus，各自 matched=0、删→比 46 条计算属性+rect=0 差异、塞回=0 差异），
      22 → 19。这一维以前只有上限、没有"还完必须调小"，所以那 3 的下降本来会静悄悄。 */
-  pageShellRedeclarations: 19,
+  /* 2026-10-06 真删企业侧（§10.2，D132）：`OrganizationWorkspace.vue` 整文件出树，19 → 18。
+     同批把 `handRolledPanelHeaders` 14 → 11、`STANDALONE_PANEL_HEADERS` 9 → 6（那 3 处随视图一起没了）、
+     `statusTagEntries` 与 `silentEmptyCatches` 里 Tenants/OrganizationWorkspace 两个键直接删掉。 */
+  pageShellRedeclarations: 18,
   /* `viewsBypassingApiLayer` 这个键在 §10.22 落地后**删掉了**：那一维以前复用 `viewSources`
      （被 `JS_OUT_OF_SCOPE_ROOTS` 豁免了 `src/stores`），所以它的 `0` 只说得出"视图没绕过"。
      现在那条守卫自带文件集、判据是硬零，不需要一个预算数字在旁边。 */
@@ -745,7 +745,7 @@ describe('style debt ratchet', () => {
     'src/features/knowledge/views/KnowledgeBase.vue': 4,
     'src/features/jobs/views/JobSearch.vue': 1,
   }
-  const STANDALONE_PANEL_HEADERS = 9
+  const STANDALONE_PANEL_HEADERS = 6
 
   it('the panel-header ledger is two named buckets, and they still add up to 14', () => {
     const sites = PANEL_HEADER_SITES()
@@ -807,10 +807,7 @@ describe('style debt ratchet', () => {
     /* §10.14 决定 ③（D96）：候选人侧那三页（JobSearch 1 + Register 1 + Privacy 2 处）的本地覆盖
        搬进了 `panels.css` 的页根作用域，所以这里只剩 §2 冻结侧的两个文件。
        **清单变短不是"债变少了"的凭证**——那 4 处头部标记还在原地，只是它们不再挡住迁移判定。 */
-    const LOCAL_OVERRIDE_FILES = [
-      'src/features/knowledge/views/KnowledgeBase.vue',
-      'src/features/billing/views/OrganizationWorkspace.vue',
-    ]
+    const LOCAL_OVERRIDE_FILES = ['src/features/knowledge/views/KnowledgeBase.vue']
     const overriding = viewSources
       // 先剥掉 CSS 注释：一条"这条规则已搬走"的说明不该被当成还在覆盖（与后端乱码守卫
       // 只看 ast 字面量、不看注释是同一个口径）

@@ -6,14 +6,18 @@ import { fileURLToPath } from 'node:url'
 
 // 全仓类型错的计数棘轮。跑的是 vue-tsc 本身，不是缓存、不是抽样。
 // 一次约 24 秒，所以它住在 node --test 这一层（CI 的 `npm test`），不进 vitest 那 71 个文件。
-const BUDGET = 42
+// 2026-10-06 真删企业侧（§10.2，D132）：那 42 条里有 2 条住在 `admin/Tenants.vue`，随文件一起出树。
+// 这是 42 第一次不是"人清出来的"，是删文件删出来的——所以下限那两条也一起改了。
+const BUDGET = 40
 
 // 编译器"看到多少个文件"。D40 那次的教训是尺子会跟着搬家安静地少测文件，所以这条不是装饰：
 // include 少一根、或某类文件改了扩展名，先在这里红，而不是等到"债清完了"才发现量的是空气。
 // 按扩展名各点一个下限，是因为实测过去掉 `src/**/*.vue` 那根只少 1 个文件（其余 .vue 仍被
 // import 拖着进程序）——只看总数的话这条腿只剩 1 的余量。
 const MIN_PROGRAM_FILES = 128
-const MIN_BY_EXTENSION = { vue: 68, js: 59, ts: 1 }
+// 2026-10-06 真删企业侧（§10.2，D132）：`admin/Tenants.vue` 与 `billing/OrganizationWorkspace.vue` 出树，
+// 68 个 .vue 变 66 个。下限是防空转的，不是装饰——所以这里要跟着实测改，并写下为什么。
+const MIN_BY_EXTENSION = { vue: 66, js: 59, ts: 1 }
 const NAMED_ROOTS = [
   'src/features/jobs/views/JobSearch.vue',
   'src/features/analysis/views/SmartAnalysis.vue',

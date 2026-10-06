@@ -21,7 +21,7 @@ const sweep = () =>
 
 test('the dead-style sweep sees the whole tree, not a corner of it', () => {
   const rows = sweep()
-  assert.ok(rows.length >= 68, `只扫到 ${rows.length} 个 .vue，这把尺又在看空目录`)
+  assert.ok(rows.length >= 66, `只扫到 ${rows.length} 个 .vue，这把尺又在看空目录`)
   const rules = rows.reduce((a, r) => a + r.rules, 0)
   assert.ok(rules >= 2000, `规则总数 ${rules}，不像扫到了整仓（解析器又漏形状了）`)
   assert.ok(
