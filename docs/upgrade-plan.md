@@ -3521,6 +3521,22 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 门禁：backend `pytest` **881 → 888 passed**（+7 全在 `test_eval_provider_guard.py`）、`ruff check` clean、`ruff format --check` 18 files already formatted。
 
+#### 已交付：D134 第四刀第一步：两个 router 出树，三张守卫表跟着实测重取
+
+按 D133 定的路线（**保模型、只删暴露面**）做的第一件事：`app/api/organization.py`（370 行）与 `app/api/tenant.py`（597 行）删除，`app/api/router.py` 里三段挂载（`/organizations`、`/tenant`、`/admin/tenants`）与两个 import 名字一起摘掉。**模型、列、`TenantScopedMixin` 一律留着**，所以 `docs/schema-baseline.sql` 一字未动、`test_no_dead_app_modules` 的可达性闭包也没有新孤儿——这正是选这条路线的原因。
+
+**跟着动的清单（每一条都是"树变小所以数变了"，全部实测、没有一条是放宽）**：
+- `app/core/api_access.py` 的"匿名可达"清单少三条（`/api/tenant/brand` + 两条飞书 SSO 回调），`tests/test_public_api_surface.py` 的期望集合同步。
+- 同一文件里三个防空转下限按现量重取：受保护操作 **200 → 199**、守护前缀覆盖 **120 → 112**（注释里那个"量过是 123"就地改成 112 并写明原因）、带会话凭据 **200 → 195**。
+- 合成夹具的示例前缀 `/organizations` → `/auth`：**"混合前缀"这个靶子必须是树上还真实存在的**，否则测的是一个已经不存在的形状。
+- `tests/test_tenant_jobs_knowledge.py` 删掉 5 条只驱动 `/admin/tenants/*` 导入端点的用例和它们共用的 15 行 `_build_app`；**剩下 12 条测的是服务层可见性，行为还在，留着**。`test_tenant_api`(17)、`test_organization_api`(1)、`test_organization_knowledge_access`(1)、`test_feishu_sso`(1) 整文件删。
+
+**门禁与对照**：backend `pytest` **888 → 863**，差的 25 条正好等于删掉的用例数，没有一条是"意外不见"；`ruff check` clean、`ruff format --check` 356 files clean。可见性主尺逐字不变：**知识 22 / 28、JD 池 72 / 72**；mock 模式下门的两臂也逐字相同（融合 `0.810/0.823/0.867`、词法-BM25 `0.803/0.785/0.86`）——这一次对照之所以能说"没变"，是因为跑的是 D133 之后那把确定的尺子。
+
+**两条自己的账**：① 这一批的提交主题（`c5c3ad6`）**写错了**——我把上一条 `e85760a` 的主题复制了过来，正文描述才是本次内容。不改写历史（未推，但规矩是不 amend 未明示的提交），在这里记明，以后按正文读。② 三次锚点失配都是同一族：`tests/test_public_api_surface.py` 与三个 `scripts/eval_*.py` 在工作树里是 **CRLF**（`core.autocrlf=true`），用 `\n` 锚点会**静默匹配不到任何东西**；救回来的是两条纪律——**断言写在写盘之前**（所以整文件一次都没被半改），以及改完必查 CR 计数（682 → 684 这种"只多了我加的行"才叫没动行尾）。
+
+**第四刀剩下的一步（未做）**：`knowledge_access.py:20-55` 的"租户级"那一类、`job_recommend.py:43/51` 的池谓词、`job_access.py` 3 处、`subscription_service.py:185` 的 `current_tenant_id()`、以及 `tenant_context.py` 本体退役。做完必须回到这把尺子：22 / 72 两个数与两臂门输出应当逐字不变。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
