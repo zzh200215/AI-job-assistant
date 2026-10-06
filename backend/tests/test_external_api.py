@@ -92,10 +92,14 @@ def _seed_key(factory, *, name="客户A", tenant_id=1, daily_quota=1000, status=
         key, plain = create_api_key(
             session,
             name=name,
-            tenant_id=tenant_id,
             daily_quota=daily_quota,
             expires_at=expires_at,
         )
+        # D136：`create_api_key` 不再收 tenant_id（"按租户发 Key"那档随企业侧出树）。
+        # 这一族的用例测的是外部计费按租户聚合，所以夹具直接写保留列，而不是经过被删的那个旋钮。
+        key.tenant_id = tenant_id
+        session.add(key)
+        session.commit()
         if status == "revoked" or revoked:
             key.status = "revoked"
             session.add(key)

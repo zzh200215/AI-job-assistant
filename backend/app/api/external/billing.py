@@ -35,7 +35,8 @@ def admin_create_api_key(
     name = str(payload.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="name 必填")
-    tenant_id = int(payload.get("tenant_id") or 1)
+    # 2026-10-06 真删企业侧第六增量（D136）：这里原来读 `payload["tenant_id"]` 给 Key 打标；
+    # 列保留、默认就是内置租户 1，所以"按租户发 Key"这个旋钮出树，行照旧落在默认租户上。
     daily_quota = int(payload.get("daily_quota") or 1000)
     expires_at = None
     if payload.get("expires_at"):
@@ -47,7 +48,6 @@ def admin_create_api_key(
     key, plain = create_api_key(
         db,
         name=name,
-        tenant_id=tenant_id,
         daily_quota=daily_quota,
         expires_at=expires_at,
     )
@@ -63,15 +63,13 @@ def admin_create_api_key(
 
 @router.get("/api-keys", summary="管理：Key 列表（含用量）")
 def admin_list_api_keys(
-    tenant_id: int | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
+    # D136：`?tenant_id=` 那一道筛选随企业侧出树；列表里的 `tenant_id` 字段仍写（它读的是保留下来的列）。
     query = db.query(ApiKey)
-    if tenant_id:
-        query = query.filter(ApiKey.tenant_id == tenant_id)
     total = query.count()
     keys = query.order_by(ApiKey.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     items = []
@@ -129,15 +127,13 @@ def admin_run_billing(
 
 @router.get("/billing/bills", summary="管理：账单列表")
 def admin_list_bills(
-    tenant_id: int | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ):
+    # D136：同 api-keys 列表，`?tenant_id=` 筛选出树、字段照旧写。
     query = db.query(ApiBill)
-    if tenant_id:
-        query = query.filter(ApiBill.tenant_id == tenant_id)
     total = query.count()
     bills = query.order_by(ApiBill.period_start.desc()).offset((page - 1) * page_size).limit(page_size).all()
     items = []

@@ -7,7 +7,6 @@ from datetime import timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.models.base import DEFAULT_TENANT_ID
 from app.models.subscription import (
     OrderStatus,
     SubscriptionOrder,
@@ -84,22 +83,18 @@ DEFAULT_PLAN_NAMES = {"free": "免费版", "pro": "Pro 版", "enterprise": "企�
 DEFAULT_PLAN_SORT = {"free": 0, "pro": 1, "enterprise": 2}
 
 
-def get_plans(db: Session, tenant_id: int) -> list[dict]:
-    """获取租户可见的套餐列表（T3-1 套餐/价格按租户覆盖）。
+def get_plans(db: Session) -> list[dict]:
+    """套餐列表：平台配置行（`tenant_id IS NULL`）覆盖内置矩阵。
+
+    2026-10-06 真删企业侧第六增量（D136）之前这里是两级来源："这个租户自定义的 tier" 优先、
+    再回落平台默认。租户那一级随 `POST /subscription/admin/plans`（它要求请求体带 `tenant_id`，
+    所以历史上只能造"租户自定义"行）一起出树，现在只剩平台 → 内置。
 
     规则（按 tier 粒度合并）：
-    1. 租户自定义套餐（tenant_id=当前租户 且 is_active）优先；
-    2. 该租户未自定义的 tier 回落平台默认（DB 中 tenant_id IS NULL 的平台默认行，
-       无则回落硬编码 TIER_FEATURES + DEFAULT_PLAN_PRICES）；
-    3. 自定义行可覆盖 name / price / sort_order，features 与默认权益矩阵做浅合并
-       （缺省键保留默认权益，避免配置不全导致权益丢失）。
+    1. 平台默认行（DB 中 `tenant_id IS NULL` 且 is_active）覆盖名称/价格/排序；
+    2. 没有平台行就用硬编码 `TIER_FEATURES` + `DEFAULT_PLAN_PRICES`；
+    3. 平台行的 features 与默认权益矩阵做浅合并（缺省键保留默认权益，避免配置不全丢权益）。
     """
-    custom = {
-        p.tier: p
-        for p in db.query(SubscriptionPlan)
-        .filter(SubscriptionPlan.tenant_id == tenant_id, SubscriptionPlan.is_active == 1)
-        .all()
-    }
     platform = {
         p.tier: p
         for p in db.query(SubscriptionPlan)
@@ -112,15 +107,13 @@ def get_plans(db: Session, tenant_id: int) -> list[dict]:
         monthly, yearly = DEFAULT_PLAN_PRICES.get(tier, (0, 0))
         name = DEFAULT_PLAN_NAMES.get(tier, tier)
         sort_order = DEFAULT_PLAN_SORT.get(tier, 0)
-        is_custom = False
 
-        source = custom.get(tier) or platform.get(tier)
+        source = platform.get(tier)
         if source is not None:
             name = source.name
             monthly = source.price_monthly if source.price_monthly is not None else monthly
             yearly = source.price_yearly if source.price_yearly is not None else yearly
             sort_order = source.sort_order if source.sort_order is not None else sort_order
-            is_custom = bool(source.is_custom)
             if source.features:
                 default_features = {**default_features, **source.features}
 
@@ -132,7 +125,6 @@ def get_plans(db: Session, tenant_id: int) -> list[dict]:
                 "price_yearly": float(yearly),
                 "features": default_features,
                 "sort_order": sort_order,
-                "is_custom": is_custom,
             }
         )
 
@@ -140,9 +132,9 @@ def get_plans(db: Session, tenant_id: int) -> list[dict]:
     return plans
 
 
-def get_plan_price(db: Session, tenant_id: int, tier: str, period: str = "monthly") -> int:
-    """获取租户视角下指定 tier 的套餐价格（分）；找不到回落平台默认价。"""
-    for plan in get_plans(db, tenant_id):
+def get_plan_price(db: Session, tier: str, period: str = "monthly") -> int:
+    """指定 tier 的套餐价格（分）；找不到回落平台默认价。"""
+    for plan in get_plans(db):
         if plan["tier"] == tier:
             return int(plan["price_yearly" if period == "yearly" else "price_monthly"])
     monthly, yearly = DEFAULT_PLAN_PRICES.get(tier, (0, 0))
@@ -166,13 +158,13 @@ def get_user_plan_tier(db: Session, user_id: int) -> str:
     return "free"
 
 
-def _effective_features(db: Session, tenant_id: int, tier: str) -> dict:
-    """用户视角的有效权益：租户/平台自定义套餐的 features 覆盖硬编码默认矩阵。
+def _effective_features(db: Session, tier: str) -> dict:
+    """用户视角的有效权益：平台自定义套餐的 features 覆盖硬编码默认矩阵。
 
-    get_plans 已把自定义 features 与 TIER_FEATURES 做浅合并（缺省键保留默认权益），
+    get_plans 已把平台行 features 与 TIER_FEATURES 做浅合并（缺省键保留默认权益），
     因此直接取 get_plans 结果即得自定义套餐真实权益（修复自定义套餐权益读硬编码不生效）。
     """
-    for plan in get_plans(db, tenant_id):
+    for plan in get_plans(db):
         if plan["tier"] == tier:
             return dict(plan["features"])
     return dict(TIER_FEATURES.get(tier, TIER_FEATURES["free"]))
@@ -181,7 +173,7 @@ def _effective_features(db: Session, tenant_id: int, tier: str) -> dict:
 def get_user_features(db: Session, user_id: int) -> dict:
     """获取用户当前套餐的完整权益配置（含租户/平台自定义覆盖）。"""
     tier = get_user_plan_tier(db, user_id)
-    return _effective_features(db, DEFAULT_TENANT_ID, tier)
+    return _effective_features(db, tier)
 
 
 def get_or_create_subscription(db: Session, user_id: int) -> UserSubscription:
@@ -247,7 +239,7 @@ def check_quota(
     """
     tier = get_user_plan_tier(db, user_id)
     # 自定义套餐权益：租户/平台自定义 features 覆盖硬编码默认矩阵（修复自定义套餐不生效）
-    features = _effective_features(db, DEFAULT_TENANT_ID, tier)
+    features = _effective_features(db, tier)
 
     # 1. 布尔权限类资源（非额度类）
     bool_features = {
@@ -358,7 +350,7 @@ def get_user_quota_summary(db: Session, user_id: int) -> dict:
     """获取用户完整的权益摘要（供前端展示）。"""
     tier = get_user_plan_tier(db, user_id)
     # 自定义套餐权益：租户/平台自定义 features 覆盖硬编码默认矩阵
-    features = _effective_features(db, DEFAULT_TENANT_ID, tier)
+    features = _effective_features(db, tier)
     sub = get_or_create_subscription(db, user_id)
     if reset_daily_quota_if_needed(sub):
         # 查询接口也持久化跨天重置，避免展示与 DB 不一致
@@ -441,8 +433,8 @@ def process_payment_callback(
         order.paid_at = utc_now()
         db.flush()
 
-        # 激活订阅（继承订单归属租户，避免回调无租户上下文时落到默认租户）
-        _activate_subscription(db, order.user_id, order.plan_tier, tenant_id=order.tenant_id)
+        # 激活订阅（单租户产品：订阅只按 user_id 归属，订单上的那一列保留但不读）
+        _activate_subscription(db, order.user_id, order.plan_tier)
 
         db.commit()
         write_audit_log(
@@ -459,98 +451,22 @@ def process_payment_callback(
         return False, f"支付处理失败: {str(e)}"
 
 
-def suspend_tenant_subscriptions(db: Session, org_id: int) -> int:
-    """租户到期停用（T4-3）：其下所有 active 用户订阅标记 suspended，权益即时失效。
-
-    注意：不改变 plan_tier / end_at，仅置 status，续费恢复时原套餐即可还原。
-    """
-    return (
-        db.query(UserSubscription)
-        .filter(
-            UserSubscription.tenant_id == org_id,
-            UserSubscription.status == "active",
-        )
-        .update({UserSubscription.status: "suspended"}, synchronize_session=False)
-    )
-
-
-def restore_tenant_subscriptions(db: Session, org) -> int:
-    """租户续费恢复（T4-3）：其下订阅重新激活，过期/空 end_at 顺延到租户到期时间。"""
-    now = utc_now_naive()  # 与 DB 读回的 naive DateTime 比较
-    new_end = org.expires_at or (now + timedelta(days=30))
-    subs = db.query(UserSubscription).filter(UserSubscription.tenant_id == org.id).all()
-    for sub in subs:
-        if sub.status != "active":
-            sub.status = "active"
-        if sub.end_at is None or sub.end_at < now:
-            sub.end_at = new_end
-    return len(subs)
-
-
-def run_tenant_billing_check(db: Session) -> dict:
-    """租户计费扫描（T4-3）：到期停用 + 续费恢复，返回统计。
-
-    - 到期：`expires_at < now` 且 `status == active` → status=expired，其下订阅挂起；
-    - 恢复：`status == expired` 但 `expires_at` 已延到未来（续费完成）→ 重新 active，订阅恢复。
-    调度器（scheduler.py `_run_tenant_billing_check`）每小时调用；测试直接传会话。
-    """
-    from app.models.organization import Organization
-
-    now = utc_now_naive()  # 与 DB 读回的 naive DateTime 比较
-    expired_count = 0
-    restored_count = 0
-
-    expired = (
-        db.query(Organization)
-        .filter(
-            Organization.expires_at.isnot(None),
-            Organization.expires_at < now,
-            Organization.status == "active",
-        )
-        .all()
-    )
-    for org in expired:
-        org.status = "expired"
-        suspend_tenant_subscriptions(db, org.id)
-        expired_count += 1
-
-    renewed = (
-        db.query(Organization)
-        .filter(
-            Organization.expires_at.isnot(None),
-            Organization.expires_at >= now,
-            Organization.status == "expired",
-        )
-        .all()
-    )
-    for org in renewed:
-        org.status = "active"
-        restore_tenant_subscriptions(db, org)
-        restored_count += 1
-
-    db.commit()
-    return {"expired": expired_count, "restored": restored_count}
-
-
-def _activate_subscription(db: Session, user_id: int, plan_tier: str, tenant_id: int | None = None) -> UserSubscription:
+def _activate_subscription(db: Session, user_id: int, plan_tier: str) -> UserSubscription:
     """
     激活用户订阅。如果已有有效订阅则延长，否则创建新订阅。
 
-    tenant_id：订阅归属租户。支付回调场景必须显式传入订单所属租户
-    （订单在 create-order 时已 stamp），否则回调无租户上下文时会回落默认租户 1，
-    导致订单属租户 A 但订阅记到租户 1，付费在真实租户下不生效。
+    2026-10-06 真删企业侧第六增量（D136）之前这里还带一个 `tenant_id`：查现有订阅时按订单归属租户
+    过滤、新建时显式打标，理由写在原 docstring 里——"订单属租户 A 而订阅记到租户 1，付费在真实租户下
+    不生效"。那是企业侧的账，随 organization 出树；行仍落在保留列的默认租户 1 上（`TenantScopedMixin`
+    的 default），而查询本来就同时按 `user_id` 收窄，所以去掉那一层过滤在单租户下等价。
     """
     # DB DateTime 列无时区，读写统一 naive，避免 existing.end_at（naive）与 now 比较抛 TypeError
     now = utc_now_naive()
     duration_days = {"pro": 30, "enterprise": 30}.get(plan_tier, 30)
-    if tenant_id is None:
-        tenant_id = DEFAULT_TENANT_ID
 
-    # 查找现有有效订阅（按订单/显式租户，而非 ContextVar）
     existing = (
         db.query(UserSubscription)
         .filter(
-            UserSubscription.tenant_id == tenant_id,
             UserSubscription.user_id == user_id,
             UserSubscription.status == "active",
         )
@@ -578,7 +494,6 @@ def _activate_subscription(db: Session, user_id: int, plan_tier: str, tenant_id:
             end_at=now + timedelta(days=duration_days),
             quota_usage=dict.fromkeys(DAILY_QUOTA_KEYS, 0),
             quota_reset_at=now,
-            tenant_id=tenant_id,
         )
         db.add(new_sub)
         db.flush()

@@ -45,7 +45,6 @@ def create_api_key(
     db: Session,
     *,
     name: str,
-    tenant_id: int,
     daily_quota: int = 1000,
     expires_at: datetime | None = None,
 ) -> tuple[ApiKey, str]:
@@ -53,7 +52,6 @@ def create_api_key(
     key = ApiKey(
         name=name,
         key_hash=hash_api_key(plain),
-        tenant_id=tenant_id,
         daily_quota=daily_quota,
         expires_at=expires_at,
         status="active",

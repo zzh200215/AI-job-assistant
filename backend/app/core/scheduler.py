@@ -72,16 +72,10 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
-    # ---- 租户计费扫描：每小时一次（T4-3） ----
-    scheduler.add_job(
-        _run_tenant_billing_check,
-        trigger=IntervalTrigger(hours=1),
-        id="tenant_billing_check",
-        name="租户到期停用/恢复",
-        replace_existing=True,
-    )
-
     # ---- 外部 API 月度结算：每月 1 日 02:30（T6-2） ----
+    # 2026-10-06 真删企业侧第六增量（D136）：这里原来还挂着一小时一次的
+    # `_run_tenant_billing_check`（遍历 `organization` 做到期停用/续费恢复）。organization 0 行，
+    # 所以那个循环从来没进过循环体；候选人那侧的订阅它也不碰（它按 `tenant_id == org.id` 收窄）。
     scheduler.add_job(
         _run_external_api_monthly_billing,
         trigger=CronTrigger(hour=2, minute=30, day=1),
@@ -215,22 +209,6 @@ def _run_operational_alert_evaluation():
     except Exception as exc:
         logger.error("Operational alert evaluation failed: %s", exc)
         db.rollback()
-    finally:
-        db.close()
-
-
-def _run_tenant_billing_check():
-    """租户计费扫描（T4-3）：每小时执行一次。"""
-    from app.core.database import SessionLocal
-    from app.services.subscription_service import run_tenant_billing_check
-
-    db = SessionLocal()
-    try:
-        stats = run_tenant_billing_check(db)
-        logger.info("Tenant billing check completed: %s", stats)
-    except Exception as exc:
-        db.rollback()
-        logger.error("Tenant billing check failed: %s", exc)
     finally:
         db.close()
 

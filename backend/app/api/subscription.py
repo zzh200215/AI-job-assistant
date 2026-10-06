@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user, require_admin
 from app.core.config import settings
 from app.core.database import get_db
-from app.models.base import DEFAULT_TENANT_ID
 from app.models.user import User
 from app.services.subscription_service import (
     TIER_FEATURES,
@@ -25,12 +24,12 @@ from app.utils.response import ERR_PARAM, fail, ok
 router = APIRouter()
 
 
-@router.get("/plans", summary="获取当前租户可见的套餐定义（T3-1 租户覆盖）")
+@router.get("/plans", summary="获取套餐定义与权益")
 def list_plans(
     db: Session = Depends(get_db),
 ):
-    """返回当前租户的套餐列表：租户自定义套餐优先，未自定义的 tier 回落平台默认。"""
-    plans = get_plans(db, DEFAULT_TENANT_ID)
+    """返回套餐列表：平台配置行覆盖内置矩阵，没有平台行就是内置那三档。"""
+    plans = get_plans(db)
     return ok({"items": plans})
 
 
@@ -86,7 +85,7 @@ def create_order(
     if plan_tier not in TIER_FEATURES or plan_tier == "free":
         return fail(message="无效的套餐", code=ERR_PARAM)
 
-    price = get_plan_price(db, DEFAULT_TENANT_ID, plan_tier, period)
+    price = get_plan_price(db, plan_tier, period)
 
     import uuid
 
@@ -264,62 +263,5 @@ def admin_list_orders(
                 }
                 for o in orders
             ],
-        }
-    )
-
-
-@router.post("/admin/plans", summary="管理员：创建/更新租户自定义套餐（T3-1）")
-def upsert_custom_plan(
-    payload: dict,
-    db: Session = Depends(get_db),
-    _admin: User = Depends(require_admin),
-):
-    """配置租户自定义套餐（按 tier 覆盖默认套餐）。
-
-    请求体: {"tenant_id": 2, "tier": "pro", "name": "高级版", "price_monthly": 12800,
-             "price_yearly": 128000, "features": {...可选，与默认权益浅合并}, "is_active": 1}
-    """
-    from app.models.subscription import SubscriptionPlan
-
-    tenant_id = payload.get("tenant_id")
-    tier = payload.get("tier", "")
-    if not tenant_id or tier not in TIER_FEATURES or tier == "free":
-        return fail(message="tenant_id 与 tier（pro/enterprise）必填", code=ERR_PARAM)
-
-    plan = (
-        db.query(SubscriptionPlan)
-        .filter(SubscriptionPlan.tenant_id == tenant_id, SubscriptionPlan.tier == tier)
-        .first()
-    )
-    if plan is None:
-        plan = SubscriptionPlan(tenant_id=tenant_id, tier=tier, is_custom=1)
-        db.add(plan)
-
-    if "name" in payload:
-        plan.name = str(payload["name"])
-    if "price_monthly" in payload:
-        plan.price_monthly = payload["price_monthly"]
-    if "price_yearly" in payload:
-        plan.price_yearly = payload["price_yearly"]
-    if "features" in payload and isinstance(payload["features"], dict):
-        plan.features = payload["features"]
-    if "sort_order" in payload:
-        plan.sort_order = payload["sort_order"]
-    if "is_active" in payload:
-        plan.is_active = 1 if payload["is_active"] else 0
-    if "is_custom" in payload:
-        plan.is_custom = 1 if payload["is_custom"] else 0
-
-    db.commit()
-    db.refresh(plan)
-    return ok(
-        {
-            "id": plan.id,
-            "tenant_id": plan.tenant_id,
-            "tier": plan.tier,
-            "name": plan.name,
-            "price_monthly": float(plan.price_monthly or 0),
-            "price_yearly": float(plan.price_yearly or 0),
-            "is_custom": bool(plan.is_custom),
         }
     )
