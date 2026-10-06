@@ -838,10 +838,43 @@ describe('style debt ratchet', () => {
       .map(({ rel }) => rel)
     expect(
       offenders,
-      `read/write the last resume / JD / record id through @/utils/lastSelection — it slots these per logged-in user, which a raw localStorage key cannot, and a stale foreign id gets prefilled into a form: ${offenders.join(
+      `read/write the last resume / JD / record id through useSelectionStore() (src/stores/selection.js) — it slots these per logged-in user, which a raw localStorage key cannot, and a stale foreign id gets prefilled into a form: ${offenders.join(
         ', '
       )}`
     ).toEqual([])
+  })
+
+  /* §10.9 决定 ①（D124）：五个具名函数收成了一个 store，`src/` 里能直接 import
+     `utils/lastSelection` 的文件从此只剩 `stores/selection.js` 一个。
+     这条腿管的是**入口**而不是键名（上一条管键名）：分槽规则本身还在 utils 里，但"谁都能拿到
+     `setSelectionOwner`"正是 §10.9 记的那次事故的形状——两套键名各写各的，换过账号的浏览器把
+     上一个人的 id 预填进表单。收成 store 之后，绕开 store 直接调 utils 是新债的唯一长法。 */
+  const importsLastSelection = (text) => /from\s+['"][^'"]*utils\/lastSelection['"]/.test(text)
+
+  it('routes every cross-page selection call through stores/selection', () => {
+    const importers = vueFiles('src', ['.vue', '.js'])
+      .map(toRel)
+      .filter((rel) => importsLastSelection(readFileSync(rel, 'utf8')))
+      .sort()
+    expect(
+      importers,
+      `@/utils/lastSelection 只能被 src/stores/selection.js import，别人请走 useSelectionStore()：${importers.join(
+        ', '
+      )}`
+    ).toEqual(['src/stores/selection.js'])
+  })
+
+  it('that sole-entry ruler bites: both spellings of a bypass are caught', () => {
+    // 判据只认 `@/utils/...` 的话，一条相对路径就能绕过去——这正是上一族尺子数文本不数东西的错法。
+    expect(importsLastSelection(`import { readResumeId } from '@/utils/lastSelection'`)).toBe(true)
+    expect(
+      importsLastSelection(`import { rememberJD, readJDId } from '../../utils/lastSelection'`)
+    ).toBe(true)
+    // 走 store 的合法写法、以及"注释里提到 utils/lastSelection"都不算绕过
+    expect(importsLastSelection(`import { useSelectionStore } from '@/stores/selection'`)).toBe(
+      false
+    )
+    expect(importsLastSelection(`// 槽的规则住在 utils/lastSelection`)).toBe(false)
   })
 
   it('never lets one race-token instance serve two loading functions', () => {
