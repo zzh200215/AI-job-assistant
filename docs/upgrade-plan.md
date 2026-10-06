@@ -3505,7 +3505,21 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **第四增量我故意没做，因为 D131 证不了它们惰性**：`app/utils/knowledge_access.py:20-55` 的三类可见性（平台共享/租户级/个人，正喂着 RAG 召回）、`app/api/job_recommend.py:43/51` 的 `tenant_id == current OR IS NULL`（决定哪些岗位进推荐池）、`app/services/job_access.py` 3 处、`app/models/base.py` 的 `TenantScopedMixin`（列的 default 就住在这里，摘错会让候选人写入落空）、以及 `app/core/tenant_context.py` 本体 + `app/api/organization.py`(370 行)/`app/api/tenant.py`(597 行) 的挂载（`app/api/router.py:25/32/103/112/114-116`，注释 `:44-47` 点名 organizations/tenant 两个前缀）。这些动完还要重取的守卫：`test_public_api_surface`（公开端点表里有 `/tenant/brand`、`/organizations/sso/*`）、E19 的默认拒绝表、`test_no_blocking_in_event_loop` 的 allowlist、以及 9 个企业测试文件（`test_tenant_api` 17、`test_tenant_jobs_knowledge` 17、`test_tenant_isolation` 5、`test_tenant_context` 6、`test_tenant_model` 6、`test_analytics_tenant` 5、`test_organization_*` 2、`test_feishu_sso` 1、`test_interview_config` 13 要改不是要删）。
 
-**§10.2 状态：进行中，不再待拍**。已删的是"装饰 + 谓词恒真的那 48 处"，未删的是"我还没法说惰性的那三处语义 + 两个 router 本体"。
+**第四刀的路线已定（D133）：保模型、只删暴露面**——两个 router 与挂载、`knowledge_access` 的租户级那一类、推荐池谓词、`tenant_context` 退役，模型与列一律留着，所以 `docs/schema-baseline.sql` 一字不动。对照尺也换定了：可见性集合（22 / 72 / 租户 2 时 0）+ mock 模式的门，不再拿真 provider 的聚合分当数。
+
+#### 已交付：D133 我跑门跑在了真 provider 上——记账、加闸，并把"哪一臂能当尺子"钉死
+
+**越界这笔，先说事实**：为了拿 D132 要的"删前删后召回对照"，我把 `scripts/eval_rag.py` 连跑 4 次，而 `backend/.env` 是 `LLM_PROVIDER=qwen / EMBEDDING_PROVIDER=qwen`——这两个脚本**不像 pytest 有 conftest 把 provider 钉成 mock**，所以那 4 次打的是真 API：今天 `prompt_trace` 多 **350 行**、**133,427 prompt + 63,366 completion tokens**。`cost_cents` 合计 **0.0**，但那只因为价目表里没有这两个模型（见 [[local-dev-environment]] 那条"cost 恒 0"），**"没计价"不等于"没花钱"**。§10 与这一段账上明写"真 provider 下全量 50 条评估未批、别擅自跑"——我跑了，虽然每次只 `--sample` 一部分，实质就是没批就花。那 350 行 trace 我**不删**：它是审计记录，删证据不是补救。
+
+**第二个发现更要紧：我差点把一次抽样当基线。** 融合臂在真 provider 下同一棵树三次给出 **0.847 / 0.813 / 0.800**（`PYTHONHASHSEED=0` 固定后两次仍是 0.81 与 0.827，所以**不是哈希顺序**，是真 rewrite 的温度）。改成 `LLM_PROVIDER=mock EMBEDDING_PROVIDER=mock` 之后两次输出**逐字相同**：融合 `recall@5 0.810 / mrr 0.823 / keyword 0.867`，词法-BM25 `0.803 / 0.785 / 0.86`。所以**能当删前删后对照的只有 mock 模式**，而 D132 里我引的那个 0.827 从来不是基线——那条已在 D132 就地撤回，这里补上为什么。
+
+**加的闸**（`scripts/provider_guard.py` + 三个入口接线，`d84291c`）：provider 不是 mock 且没给 `--allow-real` → **退出码 2** 并把能跑对的那条命令原样打印出来；`--allow-real` 时照跑但打印"会抖、别当基线"。三条设计决定都是测试逼出来的：`raise SystemExit("文本")` 的退出码是 1，会和"脚本自己崩了"混在一起，所以改成先 print 再 `SystemExit(2)`；7 条测试里有一条按脚本名参数化，**哪个 eval 脚本忘接线就红**；再加一条反空转，断言判据读的是 `settings` 而不是常量。CI 不受影响（工作流 env 本来就是 `LLM_PROVIDER: mock`）。
+
+**顺带钉住的可见性基线**（下一刀的主尺，比聚合分尖且完全确定）：testu(id=1) 知识可见 **22 篇 / 总 28**（22 行 `tenant_id IS NULL` = 平台共享、6 行 =1）、推荐池 `tenant_id in (None, 当前)` = **72 / 72**、把"当前"换成租户 2 → 池子 **0**。这三行就是"惰性来自数据全在租户 1"的实证，也是第四刀跑完必须仍然等于 22 / 72 的理由。
+
+**路线已定**：第四刀走「保模型、只删暴露面」——`app/api/organization.py` / `app/api/tenant.py` 两个 router 与挂载、`knowledge_access` 的"租户级"那一类、推荐池谓词、`tenant_context` 退役；**ORM 模型与列一律留着**，于是 `docs/schema-baseline.sql` 一字不动、`test_no_dead_app_modules` 的可达性也不会红（模型仍被列定义引用）。
+
+门禁：backend `pytest` **881 → 888 passed**（+7 全在 `test_eval_provider_guard.py`）、`ruff check` clean、`ruff format --check` 18 files already formatted。
 
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
