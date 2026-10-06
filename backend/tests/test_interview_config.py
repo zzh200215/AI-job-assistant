@@ -7,6 +7,8 @@
 - 端到端：create_session 使用租户题库（patch SessionLocal 到内存库、mock LLM）
 """
 
+# 2026-10-06 真删企业侧（D135）：这里原先给合成 app 挂租户中间件、并把中间件的 Session 工厂指向测试库；
+# 中间件与租户上下文一起出树之后，被测端点固定按内置租户 1 取数，剩下的用例只测端点本身。
 from __future__ import annotations
 
 import pytest
@@ -20,11 +22,6 @@ from app.api import interview_rest
 from app.api.auth import get_current_user
 from app.api.interview_rest import _build_personalized_prompt, _fallback_questions
 from app.core.database import Base, get_db
-from app.core.tenant_context import (
-    reset_tenant_session_factory,
-    set_tenant_session_factory,
-    tenant_context_middleware,
-)
 from app.core.user_roles import ADMIN_ROLE, CANDIDATE_ROLE
 from app.models.history import JobDescription, Resume
 from app.models.organization import Organization
@@ -62,6 +59,8 @@ CUSTOM_QUESTIONS = [
 
 
 @pytest.fixture
+# 2026-10-06 真删企业侧（D135）：3 条按 X-Tenant-Id 分题库/后台写入的用例随能力一起删；
+# 题库读取现在恒走内置租户 1（`subscription`/`interview_rest` 端点用 DEFAULT_TENANT_ID）。
 def tenant_engine():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(bind=engine)
@@ -72,10 +71,8 @@ def tenant_engine():
 @pytest.fixture
 def tenant_session(tenant_engine):
     factory = sessionmaker(bind=tenant_engine)
-    set_tenant_session_factory(factory)
     _seed_org(factory, name="默认租户", slug="default-tenant")
     yield factory
-    reset_tenant_session_factory()
 
 
 def _seed_org(factory, *, name: str, slug: str) -> int:
@@ -109,7 +106,6 @@ def _seed_custom_bank(factory, *, tenant_id: int, bank_type: str = "tech", title
 
 def _build_app(factory, *, user: User):
     app = FastAPI()
-    app.middleware("http")(tenant_context_middleware)
 
     def _get_db():
         session = factory()
@@ -244,53 +240,6 @@ def test_report_template_default_and_custom(tenant_session):
 # ===== API 层 =====
 
 
-def test_api_config_types_tenant_scoped(tenant_session):
-    org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    _seed_custom_bank(tenant_session, tenant_id=org_a)
-
-    app = _build_app(tenant_session, user=_normal_user)
-    with TestClient(app) as client:
-        resp_a = client.get("/interview/config/types", headers={"X-Tenant-Id": str(org_a)})
-        resp_default = client.get("/interview/config/types")
-
-    assert resp_a.status_code == 200
-    items_a = {i["type"]: i for i in resp_a.json()["data"]["items"]}
-    assert items_a["tech"]["title"] == "前端技术面"
-    assert items_a["tech"]["is_custom"] is True
-
-    items_default = {i["type"]: i for i in resp_default.json()["data"]["items"]}
-    assert items_default["tech"]["title"] == "技术深挖"  # 默认租户不受影响
-
-
-def test_api_admin_upsert_question_bank(tenant_session):
-    org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-
-    app_admin = _build_app(tenant_session, user=_admin_user)
-    with TestClient(app_admin) as client:
-        resp = client.put(
-            "/interview/admin/interview-config",
-            json={
-                "config_type": "question_bank",
-                "tenant_id": org_a,
-                "type": "tech",
-                "title": "前端技术面",
-                "prompt_template": "重点考察前端基础。",
-                "questions": CUSTOM_QUESTIONS,
-                "tags": ["前端"],
-            },
-        )
-    assert resp.status_code == 200
-    assert resp.json()["data"]["question_count"] == len(CUSTOM_QUESTIONS)
-
-    # 租户 A 的 config/types 变化
-    app_user = _build_app(tenant_session, user=_normal_user)
-    with TestClient(app_user) as client:
-        resp2 = client.get("/interview/config/types", headers={"X-Tenant-Id": str(org_a)})
-    tech = {i["type"]: i for i in resp2.json()["data"]["items"]}["tech"]
-    assert tech["title"] == "前端技术面"
-    assert tech["prompt_template"] == "重点考察前端基础。"
-
-
 def test_api_admin_upsert_scoring_rules_and_report_template(tenant_session):
     org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
 
@@ -342,66 +291,6 @@ def test_api_admin_config_forbidden_for_normal_user(tenant_session):
 
 
 # ===== 端到端：创建面试使用租户题库 =====
-
-
-def test_create_session_uses_tenant_question_bank(tenant_session, mocker):
-    """验收核心：租户 A 配置题库后，A 创建的面试题目来自租户配置，B 租户不变。"""
-    org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    org_b = _seed_org(tenant_session, name="客户B", slug="customer-b")
-    _seed_custom_bank(tenant_session, tenant_id=org_a)
-
-    # 背景任务改走内存库 + mock LLM（返回空，题目回落 fallback=租户题）
-    mocker.patch("app.api.interview_rest.SessionLocal", tenant_session)
-    mocker.patch("app.api.interview_rest.chat_json", return_value={})
-
-    def _seed_user_data(org_id: int):
-        session = tenant_session()
-        resume = Resume(
-            user_id=_normal_user.id,
-            file_name=f"r{org_id}.pdf",
-            file_path=f"uploads/r{org_id}.pdf",
-            parsed_json={"name": "张三", "skills": ["Vue"]},
-        )
-        jd = JobDescription(
-            user_id=_normal_user.id,
-            title="前端工程师",
-            raw_text="招聘前端工程师",
-            parsed_json={"title": "前端工程师", "required_skills": ["Vue"]},
-        )
-        session.add_all([resume, jd])
-        session.commit()
-        session.refresh(resume)
-        session.refresh(jd)
-        ids = (resume.id, jd.id)
-        session.close()
-        return ids
-
-    resume_a, jd_a = _seed_user_data(org_a)
-    resume_b, jd_b = _seed_user_data(org_b)
-
-    app = _build_app(tenant_session, user=_normal_user)
-    with TestClient(app) as client:
-        resp_a = client.post(
-            "/interview/sessions",
-            headers={"X-Tenant-Id": str(org_a)},
-            json={"resume_id": resume_a, "jd_id": jd_a, "interview_type": "tech"},
-        )
-        resp_b = client.post(
-            "/interview/sessions",
-            headers={"X-Tenant-Id": str(org_b)},
-            json={"resume_id": resume_b, "jd_id": jd_b, "interview_type": "tech"},
-        )
-
-    assert resp_a.status_code == 200
-    questions_a = resp_a.json()["data"]["questions"]
-    questions_b = resp_b.json()["data"]["questions"]
-
-    assert questions_a[0]["source"] == "tenant_config"
-    assert questions_a[0]["question"] == CUSTOM_QUESTIONS[0]["question"]
-    assert len(questions_a) == len(CUSTOM_QUESTIONS)
-    # B 租户不受影响：内置 starter 题库
-    assert questions_b[0]["source"] == "starter"
-    assert len(questions_b) == 10
 
 
 def test_background_personalization_does_not_override_custom_bank(tenant_session, mocker):

@@ -13,6 +13,8 @@ Profile 的「面试之星 · 综合评分达到85」读的就是这个值，而
    所以这个形状也得有人钉。
 """
 
+# 2026-10-06 真删企业侧（D135）：这里原先给合成 app 挂租户中间件、并把中间件的 Session 工厂指向测试库；
+# 中间件与租户上下文一起出树之后，被测端点固定按内置租户 1 取数，剩下的用例只测端点本身。
 from __future__ import annotations
 
 from datetime import datetime
@@ -24,7 +26,6 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.interview_rest import interview_performance
 from app.core.database import Base
-from app.core.tenant_context import reset_tenant_session_factory, set_tenant_session_factory
 from app.core.user_roles import CANDIDATE_ROLE
 from app.models.interview_session import InterviewSession
 from app.models.user import User
@@ -35,9 +36,7 @@ def db_factory():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(bind=engine)
     factory = sessionmaker(bind=engine)
-    set_tenant_session_factory(factory)
     yield factory
-    reset_tenant_session_factory()
     engine.dispose()
 
 

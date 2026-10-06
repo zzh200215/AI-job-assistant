@@ -16,7 +16,6 @@ from sqlalchemy.orm import Session
 
 from app.api.external.auth import require_api_key
 from app.core.database import get_db
-from app.core.tenant_context import TenantContext, reset_current_tenant, set_current_tenant
 from app.models.api_key import ApiKey
 from app.services import external_service
 from app.services.api_key_service import record_usage
@@ -24,32 +23,25 @@ from app.services.api_key_service import record_usage
 router = APIRouter(prefix="/external", tags=["external-capabilities"])
 
 
-def _tenant_token(key: ApiKey):
-    """按 Key 归属租户注入租户上下文，供 RAG / tenant_filter 使用。"""
-    return set_current_tenant(TenantContext(tenant_id=key.tenant_id))
-
-
 def _run(db, key, endpoint, fn, request_id: str = "", event: str = ""):
-    token = _tenant_token(key)
+    """2026-10-06 真删企业侧（D135）：这里原先每次调用都注入"Key 归属租户"的上下文，
+    为的是让 RAG / tenant_filter 落在正确租户上；租户上下文与租户过滤一起出树后这层没了。"""
     try:
-        try:
-            data = fn()
-        except ValueError as exc:
-            record_usage(db, key=key, endpoint=endpoint, status="failed", request_id=request_id)
-            # 业务失败返回 HTTP 400（与「success:false 即 4xx」的契约一致），
-            # 不再用 HTTP 200 兜成功语义；失败调用已记 usage（计配额但不计费）。
-            return JSONResponse(
-                status_code=400,
-                content={"success": False, "error": str(exc), "request_id": request_id},
-            )
-        record_usage(db, key=key, endpoint=endpoint, status="success", request_id=request_id)
-        if event:
-            from app.services.webhook_service import publish_event
+        data = fn()
+    except ValueError as exc:
+        record_usage(db, key=key, endpoint=endpoint, status="failed", request_id=request_id)
+        # 业务失败返回 HTTP 400（与「success:false 即 4xx」的契约一致），
+        # 不再用 HTTP 200 兜成功语义；失败调用已记 usage（计配额但不计费）。
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": str(exc), "request_id": request_id},
+        )
+    record_usage(db, key=key, endpoint=endpoint, status="success", request_id=request_id)
+    if event:
+        from app.services.webhook_service import publish_event
 
-            publish_event(db, api_key_id=key.id, event=event, payload=data)
-        return {"success": True, "data": data, "request_id": request_id}
-    finally:
-        reset_current_tenant(token)
+        publish_event(db, api_key_id=key.id, event=event, payload=data)
+    return {"success": True, "data": data, "request_id": request_id}
 
 
 def _rid(payload: dict) -> str:

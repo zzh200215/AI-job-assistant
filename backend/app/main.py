@@ -28,7 +28,6 @@ from app.core.request_context import set_request_id
 from app.core.runtime_metrics import record_request
 from app.core.scheduler import shutdown_scheduler, start_scheduler
 from app.core.schema_drift import log_drift
-from app.core.tenant_context import tenant_context_middleware
 from app.core.threadpool import apply_thread_limit
 from app.services.interview_evaluation_service import shutdown_interview_evaluation_executor
 from app.services.orchestration_runner import mark_stale_running_tasks_failed, shutdown_orchestration_executor
@@ -75,7 +74,6 @@ cors_kwargs = {
     "allow_headers": ["*"],
 }
 # 租户上下文中间件（T2-3）：先于 CORS 注册，使 CORS 在更外层执行，租户 403 也带上 CORS 头
-app.middleware("http")(tenant_context_middleware)
 
 if settings.cors_origins_list:
     cors_kwargs["allow_origins"] = settings.cors_origins_list

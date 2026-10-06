@@ -10,13 +10,12 @@ from types import SimpleNamespace
 
 from fastapi import APIRouter, Body, Depends, File, Form, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import and_, or_
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.tenant_context import current_tenant_id
 from app.models.history import JobDescription, Resume
 from app.models.job_recommend import JobBookmark, JobRecommendationFeedback
 from app.models.user import User
@@ -38,18 +37,13 @@ def _is_admin(user: User) -> bool:
 
 
 def _job_visibility_filter(user_id: int):
-    return and_(
-        or_(JobDescription.user_id == user_id, JobDescription.user_id.is_(None)),
-        or_(JobDescription.tenant_id == current_tenant_id(), JobDescription.tenant_id.is_(None)),
-    )
+    return or_(JobDescription.user_id == user_id, JobDescription.user_id.is_(None))
 
 
 def _can_access_job(jd: JobDescription, user: User) -> bool:
     if _is_admin(user):
         return True
-    owner_ok = jd.user_id in (None, user.id)
-    tenant_ok = jd.tenant_id in (None, current_tenant_id())
-    return owner_ok and tenant_ok
+    return jd.user_id in (None, user.id)
 
 
 def _get_owned_resume(db: Session, resume_id: int, user_id: int) -> Resume | None:

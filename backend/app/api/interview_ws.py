@@ -22,7 +22,6 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import decode_access_token
-from app.core.tenant_context import TenantContext, reset_current_tenant, set_current_tenant
 from app.models.interview_session import InterviewSession
 from app.services.interview_engine import InterviewEngine
 from app.utils.time_helper import utc_now
@@ -117,13 +116,7 @@ async def interview_websocket(websocket: WebSocket, session_id: int):
         await websocket.close(code=4005, reason="并发面试已达上限")
         return
 
-    # WS 不经过 HTTP 租户中间件（中间件仅 HTTP scope），手动注入会话所属租户上下文，
-    # 保证后续评分规则读取 / tenant_filter / 知识检索都落在正确租户上。
-    tenant_token = set_current_tenant(TenantContext(tenant_id=session.tenant_id or 1))
-    try:
-        return await _handle_ws_loop(websocket, session_id, session, accept_subprotocol)
-    finally:
-        reset_current_tenant(tenant_token)
+    return await _handle_ws_loop(websocket, session_id, session, accept_subprotocol)
 
 
 async def _handle_ws_loop(

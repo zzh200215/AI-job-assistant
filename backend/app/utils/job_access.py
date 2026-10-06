@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from sqlalchemy import and_, or_
+from sqlalchemy import or_
 from sqlalchemy.orm import Query, Session
 
 from app.core.config import settings
-from app.core.tenant_context import current_tenant_id
 from app.models.history import JobDescription
 from app.models.user import User
 
@@ -16,13 +15,14 @@ def is_admin(user: User) -> bool:
 
 
 def visible_job_filter(user: User):
-    """非管理员岗位可见性：本人 + 平台共享，且归属当前租户或平台共享（T3-3 租户隔离）。"""
+    """非管理员岗位可见性：本人 + 平台共享。
+
+    2026-10-06 真删企业侧（D135）之前这里还叠了一条 `tenant_id == 当前租户 OR IS NULL`——
+    在 dev 库上它恒真（72 条岗位全是租户 1，池子 72/72），随多租户一起删掉。
+    """
     if is_admin(user):
         return None
-    return and_(
-        or_(JobDescription.user_id == user.id, JobDescription.user_id.is_(None)),
-        or_(JobDescription.tenant_id == current_tenant_id(), JobDescription.tenant_id.is_(None)),
-    )
+    return or_(JobDescription.user_id == user.id, JobDescription.user_id.is_(None))
 
 
 def can_access_job(job: JobDescription | None, user: User) -> bool:
@@ -30,9 +30,7 @@ def can_access_job(job: JobDescription | None, user: User) -> bool:
         return False
     if is_admin(user):
         return True
-    owner_ok = job.user_id in (None, user.id)
-    tenant_ok = job.tenant_id in (None, current_tenant_id())
-    return owner_ok and tenant_ok
+    return job.user_id in (None, user.id)
 
 
 def accessible_job_query(db: Session, user: User) -> Query:

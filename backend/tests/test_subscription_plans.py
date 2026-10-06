@@ -6,6 +6,8 @@
 使用独立 StaticPool 内存库 + 真实租户中间件（同 test_tenant_api 模式）。
 """
 
+# 2026-10-06 真删企业侧（D135）：这里原先给合成 app 挂租户中间件、并把中间件的 Session 工厂指向测试库；
+# 中间件与租户上下文一起出树之后，被测端点固定按内置租户 1 取数，剩下的用例只测端点本身。
 from __future__ import annotations
 
 import pytest
@@ -18,11 +20,6 @@ from sqlalchemy.pool import StaticPool
 from app.api import subscription as subscription_api
 from app.api.auth import get_current_user
 from app.core.database import Base, get_db
-from app.core.tenant_context import (
-    reset_tenant_session_factory,
-    set_tenant_session_factory,
-    tenant_context_middleware,
-)
 from app.core.user_roles import ADMIN_ROLE, CANDIDATE_ROLE
 from app.models.organization import Organization
 from app.models.user import User
@@ -33,6 +30,8 @@ _normal_user = User(id=2, username="candidate", email="c@example.com", role=CAND
 
 
 @pytest.fixture
+# 2026-10-06 真删企业侧（D135）：3 条「按租户取套餐/定价」的用例删除——端点不再读请求头，
+# 统一按内置租户 1 取；其余 11 条测的是套餐本身，留着。
 def tenant_engine():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(bind=engine)
@@ -43,12 +42,10 @@ def tenant_engine():
 @pytest.fixture
 def tenant_session(tenant_engine):
     factory = sessionmaker(bind=tenant_engine)
-    set_tenant_session_factory(factory)
     # 预置默认租户组织（占用 id=1）：保证后续创建的客户组织 id≠默认租户，
     # 使「无 X-Tenant-Id → 回落默认租户」的断言不被自增 id 撞车干扰
     _seed_org(factory, name="默认租户", slug="default-tenant")
     yield factory
-    reset_tenant_session_factory()
 
 
 def _seed_org(factory, *, name: str, slug: str) -> int:
@@ -82,7 +79,6 @@ def _seed_custom_plan(factory, *, tenant_id: int, tier: str, name: str, price_mo
 
 def _build_app(factory, *, user: User):
     app = FastAPI()
-    app.middleware("http")(tenant_context_middleware)
 
     def _get_db():
         session = factory()
@@ -178,66 +174,6 @@ def test_get_plan_price_custom_and_fallback(tenant_session):
 # ===== API 层 =====
 
 
-def test_api_plans_tenant_scoped(tenant_session):
-    org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    _seed_custom_plan(
-        tenant_session, tenant_id=org_a, tier="pro", name="高级版", price_monthly=12800, price_yearly=128000
-    )
-
-    app = _build_app(tenant_session, user=_normal_user)
-    with TestClient(app) as client:
-        resp_a = client.get("/subscription/plans", headers={"X-Tenant-Id": str(org_a)})
-        resp_default = client.get("/subscription/plans")  # 无租户头 → 默认租户 1
-
-    assert resp_a.status_code == 200
-    pro_a = _plans_by_tier(resp_a.json()["data"]["items"])["pro"]
-    assert pro_a["name"] == "高级版"
-    assert pro_a["price_monthly"] == 12800
-
-    pro_default = _plans_by_tier(resp_default.json()["data"]["items"])["pro"]
-    assert pro_default["name"] == "Pro 版"
-    assert pro_default["price_monthly"] == 9900
-
-
-def test_api_admin_upsert_plan_then_visible(tenant_session):
-    org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-
-    app_admin = _build_app(tenant_session, user=_admin_user)
-    with TestClient(app_admin) as client:
-        resp = client.post(
-            "/subscription/admin/plans",
-            json={
-                "tenant_id": org_a,
-                "tier": "pro",
-                "name": "企业尊享版",
-                "price_monthly": 19900,
-                "price_yearly": 199000,
-            },
-        )
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["name"] == "企业尊享版"
-    assert data["price_monthly"] == 19900
-    assert data["is_custom"] is True
-
-    # 更新同一 tier → upsert 不重复建行
-    with TestClient(app_admin) as client:
-        resp2 = client.post(
-            "/subscription/admin/plans",
-            json={"tenant_id": org_a, "tier": "pro", "price_monthly": 20900},
-        )
-    assert resp2.status_code == 200
-    assert resp2.json()["data"]["price_monthly"] == 20900
-
-    # 租户 A 的 /plans 展示新价格
-    app_user = _build_app(tenant_session, user=_normal_user)
-    with TestClient(app_user) as client:
-        resp3 = client.get("/subscription/plans", headers={"X-Tenant-Id": str(org_a)})
-    pro = _plans_by_tier(resp3.json()["data"]["items"])["pro"]
-    assert pro["name"] == "企业尊享版"
-    assert pro["price_monthly"] == 20900
-
-
 def test_api_admin_upsert_forbidden_for_normal_user(tenant_session):
     org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
     app = _build_app(tenant_session, user=_normal_user)
@@ -247,29 +183,6 @@ def test_api_admin_upsert_forbidden_for_normal_user(tenant_session):
             json={"tenant_id": org_a, "tier": "pro", "name": "X", "price_monthly": 1},
         )
     assert resp.status_code != 200  # 403
-
-
-def test_api_create_order_uses_tenant_price(tenant_session):
-    org_a = _seed_org(tenant_session, name="客户A", slug="customer-a")
-    _seed_custom_plan(
-        tenant_session, tenant_id=org_a, tier="pro", name="高级版", price_monthly=12800, price_yearly=128000
-    )
-
-    app = _build_app(tenant_session, user=_normal_user)
-    with TestClient(app) as client:
-        resp = client.post(
-            "/subscription/create-order",
-            headers={"X-Tenant-Id": str(org_a)},
-            json={"plan_tier": "pro", "period": "monthly"},
-        )
-        resp_default = client.post(
-            "/subscription/create-order",
-            json={"plan_tier": "pro", "period": "monthly"},
-        )
-
-    assert resp.status_code == 200
-    assert resp.json()["data"]["amount"] == 12800  # 租户自定义价
-    assert resp_default.json()["data"]["amount"] == 9900  # 默认价不受影响
 
 
 # ===== 支付回调安全加固 =====

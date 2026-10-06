@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user, require_admin
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.tenant_context import require_tenant
+from app.models.base import DEFAULT_TENANT_ID
 from app.models.user import User
 from app.services.subscription_service import (
     TIER_FEATURES,
@@ -28,10 +28,9 @@ router = APIRouter()
 @router.get("/plans", summary="获取当前租户可见的套餐定义（T3-1 租户覆盖）")
 def list_plans(
     db: Session = Depends(get_db),
-    tenant=Depends(require_tenant),
 ):
     """返回当前租户的套餐列表：租户自定义套餐优先，未自定义的 tier 回落平台默认。"""
-    plans = get_plans(db, tenant.tenant_id)
+    plans = get_plans(db, DEFAULT_TENANT_ID)
     return ok({"items": plans})
 
 
@@ -73,7 +72,6 @@ def create_order(
     payload: dict,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    tenant=Depends(require_tenant),
 ):
     """创建订阅订单（支付接入后使用）。
 
@@ -88,7 +86,7 @@ def create_order(
     if plan_tier not in TIER_FEATURES or plan_tier == "free":
         return fail(message="无效的套餐", code=ERR_PARAM)
 
-    price = get_plan_price(db, tenant.tenant_id, plan_tier, period)
+    price = get_plan_price(db, DEFAULT_TENANT_ID, plan_tier, period)
 
     import uuid
 

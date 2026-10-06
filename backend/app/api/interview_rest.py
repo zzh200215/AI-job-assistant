@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user, require_admin
 from app.core.database import SessionLocal, get_db
-from app.core.tenant_context import require_tenant
+from app.models.base import DEFAULT_TENANT_ID
 from app.models.history import JobDescription, Resume
 from app.models.interview_config import (
     InterviewQuestionBank,
@@ -49,7 +49,6 @@ def create_session(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    tenant=Depends(require_tenant),
 ):
     """Create a usable interview immediately, then personalize untouched questions in background."""
     resume = (
@@ -81,7 +80,7 @@ def create_session(
     search_types = type_hints.get(payload.interview_type, ["interview_q", "skill_model"])
 
     # T3-2：租户题库配置优先（自定义静态题覆盖内置 starter 题库）
-    bank = get_question_bank(db, tenant.tenant_id, payload.interview_type)
+    bank = get_question_bank(db, DEFAULT_TENANT_ID, payload.interview_type)
     custom_questions = bank.questions if (bank is not None and bank.questions) else None
     ordered_questions = _fallback_questions(
         jd_title,
@@ -905,10 +904,9 @@ def _build_preparation_suggestions(title, required_skills, performance):
 @router.get("/config/types", summary="获取当前租户可见的面试题型配置（T3-2）")
 def list_tenant_bank_types(
     db: Session = Depends(get_db),
-    tenant=Depends(require_tenant),
 ):
     """返回当前租户可见的题型配置（租户自定义 → 平台默认 → 内置回落），前端设置页使用。"""
-    return ok({"items": list_question_banks(db, tenant.tenant_id)})
+    return ok({"items": list_question_banks(db, DEFAULT_TENANT_ID)})
 
 
 @router.put("/admin/interview-config", summary="管理员：配置租户面试题库/评分规则/报告模板（T3-2）")

@@ -25,12 +25,11 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.chroma_client import get_knowledge_collection
 from app.core.prometheus_metrics import record_recommend_vector_degraded
-from app.core.tenant_context import current_tenant_id
 from app.models.history import JobDescription, Resume
 from app.services.embedding_service import embed_texts
 from app.services.jd_embedding_service import vectors_for_jobs
@@ -50,18 +49,17 @@ _RERANK_MIN_POOL = 20
 _MAX_PER_COMPANY = 2
 
 
-def _visible_job_filter(owner_id: int | None, tenant_id: int | None = None):
-    """岗位可见性：本人 + 平台共享，且归属当前租户或平台共享（T3-3 租户隔离）。
+def _visible_job_filter(owner_id: int | None):
+    """岗位可见性：本人 + 平台共享（`user_id IS NULL`）。
 
-    tenant_id 为空时取当前租户上下文（未注入回落默认租户 1），保证单测/后台任务行为稳定。
+    2026-10-06 真删企业侧（D135）前这里还叠了一条租户谓词；dev 库 72 条岗位全是租户 1，
+    所以删掉前后池子都是 72/72，可见集合一字未动。
     """
     if owner_id is None:
         base = JobDescription.user_id.is_(None)
     else:
         base = or_(JobDescription.user_id == owner_id, JobDescription.user_id.is_(None))
-    tid = tenant_id if tenant_id is not None else current_tenant_id()
-    tenant_cond = or_(JobDescription.tenant_id == tid, JobDescription.tenant_id.is_(None))
-    return and_(base, tenant_cond)
+    return base
 
 
 def _normalize_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
@@ -85,12 +83,11 @@ def _recommend_cache_key(
     resume_id: int,
     resume_version: str,
     filters: dict[str, Any],
-    tenant_id: int = None,
     suppression_version: str = "",
 ) -> str:
     payload = json.dumps(filters, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    tid = tenant_id if tenant_id is not None else current_tenant_id()
-    raw = f"{resume_id}|{resume_version}|{tid}|{suppression_version}|{payload}"
+    # 缓存键里去掉租户一段：形状变了会让进程内缓存冷一次，不会给出错的结果
+    raw = f"{resume_id}|{resume_version}|{suppression_version}|{payload}"
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 
@@ -300,7 +297,6 @@ class JobRecommendationEngine:
             resume_id,
             resume_version,
             normalized_filters,
-            tenant_id=current_tenant_id(),
             suppression_version=suppression_version,
         )
         now = time.time()
@@ -812,7 +808,6 @@ def batch_import_jobs(
     db: Session,
     jobs: list[dict],
     source: str = "imported",
-    tenant_id: int | None = None,
     user_id: int | None = None,
 ) -> list[int]:
     """
@@ -822,7 +817,6 @@ def batch_import_jobs(
         jobs: [{"title", "company", "location", "salary_range",
                 "raw_text", "industry", ...}, ...]
         source: manual / imported / api
-        tenant_id: 归属租户；None=平台共享岗位（对所有租户可见）（T3-3）
         user_id: 归属用户；None=非个人岗位
 
     返回:
@@ -840,7 +834,6 @@ def batch_import_jobs(
             source=source,
             industry=j.get("industry", ""),
             is_active=1,
-            tenant_id=tenant_id,
             user_id=user_id,
         )
         db.add(jd)

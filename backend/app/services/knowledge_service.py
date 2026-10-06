@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.chroma_client import get_knowledge_collection
 from app.core.config import settings
-from app.core.tenant_context import current_tenant_id
+from app.models.base import DEFAULT_TENANT_ID
 from app.models.knowledge import KnowledgeDocument
 from app.services.chunk_service import chunk_document
 from app.services.document_service import parse_document
@@ -78,7 +78,7 @@ def save_and_process(
     # ---- 2) 创建 DB 记录 ----
     # 租户归属优先级：显式 tenant_id > organization_id（Organization 即租户）> 当前上下文
     doc_tenant_id = (
-        tenant_id if tenant_id is not None else organization_id if organization_id is not None else current_tenant_id()
+        tenant_id if tenant_id is not None else organization_id if organization_id is not None else DEFAULT_TENANT_ID
     )
     doc = KnowledgeDocument(
         user_id=user_id,

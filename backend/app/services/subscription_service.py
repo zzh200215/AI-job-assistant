@@ -7,7 +7,7 @@ from datetime import timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.core.tenant_context import current_tenant_id
+from app.models.base import DEFAULT_TENANT_ID
 from app.models.subscription import (
     OrderStatus,
     SubscriptionOrder,
@@ -181,7 +181,7 @@ def _effective_features(db: Session, tenant_id: int, tier: str) -> dict:
 def get_user_features(db: Session, user_id: int) -> dict:
     """获取用户当前套餐的完整权益配置（含租户/平台自定义覆盖）。"""
     tier = get_user_plan_tier(db, user_id)
-    return _effective_features(db, current_tenant_id(), tier)
+    return _effective_features(db, DEFAULT_TENANT_ID, tier)
 
 
 def get_or_create_subscription(db: Session, user_id: int) -> UserSubscription:
@@ -247,7 +247,7 @@ def check_quota(
     """
     tier = get_user_plan_tier(db, user_id)
     # 自定义套餐权益：租户/平台自定义 features 覆盖硬编码默认矩阵（修复自定义套餐不生效）
-    features = _effective_features(db, current_tenant_id(), tier)
+    features = _effective_features(db, DEFAULT_TENANT_ID, tier)
 
     # 1. 布尔权限类资源（非额度类）
     bool_features = {
@@ -358,7 +358,7 @@ def get_user_quota_summary(db: Session, user_id: int) -> dict:
     """获取用户完整的权益摘要（供前端展示）。"""
     tier = get_user_plan_tier(db, user_id)
     # 自定义套餐权益：租户/平台自定义 features 覆盖硬编码默认矩阵
-    features = _effective_features(db, current_tenant_id(), tier)
+    features = _effective_features(db, DEFAULT_TENANT_ID, tier)
     sub = get_or_create_subscription(db, user_id)
     if reset_daily_quota_if_needed(sub):
         # 查询接口也持久化跨天重置，避免展示与 DB 不一致
@@ -544,7 +544,7 @@ def _activate_subscription(db: Session, user_id: int, plan_tier: str, tenant_id:
     now = utc_now_naive()
     duration_days = {"pro": 30, "enterprise": 30}.get(plan_tier, 30)
     if tenant_id is None:
-        tenant_id = current_tenant_id()
+        tenant_id = DEFAULT_TENANT_ID
 
     # 查找现有有效订阅（按订单/显式租户，而非 ContextVar）
     existing = (
