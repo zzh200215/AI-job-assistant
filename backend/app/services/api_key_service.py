@@ -20,7 +20,7 @@ from app.models.api_pricing import ApiPricing
 from app.models.api_usage import ApiUsage
 from app.utils.time_helper import utc_now_naive
 
-# 端点 → 默认单价（分/次），与 docs/定价表.md §7 API 定价框架对齐；
+# 端点 → 默认单价（分/次），与 docs/archive/定价表.md §7 API 定价框架对齐；
 # 迁移时写入 api_pricing 表，运营可改表覆盖。
 DEFAULT_API_PRICING: dict[str, int] = {
     "resume.parse": 30,  # ¥0.30 / 次

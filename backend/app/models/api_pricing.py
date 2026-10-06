@@ -1,6 +1,6 @@
 """External API pricing model（T6-2）：端点 × 单价（分/次）。
 
-与 docs/定价表.md §7 API 定价框架对应，初始值在迁移中写入：
+与 docs/archive/定价表.md §7 API 定价框架对应，初始值在迁移中写入：
   resume.parse        30 分（¥0.30）
   match.evaluate      30 分（¥0.30）
   interview.simulate  80 分（¥0.80）

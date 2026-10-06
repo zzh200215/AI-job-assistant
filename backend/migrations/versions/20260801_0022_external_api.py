@@ -3,7 +3,7 @@
 对外能力 API（T6-1/2/3）新增 5 张表：
 - api_keys：外部调用 Key（只存 sha256 哈希，明文仅创建时返回一次）
 - api_usage：每次调用记录（限流 + 计费数据源）
-- api_pricing：端点 × 单价（分/次），初始值对齐 docs/定价表.md §7
+- api_pricing：端点 × 单价（分/次），初始值对齐 docs/archive/定价表.md §7
 - api_bill：月度聚合账单（幂等 upsert，同周期重跑覆盖）
 - webhook_subscriptions：Webhook 事件订阅
 

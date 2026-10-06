@@ -514,11 +514,14 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 │   ├── nginx.conf
 │   └── package.json
 ├── docs/
-│   ├── knowledge-seeds/         # 内置知识库种子数据
-│   ├── pilot-plan.md / pilot-report.md   # 第二个客户 Pilot 实施与报告
-│   ├── tenant-schema-design.md / schema-baseline.*  # 多租户设计 / 表结构基线
-│   ├── api-reference.md / api-examples/   # 外部能力 API 对接文档与示例
-│   ├── 产品白皮书.md / 定价表.md / 演示脚本.md 等
+│   ├── knowledge-seeds/         # 内置知识库种子数据（CI 的 RAG 门用它做夹具）
+│   ├── schema-baseline.sql      # 表结构基线（测试与导出脚本的比对目标）
+│   ├── upgrade-plan.md          # 升级过程账（唯一仍在维护的那份）
+│   ├── setup-and-security.md / engineering-quality.md / 面试消息协议.md
+│   ├── api-examples/            # 外部能力 API 示例
+│   └── archive/                 # 2026-08-01 及之前定稿的一次性交付/演示/定价/合同文档（19 份）
+│                                # 含 pilot-plan.md、pilot-report.md、tenant-schema-design.md、
+│                                # schema-baseline.md、api-reference.md、产品白皮书.md、定价表.md、演示脚本.md
 ├── monitoring/                  # Prometheus + Grafana 监控配置（可选）
 ├── docker-compose.yml
 └── README.md
@@ -615,7 +618,7 @@ FEISHU_REDIRECT_URI=https://<api-domain>/api/organizations/sso/feishu/callback
 - **Webhook**：`resume.parsed` / `match.evaluated` / `interview.completed` 三种事件；HMAC-SHA256 签名、事件 ID 防重放、失败重试 3 次、SSRF 防护。
 - **管理入口**：`/api/admin/external` 下创建/吊销 Key、手动触发结算、账单导出、Webhook 订阅管理。
 
-对接文档见 `docs/api-reference.md`，示例见 `docs/api-examples/`。
+对接文档见 `docs/archive/api-reference.md`（2026-08-01 定稿，已归档不再维护；按当前应用生成的版本在 `docs/generated/api-reference.md`，由 `backend/scripts/export_delivery_docs.py` 导出），示例见 `docs/api-examples/`。
 
 ---
 
@@ -669,12 +672,12 @@ pytest
 
 - **交付范围与验收建议**：前端 `/delivery-guide`
 - **系统当前运行模式**：前端 `/system-status`
-- **数据源与演示边界**：`docs/数据源与演示边界说明.md`
-- **知识库维护与验证**：`docs/知识库维护与验证说明.md`
-- **完成度判断**：`docs/项目完成度清单.md`
-- **第二个客户 Pilot**：`docs/pilot-plan.md`（实施计划）→ `docs/pilot-report.md`（实施后填写）→ `docs/定价表.md`（定价）
-- **多租户设计**：`docs/tenant-schema-design.md` + `docs/schema-baseline.md`（表结构基线）
-- **外部能力 API 对接**：`docs/api-reference.md` + `docs/api-examples/`
+- **数据源与演示边界**：`docs/archive/数据源与演示边界说明.md`
+- **知识库维护与验证**：`docs/archive/知识库维护与验证说明.md`
+- **完成度判断**：`docs/archive/项目完成度清单.md`
+- **第二个客户 Pilot**：`docs/archive/pilot-plan.md`（实施计划）→ `docs/archive/pilot-report.md`（实施后填写）→ `docs/archive/定价表.md`（定价）
+- **多租户设计**：`docs/archive/tenant-schema-design.md` + `docs/archive/schema-baseline.md`（2026-08-01 的表结构基线；仍在维护、被测试比对的是 `docs/schema-baseline.sql`）
+- **外部能力 API 对接**：`docs/archive/api-reference.md` + `docs/api-examples/`
 
 ### 创新点总结
 
@@ -691,7 +694,7 @@ pytest
 - 为组织增加邀请审批、所有权转移、禁用和资源级授权流程
 - 配置真实飞书应用并完成 OAuth 沙箱与生产租户联调
 - 执行备份恢复演练、跨组织授权测试与负载测试
-- 按 `docs/pilot-plan.md` 完成第二个客户 Pilot，验证配置化交付成本 ≤ 首个客户的 40%
+- 按 `docs/archive/pilot-plan.md` 完成第二个客户 Pilot，验证配置化交付成本 ≤ 首个客户的 40%
 
 ---
 

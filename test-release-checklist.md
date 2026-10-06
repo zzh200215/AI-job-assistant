@@ -183,7 +183,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ## 6. Pilot 环境实施回归（T5-2，第二个客户上线前逐条打勾）
 
-> 流程细节见 `docs/pilot-plan.md` §4；实施后把结果与耗时填入 `docs/pilot-report.md` §2。
+> 流程细节见 `docs/archive/pilot-plan.md` §4；实施后把结果与耗时填入 `docs/archive/pilot-report.md` §2。
 
 ### 6.1 建租户与品牌
 - [ ] `POST /admin/tenants` 创建 Pilot 客户租户成功（name/slug/plan_tier/expires_at 生效）

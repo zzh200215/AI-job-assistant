@@ -239,10 +239,10 @@ def main() -> int:
     )
 
     if args.seed_knowledge:
-        print("\n[知识库] 请按 docs/演示脚本.md 运行 import_knowledge_seeds.py 导入种子知识。")
+        print("\n[知识库] 请按 docs/archive/演示脚本.md 运行 import_knowledge_seeds.py 导入种子知识。")
 
     print("\n登录后：平台管理员进入「运营后台 → 租户管理」可配置品牌 / 域名 / 套餐 / 续费。")
-    print("详细演示流程见 docs/演示脚本.md。")
+    print("详细演示流程见 docs/archive/演示脚本.md。")
     return 0
 
 
