@@ -17,6 +17,8 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+from scripts.provider_guard import require_mock  # noqa: E402
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("eval_recommend")
 
@@ -441,7 +443,12 @@ def main():
     parser.add_argument("--min-explainability", type=float, default=None)
     parser.add_argument("--min-interview-stability", type=float, default=None)
     parser.add_argument("--min-feedback-agreement-rate", type=float, default=None)
+    parser.add_argument(
+        "--allow-real", action="store_true", help="显式允许打真 provider（默认拒跑，见 scripts/provider_guard.py）"
+    )
     args = parser.parse_args()
+
+    require_mock("eval_recommend.py", allow_real=args.allow_real)
 
     eval_set = load_eval_set(args.eval_set)
     if args.sample:

@@ -31,6 +31,8 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+from scripts.provider_guard import require_mock  # noqa: E402
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("eval_agent")
 
@@ -338,7 +340,12 @@ def main():
         default=0,
         help="允许多少条 pair 没跑出预测分（默认 0：一条都不允许，否则指标是残缺样本）",
     )
+    parser.add_argument(
+        "--allow-real", action="store_true", help="显式允许打真 provider（默认拒跑，见 scripts/provider_guard.py）"
+    )
     args = parser.parse_args()
+
+    require_mock("eval_agent.py", allow_real=args.allow_real)
 
     eval_set = load_eval_set(args.eval_set)
     logger.info("加载评估集 %d 条 from %s", len(eval_set), args.eval_set)
