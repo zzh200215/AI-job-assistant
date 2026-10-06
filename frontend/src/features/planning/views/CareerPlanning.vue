@@ -119,6 +119,7 @@
               <el-input
                 v-model="targetRole"
                 placeholder="例如：AI 应用工程师 / 高级后端工程师 / RAG 工程师"
+                @input="targetRoleEdited = true"
               />
             </el-form-item>
 
@@ -800,6 +801,10 @@ const {
 
 const currentStage = ref('growth')
 const targetRole = ref('')
+/* §10.11 ①：自动填进来的职称跟着"当前这份简历"走，手输过的不动它。
+   区分靠输入框的原生按键事件——`targetRole.value = …` 那种程序赋值不会触发 `@input`，
+   所以这一位只可能由候选人自己立起来。 */
+const targetRoleEdited = ref(false)
 const focusNotes = ref('')
 const goalNotes = ref('')
 
@@ -1037,8 +1042,9 @@ watch(selectedResumeId, async (value) => {
     return
   }
   selection.rememberResume(value)
-  if (!targetRole.value && selectedResume.value?.parsed?.current_title) {
-    targetRole.value = selectedResume.value.parsed.current_title
+  const title = selectedResume.value?.parsed?.current_title || ''
+  if (title && !targetRoleEdited.value) {
+    targetRole.value = title
   }
   await loadCareerPaths()
   await loadSalaryMarket()
