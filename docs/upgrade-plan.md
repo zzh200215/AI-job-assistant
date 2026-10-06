@@ -3284,6 +3284,17 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **门禁**：`test:unit` **545 → 547 passed**（85 files）、`npm test` 33、`eslint` 0 error（仅既有 warning）、`prettier --check` clean、`vue-tsc` **42**（admin 外 0）、`vite build` exit 0、js+css **2239.78 → 2239.54 kB**（−0.24：删掉那条重复规则 + 令牌名更短）。后端未触碰。§10 open **7 → 6**（31 关闭）。dev server 用完**先核对命令行**（`vite.js --port 5199 --strictPort`）再按 PID 定点关停，`netstat` 确认无监听，日志删掉。
 
+#### 已交付：D121 把推上去的那棵树按 CI 的口径完整跑了一遍（无 gh），并抓到自己造的一个假红
+
+这一串（D113→D120）推完之后，用既有配方复现 CI：`git archive origin/master frontend | tar -x`，**按 CI 的 LF 口径归一**，`node_modules` 用 junction 接进去，然后跑工作流里那几步原样的命令。
+
+**结果，逐条与本机工作树一致**：`npm run format:check`（= `prettier --check .`）**clean**、`npx eslint .` 0 error（仅既有 `paidOrders` warning）、`node --test tests/*.test.mjs` **33 pass**、`npm run test:unit` **85 files / 547 passed**、`vue-tsc` **42**。后端那两步（`ruff format --check .`、`python -m pytest`）本就在同一棵树上跑过：357 文件 clean、**876 passed**。
+
+**假红是我自己造的，值得记**：归一脚本按扩展名过滤（`.js/.mjs/.ts/.vue/.css/.json/.html/.cjs`），于是**六个没有扩展名的文件仍带 CRLF**——`.prettierrc`、`.prettierignore`、`Dockerfile`、`.dockerignore`、`nginx.conf`、`.env.example`。`format:check` 当场报 `.prettierrc` 不过，读起来像"推上去的树在 CI 里会红"。**补归一之后 clean**：判据是 `git archive` 的产物要**逐文件**判行尾（含无扩展名那批），归一完再对顶层 `os.listdir` 扫一遍有没有剩下的 `
+`；`core.autocrlf=true` 不看扩展名，我的过滤看了。这是"CI 口径 ≠ 本机口径"这一族（D13 那次把 17 读成 95）的**新一种踩法**：漏的不是转换，是转换的**文件集**。
+
+**副作用**：`.ci-probe/` 是临时件，用完先 `cmd /c rmdir` 只拆 junction（真 `frontend/node_modules` 拆前拆后都是 252 项），再删目录；`git status` 干净、`origin/master..HEAD` 为 0。本轮零代码改动。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 
