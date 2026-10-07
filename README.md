@@ -461,7 +461,7 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 | `/api/prompt-traces` | Prompt 与模型调用追踪（管理员） |
 | `/api/eval-reports` | 离线评测报告与历史快照（管理员） |
 | `/api/v1/external` | 外部能力 API（简历解析 / 匹配 / 模拟面试，X-API-Key 鉴权） |
-| `/api/admin/external` | 外部能力管理（API Key、月度结算、账单导出、Webhook 订阅） |
+| `/api/v1/admin/external` | 外部能力管理（API Key、月度结算、账单导出、Webhook 订阅） |
 
 详细接口文档以 Swagger 为准：`http://localhost:8000/docs`。
 
@@ -590,9 +590,9 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 - **用量计费**：每次调用记录 `api_usage`（成功按 `api_pricing` 单价计费，失败仅计配额）；月度 `api_bill` 按 Key + 月份聚合分项账单，可导出 CSV。
 - **每日限额**：`ApiKey.daily_quota`（默认 1000），失败调用同样计入，防恶意消耗。
 - **Webhook**：`resume.parsed` / `match.evaluated` / `interview.completed` 三种事件；HMAC-SHA256 签名、事件 ID 防重放、失败重试 3 次、SSRF 防护。
-- **管理入口**：`/api/admin/external` 下创建/吊销 Key、手动触发结算、账单导出、Webhook 订阅管理。
+- **管理入口**：`/api/v1/admin/external` 下创建/吊销 Key、手动触发结算、账单导出、Webhook 订阅管理。
 
-对接文档见 `docs/archive/api-reference.md`（2026-08-01 定稿，已归档不再维护；按当前应用生成的版本在 `docs/generated/api-reference.md`，由 `backend/scripts/export_delivery_docs.py` 导出），示例见 `docs/api-examples/`。
+对接文档见 `docs/archive/api-reference.md`（2026-08-01 定稿，已归档不再维护）；要按当前应用出最新版，跑 `backend/scripts/export_delivery_docs.py`，它会生成到 `docs/generated/`（该目录不入库，见 `.gitignore`）。示例见 `docs/api-examples/`。
 
 ---
 

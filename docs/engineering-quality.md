@@ -14,13 +14,13 @@ This repository includes a lightweight delivery-quality baseline for demo, revie
 
 ## API auth is a property of the prefix
 
-- 22 of the 30 `include_router` calls in `backend/app/api/router.py` mount `SESSION_GUARD`
+- 20 of the 28 `include_router` calls in `backend/app/api/router.py` mount `SESSION_GUARD`
   (`Depends(get_current_user)`) at include level. An endpoint added under one of those prefixes is
   authenticated without the author writing anything; it answers 401 to anonymous callers.
-- The 8 remaining prefixes mix public and authenticated operations (`/auth`, `/system`, `/jobs`,
-  `/interview`, `/organizations`, `/subscription`, `/tenant`, and the `X-API-Key` `/v1` group), so
-  they still declare auth per endpoint. Adding `SESSION_GUARD` to one of them breaks a public
-  operation — `tests/test_public_api_surface.py` fails if that happens.
+- The 8 remaining calls mount 6 prefixes that mix public and authenticated operations (`/auth`,
+  `/system`, `/interview`, `/subscription`, `/jobs` — three separate calls — and the `X-API-Key`
+  `/v1` group), so they still declare auth per endpoint. Adding `SESSION_GUARD` to one of them
+  breaks a public operation — `tests/test_public_api_surface.py` fails if that happens.
 - Whatever the prefix, keep declaring `Depends(get_current_user)` in the signature: the include-level
   guard is a safety net, not the intent, and FastAPI resolves it once per request either way.
 - New anonymous operations are not allowed by omission. They have to be listed in
