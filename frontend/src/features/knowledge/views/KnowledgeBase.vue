@@ -784,12 +784,19 @@ function beforeUpload(file) {
   return true
 }
 
+/* 上传会话的身份。`el-upload` 没开 `multiple`，但**失败之后对话框与拖拽区都还在**，
+   再投一个文件时上一发的 `onUploadProgress` 与它的 catch/finally 仍会跑完——
+   那不是什么"旧结果盖新结果"，而是两次会话共写同一组 `uploadProgress/uploadStatus/uploadError`。
+   所以每一发领一个号，落状态前先认号；不是当前会话的回调一律不写。 */
+let uploadRun = 0
+
 async function doUpload({ file }) {
   if (!uploadForm.title.trim()) {
     ElMessage.warning('请先填写文档标题')
     return
   }
 
+  const run = ++uploadRun
   pendingFile = file
   uploading.value = true
   uploadError.value = ''
@@ -804,12 +811,14 @@ async function doUpload({ file }) {
     formData.append('title', uploadForm.title.trim())
     formData.append('doc_type', uploadForm.doc_type)
     await uploadKnowledge(formData, (event) => {
+      if (run !== uploadRun) return
       const loaded = Number(event?.loaded || 0)
       const total = Number(event?.total || file.size || 0)
       const ratio = total > 0 ? loaded / total : 0
       uploadProgress.value = Math.max(0, Math.min(100, Math.round(ratio * 100)))
       uploadedBytes.value = loaded
     })
+    if (run !== uploadRun) return
 
     uploadStatus.value = '正在处理：解析 -> 切片 -> 向量化'
     uploadProgress.value = 100
@@ -820,10 +829,11 @@ async function doUpload({ file }) {
     ElMessage.success('上传完成')
     await loadList()
   } catch (error) {
+    if (run !== uploadRun) return
     uploadError.value = userErrorCopy(error, '上传失败')
     uploadProgress.value = 0
   } finally {
-    uploading.value = false
+    if (run === uploadRun) uploading.value = false
   }
 }
 
