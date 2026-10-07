@@ -27,7 +27,6 @@ from app.core.database import Base, get_db
 from app.core.user_roles import ADMIN_ROLE
 from app.models.api_key import ApiKey
 from app.models.api_usage import ApiUsage
-from app.models.organization import Organization
 from app.models.user import User
 from app.models.webhook import WebhookSubscription
 from app.services import webhook_service
@@ -66,27 +65,7 @@ def _build_app(factory):
     return app
 
 
-def _seed_org(factory, tenant_id: int):
-    session = factory()
-    try:
-        org = session.query(Organization).filter(Organization.id == tenant_id).first()
-        if org is None:
-            session.add(
-                Organization(
-                    id=tenant_id,
-                    name=f"租户{tenant_id}",
-                    slug=f"tenant-{tenant_id}",
-                    owner_id=1,
-                    status="active",
-                )
-            )
-            session.commit()
-    finally:
-        session.close()
-
-
 def _seed_key(factory, *, name="客户A", tenant_id=1, daily_quota=1000, status="active", expires_at=None, revoked=False):
-    _seed_org(factory, tenant_id)
     session = factory()
     try:
         key, plain = create_api_key(
@@ -316,7 +295,6 @@ def test_billing_csv_export(factory):
 
 
 def test_admin_key_management(factory):
-    _seed_org(factory, 1)
     app = _build_app(factory)
     with TestClient(app) as client:
         headers = {"Authorization": "Bearer admin-token"}
@@ -341,7 +319,6 @@ def test_admin_key_management(factory):
 
 
 def test_webhook_subscribe_and_list(factory):
-    _seed_org(factory, 1)
     plain, key_id = _seed_key(factory)
     app = _build_app(factory)
     headers = {"Authorization": "Bearer admin-token"}
@@ -448,7 +425,6 @@ def test_webhook_retry_after_failure(factory):
 
 
 def test_publish_event_matches_subscriptions(factory):
-    _seed_org(factory, 1)
     plain, key_id = _seed_key(factory)
     session = factory()
     try:
@@ -541,7 +517,6 @@ def test_monthly_billing_includes_inactive_keys_and_skips_paid(factory):
 
 def test_webhook_subscribe_rejects_private_url(factory):
     """订阅 URL 指向内网/环回地址应被拒绝（SSRF 防护，#17）。"""
-    _seed_org(factory, 1)
     app = _build_app(factory)
     headers = {"Authorization": "Bearer admin-token"}
     with TestClient(app) as client:
