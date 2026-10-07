@@ -1425,7 +1425,6 @@ function segmentStyle(value, total) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #fff;
   z-index: 1;
 }
 .score-num {

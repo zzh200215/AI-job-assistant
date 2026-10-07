@@ -873,7 +873,6 @@ onMounted(async () => {
   gap: 10px;
   padding: 14px;
   border-radius: var(--app-radius-sm, 12px);
-  transition: all 0.2s;
 }
 
 .achievement-card.unlocked {

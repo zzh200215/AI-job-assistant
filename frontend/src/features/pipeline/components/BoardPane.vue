@@ -286,7 +286,9 @@ function onDrop(targetStage) {
   background: var(--app-surface-strong);
   border: 1px solid var(--app-line);
   cursor: grab;
-  transition: all 0.15s;
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 
 .kanban-card:hover {

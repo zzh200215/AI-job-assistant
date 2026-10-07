@@ -168,6 +168,10 @@ watch([() => props.messages.length, () => props.status], scrollToEnd)
   width: min(100%, 720px);
   padding: 16px;
   border-radius: var(--app-radius-sm, 12px);
+  /* 这一族是挂在 .score-chip--* 上的**浅色胶囊**（底 = tone 混 92% 白），而房间整体在深色
+     工作台里，所以继承来的前景是浅色——实测 1.00–1.04:1。前景必须在这块壳上自己声明，
+     不能靠继承。--app-surface-contrast 在两个主题下都是那个深色 ink。 */
+  color: var(--app-surface-contrast);
 }
 .score-chip--high {
   background: var(--app-score-high-soft);
@@ -209,12 +213,14 @@ watch([() => props.messages.length, () => props.status], scrollToEnd)
 }
 .score-shell p {
   margin: 0;
-  color: var(--app-muted);
   line-height: 1.7;
 }
+/* `!important` 原本是为了压过上面那条 `.score-shell p` 的 color；那条已经撤掉，这里靠继承链
+   就能赢（元素自身的声明胜过继承），所以只撤 color 的。margin-top 的 `!important` **留着**：
+   `.score-shell p` 的 `margin: 0` 特异度更高 (0,2,1)，留着才说明它是不是承重的。 */
 .score-improvement {
   margin-top: 10px !important;
-  color: #9a4b1d !important;
+  color: #9a4b1d;
 }
 /* D68 补回：D66 抄这条时丢了选择器列表的前半截（页面里是 `.system-shell,` 换行 `.end-shell {…}`，
    抽取脚本按"选择器行以 { 结尾"找起点，只收进后半截），system 消息因此失去药丸形状——

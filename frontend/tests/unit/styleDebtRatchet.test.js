@@ -44,7 +44,9 @@ const BUDGET = {
        浅色，白字压上去实测只有 1.11:1。 */
     'src/features/jobs/components/SearchPane.vue': 7,
     'src/features/jobs/components/RecommendPane.vue': 7,
-    'src/layouts/DefaultLayout.vue': 34,
+    /* P1-①（2026-10-07）：`.layout-shell` 那条浅色底换成 `var(--app-bg)`，34 → 33。同一刀把
+       主题作用域加到 `documentElement` 上，因为 EP 的浮层是 teleport 到 `body` 子树的。 */
+    'src/layouts/DefaultLayout.vue': 33,
     'src/features/shell/views/Profile.vue': 31,
     'src/features/planning/views/CareerPlanning.vue': 27,
     'src/features/analysis/views/SmartAnalysis.vue': 9,
@@ -55,7 +57,7 @@ const BUDGET = {
     /* D52 同上：引用来源面板复制的是页面里 "RAG Confidence / References / Loading state" 三段，
        这 3 个是从 15 里重复出来的第二个副本；匹配度解释面板复制的两段一个色值都没有，所以不列。 */
     'src/features/analysis/components/ReferencesPane.vue': 3,
-    'src/features/jobs/views/JobRecommend.vue': 20,
+    'src/features/jobs/views/JobRecommend.vue': 19,
     'src/features/auth/views/Register.vue': 26,
     'src/features/interview/views/InterviewReport.vue': 22,
     'src/features/resume/views/ResumeCompare.vue': 19,
@@ -81,8 +83,9 @@ const BUDGET = {
        白色前景（压在 `score-fill--*` 的分数渐变上，那五条渐变规则住在 src/styles/main.css，
        跨组件边界有效，所以不重复）。这 1 条是从页面那 15 条里**重复**出来的第二份，
        页面一条没删；其余四块面板复制的四段（Query card / Generate area / Dev card / List）
-       全是 var()，一个 hex 都没有，所以它们不进这张表。 */
-    'src/features/analysis/components/CareerDirectionPane.vue': 1,
+       全是 var()，一个 hex 都没有，所以它们不进这张表。
+       —— P1-② 这一条归零：分数底从 135deg 双段渐变拍平成单色，前景按档交给 main.css 的
+       .score-fill--* 五条规则，组件不再自己写颜色，所以本表按"0 不进表"撤掉这一行。 */
     /* D66 把 InterviewRoom 的四块展示面板搬出视图，同一笔复制成本第四次记在这个域里，而且这次最贵：
        这页的样式里有**两层**——基础规则之外还有 20 多条 `.interview-room-page .xxx` 的覆盖层，
        它们的目标元素一搬进子组件就只带子组件的 scope id，页面那份再也命中不了，于是必须连覆盖层

@@ -131,7 +131,6 @@ defineProps({
   justify-content: center;
   font-size: 14px;
   font-weight: 700;
-  color: #fff;
   flex-shrink: 0;
 }
 .cp-info {

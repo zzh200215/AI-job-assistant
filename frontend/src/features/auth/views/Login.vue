@@ -53,13 +53,13 @@
               <span class="cap-desc">知识检索辅助判断</span>
             </div>
             <div class="cap-item">
-              <span class="cap-tag mono">pipeline.dual</span>
-              <span class="cap-label">双端场景</span>
-              <span class="cap-desc">求职者与招聘者分角色</span>
+              <span class="cap-tag mono">pipeline.board</span>
+              <span class="cap-label">投递看板</span>
+              <span class="cap-desc">多份投递进度跟踪</span>
             </div>
           </div>
 
-          <p class="role-note">系统根据账号身份进入对应工作台</p>
+          <p class="role-note">登录后进入求职工作台</p>
         </div>
 
         <!-- Decorative pipeline lines -->

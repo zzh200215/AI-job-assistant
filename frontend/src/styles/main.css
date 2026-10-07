@@ -3,7 +3,8 @@
    Dual-surface workbench: dark command surfaces + light reading flows.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* 字体在 index.html 里用 <link> 加载：写成 CSS @import 会让字体请求排在 main.css
+   之后串行发出，并把首屏文字一起阻塞住。别把它挪回来。 */
 
 :root {
   /* ---- Semantic surfaces ---- */
@@ -45,32 +46,16 @@
   --app-score-warn: var(--app-warning);
   --app-score-risk: var(--app-danger);
   --app-score-unknown: var(--app-muted);
-  --app-score-high-fill: linear-gradient(
-    135deg,
-    var(--app-score-high),
-    color-mix(in srgb, var(--app-score-high), white 24%)
-  );
-  --app-score-good-fill: linear-gradient(
-    135deg,
-    var(--app-score-good),
-    color-mix(in srgb, var(--app-score-good), white 24%)
-  );
-  --app-score-warn-fill: linear-gradient(
-    135deg,
-    var(--app-score-warn),
-    color-mix(in srgb, var(--app-score-warn), white 24%)
-  );
-  --app-score-risk-fill: linear-gradient(
-    135deg,
-    var(--app-score-risk),
-    color-mix(in srgb, var(--app-score-risk), white 24%)
-  );
+  /* 徽章那一族的底。原先每档是 135deg + 24% 白的双段渐变，同一块底上亮度跨得开：
+     实测蓝档白字 3.38、墨字 3.65，两种前景在这一档都够不到 4.5 —— 渐变不是可以被
+     文字色绕过去的装饰，它本身就是那个不达标的面。拍平成单色后，前景按档选，
+     判据在下面 .score-fill--* 那五条规则里。 */
+  --app-score-high-fill: var(--app-score-high);
+  --app-score-good-fill: var(--app-score-good);
+  --app-score-warn-fill: var(--app-score-warn);
+  --app-score-risk-fill: var(--app-score-risk);
   /* 没跑过评分的简历也会走到这一档：条形不能空着，也不能显示成红色差评。 */
-  --app-score-unknown-fill: linear-gradient(
-    135deg,
-    var(--app-score-unknown),
-    color-mix(in srgb, var(--app-score-unknown), white 24%)
-  );
+  --app-score-unknown-fill: var(--app-score-unknown);
   /* 浅底 + 描边：面试房间的回答分数胶囊用。旧稿是 8 个手挑 hex，这里由同一份 tone 派生，
      色差实测都在 ±5/255 以内，所以换过来的只是出处，不是观感。 */
   --app-score-high-soft: color-mix(in srgb, var(--app-score-high), white 92%);
@@ -230,7 +215,11 @@ code,
 .el-button {
   border-radius: var(--app-radius-sm);
   font-weight: 600;
-  transition: all 0.18s ease;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .el-button--primary {
@@ -278,6 +267,24 @@ code,
 
 .el-tag--small {
   border-radius: var(--app-radius-xs);
+}
+
+/* 分数 tone 走 el-tag 的那条通道（utils/scoreTone.js 的 scoreToneTagType 把每档映射成一个
+   type），两个方向各有一处实测不达标：实心档白字压中调信号色（warning 2.64、danger 3.96），
+   描边档在深色面板上直接用 tone 色当文字（primary 3.39、danger 4.42）。所以实心那两档换成
+   ink，描边那两档按同一份 tone 提亮——提亮幅度是试出来的最小值（danger 20% 得 5.83、
+   primary 25% 得 5.30），不是审美偏好。success / info 两档本来就过，不动。 */
+.el-tag--dark.el-tag--warning,
+.el-tag--dark.el-tag--danger {
+  --el-tag-text-color: var(--app-surface-contrast);
+}
+
+.workspace-theme .el-tag--plain.el-tag--danger {
+  --el-tag-text-color: color-mix(in srgb, var(--el-color-danger), white 20%);
+}
+
+.workspace-theme .el-tag--plain.el-tag--primary {
+  --el-tag-text-color: color-mix(in srgb, var(--el-color-primary), white 25%);
 }
 
 .el-dialog,
@@ -731,24 +738,32 @@ code,
   color: var(--app-score-unknown);
 }
 
+/* 底上的前景按档选，判据是实测对比度：蓝档墨字只有 3.65:1，其余四档白字落在
+   2.07–3.96:1，所以只有 good 留白字，其他四档换 ink（--app-surface-contrast 在
+   两个主题下都是那个深色值，不会被 .workspace-theme 换掉）。 */
 .score-fill--high {
   background: var(--app-score-high-fill);
+  color: var(--app-surface-contrast);
 }
 
 .score-fill--good {
   background: var(--app-score-good-fill);
+  color: var(--el-color-white);
 }
 
 .score-fill--warn {
   background: var(--app-score-warn-fill);
+  color: var(--app-surface-contrast);
 }
 
 .score-fill--risk {
   background: var(--app-score-risk-fill);
+  color: var(--app-surface-contrast);
 }
 
 .score-fill--unknown {
   background: var(--app-score-unknown-fill);
+  color: var(--app-surface-contrast);
 }
 
 @media (prefers-reduced-motion: reduce) {

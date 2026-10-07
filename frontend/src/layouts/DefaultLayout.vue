@@ -131,7 +131,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowDown,
@@ -372,7 +372,10 @@ function handleCommand(cmd) {
   router.push('/login')
 }
 
+/* 主题作用域同时挂到 documentElement：EP 的下拉/气泡/对话框是 teleport 到 body 子树的，
+   作用域只盖住这个布局元素时，它们解析到的是 :root 那一档浅色令牌，实测浮层是白底。 */
 onMounted(async () => {
+  document.documentElement.classList.add('workspace-theme')
   try {
     const data = await getSystemStatus({ notifyError: false })
     runtime.demoMode = !!data?.demo_mode
@@ -380,13 +383,17 @@ onMounted(async () => {
     runtime.demoMode = false
   }
 })
+
+onBeforeUnmount(() => {
+  document.documentElement.classList.remove('workspace-theme')
+})
 </script>
 
 <style scoped>
 /* ===== Shell ===== */
 .layout-shell {
   min-height: 100vh;
-  background: #f4f5f8;
+  background: var(--app-bg);
 }
 
 /* ===== Sidebar ===== */

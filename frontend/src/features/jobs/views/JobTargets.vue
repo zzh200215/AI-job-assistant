@@ -521,7 +521,9 @@ onMounted(loadTargets)
   border: 1px solid var(--app-line);
   background: var(--app-surface-strong);
   cursor: pointer;
-  transition: all 0.18s;
+  transition:
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
   position: relative;
 }
 
