@@ -737,7 +737,11 @@ function signed(value, percent = false) {
 }
 
 .delta-col {
-  background: var(--app-primary-light);
+  /* 这是**整列容器**，里面两档文字都来自主题令牌（`--app-text` 与 `--app-muted`）。
+     实测改前：标题 1.04、指标 2.40 —— 浅底压住了主题给的浅色字，等于那一列读不出内容。
+     所以这里不套图标座那 86%，用 92% 的一层淡色：底跟着 `--app-bg` 走，继承来的两档字
+     自动回到各自该在的那一侧，不需要再动前景。 */
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 92%);
 }
 
 .group-list {

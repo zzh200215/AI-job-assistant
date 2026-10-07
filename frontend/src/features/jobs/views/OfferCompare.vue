@@ -831,7 +831,11 @@ onMounted(() => {
 }
 .offer-row.selected {
   border-color: var(--app-primary);
-  background: var(--app-primary-light);
+  /* 选中行是容器：行里的公司/岗位名不带自己的颜色，吃的是主题的 `--app-text`。
+     原来这里是浅色令牌底 + 深色工作台浅字那一对（同对组合在 PromptTrace 那一列实测 1.04），
+     换成 tone 混 `--app-bg` 92% 之后底跟着主题走，前景不用动。
+     **这一条没有上屏元素可量**（探针的 `/jobs/pipeline/list` 夹具是空的），属推导。 */
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 92%);
 }
 .offer-info {
   flex: 1;

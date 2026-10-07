@@ -534,7 +534,10 @@ onMounted(loadTargets)
 
 .target-card.primary {
   border-color: var(--app-primary);
-  box-shadow: 0 0 0 1px var(--app-primary-light);
+  /* 这一环今天**画不上屏**：`.workspace-theme .main-shell [class*="-card"]` 那条网把
+     `box-shadow` 与 `border` 都按 `!important` 拍了（实测计算值 `none` / `--app-line`）。
+     原来这里挂的是浅色令牌，改成线令牌是为了让"哪天网撤了"不重演一遍浅压深。 */
+  box-shadow: 0 0 0 1px var(--app-line-strong);
 }
 
 .target-header {

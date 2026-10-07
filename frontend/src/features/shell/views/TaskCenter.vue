@@ -495,8 +495,9 @@ onUnmounted(() => {
   height: 18px;
   place-items: center;
   border-radius: 50%;
-  background: var(--app-primary-light);
-  color: var(--app-primary);
+  /* 实测改前 4.48（浅底 + `--app-primary` 字），换成 /home 那族图标座的同一条配方后 5.08。 */
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-size: 11px;
 }
 @media (max-width: 760px) {

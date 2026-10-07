@@ -359,8 +359,10 @@ function onDrop(targetStage) {
   margin-top: 8px;
   padding: 6px 10px;
   border-radius: var(--app-radius-xs, 8px);
-  background: var(--app-violet-light);
-  color: var(--app-violet);
+  /* 面试档那一条是紫底座：底换成 tone 混 `--app-bg`，前景按 /home 图标座量出的幅度混白
+     （紫档直接压深底只有 2.92，抬到 34% 才 5.70）。 */
+  background: color-mix(in srgb, var(--app-violet), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-violet), white 34%);
   font-size: 12px;
   font-weight: 600;
 }

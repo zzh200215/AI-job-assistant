@@ -696,7 +696,9 @@ onUnmounted(() => {
 .timeline-tags span {
   padding: 5px 10px;
   border-radius: 999px;
-  background: var(--app-primary-light);
+  /* 这一条浅色底**永远轮不上屏**：下面 `.interview-report-page .timeline-tags span` 特异度
+     高一级且自己声明了底，实测那一页的分数胶囊走的都是它。删掉的是画不到的声明，屏幕不变。
+     那一页整体还欠一次"浅色面板 vs 深色工作台"的判定，见账上 §10.33。 */
   color: var(--app-primary);
   font-size: 12px;
 }

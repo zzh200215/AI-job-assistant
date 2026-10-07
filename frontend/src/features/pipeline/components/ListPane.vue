@@ -182,7 +182,11 @@ const emit = defineEmits(['command', 'batch-move', 'clear-selection', 'selection
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: var(--app-primary-light);
+  /* 这是**容器**（里面 `.batch-info` 的字色来自 `--app-text`，跟着主题走），所以用 92% 的一层
+     淡色而不是图标座那 86%：底跟着 `--app-bg`，继承来的文字自动留在它该在的一侧。
+     原来的组合是"主题浅字压浅色令牌底"，同一对令牌在 PromptTrace 那一列实测 1.04；
+     **这一条自己没有上屏元素可量**（要勾选项才有 `.batch-bar`），属推导不是差分。 */
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 92%);
   border-bottom: 1px solid var(--app-line);
 }
 

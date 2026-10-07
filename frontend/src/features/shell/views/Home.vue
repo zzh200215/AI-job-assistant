@@ -642,8 +642,10 @@ onMounted(loadDashboard)
    原来这三族是 pastel 方块：amber 2.44、green 2.76，连图形 3:1 都不过。
    两个代价写明白：① 色相收敛（amber 与 gold 同走 warning、green 与 success 同走 success、
    teal 走最接近的 cyan），彩虹感确实降了；② 这里改的是**本文件的规则**，没有去动
-   `--app-primary-light` / `--app-violet-light` 那两个令牌本身——它们全仓还有 29 处引用
-   （14 个文件），整体重定向是另一次要单独量的决定。 */
+   `--app-primary-light` / `--app-violet-light` 那两个令牌本身。收完这一族之后（同一条配方
+   一路用到 Interview / TaskCenter / Users / PromptTrace / BoardPane / ListPane / OfferCompare），
+   全仓只剩**两处**还引它们：`InterviewSetup.vue:721` 的选中态（浅底 = "已选中"那层 affordance，
+   刻意留着）与 `InterviewReport.vue:751`（那一页的面板整体是另一条浅色面，等 §10.33 一起判）。 */
 .core-resume .core-icon {
   background: color-mix(in srgb, var(--app-violet), var(--app-bg) 86%);
   color: color-mix(in srgb, var(--app-violet), white 34%);
@@ -815,14 +817,14 @@ onMounted(loadDashboard)
   gap: 12px;
   padding: 12px 14px;
   border-radius: 10px;
-  background: var(--app-violet-light);
   cursor: pointer;
   transition: background 0.15s;
 }
 
-.suggestion-item:hover {
-  background: #e4dbff;
-}
+/* 底与它的 hover 都在下面 `.dashboard-page .suggestion-item` 那两条里（页根就是这个类，
+   所以那两条特异度恒高一级）。原来这一族的两条浅色底**一条都轮不上屏**——实测卡片计算值
+   一直是那条深色覆盖给的底色。删掉的是画不到的声明，屏幕逐字不变；留着只会让下一个人以为
+   首页的建议条是淡紫的。 */
 
 .sug-index {
   width: 24px;
@@ -1064,7 +1066,9 @@ onMounted(loadDashboard)
 .quick-btn:hover {
   box-shadow: var(--app-shadow);
   transform: translateY(-1px);
-  border-color: var(--app-primary-light);
+  /* 这里原来挂的是 `--app-primary-light`（一道接近白的描边）。它**一条都没上过屏**：
+     页根带 `.dashboard-page`，下面 `.dashboard-page .quick-btn:hover` 特异度更高一档，
+     自己写了 hover 的边框色。删掉的是画不到的声明，屏幕逐字不变。 */
 }
 
 .quick-icon {

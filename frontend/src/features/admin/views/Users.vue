@@ -273,9 +273,10 @@ onMounted(loadUsers)
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  color: var(--app-primary);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-weight: 700;
-  background: var(--app-primary-light);
+  /* 字母头像这一对实测 4.48（浅底 + `--app-primary` 字，12px 粗体），与 /home 图标座同配方。 */
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
 }
 .avatar {
   width: 29px;

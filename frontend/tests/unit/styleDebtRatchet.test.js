@@ -22,7 +22,7 @@ const BUDGET = {
        `score-tone` 那几族实测全部留在表里，`el-` 那类库里选择器一律不动）。
        下面这四个数就是量完剩下的"页面自己还在用"的那些。 */
     'src/features/interview/views/InterviewRoom.vue': 43,
-    'src/features/shell/views/Home.vue': 63,
+    'src/features/shell/views/Home.vue': 62,
     'src/features/jobs/views/JobSearch.vue': 26,
     'src/features/jobs/components/JobCompareDialog.vue': 1,
     'src/features/jobs/components/JobDetailDrawer.vue': 1,
@@ -47,7 +47,7 @@ const BUDGET = {
     /* P1-①（2026-10-07）：`.layout-shell` 那条浅色底换成 `var(--app-bg)`，34 → 33。同一刀把
        主题作用域加到 `documentElement` 上，因为 EP 的浮层是 teleport 到 `body` 子树的。 */
     'src/layouts/DefaultLayout.vue': 33,
-    'src/features/shell/views/Profile.vue': 19,
+    'src/features/shell/views/Profile.vue': 16,
     'src/features/planning/views/CareerPlanning.vue': 27,
     'src/features/analysis/views/SmartAnalysis.vue': 4,
     /* D51 搬出「职业规划」面板时样式按 D44 的口径**复制**（父页面那 1092 行一行没删，因为静态切分
@@ -62,7 +62,9 @@ const BUDGET = {
     'src/features/interview/views/InterviewReport.vue': 22,
     'src/features/resume/views/ResumeCompare.vue': 19,
     'src/features/auth/views/Login.vue': 16,
-    'src/features/interview/views/Interview.vue': 13,
+    /* 13 → 5：STAR 那五枚座（`.star-tag` + `.star-s/t/a/r`）与 `.interview-score` 收了 8 个
+       手挑 pastel；剩下 5 个是 `.daily-*` 与 `.weak-card`，属另一族。 */
+    'src/features/interview/views/Interview.vue': 5,
     'src/features/pipeline/views/PipelineKanban.vue': 1,
     /* D62 把转化分析与版本表现两块面板搬出 PipelineKanban：样式照 D44 的口径**复制不切**
        （`.funnel-fill` 的配色走 `'fill-' + stage.accent` 这种动态类名，静态切分会把 6 条
@@ -1173,8 +1175,11 @@ describe('style debt ratchet', () => {
   it('keeps the capsule / medal families token-only and the pair intact', () => {
     const LITERAL = /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/
     // B 这一刀覆盖的是"深色工作台里的色块座"整族，不只是 Profile：8 个成就徽章 +
-    // Home 的 13 个图标座 + JobRecommend 的头部图标与分数徽章 + 面试房间的回答胶囊。
+    // Home 的 13 个图标座 + JobRecommend 的头部图标与分数徽章 + 面试房间的回答胶囊，
+    // 后面两批（同一条配方）补进 Interview / TaskCenter / Users / PromptTrace /
+    // BoardPane / ListPane / OfferCompare / InterviewReport / JobTargets。
     const transcriptKey = 'src/features/interview/components/TranscriptPane.vue'
+    const interviewKey = 'src/features/interview/views/Interview.vue'
     const CHIP_FILES = [
       'src/features/shell/views/Profile.vue',
       'src/features/shell/views/Home.vue',
@@ -1183,14 +1188,29 @@ describe('style debt ratchet', () => {
       'src/features/interview/views/InterviewSetup.vue',
       'src/features/analysis/views/SmartAnalysis.vue',
       transcriptKey,
+      interviewKey,
+      'src/features/shell/views/TaskCenter.vue',
+      'src/features/admin/views/Users.vue',
+      'src/features/admin/views/PromptTrace.vue',
+      'src/features/pipeline/components/BoardPane.vue',
+      'src/features/pipeline/components/ListPane.vue',
+      'src/features/jobs/views/OfferCompare.vue',
+      'src/features/jobs/views/JobTargets.vue',
+      /* InterviewReport **这一轮不入册**：那一页的面板整体是"浅色阅读面"遗留（`.timeline-badge`
+         与 `.interview-report-page .timeline-badge` 两条底互撞、`.training-item` 系实测 1.04–1.08），
+         单独把某一座翻成深色会得到"深色座落在浅面板上"。整页一起判才成对，挂在 §10.33。 */
     ]
     // 按"选择器块"判，不按类名形状判：真选择器带修饰类与 `--档` 后缀（`.metric-icon.amber`、
     // `.score-chip--high`、`.core-resume .core-icon`），上一版按 `-icon$` 那种形状匹配
     // 对植入毫无反应——正向腿其实一直在空跑，是反证腿把它抓出来的。
     const BLOCK = /([^{}]+)\{([^{}]*)\}/g
     // 族名是"随文件入册时一起点名"的，不是自动发现的：`.qb-*` 那族挂在 `.qb-icon` 上，
-    // 但规则本身叫 `.qb-blue`，不含 icon/chip/badge 任何一个字。
-    const IS_CHIP = /(icon|chip|badge|\.ach-|\.qb-)/
+    // 但规则本身叫 `.qb-blue`，不含 icon/chip/badge 任何一个字。后面那批同理——
+    // `.star-s` / `.batch-bar` / `.delta-col` / `.card-interview` / `.avatar` 都没那几个字。
+    // 刻意不含 `card`、`suggestion-item` 这类会撞上"合法深色覆盖"的名字（`.dashboard-page
+    // .suggestion-item` 与 `.summary-card.amber` 都是按字面量写的合法债）。
+    const IS_CHIP =
+      /(icon|chip|badge|\.ach-|\.qb-|star-tag|\.star-(?:tag|s|t|a|r)\b|interview-score|empty-guide|avatar|delta-col|batch-bar|card-interview|offer-row|target-card\.primary)/
 
     const check = (sources, themeText) => {
       const bad = []
@@ -1248,6 +1268,19 @@ describe('style debt ratchet', () => {
         themeCss
       )
     ).not.toEqual([])
+    // STAR 那四枚是这一批里唯一"名字完全不在旧形状里"的一族，单独钉一条植入。
+    expect(
+      check(
+        {
+          ...sources,
+          [interviewKey]: sources[interviewKey].replace(
+            '.star-t {',
+            '.star-t { background: #fef3c7; color: #d97706;'
+          ),
+        },
+        themeCss
+      )
+    ).not.toEqual([])
     expect(
       check(
         {
@@ -1258,6 +1291,63 @@ describe('style debt ratchet', () => {
       )
     ).not.toEqual([])
     expect(check(sources, themeCss.replace('--app-score-risk-soft-line:', '/*x*/'))).not.toEqual([])
+  })
+
+  /* 浅色令牌 `--app-primary-light` / `--app-violet-light` 本身是浅的（#e8efff / #f0ebff），
+     把它们当底用在深色工作台里，就是把"浅底压主题浅字"这一族重新请回来——这一批收了 12 个
+     这样的座（ Interview 的 STAR 五枚与分数格、TaskCenter 空态序号、Users 字母头像、
+     PromptTrace 差异列、BoardPane 面试条、ListPane 批量栏、OfferCompare 选中行、JobTargets 环、
+     Home 建议条与 hover 描边、InterviewReport 时间线胶囊），实测最差 1.04。
+     所以这里不是预算，是**带出处的豁免表**：两处刻意留下的各钉一个次数，多一条红、少一条也红
+     （豁免因此不会过期，与 STATE_CLASS_SITES 同一个设计）。 */
+  it('keeps the two light tokens used only at the two sites that argue for it', () => {
+    const USE = /var\(--app-(?:primary|violet)-light\)/g
+    const ALLOWED = {
+      // 选中态那一档的浅底就是"已选中"那层 affordance：字降到 `--app-primary-dark` 之后实测
+      // 5.82，底刻意留着（理由写在该规则自己的注释里，不在这里重述）。
+      'src/features/interview/views/InterviewSetup.vue': 1,
+      // 整页是"报告 = 浅色阅读面"那一族遗留（面板底写死浅色，字却来自深色主题，实测 1.04–1.08），
+      // 这一处要跟着它一起判，单独翻会重演"只改底不改字"，见 §10.33。
+      'src/features/interview/views/InterviewReport.vue': 1,
+    }
+    const counts = viewSources
+      .map(({ rel, source }) => [rel, (source.match(USE) || []).length])
+      .filter(([, n]) => n > 0)
+    const bad = []
+    for (const [rel, n] of counts) {
+      if (ALLOWED[rel] === undefined) bad.push(`${rel} 引了浅色令牌 ${n} 处，不在豁免表里`)
+      else if (ALLOWED[rel] !== n) bad.push(`${rel} 引了 ${n} 处，豁免表写的是 ${ALLOWED[rel]} 处`)
+    }
+    for (const rel of Object.keys(ALLOWED)) {
+      if (!counts.some(([r]) => r === rel))
+        bad.push(`豁免表里的 ${rel} 现在一处都不用浅色令牌了，删掉这一行`)
+    }
+    expect(bad, `浅色令牌又长回深色工作台：${bad.join('；')}`).toEqual([])
+
+    // 反证：往 Profile 的一枚徽章里植一条浅色底，判据必须报它；植不进去（名字漂了）也要当场说清。
+    const countOf = (list) =>
+      list
+        .map(({ rel, source }) => [rel, (source.match(USE) || []).length])
+        .filter(([, n]) => n > 0)
+    const planted = viewSources.map((v) =>
+      v.rel === 'src/features/shell/views/Profile.vue'
+        ? {
+            ...v,
+            source: v.source.replace(
+              '.ach-amber {',
+              '.ach-amber { background: var(--app-primary-light);'
+            ),
+          }
+        : v
+    )
+    const hits = countOf(planted)
+    const profile = hits.find(([rel]) => rel === 'src/features/shell/views/Profile.vue')
+    expect(profile, '植入没落进 Profile，这一条反证是空转的').toBeTruthy()
+    expect(profile[1], '植入应当恰好落下 1 处').toBe(1)
+    expect(
+      hits.some(([rel, n]) => ALLOWED[rel] === undefined && n > 0),
+      '豁免表外多出一处浅色引用，判据必须报它'
+    ).toBe(true)
   })
 
   /* 拼出来的类名（`'dot-' + task.priority`、`` `severity-${item.severity}` ``）这一族，

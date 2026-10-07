@@ -759,8 +759,11 @@ onMounted(async () => {
   border-radius: var(--app-radius-sm, 12px);
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #1c8c5e, #c66a3d);
-  color: #fff;
+  /* 原来是两个手挑色相的 135° 渐变（绿→橙）压白字：24px 粗体属"大字号"，3:1 就够，
+     实测两端 3.7–4.2 是过的——留着的问题是它是全站唯一一块双色渐变身份砖，与这一族其余
+     20 多枚单色 tone 座不同源。换成同一条配方（底 = tone 混 `--app-bg`，字 = tone 混白）。 */
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-size: 24px;
   font-weight: 700;
 }

@@ -674,13 +674,16 @@ onMounted(() => {
   text-align: center;
   padding: 4px 10px;
   border-radius: var(--app-radius-xs, 8px);
-  background: var(--app-primary-light);
+  /* 实测改前：容器自身文字 1.04、`strong` 4.48、`span` 2.40 —— 浅底压着主题给的浅色字，
+     这一格是"底与前景一对"里最典型的翻车。底换成 tone 混 `--app-bg`，`span` 那条
+     `--app-muted` 跟着主题走所以不用动，只有写死 `--app-primary` 的 `strong` 要一起抬。 */
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
 }
 
 .interview-score strong {
   font-size: 18px;
   font-weight: 700;
-  color: var(--app-primary);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
 }
 
 .interview-score span {
@@ -816,27 +819,30 @@ onMounted(() => {
   flex-shrink: 0;
   padding: 2px 8px;
   border-radius: 4px;
-  background: var(--app-primary-light);
-  color: var(--app-primary);
+  /* 这一族是深色工作台里的四枚 pastel 座（实测 2.86–3.91，最差是 T）。配方与 /home 那 13 个
+     图标座同一条：底 = tone 混 `--app-bg` 86%（跟着主题走），字 = tone，蓝紫两档按实测幅度混白。
+     色相从「cyan/amber/green/pink 四枚手挑 pastel」收成「四条 token 各一档」。 */
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-weight: 600;
   font-size: 12px;
 }
 
 .star-s {
-  background: #e0f2fe;
-  color: #0284c7;
+  background: color-mix(in srgb, var(--app-cyan), var(--app-bg) 86%);
+  color: var(--app-cyan);
 }
 .star-t {
-  background: #fef3c7;
-  color: #d97706;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 86%);
+  color: var(--app-warning);
 }
 .star-a {
-  background: #dcfce7;
-  color: #16a34a;
+  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
+  color: var(--app-success);
 }
 .star-r {
-  background: #fce7f3;
-  color: #db2777;
+  background: color-mix(in srgb, var(--app-violet), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-violet), white 34%);
 }
 
 .star-cheatsheet {
