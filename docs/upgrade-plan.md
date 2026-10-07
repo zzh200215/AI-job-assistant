@@ -3667,6 +3667,28 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **门禁**：backend `pytest` **825 → 824**（净减正好等于删掉的那条 feishu 能力测试）、`ruff check` clean、`test_system_status.py` + `test_admin_auth.py` 13 条绿。前端本轮零改动——那两个键**全仓没有读方**（`SystemStatus.vue` 里 `capabilities` 只出现在 `ocr_resume_parse` 一处，`admin` 面也没有别的消费者），所以删键不需要浏览器那一帧；这句是 grep 现取，不是推断。
 
+#### 已交付：D142 文档大扫除：两把尺子先各自错过一次，顺手抓到一条在 CI 上是红的格式行
+
+**清点口径**（`git ls-files` 现取）：在册 `.md`/`.sql` **52 份**，其中 `docs/knowledge-seeds/` 17 份是 RAG 门的语料、`docs/archive/` 是冻结历史，两者本轮都不动。判"一份文档还有没有用"用两把尺子：**入链**（全仓内容扫，不含自身）与**对账**——文档里写到的 `/api` 路径能不能对上 `app.routes` 现取的 **199 条活路由**。
+
+**两把尺子都先撒过谎，都在下结论之前被抓回**：① `docs/setup-and-security.md:178` 的 `GET /api/jd/{id}` 一度被判死路径，活路由其实叫 `/api/jd/{jd_id}`——**参数名不同不是死链**，判据得把 `{...}` 段当通配。② README 的 `/api/admin/external` 一度判死，实际是 `/api/v1/admin/external`——**少写一段前缀也不是死链**（那一支的前缀来自 `app/api/external/router.py` 的 `prefix="/v1"` 再乘 billing/webhook 自己的 `/admin/external`），但它同时也**确实是错的**：读者照 README 拼出来的 URL 会 404。改成"前缀可匹配 + 参数段通配"之后才拿到可信名单——**拿一把假尺子去删文档，删掉的会是活的那一份**。
+
+**删掉的（0 入链，逐张核对过信息不丢）**：`sql/` 整目录 **8 份 / 432 行** + `backend/test_resume.txt`（1 行假 PII，pytest 不收集）。那 8 份是初始提交的手写建表 SQL，15 张表逐张比对结论是**每一张都同时躺在 `docs/schema-baseline.sql` 里和一个 ORM 模型里**（baseline 那份才是有守卫的活基线：`tests/test_schema_baseline.py` + `scripts/export_schema_baseline.py` 两处引用）；全仓除自身外 0 处引用，唯一提到 `sql/init*.sql` 的是两份**归档**文档，其中一份原文写的就是"旧的 `sql/init*.sql`"。`docs/upgrade-plan.md` 与 `docs/archive/` 里提到这 8 份的句子按 D128 口径不回改。
+
+**移走并摘心的那份**：`test-release-checklist.md` → `docs/archive/`（仓库根 `.md` 从 2 份变 1 份，只剩 README）。它 §6「Pilot 环境实施回归」那 **32 行**要人 `POST /admin/tenants` 建租户、`PUT /admin/tenants/{id}/brand` 换白标、`POST /admin/tenants/{id}/domains|jobs|knowledge` 绑域名导数据、`PUT /subscription/admin/plans` 改套餐、再去"运营后台 → 租户管理"看倒计时——**这些端点与页面全部随 D132–D137 出树，勾不动了**；而其余五节（构建、迁移、健康检查、备份那类）今天仍可执行，所以整份不删，摘掉 §6 后原地留一行说明它为什么少了一节。
+
+**改掉的三处宣称 + 一行忽略**：README 那两处 `/api/admin/external` 补上 `/v1`；README:595 原本写"按当前应用生成的版本在 `docs/generated/api-reference.md`"——**那个目录既不在树里也没进 `.gitignore`**，是"跑 `backend/scripts/export_delivery_docs.py` 才会 mkdir 出来 3 个文件"的产物，于是那句话把一个要自己生成的东西写成了"在那儿"；改成"跑脚本生成到 `docs/generated/`（不入库）"，并把 `docs/generated/` 加进 `.gitignore`，免得谁跑完脚本仓库根就多出一坨未跟踪。`docs/engineering-quality.md:17,20-21` 那两个数是旧的：写"22 of the 30 `include_router`"，实测 **20 of 28**；未守卫那 8 条调用其实只覆盖 **6 个挂载点**（`/auth`、`/system`、`/interview`、`/subscription`、`/jobs` 三条、X-API-Key 那支 `/v1`），而原文把 `/organizations`、`/tenant` 也列进"混合前缀"——两个 router 已出树。**同一份文件里的 `router.py:39-47` 那串注释不改**：它在 46-47 行自己已经写明"这段清单记的是 E19 当时的数，那两个前缀已不在树上"，是记录不是宣称。
+
+**顺手抓到一条比文档过期更贵的东西**：`ci.yml:44` 跑 `ruff format --check .`，而 `backend/app/api/system.py` 从 D141 那一刀（`d420bd0`）起在 `_is_mock` 与 `_can_view_system_overview` 之间**多留了一个空行**（三行空行）。工作树与 `git show HEAD:` 字节相同（21,590 B、CR=0），所以这不是本机 CRLF 噪音，而是 **master 在 CI 上就是红的**；`ruff format --diff` 全仓只指出这一处。补掉之后 `ruff format --check` **350 files already formatted**、`ruff check` clean。**这条给判据加了一条腿：删完代码不算删完，还要看那次删除有没有把排版门一起弄红。**
+
+**反向证据（改完复测同一把尺子）**：四份活文档对账 199 条活路由——README 25 条 URL 里剩 **4 条死，且全在 553–554 那张"一并删除"的清单表里**（那是记录，不是宣称）；`setup-and-security` 7 条 0 死、`engineering-quality` 2 条 0 死、`面试消息协议` 1 条 0 死。
+
+**明确不去修的（挂成已知悬空）**：`docs/archive/pilot-plan.md:105` 还写着"跑通 `test-release-checklist.md` §6"，而 §6 这一批摘了；`docs/archive/db-migrations.md:58` 还教人对照已删的 `sql/init*.sql`。归档按 D128 口径不回改。
+
+**行尾**：这批 5 个改动文件里 README（680 CRLF / 0 bare LF）、`.gitignore`（79 / 0）、checklist（186 / 0）在检出态是 CRLF，engineering-quality（243 行全 LF）与 `system.py` 是 LF；摘 §6 用读写都 `newline=''`、片段按 CR+LF 拼接，改完三份 CRLF 文件仍"CRLF 行数 == 总行数"，没有一份被整篇翻掉。
+
+**门禁**：backend `pytest` **824 passed / 97.6s**（与 D141 记的数零差，本轮没动后端语义）、`ruff check` clean、`ruff format --check` clean。前端本轮零改动（没有 `.vue`/`.js` 被碰），故未跑 vitest / eslint / build。`scripts/export_schema_baseline.py --check` 那一步本会话被权限层拦下、**没跑**——它只对 `docs/schema-baseline.sql` 与 ORM 的漂移敏感，这两者本轮都没动；不把它写成"已通过"。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
