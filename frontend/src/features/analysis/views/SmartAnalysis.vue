@@ -847,8 +847,9 @@ onMounted(() => {
   gap: 6px;
   padding: 4px 10px;
   border-radius: var(--app-radius-xs, 8px);
-  background: var(--app-primary-light);
-  color: var(--app-primary);
+  /* 与 B 那 21 个色块座同配方：浅蓝底在深色壳里是"贴纸"，且 11px 字压上去只有 4.48 */
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-size: 11px;
   font-weight: 600;
 }
@@ -979,8 +980,10 @@ onMounted(() => {
 }
 
 .resume-upload :deep(.el-upload-dragger:hover) {
+  /* 悬停反馈靠描边给（主色 3.39:1 相对面板，图形够 3:1），底只加深一档；
+     原来悬一下整块拖拽区会闪成浅蓝，在深色壳里像换了页面。 */
   border-color: var(--app-primary);
-  background: var(--app-primary-light);
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 88%);
 }
 
 .upload-blank {
@@ -1274,21 +1277,21 @@ onMounted(() => {
 }
 
 .chip-match {
-  background: #e8f8ee;
+  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
   color: var(--app-success);
-  border-color: #ccecd7;
+  border-color: color-mix(in srgb, var(--app-success), var(--app-bg) 62%);
 }
 
 .chip-gap {
-  background: var(--app-violet-light);
-  color: var(--app-violet);
-  border-color: #d9cef0;
+  background: color-mix(in srgb, var(--app-violet), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-violet), white 34%);
+  border-color: color-mix(in srgb, var(--app-violet), var(--app-bg) 62%);
 }
 
 .chip-ref {
-  background: var(--app-primary-light);
-  color: var(--app-primary);
-  border-color: #c1d6f0;
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
+  border-color: color-mix(in srgb, var(--app-primary), var(--app-bg) 62%);
 }
 
 .dim-table {
@@ -1322,7 +1325,11 @@ onMounted(() => {
   justify-content: center;
   font-size: 20px;
   font-weight: 700;
-  color: #fff;
+  /* 这块本来要按置信度上色：模板挂的是 :class="badge-${analysisConfidence.level}"，但全仓
+     没有任何 .badge-high / .badge-mid / .badge-low 规则（现取：只有一条无关的 .badge-outline），
+     所以它一直是透明底 + 白字——**上色那条是死接线，没在这一刀里冒充修好**，等他拍。
+     这里只把写死的白换成前景令牌（深色面上 16.9 → 15.6:1，两者都远过 4.5）。 */
+  color: var(--app-text);
   flex-shrink: 0;
 }
 

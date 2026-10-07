@@ -49,7 +49,7 @@ const BUDGET = {
     'src/layouts/DefaultLayout.vue': 33,
     'src/features/shell/views/Profile.vue': 19,
     'src/features/planning/views/CareerPlanning.vue': 27,
-    'src/features/analysis/views/SmartAnalysis.vue': 9,
+    'src/features/analysis/views/SmartAnalysis.vue': 4,
     /* D51 搬出「职业规划」面板时样式按 D44 的口径**复制**（父页面那 1092 行一行没删，因为静态切分
        看不见动态类名），所以这 3 个是从页面里**重复**出来的，不是新增的债：这一页面上的色值
        15 → 18。css 分块实测 17.01 → 19.42 kB、js 分块 46.36 → 48.30 kB。 */
@@ -1181,6 +1181,7 @@ describe('style debt ratchet', () => {
       'src/features/jobs/views/JobRecommend.vue',
       'src/features/jobs/views/SalaryInsight.vue',
       'src/features/interview/views/InterviewSetup.vue',
+      'src/features/analysis/views/SmartAnalysis.vue',
       transcriptKey,
     ]
     // 按"选择器块"判，不按类名形状判：真选择器带修饰类与 `--档` 后缀（`.metric-icon.amber`、
