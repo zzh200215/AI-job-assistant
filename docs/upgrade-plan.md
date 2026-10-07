@@ -3653,6 +3653,20 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **门禁**：`vitest` 87 files / 568 tests、`npm test` 33 条守卫全绿（含"编译器真跑了、不是崩了报 0 条"那条腿与"预算比现实松就红"那条）、prettier / eslint clean（只剩既有 `paidOrders` warning）。本轮后端未改。
 
+#### 已交付：D141 收尾时按"活文档 vs 树"重扫：README 还在卖企业侧，状态页还在宣称一种不存在的登录方式
+
+**为什么这一条不是"改改文案"**。前六刀把企业侧从树里搬空了，但没人回头扫**对外说明书**——所以现取的三类东西各自错在不同的地方：
+
+1. **一个会撒谎的能力位**（比文档过期严重）：`GET /system/status` 的 `capabilities.social_login` 与 `feishu_sso` 读的是 `FEISHU_APP_ID / _SECRET / _REDIRECT_URI` 三个设置，而**飞书 SSO 的路由在 D134 就随 organization/tenant 两个 router 出树了**。也就是说：只要部署环境里还留着这三个变量，管理员状态页就会宣称"支持这种登录方式"，背后一个端点都没有。修法是把两个键、那个 helper 与三个设置一起撤，并把测试从"设上变量就该报 True"改成**"这两个键不再出现"**（`test_system_status.py`），方向钉死，防止下次有人只加回键。
+2. **一张点了不存在的文件的表**：README 的测试清单还列着 `test_organization_api.py` / `test_organization_knowledge_access.py` / `test_feishu_sso.py`——三个文件 D134 就删了。
+3. **一个还在树里的建租户脚本**：`backend/scripts/setup_demo_tenants.py`（250 行，双租户白标演示），README 还有两处教人跑它（"多租户演示"与常用命令表）。除归档文档与本账之外**全仓零引用**（`grep` 现取，只剩 `.ruff_cache` 的缓存），`git rm`。
+
+**README 改了 47 进 / 77 出，落点逐处点名**：headline、目录条目、功能表 6 行（含删掉「团队工作区」「租户管理」两整行）、架构图里 `TENANT[Tenant Context Middleware]` 那个节点与它的边、能力表那行「多租户」、快速开始与命令表那两行、API 路径表里 `/api/organizations` 与 `/api/tenant` 两行、目录树 4 处注释、安全清单 3 条（改成"可见性只按用户判 + 平台那一档今天只能脚本填"）、两句"生产前还要做完飞书 OAuth"、以及卖点表与答辩要点里 5 处企业宣称（**编号列表就地改写、不删条目**，免得 1..7 断号）。新写一节「产品范围与保留的租户列」承担过去那节的位置，明说：模型/列/mixin/migration/schema 基线保留，读侧已无，`tenant_id IS NULL` 仍是"平台那一档"的身份而写入端已删。归档目录里的旧文档按 D128 的口径**不回改**。
+
+**自己踩的两条，都在当场被抓**：① README 在这棵工作树里是 **CRLF**（`core.autocrlf=true`），我第一版脚本用默认换行读进来再写回，等于**把整个文件刷成 LF**——那会让一次 20 行的修改在 diff 里变成 680 行全重写。改成读写都 `newline=''` 并把每个片段的 `\n` 按文件自身行尾翻译，改完实测"CRLF 行数 == 总行数"。② 第一版有两处锚点是我凭记忆写的、和原文不一样（"五层架构"那行的加粗边界、订阅那行我多打了一个"租户"），**断言跑在写盘之前**，所以整文件一次都没被半改，只是退出码告诉我哪两条没中。
+
+**门禁**：backend `pytest` **825 → 824**（净减正好等于删掉的那条 feishu 能力测试）、`ruff check` clean、`test_system_status.py` + `test_admin_auth.py` 13 条绿。前端本轮零改动——那两个键**全仓没有读方**（`SystemStatus.vue` 里 `capabilities` 只出现在 `ocr_resume_parse` 一处，`admin` 面也没有别的消费者），所以删键不需要浏览器那一帧；这句是 grep 现取，不是推断。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
