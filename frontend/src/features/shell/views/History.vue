@@ -338,8 +338,11 @@ const loadList = async () => {
   listError.value = false
   try {
     const data = await listHistory({ page: page.value, page_size: pageSize.value })
-    list.value = data.items
-    total.value = data.total
+    /* 与全仓其余 20 个列表消费点同形（`Users.vue:173`、`Orders.vue:183`、`EvalReport.vue:303`……）：
+       写进 ref 之前先兜底。裸的 `data.items` 一旦缺席，`v-if="list.length"` 就在渲染期抛，
+       页面照常显示、门照常绿，只剩 console 里两条 warn。 */
+    list.value = data.items || []
+    total.value = data.total || 0
   } catch {
     listError.value = true
   } finally {

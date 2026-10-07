@@ -568,6 +568,82 @@ const FIXTURES = [
       evaluation: null,
     },
   ],
+  /* 历史记录页（§10.27 那一双 warn 的根因）。`api/history.js:3` 打 `/history`，此前**一条夹具都没有**，
+     适配器落空返回 `{}` → `loadList` 裸写 `list.value = data.items` → 模板 `v-if="list.length"`
+     在渲染期抛 `Cannot read properties of undefined`，于是这一屏的每一帧都拍在半坏的组件上，
+     而且没有任何门会红（console 里两条 warn 是唯一的痕迹）。
+     字段名照 `backend/app/api/history.py:69-83` 的返回逐字抄；分数覆盖 scoreTone 的四档加一个 null。 */
+  [
+    /\/history(\?|$)/,
+    'get',
+    {
+      total: 5,
+      page: 1,
+      page_size: 10,
+      items: [
+        {
+          id: 99,
+          resume_id: 1,
+          jd_id: 7,
+          resume_name: '探针简历',
+          resume_file: '探针简历.pdf',
+          jd_title: '平台后端工程师',
+          jd_company: '示例公司',
+          match_score: 92,
+          remark: '高匹配',
+          create_time: '2026-10-01T09:00:00',
+        },
+        {
+          id: 98,
+          resume_id: 1,
+          jd_id: 7,
+          resume_name: '探针简历',
+          resume_file: '探针简历.pdf',
+          jd_title: '算法工程师',
+          jd_company: '示例公司二',
+          match_score: 76,
+          remark: '',
+          create_time: '2026-09-28T09:00:00',
+        },
+        {
+          id: 97,
+          resume_id: 1,
+          jd_id: 7,
+          resume_name: '探针简历',
+          resume_file: '探针简历.pdf',
+          jd_title: '数据工程师',
+          jd_company: '示例公司三',
+          match_score: 55,
+          remark: '',
+          create_time: '2026-09-20T09:00:00',
+        },
+        {
+          id: 96,
+          resume_id: 1,
+          jd_id: 7,
+          resume_name: '探针简历',
+          resume_file: '探针简历.pdf',
+          jd_title: '前端工程师',
+          jd_company: '示例公司四',
+          match_score: 30,
+          remark: '',
+          create_time: '2026-09-12T09:00:00',
+        },
+        {
+          id: 95,
+          resume_id: 1,
+          jd_id: 7,
+          resume_name: '探针简历',
+          resume_file: '探针简历.pdf',
+          jd_title: '未评分岗位',
+          jd_company: '示例公司五',
+          match_score: null,
+          remark: '',
+          create_time: '2026-09-05T09:00:00',
+        },
+      ],
+    },
+  ],
 ]
 
 /* 夹具命中账：这一屏到底发过哪些请求、哪一条没夹具可落（落空就是 `{}`，
