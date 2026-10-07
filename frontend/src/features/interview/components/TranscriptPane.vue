@@ -168,10 +168,10 @@ watch([() => props.messages.length, () => props.status], scrollToEnd)
   width: min(100%, 720px);
   padding: 16px;
   border-radius: var(--app-radius-sm, 12px);
-  /* 这一族是挂在 .score-chip--* 上的**浅色胶囊**（底 = tone 混 92% 白），而房间整体在深色
-     工作台里，所以继承来的前景是浅色——实测 1.00–1.04:1。前景必须在这块壳上自己声明，
-     不能靠继承。--app-surface-contrast 在两个主题下都是那个深色 ink。 */
-  color: var(--app-surface-contrast);
+  /* 前景跟着 .score-chip--* 的底走：底在 :root 是 92% 白的浅底、在 .workspace-theme 里是
+     深色底上的色偏（main.css 覆写那一族），而 var(--app-text) 在两个主题下正好是反方向的
+     那一档，所以这一族只写这一个令牌就能两头达标。别把它换成写死的某个 ink 或纯白字面量。 */
+  color: var(--app-text);
 }
 .score-chip--high {
   background: var(--app-score-high-soft);
@@ -215,12 +215,14 @@ watch([() => props.messages.length, () => props.status], scrollToEnd)
   margin: 0;
   line-height: 1.7;
 }
-/* `!important` 原本是为了压过上面那条 `.score-shell p` 的 color；那条已经撤掉，这里靠继承链
-   就能赢（元素自身的声明胜过继承），所以只撤 color 的。margin-top 的 `!important` **留着**：
-   `.score-shell p` 的 `margin: 0` 特异度更高 (0,2,1)，留着才说明它是不是承重的。 */
+/* `!important` 原本是为了压过 `.score-shell p` 的 color；那条已经撤掉，这里靠继承链就能赢
+   （元素自身的声明胜过继承），所以只撤 color 的。margin-top 的 `!important` **留着**：
+   `.score-shell p` 的 `margin: 0` 特异度更高 (0,2,1)，实测同特异度的后置注入压不动它。
+   前景色从写死的棕换成 warning 令牌：那颗棕是给浅底胶囊挑的，底换成深色色偏之后它自己就变成
+   暗压暗（实测约 1.5:1），而 warning / success 这一族在深色面上本来就达标。 */
 .score-improvement {
   margin-top: 10px !important;
-  color: #9a4b1d;
+  color: var(--app-warning);
 }
 /* D68 补回：D66 抄这条时丢了选择器列表的前半截（页面里是 `.system-shell,` 换行 `.end-shell {…}`，
    抽取脚本按"选择器行以 { 结尾"找起点，只收进后半截），system 消息因此失去药丸形状——

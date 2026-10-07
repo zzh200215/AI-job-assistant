@@ -1042,8 +1042,9 @@ function segmentStyle(value, total) {
   width: 48px;
   height: 48px;
   border-radius: 6px;
-  background: var(--app-primary-light);
-  color: var(--app-primary);
+  /* 与 Home 的图标座、Profile 的成就徽章同一配方（B）：深色底上的色偏，不是 pastel 方块 */
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   display: flex;
   align-items: center;
   justify-content: center;

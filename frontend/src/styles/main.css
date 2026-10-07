@@ -471,6 +471,29 @@ code,
   --el-border-color-light: #2c2f3d;
   --el-border-color-lighter: #252833;
   --el-mask-color: rgba(0, 0, 0, 0.62);
+  /* 分数胶囊的底/描边。:root 那两份是 tone 混 92% 白的**浅底**，而唯一消费者
+     TranscriptPane 的 .score-chip--* 只在深色工作台里出现（房间挂在 DefaultLayout 下），
+     于是深色屏上画着一块 92% 白的胶囊。这一族在作用域内换成深色底上的色偏：
+     底 = tone 混 panel 86%，描边 = tone 混 panel 60%。前景跟着交给 .score-shell
+     （它现在拿 var(--app-text)）——底与前景是一对，改一个必须改另一个。 */
+  --app-score-high-soft: color-mix(in srgb, var(--app-score-high), var(--workspace-panel) 86%);
+  --app-score-good-soft: color-mix(in srgb, var(--app-score-good), var(--workspace-panel) 86%);
+  --app-score-warn-soft: color-mix(in srgb, var(--app-score-warn), var(--workspace-panel) 86%);
+  --app-score-risk-soft: color-mix(in srgb, var(--app-score-risk), var(--workspace-panel) 86%);
+  --app-score-unknown-soft: color-mix(
+    in srgb,
+    var(--app-score-unknown),
+    var(--workspace-panel) 86%
+  );
+  --app-score-high-soft-line: color-mix(in srgb, var(--app-score-high), var(--workspace-panel) 60%);
+  --app-score-good-soft-line: color-mix(in srgb, var(--app-score-good), var(--workspace-panel) 60%);
+  --app-score-warn-soft-line: color-mix(in srgb, var(--app-score-warn), var(--workspace-panel) 60%);
+  --app-score-risk-soft-line: color-mix(in srgb, var(--app-score-risk), var(--workspace-panel) 60%);
+  --app-score-unknown-soft-line: color-mix(
+    in srgb,
+    var(--app-score-unknown),
+    var(--workspace-panel) 60%
+  );
   color: var(--app-text);
   background: var(--app-bg);
 }

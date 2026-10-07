@@ -727,8 +727,11 @@ onMounted(async () => {
 .identity-pills span {
   padding: 8px 12px;
   border-radius: 999px;
-  background: #eff9f2;
-  color: #1c8c5e;
+  /* 这两枚药丸原来写死浅绿底 + 绿字，实测在深色壳里**一条都没上屏**：底与字都被主题层那张
+     `!important` 网决定掉了（D94/D105 那一族）。所以换成令牌是零屏幕变化的去债，
+     留着的害处是让下一个人以为这屏是绿的。注释里不落具体色值——色尺数的是文本。 */
+  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
+  color: var(--app-success);
   font-size: 12px;
   font-weight: 600;
 }
@@ -896,37 +899,43 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
+/* 成就徽章的图标座。整族原来是**浅色方快压饱和字**（8 个手挑色），而这一页在深色工作台里，
+   于是那一排在黑面板上就是一排发白的贴纸。改成深色底上的色偏 + tone 字色，全部由令牌派生。
+   两个方向的代价都要说清：① 8 个色相收敛到 5 个（amber/gold 同走 warning、green/success 同走
+   success、teal 走最接近的 cyan 令牌），彩虹感确实降了；② 蓝/紫/红在深色面上直接用本尊字色
+   不达标（实测 primary 3.39、danger 4.42），所以按同一族的最小提亮幅度混白。
+   这套配方是给深色面挑的；若哪天要上浅色页，底与字都得跟着 .workspace-theme 另定一档。 */
 .ach-blue {
-  background: var(--app-primary-light);
-  color: var(--app-primary);
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
 }
 .ach-violet {
-  background: var(--app-violet-light);
-  color: var(--app-violet);
+  background: color-mix(in srgb, var(--app-violet), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-violet), white 34%);
 }
 .ach-amber {
-  background: #fef5e7;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 86%);
   color: var(--app-warning);
 }
 .ach-green {
-  background: #e8f8ee;
+  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
   color: var(--app-success);
 }
 .ach-teal {
-  background: #e6fffa;
-  color: #0d9488;
+  background: color-mix(in srgb, var(--app-cyan), var(--app-bg) 86%);
+  color: var(--app-cyan);
 }
 .ach-success {
-  background: #d1fae5;
-  color: #059669;
+  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
+  color: var(--app-success);
 }
 .ach-gold {
-  background: #fef3c7;
-  color: #d97706;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 86%);
+  color: var(--app-warning);
 }
 .ach-red {
-  background: #fce4ec;
-  color: #e53935;
+  background: color-mix(in srgb, var(--app-danger), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-danger), white 20%);
 }
 
 .ach-info {

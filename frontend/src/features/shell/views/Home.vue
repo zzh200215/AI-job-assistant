@@ -638,16 +638,22 @@ onMounted(loadDashboard)
   flex-shrink: 0;
 }
 
+/* 图标座统一成"深色底上的色偏 + tone 字色"，与 Profile 的成就徽章同一配方（B）。
+   原来这三族是 pastel 方块：amber 2.44、green 2.76，连图形 3:1 都不过。
+   两个代价写明白：① 色相收敛（amber 与 gold 同走 warning、green 与 success 同走 success、
+   teal 走最接近的 cyan），彩虹感确实降了；② 这里改的是**本文件的规则**，没有去动
+   `--app-primary-light` / `--app-violet-light` 那两个令牌本身——它们全仓还有 29 处引用
+   （14 个文件），整体重定向是另一次要单独量的决定。 */
 .core-resume .core-icon {
-  background: var(--app-violet-light);
-  color: var(--app-violet);
+  background: color-mix(in srgb, var(--app-violet), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-violet), white 34%);
 }
 .core-job .core-icon {
-  background: #fef5e7;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 86%);
   color: var(--app-warning);
 }
 .core-interview .core-icon {
-  background: #e8f8ee;
+  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
   color: var(--app-success);
 }
 
@@ -938,19 +944,19 @@ onMounted(loadDashboard)
 }
 
 .metric-icon.blue {
-  background: var(--app-primary-light);
-  color: var(--app-primary);
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
 }
 .metric-icon.amber {
-  background: #fef5e7;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 86%);
   color: var(--app-warning);
 }
 .metric-icon.violet {
-  background: var(--app-violet-light);
-  color: var(--app-violet);
+  background: color-mix(in srgb, var(--app-violet), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-violet), white 34%);
 }
 .metric-icon.green {
-  background: #e8f8ee;
+  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
   color: var(--app-success);
 }
 
@@ -1071,28 +1077,28 @@ onMounted(loadDashboard)
 }
 
 .quick-icon.blue {
-  background: var(--app-primary-light);
-  color: var(--app-primary);
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
 }
 .quick-icon.amber {
-  background: #fef5e7;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 86%);
   color: var(--app-warning);
 }
 .quick-icon.violet {
-  background: var(--app-violet-light);
-  color: var(--app-violet);
+  background: color-mix(in srgb, var(--app-violet), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-violet), white 34%);
 }
 .quick-icon.green {
-  background: #e8f8ee;
+  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
   color: var(--app-success);
 }
 .quick-icon.teal {
-  background: #e6fffa;
-  color: #0d9488;
+  background: color-mix(in srgb, var(--app-cyan), var(--app-bg) 86%);
+  color: var(--app-cyan);
 }
 .quick-icon.red {
-  background: var(--app-accent-soft);
-  color: var(--app-accent);
+  background: color-mix(in srgb, var(--app-danger), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-danger), white 20%);
 }
 
 /* ===== Signal Deck Skin ===== */

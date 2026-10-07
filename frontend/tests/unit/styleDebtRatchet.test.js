@@ -22,7 +22,7 @@ const BUDGET = {
        `score-tone` 那几族实测全部留在表里，`el-` 那类库里选择器一律不动）。
        下面这四个数就是量完剩下的"页面自己还在用"的那些。 */
     'src/features/interview/views/InterviewRoom.vue': 43,
-    'src/features/shell/views/Home.vue': 71,
+    'src/features/shell/views/Home.vue': 63,
     'src/features/jobs/views/JobSearch.vue': 26,
     'src/features/jobs/components/JobCompareDialog.vue': 1,
     'src/features/jobs/components/JobDetailDrawer.vue': 1,
@@ -47,7 +47,7 @@ const BUDGET = {
     /* P1-①（2026-10-07）：`.layout-shell` 那条浅色底换成 `var(--app-bg)`，34 → 33。同一刀把
        主题作用域加到 `documentElement` 上，因为 EP 的浮层是 teleport 到 `body` 子树的。 */
     'src/layouts/DefaultLayout.vue': 33,
-    'src/features/shell/views/Profile.vue': 31,
+    'src/features/shell/views/Profile.vue': 19,
     'src/features/planning/views/CareerPlanning.vue': 27,
     'src/features/analysis/views/SmartAnalysis.vue': 9,
     /* D51 搬出「职业规划」面板时样式按 D44 的口径**复制**（父页面那 1092 行一行没删，因为静态切分
@@ -92,7 +92,7 @@ const BUDGET = {
        一起复制。interview 域这一维 69 → 69+29=98（页面那 69 条仍然一条没删，删除属 D67 那场差分）。
        其中 QuestionPane 19 条最多，因为它那块把头像、徽章、结构框三个上色的块都带走了。 */
     'src/features/interview/components/QuestionPane.vue': 19,
-    'src/features/interview/components/TranscriptPane.vue': 7,
+    'src/features/interview/components/TranscriptPane.vue': 6,
     'src/features/interview/components/RoomAside.vue': 2,
     'src/features/interview/components/StagePane.vue': 1,
     'src/features/auth/views/ResetPassword.vue': 12,
@@ -1163,6 +1163,84 @@ describe('style debt ratchet', () => {
       }
     }
     expect(missing, `main.css is missing score tokens: ${missing.join(', ')}`).toEqual([])
+  })
+
+  /* P1-B（2026-10-07）：深色工作台里不许再长出"浅底压深字"的胶囊/徽章。这一族改过两处——
+     Profile 的 8 个 `.ach-*` 原来是 8 个手挑的 pastel 方块，面试房间的 `.score-chip--*`
+     底是 tone 混 92% 白——两处都量过屏幕（徽章 8 项最差 5.10；胶囊 25 项最差 5.33，
+     且 8 个徽章是 /profile 上真实渲染的元素，不是合成读数）。**但底与前景是一对**：
+     只改一个就回到 1:1 那一档，而色值预算对这种翻车完全无声（换成 color-mix 一个数都不动），
+     所以这条守卫盯的是"配对"而不是"数量"。 */
+  it('keeps the capsule / medal families token-only and the pair intact', () => {
+    const LITERAL = /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/
+    // B 这一刀覆盖的是"深色工作台里的色块座"整族，不只是 Profile：8 个成就徽章 +
+    // Home 的 13 个图标座 + JobRecommend 的头部图标与分数徽章 + 面试房间的回答胶囊。
+    const transcriptKey = 'src/features/interview/components/TranscriptPane.vue'
+    const CHIP_FILES = [
+      'src/features/shell/views/Profile.vue',
+      'src/features/shell/views/Home.vue',
+      'src/features/jobs/views/JobRecommend.vue',
+      transcriptKey,
+    ]
+    // 按"选择器块"判，不按类名形状判：真选择器带修饰类与 `--档` 后缀（`.metric-icon.amber`、
+    // `.score-chip--high`、`.core-resume .core-icon`），上一版按 `-icon$` 那种形状匹配
+    // 对植入毫无反应——正向腿其实一直在空跑，是反证腿把它抓出来的。
+    const BLOCK = /([^{}]+)\{([^{}]*)\}/g
+    const IS_CHIP = /(icon|chip|badge|\.ach-)/
+
+    const check = (sources, themeText) => {
+      const bad = []
+      for (const [file, css] of Object.entries(sources)) {
+        for (const m of css.matchAll(BLOCK)) {
+          const sel = m[1].trim()
+          if (!sel || sel.startsWith('@') || !IS_CHIP.test(sel)) continue
+          if (LITERAL.test(m[2])) bad.push(`${file} 的 ${sel} 块里有字面量色值`)
+        }
+      }
+      if (!/\.score-shell\s*\{[^}]*\bcolor:/.test(sources[transcriptKey])) {
+        bad.push('.score-shell 没声明前景色：底在 :root 与 .workspace-theme 下是反的，靠继承必翻车')
+      }
+      for (const tone of TONES) {
+        for (const suffix of ['-soft', '-soft-line']) {
+          const n = (themeText.match(new RegExp(`--app-score-${tone}${suffix}:`, 'g')) || []).length
+          if (n !== 2)
+            bad.push(
+              `--app-score-${tone}${suffix} 声明了 ${n} 处，应为 2（:root 浅底 + 深色面覆写）`
+            )
+        }
+      }
+      return bad
+    }
+
+    const sources = Object.fromEntries(CHIP_FILES.map((f) => [f, styleOf(f)]))
+    expect(
+      check(sources, themeCss),
+      '色块座这一族回退了（长回 pastel，或胶囊的底与前景被拆开）'
+    ).toEqual([])
+
+    // 反证：三种植入都必须让判据红，否则上面那条等于没在管任何东西。
+    expect(
+      check(
+        {
+          ...sources,
+          'src/features/shell/views/Home.vue': sources['src/features/shell/views/Home.vue'].replace(
+            '.metric-icon.amber {',
+            '.metric-icon.amber { background: #fef5e7;'
+          ),
+        },
+        themeCss
+      )
+    ).not.toEqual([])
+    expect(
+      check(
+        {
+          ...sources,
+          [transcriptKey]: sources[transcriptKey].replace('  color: var(--app-text);\n', ''),
+        },
+        themeCss
+      )
+    ).not.toEqual([])
+    expect(check(sources, themeCss.replace('--app-score-risk-soft-line:', '/*x*/'))).not.toEqual([])
   })
 
   /* 拼出来的类名（`'dot-' + task.priority`、`` `severity-${item.severity}` ``）这一族，
