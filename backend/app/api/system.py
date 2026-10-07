@@ -43,7 +43,6 @@ def _is_mock(provider: str | None) -> bool:
     return str(provider or "").strip().lower() == "mock"
 
 
-
 def _can_view_system_overview(user: User) -> bool:
     return user.role == ADMIN_ROLE or user.username in settings.admin_usernames_list
 
