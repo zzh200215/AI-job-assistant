@@ -1333,6 +1333,25 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
+/* 模板挂的是 `badge-${analysisConfidence.level}`，而这三条规则原本不存在（2026-10-07 现取：
+   全仓没有任何 .badge-high/.badge-mid/.badge-low，只有一条无关的 .badge-outline），
+   所以那块置信度方块从来没上过色。档位映射与 KnowledgeBase 的 .confidence-high/medium/low
+   保持一致（high=success、medium=primary、low=danger），域与后端出处在 constants/states.js
+   的 CONFIDENCE_LEVELS（high / medium / low），已由棘轮的 STATE_CLASS_SITES 双向钉住。
+   底与字用 B 那一套（深色面色偏 + tone 字），不抄同胞那三条 135deg 渐变。 */
+.badge-high {
+  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
+  color: var(--app-success);
+}
+.badge-medium {
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
+}
+.badge-low {
+  background: color-mix(in srgb, var(--app-danger), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-danger), white 20%);
+}
+
 .rag-confidence-copy {
   flex: 1;
   min-width: 0;

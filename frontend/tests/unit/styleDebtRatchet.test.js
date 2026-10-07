@@ -1293,6 +1293,17 @@ describe('style debt ratchet', () => {
       siblings: ['grid', 'main', 'score', 'signals'],
     },
     {
+      /* 2026-10-07：这一族原先是**死接线** —— 模板挂 `badge-${level}`，而三条规则根本不存在，
+         所以置信度方块一直透明底白字。补上规则之后必须有这条双向守卫：域里少一档、或文件里
+         多出一个不在域内的 `badge-*`，都会红（`.badge-dot` 那颗 6px 圆点是布局类，列在 siblings）。
+         域与后端出处见 constants/states.js 的 CONFIDENCE_LEVELS（rag_confidence_service.py:54-62）。 */
+      prefix: 'badge',
+      values: CONFIDENCE_LEVELS,
+      file: 'src/features/analysis/views/SmartAnalysis.vue',
+      unstyled: [],
+      siblings: ['dot'],
+    },
+    {
       prefix: 'severity',
       values: SEVERITY_LEVELS,
       file: 'src/features/eval/views/RecommendationEval.vue',

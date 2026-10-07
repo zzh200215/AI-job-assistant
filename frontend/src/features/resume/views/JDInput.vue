@@ -81,6 +81,7 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import { DataAnalysis, Document, Promotion } from '@element-plus/icons-vue'
 import { ElMessage } from '@/plugins/element-services'
 import { createJD, parseJD } from '@/api/jd'
 import { useSelectionStore } from '@/stores/selection'
