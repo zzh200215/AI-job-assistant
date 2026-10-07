@@ -479,7 +479,9 @@ async function checkExpectation() {
 }
 .empty-copy {
   padding: 34px;
-  background: var(--app-primary-light);
+  /* 这块空状态原来是浅蓝底 + 深色壳里的浅色字：实测标题 1.04:1、正文 2.40:1，标题等于看不见。
+     缺陷只在底——里面的 h3/p 用的本来就是深色面那套前景令牌，所以只把底换成色偏即可。 */
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
 }
 .empty-copy h3 {
   margin: 14px 0 7px;
@@ -520,16 +522,16 @@ async function checkExpectation() {
   font-weight: 700;
 }
 .check-icon.blue {
-  background: var(--app-primary-light);
-  color: var(--app-primary);
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
 }
 .check-icon.violet {
-  background: var(--app-violet-light);
-  color: var(--app-violet);
+  background: color-mix(in srgb, var(--app-violet), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-violet), white 34%);
 }
 .check-icon.amber {
-  background: #fff4d8;
-  color: #996000;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 86%);
+  color: var(--app-warning);
 }
 .insight-checklist p {
   margin: 0;

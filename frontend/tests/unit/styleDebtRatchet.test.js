@@ -114,7 +114,6 @@ const BUDGET = {
     'src/features/analysis/views/MultiAgentAnalysis.vue': 2,
     'src/features/jobs/views/OfferCompare.vue': 2,
     'src/features/admin/views/PromptTrace.vue': 2,
-    'src/features/jobs/views/SalaryInsight.vue': 2,
     'src/features/shell/views/History.vue': 1,
     'src/features/jobs/views/JobTargets.vue': 1,
   },
@@ -1180,6 +1179,7 @@ describe('style debt ratchet', () => {
       'src/features/shell/views/Profile.vue',
       'src/features/shell/views/Home.vue',
       'src/features/jobs/views/JobRecommend.vue',
+      'src/features/jobs/views/SalaryInsight.vue',
       transcriptKey,
     ]
     // 按"选择器块"判，不按类名形状判：真选择器带修饰类与 `--档` 后缀（`.metric-icon.amber`、
