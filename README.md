@@ -1,6 +1,6 @@
 # 基于 Agentic RAG 与多智能体协作的智能招聘与职业规划平台
 
-> 一个以 **求职者职业发展** 为核心、支持 **多租户 SaaS、组织协作与企业级治理** 的全栈智能平台。平台通过 **Agentic RAG 引擎** 检索岗位 JD、行业知识、面试题库和职业发展资料，再由多个 AI Agent 协作完成简历优化、岗位匹配、模拟面试和职业规划；支持以租户为单位交付白标品牌、自定义套餐、题库与评分规则，组织可安全共享知识库，并通过飞书 SSO、审计、运行治理与外部能力 API 进行管理。
+> 一个以 **求职者职业发展** 为核心的全栈智能平台。平台通过 **Agentic RAG 引擎** 检索岗位 JD、行业知识、面试题库和职业发展资料，再由多个 AI Agent 协作完成简历优化、岗位匹配、模拟面试和职业规划；题库、评分规则与套餐按平台一处配置覆盖内置默认；审计、运行治理与外部能力 API 用于内部可观测。**企业/多租户那一侧已在 2026-10 的产品收缩中出树**（`docs/upgrade-plan.md` D132–D137）：数据库里的 `tenant_id` / `organization_id` 列与模型保留，但不再参与任何可见性判定。
 
 ---
 
@@ -18,7 +18,7 @@
 - [接口概览](#接口概览)
 - [项目结构](#项目结构)
 - [安全与权限](#安全与权限)
-- [多租户 SaaS 与组织协作](#多租户-saas-与组织协作)
+- [产品范围与保留的租户列](#产品范围与保留的租户列)
 - [外部能力 API（M6）](#外部能力-apim6)
 - [AI 治理与运行保障](#ai-治理与运行保障)
 - [测试](#测试)
@@ -31,18 +31,16 @@
 
 | 模块 | 前端入口 | 使用范围 | 核心能力 |
 | --- | --- | :---: | --- |
-| 用户认证 | 登录 / 注册 / 重置密码 | C + 管理后台 | JWT 登录态、用户隔离、管理员配置、可选飞书 SSO |
+| 用户认证 | 登录 / 注册 / 重置密码 | C + 管理后台 | JWT 登录态、用户隔离、管理员配置 |
 | 简历管理 | 简历上传 / 简历对比 | C | PDF / Word / TXT 解析、结构化存储、优化导出 |
-| 岗位 JD 管理 | 岗位 JD | C | JD 录入、解析、公开 / 私有权限控制、租户岗位隔离 |
+| 岗位 JD 管理 | 岗位 JD | C | JD 录入、解析、公开 / 私有权限控制 |
 | **智能分析** | 智能分析 / 分析详情 | C | 匹配度评估 + 能力差距 + 优化建议 + 面试题 + 职业建议 |
 | **多智能体协作** | Agent 分析 / Multi-Agent | C | Agent 编排、任务中心、步骤追踪与质量自检 |
-| **模拟面试** | AI 模拟面试 → 面试室 → 面试报告 | C | WebSocket 实时问答、评分、追问、复盘报告；题库/评分/报告模板可租户配置 |
-| **岗位市场** | 岗位搜索 / 岗位推荐 | C | Mock 岗位源、基于简历的混合推荐、投递流程、租户岗位隔离 |
+| **模拟面试** | AI 模拟面试 → 面试室 → 面试报告 | C | WebSocket 实时问答、评分、追问、复盘报告；题库与评分规则可按平台配置覆盖内置默认 |
+| **岗位市场** | 岗位搜索 / 岗位推荐 | C | Mock 岗位源、基于简历的混合推荐、投递流程 |
 | **职业规划** | 职业规划工作台 | C | 能力雷达、成长路线图、阶段诊断、技能提升建议 |
-| **知识库管理** | 知识库 / 团队工作区 | C + 组织 | 文档上传、切片、Chroma 向量检索、Query Rewrite、Rerank、租户/组织隔离 |
-| **团队工作区** | 团队工作区 | 组织 | 创建和切换组织、成员角色、共享知识库、飞书 SSO 配置 |
-| **订阅套餐** | 订阅方案 / 订单管理 | C + 管理后台 | 三档套餐、额度体系、订单支付、管理员自定义租户套餐 |
-| **租户管理** | 管理后台 → 租户管理 | 管理后台 | 建租户、配品牌白标、绑定域名、配套餐/题库、导入岗位与知识、续费 |
+| **知识库管理** | 知识库 | C | 文档上传、切片、Chroma 向量检索、Query Rewrite、Rerank、个人与平台共享两档可见性 |
+| **订阅套餐** | 订阅方案 / 订单管理 | C + 管理后台 | 三档套餐、额度体系、订单支付、管理员配置平台套餐 |
 | **外部能力 API** | 接口文档（Swagger） | 第三方开发者 | X-API-Key 鉴权、简历解析 / 匹配 / 面试能力、用量计费、Webhook 事件 |
 | 历史记录 | 历史记录 | C | 分析记录回看、简历版本与投递反馈闭环 |
 | 数据隐私 | 隐私与数据 | C | 个人数据概览与删除入口 |
@@ -112,7 +110,7 @@
 
 ## 系统架构
 
-整体为 **五层架构：数据层 → Agentic RAG 智能层 → 多智能体业务层 → API 服务层 → 前端展示层**，租户上下文在中间件层统一解析注入，外部能力 API 与平台内部 API 并行提供能力。
+整体为 **五层架构：数据层 → Agentic RAG 智能层 → 多智能体业务层 → API 服务层 → 前端展示层**，外部能力 API 与平台内部 API 并行提供能力。
 
 ```mermaid
 flowchart TB
@@ -120,7 +118,6 @@ flowchart TB
     D[第三方开发者] -->|X-API-Key| EXT[External API<br/>/api/v1/external]
 
     FE -->|HTTP / WebSocket| API[FastAPI API Layer]
-    API --> TENANT[Tenant Context Middleware<br/>X-Tenant-Id / Host 解析]
     API --> AUTH[Auth & Access Guard]
     API --> ORCH[Agent Orchestration<br/>Linear / Layered / StepByStep]
     API --> SVC[Business Services]
@@ -135,8 +132,7 @@ flowchart TB
 
     EXT --> EXTSVC[External Services<br/>API Key 鉴权 / 用量计费 / Webhook]
     EXTSVC --> SVC
-    TENANT --> SVC
-    SVC --> DB[(MySQL)<br/>租户隔离 tenant_id]
+    SVC --> DB[(MySQL)]
     SVC --> FILES[(Uploads)]
     SVC --> RAG[RAG Services]
     RAG --> CHROMA[(Chroma 向量库)]
@@ -200,7 +196,7 @@ flowchart LR
 | **RAG 引擎** | Chroma、BM25、Query Rewrite、RRF 融合、Rerank、置信度评估 |
 | **模型接入** | OpenAI 兼容接口、DashScope / OpenAI Embedding、mock provider |
 | **编排** | 自研 Orchestration 层、LangGraph 可选、Redis 队列 worker |
-| **多租户** | 共享表 + `tenant_id` 行级隔离、中间件租户上下文、品牌白标、域名绑定 |
+| **数据隔离** | 业务表仍带 `tenant_id` / `organization_id` 列（按 2026-10 的收缩决定保留），可见性只按 `user_id`：本人 + 无主的平台共享 |
 | **外部能力 API** | X-API-Key 鉴权、用量计费、HMAC-SHA256 签名 Webhook |
 | **数据库** | MySQL 8.0 |
 | **部署** | Docker、Docker Compose、Nginx、Prometheus + Grafana（可选） |
@@ -291,9 +287,6 @@ JWT_SECRET=your-random-32-char-secret
 LLM_PROVIDER=mock
 EMBEDDING_PROVIDER=mock
 ORCHESTRATION_STRATEGY=linear
-FEISHU_APP_ID=
-FEISHU_APP_SECRET=
-FEISHU_REDIRECT_URI=
 ```
 
 ### 生产部署
@@ -382,8 +375,6 @@ npm run dev
 | `ORCHESTRATION_MAX_ATTEMPTS` | `3` | 仅 `redis_queue`：含首次的执行次数上限，跑满即转入 `<队列名>:dead-letter` |
 | `RAG_TOP_K` | `5` | 检索 Top K |
 | `RAG_CHUNK_SIZE` / `RAG_CHUNK_OVERLAP` | `500` / `50` | 切片参数 |
-| `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | — | 飞书应用凭据，仅从环境变量读取 |
-| `FEISHU_REDIRECT_URI` | — | 飞书 OAuth 回调地址，需与飞书开放平台白名单一致 |
 | `RERANKER_PROVIDER` | `auto` | 重排模型提供方 |
 | `SMTP_*` | — | SMTP 邮件服务（发信、重置密码邮件） |
 | `FRONTEND_URL` | `http://localhost:5173` | 前端地址（用于邮件跳转链接） |
@@ -421,7 +412,6 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 - 注册后即可体验所有功能
 - 系统状态页将标识当前处于 `demo mode`
 - 岗位数据可通过 `批量导入` 或 `种子数据` 功能快速填充
-- 多租户演示可运行 `backend/scripts/setup_demo_tenants.py` 初始化演示租户
 
 > **提示**：接入真实大模型后，在 `.env` 中配置 `LLM_API_KEY` 并设置 `LLM_PROVIDER=openai` 或 `dashscope`，分析质量和多样性将显著提升。
 
@@ -441,7 +431,6 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 | 导入种子知识库 | `cd backend && python scripts/import_knowledge_seeds.py` |
 | 重置知识库 | `cd backend && python reset_kb.py` |
 | 建管理员 | `cd backend && python scripts/create_admin.py` |
-| 初始化演示租户 | `cd backend && python scripts/setup_demo_tenants.py` |
 | 导出 schema 基线 | `cd backend && python scripts/export_schema_baseline.py` |
 | 导出交付文档 | `cd backend && python scripts/export_delivery_docs.py` |
 | 备份 / 恢复 | `cd backend && python scripts/backup.py` / `bash scripts/restore.sh` |
@@ -461,9 +450,7 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 | `/api/analysis` | 智能分析（匹配度 + 优化 + 面试题 + 职业规划） |
 | `/api/history` | 历史记录 |
 | `/api/knowledge` | 知识库上传、检索、切片管理 |
-| `/api/organizations` | 组织工作区、成员角色、飞书 SSO 配置 |
-| `/api/tenant` / `/api/admin/tenants` | 租户品牌查询 / 租户管理（建租户、品牌、域名、岗位与知识导入、续费） |
-| `/api/subscription` | 套餐列表、订阅状态、额度检查、订单、支付；管理员自定义套餐与订单管理 |
+| `/api/subscription` | 套餐列表、订阅状态、额度检查、订单、支付；管理员平台套餐配置 |
 | `/api/agent` | 单 Agent 分析入口 / 任务中心 |
 | `/api/multi-agent` | 多智能体协作分析入口 |
 | `/api/interview` | 面试会话创建、结果查询、报告导出 |
@@ -487,9 +474,9 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 ├── backend/
 │   ├── app/
 │   │   ├── agents/              # 专业 AI Agents + 辅助 Agent
-│   │   ├── api/                 # FastAPI 路由层（含 external/ 外部能力 API、tenant.py 租户管理）
-│   │   ├── core/                # 配置 / 数据库 / 安全 / 启动引导 / 租户上下文
-│   │   ├── models/              # SQLAlchemy 数据模型（含 tenant、api_*、webhook、interview_config）
+│   │   ├── api/                 # FastAPI 路由层（含 external/ 外部能力 API）
+│   │   ├── core/                # 配置 / 数据库 / 安全 / 启动引导
+│   │   ├── models/              # SQLAlchemy 数据模型（含按收缩决定保留的 tenant / organization 模型、api_*、webhook、interview_config）
 │   │   ├── orchestration/       # 编排策略（Linear / Layered / StepByStep + LangGraph）
 │   │   ├── prompts/             # LLM Prompt 模板
 │   │   ├── schemas/             # Pydantic 请求/响应模型
@@ -497,7 +484,7 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 │   │   └── utils/               # 文件 / 权限 / 响应 / 重试等工具
 │   ├── chroma_db/               # Chroma 向量数据库文件
 │   ├── migrations/              # Alembic 数据库迁移
-│   ├── scripts/                 # 知识库导入 / 评测 / 备份 / 建租户等脚本
+│   ├── scripts/                 # 知识库导入 / 评测 / 备份等脚本
 │   ├── tests/                   # pytest 测试套件
 │   ├── uploads/                 # 上传文件存储
 │   ├── Dockerfile
@@ -539,11 +526,9 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 - **限流防护**：基于 slowapi。带有效令牌的请求按**登录用户**计额度，匿名请求（登录/注册/重置密码等）仍按**来源地址**计，默认 `100/minute` / `5/minute`，支持 Redis 后端
 - **文件隔离**：简历和知识库文件不通过静态目录暴露，下载需登录 + 权限校验
 - **用户隔离**：JD 列表保持私有语义，公开 JD（`user_id = null`）可参与分析流程
-- **多租户隔离**：所有业务表注入 `tenant_id`，共享表通过 `tenant_filter()` / `stamp_tenant()` 强制行级过滤；租户上下文由中间件统一解析（`X-Tenant-Id` 头 > Host 域名 > 默认租户），业务代码不散写判断；岗位、知识库、订阅按租户隔离
-- **组织隔离**：组织知识库使用显式 `X-Organization-ID` 上下文；成员可读，所有者与管理员可维护，个人简历和投递记录不会自动共享
-- **组织治理**：支持所有者、管理员、成员角色，成员变更与 SSO 配置写入审计日志
+- **可见性只按用户判**：岗位、知识库、订阅的读侧一律 `user_id in (本人, 无主)`；`tenant_id` / `organization_id` 列仍由 ORM 写默认值，但树里已没有任何按它分区的读侧（中间件、`tenant_filter()` / `stamp_tenant()`、`X-Tenant-Id` / `X-Organization-ID` 的解析都随企业侧出树）
+- **平台共享那一档**：`kb_document.user_id IS NULL` 即共享（无主即共享）；这一档今天只能由脚本/SQL 写入——配置类端点的写入端已随企业侧删除
 - **外部能力 API 安全**：独立 `X-API-Key` 鉴权（不依赖平台 JWT），行锁防并发超配额，每日限额；Webhook 投递带 HMAC-SHA256 签名、事件 ID 防重放，并做 IP + DNS 双层 SSRF 校验
-- **飞书 SSO**：OAuth state 使用一次性、数据库持久化且过期的 nonce，防止回放；凭据仅允许从环境变量读取
 - **隐私控制**：提供个人数据概览和删除入口，简历删除同时清理版本记录
 - **运行保障**：持久化运行告警覆盖模型、队列、工作流、LLM 失败与 HTTP 错误率，并支持确认和审计
 - **AI 发布治理**：发布记录固化模型、Prompt 版本、评测证据、门禁结果和审批信息
@@ -555,45 +540,34 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 
 ---
 
-## 多租户 SaaS 与组织协作
+## 产品范围与保留的租户列
 
-平台以 **多租户** 作为交付单位：`Organization` 即租户，`tenant_id` 即组织 ID。每个租户可独立配置品牌、套餐、题库、评分规则、岗位库与知识库，实现白标 SaaS 交付。
+**产品只做求职者侧**（2026-09-19 收缩，2026-10 起把企业/多租户那一侧真正删出树：`docs/upgrade-plan.md` D132–D137）。
+这一节写的是"删了什么、留了什么、为什么留的列不再参与判定"，因为只 grep 到 `tenant_id` 的人很容易读成"多租户还在"。
 
-### 租户生命周期
+### 已经出树的能力
 
-- 管理员通过运营后台「租户管理」（`/admin/tenants`）创建/停用租户、配置品牌白标、绑定域名、分配管理员、续费（延长 `expires_at` 并恢复 `active`）。
-- 租户状态：`active` / `suspended` / `expired`；过期或停用的租户用户访问被拦截（403）。
-- 品牌白标：`logo_url` / `primary_color` / `favicon` / `login_bg` / `company` / `contact`，前端通过租户 Store 注入 CSS 变量动态生效。
-- 域名绑定：`TenantDomainBinding` 支持一个租户绑定主域名 + 别名，Host 解析自动识别租户。
+| 能力 | 曾经是什么 | 现在 |
+| --- | --- | --- |
+| 租户上下文中间件 | 每请求解析 `X-Tenant-Id` / Host 域名 → 注入 ContextVar | 模块 `app/core/tenant_context.py` 已删除，中间件不再挂载 |
+| 租户与组织管理 API | `/api/tenant`、`/api/admin/tenants`、`/api/organizations`（含成员、品牌白标、域名绑定、岗位与知识导入、续费） | 两个 router 与其挂载一并删除 |
+| 飞书 SSO | `/api/organizations/sso/feishu/{slug}/start` 与回调 | 端点、登录页入口、`capabilities` 里的 `social_login` / `feishu_sso` 一并撤下 |
+| 白标品牌 | 租户 Store 拉品牌配置注入 CSS 变量 | Store、`/tenant/brand` 读点与注入路径全删；主题只有内置一套 |
+| 按租户分区的可见性 | 岗位、知识库、订阅、面试配置的 `tenant_filter()` / `stamp_tenant()`（共 48 + 9 处） | 读侧只按 `user_id`；`organization_id` 那两处作用域同样删除 |
+| 按租户配置题库 / 评分 / 套餐 | `PUT /interview/admin/interview-config`、`POST /subscription/admin/plans` | 两个"唯一写入端"出树；平台级配置仍可读，但只能由脚本/SQL 填 |
+| 租户计费扫描 | 每小时遍历 `organization` 做到期停用/续费恢复 | 调度任务与三个服务函数删除（实测 organization 0 行，循环体从没进过） |
 
-### 租户隔离
+### 保留的东西，以及为什么
 
-- 共享表 + `tenant_id` 行级隔离，中间件统一解析租户上下文（`X-Tenant-Id` 头 > Host 域名 > 默认租户 id=1）。
-- 岗位、知识库、订阅按租户隔离：导入到某租户的岗位/文档仅在该租户可见，RAG 检索不跨租户。
-- 组织成员通过 `OrganizationMembership` 归属租户，支持多用户协作。
+- **模型、列、mixin、migration 与 `docs/schema-baseline.sql` 全部保留**：这是收缩时定的路线（保模型只删暴露面），所以 `tenant_id` / `organization_id` 列还在、`TenantScopedMixin` 还在、`Organization` / `OrganizationMembership` / `TenantConfig` 模型还在，`tests/test_tenant_model.py` 也还在守这些列。**判据是"有没有读写侧走它"，不是"列在不在"**。
+- **可见性只按用户**：岗位与知识库是"本人 + 无主的平台共享"，订阅/额度按 `user_id` 归属。
+- **平台配置那一档仍由 `tenant_id IS NULL` 表达**（题库/评分/套餐三处），因为它是产品自己的配置机制，不是企业面；但写入端已删，所以今天填它只能靠脚本——手工插入一条带租户号的行，配置阶梯是看不见的。
+- **外部能力 API（下一节）不属于这一族**：它是 X-API-Key 计费的对外接口，`api_key` / `api_bill` 上的 `tenant_id` 只是账单归属列，不参与候选人可见性。
 
-### 组织工作区
+### 演示与种子数据
 
-组织能力采用显式工作区边界，当前已落地的组织资源是**共享知识库**：
-
-- 前端入口：`/organizations`，支持创建、切换组织，查看成员与管理飞书 SSO。
-- 角色：`owner` 可调整成员角色；`owner` / `admin` 可添加、移除普通成员和维护组织知识；成员可读取组织知识。
-- 范围：请求携带 `X-Organization-ID` 时，知识检索仅包含当前组织资料与平台公共资料；个人知识、简历、分析和投递记录不会自动共享。
-- 审计：组织创建、成员变更、SSO 配置以及告警确认均记录审计日志。
-
-### 订阅套餐
-
-三档套餐 `free` / `pro` / `enterprise`，权益含简历上限、每日分析/面试/推荐额度、完整报告导出、ATS 检测、Offer 决策、谈薪建议等。管理员可通过 `POST /subscription/admin/plans` 按租户自定义套餐名称、价格与权益（与默认权益做浅合并），覆盖优先级：租户自定义 > 平台默认 > 内置常量。
-
-飞书 SSO 使用 OAuth 授权码流程，需在部署环境设置以下变量，并在飞书开放平台登记完全一致的回调地址：
-
-```env
-FEISHU_APP_ID=cli_xxx
-FEISHU_APP_SECRET=your-secret
-FEISHU_REDIRECT_URI=https://<api-domain>/api/organizations/sso/feishu/callback
-```
-
-登录入口为 `/api/organizations/sso/feishu/{organization_slug}/start`。未配置以上三个变量时接口会明确返回“飞书 SSO 尚未配置应用凭据”；本地 mock 测试不替代真实飞书租户联调。
+`backend/scripts/setup_demo_tenants.py`（双租户白标演示）随企业侧出树，README 里那两行入口也一起撤下。
+演示数据的界面入口现在是 `POST /jobs/seed`（岗位）与 `POST /resume/seed-demo`（简历），两者写的都是**调用者自己名下**的行；平台共享岗位是 `user_id IS NULL` 那一类。知识库侧另有 `scripts/import_knowledge*.py` 与 `scripts/seed_rag_corpus.py`，与本节无关。
 
 ---
 
@@ -629,7 +603,7 @@ FEISHU_REDIRECT_URI=https://<api-domain>/api/organizations/sso/feishu/callback
 - **AI 发布门禁**：发布记录固化模型、提供方、Prompt 版本、评测证据、阈值、门禁结果与审批信息；RAG、Agent 和推荐评测报告须满足配置要求后才能通过。
 - **隐私与删除**：`/api/auth/data-summary` 提供个人数据概览；删除简历时同步删除对应版本记录。
 
-生产运营仍应完成飞书真实 OAuth、外部告警通知、备份恢复演练、跨组织授权与压力测试后再进入正式发布流程。
+生产运营仍应完成外部告警通知、备份恢复演练与压力测试后再进入正式发布流程。
 
 ---
 
@@ -654,7 +628,6 @@ pytest
 | `test_interview_engine.py` / `test_interview_async_evaluation.py` / `test_interview_question_generation.py` | 面试引擎 / 异步评分 / 出题 |
 | `test_interview_config.py` | 题库 / 评分规则 / 报告模板租户覆盖 |
 | `test_analysis_history_access.py` | 分析历史权限 |
-| `test_organization_api.py` / `test_organization_knowledge_access.py` / `test_feishu_sso.py` | 组织工作区 / 知识隔离 / 飞书 SSO |
 | `test_tenant_api.py` / `test_tenant_model.py` / `test_tenant_context.py` | 租户管理 / 模型 / 上下文解析 |
 | `test_tenant_isolation.py` / `test_tenant_jobs_knowledge.py` / `test_analytics_tenant.py` | 租户数据隔离（岗位 / 知识 / 报表） |
 | `test_subscription_plans.py` | 三档套餐与自定义套餐 |
@@ -668,7 +641,7 @@ pytest
 
 ## 交付说明
 
-项目具备可演示、可答辩与可部署的基础能力；生产启用前仍应完成真实模型、飞书 OAuth 和备份恢复演练。推荐结合以下入口做统一说明：
+项目具备可演示、可答辩与可部署的基础能力；生产启用前仍应完成真实模型联调与备份恢复演练。推荐结合以下入口做统一说明：
 
 - **交付范围与验收建议**：前端 `/delivery-guide`
 - **系统当前运行模式**：前端 `/system-status`
@@ -684,17 +657,14 @@ pytest
 1. **Agentic RAG** — LLM 检索路由（Retrieval Planner）+ Query Rewrite + 多路召回 + RRF 融合 + Rerank + 置信度评估的完整链路
 2. **多智能体分工** — 多个专业 Agent 各司其职，通过编排层组合成灵活工作流
 3. **求职全流程闭环** — 从简历诊断 → 岗位选择 → 投递策略 → 面试准备 → 职业规划，并沉淀简历版本与投递反馈
-4. **多租户白标 SaaS** — 以租户为交付单位，品牌白标、自定义套餐、题库/评分规则、岗位与知识按租户隔离，支持第二个客户低成本复制交付
+4. **平台级配置化** — 题库、评分规则与套餐都走「平台配置行 → 内置默认」两级回落，改配置不改代码（配置行由脚本/SQL 写入，管理端写入点已随企业侧出树）
 5. **外部能力 API 商业化** — X-API-Key 鉴权、用量计费、月度账单与签名 Webhook，为第三方集成与渠道合作提供商业化出口
-6. **企业治理基础** — 组织工作区、成员角色、共享知识库、飞书 SSO、审计、告警与 AI 发布门禁
+6. **治理与可观测** — 审计日志、运行告警评估、AI 发布门禁与提示溯源；企业/多租户那一侧已于 2026-10 出树，口径见「产品范围与保留的租户列」
 
 ### 后续加强方向
 
 - 接入真实第三方岗位平台 API（鉴权、分页、频控、回退）
-- 为组织增加邀请审批、所有权转移、禁用和资源级授权流程
-- 配置真实飞书应用并完成 OAuth 沙箱与生产租户联调
-- 执行备份恢复演练、跨组织授权测试与负载测试
-- 按 `docs/archive/pilot-plan.md` 完成第二个客户 Pilot，验证配置化交付成本 ≤ 首个客户的 40%
+- 执行备份恢复演练与负载测试
 
 ---
 
@@ -703,8 +673,8 @@ pytest
 1. **业务闭环**：从简历上传、JD 输入、智能分析，到职业规划、岗位市场和模拟面试
 2. **多智能体**：多个专业 Agent 通过编排层组合成可追溯工作流
 3. **Agentic RAG**：知识库不是简单向量检索，而是 Query Rewrite、多路召回、RRF 融合、重排和置信度评估
-4. **工程化**：前后端分离、Docker Compose、Alembic 迁移、JWT 鉴权、多租户隔离、测试覆盖
-5. **多租户 SaaS**：以租户为单位交付白标品牌、自定义套餐、题库/评分规则与知识隔离，支持客户复制与配置化交付
+4. **工程化**：前后端分离、Docker Compose、Alembic 迁移、JWT 鉴权、用户级数据隔离、测试覆盖
+5. **配置化而非硬编码**：题库、评分规则与套餐是「平台配置 → 内置默认」两级回落，加一档配置不用改代码
 6. **外部能力 API**：X-API-Key 鉴权 + 用量计费 + 签名 Webhook，开放 AI 能力给第三方集成方
-7. **企业能力**：团队工作区、飞书 SSO、审计、运行告警和 AI 发布门禁已落地；真实 OAuth 与生产演练需配置外部凭据后完成
+7. **治理与运维**：审计、运行告警、AI 发布门禁与提示溯源已落地；外部告警通知与备份恢复演练仍待生产环境验证（企业/多租户一侧已出树）
 8. **体验闭环**：简历、分析、面试、投递、Offer、职业规划与周报均提供状态、依据和下一步操作；智能任务与 RAG 检索可回看执行痕迹
