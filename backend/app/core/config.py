@@ -93,10 +93,6 @@ class Settings(BaseSettings):
     AI_RELEASE_REQUIRED_EVALUATION_TYPES: str = "rag,agent,recommend"
     AI_RELEASE_MAX_EVALUATION_AGE_DAYS: int = 30
 
-    FEISHU_APP_ID: str = ""
-    FEISHU_APP_SECRET: str = ""
-    FEISHU_REDIRECT_URI: str = ""
-
     EMBEDDING_PROVIDER: str = "mock"
     EMBEDDING_API_KEY: str | None = None
     EMBEDDING_BASE_URL: str | None = None

@@ -89,23 +89,13 @@ def test_system_status_returns_runtime_flags(client):
     assert "ready" in data["model_runtime"]
     assert "configured" in data["model_runtime"]["llm"]
     assert "configured" in data["model_runtime"]["embedding"]
-    assert data["capabilities"]["social_login"] is False
     assert data["capabilities"]["password_reset"] is True
+    # 状态页不许报"有某种登录方式"而树里没有对应端点：`social_login` / `feishu_sso` 那两个键
+    # 读的是三个 FEISHU_* 设置，而 SSO 路由早在 D134 就随企业侧出树了——环境变量配上也只会
+    # 让管理员看到一句假话。键与设置一起撤，这里钉住"不再出现"。
+    assert "social_login" not in data["capabilities"]
+    assert "feishu_sso" not in data["capabilities"]
     assert isinstance(data["capabilities"]["ocr_resume_parse"], bool)
-
-
-def test_system_status_reports_configured_feishu_sso(client, monkeypatch):
-    monkeypatch.setattr(system.settings, "FEISHU_APP_ID", "cli_test")
-    monkeypatch.setattr(system.settings, "FEISHU_APP_SECRET", "secret")
-    monkeypatch.setattr(system.settings, "FEISHU_REDIRECT_URI", "https://example.test/callback")
-    register_response = register_user(client)
-    token = register_response.json()["data"]["access_token"]
-
-    response = client.get("/system/status", headers={"Authorization": f"Bearer {token}"})
-
-    capabilities = response.json()["data"]["capabilities"]
-    assert capabilities["social_login"] is True
-    assert capabilities["feishu_sso"] is True
 
 
 def test_system_status_exposes_ocr_capability(client, monkeypatch):
