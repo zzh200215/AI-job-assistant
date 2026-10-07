@@ -8,7 +8,14 @@ import { fileURLToPath } from 'node:url'
 // 一次约 24 秒，所以它住在 node --test 这一层（CI 的 `npm test`），不进 vitest 那 71 个文件。
 // 2026-10-06 真删企业侧（§10.2，D132）：那 42 条里有 2 条住在 `admin/Tenants.vue`，随文件一起出树。
 // 这是 42 第一次不是"人清出来的"，是删文件删出来的——所以下限那两条也一起改了。
-const BUDGET = 40
+// 2026-10-07 D140 清零剩下 40 条：它们全在三个管理员页面（`SystemStatus` 29 + `PromptTrace` 6 +
+// `Overview` 5），病根是同一个——视图在 `ref({})` / `reactive({...字面量})` 上起步，读后端真的返回的键
+// 就判 TS2339。修法是 §D83 那一条：给响应写只含后端真返回键的抄本（`api/system.js`、`api/analytics.js`、
+// `api/promptTrace.js`），外加两处顺带清掉的死代码：`res?.data || res` 那层信封二次解包（`request.js:37`
+// 在 `code === 0` 时已经返回 `body.data`，这几个载荷里也没有 `data` 键，所以那一支永远取不到），
+// 以及 `?degraded=` 只认单个字符串（与改写前逐字同结果，只是不再把 `string[]` 喂进 filters）。
+// 预算从此是硬零：任何新增类型错都会在这里红，而不是"还剩几条"。
+const BUDGET = 0
 
 // 编译器"看到多少个文件"。D40 那次的教训是尺子会跟着搬家安静地少测文件，所以这条不是装饰：
 // include 少一根、或某类文件改了扩展名，先在这里红，而不是等到"债清完了"才发现量的是空气。

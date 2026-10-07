@@ -123,9 +123,9 @@ import { dateTime } from '@/utils/format/date'
 
 const router = useRouter()
 const loading = ref(false)
-const summary = ref({})
-const revenue = ref({})
-const funnel = ref({})
+const summary = ref(/** @type {import('@/api/analytics').AnalyticsSummaryPayload} */ ({}))
+const revenue = ref(/** @type {import('@/api/analytics').AnalyticsRevenuePayload} */ ({}))
+const funnel = ref(/** @type {import('@/api/analytics').AnalyticsFunnelPayload} */ ({}))
 const orders = ref([])
 
 const paidOrders = computed(() => orders.value.filter((order) => order.status === 'paid'))
@@ -211,9 +211,9 @@ async function loadAnalytics() {
       getAdminRevenue({}, { notifyError: false }),
       getAnalyticsFunnel({}, { notifyError: false }),
     ])
-    summary.value = summaryRes?.data || summaryRes || {}
-    revenue.value = revenueRes?.data || revenueRes || {}
-    funnel.value = funnelRes?.data || funnelRes || {}
+    summary.value = summaryRes || {}
+    revenue.value = revenueRes || {}
+    funnel.value = funnelRes || {}
   } catch {
     summary.value = {}
     revenue.value = {}

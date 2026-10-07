@@ -172,8 +172,8 @@ import { useAuthStore } from '@/stores/auth'
 import { ElMessage } from 'element-plus'
 
 const authStore = useAuthStore()
-const status = ref({})
-const overview = ref({})
+const status = ref(/** @type {import('@/api/system').SystemStatusPayload} */ ({}))
+const overview = ref(/** @type {import('@/api/system').SystemOverviewPayload} */ ({}))
 const modelProbe = ref(null)
 const probing = ref(false)
 const canViewOverview = computed(() => !!authStore.user?.is_admin)
@@ -232,7 +232,7 @@ async function runModelProbe() {
   probing.value = true
   try {
     const response = await probeModelRuntime()
-    modelProbe.value = response?.data || response || null
+    modelProbe.value = response || null
     if (modelProbe.value?.checks?.llm?.ok && modelProbe.value?.checks?.embedding?.ok) {
       ElMessage.success('模型与向量服务连通性检测通过')
     } else {
@@ -245,7 +245,7 @@ async function runModelProbe() {
 
 onMounted(async () => {
   const statusRes = await getSystemStatus()
-  status.value = statusRes?.data || statusRes || {}
+  status.value = statusRes || {}
 
   if (!canViewOverview.value) {
     overview.value = {}
@@ -253,7 +253,7 @@ onMounted(async () => {
   }
 
   const overviewRes = await getSystemOverview()
-  overview.value = overviewRes?.data || overviewRes || {}
+  overview.value = overviewRes || {}
 })
 </script>
 

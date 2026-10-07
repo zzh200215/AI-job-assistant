@@ -382,16 +382,18 @@ const compareForm = reactive({
   versionB: '',
 })
 
-const summary = reactive({
-  total: 0,
-  success_rate: 0,
-  avg_duration_ms: null,
-  avg_total_tokens: null,
-  avg_cost_cents: null,
-  sources: [],
-  versions: [],
-  version_groups: [],
-})
+const summary = reactive(
+  /** @type {import('@/api/promptTrace').PromptTraceSummaryPayload} */ ({
+    total: 0,
+    success_rate: 0,
+    avg_duration_ms: null,
+    avg_total_tokens: null,
+    avg_cost_cents: null,
+    sources: [],
+    versions: [],
+    version_groups: [],
+  })
+)
 
 const traceList = reactive({
   items: [],
@@ -594,7 +596,10 @@ function hydrateFiltersFromRoute() {
   filters.prompt_version = normalizeQueryText(route.query.prompt_version)
   filters.status = normalizeQueryText(route.query.status)
   filters.response_source = normalizeQueryText(route.query.response_source)
-  filters.degraded = ['true', 'false'].includes(route.query.degraded) ? route.query.degraded : ''
+  // 只认单个字符串：数组形式的 ?degraded= 今天仍然落到空串（与改写前一致），
+  // 但类型上不再把 string[] 喂给 filters.degraded。
+  const degradedQuery = route.query.degraded
+  filters.degraded = degradedQuery === 'true' || degradedQuery === 'false' ? degradedQuery : ''
   filters.request_id = normalizeQueryText(route.query.request_id)
   filters.task_id = normalizePositiveNumber(route.query.task_id)
   filters.analysis_record_id = normalizePositiveNumber(route.query.analysis_record_id)
