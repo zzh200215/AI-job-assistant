@@ -3669,7 +3669,7 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 #### 已交付：D142 文档大扫除：两把尺子先各自错过一次，顺手抓到一条在 CI 上是红的格式行
 
-**清点口径**（`git ls-files` 现取）：在册 `.md`/`.sql` **52 份**，其中 `docs/knowledge-seeds/` 17 份是 RAG 门的语料、`docs/archive/` 是冻结历史，两者本轮都不动。判"一份文档还有没有用"用两把尺子：**入链**（全仓内容扫，不含自身）与**对账**——文档里写到的 `/api` 路径能不能对上 `app.routes` 现取的 **199 条活路由**。
+**清点口径**（`git ls-files` 现取）：在册 `.md`/`.sql` **52 份**，其中 `docs/knowledge-seeds/` 17 份是 RAG 门的语料、`docs/archive/` 那 19 份是冻结历史——两者本轮都不动，这一批做完在册从 52 变 **44**，唯一进归档的是下面那份 release 清单。判"一份文档还有没有用"用两把尺子：**入链**（全仓内容扫，不含自身）与**对账**——文档里写到的 `/api` 路径能不能对上 `app.routes` 现取的 **199 条活路由**。
 
 **两把尺子都先撒过谎，都在下结论之前被抓回**：① `docs/setup-and-security.md:178` 的 `GET /api/jd/{id}` 一度被判死路径，活路由其实叫 `/api/jd/{jd_id}`——**参数名不同不是死链**，判据得把 `{...}` 段当通配。② README 的 `/api/admin/external` 一度判死，实际是 `/api/v1/admin/external`——**少写一段前缀也不是死链**（那一支的前缀来自 `app/api/external/router.py` 的 `prefix="/v1"` 再乘 billing/webhook 自己的 `/admin/external`），但它同时也**确实是错的**：读者照 README 拼出来的 URL 会 404。改成"前缀可匹配 + 参数段通配"之后才拿到可信名单——**拿一把假尺子去删文档，删掉的会是活的那一份**。
 
