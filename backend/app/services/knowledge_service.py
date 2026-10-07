@@ -54,8 +54,6 @@ def save_and_process(
     title: str,
     doc_type: str = "general",
     user_id: int = None,
-    organization_id: int = None,
-    tenant_id: int = None,
 ) -> KnowledgeDocument:
     """
     保存文件 → 创建 DB 记录 → 解析 → 切片 → 向量化 → 写入 Chroma
@@ -76,14 +74,12 @@ def save_and_process(
     rel_path = os.path.join("knowledge", str(year), f"{month:02d}", stored_name).replace("\\", "/")
 
     # ---- 2) 创建 DB 记录 ----
-    # 租户归属优先级：显式 tenant_id > organization_id（Organization 即租户）> 当前上下文
-    doc_tenant_id = (
-        tenant_id if tenant_id is not None else organization_id if organization_id is not None else DEFAULT_TENANT_ID
-    )
+    # D136 之前这里有一条归属优先级（显式 tenant_id > organization_id > 内置租户），因为"这份文档
+    # 属于哪个组织"是一个真问题。现在两列都保留但都不参与可见性判定（见 utils/knowledge_access），
+    # 新入库的行统一落在内置租户 1 上，只为让这一列的取值保持均匀，读它的一侧已经没有了。
     doc = KnowledgeDocument(
         user_id=user_id,
-        organization_id=organization_id,
-        tenant_id=doc_tenant_id,
+        tenant_id=DEFAULT_TENANT_ID,
         title=title,
         file_name=original_filename,
         file_type=ext,

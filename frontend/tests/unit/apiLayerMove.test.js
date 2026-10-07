@@ -82,7 +82,10 @@ describe('analytics.js / admin.js / subscription.js：后台面那五条', () =>
   it('三条分析读把 params 与 notifyError 一起带上，且 revenue 走 /admin 前缀', async () => {
     const { getAnalyticsSummary, getAdminRevenue, getAnalyticsFunnel } =
       await import('@/api/analytics')
-    const params = { tenant_id: 3 }
+    // 传的是后端今天真收的那个参数（days）。原先这里写 `{ tenant_id: 3 }`，而 D136 把那四个
+    // `?tenant_id=` 从后端摘掉了——这条测试钉的是"包装层把 params 原样转发"，换一个仍被接受的
+    // 参数才是它本来想说的事；留着 tenant_id 会让下一次读账的人以为后端还认它。
+    const params = { days: 30 }
 
     await getAnalyticsSummary(params, { notifyError: false })
     await getAdminRevenue(params, { notifyError: false })

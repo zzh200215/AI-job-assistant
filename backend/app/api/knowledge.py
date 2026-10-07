@@ -3,7 +3,7 @@
 import os
 import traceback
 
-from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -12,7 +12,6 @@ from app.api.auth import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.knowledge import KnowledgeDocument
-from app.models.organization import Organization, OrganizationMembership
 from app.models.user import User
 from app.schemas.knowledge import (
     DOC_TYPE_CHOICES,
@@ -47,40 +46,16 @@ def _is_admin(user: User) -> bool:
     return user.username in settings.admin_usernames_list
 
 
-def _organization_membership(db: Session, organization_id: int, user_id: int) -> OrganizationMembership | None:
-    return (
-        db.query(OrganizationMembership)
-        .filter(
-            OrganizationMembership.organization_id == organization_id,
-            OrganizationMembership.user_id == user_id,
-            OrganizationMembership.status == "active",
-        )
-        .first()
-    )
-
-
-def _organization_scope(db: Session, user: User, organization_id: int | None) -> Organization | None:
-    """Resolve an explicitly requested workspace without changing personal defaults."""
-    if organization_id is None:
-        return None
-    organization = (
-        db.query(Organization).filter(Organization.id == organization_id, Organization.status == "active").first()
-    )
-    if organization is None or _organization_membership(db, organization.id, user.id) is None:
-        return None
-    return organization
-
-
 def _can_access_document(db: Session, doc: KnowledgeDocument, user: User) -> bool:
-    if doc.organization_id is not None:
-        return _organization_membership(db, doc.organization_id, user.id) is not None
+    """文档可见性：管理员全量，否则"无主即平台共享"或本人所有。
+
+    D136 之前这里第一条判的是 `doc.organization_id is not None` → 走 `OrganizationMembership`
+    成员表；那条随组织工作区出树（dev 实测 organization / membership / 带 org 的文档各 0 行）。
+    """
     return _is_admin(user) or doc.user_id in (None, user.id)
 
 
 def _can_manage_document(db: Session, doc: KnowledgeDocument, user: User) -> bool:
-    if doc.organization_id is not None:
-        membership = _organization_membership(db, doc.organization_id, user.id)
-        return membership is not None and membership.role in {"owner", "admin"}
     if doc.user_id is None:
         return _is_admin(user)
     return _is_admin(user) or doc.user_id == user.id
@@ -90,7 +65,6 @@ def _serialize_document(doc: KnowledgeDocument) -> dict:
     return {
         "id": doc.id,
         "user_id": doc.user_id,
-        "organization_id": doc.organization_id,
         "tenant_id": doc.tenant_id,
         "title": doc.title,
         "file_name": doc.file_name,
@@ -110,17 +84,9 @@ async def upload_knowledge(
     file: UploadFile = File(...),
     title: str = Form(...),
     doc_type: str = Form("general"),
-    x_organization_id: int | None = Header(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    organization = _organization_scope(db, current_user, x_organization_id)
-    if x_organization_id is not None and organization is None:
-        return fail(message="organization access denied", code=ERR_AUTH)
-    if organization is not None:
-        membership = _organization_membership(db, organization.id, current_user.id)
-        if membership is None or membership.role not in {"owner", "admin"}:
-            return fail(message="organization manager permission required", code=ERR_AUTH)
     if not file or not file.filename:
         return fail(message="empty file", code=ERR_FILE)
 
@@ -151,8 +117,7 @@ async def upload_knowledge(
             file.filename,
             title.strip(),
             doc_type,
-            user_id=None if organization else current_user.id,
-            organization_id=organization.id if organization else None,
+            user_id=current_user.id,
         )
     except Exception as exc:
         traceback.print_exc()
@@ -167,7 +132,6 @@ async def upload_knowledge(
             file_size=doc.file_size or 0,
             doc_type=doc.doc_type,
             status=doc.status,
-            organization_id=doc.organization_id,
             create_time=doc.create_time.isoformat() if doc.create_time else None,
         ).model_dump(),
         message=f"uploaded with status={doc.status}",
@@ -181,20 +145,14 @@ def list_knowledge(
     doc_type: str | None = Query(None),
     status: str | None = Query(None),
     my_only: bool = Query(True, description="Only show current user's uploads"),
-    x_organization_id: int | None = Header(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    organization = _organization_scope(db, current_user, x_organization_id)
-    if x_organization_id is not None and organization is None:
-        return fail(message="organization access denied", code=ERR_AUTH)
     query = db.query(KnowledgeDocument)
     if doc_type:
         query = query.filter(KnowledgeDocument.doc_type == doc_type)
     if status:
         query = query.filter(KnowledgeDocument.status == status)
-    if organization is not None:
-        query = query.filter(KnowledgeDocument.organization_id == organization.id)
     elif my_only or not _is_admin(current_user):
         query = query.filter(KnowledgeDocument.user_id == current_user.id)
 
@@ -312,13 +270,9 @@ def download_document(
 @router.post("/search", summary="Search knowledge base")
 async def search_knowledge(
     payload: KBSearchReq,
-    x_organization_id: int | None = Header(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    organization = _organization_scope(db, current_user, x_organization_id)
-    if x_organization_id is not None and organization is None:
-        return fail(message="organization access denied", code=ERR_AUTH)
     results = await run_in_threadpool(
         rag_service.search_knowledge,
         query=payload.query,
@@ -326,7 +280,6 @@ async def search_knowledge(
         top_k=payload.top_k,
         db=db,
         user_id=current_user.id,
-        organization_id=organization.id if organization else None,
     )
     return ok(
         data={
@@ -378,13 +331,9 @@ async def embedding_stats(current_user: User = Depends(get_current_user)):
 @router.post("/query-rewrite-test", summary="Test query rewrite and retrieval")
 async def query_rewrite_test(
     payload: QueryRewriteReq,
-    x_organization_id: int | None = Header(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    organization = _organization_scope(db, current_user, x_organization_id)
-    if x_organization_id is not None and organization is None:
-        return fail(message="organization access denied", code=ERR_AUTH)
     # 一次调试调用要打 4 段 provider 工作（改写过 LLM + 三路检索）。同步跑在 `async def` 里
     # 就是按秒停事件循环，所以逐段挪进线程池；顺序、参数、返回都与原来一致。
     rewritten = await run_in_threadpool(
@@ -402,7 +351,6 @@ async def query_rewrite_test(
         top_k_per_query=payload.top_k_per_query,
         db=db,
         user_id=current_user.id,
-        organization_id=organization.id if organization else None,
     )
     rag_context = await run_in_threadpool(
         rag_service.build_rag_context_with_rewrite,
@@ -411,7 +359,6 @@ async def query_rewrite_test(
         top_k_per_query=payload.top_k_per_query,
         db=db,
         user_id=current_user.id,
-        organization_id=organization.id if organization else None,
     )
     references = await run_in_threadpool(
         rag_service.get_knowledge_references_with_rewrite,
@@ -420,7 +367,6 @@ async def query_rewrite_test(
         top_k_per_query=payload.top_k_per_query,
         db=db,
         user_id=current_user.id,
-        organization_id=organization.id if organization else None,
     )
     rag_confidence = confidence_from_flat_results(payload.original_query, retrieved)
 

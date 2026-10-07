@@ -31,39 +31,21 @@ def get_visible_knowledge_doc_ids(
     *,
     user: User | None = None,
     user_id: int | None = None,
-    organization_id: int | None = None,
 ) -> set[str] | None:
-    """当前用户可检索的知识文档 id 集合。
+    """当前用户可检索的知识文档 id 集合：本人 + 平台共享（无主）。管理员返回 None（全量）。
 
-    2026-10-06 真删企业侧（D135）之前这里有三类：本人 + 当前租户 + 平台共享。中间那一类
-    （`tenant_id == 当前租户` 且无 owner）随多租户一起删掉——**删之前实测它匹配 0 行**
-    （`kb_document` 是 22 行 `tenant_id IS NULL` 的平台共享 + 6 行有 owner 的个人文档），
-    所以可见集合不变。管理员仍返回 None（全量）。
+    这一支在 D135/D136 之前有三级：本人 + 当前租户 + 组织工作区（外加一条"迁移前用 tenant_id 当
+    组织 id"的兼容读法）。租户级实测匹配 0 行所以先删；组织那一级随 `X-Organization-ID` 一起删。
+    **"平台共享"的定义改回它本来想说的那句话：`user_id IS NULL`（无主即共享）**，不再同时要求
+    `tenant_id / organization_id` 为空。两种读法在这份数据上逐字等价——现取分布是 22 行三键皆空
+    + 6 行有 owner，`user_id IS NULL 且 tenant_id 非空` 的行数是 **0**，所以可见集合仍是 22 / 28。
     """
     if is_admin_user(user):
         return None
 
-    # 平台共享文档：tenant_id / user_id / organization_id 均为空（T3-3 迁移后平台文档三者皆空）
-    platform_scope = (
-        KnowledgeDocument.tenant_id.is_(None)
-        & KnowledgeDocument.user_id.is_(None)
-        & KnowledgeDocument.organization_id.is_(None)
-    )
-    if organization_id is not None:
-        # 组织工作区：该组织文档（兼容迁移前后 organization_id / tenant_id 两种标记）+ 平台共享
-        legacy_org = (
-            (KnowledgeDocument.tenant_id == organization_id)
-            & KnowledgeDocument.user_id.is_(None)
-            & KnowledgeDocument.organization_id.is_(None)
-        )
-        visibility = or_(
-            KnowledgeDocument.organization_id == organization_id,
-            legacy_org,
-            platform_scope,
-        )
-    else:
-        owner_id = user.id if user is not None else user_id
-        visibility = platform_scope if owner_id is None else or_(KnowledgeDocument.user_id == owner_id, platform_scope)
+    platform_scope = KnowledgeDocument.user_id.is_(None)
+    owner_id = user.id if user is not None else user_id
+    visibility = platform_scope if owner_id is None else or_(KnowledgeDocument.user_id == owner_id, platform_scope)
 
     rows = db.query(KnowledgeDocument.id).filter(visibility).all()
     return {str(row[0]) for row in rows}

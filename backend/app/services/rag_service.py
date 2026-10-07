@@ -98,7 +98,6 @@ def search_knowledge(
     query_embedding: list[float] | None = None,
     db: Session | None = None,
     user_id: int | None = None,
-    organization_id: int | None = None,
 ) -> list[dict]:
     if top_k is None:
         top_k = settings.RAG_TOP_K
@@ -134,7 +133,7 @@ def search_knowledge(
     if collection.count() == 0:
         return _log([])
 
-    visible_doc_ids = get_visible_knowledge_doc_ids(db, user_id=user_id, organization_id=organization_id)
+    visible_doc_ids = get_visible_knowledge_doc_ids(db, user_id=user_id)
     if visible_doc_ids == set():
         return _log([])
 
@@ -271,7 +270,6 @@ def search_knowledge_multi_queries(
     top_k_per_query: int = None,
     db: Session | None = None,
     user_id: int | None = None,
-    organization_id: int | None = None,
 ) -> list[dict]:
     if top_k_per_query is None:
         top_k_per_query = settings.RAG_TOP_K
@@ -286,7 +284,6 @@ def search_knowledge_multi_queries(
             top_k=top_k_per_query,
             db=db,
             user_id=user_id,
-            organization_id=organization_id,
         )
         for item in chunk_results:
             item["query_used"] = rewritten.query_text
@@ -341,7 +338,6 @@ def build_rag_context_with_rewrite(
     top_k_per_query: int = None,
     db: Session | None = None,
     user_id: int | None = None,
-    organization_id: int | None = None,
 ) -> str:
     results = search_knowledge_multi_queries(
         rewritten_queries=rewritten_queries,
@@ -349,7 +345,6 @@ def build_rag_context_with_rewrite(
         top_k_per_query=top_k_per_query,
         db=db,
         user_id=user_id,
-        organization_id=organization_id,
     )
     if not results:
         return ""
@@ -368,7 +363,6 @@ def get_knowledge_references_with_rewrite(
     top_k_per_query: int = None,
     db: Session | None = None,
     user_id: int | None = None,
-    organization_id: int | None = None,
 ) -> list[dict]:
     results = search_knowledge_multi_queries(
         rewritten_queries=rewritten_queries,
@@ -376,7 +370,6 @@ def get_knowledge_references_with_rewrite(
         top_k_per_query=top_k_per_query,
         db=db,
         user_id=user_id,
-        organization_id=organization_id,
     )
 
     seen_docs: dict[str, dict] = {}
