@@ -96,7 +96,7 @@ const BUDGET = {
     'src/features/interview/components/RoomAside.vue': 2,
     'src/features/interview/components/StagePane.vue': 1,
     'src/features/auth/views/ResetPassword.vue': 12,
-    'src/features/interview/views/InterviewSetup.vue': 11,
+    'src/features/interview/views/InterviewSetup.vue': 6,
     'src/features/eval/views/RecommendationEval.vue': 11,
     'src/features/analysis/views/ExplainMatch.vue': 9,
     'src/features/auth/views/NotFound.vue': 5,
@@ -1180,13 +1180,16 @@ describe('style debt ratchet', () => {
       'src/features/shell/views/Home.vue',
       'src/features/jobs/views/JobRecommend.vue',
       'src/features/jobs/views/SalaryInsight.vue',
+      'src/features/interview/views/InterviewSetup.vue',
       transcriptKey,
     ]
     // 按"选择器块"判，不按类名形状判：真选择器带修饰类与 `--档` 后缀（`.metric-icon.amber`、
     // `.score-chip--high`、`.core-resume .core-icon`），上一版按 `-icon$` 那种形状匹配
     // 对植入毫无反应——正向腿其实一直在空跑，是反证腿把它抓出来的。
     const BLOCK = /([^{}]+)\{([^{}]*)\}/g
-    const IS_CHIP = /(icon|chip|badge|\.ach-)/
+    // 族名是"随文件入册时一起点名"的，不是自动发现的：`.qb-*` 那族挂在 `.qb-icon` 上，
+    // 但规则本身叫 `.qb-blue`，不含 icon/chip/badge 任何一个字。
+    const IS_CHIP = /(icon|chip|badge|\.ach-|\.qb-)/
 
     const check = (sources, themeText) => {
       const bad = []
@@ -1227,6 +1230,19 @@ describe('style debt ratchet', () => {
             '.metric-icon.amber {',
             '.metric-icon.amber { background: #fef5e7;'
           ),
+        },
+        themeCss
+      )
+    ).not.toEqual([])
+    // `.qb-blue` 这类名字里不含 icon/chip/badge，专门给它一条植入反证，
+    // 否则"族名点进来"这一步可能是空转的。
+    expect(
+      check(
+        {
+          ...sources,
+          'src/features/interview/views/InterviewSetup.vue': sources[
+            'src/features/interview/views/InterviewSetup.vue'
+          ].replace('.qb-blue {', '.qb-blue { background: #e8efff;'),
         },
         themeCss
       )

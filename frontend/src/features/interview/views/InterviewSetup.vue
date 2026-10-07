@@ -714,9 +714,12 @@ onMounted(async () => {
 }
 
 .type-group :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  /* 选中态刻意保留浅色底：它与未选中（面板色）的反差就是"选中"这个 affordance，翻成深色会
+   把反差抹平。但实测主色字压在浅蓝底上是 4.48:1，差 0.02 够不到 4.5，所以字降一档到
+   --app-primary-dark（底与描边都不动）。 */
   border-color: var(--app-primary) !important;
   background: var(--app-primary-light) !important;
-  color: var(--app-primary) !important;
+  color: var(--app-primary-dark) !important;
 }
 
 .type-preview {
@@ -849,29 +852,31 @@ onMounted(async () => {
   justify-content: center;
   flex-shrink: 0;
 }
+/* 题库的 6 枚图标座，与 Home / Profile 那 21 个同一配方（B）：深色底上的色偏 + tone 字色。
+   蓝与紫在深色面上要用混白那一档才够 4.5，红色同理；teal 收敛到最接近的 cyan 令牌。 */
 .qb-blue {
-  background: var(--app-primary-light);
-  color: var(--app-primary);
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
 }
 .qb-violet {
-  background: var(--app-violet-light);
-  color: var(--app-violet);
+  background: color-mix(in srgb, var(--app-violet), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-violet), white 34%);
 }
 .qb-amber {
-  background: #fef5e7;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 86%);
   color: var(--app-warning);
 }
 .qb-green {
-  background: #e8f8ee;
+  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
   color: var(--app-success);
 }
 .qb-red {
-  background: #fff3f0;
-  color: var(--app-danger);
+  background: color-mix(in srgb, var(--app-danger), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-danger), white 20%);
 }
 .qb-teal {
-  background: #e6fffa;
-  color: #0d9488;
+  background: color-mix(in srgb, var(--app-cyan), var(--app-bg) 86%);
+  color: var(--app-cyan);
 }
 .qb-info {
   display: flex;
