@@ -748,7 +748,7 @@ describe('style debt ratchet', () => {
   }
   const STANDALONE_PANEL_HEADERS = 6
 
-  it('the panel-header ledger is two named buckets, and they still add up to 14', () => {
+  it('the panel-header ledger is two named buckets, and they still add up to the total budget', () => {
     const sites = PANEL_HEADER_SITES()
     const perCard = {}
     for (const s of sites.filter((x) => x.inCard)) perCard[s.rel] = (perCard[s.rel] || 0) + 1
