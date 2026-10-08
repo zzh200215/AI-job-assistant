@@ -3786,6 +3786,26 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **门禁**：`test:unit` **579 / 88 files**（+1 条解析 `followUpLevel` 的腿，含两处反证：往函数体插 `return 'urgent'` 集合必须变、域里必须没有 urgent）、`npm test` 33/33、`format:check` clean、`eslint` 只剩既有 `paidOrders`、体积 2208.35 → **2208.25 kB（−0.10）**——删掉那条死规则是这一族第一次往下走。**未测**：`.follow-*` 在**浅色主题**下的达标性（登录后恒深色，今天够不到）；探针页视口仍是 321×559 的小窗，四档的**几何**没在桌面宽度复核（对比度与视口无关，`capture/diff` 那 0 差异是在这个视口下取的）。
 
+#### 已交付：D150 清掉挂着的那批"未测"，顺手修掉一条会把测量演成假数的仪器缺陷
+
+**五条挂着"未测"的读数，这一轮全部在活页上量到；其中一条的根因不是页面，是探针自己。**
+
+**仪器（先说这条，因为它影响此前所有跨页读数的可信度）**：内嵌浏览器是 `visibilityState=hidden` 的，**hidden 标签页一拍都不发 rAF**。`__probe.go()` 卡在等两帧上，而更阴的是路由那条 `<Transition name="fade">`：`router.replace` 已经把 URL 改了（`currentRoute.matched` 确实是 Interview），出发的视图却停在 `fade-leave-from` 永远不换——于是"我已经在看这一页了"和"屏幕上还是上一页"可以同时为真。这就是 D147 那轮 `go('/jobs/pipeline/kanban')` 超时、我把随后的扫描当成看板读数的同一件事（当时只当是一次失败，现在有了机制）。修法在探针侧：hidden 时把 `requestAnimationFrame` 换成 16ms 计时器垫片（`cancelAnimationFrame` 一起换），可见标签页照旧走真 rAF。判据是探针要的是**计算值**而不是像素，垫片不改变布局与 `getComputedStyle`。现取：改前 `go()` 在 15s 超时里不返回，改后 **2.6s 返回**、`{path:'/interview/room/88', elements:272}` 且那一屏真有 5 枚 `.score-chip`。顺带又踩到一次 **oklab**：未冻结时读到 `oklab(0.255397 …)`（拖拽区那条 0.2s 过渡正走到一半），这次按 D147 的口径先注 FREEZE 再读。
+
+**① 房间 `.score-chip--*` 真屏**：`TranscriptPane` 在 `InterviewRoom.vue:37` 是**无条件渲染**的，实录数据走 `hydrateSession(detail.messages)`，所以房间不需要连上 WS 就能上屏——WS 连不上只把 status 打成 error。两个坑值得记：`startWS` 里 `isSameSession` 不同就会把 `messages` 清空，所以夹具的 `detail.id` 必须与路由参数同号；`score` 缺失那一条才走得到 unknown 档，五条 evaluation 才能一次量齐 85/70/55 四个阈值加一档 unknown。**实测**（每档取 `.score-chip` 自己的底，再比四类前景）：high 13.03、good 14.00、warn 12.72、risk 13.67、unknown **12.68**（最差那一档），四类前景（`strong` / `.score-top span` / `.score-dims span` / 正文 `p`）在同一档里读数相同，说明这一族的前景全部来自 `--app-text` 而不是 tone 本体——正是 P1-B 那次"底与前景成对"改完之后的形状。
+
+**② `.star-tag` 不带变体那一支**：D143 只量到带变体的四枚，因为无变体那四枚在"查看答案与 STAR 分析"点开之后才出现（`Interview.vue:89-110`，`v-if="showAnswer"`）。点开后同屏 8 枚：无变体那一支 **5.10**（"S 情境"等 4 枚），四枚变体复测 6.58 / 5.85 / 5.21 / 5.70，与 D143 记的 6.56 / 5.86 / 5.20 / 5.70 逐档对得上（差在百分位的四舍五入）。
+
+**③ `qb-red` / `qb-teal`**：这两枚要选到面试风格才出现（`InterviewSetup.vue:431-437`：`stress` 追加压力场景、`group` 追加小组讨论并 splice 掉行为面）。走真实交互——点 `el-radio-button`，不注入状态。现取六枚全在屏：**blue 5.10 / violet 5.70 / amber 5.85 / green 5.21 / red 5.48 / teal 6.58**（副标题跟着变成"12 题 · 覆盖 5 类题型"与"8 题 · 覆盖 4 类题型"，证明两支都真渲染过）。
+
+**④ `.chip-ref` / `.chip-gap` / `.chip-match`**：点"一键智能分析"进到结果态，三枚同屏：**match 5.21 / gap 5.70 / ref 5.10**（11px、字重 500，按 4.5 那档判）。同一次读数还确认了三条 `border-color` 各自跟着自己的 tone（不是同一条灰线），与 D148 那批座配方一致。
+
+**⑤ 拖拽区 hover**：`SmartAnalysis.vue:982` 那条注释里写着"主色 3.39:1 相对面板，图形够 3:1"——那是**推导**，今天第一次真量。用真 hover（`mcp__browser-use__hover` 打在 `.el-upload-dragger` 上，`el.matches(':hover')` 回读为 true），先注 FREEZE 再读：**描边 rgb(37,99,235) 相对面板底 3.39**（与注释里那个数逐字相同，说明当年是按令牌推的、推对了）、**相对自己那层 hover 底 3.31**（这才是屏幕上真正相邻的那一对，也过 3:1），底从 `rgb(32,34,46)` 加深到 `rgb(19,27,48)`、区内文字 **15.41**（原 14.23）——"只加深一档"成立，没有出现"闪成浅蓝"。三条 `.el-upload-dragger:hover` 规则里 EP 自带那条（`--el-color-primary`）被这一族的 scoped 那条压过，落点确实是 `--app-primary`。
+
+**这五条的共同点**：没有一条需要改代码——**全部达标**，它们缺的只是"上屏"这一步。而拦着这一步的是仪器：一条 hidden 标签页的 rAF 约定。所以这一刀的产物主要是探针（一条垫片 + 一份房间夹具），不是一批样式。
+
+**仍未测**（不写成已验证）：房间那一屏的 WS 是真断的（探针不桩 WebSocket），所以我量的是"由 detail 水合出来的五档"，**不是**"WS 实时推来评分时的同一帧"——两者共用同一个 `TranscriptPane` 与同一批规则，但 status 提示条那一支今天没在屏上出现过；`.score-chip` 在**浅色主题**下的读数依旧没人量过（登录后恒深色）；拖拽区 hover 的**几何**没在桌面宽度复核（探针视口 321×559）。**门禁**：`test:unit` **579 / 88 files**、`npm test` 33/33、`format:check` clean、`eslint` 只剩既有 `paidOrders`、体积尺 **2208.25 kB** 不变（探针不进包）。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**

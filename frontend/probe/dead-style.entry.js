@@ -350,6 +350,77 @@ const FIXTURES = [
      （9 / 1 / 4 天前，相对天数所以不会过几天就跳档），`followUpLevel` 的 danger / ok / warn
      才在同一屏各出一个元素。这一份数据同时喂两块面板——`ListPane` 的 `:rows` 是
      `PipelineKanban.vue:339` 的 `flattenCards(kanban)`，不是那个 list 端点，所以一份夹具量齐两个副本。 */
+  /* 面试房间的实录面板（D150）：`TranscriptPane` 的 `.score-chip--*` 由 `hydrateSession(detail.messages)`
+     驱动，而 `<TranscriptPane>` 在 `InterviewRoom.vue:37` 是**无条件渲染**的——所以房间不需要真的连上
+     WS 就能上屏：`getInterviewDetail` 有数据、`detail.id` 与路由参数同号（`startWS` 里
+     `isSameSession` 不同就会把 messages 清空），WS 连不上只会把 status 打成 error 并留下一句提示。
+     五条 evaluation 各占一个分数档（INTERVIEW_SCORE_BANDS 是 85 / 70 / 55），加上 `score` 缺失那条走
+     unknown，五档一次量齐。字段名照 `TranscriptPane.vue:38-52` 的取法写，不是照后端模型猜。 */
+  [
+    /\/interview\/sessions\/\d+$/,
+    'get',
+    {
+      id: 88,
+      status: 'in_progress',
+      total_questions: 5,
+      answered_count: 5,
+      evaluation_status: 'idle',
+      memory_snapshot: {},
+      messages: [
+        {
+          id: 1,
+          type: 'question',
+          round: 1,
+          content: '讲一次你把一个卡住的问题推动到底的经历。',
+          metadata: { category: '行为面试' },
+        },
+        { id: 2, type: 'answer', round: 1, content: '我把依赖链拆开，逐段加了可观测点。' },
+        {
+          id: 3,
+          type: 'evaluation',
+          round: 1,
+          content: 'STAR 结构完整，行动部分具体。',
+          metadata: {
+            score: 92,
+            completeness: 9,
+            accuracy: 9,
+            depth: 8,
+            expression: 9,
+            improvement: '补一句结果的可量化影响。',
+          },
+        },
+        {
+          id: 4,
+          type: 'evaluation',
+          round: 2,
+          content: '任务描述清楚，行动与结果的因果还差一环。',
+          metadata: { score: 78, completeness: 8, accuracy: 7, depth: 7, expression: 8 },
+        },
+        {
+          id: 5,
+          type: 'evaluation',
+          round: 3,
+          content: '回答偏结论，缺少可核对的过程。',
+          metadata: { score: 62, completeness: 6, accuracy: 6, depth: 5, expression: 7 },
+        },
+        {
+          id: 6,
+          type: 'evaluation',
+          round: 4,
+          content: '这一条没有覆盖到追问点。',
+          metadata: { score: 40, completeness: 4, accuracy: 4, depth: 3, expression: 5 },
+        },
+        {
+          // score 缺失 ⇒ `interviewScoreToneClass(undefined)` 走 unknown 那一档
+          id: 7,
+          type: 'evaluation',
+          round: 5,
+          content: '这条回答还没评上分。',
+          metadata: { completeness: null, accuracy: null, depth: null, expression: null },
+        },
+      ],
+    },
+  ],
   [
     /\/jobs\/pipeline\/list/,
     'get',
@@ -883,6 +954,16 @@ const PROPS = [
 ]
 
 const FREEZE = '*,*::before,*::after{animation:none!important;transition:none!important}'
+
+/* 隐藏标签页里 rAF 一拍都不来（内嵌浏览器 `visibilityState=hidden` 时实测：`go()` 卡在等两帧上，
+   URL 已经变了、视图却停在 `fade-leave-from` 永远不换）。D147 那次"0 组不达标"的假数就是这么来的——
+   我以为在看板那一屏扫过，其实整页还停在上一张视图上。探针要的是**计算值**，不是像素，所以这里把
+   rAF 换成计时器垫片：布局与 getComputedStyle 照常准确，transition 也能走完自己的收尾。
+   只在 hidden 时生效，可见标签页照旧走真 rAF。 */
+if (document.visibilityState === 'hidden') {
+  window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16)
+  window.cancelAnimationFrame = (id) => clearTimeout(id)
+}
 
 /** scope 有两种写法：`__scopeId` 给的是 `data-v-xxxx`（`scopes()` 原样返回），手写调用时常只给 `xxxx`。
  *  拼两次前缀会得到 `[data-v-data-v-xxxx]`，匹配 0 个元素、0 条规则，而**任何一条判据都会安静地
