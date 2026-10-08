@@ -59,8 +59,9 @@ const BUDGET = {
     'src/features/analysis/components/ReferencesPane.vue': 3,
     'src/features/jobs/views/JobRecommend.vue': 19,
     'src/features/auth/views/Register.vue': 26,
-    /* 22 → 8：§10.33 走 ①，那批"把令牌基座涂成手挑浅色"的页面级覆写整批撤掉。 */
-    'src/features/interview/views/InterviewReport.vue': 8,
+    /* InterviewReport 这一维现在是 **0**，条目随之从表里删除：D144 撤掉那批浅色时代覆写
+       （22 → 8），D146 又把被覆写压住的深色渐变基座并进单层（8 → 0）。它从"硬编码色最多的
+       页面之一"变成这一族的第一个清零样本。 */
     'src/features/resume/views/ResumeCompare.vue': 19,
     'src/features/auth/views/Login.vue': 16,
     /* 13 → 5：STAR 那五枚座（`.star-tag` + `.star-s/t/a/r`）与 `.interview-score` 收了 8 个

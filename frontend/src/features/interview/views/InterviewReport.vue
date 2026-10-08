@@ -449,18 +449,39 @@ onUnmounted(() => {
   gap: 18px;
 }
 
-/* ---- Dark hero — intentionally unique ---- */
+/* ---- Hero：这一页的头部，只有一层 ----
+   原来这里是深色渐变 marketing hero，`:790` 那批 `P1 report treatment` 页面级覆写又把它
+   拍平成卡片。页根类 `.interview-report-page` 是静态写在根元素上的，所以那层前缀**永远生效**，
+   被它压住的基座声明（渐变底、白字、两档半透明白、8px 环宽、opacity .72）一条都到不了屏幕
+   ——D146 逐条对过计算值：底是 none、字与环阴影都是主题令牌给的那两档、环宽是覆写那档、
+   eyebrow 的不透明度是 1。现在把覆写并进基座、删掉画不到的那些，这一族从此只有一个出处。 */
 .report-hero {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
   padding: 28px;
-  border-radius: var(--app-radius-md, 16px);
-  background:
-    radial-gradient(circle at top right, rgba(214, 93, 47, 0.18), transparent 32%),
-    linear-gradient(135deg, #16253c, #243a59 52%, #35556f);
-  color: #fff;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface-strong);
+  box-shadow: var(--app-shadow-soft);
+  color: var(--app-text);
+}
+
+.report-hero::before {
+  position: absolute;
+  top: 28px;
+  left: 0;
+  width: 4px;
+  height: 50px;
+  border-radius: var(--app-radius-xs);
+  background: var(--app-primary);
+  content: '';
+}
+
+.report-hero > div:first-child {
+  padding-left: 18px;
 }
 
 .eyebrow {
@@ -468,17 +489,19 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.12em;
   font-size: 12px;
-  opacity: 0.72;
 }
 
 .report-hero h1 {
   margin: 0 0 8px;
   font-size: 30px;
+  color: var(--app-text);
 }
 
+/* eyebrow 本身就是一个 `<p class="eyebrow">`，所以这一条同时是它的前景色出处
+   （覆写里那条 `.report-hero .eyebrow { color / opacity }` 一并并到这里）。 */
 .report-hero p {
   margin: 0;
-  color: rgba(255, 255, 255, 0.74);
+  color: var(--app-muted);
 }
 
 .hero-score {
@@ -495,8 +518,9 @@ onUnmounted(() => {
   width: 130px;
   height: 130px;
   border-radius: 50%;
-  border: 8px solid var(--score-color);
-  box-shadow: inset 0 0 0 10px rgba(255, 255, 255, 0.08);
+  border: 7px solid var(--score-color);
+  background: var(--app-surface-muted);
+  box-shadow: inset 0 0 0 10px var(--app-line);
 }
 
 .score-ring strong {
@@ -505,7 +529,7 @@ onUnmounted(() => {
 
 .score-ring span {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.74);
+  color: var(--app-muted);
 }
 
 /* ---- Summary grid — uses global .stat-card ---- */
@@ -519,6 +543,9 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: flex-start;
   gap: 0;
+  /* 从页面级覆写并进来的。边框色本来就被主题网按 `!important` 拍成 `--app-line`
+     （实测计算值就是它），所以这里承重的只有那 3px 宽度。 */
+  border-top: 3px solid var(--app-line);
 }
 
 .summary-grid .stat-card strong {
@@ -806,62 +833,6 @@ onUnmounted(() => {
   justify-content: center;
   gap: 12px;
   padding-bottom: 8px;
-}
-
-/* P1 report treatment: a reading surface instead of a marketing hero.
-   §10.33 走 ①（2026-10-07）：这一批页面级覆写里，凡是"把已经令牌化的基座重新涂成手挑浅色"
-   的那几条**整批撤掉**（页底渐变、三块面板、决策条、时间线徽章、两族胶囊）。撤之前实测
-   同一元素上浅面压深色主题的浅字到 **1.04–1.08**，且元素确实上屏（166×138、visible）。
-   留下来的都是覆写里**唯一承重**的那几条：把深色渐变 hero 拍平成卡片、分数环的粗细、
-   stat-card 那道 3px 顶边、以及把基座留给渐变底的两档白字换成主题字。 */
-.interview-report-page .report-hero {
-  position: relative;
-  border: 1px solid var(--app-line);
-  border-radius: var(--app-radius-md);
-  background: var(--app-surface-strong);
-  box-shadow: var(--app-shadow-soft);
-  color: var(--app-text);
-}
-
-.interview-report-page .report-hero::before {
-  position: absolute;
-  top: 28px;
-  left: 0;
-  width: 4px;
-  height: 50px;
-  border-radius: var(--app-radius-xs);
-  background: var(--app-primary);
-  content: '';
-}
-
-.interview-report-page .report-hero > div:first-child {
-  padding-left: 18px;
-}
-
-.interview-report-page .report-hero h1 {
-  color: var(--app-text);
-}
-
-.interview-report-page .report-hero p,
-.interview-report-page .report-hero .eyebrow {
-  color: var(--app-muted);
-  opacity: 1;
-}
-
-.interview-report-page .score-ring {
-  border-width: 7px;
-  background: var(--app-surface-muted);
-  box-shadow: inset 0 0 0 10px var(--app-line);
-}
-
-.interview-report-page .score-ring span {
-  color: var(--app-muted);
-}
-
-.interview-report-page .summary-grid .stat-card {
-  /* 边框色本来就被主题网按 `!important` 拍成 `--app-line`（实测计算值就是它），
-     这里换成令牌是零变化的去债；承重的是那 3px 宽度。 */
-  border-top: 3px solid var(--app-line);
 }
 
 /* ---- Responsive ---- */
