@@ -174,46 +174,9 @@
               </el-button>
             </el-form-item>
 
-            <div class="divider-row">
-              <span class="divider-label">或使用第三方登录</span>
-            </div>
-
-            <div class="social-row">
-              <button class="social-btn" type="button" @click="handleSocialLogin('Google')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M20.5 12.2c0-.7-.1-1.2-.2-1.8h-8v3.3h4.6c-.2 1.1-.8 2-1.7 2.6v2.2h2.8c1.6-1.5 2.5-3.6 2.5-6.3Z"
-                    fill="#4285F4"
-                  />
-                  <path
-                    d="M12.3 20.5c2.3 0 4.2-.8 5.6-2.1l-2.8-2.2c-.8.5-1.7.9-2.9.9-2.2 0-4-1.5-4.7-3.4H4.7V16c1.4 2.7 4.2 4.5 7.6 4.5Z"
-                    fill="#34A853"
-                  />
-                  <path
-                    d="M7.6 13.7c-.2-.5-.3-1.1-.3-1.7s.1-1.2.3-1.7V8H4.7c-.6 1.2-1 2.5-1 4s.4 2.8 1 4l2.9-2.3Z"
-                    fill="#FBBC05"
-                  />
-                  <path
-                    d="M12.3 6.9c1.3 0 2.4.4 3.3 1.3l2.4-2.4c-1.5-1.4-3.4-2.2-5.7-2.2-3.4 0-6.2 1.9-7.6 4.5l2.9 2.3c.7-2 2.5-3.5 4.7-3.5Z"
-                    fill="#EA4335"
-                  />
-                </svg>
-                Google
-              </button>
-              <button class="social-btn" type="button" @click="handleSocialLogin('GitHub')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.49.5.09.68-.22.68-.48 0-.24-.01-.87-.01-1.71-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02.8-.22 1.65-.33 2.5-.33.85 0 1.7.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.86 0 1.34-.01 2.42-.01 2.75 0 .27.18.58.69.48A10.01 10.01 0 0 0 22 12c0-5.52-4.48-10-10-10Z"
-                    fill="#24292f"
-                  />
-                </svg>
-                GitHub
-              </button>
-            </div>
-
             <p class="signup-link">
               还没有账号？
-              <el-link type="primary" :underline="false" @click="goRegister">创建账号</el-link>
+              <el-link type="primary" underline="never" @click="goRegister">创建账号</el-link>
             </p>
           </el-form>
         </div>
@@ -254,10 +217,6 @@ const rules = {
 
 const goRegister = () => router.push('/register')
 const goResetPassword = () => router.push('/reset-password')
-
-const handleSocialLogin = (provider) => {
-  ElMessage.info(`${provider} 第三方登录暂未开放`)
-}
 
 const handleLogin = async () => {
   if (loading.value) return
@@ -501,61 +460,6 @@ const handleLogin = async () => {
 .submit-btn {
   width: 100%;
   min-height: 46px;
-}
-
-/* Divider */
-.divider-row {
-  position: relative;
-  margin: 16px 0;
-  text-align: center;
-}
-
-.divider-row::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: var(--el-border-color);
-}
-
-.divider-label {
-  position: relative;
-  padding: 0 12px;
-  background: var(--app-surface-strong);
-  color: var(--app-muted);
-  font-size: 12px;
-}
-
-/* Social buttons */
-.social-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.social-btn {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid var(--app-line);
-  border-radius: 10px;
-  background: var(--app-surface-strong);
-  color: var(--app-text);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.social-btn:hover {
-  background: var(--el-fill-color-light);
-  border-color: var(--el-border-color);
 }
 
 /* Signup link */

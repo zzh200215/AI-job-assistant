@@ -125,7 +125,7 @@
 
         <p class="signup">
           已有账号？
-          <el-link type="primary" :underline="false" @click="goLogin">去登录</el-link>
+          <el-link type="primary" underline="never" @click="goLogin">去登录</el-link>
         </p>
       </el-form>
     </section>

@@ -125,24 +125,26 @@ const BUDGET = {
   // 视图的 <script> 里再出现 hex，这条预算就会红。
   scriptColorLiterals: {},
   /* 模板属性里的色值：上面两个预算都看不见它（一个数 <style>，一个数 <script>）。
-     这里的数字是现状记账，不是认可——Login 的 17 处是第三方登录按钮的品牌色
-     （Google / GitHub 官方值），本来就该写死；其余 8 处是真债（导航菜单两个蓝、
-     风险点/改进建议两个 Element 默认色、两处内联 SVG 描边、一个兜底色），且都与
-     主题 token 不同值。本段一条都没换成 var()：`stroke="var(--app-…)"` 这类表现
-     属性必须能在浏览器里看结果才敢改，而 browser 工具被会话策略拦着。 */
+     这里的数字是现状记账，不是认可——Login 原先那 17 处里，5 处是第三方登录按钮的
+     Google/GitHub 官方品牌色，**D145 把那两个假按钮摘了，这 5 处连同"品牌色本就该写死"
+     这条豁免理由一起作废**；剩下 12 处是登录页左侧那幅装饰雷达插画的描边与网点
+     （压在固定的品牌渐变上，不跟主题走）加一枚房子图标的白描边，属插画资产不是主题色。
+     其余 3 处是真债（DefaultLayout 1 + ExplainMatch 2），理由逐条写在下面。
+     本段一条都没换成 var()：`stroke="var(--app-…)"` 这类表现属性必须能在浏览器里看结果
+     才敢改。 */
   /* 模板属性里的色值。三个维度里只有这一维必须逐条在真浏览器里看过才敢动（D1 第三段）。
      D17 动了 5 处，其中 2 处是**删掉**而不是换成 token：`el-menu` 的 `text-color` /
      `active-text-color` 在本文件 `<style>` 里被 `.el-menu-item`、`:hover`、`.is-active`、
      `.el-sub-menu__title` 四条 `color: … !important` 全覆盖，实测把属性值改成 #ff00ff/#00ffff
      后 23 个导航项的计算色一个字节都没动（167,169,181 / 189,164,255）——它们从来不说真话，
-     留着只会误导下一个人。剩下 3 处各有各的理由不动：
-     - Login 17 处是 Google/GitHub 官方品牌色与雷达图描边，本就该写死；
+     留着只会误导下一个人。剩下的各有各的理由不动：
+     - Login 12 处：装饰插画与图标描边，见上面那段（原来含品牌色的那 5 处随假按钮出树）；
      - DefaultLayout 这 1 处是品牌标记的白描边，压在 #6d3ce8 的紫色块上，是刻意的对比色，
        不是"忘了用 token"（它等于 --app-surface-strong 也是巧合）；
      - ExplainMatch 2 处：D16 查到这个视图**没有路由可达**（`explain-match` 是 redirect），
        改了没人看见，等 §7 阶段 3 决定删不删。 */
   templateColorLiterals: {
-    'src/features/auth/views/Login.vue': 17,
+    'src/features/auth/views/Login.vue': 12,
     'src/layouts/DefaultLayout.vue': 1,
     'src/features/analysis/views/ExplainMatch.vue': 2,
   },
