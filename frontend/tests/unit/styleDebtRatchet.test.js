@@ -77,16 +77,17 @@ const BUDGET = {
     'src/features/pipeline/views/PipelineKanban.vue': 1,
     /* D62 把转化分析与版本表现两块面板搬出 PipelineKanban：样式照 D44 的口径**复制不切**
        （`.funnel-fill` 的配色走 `'fill-' + stage.accent` 这种动态类名，静态切分会把 6 条
-       fill-* 整条切没）。这 1 条 `#94a3b8` 是页面那 12 条里重复出来的第二个副本，
-       页面一条没删，所以这一维总数 12 → 13，不是新写的色值。 */
-    'src/features/pipeline/components/StatsPane.vue': 1,
+       fill-* 整条切没）。这 1 条是那两枚 slate 手挑灰蓝里**重复**出来的第二份。
+       D152 把它换成 `var(--app-muted)` ⇒ 这一维到 0，条目随之从表里删除（"预算比现实松"会红）。 */
     /* D63 搬看板列：同一笔复制成本再记一次。这 9 条是 `.dot-*` 与 `.follow-*` 那些
        十六进制值从页面**重复**出来的第二份（页面 12 条仍然一条没删——那些类名有一半是
        拼出来的：`'dot-' + col.accent`、`'card-follow follow-' + followUpLevel(...)`）。
        这一维在 pipeline 这个域里 12 → 13 → 22。
        §10.34 走 ①：`.follow-*` 那四枚药丸从"手挑浅底 + 同色系浅字"换成这一族的座配方，
-       BoardPane 9 → 3、ListPane 7 → **0**（条目随之从表里删除）。 */
-    'src/features/pipeline/components/BoardPane.vue': 3,
+       BoardPane 9 → 3、ListPane 7 → **0**（条目随之从表里删除）。
+       D152 再收一条：`.dot-slate` 那枚手挑灰蓝换 `--app-muted`（同一刀落在 StatsPane 的副本上）。
+       剩下 2 条是 `.dot-gray`（与 slate 几乎同值，要不要一起并等拍）与 `.resume-version-tag`。 */
+    'src/features/pipeline/components/BoardPane.vue': 2,
     /* ListPane 这一维现在是 0：它带的那 7 条全是 `.follow-*` 与 `.version-cell` 的手挑色，
        同一批在 §10.34 里收掉了。`.score-level--*` 那五档住的是令牌，本来就不计。 */
     /* D65 把 SmartAnalysis 剩下 5 个标签页面板搬出视图，其中只有这一页带色值：`.cp-score` 的

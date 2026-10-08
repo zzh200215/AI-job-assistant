@@ -311,8 +311,11 @@ const stageToRate = (from, to) => boardStageToRate(props.counts, from, to)
   transition: width 0.4s ease;
 }
 
+/* 与 BoardPane 的 `.dot-slate` 同一档、同一刀：手挑灰蓝换成 `--app-muted`（跟着主题走）。
+   这一档在漏斗里读数取决于轨道：今天轨道是 EP 的 `--el-fill-color`（浅色遗留），
+   挂在它上面只有 2.29（图形门槛 3:1）；换成深色轨道后是 7.35。轨道本身另有一格等拍（§10.35）。 */
 .fill-slate {
-  background: #94a3b8;
+  background: var(--app-muted);
 }
 
 .fill-blue {

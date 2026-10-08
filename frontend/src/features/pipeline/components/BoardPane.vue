@@ -224,8 +224,12 @@ function onDrop(targetStage) {
   flex-shrink: 0;
 }
 
+/* `slate` 这一档原来是手挑的灰蓝，与下面 `gray` 那档几乎同值（现取 148,163,184 对 156,163,175）。
+   它不进任何令牌族，所以在浅色主题下会跟着掉线（灰蓝压白只剩 2.3 上下）。换 `--app-muted`：
+   深色工作台里作为图形压在列头 6.83 → 6.34（门槛 3:1，见 WCAG 1.4.11），且跟着主题走。
+   StatsPane 的 `.fill-slate` 是同一档的另一份副本，两处一起换。 */
 .dot-slate {
-  background: #94a3b8;
+  background: var(--app-muted);
 }
 
 .dot-blue {
