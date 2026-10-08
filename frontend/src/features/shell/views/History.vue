@@ -448,7 +448,7 @@ onMounted(loadList)
   border-left: 1px solid var(--app-line);
 }
 .history-focus-metrics b {
-  color: var(--app-primary-dark);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-size: 23px;
   line-height: 1;
 }
@@ -480,7 +480,7 @@ onMounted(loadList)
   margin: 4px 0;
 }
 .a {
-  color: var(--app-primary-dark);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-size: 13px;
 }
 .risk {

@@ -750,7 +750,7 @@ onUnmounted(() => {
   border-left: 1px solid var(--app-line);
 }
 .agent-focus-metrics b {
-  color: var(--app-primary-dark);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-size: 21px;
   line-height: 1;
 }

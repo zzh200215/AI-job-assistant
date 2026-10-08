@@ -61,7 +61,7 @@ const emit = defineEmits(['command', 'batch-move', 'clear-selection', 'selection
         size="small"
         :loading="writeBusy"
         :disabled="writeBusy"
-        style="color: var(--app-danger)"
+        style="color: color-mix(in srgb, var(--app-danger), white 20%)"
         @click="emit('batch-move', 'rejected')"
         >批量标记拒绝</el-button
       >
@@ -146,7 +146,10 @@ const emit = defineEmits(['command', 'batch-move', 'clear-selection', 'selection
                 >
                 <el-dropdown-item command="reject">标记拒绝</el-dropdown-item>
                 <el-dropdown-item command="abandon">放弃</el-dropdown-item>
-                <el-dropdown-item command="delete" divided style="color: var(--app-danger)"
+                <el-dropdown-item
+                  command="delete"
+                  divided
+                  style="color: color-mix(in srgb, var(--app-danger), white 20%)"
                   >删除</el-dropdown-item
                 >
               </el-dropdown-menu>
@@ -197,36 +200,40 @@ const emit = defineEmits(['command', 'batch-move', 'clear-selection', 'selection
 }
 
 .batch-info strong {
-  color: var(--app-primary);
+  /* 实测 3.44：批量栏底已经是 tone 混 `--app-bg` 92%，蓝档本体当文字仍不够 4.5。 */
+  color: color-mix(in srgb, var(--app-primary), white 25%);
 }
 
 .version-cell {
   display: inline-block;
   max-width: 120px;
   overflow: hidden;
-  color: #365c8d;
+  /* 一个手挑的暗蓝，实测压在卡片上是 2.56。与"文字档"同一条口径：品牌蓝当文字用要抬一档。 */
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   text-overflow: ellipsis;
   vertical-align: bottom;
   white-space: nowrap;
 }
 
+/* 与 BoardPane 那份副本同一条配方（D44 那族"复制不切"，两处必须一起改）。
+   改前实测最差 2.10：浅绿底压绿字。 */
 .follow-danger {
-  background: #fff3f0;
-  color: #d46e6e;
+  background: color-mix(in srgb, var(--app-danger), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-danger), white 20%);
 }
 
 .follow-warn {
-  background: #fffaf1;
-  color: #dc9c3f;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 86%);
+  color: var(--app-warning);
 }
 
 .follow-ok {
-  background: #f0faf4;
-  color: #67c23a;
+  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
+  color: var(--app-success);
 }
 
 .follow-interview {
-  color: var(--app-violet);
+  color: color-mix(in srgb, var(--app-violet), white 34%);
   font-weight: 600;
 }
 

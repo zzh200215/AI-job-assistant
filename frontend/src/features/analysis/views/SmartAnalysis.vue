@@ -1205,7 +1205,7 @@ onMounted(() => {
   border-radius: var(--app-radius-xs, 8px);
   background: var(--el-fill-color-light);
   font-size: 12px;
-  color: var(--app-primary-dark);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
 }
 
 /* ===== Results ===== */

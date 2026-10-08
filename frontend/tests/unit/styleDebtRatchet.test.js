@@ -58,7 +58,9 @@ const BUDGET = {
     /* D52 同上：引用来源面板复制的是页面里 "RAG Confidence / References / Loading state" 三段，
        这 3 个是从 15 里重复出来的第二个副本；匹配度解释面板复制的两段一个色值都没有，所以不列。 */
     'src/features/analysis/components/ReferencesPane.vue': 3,
-    'src/features/jobs/views/JobRecommend.vue': 19,
+    /* 19 → 18：`.salary-val` 原来写成 `var(--app-primary-dark, #1c8c5e)`——一个蓝色令牌挂着
+       绿色兜底，等于给同一处留了两种语义。§10.34 换成混白那一档，兜底随之消失。 */
+    'src/features/jobs/views/JobRecommend.vue': 18,
     'src/features/auth/views/Register.vue': 26,
     /* InterviewReport 这一维现在是 **0**，条目随之从表里删除：D144 撤掉那批浅色时代覆写
        （22 → 8），D146 又把被覆写压住的深色渐变基座并进单层（8 → 0）。它从"硬编码色最多的
@@ -77,13 +79,12 @@ const BUDGET = {
     /* D63 搬看板列：同一笔复制成本再记一次。这 9 条是 `.dot-*` 与 `.follow-*` 那些
        十六进制值从页面**重复**出来的第二份（页面 12 条仍然一条没删——那些类名有一半是
        拼出来的：`'dot-' + col.accent`、`'card-follow follow-' + followUpLevel(...)`）。
-       这一维在 pipeline 这个域里 12 → 13 → 22。 */
-    'src/features/pipeline/components/BoardPane.vue': 9,
-    /* D64 搬列表视图：同一笔复制成本第三次记在这个域里。这 7 条是 .follow-* 与
-       .score-level--* 那些十六进制值从页面**重复**出来的第二份（页面 12 条一条没删；
-       这两个类名分别是 'follow-' + followUpLevel(...) 与 scoreToneClass(..., 'score-level')
-       拼出来的，静态切分会整条切错）。pipeline 域这一维：12 → 13 → 22 → 29。 */
-    'src/features/pipeline/components/ListPane.vue': 7,
+       这一维在 pipeline 这个域里 12 → 13 → 22。
+       §10.34 走 ①：`.follow-*` 那四枚药丸从"手挑浅底 + 同色系浅字"换成这一族的座配方，
+       BoardPane 9 → 3、ListPane 7 → **0**（条目随之从表里删除）。 */
+    'src/features/pipeline/components/BoardPane.vue': 3,
+    /* ListPane 这一维现在是 0：它带的那 7 条全是 `.follow-*` 与 `.version-cell` 的手挑色，
+       同一批在 §10.34 里收掉了。`.score-level--*` 那五档住的是令牌，本来就不计。 */
     /* D65 把 SmartAnalysis 剩下 5 个标签页面板搬出视图，其中只有这一页带色值：`.cp-score` 的
        白色前景（压在 `score-fill--*` 的分数渐变上，那五条渐变规则住在 src/styles/main.css，
        跨组件边界有效，所以不重复）。这 1 条是从页面那 15 条里**重复**出来的第二份，
@@ -1216,7 +1217,7 @@ describe('style debt ratchet', () => {
     // 刻意不含 `card`、`suggestion-item` 这类会撞上"合法深色覆盖"的名字（`.dashboard-page
     // .suggestion-item` 与 `.summary-card.amber` 都是按字面量写的合法债）。
     const IS_CHIP =
-      /(icon|chip|badge|\.ach-|\.qb-|star-tag|\.star-(?:tag|s|t|a|r)\b|interview-score|empty-guide|avatar|delta-col|batch-bar|card-interview|offer-row|target-card\.primary)/
+      /(icon|chip|badge|\.ach-|\.qb-|star-tag|\.star-(?:tag|s|t|a|r)\b|interview-score|empty-guide|avatar|delta-col|batch-bar|card-interview|offer-row|target-card\.primary|\.follow-(?:danger|warn|ok|interview)\b)/
 
     const check = (sources, themeText) => {
       const bad = []
@@ -1422,6 +1423,78 @@ describe('style debt ratchet', () => {
     )
     expect(regressed, '植入没落进 main.css，这条反证是空转的').not.toBe(themeCss)
     expect(cssMap(regressed, 'score-tone').good, '改回 tone 本体必须报红').toBe(null)
+  })
+
+  /* `--app-primary-dark` 是品牌蓝的**更深**一档：它存在的理由是给浅色面的 hover / 按压态用。
+     深色工作台里"更强调的文字"方向是往**亮**走（这一族的分数座、`.follow-*`、批量栏数字都按
+     混白 25% 收），所以它出现在 `color:` 位置上几乎一定是抄规则时没看主题——实测这样一处
+     23px 数字压在深色卡片上是 2.61，连大字号的 3:1 都不过。§10.34 走 ①：12 处抬起，
+     只留两处**按页**豁免（都在浅色面上）。 */
+  it('keeps the darker brand blue out of any dark-workspace text', () => {
+    const DARK_TEXT = /color:\s*var\(--app-primary-dark\b/g
+    const ALLOWED = {
+      // 浅色登录页的"忘记密码"hover——这里 `--app-primary-dark` 压在白面上，方向是对的。
+      'src/features/auth/views/Login.vue': 1,
+      // 题库类型选中态：浅底是"已选中"那层 affordance（与浅色令牌豁免表同一条理由），
+      // 字压在那层浅底上，所以往深走才对。
+      'src/features/interview/views/InterviewSetup.vue': 1,
+    }
+    const counts = viewSources
+      .map(({ rel, style }) => [rel, (style.match(DARK_TEXT) || []).length])
+      .filter(([, n]) => n > 0)
+    const bad = []
+    for (const [rel, n] of counts) {
+      if (ALLOWED[rel] === undefined)
+        bad.push(`${rel} 把更深一档的蓝当文字用了 ${n} 处，不在豁免表里`)
+      else if (ALLOWED[rel] !== n) bad.push(`${rel} 实得 ${n} 处，豁免表写的是 ${ALLOWED[rel]} 处`)
+    }
+    for (const rel of Object.keys(ALLOWED)) {
+      if (!counts.some(([r]) => r === rel))
+        bad.push(`豁免表里的 ${rel} 现在一处都不这么用了，删掉这一行`)
+    }
+    expect(bad, `深色工作台里长出"更深的字"：${bad.join('；')}`).toEqual([])
+
+    // 反证：往 History 的那一格数字里植一条回来，判据必须报；植不进去也要当场说清。
+    const key = 'src/features/shell/views/History.vue'
+    const target = viewSources.find((v) => v.rel === key)
+    expect(target.style, `视图清单里没有 ${key}，这条反证是空转的`).toContain(
+      '.history-focus-metrics b {'
+    )
+    const planted = target.style.replace(
+      '.history-focus-metrics b {',
+      '.history-focus-metrics b { color: var(--app-primary-dark);'
+    )
+    expect((planted.match(DARK_TEXT) || []).length, '植入应当恰好落 1 处').toBe(1)
+    const recount = viewSources
+      .map((v) => [v.rel, v.rel === key ? planted : v.style])
+      .map(([rel, style]) => [rel, (style.match(DARK_TEXT) || []).length])
+      .filter(([, n]) => n > 0)
+    expect(
+      recount.some(([rel, n]) => ALLOWED[rel] === undefined && n > 0),
+      '豁免表外多出一处更深一档的蓝当文字，判据必须报它'
+    ).toBe(true)
+  })
+
+  /* 模板里的内联 `style="color: var(--app-danger)"` 是这一族最难看见的一处：**内联样式压过
+     一切 CSS**，所以主题层那条 tone 通道（`.score-tone--*` / el-tag 那两条）对它完全无效，
+     而它也不在任何 `<style>` 色值预算里（`var()` 不是字面量）。实测这样一处 12px 红字压在
+     深色卡片上是 4.42。danger / primary / violet 三个 tone 本体当文字都不过 4.5
+     （4.42 / 3.39 / 2.92），success / warning / cyan 与 muted 本体就过，所以只禁前三。 */
+  it('keeps inline tone colors in templates lifted for text', () => {
+    const BARE = /style="[^"]*color:\s*var\(--app-(?:danger|primary|violet)\)\s*[";]/
+    const offenders = viewSources.filter((v) => BARE.test(v.source)).map((v) => v.rel)
+    expect(offenders, `模板内联把 tone 本体当文字用：${offenders.join(', ')}`).toEqual([])
+
+    const key = 'src/features/pipeline/components/ListPane.vue'
+    const target = viewSources.find((v) => v.rel === key)
+    expect(target.source, `视图清单里没有 ${key}，这条反证是空转的`).toContain(
+      'color: color-mix(in srgb, var(--app-danger), white 20%)'
+    )
+    const planted = target.source.replace(
+      'color: color-mix(in srgb, var(--app-danger), white 20%)',
+      'color: var(--app-danger)'
+    )
+    expect(BARE.test(planted), '把一处改回 tone 本体，判据必须报它').toBe(true)
   })
 
   /* 拼出来的类名（`'dot-' + task.priority`、`` `severity-${item.severity}` ``）这一族，

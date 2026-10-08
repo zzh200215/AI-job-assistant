@@ -1164,7 +1164,7 @@ function segmentStyle(value, total) {
 }
 
 .brief-metrics b {
-  color: var(--app-primary-dark);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-size: 23px;
   line-height: 1;
 }
@@ -1352,7 +1352,7 @@ function segmentStyle(value, total) {
 }
 .salary-val {
   font-size: 12px;
-  color: var(--app-primary-dark, #1c8c5e);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-weight: 700;
   min-width: 30px;
 }

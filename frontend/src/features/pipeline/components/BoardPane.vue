@@ -106,13 +106,18 @@ function onDrop(targetStage) {
                     <el-dropdown-item v-if="col.key === 'interview'" command="interview"
                       >模拟面试</el-dropdown-item
                     >
-                    <el-dropdown-item command="reject" divided style="color: var(--app-danger)"
+                    <el-dropdown-item
+                      command="reject"
+                      divided
+                      style="color: color-mix(in srgb, var(--app-danger), white 20%)"
                       >标记拒绝</el-dropdown-item
                     >
                     <el-dropdown-item command="abandon" style="color: var(--app-muted)"
                       >放弃</el-dropdown-item
                     >
-                    <el-dropdown-item command="delete" style="color: var(--app-danger)"
+                    <el-dropdown-item
+                      command="delete"
+                      style="color: color-mix(in srgb, var(--app-danger), white 20%)"
                       >删除</el-dropdown-item
                     >
                   </el-dropdown-menu>
@@ -401,23 +406,27 @@ function onDrop(targetStage) {
   color: #365c8d;
 }
 
+/* 跟进状态那四枚药丸：原来每枚都是"手挑浅底 + 同色系浅字"，实测最差 2.10（`.follow-ok`
+   浅绿底压绿字）——浅底压浅字与深色工作台里读不出内容，是同一件事的两种表现。
+   统一走这一族的座配方（底 = tone 混 `--app-bg` 86%、字 = tone，红/紫按实测幅度混白）。
+   ListPane 里有一份同形状的副本（D44 那族"复制不切"），两处一起改。 */
 .follow-danger {
-  background: #fff3f0;
-  color: #d46e6e;
+  background: color-mix(in srgb, var(--app-danger), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-danger), white 20%);
 }
 
 .follow-warn {
-  background: #fffaf1;
-  color: #dc9c3f;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 86%);
+  color: var(--app-warning);
 }
 
 .follow-ok {
-  background: #f0faf4;
-  color: #67c23a;
+  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
+  color: var(--app-success);
 }
 
 .follow-interview {
-  color: var(--app-violet);
+  color: color-mix(in srgb, var(--app-violet), white 34%);
   font-weight: 600;
 }
 </style>

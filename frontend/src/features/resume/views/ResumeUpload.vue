@@ -448,7 +448,10 @@
                   }}</el-dropdown-item>
                   <el-dropdown-item command="exportDocx">导出 Word</el-dropdown-item>
                   <el-dropdown-item command="exportPdf">导出 PDF</el-dropdown-item>
-                  <el-dropdown-item command="delete" divided style="color: var(--app-danger)"
+                  <el-dropdown-item
+                    command="delete"
+                    divided
+                    style="color: color-mix(in srgb, var(--app-danger), white 20%)"
                     >删除</el-dropdown-item
                   >
                 </el-dropdown-menu>
@@ -1269,7 +1272,7 @@ async function showDiagnosisDialog(r) {
 
 .is-default .record-mark {
   background: var(--app-primary-soft);
-  color: var(--app-primary-dark);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
 }
 
 .card-title-row h3 {

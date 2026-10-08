@@ -91,7 +91,10 @@
                 <el-dropdown-item v-if="!t.is_primary" command="primary"
                   >设为主目标</el-dropdown-item
                 >
-                <el-dropdown-item command="delete" divided style="color: var(--app-danger)"
+                <el-dropdown-item
+                  command="delete"
+                  divided
+                  style="color: color-mix(in srgb, var(--app-danger), white 20%)"
                   >删除</el-dropdown-item
                 >
               </el-dropdown-menu>
@@ -503,7 +506,7 @@ onMounted(loadTargets)
   border-left: 1px solid var(--app-line);
 }
 .target-focus-metrics b {
-  color: var(--app-primary-dark);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-size: 23px;
   line-height: 1;
 }

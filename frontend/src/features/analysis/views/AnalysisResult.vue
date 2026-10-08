@@ -795,7 +795,7 @@ const goJobMarket = () => router.push('/jobs/search')
   margin-top: 12px;
   font-size: 56px;
   line-height: 1;
-  color: var(--app-primary-dark);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
 }
 
 .score-rec {
@@ -930,7 +930,7 @@ const goJobMarket = () => router.push('/jobs/search')
 }
 
 .a {
-  color: var(--app-primary-dark);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-size: 13px;
   margin-top: 6px;
 }
