@@ -7,8 +7,10 @@
  * "这一屏没渲染到"，不证明"没有值能渲染到"。所以域写在这里，两个方向各有一条守卫：
  *   正向 —— 域里每个值在该有规则的视图里都必须有一条 `.prefix-value`；
  *   反向 —— 视图里每条 `.prefix-*` 规则的值都必须还在域里（多出来的就是死样式）。
- * 每个域都标了它的出处：多数是后端的某个字段，`FOLLOW_UP_LEVELS` 那一个是前端自己的一个纯函数
- * （见那条注释）。后端加一档而这里没跟上，正向那条会红。
+ * 每个域都标了它的出处：`PRIORITY_LEVELS` / `AGENT_TASK_STATUSES` / `CONFIDENCE_LEVELS` /
+ * `SEVERITY_LEVELS` 是后端字段，`FOLLOW_UP_LEVELS` / `STAGE_ACCENTS` / `FUNNEL_ACCENTS` /
+ * `WEIGHT_DOT_COLORS` 是**前端自己的代码**（纯函数或本地常量）——后这四个由守卫逐字解析产出它们的
+ * 那段代码，抄本与代码分叉就红。后端加一档而这里没跟上，正向那条会红。
  */
 
 /** 今日待办的优先级。出处：`backend/app/api/dashboard.py` 的 today-tasks，实际发出 high/medium/low。 @typedef {'high' | 'medium' | 'low'} PriorityLevel */
@@ -52,6 +54,43 @@ export const SEVERITY_LEVELS = Object.freeze(['high', 'medium', 'low'])
  * @typedef {'danger' | 'warn' | 'ok'} FollowUpLevel
  */
 export const FOLLOW_UP_LEVELS = Object.freeze(['danger', 'warn', 'ok'])
+
+/**
+ * 看板列的强调色。出处：`features/pipeline/lib/pipelineBoard.js:66-73` 每条列定义的那个 `accent`
+ * 字段（`pipelineBoard.js:11` 原话："取值集合就是样式里的 `.dot-*`，不在这里发明新值"）。
+ * 这一族与 `PRIORITY_LEVELS` / `AGENT_TASK_STATUSES` **共用 `dot-` 这个前缀但语义无关**：
+ * Home 拼的是任务优先级、TaskCenter 拼的是任务状态、看板列头与卡片拼的是 accent，
+ * 所以守卫按 (前缀, 文件) 一站一站记，不按前缀全局记。
+ * `green` 在列里出现两次（offer 与 accepted），集合里去重。
+ * @typedef {'slate' | 'blue' | 'amber' | 'violet' | 'green' | 'red' | 'gray'} StageAccent
+ */
+export const STAGE_ACCENTS = Object.freeze([
+  'slate',
+  'blue',
+  'amber',
+  'violet',
+  'green',
+  'red',
+  'gray',
+])
+
+/**
+ * 漏斗那几条填充真的会发出来的强调色。出处：`pipelineBoard.js:113-120` 的 `funnelRows()`
+ * 先把列筛成 todo / applied / written_test / interview / offer 五段，所以 `rejected`（red）与
+ * `withdrawn`（gray）**进不了漏斗**。这条域必须是 `STAGE_ACCENTS` 的子集——守卫两条都钉：
+ * 筛出的五段映出来的 accent 集合 == 这里，而 `.fill-*` 规则集合也 == 这里（D151 当场照出
+ * `.fill-red` 是没人能发出的死规则，已删）。
+ * @typedef {'slate' | 'blue' | 'amber' | 'violet' | 'green'} FunnelAccent
+ */
+export const FUNNEL_ACCENTS = Object.freeze(['slate', 'blue', 'amber', 'violet', 'green'])
+
+/**
+ * Offer 权衡表里那颗点色。出处：`features/jobs/views/OfferCompare.vue:459-464` 六条权重各自的
+ * `color` 字段（模板 `:class="'dot-' + w.color"`，`OfferCompare.vue:124`）。同样是 `dot-` 前缀的
+ * 第四个域，与上面三个互不相干。
+ * @typedef {'blue' | 'violet' | 'green' | 'amber' | 'red' | 'teal'} WeightDotColor
+ */
+export const WEIGHT_DOT_COLORS = Object.freeze(['blue', 'violet', 'green', 'amber', 'red', 'teal'])
 
 /**
  * 拼 class 用的那一个函数：它**不做兜底**——值域外的值今天就是没样式，

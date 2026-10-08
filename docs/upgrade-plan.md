@@ -3806,6 +3806,20 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **仍未测**（不写成已验证）：房间那一屏的 WS 是真断的（探针不桩 WebSocket），所以我量的是"由 detail 水合出来的五档"，**不是**"WS 实时推来评分时的同一帧"——两者共用同一个 `TranscriptPane` 与同一批规则，但 status 提示条那一支今天没在屏上出现过；`.score-chip` 在**浅色主题**下的读数依旧没人量过（登录后恒深色）；拖拽区 hover 的**几何**没在桌面宽度复核（探针视口 321×559）。**门禁**：`test:unit` **579 / 88 files**、`npm test` 33/33、`format:check` clean、`eslint` 只剩既有 `paidOrders`、体积尺 **2208.25 kB** 不变（探针不进包）。
 
+#### 已交付：D151 `dot-` 这一个前缀今天载着四个互不相干的域——按 (前缀, 文件) 一站一站钉，当场照出第二条死规则
+
+**D149 留的那格（"`.dot-<accent>` / `.fill-<accent>` 没人守着"）补完，顺带把射程扩了一圈。** 起手按 `pipelineBoard.js:66-73` 那 7 个 accent 枚举，扫完全仓才发现 `dot-` 不是"一个域的一站"，而是**四个域共用一个前缀**：Home 拼 `task.priority`（high/medium/low）、TaskCenter 拼 `task.status`（六档）、看板列与卡片拼 `col.accent`（七档）、OfferCompare 的权重表拼 `w.color`（六档）。所以这一族的守卫必须按 **(前缀, 文件)** 记站，不能按前缀全局记——按前缀比会让"某一站缺一条规则"被另一站的同名值遮掉（`red` 同时是 accent 和权重色，`blue` 是三站的值）。这条口径由守卫自己钉：`STATE_CLASS_SITES` 里 `dot` 的站点清单必须正好是那四个不同文件，多一站或少一站都红。
+
+**新域三个**（`constants/states.js`）：`STAGE_ACCENTS` 7 档（出处是列定义数组，`pipelineBoard.js:11` 原话就是"取值集合就是样式里的 `.dot-*`，不在这里发明新值"）、`FUNNEL_ACCENTS` 5 档、`WEIGHT_DOT_COLORS` 6 档（出处 `OfferCompare.vue:459-464` 的 `color` 字段）。后一个是 D149 那条口径的直接延续：**抄本由产出它的那段代码来定**，新那条腿逐字解析列数组的 `accent:`、`funnelRows()` 里那条 `.filter` 的 key 列表（再映回 accent）、以及权重表的 `color:`，三处各带植入反证（往列里插 `accent: 'chartreuse'`、往权重表插 `color: 'magenta'`，解析必须看见，而域里没有它 ⇒ 上面那条 equal 在这一刻必须是红的）。
+
+**反向那条一接上就报 `.fill-red` 不在值域里 = 死样式。** 机制很干净：漏斗的填充走 `'fill-' + stage.accent`，而 `funnelRows()` 先把列筛成 todo / applied / written_test / interview / offer 五段，**rejected(red) 与 withdrawn(gray) 永远进不了漏斗**——所以 `FUNNEL_ACCENTS` 必须是 `STAGE_ACCENTS` 的子集（这条也是断言，不是注释）。活页确认：五段全在屏（slate / blue / amber / violet / green，宽度 1–37px 都算图形），`.fill-red` **matched=0**，从活样式表删掉后整屏 **423 个元素 0 处差异** ⇒ 死规则，已删（`var(--app-danger)` 不是字面量，所以色值预算不受这一刀影响）。正向也一并量了：看板七档 accent 全在屏（`green` 出现两次，offer 与 accepted 两列共用），`/offer` 那六枚权重色全在屏。
+
+**一次仪器失误，值得记。** 我第一次量 `/offer` 用的是 `/jobs/offer-compare` ——**这个路由不存在**。页面照样换了 URL，`.page-title` 也从路由 meta 拿到了"Offer决策"，但 `.weight-item` 是 0，而且报了一句"请求失败（500），请稍后重试"。真因不是页面：`onMounted` 的那发请求**根本没出现在夹具账上**（`fixtureLog` 只有 kanban 与 /system/status），所以我一开始读到的"这一屏加载失败"是把一次错误导航当成了被测状态。重做（先 `__probe.routes()` 认出 `/offer`，再整页重载）就正常了。**教训两条**：跨页读数前先把路由表现取一遍，别按目录名猜；读到"加载失败"时先看 `fixtureMisses` / `fixtureLog`，**没有请求记录 = 这一屏从没跑过它的加载函数**，与后端无关。这也和 D150 那条 rAF 陷阱同一族：内嵌浏览器的失败通常发生在**仪器层**，而症状长得像应用层缺陷。
+
+**照见但没动**：`.fill-slate { background: #94a3b8 }` 仍是 StatsPane 那一格里唯一的手挑十六进制（色值预算数得到它，本轮不动，因为它与 `.dot-slate` 同值、换令牌要一起换才不自相矛盾）；七档 accent 与六档权重色作为**图形**的 3:1 门槛（WCAG 1.4.11）从没量过——这一刀钉的是"值域与规则集合对齐"，不是"这些颜色够不够显眼"。**未测**：`DefaultLayout` 与 `SmartAnalysis` 里那几枚 `.dot-*` 是模板里**静态**挂的类名（不是拼出来的），不在这一族的双向守卫射程内——它们今天各自有规则，但守卫不会替它们发现"哪天 markup 改名"。
+
+**门禁**：`test:unit` **580 / 88 files**（+1 条三向解析腿，含两处植入反证）、`npm test` 33/33、`format:check` clean、`eslint` 只剩既有 `paidOrders`、build 通过、体积 2208.25 → **2208.19 kB（−0.06）**。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**

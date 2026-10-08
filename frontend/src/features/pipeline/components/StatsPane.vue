@@ -331,9 +331,11 @@ const stageToRate = (from, to) => boardStageToRate(props.counts, from, to)
   background: var(--app-success);
 }
 
-.fill-red {
-  background: var(--app-danger);
-}
+/* `.fill-red` 曾在这里（`var(--app-danger)`）：漏斗的色走 `'fill-' + stage.accent`，而
+   `funnelRows()` 把列筛成 todo / applied / written_test / interview / offer 五段，rejected 与
+   withdrawn 永远进不来 ⇒ 没人能发出它。D151 现取：五段全在屏（slate/blue/amber/violet/green），
+   这条 matched=0，从活样式表删掉后整屏 423 个元素 0 处差异。域与这条判据见 constants/states.js 的
+   FUNNEL_ACCENTS。*/
 
 .funnel-arrow {
   display: flex;

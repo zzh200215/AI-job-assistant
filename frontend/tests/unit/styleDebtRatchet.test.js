@@ -6,8 +6,11 @@ import {
   AGENT_TASK_STATUSES,
   CONFIDENCE_LEVELS,
   FOLLOW_UP_LEVELS,
+  FUNNEL_ACCENTS,
   PRIORITY_LEVELS,
   SEVERITY_LEVELS,
+  STAGE_ACCENTS,
+  WEIGHT_DOT_COLORS,
 } from '../../src/constants/states.js'
 import { scoreToneTextColor } from '../../src/utils/scoreTone'
 
@@ -1577,6 +1580,37 @@ describe('style debt ratchet', () => {
       unstyled: [],
       siblings: ['interview'],
     },
+    {
+      /* D151：`dot-` 这一个前缀今天载着**四个互不相干的域**——Home 载任务优先级、TaskCenter 载任务
+         状态、看板载列的 accent、OfferCompare 载权重色。所以这一族按 (前缀, 文件) 一站一站钉，
+         不按前缀全局钉：全局比会让"某一站缺一条规则"被另一站的同名值遮掉。
+         accent 的出处是 `pipelineBoard.js:66-73` 那个数组（下面有一条腿逐字解析它）。 */
+      prefix: 'dot',
+      values: STAGE_ACCENTS,
+      file: 'src/features/pipeline/components/BoardPane.vue',
+      unstyled: [],
+      siblings: [],
+    },
+    {
+      /* 漏斗的填充色走 `'fill-' + stage.accent`，而 `funnelRows()` 先把列筛成五段
+         （todo / applied / written_test / interview / offer），所以这一族的域是 STAGE_ACCENTS 的
+         **子集**：rejected(red) 与 withdrawn(gray) 永远进不了漏斗。反向那条一接上就报
+         `.fill-red` 发不出来 = 死规则（浏览器实测 matched=0、dropRule 后整屏 0 处差异，已删）。 */
+      prefix: 'fill',
+      values: FUNNEL_ACCENTS,
+      file: 'src/features/pipeline/components/StatsPane.vue',
+      unstyled: [],
+      siblings: [],
+    },
+    {
+      // 权重那颗点的色域住在**页面自己**的常量里（`OfferCompare.vue:459-464` 的 `color` 字段），
+      // 与看板 accent 只是恰好同名同前缀。出处由下面那条腿解析那个数组取。
+      prefix: 'dot',
+      values: WEIGHT_DOT_COLORS,
+      file: 'src/features/jobs/views/OfferCompare.vue',
+      unstyled: [],
+      siblings: [],
+    },
   ]
 
   it('keeps concatenated state classes aligned with their backend value domain', () => {
@@ -1671,6 +1705,89 @@ describe('style debt ratchet', () => {
       '阈值变了，深浅两档要重测'
     ).toEqual(['3', '7'])
     expect(body('needsFollowUp'), 'needsFollowUp 解析不到').not.toBeNull()
+  })
+
+  /* D151：`dot-` / `fill-` 这两族的域不在后端，在前端两处本地常量里——`pipelineBoard.js` 的列定义
+     （accent）与 `OfferCompare.vue` 的权重表（color）。和 FOLLOW_UP_LEVELS 同一口径：**抄本由产出它
+     的那段代码来定**，三个方向各自解析：
+       列数组的 accent 集合  == STAGE_ACCENTS
+       funnelRows 筛出的那五段映出的 accent 集合 == FUNNEL_ACCENTS（它必须是前者的子集）
+       权重表的 color 集合   == WEIGHT_DOT_COLORS
+     每条都带植入反证，否则"解析到 0 条再和空集合相等"会假装通过。 */
+  it('derives the accent and weight-dot domains from the code that produces them', () => {
+    const board = readFileSync('src/features/pipeline/lib/pipelineBoard.js', 'utf8')
+    const offer = readFileSync('src/features/jobs/views/OfferCompare.vue', 'utf8')
+
+    const columnsAt = board.indexOf('const columns')
+    expect(columnsAt, '解析不到 columns（改名或搬家了，指针该跟着搬）').toBeGreaterThanOrEqual(0)
+    const columnsText = board.slice(columnsAt, board.indexOf('\n]', columnsAt) + 2)
+    const parsedAccents = [
+      ...new Set([...columnsText.matchAll(/accent:\s*'([a-z]+)'/g)].map((m) => m[1])),
+    ]
+    expect(parsedAccents.sort(), 'columns 里的 accent 与 STAGE_ACCENTS 分叉').toEqual(
+      [...STAGE_ACCENTS].sort()
+    )
+    /* 反证：列里加一档新 accent，解析必须看见（看不见就是这条腿在空转）。 */
+    const plantedColumns = columnsText.replace(
+      "{ key: 'todo', label: '待投递', accent: 'slate' }",
+      "{ key: 'todo', label: '待投递', accent: 'slate' },\n  { key: 'x', label: 'x', accent: 'chartreuse' }"
+    )
+    const afterPlant = [
+      ...new Set([...plantedColumns.matchAll(/accent:\s*'([a-z]+)'/g)].map((m) => m[1])),
+    ]
+    expect(afterPlant, '往列里插一档 accent，集合必须变大').toContain('chartreuse')
+    expect(STAGE_ACCENTS, '而域里没有它：上面那条 equal 在这一刻必须是红的').not.toContain(
+      'chartreuse'
+    )
+
+    /* 漏斗不是全部列：`funnelRows()` 先按 key 筛，所以这一族的域是上面的**子集**。
+       筛出的 key 从 columns 映成 accent，比的是这条映射结果，不是手写的五个字。 */
+    const funnelAt = board.indexOf('export function funnelRows(')
+    expect(funnelAt, '解析不到 funnelRows').toBeGreaterThanOrEqual(0)
+    const filterList = board
+      .slice(funnelAt, board.indexOf('\n}', funnelAt))
+      .match(/\.filter\(\(c\)\s*=>\s*\[([^\]]+)\]/)
+    expect(filterList, 'funnelRows 里那条 .filter 的形状变了（这一族今天靠它定域）').not.toBeNull()
+    const funnelKeys = [...filterList[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1])
+    const keyToAccent = Object.fromEntries(
+      [
+        ...columnsText.matchAll(/key:\s*'([a-z_]+)',\s*label:\s*'[^']*',\s*accent:\s*'([a-z]+)'/g),
+      ].map((m) => [m[1], m[2]])
+    )
+    expect(Object.keys(keyToAccent).sort(), 'columns 有 key 没映到 accent').toEqual(
+      [...new Set([...columnsText.matchAll(/key:\s*'([a-z_]+)'/g)].map((m) => m[1]))].sort()
+    )
+    const funnelAccents = [...new Set(funnelKeys.map((k) => keyToAccent[k]))]
+    expect(funnelAccents.sort(), 'funnelRows 筛出的段映出的 accent 与 FUNNEL_ACCENTS 分叉').toEqual(
+      [...FUNNEL_ACCENTS].sort()
+    )
+    for (const a of FUNNEL_ACCENTS) {
+      expect(STAGE_ACCENTS, `FUNNEL_ACCENTS 里的 ${a} 必须是列里真有的 accent`).toContain(a)
+    }
+
+    const weightColors = [...new Set([...offer.matchAll(/color:\s*'([a-z]+)'/g)].map((m) => m[1]))]
+    expect(weightColors.sort(), '权重表的 color 与 WEIGHT_DOT_COLORS 分叉').toEqual(
+      [...WEIGHT_DOT_COLORS].sort()
+    )
+    const plantedWeights = offer.replace(
+      "{ key: 'culture', label: '文化氛围', color: 'teal' }",
+      "{ key: 'culture', label: '文化氛围', color: 'teal' },\n  { key: 'y', label: 'y', color: 'magenta' }"
+    )
+    expect(
+      [...new Set([...plantedWeights.matchAll(/color:\s*'([a-z]+)'/g)].map((m) => m[1]))],
+      '往权重表插一档颜色，解析必须看见'
+    ).toContain('magenta')
+
+    /* 前缀共用语义不共用：`dot-` 载着四个互不相干的域（优先级 / 状态 / accent / 权重色），
+       所以"某一站缺一条规则"必须能被单独发现——这里数的是站点的文件数，不是前缀数。 */
+    const dotSites = STATE_CLASS_SITES.filter((s) => s.prefix === 'dot').map((s) => s.file)
+    expect(new Set(dotSites).size, 'dot- 的每一站必须是不同文件').toBe(dotSites.length)
+    expect(dotSites, 'dot- 前缀的站点清单（四个域）').toEqual([
+      'src/features/shell/views/Home.vue',
+      'src/features/shell/views/TaskCenter.vue',
+      'src/features/pipeline/components/BoardPane.vue',
+      'src/features/jobs/views/OfferCompare.vue',
+    ])
   })
 
   it('keeps the auth session keys inside utils/session', () => {
