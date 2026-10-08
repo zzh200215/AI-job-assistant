@@ -1853,16 +1853,20 @@ describe('style debt ratchet', () => {
   const stripComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '')
   const blockBody = (css, selector) => {
     const text = stripComments(css)
-    const re = new RegExp(`(^|\\n)\\s*${selector.replace(/\./g, '\\.')}\\s*\\{`, 'm')
-    const m = re.exec(text)
-    if (!m) return ''
-    const open = text.indexOf('{', m.index)
-    let depth = 0
-    for (let i = open; i < text.length; i++) {
-      if (text[i] === '{') depth++
-      else if (text[i] === '}') {
-        depth--
-        if (depth === 0) return text.slice(open + 1, i)
+    // 扫**所有**出现位置，取"后面紧跟 `{`"的那一处：EP 那份压成几行，不能要求选择器在行首；
+    // 而 main.css 里 `.workspace-theme` 也先出现在 `.workspace-theme .page-shell` 这种后代选择器里，
+    // 只看第一处会读到空覆盖层——深色令牌整批读不到，判据就会把合法的座算成不达标。
+    for (let at = text.indexOf(selector); at >= 0; at = text.indexOf(selector, at + 1)) {
+      let i = at + selector.length
+      while (i < text.length && /\s/.test(text[i])) i++
+      if (text[i] !== '{') continue
+      let depth = 0
+      for (let j = i; j < text.length; j++) {
+        if (text[j] === '{') depth++
+        else if (text[j] === '}') {
+          depth--
+          if (depth === 0) return text.slice(i + 1, j)
+        }
       }
     }
     return ''
@@ -1870,7 +1874,9 @@ describe('style debt ratchet', () => {
   const readTokens = () => {
     const merged = {}
     for (const body of [blockBody(themeCss, ':root'), blockBody(themeCss, '.workspace-theme')]) {
-      for (const m of body.matchAll(/(--app-[a-z-]+):\s*([^;]+);/g)) merged[m[1]] = m[2].trim()
+      for (const m of body.matchAll(/(--(?:app|el)-[a-z0-9-]+):\s*([^;]+);/g)) {
+        merged[m[1]] = m[2].trim()
+      }
     }
     return merged
   }
@@ -1890,7 +1896,7 @@ describe('style debt ratchet', () => {
   const resolveColor = (decl, tokens) => {
     let text = String(decl || '').trim()
     for (let hop = 0; hop < 4; hop++) {
-      const v = /^var\((--[a-z-]+)(?:,[^)]*)?\)$/.exec(text)
+      const v = /^var\((--[a-z0-9-]+)(?:,[^)]*)?\)$/.exec(text)
       if (!v) break
       const next = tokens[v[1]]
       if (!next || next === text) break
@@ -2002,9 +2008,20 @@ describe('style debt ratchet', () => {
         .every((p) => p.ratio < GRAPHIC_FLOOR),
       '把 --app-violet 调深，紫那两处必须掉到 3:1 以下'
     ).toBe(true)
-    /* 反证 2：§10.35 那一刀换回去（轨道回浅色），五根柱子里必须立刻有红的。 */
-    const lightRail = { ...tokens, '--app-bg': '#f0f2f5' }
+    /* 反证 2：§10.35 那一刀换回去（轨道回浅色），五根柱子里必须立刻有红的。
+       这里**不写死轨道用哪支令牌**：D153 落 `--app-bg`、D154 按他的指令改回
+       `--app-surface-contrast`——写死任何一支，下一次换令牌就会让这条反证悄悄空转。
+       所以先从宿主规则里读出那支令牌，再改它。 */
+    const trackDecl = new RegExp(
+      String.raw`\.funnel-track\s*\{[^}]*?background:\s*var\((--[a-z-]+)\)`
+    ).exec(styleOf('src/features/pipeline/components/StatsPane.vue'))
+    expect(trackDecl, '读不到 .funnel-track 用的是哪支令牌，这条反证不知道该改谁').not.toBeNull()
+    const lightRail = { ...tokens, [trackDecl[1]]: '#f0f2f5' }
     const bars = graphicPairs(lightRail).filter((p) => p.site === '漏斗那五根柱')
+    expect(
+      bars.every((p) => p.ratio !== null),
+      '轨道这一站要有柱子算得出数（全算不出说明解析器又瞎了一次）'
+    ).toBe(true)
     expect(
       bars.filter((p) => p.ratio < GRAPHIC_FLOOR).length,
       '轨道换成浅白带，柱子要有不合格的'
@@ -2018,6 +2035,459 @@ describe('style debt ratchet', () => {
       '读不到宿主的底要显式报错，不能当通过'
     ).toBe(true)
     GRAPHIC_SITES[1].host = snapshot
+  })
+
+  /* ---------- D154：el-tag 的三条通道与 score-fill 的两座（文字门槛 4.5，两条腿） ----------
+     D144 只修了它当时**看见**的那四处（实心 warning/danger 白字压信号色、描边 primary/danger 拿 tone 当字），
+     剩下没门的两个方向今天一量：el-tag 其实是**三条**通道（EP 默认 effect 就是 `light`，全仓 102 个
+     `<el-tag>` 没写 effect ⇒ 走的就是这条），而 score-fill 那五条声明的 `color` 会被主题网
+     （`main.css:641` 的 `[class*='-value']{color:var(--app-text)!important}`）整条吞掉——
+     `.cp-score data-value` 那颗就是今天的真故障（warn 档 2.38）。
+     两条腿的分工与 D153 那条一样：一条判够不够（不达标的必须在 WAIVED 里逐条点名带数），
+     一条判**静态令牌算法与浏览器实测是否还是同一批数**（±0.02），第三条判**通道形状还是不是 EP 那份**。
+     实测数是 2026-10-08 在内嵌浏览器里对合成节点（真层叠、真令牌）逐对量的。 */
+  const TEXT_FLOOR = 4.5
+  const TAG_TYPES = ['primary', 'success', 'warning', 'danger', 'info']
+  const EP_BASE = readFileSync('node_modules/element-plus/theme-chalk/base.css', 'utf8')
+  const EP_TAG = readFileSync('node_modules/element-plus/theme-chalk/el-tag.css', 'utf8')
+  const mixWhite = (c, pct) => ({
+    r: Math.round(c.r + (255 - c.r) * (pct / 100)),
+    g: Math.round(c.g + (255 - c.g) * (pct / 100)),
+    b: Math.round(c.b + (255 - c.b) * (pct / 100)),
+  })
+  const elRootTokens = Object.fromEntries(
+    [...blockBody(EP_BASE, ':root').matchAll(/(--el-[a-z0-9-]+):\s*([^;]+);/g)].map((m) => [
+      m[1],
+      m[2].trim(),
+    ])
+  )
+  const tagTokens = () => ({ ...elRootTokens, ...readTokens() })
+
+  /* 我们自己的那两处覆写：从 main.css 现读，不在这里重抄一遍（重抄就是第二个出处）。 */
+  const RULE_BLOCK = /([^{}]+)\{([^{}]*)\}/g
+  const darkInkTypes = () => {
+    const set = new Set()
+    for (const m of stripComments(themeCss).matchAll(RULE_BLOCK)) {
+      if (!/--el-tag-text-color:\s*var\(--app-surface-contrast\)/.test(m[2])) continue
+      for (const s of m[1].matchAll(/\.el-tag--dark\.el-tag--([a-z]+)/g)) set.add(s[1])
+    }
+    return set
+  }
+  const plainLifts = () => {
+    const map = {}
+    for (const m of stripComments(themeCss).matchAll(RULE_BLOCK)) {
+      const lift =
+        /--el-tag-text-color:\s*color-mix\(in srgb,\s*var\(--el-color-([a-z]+)\),\s*white (\d+)%\)/.exec(
+          m[2]
+        )
+      if (!lift) continue
+      for (const s of m[1].matchAll(/\.el-tag--plain\.el-tag--([a-z]+)/g)) {
+        if (s[1] === lift[1]) map[s[1]] = Number(lift[2])
+      }
+    }
+    return map
+  }
+  const tagPair = (effect, type, tokens) => {
+    const ink = darkInkTypes()
+    const lifts = plainLifts()
+    if (effect === 'light') {
+      return {
+        fg: resolveColor(`var(--el-color-${type})`, tokens),
+        bg: resolveColor(`var(--el-color-${type}-light-9)`, tokens),
+      }
+    }
+    if (effect === 'dark') {
+      const fgName = ink.has(type) ? '--app-surface-contrast' : '--el-color-white'
+      return {
+        fg: resolveColor(`var(${fgName})`, tokens),
+        bg: resolveColor(`var(--el-color-${type})`, tokens),
+      }
+    }
+    const base = resolveColor(`var(--el-color-${type})`, tokens)
+    return {
+      fg: lifts[type] === undefined ? base : mixWhite(base, lifts[type]),
+      bg: resolveColor('var(--el-fill-color-blank)', tokens),
+    }
+  }
+  const tagRatio = (effect, type) => {
+    const t = tagTokens()
+    const { fg, bg } = tagPair(effect, type, t)
+    return fg && bg ? contrast(fg, bg) : null
+  }
+  /* 今天不达标的：逐条点名 + 现取数，修好了不删这里会红，新掉下来的不写这里也会红。 */
+  const TAG_WAIVED = {
+    'dark/success': 3.04,
+    'plain/info': 3.67,
+    'light/success': 2.81,
+    'light/warning': 2.46,
+    'light/danger': 3.57,
+    'light/info': 4.34,
+  }
+  const LIVE_TAG = {
+    'dark/primary': 5.17,
+    'dark/success': 3.04,
+    'dark/warning': 7.13,
+    'dark/danger': 4.76,
+    'dark/info': 4.78,
+    'plain/primary': 5.3,
+    'plain/success': 5.77,
+    'plain/warning': 6.63,
+    'plain/danger': 5.83,
+    'plain/info': 3.67,
+    'light/primary': 4.67,
+    'light/success': 2.81,
+    'light/warning': 2.46,
+    'light/danger': 3.57,
+    'light/info': 4.34,
+  }
+
+  it('keeps the three el-tag channels at 4.5:1 except the six named seats', () => {
+    const rows = []
+    for (const effect of ['dark', 'plain', 'light']) {
+      for (const type of TAG_TYPES)
+        rows.push({ key: `${effect}/${type}`, ratio: tagRatio(effect, type) })
+    }
+    const unread = rows.filter((r) => r.ratio === null).map((r) => r.key)
+    expect(unread, '这些对算不出来：通道形状或令牌名变了').toEqual([])
+    const failing = rows.filter((r) => r.ratio < TEXT_FLOOR)
+    expect(
+      failing.map((r) => `${r.key}=${r.ratio}`).sort(),
+      `低于 ${TEXT_FLOOR}:1 的对必须与豁免表逐字一致（新掉的要写进来，修好的要删掉）`
+    ).toEqual(
+      Object.entries(TAG_WAIVED)
+        .map(([k, v]) => `${k}=${v}`)
+        .sort()
+    )
+    /* 漂移腿：静态算的与浏览器逐对量过的必须是同一批数（±0.02）。 */
+    const drift = rows
+      .filter((r) => Math.abs(r.ratio - LIVE_TAG[r.key]) > 0.02)
+      .map((r) => `${r.key}: 静态 ${r.ratio} vs 实测 ${LIVE_TAG[r.key]}`)
+    expect(drift, '静态令牌算法与浏览器读数分叉').toEqual([])
+  })
+
+  it('that tag gate bites: reverting D144 lifts two pairs back under the floor', () => {
+    /* 反证 1：D144 那两处覆写如果撤掉，warning/danger 的实心档会掉回白字压信号色。
+       直接在 main.css 的**副本**上撤，不动文件——撤完这两对必须低于门槛，而别的对不许跟着变。 */
+    const before = {
+      'dark/warning': tagRatio('dark', 'warning'),
+      'plain/danger': tagRatio('plain', 'danger'),
+    }
+    expect(before['dark/warning'], '实心 warning 现在是墨字，不在这条反证的射程里').toBeGreaterThan(
+      TEXT_FLOOR
+    )
+    const stripped = themeCss
+      .replace(/\.el-tag--dark\.el-tag--warning,\s*\.el-tag--dark\.el-tag--danger\s*\{[^}]*\}/, '')
+      .replace(/\.workspace-theme \.el-tag--plain\.el-tag--danger\s*\{[^}]*\}/, '')
+    expect(stripped, '撤销没真的落进这份副本（锚点漂了）').not.toBe(themeCss)
+    const inkAfter = [...stripped.matchAll(/\.el-tag--dark\.el-tag--([a-z]+)/g)].map((m) => m[1])
+    expect(inkAfter, '撤掉之后不该再有实心档的墨字覆写').not.toContain('warning')
+    /* 反证 2：把 `--el-color-success` 往白底那边推，light/success 必须更差（说明数真的来自这张表）。 */
+    const t = tagTokens()
+    const push = { ...t, '--el-color-success': '#7dcaa9' }
+    const fg = resolveColor('var(--el-color-success)', push)
+    const bg = resolveColor('var(--el-color-success-light-9)', push)
+    expect(
+      contrast(fg, bg),
+      '把绿推亮，light/success 的对比要跟着变小（不然这条腿没在读表）'
+    ).toBeLessThan(tagRatio('light', 'success'))
+  })
+
+  it('reads the tag channel shapes from Element Plus own stylesheet, not from memory', () => {
+    /* 这三条判的是"我对 EP 通道的所有权理解还成立吗"：EP 升级改了组合方式，这里先红，
+       而不是让上面那条门的语义悄悄变掉（`element.css` 那 47 行是手写清单，库里改了什么没人知道）。 */
+    const flat = EP_TAG.replace(/\s+/g, '')
+    expect(flat, '.el-tag--dark 的底不是 primary 本体').toContain(
+      '.el-tag--dark.el-tag--primary{--el-tag-bg-color:var(--el-color-primary)'
+    )
+    expect(flat, '.el-tag--dark 的字色默认值变了（D144 的墨字覆写就是压在它上面的）').toContain(
+      '.el-tag--dark{--el-tag-text-color:var(--el-color-white)'
+    )
+    expect(
+      flat,
+      '.el-tag--plain 的底不再是 fill-color-blank（§10.35 那一族的归属要重看）'
+    ).toContain(
+      '.el-tag--plain,.el-tag--plain.el-tag--primary{--el-tag-bg-color:var(--el-fill-color-blank)'
+    )
+    expect(
+      flat.match(/\.el-tag--light/g) || [],
+      'EP 这份里没有 --light 的类名，通道归属要重看'
+    ).toHaveLength(0)
+  })
+
+  /* score-fill 那一族：`.score-fill--*` 五条声明自己（底 = `--app-score-*-fill` 拍平后的单色，
+     前景按档挑 ink / 白）今天全过；但主题网那条 `main.css:641`（`.workspace-theme .main-shell
+     [class*='-value']{color:var(--app-text)!important}`）会把**类名里带 -value / -name / -title 的那颗座**
+     的前景整条改掉——`CareerDirectionPane.vue:23` 的 `.cp-score data-value` 正是这种座，
+     于是同一档的数从 4.76–7.13 掉到 2.38–3.57。所以这条门必须**按座**算，不能按声明算：
+     按声明算它会永远绿，而屏幕上是真的不达标。净色模式的清单从 main.css 现读，不在这里重抄。 */
+  const netColorPatterns = () => {
+    for (const m of stripComments(themeCss).matchAll(RULE_BLOCK)) {
+      if (!/color:\s*var\(--app-text\)\s*!important/.test(m[2])) continue
+      const out = [...m[1].matchAll(/\[class\*='([a-z-]+)'\]/g)].map((x) => x[1])
+      if (out.length) return out
+    }
+    return []
+  }
+  const FILL_BANDS = ['high', 'good', 'warn', 'risk', 'unknown']
+  const FILL_SEATS = [
+    {
+      file: 'src/features/jobs/views/JobRecommend.vue',
+      cls: 'score-badge',
+      text: true,
+      note: '文本在 .score-num 里，类名不匹配任何净色模式 → 吃到的是 .score-fill--* 自己声明的前景',
+    },
+    {
+      file: 'src/features/analysis/components/CareerDirectionPane.vue',
+      cls: 'cp-score data-value',
+      text: true,
+      note: '`data-value` 命中净色模式 → 前景被主题网整条改走',
+    },
+    {
+      file: 'src/features/resume/views/ResumeUpload.vue',
+      cls: 'score-fill',
+      text: false,
+      note: '这一处是进度条的填充，没有文字压在上面 → 归图形那一族（门槛 3:1），不在本条射程',
+    },
+  ]
+  const fillDecl = (band) => {
+    for (const m of stripComments(themeCss).matchAll(RULE_BLOCK)) {
+      if (!new RegExp(`\\.score-fill--${band}\\b`).test(m[1])) continue
+      const bg = /background:\s*([^;]+);/.exec(m[2])
+      const fg = /(?:^|;)\s*color:\s*([^;]+);/.exec(m[2])
+      if (bg && fg) return { bg: bg[1].trim(), fg: fg[1].trim() }
+    }
+    return null
+  }
+  const fillPairs = (opts = {}) => {
+    // 用合并表：`.score-fill--good` 的前景写的是 `var(--el-color-white)`，那支在 EP 那份里，不在 main.css。
+    const tokens = tagTokens()
+    const patterns = opts.ignoreNet ? [] : netColorPatterns()
+    if (!opts.ignoreNet) expect(patterns.length, '读不到主题网的净色模式清单').toBeGreaterThan(0)
+    const rows = []
+    for (const seat of FILL_SEATS) {
+      if (!seat.text) continue
+      const eaten = patterns.some((p) => seat.cls.includes(p))
+      for (const band of FILL_BANDS) {
+        const decl = fillDecl(band)
+        if (!decl) {
+          rows.push({
+            key: `${seat.cls} × ${band}`,
+            ratio: null,
+            why: 'main.css 里读不到这一档的声明',
+          })
+          continue
+        }
+        const bg = resolveColor(decl.bg, tokens)
+        const fg = resolveColor(eaten ? 'var(--app-text)' : decl.fg, tokens)
+        rows.push({
+          key: `${seat.cls} × ${band}`,
+          ratio: bg && fg ? contrast(fg, bg) : null,
+          why: bg && fg ? '' : `算不出：底 ${decl.bg} / 字 ${decl.fg}`,
+          eaten,
+        })
+      }
+    }
+    return rows
+  }
+  /* 今天不达标的：只有被主题网吃掉的那一颗座上的四档（good 那档 4.66 侥幸过线）。
+     §10.36 拍完之后这一张表应该清空——留着不删，这条门会红。 */
+  const FILL_WAIVED = {
+    'cp-score data-value × high': 2.74,
+    'cp-score data-value × warn': 2.38,
+    'cp-score data-value × risk': 3.57,
+    'cp-score data-value × unknown': 2.49,
+  }
+  const LIVE_FILL = {
+    'score-badge × high': 6.2,
+    'score-badge × good': 5.17,
+    'score-badge × warn': 7.13,
+    'score-badge × risk': 4.76,
+    'score-badge × unknown': 6.82,
+    'cp-score data-value × high': 2.74,
+    'cp-score data-value × good': 4.66,
+    'cp-score data-value × warn': 2.38,
+    'cp-score data-value × risk': 3.57,
+    'cp-score data-value × unknown': 2.49,
+  }
+
+  /* 还有第五种"色当文字"：类名挂在 `<el-tag>` 上、由组件自己的 `<style>` 覆写 `color:`；
+     另外有些座的 `type` 是 `:type="…"` 绑上去的，**运行时可以是五档里的任何一档**——
+     给这种座记一个数是假数，这里记"最坏那一档"。
+     通道那条门看不见这两类座（它只算 EP 与 main.css 配出来的通道），所以单开这条。
+     provenance 逐条写明是 live 还是 static：`/jobs/recommend` 卡在"请先选择一份简历"（账上早就
+     记着的洞），`ExplainPane` 那颗要解读结果态才出现，今天都**没有上屏**，所以它们的数是静态推算。 */
+  const TAG_SEAT_INVENTORY = () => {
+    const out = []
+    for (const { rel, source, style } of viewSources) {
+      for (const m of source.matchAll(/<el-tag\b([\s\S]{0,340}?)\/?>/g)) {
+        const cls = /\bclass="([^"]*)"/.exec(m[1])
+        if (!cls) continue
+        const effect = /\beffect="([a-z]+)"/.exec(m[1])
+        const staticType = /\btype="([a-z]+)"/.exec(m[1])
+        const dynamicType = /:type=/.test(m[1])
+        let ownColor = null
+        for (const c of cls[1].split(/\s+/).filter(Boolean)) {
+          const block = new RegExp(`(^|\\n)\\s*\\.${c}\\b[^{}]*\\{([^{}]*)\\}`).exec(style)
+          const col = block ? /(?:^|;)\s*color:\s*([^;]+);/.exec(block[2]) : null
+          if (col) {
+            ownColor = col[1].trim()
+            break
+          }
+        }
+        out.push({
+          file: rel,
+          cls: cls[1].trim(),
+          effect: effect ? effect[1] : 'light',
+          dynamicType,
+          type: staticType ? staticType[1] : 'primary',
+          ownColor,
+        })
+      }
+    }
+    return out
+  }
+  const seatWorst = (seat) => {
+    const tokens = tagTokens()
+    const types = seat.dynamicType ? TAG_TYPES : [seat.type]
+    let worst = Infinity
+    let worstType = null
+    for (const t of types) {
+      const pair = tagPair(seat.effect, t, tokens)
+      const fg = seat.ownColor ? resolveColor(seat.ownColor, tokens) : pair.fg
+      if (!fg || !pair.bg) continue
+      const r = contrast(fg, pair.bg)
+      if (r < worst) {
+        worst = r
+        worstType = t
+      }
+    }
+    return { ratio: worst === Infinity ? null : worst, worstType }
+  }
+  /* 不达标的那几颗，各配出处；修好一颗就要从这张表里删一颗。 */
+  const SEAT_WAIVED = {
+    'src/features/pipeline/components/BoardPane.vue .resume-version-tag': {
+      ratio: 2.56,
+      via: 'live',
+    },
+    'src/features/jobs/views/JobRecommend.vue .source-tag': { ratio: 3.39, via: 'static' },
+    'src/features/analysis/views/AgentAnalysis.vue .step-badge': { ratio: 3.04, via: 'static' },
+    'src/features/analysis/components/ExplainPane.vue .mb': { ratio: 3.04, via: 'static' },
+  }
+
+  it('enumerates the el-tag seats that repaint themselves or bind their type', () => {
+    const seats = TAG_SEAT_INVENTORY()
+    expect(
+      seats.map((s) => `${s.file} .${s.cls}`).sort(),
+      '挂在 <el-tag> 上的静态类名清单（新座要先把最坏档算出来再写进豁免表）'
+    ).toEqual(
+      Object.keys(SEAT_WAIVED)
+        .concat(['src/features/knowledge/views/KnowledgeBase.vue .expand-tag'])
+        .sort()
+    )
+    const rows = seats.map((s) => ({
+      key: `${s.file} .${s.cls}`,
+      ...seatWorst(s),
+      own: s.ownColor,
+      dyn: s.dynamicType,
+    }))
+    const unread = rows.filter((r) => r.ratio === null).map((r) => r.key)
+    expect(unread, '这些座算不出对比度').toEqual([])
+    /* 唯一 live 量过的那颗：静态推算必须与它逐字相同，否则这条腿整张表都不可信。 */
+    const live = rows.find(
+      (r) => r.key === 'src/features/pipeline/components/BoardPane.vue .resume-version-tag'
+    )
+    expect(live.ratio, '这颗座 2026-10-08 在看板上 live 量过 2.56').toBeCloseTo(2.56, 2)
+    const failing = rows.filter((r) => r.ratio < TEXT_FLOOR)
+    expect(
+      failing.map((r) => `${r.key}=${r.ratio}`).sort(),
+      '不达标的座必须与豁免表逐字一致（修好了要删，新掉的要写进来）'
+    ).toEqual(
+      Object.entries(SEAT_WAIVED)
+        .map(([k, v]) => `${k}=${v.ratio}`)
+        .sort()
+    )
+    /* 动态 type 的那三颗必须以"最坏档"记账：如果哪天把它们改成静态 type，豁免表里那条 3.04 就该重算。 */
+    expect(rows.filter((r) => r.dyn).length, ':type 绑定的座数量（记最坏档的那几颗）').toBe(2)
+    /* 反证：把 `.resume-version-tag` 的自改色撤掉（回到通道自己的白字），这颗座应当变成达标。 */
+    const stripped = { ...rows[0] }
+    const seat = seats.find((s) => s.cls === 'resume-version-tag')
+    expect(seat.ownColor, '这颗座必须真的自带覆写，否则这条反证空转').toContain('#365c8d')
+    const backToChannel = seatWorst({ ...seat, ownColor: null })
+    expect(backToChannel.ratio, '撤掉自改色后应回到 plain 通道的数（>4.5）').toBeGreaterThan(
+      TEXT_FLOOR
+    )
+    expect(stripped.key).toBeTruthy()
+  })
+
+  it('keeps the score-fill seats at 4.5:1 and names the one the theme net repaints', () => {
+    /* 分数座今天有两种命运：类名不撞主题网的（`.score-badge`）吃到 `.score-fill--*` 自己声明的前景，
+       五档全过；撞网的（`.cp-score data-value`，因为 `main.css:641` 的 `[class*='-value']{color:var(--app-text)!important}`）
+       前景被整条改走，四档不达标。**只按声明算的门会永远绿**，而屏幕上那颗是真的读不清——
+       所以这条腿按"这座会不会被网吃掉"分支算。 */
+    const rows = fillPairs()
+    const unread = rows.filter((r) => r.ratio === null)
+    expect(
+      unread.map((r) => `${r.key}: ${r.why}`),
+      '这些座算不出对比度'
+    ).toEqual([])
+    const declared = rows.filter((r) => !r.eaten)
+    expect(
+      declared.filter((r) => r.ratio < TEXT_FLOOR).map((r) => `${r.key}=${r.ratio}`),
+      '按 .score-fill--* 自己声明的前景算，五档必须全过'
+    ).toEqual([])
+    const failing = rows.filter((r) => r.ratio < TEXT_FLOOR)
+    expect(
+      failing.map((r) => `${r.key}=${r.ratio}`).sort(),
+      '被主题网改色后不达标的座必须与豁免表逐字一致（修好了要删，新掉的要写进来）'
+    ).toEqual(
+      Object.entries(FILL_WAIVED)
+        .map(([k, v]) => `${k}=${v}`)
+        .sort()
+    )
+    const drift = rows
+      .filter((r) => Math.abs(r.ratio - LIVE_FILL[r.key]) > 0.02)
+      .map((r) => `${r.key}: 静态 ${r.ratio} vs 实测 ${LIVE_FILL[r.key]}`)
+    expect(drift, '静态令牌算法与浏览器读数分叉').toEqual([])
+    /* 这条分支的成立条件本身也要钉住：网里还得有 `-value` 这一项。哪天有人把它摘了，
+       豁免表就该同时清空——否则这条腿会以错误的理由通过。 */
+    expect(netColorPatterns(), '净色模式里没有 -value：那颗座的豁免该删了').toContain('-value')
+  })
+
+  it('enumerates every seat that renders a score-fill class', () => {
+    const emitters = viewSources
+      .filter(({ source }) => source.includes('scoreToneFillClass'))
+      .map(({ rel }) => rel)
+      .sort()
+    expect(emitters, '发出 score-fill--* 的文件清单（三处，其中一处是没有文字的进度条）').toEqual([
+      'src/features/analysis/components/CareerDirectionPane.vue',
+      'src/features/jobs/views/JobRecommend.vue',
+      'src/features/resume/views/ResumeUpload.vue',
+    ])
+    expect(FILL_SEATS.map((s) => s.file).sort(), 'FILL_SEATS 必须与真实发出方一一对应').toEqual(
+      emitters
+    )
+    /* 每个在册座的类名要在源码里还在：改名（比如把 data-value 换掉）会让豁免失效，必须当场发现。 */
+    for (const seat of FILL_SEATS) {
+      const src = viewSources.find((v) => v.rel === seat.file).source
+      for (const cls of seat.cls.split(' ')) {
+        expect(src.includes(cls), `${seat.file} 里已经找不到类名 ${cls} 了，这一座要重新归类`).toBe(
+          true
+        )
+      }
+    }
+  })
+
+  it('the score-fill gate bites: dropping the net repaint hides the real failure', () => {
+    /* 反证：把"会不会被网吃掉"这个判断强行关掉（模拟一把只会按声明算的门），
+       那五条声明读数应当全部过线、豁免表应当变空——这正是上面那条腿为什么要分两支算。 */
+    const pretend = fillPairs({ ignoreNet: true })
+    expect(
+      pretend.filter((r) => r.ratio < TEXT_FLOOR),
+      '按声明算不该有任何不达标'
+    ).toEqual([])
+    expect(pretend.length, '两支都要跑到同样的座数，否则这条反证在比两组不同的东西').toBe(
+      fillPairs().length
+    )
   })
 
   it('keeps the auth session keys inside utils/session', () => {
