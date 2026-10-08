@@ -3737,6 +3737,25 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **连带与踩坑**：`InterviewReport.vue` 的 `hardcodedColorLiterals` **8 → 0**，条目从预算表里删除——这一页从"硬编码色最多的页面之一"（D67 那轮 22 处）变成这一族第一个清零样本。**本会话第三次踩同一个坑**：我第一版把 `#fff` 与两个 `rgb(…)` 写进了那段解释性注释，尺子当场计进 3 处债。口径不变：**改措辞，不抬预算**；这条也说明"注释里引用色值"在这一族里不是免费的。体积 2207.94 → **2207.20 kB（−0.74）**。**未做**：`.stat-card` 那道 3px 顶边的颜色仍被主题网按 `!important` 吞着（写令牌是为了"哪天网撤了"不重演浅压深，今天不承重）；旧基座那档 `var(--app-radius-md, 16px)` 与覆写的 `var(--app-radius-md)` 实测同为 8px，合并取无 fallback 的那一档。**门禁**：`test:unit` 575 / 88 files、`npm test` 33/33（死样式门一并过）、`format:check` clean、`eslint` 只剩既有 `paidOrders`、`build` 通过。
 
+#### 已交付：D147 补上两条 pipeline 夹具，把三处"推导"订成实数——其中一处推翻了我自己在 D143 写的判断
+
+**为什么欠着**：D143 收浅色座时有三处只能记"推导"——`.batch-bar`、`.offer-row.selected`、`.card-interview`，屏幕上没有元素。根因在探针：`/jobs/pipeline/list` 的夹具是 `{items: [], total: 0}`，而 `/jobs/pipeline/kanban` **压根没有夹具**（落空成 `{}`），那两页一直是空态。这次他点"补夹具订成实数"。
+
+**形状各按自己的消费者写**：看板走 `PipelineKanban.vue:386` 的 `data.stages`，卡片字段是 snake_case（`card.interview_at` / `match_score` / `salary_range` / `resume_version_label`），**与 `jobModel.normalizePipelineEntry` 那套 camelCase 不是同一个形状**——照后者写只会得到一个空看板。列表那三条卡在 2–4 之间，是为了让 `OfferCompare.vue:592` 那句自动全选生效，`.offer-row.selected` 才有元素。**代价写在夹具注释里**：这两页从空态变成有卡片，以前在那两页取过的"0 命中 / 无元素"读数从此作废。
+
+**三处实数**（"改前"是在同一个真元素上注入旧声明量出来的，不是算的）：
+- `.batch-bar`：**1.04 → 15.99**（推导坐实，那确实是白压白）；
+- `.offer-row.selected`：**1.04 → 15.99**；
+- `.card-interview`：**5.00 → 5.70**。**这一条推翻我自己在 D143 写的话**——我当时注的是"紫档直接压深底只有 2.92，抬到 34% 才 5.70"，那是**新底**的那一档；旧组合是浅紫底压紫字，实测 5.00，本来就读得清。所以 BoardPane 那一刀是零回归的换令牌 + 观感收敛，**不是修对比度**，账上从此按这个口径写。
+
+**夹具点亮后当场照出活的失败，修了三族**：`.card-score` 的 `--app-primary` 压卡片面 **3.39** → 抬一档 5.08；主题层 `.score-tone--good / --risk`（3.39 / 4.15）与 ListPane 自己的 `.score-level--good / --risk`——**同一缺陷的 CSS 孪生，D144 只抬了 JS 那一支**。复测 `/offer` 整页 **offenders 0**，`.score-tone--good` 3.39 → **5.29**。
+
+**新守卫一条（判同值，不判够不够）**：分数当文字读的 tone 有**三个表示法**——JS 的 `scoreToneTextColor()`（内联 style）、主题层 `.score-tone--*`、ListPane `.score-level--*`。三处各改各的就会静默分叉，所以这条腿把三张表对齐钉死（good 25% / risk 20%，其余不抬），反证是把主题层那一档改回 tone 本体。它不替代浏览器读数——对比度本身仍要量。
+
+**仪器一条新的**：带 `transition` 的元素在改色后**立刻**读计算值，Chrome 会把过渡中的颜色序列化成 **`oklab(...)`**（实测 `.offer-row.selected` 报成 `oklab(0.210059 -0.00096 -0.03387)`），而仓里已有的解析器只认 `rgb()` 与 `color(srgb …)` ⇒ 直接返回 null、看起来像"没有底色"。两条对策：解析器补 oklab 解码，以及**等过渡结束再读**（这一页是 0.15s，我给到 2.2s）。同一次实验里我还差点把"注入撤掉后仍读到浅色"当成真缺陷——那正是过渡没走完。
+
+**照出来但没动，等拍**（都在刚点亮的两页上，实测值现取）：`.follow-ok` **2.10**（浅绿药丸底压绿字）、`.version-cell` **2.56**、`.follow-interview` **3.01**（紫本体当文字）、批量栏里那个数字 **3.44**、"批量标记拒绝" **4.42**；另有一族 `*focus-metrics b` 在 **6 个页面各抄了一份** `color: var(--app-primary-dark)`（实测 **2.61**，23px 常规字重连大字号的 3:1 都不过——`--app-primary-dark` 是给浅色面 hover 用的更深一档，天生不该出现在深色工作台的文字上）。**门禁**：`test:unit` **576 / 88 files**（+1 条三向腿）、`npm test` 33/33、`format:check` clean、`eslint` 只剩既有 `paidOrders`、`build` 通过、体积 2207.20 → **2207.38 kB（+0.18）**（夹具不进包，涨的是 CSS 里那几处 `color-mix`）。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
