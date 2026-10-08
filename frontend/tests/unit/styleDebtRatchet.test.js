@@ -59,7 +59,8 @@ const BUDGET = {
     'src/features/analysis/components/ReferencesPane.vue': 3,
     'src/features/jobs/views/JobRecommend.vue': 19,
     'src/features/auth/views/Register.vue': 26,
-    'src/features/interview/views/InterviewReport.vue': 22,
+    /* 22 → 8：§10.33 走 ①，那批"把令牌基座涂成手挑浅色"的页面级覆写整批撤掉。 */
+    'src/features/interview/views/InterviewReport.vue': 8,
     'src/features/resume/views/ResumeCompare.vue': 19,
     'src/features/auth/views/Login.vue': 16,
     /* 13 → 5：STAR 那五枚座（`.star-tag` + `.star-s/t/a/r`）与 `.interview-score` 收了 8 个
@@ -1189,6 +1190,7 @@ describe('style debt ratchet', () => {
       'src/features/analysis/views/SmartAnalysis.vue',
       transcriptKey,
       interviewKey,
+      'src/features/interview/views/InterviewReport.vue',
       'src/features/shell/views/TaskCenter.vue',
       'src/features/admin/views/Users.vue',
       'src/features/admin/views/PromptTrace.vue',
@@ -1300,15 +1302,14 @@ describe('style debt ratchet', () => {
      Home 建议条与 hover 描边、InterviewReport 时间线胶囊），实测最差 1.04。
      所以这里不是预算，是**带出处的豁免表**：两处刻意留下的各钉一个次数，多一条红、少一条也红
      （豁免因此不会过期，与 STATE_CLASS_SITES 同一个设计）。 */
-  it('keeps the two light tokens used only at the two sites that argue for it', () => {
+  it('keeps the two light tokens used only at the site that argues for it', () => {
     const USE = /var\(--app-(?:primary|violet)-light\)/g
     const ALLOWED = {
       // 选中态那一档的浅底就是"已选中"那层 affordance：字降到 `--app-primary-dark` 之后实测
       // 5.82，底刻意留着（理由写在该规则自己的注释里，不在这里重述）。
+      // 原来第二条是 InterviewReport 的序号座，随 §10.33 走 ① 一起撤了——豁免表少一条会红，
+      // 这条腿的设计就是"撤了不删表它不响"。
       'src/features/interview/views/InterviewSetup.vue': 1,
-      // 整页是"报告 = 浅色阅读面"那一族遗留（面板底写死浅色，字却来自深色主题，实测 1.04–1.08），
-      // 这一处要跟着它一起判，单独翻会重演"只改底不改字"，见 §10.33。
-      'src/features/interview/views/InterviewReport.vue': 1,
     }
     const counts = viewSources
       .map(({ rel, source }) => [rel, (source.match(USE) || []).length])
@@ -1348,6 +1349,25 @@ describe('style debt ratchet', () => {
       hits.some(([rel, n]) => ALLOWED[rel] === undefined && n > 0),
       '豁免表外多出一处浅色引用，判据必须报它'
     ).toBe(true)
+  })
+
+  /* 分数当**文字**读的地方不能直接吃 tone 本体：蓝档压在深色面板上实测 3.06、红档 4.15。
+     出口是 `scoreToneTextColor` / `interviewScoreTextColor`（同一份 tone 表，只抬那两档）。
+     这条钉的是"视图里 `:style="{ color: …ScoreColor(…) }"` 这种写法不再出现"——填色与描边
+     不受约束，那是非文字、门槛 3:1。 */
+  it('routes score colors used as text through the lifted tone', () => {
+    const AS_TEXT = /\{\s*color:\s*\w*(?:scoreColor|ScoreColor|ToneColor)\w*\s*\(/
+    const offenders = viewSources.filter((v) => AS_TEXT.test(v.source)).map((v) => v.rel)
+    expect(offenders, `分数文字直接吃 tone 本体：${offenders.join(', ')}`).toEqual([])
+
+    const key = 'src/features/interview/views/InterviewReport.vue'
+    const planted = viewSources.find((v) => v.rel === key)
+    expect(planted.source, `视图清单里没有 ${key}，这条反证是空转的`).toContain('scoreTextColor(')
+    const regressed = planted.source.replace(
+      'color: scoreTextColor(item.overall_score)',
+      'color: scoreColor(item.overall_score)'
+    )
+    expect(AS_TEXT.test(regressed), '把一处改回 tone 本体，判据必须报它').toBe(true)
   })
 
   /* 拼出来的类名（`'dot-' + task.priority`、`` `severity-${item.severity}` ``）这一族，

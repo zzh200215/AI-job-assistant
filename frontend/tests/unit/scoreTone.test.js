@@ -5,6 +5,8 @@ import {
   scoreTone,
   scoreToneClass,
   scoreToneColor,
+  scoreToneTextColor,
+  interviewScoreTextColor,
   scoreToneFillClass,
 } from '../../src/utils/scoreTone'
 
@@ -50,5 +52,32 @@ describe('scoreTone', () => {
     for (const out of [scoreToneColor(72), scoreToneClass(72), scoreToneFillClass(72)]) {
       expect(out).not.toMatch(/#[0-9a-fA-F]{3,8}/)
     }
+  })
+
+  it('lifts only the two tones that fail as text on a dark surface', () => {
+    // 五个 tone 各有一条，且只有实测不过线的那两档被抬：good 3.06 → 5.08、risk 4.15 → 5.48；
+    // high / warn / unknown 在深色面板上本体就有 5.20 / 5.86 / 5.07，不许顺手也混白。
+    const byValue = [
+      [90, 'var(--app-score-high)'],
+      [72, 'color-mix(in srgb, var(--app-score-good), white 25%)'],
+      [55, 'var(--app-score-warn)'],
+      [30, 'color-mix(in srgb, var(--app-score-risk), white 20%)'],
+      [null, 'var(--app-score-unknown)'],
+    ]
+    for (const [value, want] of byValue) {
+      expect(scoreToneTextColor(value), `tone of ${value}`).toBe(want)
+      expect(scoreToneColor(value)).toContain('var(--app-score-')
+    }
+    // 反证：文字档不许退化成 tone 本体（那正是 3.06 那一档），也不许多出第二份色值。
+    expect(scoreToneTextColor(72)).not.toBe(scoreToneColor(72))
+    expect(scoreToneTextColor(30)).not.toBe(scoreToneColor(30))
+    expect(scoreToneTextColor(90)).toBe(scoreToneColor(90))
+    for (const [, out] of byValue) {
+      expect(out).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
+    }
+    // 文字档跟着**自己的分界**：52 在匹配分里是 warn、在面试分里是 risk（55 那道界），
+    // 两条不能因为共用一张表就被抹平成同一档。
+    expect(interviewScoreTextColor(52)).toBe('color-mix(in srgb, var(--app-score-risk), white 20%)')
+    expect(scoreToneTextColor(52)).toBe('var(--app-score-warn)')
   })
 })

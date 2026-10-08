@@ -79,7 +79,7 @@
               >
                 <div class="dimension-top">
                   <span>{{ dimLabels[key] || key }}</span>
-                  <strong :style="{ color: scoreColor(score) }">{{ score }}</strong>
+                  <strong :style="{ color: scoreTextColor(score) }">{{ score }}</strong>
                 </div>
                 <div class="dimension-track">
                   <div
@@ -148,7 +148,10 @@
                       <strong>{{ item.category || '通用问题' }}</strong>
                       <p>{{ item.question }}</p>
                     </div>
-                    <div class="timeline-score" :style="{ color: scoreColor(item.overall_score) }">
+                    <div
+                      class="timeline-score"
+                      :style="{ color: scoreTextColor(item.overall_score) }"
+                    >
                       {{ item.overall_score }}
                     </div>
                   </div>
@@ -264,7 +267,13 @@ import {
   localizeSentence,
   normalizeLocalizedTextList,
 } from '@/utils/analysisLocalization'
-import { interviewScoreColor as scoreColor, interviewScoreTone } from '@/utils/scoreTone'
+/* `scoreColor` 只管描边与填色（非文字，门槛 3:1）；分数当文字读的两处走 `scoreTextColor`，
+   否则蓝档压在深色面板上是 3.06。 */
+import {
+  interviewScoreColor as scoreColor,
+  interviewScoreTextColor as scoreTextColor,
+  interviewScoreTone,
+} from '@/utils/scoreTone'
 
 const route = useRoute()
 const router = useRouter()
@@ -653,8 +662,10 @@ onUnmounted(() => {
   width: 44px;
   height: 44px;
   border-radius: var(--app-radius-xs, 8px);
-  background: #1d3655;
-  color: #fff;
+  /* 原来这里是一条深蓝、页面级覆写又压一条更亮的蓝，两条互撞（实测上屏的是后者）。
+     ① 撤掉覆写之后这里就是唯一出处，值取主题的主色（与原来那条蓝 ΔE 很小，白字 5.17）。 */
+  background: var(--app-primary);
+  color: var(--el-color-white);
   font-weight: 700;
 }
 
@@ -695,11 +706,14 @@ onUnmounted(() => {
 
 .timeline-tags span {
   padding: 5px 10px;
-  border-radius: 999px;
-  /* 这一条浅色底**永远轮不上屏**：下面 `.interview-report-page .timeline-tags span` 特异度
-     高一级且自己声明了底，实测那一页的分数胶囊走的都是它。删掉的是画不到的声明，屏幕不变。
-     那一页整体还欠一次"浅色面板 vs 深色工作台"的判定，见账上 §10.33。 */
-  color: var(--app-primary);
+  /* 圆角从 999px 收成 radius-xs 是**搬过来的**，不是新决定：原来页面级覆写就是这么写的，
+     撤覆写时把它并进唯一出处，屏幕形状不变。 */
+  border-radius: var(--app-radius-xs);
+  /* 分数胶囊走这一族的座配方（底 = tone 混 `--app-bg`、字 = 同一 tone 混白 25%）。
+     原来底由页面级覆写给一层浅色、字却是深色主题的 `--app-primary`，实测 4.55 贴边；
+     覆写撤掉后这里成唯一出处，底与字一起配好（实测 5.08）。 */
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-size: 12px;
 }
 
@@ -748,8 +762,10 @@ onUnmounted(() => {
   width: 42px;
   height: 42px;
   border-radius: var(--app-radius-xs, 8px);
-  background: var(--app-primary-light);
-  color: var(--app-primary);
+  /* 序号座：与 /home 图标座、STAR 那四枚同一条配方（原来 4.48 → 5.08）。
+     这一处也是全仓最后一处把浅色令牌当底用的地方，撤掉之后豁免表里只剩选中态那一条。 */
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-weight: 700;
 }
 
@@ -778,7 +794,7 @@ onUnmounted(() => {
 
 .job-skills span {
   padding: 5px 10px;
-  border-radius: 999px;
+  border-radius: var(--app-radius-xs);
   background: var(--app-surface-muted);
   color: var(--app-muted);
   font-size: 12px;
@@ -792,14 +808,15 @@ onUnmounted(() => {
   padding-bottom: 8px;
 }
 
-/* P1 report treatment: a reading surface instead of a marketing hero. */
-.interview-report-page {
-  background: linear-gradient(135deg, #f7f9fd 0%, #f2f7ff 100%);
-}
-
+/* P1 report treatment: a reading surface instead of a marketing hero.
+   §10.33 走 ①（2026-10-07）：这一批页面级覆写里，凡是"把已经令牌化的基座重新涂成手挑浅色"
+   的那几条**整批撤掉**（页底渐变、三块面板、决策条、时间线徽章、两族胶囊）。撤之前实测
+   同一元素上浅面压深色主题的浅字到 **1.04–1.08**，且元素确实上屏（166×138、visible）。
+   留下来的都是覆写里**唯一承重**的那几条：把深色渐变 hero 拍平成卡片、分数环的粗细、
+   stat-card 那道 3px 顶边、以及把基座留给渐变底的两档白字换成主题字。 */
 .interview-report-page .report-hero {
   position: relative;
-  border: 1px solid #d7e0ed;
+  border: 1px solid var(--app-line);
   border-radius: var(--app-radius-md);
   background: var(--app-surface-strong);
   box-shadow: var(--app-shadow-soft);
@@ -833,8 +850,8 @@ onUnmounted(() => {
 
 .interview-report-page .score-ring {
   border-width: 7px;
-  background: #fbfcff;
-  box-shadow: inset 0 0 0 10px #f0f3f8;
+  background: var(--app-surface-muted);
+  box-shadow: inset 0 0 0 10px var(--app-line);
 }
 
 .interview-report-page .score-ring span {
@@ -842,32 +859,9 @@ onUnmounted(() => {
 }
 
 .interview-report-page .summary-grid .stat-card {
-  border-top: 3px solid #d7e5fb;
-}
-
-.interview-report-page .decision-strip {
-  background: #f6f9ff;
-}
-
-.interview-report-page .dimension-item,
-.interview-report-page .timeline-content,
-.interview-report-page .training-item {
-  border: 1px solid #e1e7f0;
-  background: #f9fbfe;
-}
-
-.interview-report-page .timeline-badge {
-  background: #245fd1;
-}
-
-.interview-report-page .timeline-tags span {
-  border-radius: var(--app-radius-xs);
-  background: #e9f1ff;
-}
-
-.interview-report-page .job-skills span {
-  border-radius: var(--app-radius-xs);
-  background: #eff4fb;
+  /* 边框色本来就被主题网按 `!important` 拍成 `--app-line`（实测计算值就是它），
+     这里换成令牌是零变化的去债；承重的是那 3px 宽度。 */
+  border-top: 3px solid var(--app-line);
 }
 
 /* ---- Responsive ---- */

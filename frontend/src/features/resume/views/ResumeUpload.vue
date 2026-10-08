@@ -186,7 +186,7 @@
             <div v-for="dim in diagnosisDims" :key="dim.key" class="diag-dim-item">
               <div class="dim-label">
                 <span>{{ dim.label }}</span>
-                <strong :style="{ color: scoreToneColor(dim.score) }">{{
+                <strong :style="{ color: scoreToneTextColor(dim.score) }">{{
                   dim.score ?? '—'
                 }}</strong>
               </div>
@@ -569,6 +569,8 @@ import {
   scoreToneAtLeast,
   scoreToneClass,
   scoreToneColor,
+  // 分数当文字读的那一处走抬过一档的文字版（蓝档压深面 3.06 → 5.08）
+  scoreToneTextColor,
   scoreToneFillClass,
 } from '@/utils/scoreTone'
 import { monthDay } from '@/utils/format/date'

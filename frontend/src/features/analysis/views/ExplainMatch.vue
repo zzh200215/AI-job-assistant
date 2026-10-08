@@ -62,7 +62,7 @@
           <div class="dim-header">
             <span class="dim-name">{{ dim.name }}</span>
             <span class="dim-w">权重 {{ (dim.weight * 100).toFixed(0) }}%</span>
-            <span class="dim-score" :style="{ color: scoreColor(dim.score) }">{{
+            <span class="dim-score" :style="{ color: scoreTextColor(dim.score) }">{{
               dim.score.toFixed(1)
             }}</span>
           </div>
@@ -154,7 +154,11 @@ import { userErrorCopy } from '@/utils/requestTracing'
 import { ref, reactive, computed } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
 import { explainMatch } from '@/api/analysis'
-import { scoreToneColor as scoreColor } from '@/utils/scoreTone'
+/* 填色/描边吃 `scoreColor`（非文字门槛 3:1），分数当文字读的那一处吃 `scoreTextColor`。 */
+import {
+  scoreToneColor as scoreColor,
+  scoreToneTextColor as scoreTextColor,
+} from '@/utils/scoreTone'
 import { DataAnalysis, Loading } from '@element-plus/icons-vue'
 
 const form = reactive({ resume_id: null, jd_id: null })

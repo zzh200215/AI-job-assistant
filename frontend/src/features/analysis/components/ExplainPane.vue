@@ -43,7 +43,7 @@
       <div class="dim-header">
         <span class="dim-name">{{ dim.name }}</span>
         <span class="dim-w">权重 {{ (dim.weight * 100).toFixed(0) }}%</span>
-        <span class="dim-score data-value" :style="{ color: scoreToneColor(dim.score) }">{{
+        <span class="dim-score data-value" :style="{ color: scoreToneTextColor(dim.score) }">{{
           dim.score.toFixed(1)
         }}</span>
       </div>
@@ -94,7 +94,9 @@ import { Loading } from '@element-plus/icons-vue'
 
 import { explainRecommendationTag, mergeMissingSkills } from '@/features/analysis/lib/analysisModel'
 import { localizeRecommendationText, localizeSentence } from '@/utils/analysisLocalization'
-import { scoreToneColor } from '@/utils/scoreTone'
+/* 填色与描边（进度条、条形）吃 tone 本体——那是非文字，门槛 3:1；分数当文字读的那一处吃
+   抬过一档的文字版，否则蓝档压在深色面板上是 3.06。 */
+import { scoreToneColor, scoreToneTextColor } from '@/utils/scoreTone'
 
 /* 匹配度解释面板：D52 从 SmartAnalysis.vue 搬出来。
    显示形状（推荐标签、两列缺口合并、句子本地化）在面板里自己推，因为它们只服务这一块，而

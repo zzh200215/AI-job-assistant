@@ -41,6 +41,22 @@ export function scoreToneColor(value, bands = MATCH_SCORE_BANDS) {
   return `var(--app-score-${scoreTone(value, bands)})`
 }
 
+/* 分数当**文字**用时不能直接吃 tone 本体：good（蓝）压在深色面板上实测 3.06、risk（红）4.15，
+   两档都够不到正文的 4.5。抬的幅度用的是这一族已经量过的那批数（蓝混白 25% → 5.08、
+   红混白 20% → 5.48），其余三档本体在深色面上已经过线（high 5.20 / warn 5.86 / unknown 5.07）。
+   填色与描边不走这里——那是非文字，门槛是 3:1。 */
+const TEXT_TONE = {
+  high: 'var(--app-score-high)',
+  good: 'color-mix(in srgb, var(--app-score-good), white 25%)',
+  warn: 'var(--app-score-warn)',
+  risk: 'color-mix(in srgb, var(--app-score-risk), white 20%)',
+  unknown: 'var(--app-score-unknown)',
+}
+
+export function scoreToneTextColor(value, bands = MATCH_SCORE_BANDS) {
+  return TEXT_TONE[scoreTone(value, bands)]
+}
+
 export function scoreToneFillClass(value, bands = MATCH_SCORE_BANDS) {
   return `score-fill--${scoreTone(value, bands)}`
 }
@@ -89,6 +105,10 @@ export function interviewScoreTone(value) {
 
 export function interviewScoreColor(value) {
   return scoreToneColor(value, INTERVIEW_SCORE_BANDS)
+}
+
+export function interviewScoreTextColor(value) {
+  return scoreToneTextColor(value, INTERVIEW_SCORE_BANDS)
 }
 
 export function interviewScoreToneClass(value, prefix = 'score-tone') {
