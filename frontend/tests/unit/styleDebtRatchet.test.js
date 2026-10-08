@@ -2571,6 +2571,210 @@ describe('style debt ratchet', () => {
     ).toBeLessThan(TEXT_FLOOR)
   })
 
+  /* ―― D159：浅色作用域（只有 `:root`，没有 `.workspace-theme` 那一层覆写）――――――――
+     账上一直写"浅色主题够不到"，这话只对了一半：`.workspace-theme` 是 `DefaultLayout.vue:375-388`
+     在 onMounted 加、onBeforeUnmount 删的，而路由表里排在 `component: DefaultLayout` **之前**那四条
+     （登录 / 注册 / 重置密码 / 404）不在这个布局里，它们真的按 `:root` 那一档渲染。
+     探针也早就有进得去的那一档：`?anon=1&to=/login`（不是这次新加的开关）。
+     三条腿：① 同一张三通道矩阵在浅色作用域重算，不达标的三对进这张作用域自己的豁免表；
+     ② 判"实心与浅底那两族逐对不随主题变"这件事还成立（成立的原因是 tone 本体与墨字都不跟主题走）；
+     ③ 普查那四条路由上今天有没有被门管着的东西——没有，而"没有"本身要被钉住。 */
+  const rootOnlyTokens = () => ({
+    ...elRootTokens,
+    ...Object.fromEntries(
+      [...blockBody(themeCss, ':root').matchAll(/(--(?:app|el)-[a-z0-9-]+):\s*([^;]+);/g)].map(
+        (m) => [m[1], m[2].trim()]
+      )
+    ),
+  })
+  /* 没写 `.workspace-theme` 前缀的覆写在两个作用域都生效；写了的只在深色生效。 */
+  const unscopedRules = () =>
+    [...stripComments(themeCss).matchAll(RULE_BLOCK)].filter(
+      (m) => !m[1].includes('.workspace-theme')
+    )
+  const lightInkShared = (effect) => {
+    const set = new Set()
+    for (const m of unscopedRules()) {
+      if (!/--el-tag-text-color:\s*var\(--app-surface-contrast\)/.test(m[2])) continue
+      for (const s of m[1].matchAll(new RegExp(`\\.el-tag--${effect}\\.el-tag--([a-z]+)`, 'g')))
+        set.add(s[1])
+    }
+    return set
+  }
+  const lightPlainLifts = () => {
+    const map = {}
+    for (const m of unscopedRules()) {
+      const lift =
+        /--el-tag-text-color:\s*color-mix\(in srgb,\s*var\(--el-color-([a-z]+)\),\s*white (\d+)%\)/.exec(
+          m[2]
+        )
+      if (!lift) continue
+      for (const s of m[1].matchAll(/\.el-tag--plain\.el-tag--([a-z]+)/g))
+        if (s[1] === lift[1]) map[s[1]] = Number(lift[2])
+    }
+    return map
+  }
+  const lightTagRatio = (effect, type) => {
+    const t = rootOnlyTokens()
+    let fg
+    let bg
+    if (effect === 'dark') {
+      fg = resolveColor(
+        `var(${lightInkShared('dark').has(type) ? '--app-surface-contrast' : '--el-color-white'})`,
+        t
+      )
+      bg = resolveColor(`var(--el-color-${type})`, t)
+    } else if (effect === 'light') {
+      fg = resolveColor(
+        `var(${lightInkShared('light').has(type) ? '--app-surface-contrast' : `--el-color-${type}`})`,
+        t
+      )
+      bg = resolveColor(`var(--el-color-${type}-light-9)`, t)
+    } else {
+      const lifts = lightPlainLifts()
+      const base = resolveColor(`var(--el-color-${type})`, t)
+      fg = lifts[type] === undefined ? base : mixWhite(base, lifts[type])
+      bg = resolveColor('var(--el-fill-color-blank)', t)
+    }
+    return fg && bg ? contrast(fg, bg) : null
+  }
+  /* 2026-10-08 在 `/login`（`?anon=1`；当场验过 `themeOnRoot=false`、body 底 `rgb(244,246,250)`）
+     对合成节点逐对 live 量的十五个数——宿主用的是页面自己的 `.el-main`。 */
+  const LIVE_LIGHT_TAG = {
+    'dark/primary': 5.17,
+    'dark/success': 6.2,
+    'dark/warning': 7.13,
+    'dark/danger': 4.76,
+    'dark/info': 4.78,
+    'plain/primary': 5.17,
+    'plain/success': 3.04,
+    'plain/warning': 2.64,
+    'plain/danger': 3.96,
+    'plain/info': 4.78,
+    'light/primary': 4.67,
+    'light/success': 17.45,
+    'light/warning': 17.56,
+    'light/danger': 16.99,
+    'light/info': 17.14,
+  }
+  /* 浅色作用域不达标的那三对：plain 那一族的全部覆写都写着 `.workspace-theme`，
+     所以这三档在浅色下退回"tone 本体压白底"。**今天它们没有屏幕对象**（见下面普查那条腿），
+     所以这张表钉的是形状、不是"有人正读不清"；方向为什么不照抄深色那支，由第三条腿给数。 */
+  const LIGHT_TAG_WAIVED = { 'plain/success': 3.04, 'plain/warning': 2.64, 'plain/danger': 3.96 }
+
+  it('measures the same three el-tag channels in the light scope and names the three plain pairs that fail there', () => {
+    const rows = []
+    for (const effect of ['dark', 'plain', 'light'])
+      for (const type of TAG_TYPES)
+        rows.push({ key: `${effect}/${type}`, ratio: lightTagRatio(effect, type) })
+    expect(
+      rows.filter((r) => r.ratio === null).map((r) => r.key),
+      '浅色作用域里算不出来的对'
+    ).toEqual([])
+    const failing = rows.filter((r) => r.ratio < TEXT_FLOOR)
+    expect(
+      failing.map((r) => `${r.key}=${r.ratio}`).sort(),
+      '浅色作用域不达标的对必须与这张表逐字一致'
+    ).toEqual(
+      Object.entries(LIGHT_TAG_WAIVED)
+        .map(([k, v]) => `${k}=${v}`)
+        .sort()
+    )
+    const drift = rows
+      .filter((r) => Math.abs(r.ratio - LIVE_LIGHT_TAG[r.key]) > 0.02)
+      .map((r) => `${r.key}: 静态 ${r.ratio} vs /login 实测 ${LIVE_LIGHT_TAG[r.key]}`)
+    expect(drift, '浅色作用域的静态算法与实测分叉').toEqual([])
+    /* 第二条腿：实心与浅底那两族**逐对不随主题变**。它一红，说明有人给某条墨字覆写加了
+       `.workspace-theme` 前缀，或者 tone 本体开始跟主题走——两种都是把"一个数"变成"两个数"的开端。 */
+    const moved = rows
+      .filter((r) => !r.key.startsWith('plain/'))
+      .map((r) => {
+        const [effect, type] = r.key.split('/')
+        return { ...r, darkScope: tagRatio(effect, type) }
+      })
+      .filter((r) => Math.abs(r.ratio - r.darkScope) > 0.02)
+      .map((r) => `${r.key}: 浅色 ${r.ratio} vs 深色 ${r.darkScope}`)
+    expect(moved, '这两条通道的数不该随主题变').toEqual([])
+    /* 第三条腿：为什么这里不自作主张照抄深色的修法——**"抬白"在浅色作用域是反方向的**：
+       那一族的底就是白，再往白里抬只会更糊（现量 danger 3.96 → 3.00、warning 2.64 → 2.16、
+       success 3.04 → 2.44）。浅色那一侧的候选配方是往黑里压，压 35% 三档全过（7.75 / 5.62 / 6.33）。
+       两件事一起判，才知道"照抄"与"另配"都不是空话。 */
+    const t = rootOnlyTokens()
+    const white = resolveColor('var(--el-fill-color-blank)', t)
+    for (const [key, want] of Object.entries(LIGHT_TAG_WAIVED)) {
+      const type = key.split('/')[1]
+      const tone = resolveColor(`var(--el-color-${type})`, t)
+      expect(
+        contrast(mixWhite(tone, 20), white),
+        `${key} 用深色那一族的抬白配方在浅色下要**更差**（这就是方向反了）`
+      ).toBeLessThan(want)
+      const darker = {
+        r: Math.round(tone.r * 0.65),
+        g: Math.round(tone.g * 0.65),
+        b: Math.round(tone.b * 0.65),
+      }
+      expect(
+        contrast(darker, white),
+        `${key} 压暗 35% 要过线（这是浅色那一侧的候选配方，等他拍）`
+      ).toBeGreaterThanOrEqual(TEXT_FLOOR)
+    }
+  })
+
+  it('keeps the four light-scope routes free of every family the contrast gates own', () => {
+    /* 浅色作用域今天**没有任何被门管着的东西**——这句以前只是账上一句话，这里把它钉成判据。
+       四条路由=router 里排在 `component: DefaultLayout` 之前的那几条（登录 / 注册 / 重置密码 / 404）。
+       2026-10-08 真浏览器逐条普查（`?anon=1`）：四屏上 `.el-tag`、`[class*=score-fill]`、
+       `[class*="dot-"]`、`[class*="-value"]`、`[class*="follow-"]`、tone 族全为 0；
+       `/reset-password` 与 404 当场读到 `themeOnRoot=false`、`--app-text:#1c2230`，证明量的真是浅色作用域。 */
+    const routerSrc = readFileSync('src/router/index.js', 'utf8')
+    const cut = routerSrc.indexOf('component: DefaultLayout')
+    expect(cut, 'router 里认不出 DefaultLayout 那一条（结构变了这条要跟着改）').toBeGreaterThan(0)
+    const lightViews = [
+      ...new Set(
+        [...routerSrc.slice(0, cut).matchAll(/import\('@\/([^']+)'\)/g)].map((m) => `src/${m[1]}`)
+      ),
+    ].sort()
+    expect(lightViews, '浅色作用域的路由组件清单（多一条少一条都要先来看这张表）').toEqual([
+      'src/features/auth/views/Login.vue',
+      'src/features/auth/views/NotFound.vue',
+      'src/features/auth/views/Register.vue',
+      'src/features/auth/views/ResetPassword.vue',
+    ])
+    const FAMILIES = [
+      'score-fill',
+      'score-tone',
+      'score-level',
+      'dot-',
+      'fill-',
+      'follow-',
+      'data-value',
+    ]
+    const census = (text) => {
+      const out = { elTag: (text.match(/<el-tag\b/g) || []).length }
+      for (const fam of FAMILIES) {
+        out[fam] = [...text.matchAll(/(?::?class)="([^"]*)"/g)].filter((m) =>
+          m[1].split(/\s+/).some((cls) => cls.includes(fam))
+        ).length
+      }
+      return out
+    }
+    for (const rel of lightViews) {
+      const counts = census(readFileSync(rel, 'utf8'))
+      const hit = Object.entries(counts).filter(([, n]) => n > 0)
+      expect(
+        hit.map(([k, n]) => `${k}=${n}`).sort(),
+        `${rel} 在浅色作用域里出现了被门管着的东西——上面那张浅色豁免表现在有屏幕对象了，先重看方向再动手`
+      ).toEqual([])
+    }
+    /* 反证：给一份**副本**塞一颗浅色页上的 plain 标签，普查必须当场认出来。 */
+    const seeded = census(
+      readFileSync('src/features/auth/views/Login.vue', 'utf8') +
+        '\n<template><el-tag class="score-fill--risk" effect="plain" type="danger">x</el-tag></template>'
+    )
+    expect(seeded.elTag, '植入的 el-tag 没被普查认出来').toBeGreaterThan(0)
+    expect(seeded['score-fill'], '植入的分数座类名没被普查认出来').toBeGreaterThan(0)
+  })
+
   it('keeps the score-fill seats at 4.5:1 and names the one the theme net repaints', () => {
     /* 分数座今天有两种命运：类名不撞主题网的（`.score-badge`）吃到 `.score-fill--*` 自己声明的前景，
        五档全过；撞网的（`.cp-score data-value`，因为 `main.css:641` 的 `[class*='-value']{color:var(--app-text)!important}`）
