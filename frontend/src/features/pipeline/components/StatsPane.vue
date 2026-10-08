@@ -298,18 +298,16 @@ const stageToRate = (from, to) => boardStageToRate(props.counts, from, to)
   color: var(--app-text);
 }
 
-/* §10.35 走 ①（D153）：这条轨道原来是 EP 的 `--el-fill-color`，它在深色工作台里仍是**浅值**
-   （现测一条近白带），于是深色面板中间横着亮带，而五档柱子挂在它上面有三档过不了图形的 3:1
-   门槛（slate 2.46 / amber 2.36 / green 2.71；blue 4.61、violet 5.19 过）。
-   换成 `--app-bg`：深色下与账上选的那一档逐字同值（`--app-surface-contrast` 在 `.workspace-theme`
-   里就是同一支数），五档落定后实测 6.82 / 3.65 / 7.13 / 3.23 / 6.20 全过（slate 那一档同时接了
-   D152 的令牌换，所以比 §10.35 里拍的 7.35 低半档）；但 `--app-surface-contrast`
-   的本义是"实心档上那层白字"的 ink，且在浅色主题下不重定义（一路近黑到底），拿它当背景会把白卡里
-   嵌一条黑带 —— 所以这里用跟主题的 `--app-bg`：浅色下是软的浅轨，深色下就是这条凹槽。
-   这一族现在有静态门兜着（`styleDebtRatchet` 的图形 3:1 那条腿），把它换回浅色变量会直接红。 */
+/* §10.35 走 ①（D153 落的、D154 按他的指令改回字面那支）：这条轨道原来是 EP 的 `--el-fill-color`，
+   它在深色工作台里仍是**浅值**（现测一条近白带），于是深色面板中间横着亮带，五档柱子挂在它上面
+   有三档过不了图形的 3:1 门槛（slate 2.46 / amber 2.36 / green 2.71；blue 4.61、violet 5.19 过）。
+   现在用 `--app-surface-contrast`：深色下它就是那条凹槽，五档实测 6.82 / 3.65 / 7.13 / 3.23 / 6.20
+   全过。**代价按他的判断明写着**：这支令牌的本义是"实心档上那层白字"的 ink，且只在 `:root` 定义、
+   `.workspace-theme` 不重定义 —— 所以浅色主题真被人走到时，这条轨道会在白卡里显成一条暗带。
+   这一族的 3:1 有静态门兜着（`styleDebtRatchet` 那条腿），把它换回 EP 那个浅色变量会直接红。 */
 .funnel-track {
   height: 24px;
-  background: var(--app-bg);
+  background: var(--app-surface-contrast);
   border-radius: 6px;
   overflow: hidden;
 }
