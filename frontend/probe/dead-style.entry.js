@@ -330,7 +330,127 @@ const FIXTURES = [
     },
   ],
   [/\/subscription\/my/, 'get', { tier: 'free', quota_usage: {}, expires_at: null }],
-  [/\/jobs\/pipeline\/list/, 'get', { items: [], total: 0 }],
+  /* 投递看板与列表（D147）。两条都是**从空到有**的补法，代价要写在账上：
+     `/jobs/pipeline/list` 原来是 `{items: [], total: 0}`、`/jobs/pipeline/kanban` 原来**没有夹具**
+     （落空成 `{}`），所以那两页一直是空态——§10.26 里 `.batch-bar` / `.offer-row.selected` /
+     `.card-interview` 三处只能记"推导"，根因就在这一格。**以前在那两页取过的"0 命中 / 无元素"
+     读数从此作废。**
+     形状各按自己的消费者写：看板走 `PipelineKanban.vue:386` 的 `data.stages`，而 BoardPane 的
+     卡片字段是 snake_case（`card.interview_at` / `match_score` / `salary_range` /
+     `resume_version_label` / `create_time`），**与 `jobModel.normalizePipelineEntry` 那套
+     camelCase 不是同一个形状**——照后者写只会得到一个空看板。
+     面试档那条必须带 `interview_at` 且落在 `interview` 列，`.card-interview` 才会出现
+     （`BoardPane.vue:144` 的条件是 `card.interview_at && col.key === 'interview'`）。
+     列表那三条卡在 2–4 之间，是为了让 `OfferCompare.vue:592` 那句
+     `if (items.length <= 4 && items.length >= 2)` 自动全选，`.offer-row.selected` 才有元素。 */
+  [
+    /\/jobs\/pipeline\/list/,
+    'get',
+    {
+      total: 3,
+      page: 1,
+      page_size: 20,
+      items: [
+        {
+          id: 41,
+          jd_id: 7,
+          stage: 'offer',
+          title: '平台后端工程师',
+          company: '示例公司',
+          location: '上海',
+          salary_range: '30-40K',
+          match_score: 88,
+          source: '本地',
+          resume_version_label: 'v3',
+          interview_at: '2026-09-28T10:00:00',
+          create_time: '2026-09-20T09:00:00',
+        },
+        {
+          id: 42,
+          jd_id: 7,
+          stage: 'offer',
+          title: '算法工程师',
+          company: '示例公司二',
+          location: '北京',
+          salary_range: '28-38K',
+          match_score: 72,
+          source: '外部',
+          create_time: '2026-09-18T09:00:00',
+        },
+        {
+          id: 43,
+          jd_id: 7,
+          stage: 'interview',
+          title: '数据平台工程师',
+          company: '示例公司三',
+          location: '杭州',
+          salary_range: '26-36K',
+          match_score: 65,
+          source: '本地',
+          interview_at: '2026-10-02T14:00:00',
+          create_time: '2026-09-25T09:00:00',
+        },
+      ],
+    },
+  ],
+  [
+    /\/jobs\/pipeline\/kanban/,
+    'get',
+    {
+      stages: {
+        todo: [],
+        applied: [
+          {
+            id: 44,
+            jd_id: 7,
+            stage: 'applied',
+            title: '后端开发工程师',
+            company: '示例公司四',
+            location: '深圳',
+            salary_range: '25-35K',
+            match_score: 79,
+            source: '本地',
+            create_time: '2026-09-26T09:00:00',
+          },
+        ],
+        written_test: [],
+        interview: [
+          {
+            id: 43,
+            jd_id: 7,
+            stage: 'interview',
+            title: '数据平台工程师',
+            company: '示例公司三',
+            location: '杭州',
+            salary_range: '26-36K',
+            match_score: 65,
+            source: '本地',
+            resume_version_label: 'v2',
+            interview_at: '2026-10-02T14:00:00',
+            create_time: '2026-09-25T09:00:00',
+          },
+        ],
+        offer: [
+          {
+            id: 41,
+            jd_id: 7,
+            stage: 'offer',
+            title: '平台后端工程师',
+            company: '示例公司',
+            location: '上海',
+            salary_range: '30-40K',
+            match_score: 88,
+            source: '本地',
+            resume_version_label: 'v3',
+            create_time: '2026-09-20T09:00:00',
+          },
+        ],
+        accepted: [],
+        rejected: [],
+        withdrawn: [],
+      },
+    },
+  ],
   [/\/jobs\/bookmarks\/list/, 'get', { items: [], total: 0 }],
   /* 智能推荐那条链（D105）：消费者是 `useJobRecommend.js:23-52`，读 `data.recommendations`，
      每条按 `jd_id / job_title / company / location / salary_range / match_score / recommendation_type /

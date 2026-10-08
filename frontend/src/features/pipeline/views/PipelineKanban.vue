@@ -687,7 +687,10 @@ onMounted(() => {
 }
 
 .focus-metrics b {
-  color: var(--app-primary-dark);
+  /* 实测 2.61：`--app-primary-dark` 是品牌蓝的**更深**一档，为浅色面的 hover/按压态设计，
+     放在深色工作台上当 23px 常规字重的数字用，连大字号的 3:1 都不过。抬到混白 25% 那一档
+     （5.08）。同一族还有 6 个页面各抄了一份这条规则，账上另列，等一次收完。 */
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-size: 23px;
   line-height: 1;
 }

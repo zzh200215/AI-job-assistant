@@ -348,7 +348,9 @@ function onDrop(targetStage) {
 }
 
 .card-score {
-  color: var(--app-primary);
+  /* 实测 3.39：`--app-primary` 本体当文字压在卡片面上（12px 常规字重要 4.5）。
+     抬一档与全仓"分数当文字读"那条口径一致（同一支蓝混白 25% → 5.08）。 */
+  color: color-mix(in srgb, var(--app-primary), white 25%);
   font-weight: 600;
 }
 

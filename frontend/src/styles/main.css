@@ -737,6 +737,10 @@ code,
 }
 
 /* ── 分数语义档：唯一一份色源，视图只挂 tone class，不再各自挑 hex ── */
+/* 这一族是**文字色**（`color:`），不是底：`scoreToneClass()` 拼出来的类名走的就是这五条。
+   所以 good / risk 两档按 D144 那条口径抬过一档——蓝档本体压在深色卡片上是实测 3.39、
+   红档 4.15，都不过正文的 4.5；抬完与 `scoreToneTextColor()` 给的是同一档混白比例。
+   其余三档本体在深面已有 5.2 / 5.86 / 6.0 上下，不动。 */
 .score-tone {
   color: var(--app-score-unknown);
 }
@@ -746,7 +750,7 @@ code,
 }
 
 .score-tone--good {
-  color: var(--app-score-good);
+  color: color-mix(in srgb, var(--app-score-good), white 25%);
 }
 
 .score-tone--warn {
@@ -754,7 +758,7 @@ code,
 }
 
 .score-tone--risk {
-  color: var(--app-score-risk);
+  color: color-mix(in srgb, var(--app-score-risk), white 20%);
 }
 
 .score-tone--unknown {

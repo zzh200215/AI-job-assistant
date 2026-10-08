@@ -8,6 +8,7 @@ import {
   PRIORITY_LEVELS,
   SEVERITY_LEVELS,
 } from '../../src/constants/states.js'
+import { scoreToneTextColor } from '../../src/utils/scoreTone'
 
 // Ratchet guards. Every ceiling below is a measurement of existing debt, not an
 // approval of it. A count may only move DOWN: when you fix some, lower the
@@ -1371,6 +1372,56 @@ describe('style debt ratchet', () => {
       'color: scoreColor(item.overall_score)'
     )
     expect(AS_TEXT.test(regressed), '把一处改回 tone 本体，判据必须报它').toBe(true)
+  })
+
+  /* 分数当文字读的 tone 有**三个表示法**：JS 的 `scoreToneTextColor()`（内联 style）、主题层的
+     `.score-tone--*`（`scoreToneClass()` 拼出来的类名）、ListPane 自己的 `.score-level--*`。
+     三处各改各的就会分叉——D144 只抬了 JS 那一支，D147 补 CSS 两支时才发现它们一直停在 3.39 /
+     4.15 那一档。所以这条不判"够不够"（那要浏览器），它判**三处是否同值**。 */
+  it('keeps the three text-tone representations on the same lift', () => {
+    const EXPECT = { high: null, good: 25, warn: null, risk: 20, unknown: null }
+    const liftOf = (decl) => {
+      const m = /white (\d+)%/.exec(decl || '')
+      return m ? Number(m[1]) : null
+    }
+    const cssMap = (text, prefix) => {
+      const out = {}
+      for (const tone of Object.keys(EXPECT)) {
+        const m = new RegExp(`\\.${prefix}--${tone}\\s*\\{([^}]*)\\}`).exec(text)
+        out[tone] = liftOf(m ? m[1] : '')
+      }
+      return out
+    }
+    const jsMap = {}
+    for (const [tone, value] of [
+      ['high', 90],
+      ['good', 72],
+      ['warn', 55],
+      ['risk', 30],
+      ['unknown', null],
+    ]) {
+      jsMap[tone] = liftOf(scoreToneTextColor(value))
+    }
+    const theme = cssMap(themeCss, 'score-tone')
+    const listPane = cssMap(styleOf('src/features/pipeline/components/ListPane.vue'), 'score-level')
+
+    const bad = []
+    for (const tone of Object.keys(EXPECT)) {
+      const trio = [jsMap[tone], theme[tone], listPane[tone]]
+      if (trio.some((v) => v !== EXPECT[tone]))
+        bad.push(
+          `${tone}：期望 ${EXPECT[tone]}，实得 js=${trio[0]} / .score-tone=${trio[1]} / .score-level=${trio[2]}`
+        )
+    }
+    expect(bad, `文字档三处不同值：${bad.join('；')}`).toEqual([])
+
+    // 反证：把主题层那一档改回 tone 本体（就是 D147 之前的状态），判据必须报。
+    const regressed = themeCss.replace(
+      '.score-tone--good {\n  color: color-mix(in srgb, var(--app-score-good), white 25%);',
+      '.score-tone--good {\n  color: var(--app-score-good);'
+    )
+    expect(regressed, '植入没落进 main.css，这条反证是空转的').not.toBe(themeCss)
+    expect(cssMap(regressed, 'score-tone').good, '改回 tone 本体必须报红').toBe(null)
   })
 
   /* 拼出来的类名（`'dot-' + task.priority`、`` `severity-${item.severity}` ``）这一族，
