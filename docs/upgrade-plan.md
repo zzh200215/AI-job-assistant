@@ -3725,6 +3725,18 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **未复核**：Register 页只看了 console 与警告是否消失，没逐像素比那一页的其余部分；`.social-*` 的样式在 `dead-style.mjs` 的候选表里本来就 0 命中（规则与类名一起出树，33/33 通过即证）。**门禁**：`test:unit` **575 / 88 files**（与 D144 持平——这一刀没有新腿，它只把一维预算往下压，而那一维的"预算比现实松就失败"会替它把关）、`npm test` 33/33、`format:check` clean、`eslint` 只剩既有 `paidOrders` 一条警告、`build` 通过、体积 **2210.58 → 2207.94 kB（−2.64）**，其中假按钮出树省 2.66（两段 SVG path 是文本里的大头）、`underline="never"` 那两处进 0.02。
 
+#### 已交付：D146 报告页最后一族硬编码：把"永远生效的覆写"并进基座，整页逐属性零变化
+
+**这一族是什么**：D144 撤掉浅色覆写之后，`InterviewReport` 还剩 8 处硬编码，全在 `.report-hero` / `.score-ring` / `.eyebrow` 这一带——它们是**深色渐变 marketing hero 那一版留下的基座**，而 `:790` 那批 `P1 report treatment` 覆写永远盖在它们上面。页根类 `.interview-report-page` 是静态写在根元素上的（`InterviewReport.vue:2`），所以那层前缀**没有一天不生效**，被它压住的基座声明全是死重量。留着最坏的后果不是体积，是**下一个人会以为那个深色渐变 hero 还有可达路径**。
+
+**动手前先枚举，别直接删**：把 `<style>` 里所有命中 `report-hero|eyebrow|score-ring|hero-score` 的规则按文件顺序列出来（16 条），确认两件事——① 基座与覆写之间没有第三条同元素同属性的规则会被翻盘（中间只有 `.report-hero h1` / `p` / `.score-ring strong` / `span` 这些**后代**规则）；② 末尾 `@media (max-width: 800px)` 里那条 `.report-hero, .hero-score { flex-direction: column; align-items: flex-start }` 特异度 0,1,0、位置在最后，合并后基座仍是 0,1,0 且在它之前 ⇒ 媒体查询照旧赢，不引入变化。**实测视口 279px 时那条 media 是活的**，所以这次差分确实走过了这条风险路径。
+
+**七条"画不到"是逐条对计算值定的，不是按特异度推的**：hero 底 `background-image: none`、字 `--app-text`、圆角 8px、环阴影 `--app-line` 那一档、环宽是覆写那档、eyebrow 不透明度 1、hero 内 `<p>` 字色是 `--app-muted`。合并动作：覆写六条并进基座、`.interview-report-page` 前缀在 CSS 里降到 **0 处**；`.report-hero .eyebrow` 那条不必存在——eyebrow 本身就是 `<p class="eyebrow">`，`.report-hero p` 一条就是它的颜色出处；`.summary-grid .stat-card` 吸收那道 3px 顶边。
+
+**零变化的证法**：同一注入流程跑两帧 `__probe.capture`，`diff('heroA','heroB')` = **258 / 258 元素、missingFromB 0、diffs 0**（46 个计算属性 + rect 逐元素比）。这一刀因此是**纯重构**，不需要产品拍观感。
+
+**连带与踩坑**：`InterviewReport.vue` 的 `hardcodedColorLiterals` **8 → 0**，条目从预算表里删除——这一页从"硬编码色最多的页面之一"（D67 那轮 22 处）变成这一族第一个清零样本。**本会话第三次踩同一个坑**：我第一版把 `#fff` 与两个 `rgb(…)` 写进了那段解释性注释，尺子当场计进 3 处债。口径不变：**改措辞，不抬预算**；这条也说明"注释里引用色值"在这一族里不是免费的。体积 2207.94 → **2207.20 kB（−0.74）**。**未做**：`.stat-card` 那道 3px 顶边的颜色仍被主题网按 `!important` 吞着（写令牌是为了"哪天网撤了"不重演浅压深，今天不承重）；旧基座那档 `var(--app-radius-md, 16px)` 与覆写的 `var(--app-radius-md)` 实测同为 8px，合并取无 fallback 的那一档。**门禁**：`test:unit` 575 / 88 files、`npm test` 33/33（死样式门一并过）、`format:check` clean、`eslint` 只剩既有 `paidOrders`、`build` 通过。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
