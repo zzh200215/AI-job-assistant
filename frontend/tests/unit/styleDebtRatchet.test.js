@@ -1791,6 +1791,235 @@ describe('style debt ratchet', () => {
     ])
   })
 
+  /* 图形那一族（状态点 / 漏斗柱）第一次从"一次性读数"变成门。门槛是 **3:1**（WCAG 1.4.11
+     非文字对比度），不是文字那 4.5。判据读**令牌表**不读屏幕：`--app-*` 任一档调深调浅、
+     或某个座换掉底色，这里当场红——不需要有人再开浏览器重跑普查。
+     三族的"相邻面"由**各自宿主规则**的 `background` 决定（列头 / 漏斗轨道 / 权重格），
+     所以 §10.35 那一刀（轨道从 EP 的浅色变量换成 `--app-bg`）也被这条门钉着：把它换回去，
+     五根柱子里立刻有三根红。
+     两条腿分工不同：`floor` 判够不够；`measured` 判**这把静态尺与活页实测是否还是同一批数**
+     （D152 / D153 逐元素量出来的 18 对写死在下面）。静态算法一旦与浏览器算的不一致，
+     红的是第二条——那说明我改坏了尺子，而不是页面。 */
+  const GRAPHIC_FLOOR = 3
+  const GRAPHIC_SITES = [
+    {
+      label: '看板列头那颗点',
+      file: 'src/features/pipeline/components/BoardPane.vue',
+      host: 'col-header',
+      seats: STAGE_ACCENTS.map((v) => `dot-${v}`),
+      measured: {
+        'dot-slate': 6.34,
+        'dot-blue': 3.39,
+        'dot-amber': 6.63,
+        'dot-violet': 3.01,
+        'dot-green': 5.77,
+        'dot-red': 4.42,
+        'dot-gray': 6.9,
+      },
+    },
+    {
+      label: '漏斗那五根柱',
+      file: 'src/features/pipeline/components/StatsPane.vue',
+      host: 'funnel-track',
+      seats: FUNNEL_ACCENTS.map((v) => `fill-${v}`),
+      measured: {
+        'fill-slate': 6.82,
+        'fill-blue': 3.65,
+        'fill-amber': 7.13,
+        'fill-violet': 3.23,
+        'fill-green': 6.2,
+      },
+    },
+    {
+      label: '权重那颗点',
+      file: 'src/features/jobs/views/OfferCompare.vue',
+      host: 'weight-item',
+      seats: WEIGHT_DOT_COLORS.map((v) => `dot-${v}`),
+      measured: {
+        'dot-blue': 3.65,
+        'dot-violet': 3.23,
+        'dot-green': 6.2,
+        'dot-amber': 7.13,
+        'dot-red': 4.76,
+        'dot-teal': 5.03,
+      },
+    },
+  ]
+
+  /* :root 打底、`.workspace-theme` 覆盖——深色工作台是候选人唯一够得到的那一套，门就按它算。
+     先剥注释再找块：这条文件里 `.workspace-theme` 这个字串在注释里也出现，`indexOf` 会先撞上
+     注释那一处并往后找到**别的** `{`，于是深色覆盖整批读不到——第一版就是这么把琥珀算成 2.64
+     （它拿的是浅色那支 `#ffffff` 的面），而浏览器实测是 6.63。 */
+  const stripComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '')
+  const blockBody = (css, selector) => {
+    const text = stripComments(css)
+    const re = new RegExp(`(^|\\n)\\s*${selector.replace(/\./g, '\\.')}\\s*\\{`, 'm')
+    const m = re.exec(text)
+    if (!m) return ''
+    const open = text.indexOf('{', m.index)
+    let depth = 0
+    for (let i = open; i < text.length; i++) {
+      if (text[i] === '{') depth++
+      else if (text[i] === '}') {
+        depth--
+        if (depth === 0) return text.slice(open + 1, i)
+      }
+    }
+    return ''
+  }
+  const readTokens = () => {
+    const merged = {}
+    for (const body of [blockBody(themeCss, ':root'), blockBody(themeCss, '.workspace-theme')]) {
+      for (const m of body.matchAll(/(--app-[a-z-]+):\s*([^;]+);/g)) merged[m[1]] = m[2].trim()
+    }
+    return merged
+  }
+  const hexRgb = (hex) => {
+    let h = hex.replace('#', '')
+    if (h.length === 3)
+      h = h
+        .split('')
+        .map((c) => c + c)
+        .join('')
+    return {
+      r: parseInt(h.slice(0, 2), 16),
+      g: parseInt(h.slice(2, 4), 16),
+      b: parseInt(h.slice(4, 6), 16),
+    }
+  }
+  const resolveColor = (decl, tokens) => {
+    let text = String(decl || '').trim()
+    for (let hop = 0; hop < 4; hop++) {
+      const v = /^var\((--[a-z-]+)(?:,[^)]*)?\)$/.exec(text)
+      if (!v) break
+      const next = tokens[v[1]]
+      if (!next || next === text) break
+      text = next
+    }
+    return /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(text) ? hexRgb(text) : null
+  }
+  const lumOf = (c) => {
+    const f = (v) => {
+      v /= 255
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+    }
+    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b)
+  }
+  const contrast = (a, b) => {
+    const la = lumOf(a),
+      lb = lumOf(b)
+    return Math.round(((Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)) * 100) / 100
+  }
+  const graphicPairs = (tokens) => {
+    const out = []
+    for (const site of GRAPHIC_SITES) {
+      const css = styleOf(site.file)
+      const hostDecl = new RegExp(`\\.${site.host}\\s*\\{[^}]*?background:\\s*([^;]+);`).exec(css)
+      if (!hostDecl) {
+        out.push({
+          site: site.label,
+          seat: '(宿主)',
+          ratio: null,
+          why: `读不到 .${site.host} 的 background`,
+        })
+        continue
+      }
+      const surface = resolveColor(hostDecl[1], tokens)
+      if (!surface) {
+        out.push({
+          site: site.label,
+          seat: '(宿主)',
+          ratio: null,
+          why: `.${site.host} 的底不是 hex 也不是单个 var()`,
+        })
+        continue
+      }
+      for (const seat of site.seats) {
+        const decl = new RegExp(`\\.${seat}\\s*\\{[^}]*?background(-color)?:\\s*([^;]+);`).exec(css)
+        if (!decl) {
+          out.push({
+            site: site.label,
+            seat,
+            ratio: null,
+            why: '这一档没有底色声明（值域里有一档而样式没有 = 正向缺规则）',
+          })
+          continue
+        }
+        const color = resolveColor(decl[2], tokens)
+        out.push({
+          site: site.label,
+          seat,
+          ratio: color ? contrast(color, surface) : null,
+          why: color ? '' : `底色读不出：${decl[2].trim()}`,
+        })
+      }
+    }
+    return out
+  }
+
+  it('keeps every state dot / funnel bar at 3:1 against the surface it sits on', () => {
+    const tokens = readTokens()
+    const pairs = graphicPairs(tokens)
+    const unreadable = pairs.filter((p) => p.ratio === null)
+    expect(
+      unreadable.map((p) => `${p.site} / ${p.seat}: ${p.why}`),
+      '图形门看不见这些座'
+    ).toEqual([])
+    const below = pairs.filter((p) => p.ratio < GRAPHIC_FLOOR)
+    expect(
+      below.map((p) => `${p.site} / ${p.seat} = ${p.ratio}`),
+      `图形对比度低于 ${GRAPHIC_FLOOR}:1（WCAG 1.4.11）`
+    ).toEqual([])
+    /* 静态尺必须复现活页实测：18 对逐对对齐到 0.02 以内。 */
+    const drift = []
+    for (const site of GRAPHIC_SITES) {
+      for (const p of pairs.filter((x) => x.site === site.label)) {
+        const want = site.measured[p.seat]
+        if (want === undefined) {
+          drift.push(`${site.label} / ${p.seat}: 账上没有这一对的实测数（新座要补测）`)
+          continue
+        }
+        if (Math.abs(p.ratio - want) > 0.02)
+          drift.push(`${site.label} / ${p.seat}: 静态 ${p.ratio} vs 实测 ${want}`)
+      }
+    }
+    expect(drift, '静态令牌算法与浏览器读数分叉').toEqual([])
+  })
+
+  it('that graphic floor bites: a darker tone token and a light rail are both caught', () => {
+    const tokens = readTokens()
+    const base = graphicPairs(tokens)
+    /* 反证 1：把紫调深一档（今天它是这一族最紧的一档，先断言确实最紧，再压它）。 */
+    const violetNow = base.filter((p) => /violet$/.test(p.seat)).map((p) => p.ratio)
+    expect(Math.min(...violetNow), '紫不是这一族最紧的一档，这条反证就是空转的').toBeCloseTo(
+      3.01,
+      2
+    )
+    const darker = { ...tokens, '--app-violet': '#3b2570' }
+    expect(
+      graphicPairs(darker)
+        .filter((p) => /violet$/.test(p.seat))
+        .every((p) => p.ratio < GRAPHIC_FLOOR),
+      '把 --app-violet 调深，紫那两处必须掉到 3:1 以下'
+    ).toBe(true)
+    /* 反证 2：§10.35 那一刀换回去（轨道回浅色），五根柱子里必须立刻有红的。 */
+    const lightRail = { ...tokens, '--app-bg': '#f0f2f5' }
+    const bars = graphicPairs(lightRail).filter((p) => p.site === '漏斗那五根柱')
+    expect(
+      bars.filter((p) => p.ratio < GRAPHIC_FLOOR).length,
+      '轨道换成浅白带，柱子要有不合格的'
+    ).toBeGreaterThan(0)
+    /* 反证 3：宿主规则读不到时不许静默通过。 */
+    const noHost = { ...tokens }
+    const snapshot = GRAPHIC_SITES[1].host
+    GRAPHIC_SITES[1].host = 'funnel-track-does-not-exist'
+    expect(
+      graphicPairs(noHost).some((p) => p.ratio === null),
+      '读不到宿主的底要显式报错，不能当通过'
+    ).toBe(true)
+    GRAPHIC_SITES[1].host = snapshot
+  })
+
   it('keeps the auth session keys inside utils/session', () => {
     /* D87 之前这两个键散在三个文件 12 处：`api/request.js`（每次请求读 + 401 直接 removeItem 两个键）、
        `api/interview.js`（拼 WS 地址又读一次）、`stores/auth.js`（建 store 读、setAuth/clearAuth/fetchMe 写）。
