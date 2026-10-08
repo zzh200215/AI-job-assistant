@@ -287,6 +287,22 @@ code,
   --el-tag-text-color: color-mix(in srgb, var(--el-color-primary), white 25%);
 }
 
+/* §10.36(a) 走 ①（2026-10-08 D155）：**EP 的默认 effect 就是 `light`**，全仓 102 个 `<el-tag>`
+   里 94 个没写 effect（候选人侧 94），走的就是这一条通道——底是库自己的 `--el-color-*-light-9`
+   浅 tint（**两个主题同一支数，浅色那边不跟着深色走**），字是 tone 本体。D154 按 5×3 的矩阵现量：
+   success 2.81、warning 2.46、danger 3.57、info 4.34，全在 4.5 以下（primary 4.67 本来过线，
+   按拍板那一档保持 EP 原样）。这里只换文字色、不动那颗浅底（"浅底胶囊"本身是 §10.17 已经拍过
+   「那张强覆写网不动」的一格），四个 tone 在浅 tint 上统一换成墨字。
+   认通道用 EP 自己在 markup 上加的 `el-tag--light` 类（它**没有**对应的库样式，D154 查过），
+   比 `:not(.el-tag--dark):not(.el-tag--plain)` 短一半；特异性 (0,2,0) 与 EP 那五条
+   `.el-tag.el-tag--X` 相同，靠"我们这份后加载"赢——守卫里那条读库样式的腿钉的就是这件事。 */
+.el-tag--light.el-tag--success,
+.el-tag--light.el-tag--warning,
+.el-tag--light.el-tag--danger,
+.el-tag--light.el-tag--info {
+  --el-tag-text-color: var(--app-surface-contrast);
+}
+
 .el-dialog,
 .el-message,
 .el-popover,

@@ -20,7 +20,7 @@
       >
         <div class="panel-body">
           <div class="cp-header">
-            <span class="cp-score data-value" :class="scoreToneFillClass(cp.match_score)">{{
+            <span class="cp-score" :class="scoreToneFillClass(cp.match_score)">{{
               cp.match_score
             }}</span>
             <div class="cp-info">
@@ -132,6 +132,12 @@ defineProps({
   font-size: 14px;
   font-weight: 700;
   flex-shrink: 0;
+  /* §10.36(b) 走 ①：这颗座原先挂着 `data-value`，那一个类同时干两件事——`main.css:191` 的
+     mono 数字排版，以及 `main.css:641` 主题网那条 `[class*='-value']{color:var(--app-text)!important}`。
+     后者会整条盖掉 `.score-fill--*` 自己按档挑的前景（实测 2.38–3.57，见 D154），所以这里把
+     类名摘掉、把排版自己接管：字体与字距逐条照 `data-value` 那两行写，只有颜色交还给分数座。 */
+  font-family: var(--app-font-mono);
+  letter-spacing: 0;
 }
 .cp-info {
   flex: 1;

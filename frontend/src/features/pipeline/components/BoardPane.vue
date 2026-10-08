@@ -407,7 +407,11 @@ function onDrop(targetStage) {
 .resume-version-tag {
   max-width: 100%;
   margin-top: 8px;
-  color: #365c8d;
+  /* §10.36(c)（D155）：这里原来是仓里那一族唯一还留着的手挑暗蓝，D148 收了同值的另一处
+     （ListPane 的 `.version-cell`）却没收到这颗挂在 `<el-tag>` 上的座。D154 现量它压在 plain
+     通道的底上是 2.56（12px / 500 的字，门槛 4.5）。换成与 `.score-tone--good` 文字档同一配方
+     （品牌蓝混白 25%，D148 同一对量过 5.30），并在守卫的座豁免表里删掉这一条。 */
+  color: color-mix(in srgb, var(--app-primary), white 25%);
 }
 
 /* 跟进状态那三枚药丸：原来每枚都是"手挑浅底 + 同色系浅字"，实测最差 2.10（`.follow-ok`
