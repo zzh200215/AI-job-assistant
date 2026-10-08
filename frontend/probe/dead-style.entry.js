@@ -158,6 +158,9 @@ const ANALYSIS_RECORD = {
   created_at: '2026-09-30T02:00:00Z',
 }
 
+/* 相对"今天"的时间戳：`followUpLevel` 的两个阈值（>=7 / >=3 天）只有用相对天数才能长期各就各位。 */
+const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString()
+
 const FIXTURES = [
   [/\/auth\/me$/, 'get', { id: 1, username: 'probe', role: 'candidate', nickname: '探针' }],
   [/\/resume\/?(\?|$)/, 'get', [{ id: 1, title: '探针简历', created_at: '2026-09-01' }]],
@@ -342,11 +345,15 @@ const FIXTURES = [
      面试档那条必须带 `interview_at` 且落在 `interview` 列，`.card-interview` 才会出现
      （`BoardPane.vue:144` 的条件是 `card.interview_at && col.key === 'interview'`）。
      列表那三条卡在 2–4 之间，是为了让 `OfferCompare.vue:592` 那句
-     `if (items.length <= 4 && items.length >= 2)` 自动全选，`.offer-row.selected` 才有元素。 */
+     `if (items.length <= 4 && items.length >= 2)` 自动全选，`.offer-row.selected` 才有元素。
+     **D149 补的跟进三档**：看板那两张 applied 与一张 written_test 各带一个 `update_time`
+     （9 / 1 / 4 天前，相对天数所以不会过几天就跳档），`followUpLevel` 的 danger / ok / warn
+     才在同一屏各出一个元素。这一份数据同时喂两块面板——`ListPane` 的 `:rows` 是
+     `PipelineKanban.vue:339` 的 `flattenCards(kanban)`，不是那个 list 端点，所以一份夹具量齐两个副本。 */
   [
     /\/jobs\/pipeline\/list/,
     'get',
-    {
+    () => ({
       total: 3,
       page: 1,
       page_size: 20,
@@ -391,12 +398,12 @@ const FIXTURES = [
           create_time: '2026-09-25T09:00:00',
         },
       ],
-    },
+    }),
   ],
   [
     /\/jobs\/pipeline\/kanban/,
     'get',
-    {
+    () => ({
       stages: {
         todo: [],
         applied: [
@@ -411,9 +418,40 @@ const FIXTURES = [
             match_score: 79,
             source: '本地',
             create_time: '2026-09-26T09:00:00',
+            /* 9 天前 → `followUpLevel` 走 danger 那一档（>=7）。 */
+            update_time: daysAgo(9),
+          },
+          {
+            id: 46,
+            jd_id: 7,
+            stage: 'applied',
+            title: '服务端开发工程师',
+            company: '示例公司六',
+            location: '南京',
+            salary_range: '22-32K',
+            match_score: 58,
+            source: '外部',
+            create_time: '2026-10-06T09:00:00',
+            /* 1 天前 → ok 档（<3）。 */
+            update_time: daysAgo(1),
           },
         ],
-        written_test: [],
+        written_test: [
+          {
+            id: 45,
+            jd_id: 7,
+            stage: 'written_test',
+            title: '数据开发工程师',
+            company: '示例公司五',
+            location: '广州',
+            salary_range: '24-34K',
+            match_score: 71,
+            source: '本地',
+            create_time: '2026-10-04T09:00:00',
+            /* 4 天前 → warn 档（>=3 且 <7）。三档各有一张卡，正向那条腿才有元素可量。 */
+            update_time: daysAgo(4),
+          },
+        ],
         interview: [
           {
             id: 43,
@@ -449,7 +487,7 @@ const FIXTURES = [
         rejected: [],
         withdrawn: [],
       },
-    },
+    }),
   ],
   [/\/jobs\/bookmarks\/list/, 'get', { items: [], total: 0 }],
   /* 智能推荐那条链（D105）：消费者是 `useJobRecommend.js:23-52`，读 `data.recommendations`，
@@ -774,7 +812,10 @@ request.defaults.adapter = async (config) => {
   const method = String(config.method || 'get').toLowerCase()
   const url = String(config.url || '')
   const hit = FIXTURES.find(([re, m]) => re.test(url) && m === method)
-  const data = hit ? hit[2] : {}
+  /* 夹具可以是函数：跟进档位那一条按 `Date.now()` 算相对天数，写死日期的话过几天整条档就跳了，
+     读数会静默变成另一档（和 [[eval-gates-must-beat-chance]] 里"旧基线作废"同一类坑）。 */
+  const raw = hit ? hit[2] : {}
+  const data = typeof raw === 'function' ? raw() : raw
   fixtureLog.push({ url, method, hit: !!hit })
   return {
     data: { code: 0, message: 'ok', data },

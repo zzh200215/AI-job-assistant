@@ -406,10 +406,14 @@ function onDrop(targetStage) {
   color: #365c8d;
 }
 
-/* 跟进状态那四枚药丸：原来每枚都是"手挑浅底 + 同色系浅字"，实测最差 2.10（`.follow-ok`
+/* 跟进状态那三枚药丸：原来每枚都是"手挑浅底 + 同色系浅字"，实测最差 2.10（`.follow-ok`
    浅绿底压绿字）——浅底压浅字与深色工作台里读不出内容，是同一件事的两种表现。
-   统一走这一族的座配方（底 = tone 混 `--app-bg` 86%、字 = tone，红/紫按实测幅度混白）。
-   ListPane 里有一份同形状的副本（D44 那族"复制不切"），两处一起改。 */
+   统一走这一族的座配方（底 = tone 混 `--app-bg` 86%、字 = tone，红按实测幅度混白）。
+   ListPane 里有一份同形状的副本（D44 那族"复制不切"），两处一起改。
+   D149：这份副本原本还带着第四条 `.follow-interview`，而看板不发它——面试时间在这里走
+   `.card-interview`（`BoardPane.vue:151` 的条件是 `card.interview_at && col.key === 'interview'`）。
+   面试卡在场时它 matched=0，把规则从活样式表里删掉整屏 349 个元素 0 处差异，所以它是死样式，已删；
+   值域由 `states.js` 的 FOLLOW_UP_LEVELS 与那条双向守卫钉住（ListPane 那份仍在发，别一起删）。 */
 .follow-danger {
   background: color-mix(in srgb, var(--app-danger), var(--app-bg) 86%);
   color: color-mix(in srgb, var(--app-danger), white 20%);
@@ -423,10 +427,5 @@ function onDrop(targetStage) {
 .follow-ok {
   background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
   color: var(--app-success);
-}
-
-.follow-interview {
-  color: color-mix(in srgb, var(--app-violet), white 34%);
-  font-weight: 600;
 }
 </style>

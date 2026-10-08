@@ -215,7 +215,10 @@ const emit = defineEmits(['command', 'batch-move', 'clear-selection', 'selection
   white-space: nowrap;
 }
 
-/* 与 BoardPane 那份副本同一条配方（D44 那族"复制不切"，两处必须一起改）。
+/* 与 BoardPane 那份副本同一条配方（D44 那族"复制不切"），但这一份**多发**一枚 `.follow-interview`：
+   列表的面试时间是一枚静态胶囊（`ListPane.vue:120` 的 `v-if="row.interview_at"`），看板那边同一件信息走
+   `.card-interview`。三档跟进色（danger / warn / ok）由 `states.js` 的 FOLLOW_UP_LEVELS 钉住，
+   这一枚是它的兄弟，在守卫里记成 siblings——发出方那行 markup 删掉时豁免会红着要求撤销。
    改前实测最差 2.10：浅绿底压绿字。 */
 .follow-danger {
   background: color-mix(in srgb, var(--app-danger), var(--app-bg) 86%);

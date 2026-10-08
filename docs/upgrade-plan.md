@@ -3770,6 +3770,22 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **未收**：`el-button` 的 danger 描边档（`.el-button--danger.is-plain`）在仓里**一处都没用**，所以那条通道我没补——如果哪天有人真用 `type="danger" plain`，4.42 会回来；`.follow-*` 的完整值域仍没按 `states.js` 的口径钉过（§10.34 原文里就写着这条）。**预算**：JobRecommend 19 → 18、BoardPane 9 → 3、ListPane 7 → **0**（条目从表里删除）。**门禁**：`test:unit` **578 / 88 files**（+2 条腿）、`npm test` 33/33、`format:check` clean、`eslint` 只剩既有 `paidOrders`、`build` 通过、体积 2207.38 → **2208.35 kB（+0.97）**——`color-mix()` 比裸令牌与短 hex 都长，这一族又一次往上走，与 D142 之前记的方向一致。
 
+#### 已交付：D149 把 `.follow-*` 的值域按 `states.js` 的口径钉成双向守卫，代价是抓出看板副本里一枚死药丸
+
+**这一族的域不是后端字段，是前端自己的一个纯函数。** `followUpLevel()`（`pipelineBoard.js:200-205`）按天数阈值 `>=7` / `>=3` 返回 `danger` / `warn` / `ok` 三个字面量，除此之外发不出别的值。所以 `FOLLOW_UP_LEVELS` 只是它的手写抄本，抄本和代码分叉时以代码为准——新那条腿**直接解析函数体**取 `return` 的字面量集合与域比对，顺带把两个阈值钉在断言里（阈值一动，D148 那批按档实测的数就作废，不该静默）。正反两向：域里每一档在两个发出方（BoardPane / ListPane）都必须有规则；文件里每一条 `.follow-*` 规则的值都必须还在域内。反向那条一上来就红，报出 `BoardPane.vue: .follow-interview 不在值域里 = 死样式`。
+
+**它是 D63 整块复制样式时带过来的。** 看板的面试时间走 `.card-interview`（`BoardPane.vue:151` 的条件是 `card.interview_at && col.key === 'interview'`），ListPane 那边才是静态胶囊 `class="follow-interview"`（`ListPane.vue:120`，`v-if="row.interview_at"`）。所以同一个类名在两个副本里一个有发出方、一个没有。看板屏上现取：面试卡在场（`.card-interview` matched=1）而 `.follow-interview` 在这份 scope 里 **matched=0**；把这条规则从活样式表删掉，整屏 **349 个元素 0 处属性差异**、0 个身份消失 ⇒ 死样式确认，已从 BoardPane 删除。ListPane 那份**保留**，并在守卫里记成 siblings（不是域的一档），markup 那行删掉时豁免会红着要求撤销。
+
+**仪器修了两处。**
+1. 那条"指针还在不在发出方"的判据原先只认 `'prefix-' + x` 与 `` `prefix-${x}` `` 两种写法，而看板发的是 `'card-follow follow-' + followUpLevel(...)`——**同一个字面量里带着兄弟类名，前缀不在串首**，于是新加的 BoardPane 那一站差点被判成"这个文件已经不发 `.follow-*` 了"。改成认三种写法（含前缀的字面量后接 `+`、模板插值、静态 `class="prefix-x"`），六个既有站点重跑全绿，说明放宽没把它们放走。
+2. 跟进三档原来**一个元素都上不了屏**：看板夹具那张 applied 卡没有 `update_time`，`needsFollowUp` 直接短路（`pipelineBoard.js:191-193` 只认 applied / written_test 两段）。补齐成 applied×2 + written_test×1，`update_time` 分别 9 / 1 / 4 天前 ⇒ danger / ok / warn 在同一屏各出一个元素。日期用**相对天数**（夹具现在可以是函数，探针的 adapter 会调它）：写死日期过几天就跳档，读数会静默变成另一档——这是 [[eval-gates-must-beat-chance]] 那条"旧基线作废"的同一类坑，这次提前避掉。顺带订正一条我先前对形状的说法：`ListPane` 的 `:rows` 是 `PipelineKanban.vue:339` 的 `flattenCards(kanban)`，**不是** `/jobs/pipeline/list` 那个端点，所以一份看板夹具同时喂两个副本；list 那条只服务 OfferCompare（我一度往它加了第四行，发现喂错了对象，已撤回）。
+
+**实测（现取，四档全在屏上）**：`.follow-ok` 5.21、`.follow-danger` 5.48、`.follow-warn` 5.85、`.follow-interview` 5.90（后三枚压在自带底色上，最后一枚压祖先面板底），12px、AA 4.5 全过。看板那一侧同三档 5.21 / 5.48 / 5.85 与列表一致（同一条配方、同一份数据）。**自我纠正一条**：同一轮里我第一版对比度脚本拿"文字的最终色 vs 纯白"当参照，报出 3.04 / 3.00 / 2.64 / 2.97——那是把黑字白底的直觉套到深色座上，参照物错了；正确读法是文字先合成到它自己的背景、再与该背景比，上表就是这个数。两版差在参照，不在页面。
+
+**看见但没动**：`'dot-' + col.accent` 与 `'fill-' + stage.accent`（`pipelineBoard.js:66-73` 那 7 个 accent：slate / blue / amber / violet / green / red / gray）是同一族的第三个拼类名站点，域同样住在前端而不在 `states.js`，BoardPane 那 7 条 `.dot-*` 今天一条不缺，但没有任何东西守着它——下一次加列忘了加点色，D78 那一幕会在这里重演。这条留给拍，不顺手改。
+
+**门禁**：`test:unit` **579 / 88 files**（+1 条解析 `followUpLevel` 的腿，含两处反证：往函数体插 `return 'urgent'` 集合必须变、域里必须没有 urgent）、`npm test` 33/33、`format:check` clean、`eslint` 只剩既有 `paidOrders`、体积 2208.35 → **2208.25 kB（−0.10）**——删掉那条死规则是这一族第一次往下走。**未测**：`.follow-*` 在**浅色主题**下的达标性（登录后恒深色，今天够不到）；探针页视口仍是 321×559 的小窗，四档的**几何**没在桌面宽度复核（对比度与视口无关，`capture/diff` 那 0 差异是在这个视口下取的）。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**

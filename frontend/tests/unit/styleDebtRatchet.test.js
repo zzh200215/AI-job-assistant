@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_TASK_STATUSES,
   CONFIDENCE_LEVELS,
+  FOLLOW_UP_LEVELS,
   PRIORITY_LEVELS,
   SEVERITY_LEVELS,
 } from '../../src/constants/states.js'
@@ -1554,6 +1555,28 @@ describe('style debt ratchet', () => {
       unstyled: [],
       siblings: ['list', 'item', 'detail', 'title'],
     },
+    {
+      /* 跟进档位：域由 `pipelineBoard.js` 那个纯函数的 return 集合决定（下一条腿逐字解析它），
+         看板这一份**只发这三档**（`'card-follow follow-' + followUpLevel(card, now)`）。
+         D149 之前这里还挂着第四条 `.follow-interview`：D63 整块复制样式时把它一起搬了进来，
+         而看板的面试时间走 `.card-interview`，所以它是这条文件里唯一没有发出方的 `follow-*`
+         ——真浏览器 dropRule 差分 0（见 D149），已删。反向这条腿就是它再也回不来的根据。 */
+      prefix: 'follow',
+      values: FOLLOW_UP_LEVELS,
+      file: 'src/features/pipeline/components/BoardPane.vue',
+      unstyled: [],
+      siblings: [],
+    },
+    {
+      // 列表这一份多发一枚静态胶囊：`ListPane.vue:120` 的 `class="follow-interview"`
+      //（`v-if="row.interview_at"`），它不进 `followUpLevel` 的值域，所以记在 siblings 而不是域里。
+      // markup 那行删掉时 siblings 这条会红着要求撤豁免——豁免不会过期。
+      prefix: 'follow',
+      values: FOLLOW_UP_LEVELS,
+      file: 'src/features/pipeline/components/ListPane.vue',
+      unstyled: [],
+      siblings: ['interview'],
+    },
   ]
 
   it('keeps concatenated state classes aligned with their backend value domain', () => {
@@ -1565,7 +1588,18 @@ describe('style debt ratchet', () => {
         problems.push(`${site.file}: 尺子看不见这个文件了（搬家没改根）`)
         continue
       }
-      if (!source.includes(`'${site.prefix}-'`) && !source.includes('`' + site.prefix + '-${')) {
+      /* 发出方认三种写法：拼接的字面量（`'dot-' + x`，也认同一串里还带兄弟类名的
+         `'card-follow follow-' + followUpLevel(...)`）、模板字符串（`` `severity-${x}` ``）、
+         以及模板里静态挂上的 `class="follow-ok"`。认不出来就等于搬家把指针留在了不发 class 的
+         文件上，这条守卫会退化成永远为真的空检查。 */
+      const emits = new RegExp(
+        `['"\`][^'"\`]*${site.prefix}-[^'"\`]*['"\`]\\s*\\+` +
+          `|` +
+          `\`[^'"\`]*${site.prefix}-[^'"\`]*\\$\\{` +
+          `|` +
+          `class="[^"]*\\b${site.prefix}-[a-z]+\\b`
+      )
+      if (!emits.test(source)) {
         problems.push(
           `${site.file}: 这里已经不再发 .${site.prefix}-* 了，指针该跟着搬（否则这条守卫会退化成空检查）`
         )
@@ -1599,6 +1633,44 @@ describe('style debt ratchet', () => {
       }
     }
     expect(problems, problems.join('\n')).toEqual([])
+  })
+
+  /* 跟进档位的**真正出处**是 `pipelineBoard.js` 里那个纯函数，不是后端字段，所以这一族的"域"必须由
+     那个函数的 return 集合来定：`FOLLOW_UP_LEVELS` 只是它的手写抄本，抄本和代码分叉就该红。
+     两个方向：代码里 return 的字面量集合 == 域（多一档少一档都红）；域里每一档在两个发出方
+     （上面那两个 follow 站）都必须有规则，已由上一条腿覆盖。
+     解析取函数体到第一个 `}` 为止——那个函数今天没有嵌套块，加嵌套时函数体会截断、集合会变小，
+     于是这条腿自己会红，不会假装通过。反证：往函数体里插一条 `return 'urgent'`，判据必须报它。 */
+  it('derives FOLLOW_UP_LEVELS from followUpLevel own return set', () => {
+    const board = readFileSync('src/features/pipeline/lib/pipelineBoard.js', 'utf8')
+    const body = (name) => {
+      const at = board.indexOf(`export function ${name}(`)
+      if (at < 0) return null
+      const start = board.indexOf('{', at)
+      return board.slice(start, board.indexOf('}', start))
+    }
+    const fn = body('followUpLevel')
+    expect(fn, '解析不到 followUpLevel 的函数体（签名或文件搬了，指针该跟着搬）').not.toBeNull()
+    const returned = [...fn.matchAll(/return\s+'([a-z_]+)'/g)].map((m) => m[1])
+    expect(returned.sort(), `${'followUpLevel'} 发出的档位与 FOLLOW_UP_LEVELS 分叉`).toEqual(
+      [...FOLLOW_UP_LEVELS].sort()
+    )
+    /* 反证 1：函数多发一档而域没跟上 → 判据要报。反证 2：域多一档而函数不发 → 同样要报。 */
+    const planted = fn.replace(/return 'ok'/, "return 'urgent'\n  return 'ok'")
+    const afterPlant = [...planted.matchAll(/return\s+'([a-z_]+)'/g)].map((m) => m[1])
+    expect(afterPlant.sort(), '往函数里插一档，集合必须变（否则上面那条断言是空转的）').toEqual(
+      [...returned, 'urgent'].sort()
+    )
+    expect(
+      [...FOLLOW_UP_LEVELS].sort(),
+      '域里没有 urgent：上面那条 equal 断言在这一刻必须是红的'
+    ).not.toContain('urgent')
+    /* 阈值也是口径的一部分：天数写成别的数，D148 那批实测数就作废了，所以钉在注释里同时钉在代码上。 */
+    expect(
+      [...fn.matchAll(/days >= (\d+)/g)].map((m) => m[1]).sort(),
+      '阈值变了，深浅两档要重测'
+    ).toEqual(['3', '7'])
+    expect(body('needsFollowUp'), 'needsFollowUp 解析不到').not.toBeNull()
   })
 
   it('keeps the auth session keys inside utils/session', () => {
