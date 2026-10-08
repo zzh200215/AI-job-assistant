@@ -1107,10 +1107,15 @@ const probe = {
   /** 注回一条"当时被删掉的副本"。D68 那三条 `matched=1` 判完之后规则就不在源码里了，
    *  要做正向对照只能往**活样式表**里造一条同选择器、同 scope 属性的。
    *  落点选"拥有该 scope 的那张表"的表尾：同特异性时后写的赢，而父页的样式表在子面板之后
-   *  （视图 import 面板，面板的 style 先注），所以变异那一条真能改到屏幕，而不是被后写的对手压掉。 */
+   *  （视图 import 面板，面板的 style 先注），所以变异那一条真能改到屏幕，而不是被后写的对手压掉。
+   *  D152：注入的那条带一个哨兵声明 `--probe-injected: 1`（自定义属性，不参与渲染），
+   *  `dropRule` 只撤**带哨兵的**——之前它按选择器精确删，而我注的就是同一个选择器，
+   *  于是把页面自己的那条源规则一起删了（量 `.funnel-track` 时踩过：之后整屏的轨道底色变透明，
+   *  我差一点把"注入撤掉后仍是透明"当成真缺陷）。撤完顺手回报源规则还在不在。 */
   injectRule({ selector, scope, decls }) {
     const mark = markOf(scope)
-    const text = norm(`${selector}${mark} { ${decls} }`)
+    const withSentinel = `${decls.replace(/;\s*$/, '')}; --probe-injected: 1`
+    const text = norm(`${selector}${mark} { ${withSentinel} }`)
     for (const sheet of Array.from(document.styleSheets)) {
       let rules
       try {
@@ -1128,10 +1133,11 @@ const probe = {
     }
     throw new Error(`没有一张表带 ${mark}，injectRule 不知道该注到哪`)
   },
-  /** 按**精确选择器**删掉注入过的那条（可重复调用，返回删了几条）。 */
+  /** 撤掉**探针注过的那条**（按哨兵声明认，绝不碰源规则）。返回撤了几条 + 源规则还在不在。 */
   dropRule(selector, scope) {
     const want = norm(`${selector}${markOf(scope)}`)
-    let n = 0
+    let removed = 0
+    let sourceLeft = 0
     for (const sheet of Array.from(document.styleSheets)) {
       let rules
       try {
@@ -1141,13 +1147,16 @@ const probe = {
       }
       for (let i = rules.length - 1; i >= 0; i--) {
         const rule = rules[i]
-        if (rule && rule.selectorText && norm(rule.selectorText) === want) {
+        if (!rule || !rule.selectorText || norm(rule.selectorText) !== want) continue
+        if (rule.style && rule.style.getPropertyValue('--probe-injected')) {
           sheet.deleteRule(i)
-          n++
+          removed++
+        } else {
+          sourceLeft++
         }
       }
     }
-    return n
+    return { removed, sourceLeft }
   },
   async audit({ selector, scope, label }) {
     const found = locate(selector, scope)
