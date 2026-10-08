@@ -188,6 +188,130 @@ const FIXTURES = [
     },
   ],
   [/\/resume\/\d+$/, 'get', { id: 1, title: '探针简历', parsed_json: { basics: {} } }],
+  /* ―― D158：B1 行级改写那一条链（诊断 → 建议 → 应用 → **撤销**）。
+     这四条在夹具里原本**一条都没有**，所以"撤销这次应用"那颗按钮（`ResumeUpload.vue:377-385`，
+     B1.4 加的）到今天为止在真浏览器里从没被点过——它是不是把 apply 返回的那个
+     `snapshot_version_id` 发回去、点完之后按钮文案与匹配分那行怎么变，全都没有过一次屏幕证据。
+     形状逐条抄后端：`app/api/resume.py:1020/1039/1068` 与
+     `app/services/resume_rewrite_service.py:165（suggestions）/391（apply）/322（revert）`。
+     撤销那一条写成**函数夹具**：它把前端真的发过来的 `snapshot_version_id` 原样回显成
+     `restored_from_version_id`，并把 `undo_version_id` 派生成它 +1——前端一旦漏发或发错，
+     屏幕上那个"撤销这次撤销"与分数那行就会露出来，而不是"看起来成功了"。―――――――――― */
+  [
+    /\/resume\/\d+\/diagnose$/,
+    'post',
+    {
+      total_score: 62,
+      structure_score: 70,
+      expression_score: 58,
+      keyword_score: 55,
+      highlight_score: 66,
+      ats_score: 61,
+      structure_issues: ['项目段落只有职责、没有结果口径'],
+      expression_issues: ['动词偏弱（"负责"、"参与"）'],
+      missing_keywords: ['Kubernetes', '成本治理'],
+      highlights: ['后端三年且同一团队'],
+      match_analysis: '与目标岗位重合一半，缺口在编排与可观测',
+      completeness_issues: [],
+      completeness_score: 72,
+      module_check: {},
+      improvement_roadmap: [],
+      /* 后端这句是实心的：`/diagnose` 打的是岗位名字符串，响应里没有 jd_id（:1082 的注释）。
+         给 null 就是让改写那两条链走"无目标 JD"的入参形状，与生产一致。 */
+      jd_id: null,
+    },
+  ],
+  [
+    /\/resume\/\d+\/rewrite-suggestions$/,
+    'post',
+    {
+      resume_id: 1,
+      jd_id: null,
+      block_total: 3,
+      suggestions: [
+        {
+          block_id: 'work[0].desc',
+          kind: 'work',
+          label: '工作经历 1',
+          original: '负责后端服务与接口开发',
+          proposed_text: '负责后端服务与接口开发，日均 2k QPS，可用性 99.9%',
+          reason: '补一个可核验的结果口径',
+        },
+        {
+          block_id: 'project[0].desc',
+          kind: 'project',
+          label: '项目经历 1',
+          original: '参与召回模块',
+          proposed_text: '把 BM25 与向量召回融合，命中率 +12%',
+          reason: '动词改具体、给出增量',
+        },
+      ],
+      rejected: [],
+    },
+  ],
+  [
+    /\/resume\/\d+\/apply-rewrites$/,
+    'post',
+    {
+      resume_id: 1,
+      changed: true,
+      applied: [
+        { block_id: 'work[0].desc', kind: 'work', label: '工作经历 1' },
+        { block_id: 'project[0].desc', kind: 'project', label: '项目经历 1' },
+      ],
+      rejected: [],
+      snapshot_version_id: 9001,
+      resume_version: 2,
+      block_total: 3,
+      score: {
+        before: { score: 62, raw_score: 62, method: 'canonical' },
+        after: { score: 71, raw_score: 71, method: 'canonical' },
+        delta: 9,
+      },
+    },
+  ],
+  [
+    /\/resume\/\d+\/revert-rewrite$/,
+    'post',
+    (body) => {
+      const from = body && body.snapshot_version_id
+      /* `window.__revertStale = true` 切到**被拒那一支**（`changed:false` + `stale_blocks`，
+         后端 `resume.py:1075` 那句"撤销与 expected_original 共用一条判据"）。默认不开：
+         候选人应用之后自己又改过那几块时整单不动，这是这一族唯一"不能吃掉后写文字"的路径，
+         界面上的说法与状态位都要单独量一次。 */
+      if (typeof window !== 'undefined' && window.__revertStale) {
+        return {
+          resume_id: 1,
+          reverted: false,
+          changed: false,
+          stale_blocks: [
+            { block_id: 'work[0].desc', kind: 'work' },
+            { block_id: 'project[0].desc', kind: 'project' },
+          ],
+          resume_version: 4,
+          score: { before: null, after: null, delta: null },
+        }
+      }
+      return {
+        resume_id: 1,
+        reverted: true,
+        changed: true,
+        restored_blocks: ['work[0].desc', 'project[0].desc'],
+        restored_from_version_id: from ?? '前端没有发 snapshot_version_id',
+        undo_version_id: typeof from === 'number' ? from + 1 : null,
+        resume_version: 3,
+        block_total: 3,
+        /* 撤销那一发也带 score：`rewrite.result` 会被它整体替换（ResumeUpload.vue:752），
+           不给的话按钮旁那行会退成"未指定目标岗位…"，看着像 bug 其实是夹具缺键。 */
+        score: {
+          before: { score: 71, raw_score: 71, method: 'canonical' },
+          after: { score: 62, raw_score: 62, method: 'canonical' },
+          delta: -9,
+        },
+        score_note: '',
+      }
+    },
+  ],
   [/\/jd\/?(\?|$)/, 'get', [{ id: 7, title: '平台工程师', company: '示例' }]],
   /* §10.17 要量的那一张卡（`JobCompareDialog` 的 `.compare-card`）只在对比弹窗里存在，而弹窗要
      先在搜索结果里勾满两个岗位。这一族原先一条夹具都没有，所以 `matched=0` 是**假阴性**（D76 那个坑的
@@ -913,18 +1037,33 @@ const FIXTURES = [
 ]
 
 /* 夹具命中账：这一屏到底发过哪些请求、哪一条没夹具可落（落空就是 `{}`，
-   于是"点了没反应/生成失败"而屏幕上看不出是数据缺失）。§10.20 那一帧就是靠它定位的。 */
+   于是"点了没反应/生成失败"而屏幕上看不出是数据缺失）。§10.20 那一帧就是靠它定位的。
+   D158 起还记**请求体**（`body`）：写操作那几条（应用 / 撤销改写）光看"请求发出去了"不够，
+   要看得出发出去的那个 id 是不是上一响应里带回来的那一个——"按钮点了但接错线"正是这一族
+   最容易漏的事故（见 [[frontend-extraction-wiring-needs-screen-assertions]]）。
+   函数夹具现在会收到这个已解析的请求体，所以撤销那条能把前端真的发出去的 id 原样回显，
+   前端一旦漏发，屏幕上立刻看出不对而不是"看起来成功了"。 */
 const fixtureLog = []
 
 request.defaults.adapter = async (config) => {
   const method = String(config.method || 'get').toLowerCase()
   const url = String(config.url || '')
   const hit = FIXTURES.find(([re, m]) => re.test(url) && m === method)
+  let body = null
+  if (typeof config.data === 'string') {
+    try {
+      body = JSON.parse(config.data)
+    } catch {
+      body = config.data
+    }
+  } else if (config.data && typeof config.data === 'object') {
+    body = config.data
+  }
   /* 夹具可以是函数：跟进档位那一条按 `Date.now()` 算相对天数，写死日期的话过几天整条档就跳了，
      读数会静默变成另一档（和 [[eval-gates-must-beat-chance]] 里"旧基线作废"同一类坑）。 */
   const raw = hit ? hit[2] : {}
-  const data = typeof raw === 'function' ? raw() : raw
-  fixtureLog.push({ url, method, hit: !!hit })
+  const data = typeof raw === 'function' ? raw(body) : raw
+  fixtureLog.push({ url, method, hit: !!hit, body })
   return {
     data: { code: 0, message: 'ok', data },
     status: 200,
