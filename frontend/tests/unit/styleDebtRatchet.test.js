@@ -2361,8 +2361,9 @@ describe('style debt ratchet', () => {
      另外有些座的 `type` 是 `:type="…"` 绑上去的，**运行时可以是五档里的任何一档**——
      给这种座记一个数是假数，这里记"最坏那一档"。
      通道那条门看不见这两类座（它只算 EP 与 main.css 配出来的通道），所以单开这条。
-     provenance 逐条写明是 live 还是 static：`/jobs/recommend` 卡在"请先选择一份简历"（账上早就
-     记着的洞），`ExplainPane` 那颗要解读结果态才出现，今天都**没有上屏**，所以它们的数是静态推算。 */
+     provenance 逐条写明是 live 还是 static：D157 补了两份夹具之后，`.source-tag` 与 `.mb` 都已经
+     在真组件上量到了（下面那条腿逐颗对齐），剩下两颗（`.expand-tag` / `.step-badge`）在
+     `roles: ADMIN` 的页上，候选人会话进不去，仍是静态推算。 */
   const TAG_SEAT_INVENTORY = () => {
     const out = []
     for (const { rel, source, style } of viewSources) {
@@ -2443,14 +2444,33 @@ describe('style debt ratchet', () => {
     }))
     const unread = rows.filter((r) => r.ratio === null).map((r) => r.key)
     expect(unread, '这些座算不出对比度').toEqual([])
-    /* 唯一 live 量过的那颗：静态推算必须与它逐字相同，否则这条腿整张表都不可信。
-       D155 之前它是 2.56（不合格），换令牌之后同一颗座在同一块底上 live 复测 5.30。
-       另两颗（`.step-badge` / `.mb`）要解读结果态才出现、`.source-tag` 卡在"请先选择一份简历"，
-       这几颗今天都没上屏，它们的数是静态推算——provenance 记在上面那张表的注释里。 */
-    const live = rows.find(
-      (r) => r.key === 'src/features/pipeline/components/BoardPane.vue .resume-version-tag'
+    /* live 与静态必须撞在同一个数上，否则这条腿整张表都不可信。2026-10-08 D157 之后五颗座里
+       **三颗有真组件的 live 数**：
+       · `.resume-version-tag` 5.30 —— 看板 v2/v3 两颗（D155 换令牌前是 2.56）；
+       · `.source-tag` 5.30 —— `/jobs/recommend` 选完简历后那两颗（"接口" / "导入"）；
+       · `.mb` 4.76 —— `/smart-analysis` 跑完一轮分析、切到「匹配度解释」那颗（`:type` 绑 danger）。
+       还差两颗：`.expand-tag` 在 `roles: ADMIN` 的知识库页（`router/index.js:250-254`）、
+       `.step-badge` 在同样 ADMIN 门的 `/agent`（:257-261）——守卫按 `guard.js:14-16` 把候选人会话
+       弹回 homeRoute，为了量它们要改 `/auth/me` 的 role，而那会影响全站每一条链的守卫判定，不值。
+       `.step-badge` 记的最坏档 dark/danger 4.76 已经由 `.mb` 在真组件上量到同一个数；
+       `.expand-tag` 是 light/primary 4.67，也在 `/tasks` 与 `/smart-analysis` 的真组件上量过。 */
+    const liveSeat = (key, want, note) =>
+      expect(rows.find((r) => r.key === key).ratio, note).toBeCloseTo(want, 2)
+    liveSeat(
+      'src/features/pipeline/components/BoardPane.vue .resume-version-tag',
+      5.3,
+      '这颗座 2026-10-08 在看板上 live 复测 5.30'
     )
-    expect(live.ratio, '这颗座 2026-10-08 在看板上 live 复测 5.30').toBeCloseTo(5.3, 2)
+    liveSeat(
+      'src/features/jobs/views/JobRecommend.vue .source-tag',
+      5.3,
+      '这颗座 2026-10-08 在 /jobs/recommend 的两颗真标签上 live 量到 5.30'
+    )
+    liveSeat(
+      'src/features/analysis/components/ExplainPane.vue .mb',
+      4.76,
+      '这颗座 2026-10-08 在「匹配度解释」那颗真标签上 live 量到 4.76（就是静态算出的最坏档）'
+    )
     const failing = rows.filter((r) => r.ratio < TEXT_FLOOR)
     expect(
       failing.map((r) => `${r.key}=${r.ratio}`).sort(),

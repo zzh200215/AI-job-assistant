@@ -3915,6 +3915,22 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **门禁**：`test:unit` **590 / 88 files**（比上一轮 +1，就是那条第四入口的腿）、`npm test` 33/33、`format:check` clean、`eslint` 只剩既有 `paidOrders` 那条 warning、build 通过、体积 2208.45 → **2208.58 kB（+0.13）**，全部来自 plain/info 那条新规则。**§10 在册 34 条编号项，open 仍是 0**；一处小订正：D155 那条门禁写的"28–35 全部已划"应为"28–36"（36 由 D155 自己关闭，当时笔误）。
 
+#### 已交付：D157 把 §10.36 最后两个 static 座数量成 live——代价是补两份夹具，应用代码一行没改
+
+**目标是"证据升级"而不是"改动"**：D156 之后三张豁免表空了，但座清单里还有两颗的数写着 static（`.source-tag`、`.mb`）。这一轮把它们变成真组件上的读数。
+
+**`.source-tag`：夹具少一个键，那颗标签根本画不出来。** `/jobs/recommend` 空态停在"请先选择一份简历"是**已知**的，但真正卡住测量的是 `FIXTURES` 里那份 `/jobs/recommend` 响应没有 `source` 键，而模板写 `v-if="job.source"`（`JobRecommend.vue:394`）。补 `source: 'api'` / `'imported'` 之后，用 DOM 点选"探针简历"，两张卡片出屏幕，两颗标签（"接口" / "导入"）**live 5.30**——与守卫静态算的 plain/primary 那一档逐字相同。同屏另外 9 颗（`dark/danger` 4.76、`dark/info` 4.78、`dark/warning` 7.13、`plain/success` 5.77×3、`plain/danger` 5.83×3）也一并落账。
+
+**`.mb`：缺嵌套键不会报错，会把面板冻在上一帧。** 这是这轮最值钱的一条。`/analysis/explain-match` 那份夹具只有 `explain_mode / recommendation / overall_reason / dimension_explain` 四个键，而 `ExplainPane.vue` 是直接读嵌套字段的——`:11` 取 `overall_score`、`:28-36` 连着取 `weights_used` 六键，**都没有 `?.`**。结果：请求成功、`explainResult` 有值、面板渲染时抛 TypeError，Vue 保留上一次成功的帧，而那一帧正好是 `v-if="loading"` 的骨架 ⇒ 屏幕上永远是"正在生成匹配度解释…"，`__probe` 里 `loading: true` 且 `fixtureLog` 明明白白记着那条 POST 命中。**症状像"链上有竞态"，根因是夹具形状**——D76 那条"形状要照消费者写"第四次成立，形态是新的。补齐 `overall_score / weights_used / dimensions[] / skill_match` 之后 `.mb` 上屏：`:type="explainRecTag"` 按 `analysisModel.js:151` 把「不建议投递」映成 `danger`，live **4.76**，正是守卫给它记的最坏档（dark/danger）。同屏 19 颗真标签，最低仍是 `light/primary` 4.67。
+
+**顺带抓到自己一个测量习惯问题**：`__probe.clickTexts(['一键智能分析'])` 报 `ok`，命中的却是 panel-header 里那个**同名 `<span>`**，什么都没发生；换成"取 `button` 元素本身 `.click()`"才发出 `POST /analysis/full`。这是 D151 那条"点了没反应先查 fixtureLog"的下一种形态——**日志里连请求都没有，说明点错了地方，不是数据缺失**。
+
+**为什么另外两颗不做**：`.expand-tag`（`KnowledgeBase.vue`）与 `.step-badge`（`AgentAnalysis.vue`）都在 `meta.roles = ADMIN` 的路由后面（`router/index.js:250-261`），候选人会话被 `guard.js:14-16` 弹回 homeRoute。要量它们得把 `/auth/me` 夹具的 role 改成 admin，而 role 一变，全站每一条链的守卫判定都跟着变——为了两颗座把整个夹具层的语义换掉不值。**而且它们各自落在的那一档已经在真组件上量过了**：`.step-badge` 的最坏档 dark/danger 4.76 由 `.mb` 证明，`.expand-tag` 的 light/primary 4.67 由 `/tasks` 与 `/smart-analysis` 那两颗证明。守卫注释把这段"为什么是 static"写实。
+
+**守卫现状**：座那条腿从"一颗 live 对齐"升级为**三颗逐颗对齐**（`.resume-version-tag` 5.30 / `.source-tag` 5.30 / `.mb` 4.76），provenance 注释同步。豁免表仍是三张空表。
+
+**门禁**：`test:unit` **590 / 88 files**（用例数没增，是同一颗腿里多两条断言）、`npm test` 33/33、`format:check` clean、`eslint` 只剩既有 `paidOrders`、build 通过、体积 **2208.58 kB（与 D156 相同）**——本轮改动全在探针夹具、守卫与账上，**应用代码只动了一处注释**。**§10 在册 34 条编号项，open 仍为 0。**
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**

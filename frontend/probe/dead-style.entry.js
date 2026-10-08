@@ -587,6 +587,10 @@ const FIXTURES = [
           salary_match: true,
           location_match: true,
           experience_match: false,
+          /* D157：这两条 `source` 是为了让 `JobRecommend.vue:394` 那颗 `.source-tag` 真上屏——
+             它挂在 `v-if="job.source"` 上，而这份夹具原来没有这个键，所以那颗座（plain/primary 通道、
+             组件不再自改字色）在探针里永远画不出来。`sourceText`（:986）认 `api` / `imported`。 */
+          source: 'api',
         },
         {
           jd_id: 702,
@@ -603,6 +607,7 @@ const FIXTURES = [
           salary_match: true,
           location_match: false,
           experience_match: true,
+          source: 'imported',
         },
       ],
     },
@@ -629,8 +634,40 @@ const FIXTURES = [
     'post',
     {
       explain_mode: 'rules',
-      recommendation: '可以投递',
-      overall_reason: '技能命中两条',
+      /* D157：这份夹具原来只有四个键，而 `ExplainPane.vue:28-36` 是**直接读嵌套字段**的
+         （`explainResult.weights_used.skill` 等六次，没有 `?.`），`:11` 还读 `overall_score`。
+         缺键的后果不是报错而是"渲染中断"：面板停在上一帧（那条 `v-if="loading"` 的骨架），
+         屏幕上永远显示"正在生成匹配度解释…"——`.mb` 这颗座就是这么长期量不到的。
+         补齐按消费者来：`weights_used` 六键（后端 `schemas/analysis.py:23` 声明成必填 dict）、
+         `dimensions[].{name,weight,score,reason,details}`、`skill_match.{matched,missing_required,missing_nice}`。
+         `recommendation` 取「不建议投递」：`explainRecommendationTag`（analysisModel.js:151）把它映成
+         `danger`，也就是守卫给这颗座记的那个**最坏档**（dark/danger 4.76）——live 与静态要撞在同一个数上。 */
+      recommendation: '不建议投递',
+      overall_score: 41,
+      overall_reason: '技能命中两条，编排与数据编排缺口拉低总分',
+      weights_used: {
+        skill: 0.34,
+        project: 0.2,
+        experience: 0.16,
+        education: 0.1,
+        keyword: 0.1,
+        bonus: 0.1,
+      },
+      dimensions: [
+        {
+          name: '技能',
+          weight: 0.34,
+          score: 72,
+          reason: '命中两项必需技能，缺口集中在编排',
+          details: ['缺少 Kubernetes 经验'],
+        },
+        { name: '经验', weight: 0.16, score: 50, reason: '年限相近但领域不同', details: [] },
+      ],
+      skill_match: {
+        matched: ['Python', 'SQL'],
+        missing_required: ['Kubernetes'],
+        missing_nice: ['Terraform'],
+      },
       dimension_explain: [],
     },
   ],
