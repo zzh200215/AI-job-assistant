@@ -3713,6 +3713,18 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **未测**（不写成已验证）：ExplainMatch / ExplainPane / ResumeUpload 那三处**没有单独上屏**（要分析结果态），依据是同页同 (tone, 面板) 组合实测 4.77 + 源码级硬零腿；`--app-score-*` 在**浅色主题**下的文字达标性没人量过（今天够不到，登录后恒深色）；`.report-hero` 基座里那批深色渐变与 `rgba(255,255,255,.74)` 白字**本轮没动**——它们被覆写整条压住属"画不到的字面量"，删它要连带动那条"覆写 vs 基座"的层叠，留给下一次。**门禁**：`test:unit` **575 / 88 files**（+2：scoreTone 文字档一条腿、tone-as-text 硬零一条腿）、`npm test` 33/33、`format:check` clean、`eslint` 只剩既有 `paidOrders`、`build` 通过、体积 2210.67 → **2210.58 kB（−0.09）**——撤掉的覆写块比新增的文字档字符串长，这是这一族第一次往下走。连带：`InterviewReport.vue` 色值预算 **22 → 8**、该页入册"色块座只许用令牌"那条腿、浅色令牌豁免表**缩到 1 条**（序号座那处撤了，不删表这条腿就会红——这正是它的设计）。
 
+#### 已交付：D145 摘掉登录页那两枚假 OAuth 按钮，连带把它 17 处模板色值的豁免理由作废
+
+**为什么现在做**：`Login.vue` 那两枚 Google / GitHub 按钮点了只 `ElMessage.info('…第三方登录暂未开放')`——全仓没有任何 OAuth 回调、没有 provider 配置、`isRoleAllowed` 那一侧也没有第三方身份通道。它是"AI 生成感"里最具体的一种：**界面在承诺一件产品不会做的事**。账上挂了两轮（UI 去模板化那一族的头一格），这次他点"收"。
+
+**删掉的**：模板里 `.divider-row`（那句"或使用第三方登录"）+ `.social-row` 两枚按钮（含两段品牌 SVG path）共 37 行；`handleSocialLogin` 那个只弹提示的函数；`<style>` 里 `.divider-row` / `::before` / `.divider-label` / `.social-row` / `.social-btn` / `.social-btn:hover` 六条规则。**屏幕变化就一处**：表单下方少那一行两枚；实测 `.signup-link` 现在是表单的最后一个子元素、`el-input` 2 个、主按钮 1 个、`.social-btn` 与 `.divider-row` 各 0 个、两页 console 无报错。
+
+**连带作废的是账，不是数字**：`styleDebtRatchet` 的 `templateColorLiterals` 那一维原先写着"Login 的 17 处是第三方登录按钮的品牌色（Google/GitHub 官方值），本来就该写死"。现取这 17 处的分布是 **5 处品牌色（四段 Google path + 一段 GitHub path）+ 12 处左侧装饰插画**（`stroke="#fff"` 一枚 + 雷达图那 11 个 `rgba(255,255,255,…)` 描边与网点）。所以按钮出树之后：**17 → 12，而"品牌色本就该写死"这条豁免理由同时不再承重**——剩下的 12 处要留，得按它们真正是什么来留（装饰资产压在固定品牌渐变上、不跟主题走），注释已按这个口径重写。这条是"豁免理由会随代码出树而失效，账要跟着改判据而不是跟着改数字"的一个实例。
+
+**顺手一条同页的 console 债**：`el-link` 的 `:underline="false"` 在 EP 2.7 已弃用（3.0 会坏），探针在 `/login` 的 console 里就报着 `ElementPlusError: [el-link] [API] The underline option (boolean) is about to be deprecated`。两处（Login 的"创建账号"、Register 的"去登录"）换成 `underline="never"`，**实测两页 console 只剩 vite 的两条 debug、警告消失**，链接计算值 `text-decoration: none` 逐字不变。
+
+**未复核**：Register 页只看了 console 与警告是否消失，没逐像素比那一页的其余部分；`.social-*` 的样式在 `dead-style.mjs` 的候选表里本来就 0 命中（规则与类名一起出树，33/33 通过即证）。**门禁**：`test:unit` **575 / 88 files**（与 D144 持平——这一刀没有新腿，它只把一维预算往下压，而那一维的"预算比现实松就失败"会替它把关）、`npm test` 33/33、`format:check` clean、`eslint` 只剩既有 `paidOrders` 一条警告、`build` 通过、体积 **2210.58 → 2207.94 kB（−2.64）**，其中假按钮出树省 2.66（两段 SVG path 是文本里的大头）、`underline="never"` 那两处进 0.02。
+
 #### 已交付：E19 默认拒绝从"按前缀挂"改成"按操作补"——顺手把一条错误承诺用数字打死
 
 E11（提交 `21778e2`）只走完了一半：22 段纯会话前缀挂上了 include 级守护（123 条操作），剩下 **8 段混着公开端点的前缀（110 条）仍是"逐端点自觉"**，公开面靠 `PUBLIC_OPERATIONS` 清单钉住。计划给那条债行开的方子是"先做端点级拆分"。**这次把三种做法都跑了一遍，前两种被数据否掉，第三种被自己的测量否掉。**
