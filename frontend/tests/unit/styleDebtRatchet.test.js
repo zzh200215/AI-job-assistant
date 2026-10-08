@@ -2135,16 +2135,13 @@ describe('style debt ratchet', () => {
     const { fg, bg } = tagPair(effect, type, t)
     return fg && bg ? contrast(fg, bg) : null
   }
-  /* 今天不达标的：D155 之后 light 那四档已经配了墨字（16.99–17.56），只剩这两对，各配现取数。
-     留着不删会红，是新 bug 的入口；这两条的方向分别是"绿档白字压绿底"与"灰档 tone 当字"，
-     要修就得再拍一次（墨字还是抬色），所以不顺手改。 */
-  const TAG_WAIVED = {
-    'dark/success': 3.04,
-    'plain/info': 3.67,
-  }
+  /* D156 之后这张表是空的：`dark/success` 进了墨字组（3.04 → 6.20）、`plain/info` 按 danger
+     同一幅度抬白（3.67 → 5.38）。**空表配反证，不是配沉默**——下面 `that tag gate bites`
+     那条腿把 main.css 声明的十条覆写逐条撤一遍，撤完每一条都要重新掉线。 */
+  const TAG_WAIVED = {}
   const LIVE_TAG = {
     'dark/primary': 5.17,
-    'dark/success': 3.04,
+    'dark/success': 6.2,
     'dark/warning': 7.13,
     'dark/danger': 4.76,
     'dark/info': 4.78,
@@ -2152,7 +2149,7 @@ describe('style debt ratchet', () => {
     'plain/success': 5.77,
     'plain/warning': 6.63,
     'plain/danger': 5.83,
-    'plain/info': 3.67,
+    'plain/info': 5.38,
     'light/primary': 4.67,
     'light/success': 17.45,
     'light/warning': 17.56,
@@ -2160,7 +2157,7 @@ describe('style debt ratchet', () => {
     'light/info': 17.14,
   }
 
-  it('keeps the three el-tag channels at 4.5:1 except the two named pairs still awaiting a call', () => {
+  it('keeps the three el-tag channels at 4.5:1 with no pair left waived', () => {
     const rows = []
     for (const effect of ['dark', 'plain', 'light']) {
       for (const type of TAG_TYPES)
@@ -2184,24 +2181,56 @@ describe('style debt ratchet', () => {
     expect(drift, '静态令牌算法与浏览器读数分叉').toEqual([])
   })
 
-  it('that tag gate bites: reverting D144 lifts two pairs back under the floor', () => {
-    /* 反证 1：D144 那两处覆写如果撤掉，warning/danger 的实心档会掉回白字压信号色。
-       直接在 main.css 的**副本**上撤，不动文件——撤完这两对必须低于门槛，而别的对不许跟着变。 */
-    const before = {
-      'dark/warning': tagRatio('dark', 'warning'),
-      'plain/danger': tagRatio('plain', 'danger'),
-    }
-    expect(before['dark/warning'], '实心 warning 现在是墨字，不在这条反证的射程里').toBeGreaterThan(
-      TEXT_FLOOR
-    )
-    const stripped = themeCss
-      .replace(/\.el-tag--dark\.el-tag--warning,\s*\.el-tag--dark\.el-tag--danger\s*\{[^}]*\}/, '')
-      .replace(/\.workspace-theme \.el-tag--plain\.el-tag--danger\s*\{[^}]*\}/, '')
-    expect(stripped, '撤销没真的落进这份副本（锚点漂了）').not.toBe(themeCss)
-    const inkAfter = [...stripped.matchAll(/\.el-tag--dark\.el-tag--([a-z]+)/g)].map((m) => m[1])
-    expect(inkAfter, '撤掉之后不该再有实心档的墨字覆写').not.toContain('warning')
-    /* 反证 2：把 `--el-color-success` 往白底那边推，light/success 必须更差（说明数真的来自这张表）。 */
+  it('that tag gate bites: each of the ten overrides main.css declares moves its own pair', () => {
+    /* 豁免表清空之后，这条腿就是"这张门还在读 main.css"的唯一证据。
+       清单不在这里重数：直接问 main.css 要（darkInkTypes / plainLifts / lightInkTypes 都是从
+       `themeCss` 现读的），再逐对判两件事——
+       ① 这条覆写现在把这一对撑在门槛之上；
+       ② 把这一对的前景退回 EP 自己的默认（实心档＝白字压 tone 本体，描边与 light 档＝tone 本体），
+          数必须掉到门槛以下。掉不下去的那条就是"覆写不承重"，要当场点名。 */
     const t = tagTokens()
+    const owned = [
+      ...[...darkInkTypes()].map((x) => `dark/${x}`),
+      ...Object.keys(plainLifts()).map((x) => `plain/${x}`),
+      ...[...lightInkTypes()].map((x) => `light/${x}`),
+    ].sort()
+    expect(owned, 'main.css 在 el-tag 三条通道上声明的覆写清单（写法一改这里先红）').toEqual([
+      'dark/danger',
+      'dark/success',
+      'dark/warning',
+      'light/danger',
+      'light/info',
+      'light/success',
+      'light/warning',
+      'plain/danger',
+      'plain/info',
+      'plain/primary',
+    ])
+    const noOverride = (effect, type) => {
+      const bg =
+        effect === 'light'
+          ? resolveColor(`var(--el-color-${type}-light-9)`, t)
+          : effect === 'dark'
+            ? resolveColor(`var(--el-color-${type})`, t)
+            : resolveColor('var(--el-fill-color-blank)', t)
+      const fg =
+        effect === 'dark'
+          ? resolveColor('var(--el-color-white)', t)
+          : resolveColor(`var(--el-color-${type})`, t)
+      return contrast(fg, bg)
+    }
+    for (const key of owned) {
+      const [effect, type] = key.split('/')
+      expect(
+        tagRatio(effect, type),
+        `${key} 现在就该过线（不然反证没有意义）`
+      ).toBeGreaterThanOrEqual(TEXT_FLOOR)
+      expect(
+        noOverride(effect, type),
+        `${key} 撤掉覆写后必须掉到 ${TEXT_FLOOR}:1 以下，否则这条覆写不承重`
+      ).toBeLessThan(TEXT_FLOOR)
+    }
+    /* 反证：把 `--el-color-success` 往白底那边推，light/success 必须更差（说明数真的来自这张表）。 */
     const push = { ...t, '--el-color-success': '#7dcaa9' }
     const fg = resolveColor('var(--el-color-success)', push)
     const bg = resolveColor('var(--el-color-success-light-9)', push)
@@ -2384,28 +2413,28 @@ describe('style debt ratchet', () => {
     return { ratio: worst === Infinity ? null : worst, worstType }
   }
   /* 不达标的那几颗，各配出处；修好一颗就要从这张表里删一颗。
-     D155 收了 `.resume-version-tag`（§10.36(c)：那枚遗留手挑暗蓝换成抬起配方，live 2.56 → 5.30），
-     剩下三颗都还没拍：`.source-tag` 是组件自己把 tone 当字写在 plain 通道上，另两颗是 `:type`
-     绑定 ⇒ 记最坏档（dark/success 3.04），它们与 §10.36(a) 的通道级修法一起等拍。 */
-  const SEAT_WAIVED = {
-    'src/features/jobs/views/JobRecommend.vue .source-tag': { ratio: 3.39, via: 'static' },
-    'src/features/analysis/views/AgentAnalysis.vue .step-badge': { ratio: 3.04, via: 'static' },
-    'src/features/analysis/components/ExplainPane.vue .mb': { ratio: 3.04, via: 'static' },
-  }
+     D155 收了 `.resume-version-tag`（§10.36(c)：那枚遗留手挑暗蓝换成抬起配方，live 2.56 → 5.30）；
+     D156 把剩下三颗一起收完，所以这张表现在是空的：
+     · `.source-tag` 删掉了组件自己补的那行 `color: var(--app-primary)`，字色落回 plain 通道
+       自己抬过的那一档（3.39 → 5.30）；
+     · `.step-badge` / `.mb` 没有单独改——它们的不达标本来就来自"`:type` 能绑到 dark/success"
+       （白字压绿 3.04）。D156 的通道级墨字把 success 抬到 6.20 之后，这两颗的最坏档换成了
+       dark/danger 4.76（D144 那条墨字早已撑着），整颗座这才过线。
+     **空表配的是反证，不是沉默**：下面三条腿各撤一次支撑，撤完必须重新掉线。 */
+  const SEAT_WAIVED = {}
 
   it('enumerates the el-tag seats that repaint themselves or bind their type', () => {
     const seats = TAG_SEAT_INVENTORY()
     expect(
       seats.map((s) => `${s.file} .${s.cls}`).sort(),
-      '挂在 <el-tag> 上的静态类名清单（新座要先把最坏档算出来再写进豁免表）'
-    ).toEqual(
-      Object.keys(SEAT_WAIVED)
-        .concat([
-          'src/features/knowledge/views/KnowledgeBase.vue .expand-tag',
-          'src/features/pipeline/components/BoardPane.vue .resume-version-tag',
-        ])
-        .sort()
-    )
+      '挂在 <el-tag> 上的静态类名清单（新座要先把最坏档算出来，别等它掉进门槛）'
+    ).toEqual([
+      'src/features/analysis/components/ExplainPane.vue .mb',
+      'src/features/analysis/views/AgentAnalysis.vue .step-badge',
+      'src/features/jobs/views/JobRecommend.vue .source-tag',
+      'src/features/knowledge/views/KnowledgeBase.vue .expand-tag',
+      'src/features/pipeline/components/BoardPane.vue .resume-version-tag',
+    ])
     const rows = seats.map((s) => ({
       key: `${s.file} .${s.cls}`,
       ...seatWorst(s),
@@ -2415,7 +2444,9 @@ describe('style debt ratchet', () => {
     const unread = rows.filter((r) => r.ratio === null).map((r) => r.key)
     expect(unread, '这些座算不出对比度').toEqual([])
     /* 唯一 live 量过的那颗：静态推算必须与它逐字相同，否则这条腿整张表都不可信。
-       D155 之前它是 2.56（不合格），换令牌之后同一颗座在同一块底上 live 复测 5.30。 */
+       D155 之前它是 2.56（不合格），换令牌之后同一颗座在同一块底上 live 复测 5.30。
+       另两颗（`.step-badge` / `.mb`）要解读结果态才出现、`.source-tag` 卡在"请先选择一份简历"，
+       这几颗今天都没上屏，它们的数是静态推算——provenance 记在上面那张表的注释里。 */
     const live = rows.find(
       (r) => r.key === 'src/features/pipeline/components/BoardPane.vue .resume-version-tag'
     )
@@ -2429,9 +2460,40 @@ describe('style debt ratchet', () => {
         .map(([k, v]) => `${k}=${v.ratio}`)
         .sort()
     )
-    /* 动态 type 的那两颗必须以"最坏档"记账：改成静态 type 之后这条 3.04 就该重算。 */
-    expect(rows.filter((r) => r.dyn).length, ':type 绑定的座数量（记最坏档的那几颗）').toBe(2)
-    /* 反证：把 `.resume-version-tag` 的自改色撤掉（回到 plain 通道自己的字），数应当变好而不是变无。 */
+    /* 动态 type 的那两颗必须以"最坏档"记账：改成静态 type 之后这条数就该重算。 */
+    const dyn = rows.filter((r) => r.dyn)
+    expect(dyn.length, ':type 绑定的座数量（记最坏档的那几颗）').toBe(2)
+
+    /* ―― 空表的三条反证：一颗一颗把支撑撤掉，撤完必须重新掉线。――――――――――――― */
+    /* 反证 1：`.source-tag` 原来那行 `color: var(--app-primary)` 如果是"多余的"，删掉它数不会动。
+       把它塞回这座自己的声明里，plain/primary 的通道抬色就被绕开，数应回到 3.39。 */
+    const src = seats.find((s) => s.cls === 'source-tag')
+    expect(src.ownColor, '这行已经删干净了，反证 1 失去意义（要改成别的支持）').toBeNull()
+    expect(
+      seatWorst({ ...src, ownColor: 'var(--app-primary)' }).ratio,
+      '把 D156 删掉的那行塞回去，plain/primary 要掉回 3.39'
+    ).toBeLessThan(TEXT_FLOOR)
+    /* 反证 2：那两颗动态座的过线**不是**它们自己挣的，是实心档那组墨字覆写撑的。
+       现量：五档里最坏的是 dark/danger 4.76（success 换墨字后升到 6.20，不再是最低档），
+       而这一档把前景退回 EP 默认的白就是 3.96。所以判两件事：
+       · 最坏档必须落在这组墨字的覆盖范围里（落不进去 ⇒ 这条数是靠别的侥幸过的，语义变了）；
+       · 该档"白字压 tone 本体"必须低于门槛（撤掉覆写就红，说明覆写承重）。 */
+    const ink = darkInkTypes()
+    const t = tagTokens()
+    for (const s of dyn) {
+      expect(
+        [...ink],
+        `${s.key} 的最坏档 ${s.worstType} 不在墨字覆写覆盖的档位里（main.css 那组选择器变了）`
+      ).toContain(s.worstType)
+      expect(
+        contrast(
+          resolveColor('var(--el-color-white)', t),
+          resolveColor(`var(--el-color-${s.worstType})`, t)
+        ),
+        `${s.key} 的最坏档 ${s.worstType} 退回 EP 默认白字后要低于门槛`
+      ).toBeLessThan(TEXT_FLOOR)
+    }
+    /* 反证 3：把 `.resume-version-tag` 的自改色撤掉（回到 plain 通道自己的字），数应当变好而不是变无。 */
     const seat = seats.find((s) => s.cls === 'resume-version-tag')
     expect(seat.ownColor, '这颗座仍然自己管着字色（现在是抬起配方），否则这条反证空转').toContain(
       'color-mix'
@@ -2441,6 +2503,52 @@ describe('style debt ratchet', () => {
       backToChannel.ratio,
       '撤掉自改色应回到 plain/primary 那一档的数（两者现在几乎同值，所以这里判"算得出且达标"）'
     ).toBeGreaterThan(TEXT_FLOOR)
+  })
+
+  it('names the one place that takes over every el-tag on a page wholesale', () => {
+    /* 前面两条门都只算"通道 + 座自己那个类名"，看不见**第四种入口**：组件用
+       `:deep(.el-tag)` 不给某个类名上色，而是给整页所有标签上色——座清单里一颗都不会出现，
+       通道门也照不到它（它盖在通道之上）。实测这一处就把 D155 的 light 墨字整条吞了。
+       三条判据：① 这样的接管点全仓只有一处（第二处先来这条门登记）；② 它那对 前景/底 过 4.5；
+       ③ 静态推算与 `/home` 上那颗真标签的实测（8.97，2026-10-08）对得上。 */
+    const owners = []
+    for (const { rel, style } of viewSources) {
+      for (const m of stripComments(style || '').matchAll(RULE_BLOCK)) {
+        if (!/:deep\(\.el-tag\)/.test(m[1])) continue
+        const decl = (prop) => {
+          const hit = new RegExp(`(?:^|;)\\s*${prop}:\\s*([^;]+);`).exec(m[2])
+          return hit ? hit[1].trim() : null
+        }
+        owners.push({
+          key: `${rel} ${m[1].trim()}`,
+          color: decl('color'),
+          bg: decl('background') || decl('background-color'),
+          border: decl('border-color'),
+        })
+      }
+    }
+    expect(
+      owners.map((o) => o.key),
+      '`<style>` 里整页接管 el-tag 的选择器清单'
+    ).toEqual(['src/features/shell/views/Home.vue .dashboard-page :deep(.el-tag)'])
+    const o = owners[0]
+    expect(o.color, '接管点没声明字色，这条门失去对象').not.toBeNull()
+    expect(o.bg, '接管点没声明底色，这条门失去对象').not.toBeNull()
+    const t = tagTokens()
+    const fg = resolveColor(o.color, t)
+    const surface = resolveColor(o.bg, t)
+    expect(fg, `读不出这条字色：${o.color}`).not.toBeNull()
+    expect(surface, `读不出这条底色：${o.bg}`).not.toBeNull()
+    const ratio = contrast(fg, surface)
+    expect(ratio, `${o.key} 的 前景/底 要过 ${TEXT_FLOOR}:1`).toBeGreaterThanOrEqual(TEXT_FLOOR)
+    expect(ratio, '静态推算与 /home 那颗真标签的实测 8.97 分叉').toBeCloseTo(8.97, 2)
+    /* 反证：如果这页不接管、字色落回通道给的 tone 本体（`--el-color-info` #697386），
+       压在这颗深色胶囊上只有 3.23 ⇒ 这条 `:deep` 覆写是承重的，不是"多余的一行"。 */
+    const toneBody = resolveColor('var(--el-color-info)', t)
+    expect(
+      contrast(toneBody, surface),
+      'tone 本体压在这颗接管后的底上必须低于门槛，否则这条覆写不承重'
+    ).toBeLessThan(TEXT_FLOOR)
   })
 
   it('keeps the score-fill seats at 4.5:1 and names the one the theme net repaints', () => {

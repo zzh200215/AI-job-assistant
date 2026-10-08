@@ -1467,7 +1467,13 @@ function segmentStyle(value, total) {
 
 .source-tag {
   border-color: var(--app-line);
-  color: var(--app-primary);
+  /* §10.36 走 ①（D156）：这里原来写着 `color: var(--app-primary)`——"色当文字"的第三种入口
+     （既不是主题层的 tone 档、也不是内联 style，而是组件给库组件补的一行）。它绕开了 el-tag
+     的 plain 通道：通道那一档在深色面板上抬过白，实测 5.30，而这行直接拿 tone 本体压在同一块底上
+     只有 3.39。删掉之后字色落回通道。这两个数是 2026-10-08 在看板同一作用域 live 量的
+     plain/primary 一对；这颗标签自己还没上过屏（`/jobs/recommend` 卡在"请先选择一份简历"，
+     点"生成模拟岗位"要 POST /jobs/seed、夹具里没有），所以守卫的座清单给它记 static。
+     边框留在 `--app-line` 是有意的：它要跟旁边的正文区分开，那部分没动。 */
 }
 
 .match-reason {

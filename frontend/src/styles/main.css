@@ -270,10 +270,17 @@ code,
 }
 
 /* 分数 tone 走 el-tag 的那条通道（utils/scoreTone.js 的 scoreToneTagType 把每档映射成一个
-   type），两个方向各有一处实测不达标：实心档白字压中调信号色（warning 2.64、danger 3.96），
-   描边档在深色面板上直接用 tone 色当文字（primary 3.39、danger 4.42）。所以实心那两档换成
-   ink，描边那两档按同一份 tone 提亮——提亮幅度是试出来的最小值（danger 20% 得 5.83、
-   primary 25% 得 5.30），不是审美偏好。success / info 两档本来就过，不动。 */
+   type），D144 现量的两处不达标：实心档白字压中调信号色（warning 2.64、danger 3.96），
+   描边档在深色面板上直接用 tone 色当文字（primary 3.39、danger 4.42）。实心那几档换成 ink，
+   描边那几档按同一支 tone 抬白。
+   D156 补上剩下两档。原注释最后那句「success / info 两档本来就过」是一条**没枚举过的断言**，
+   D154 按 5 档 × 3 通道量完不成立：实心 success 白字 3.04、描边 info tone 当字 3.67。现在
+   success 进墨字组（3.04 → 6.20），info 抬白（3.67 → 5.38）。
+   **primary / info 两档继续留白字**（它们换墨字反而只有 3.65 / 3.95），所以这条通道的真实规则
+   是"逐档挑能过线的那个前景"，不是"一律墨字"也不是"一律白字"。
+   抬白的幅度不是最小值（danger 抬 10% 就有 5.06、primary 抬 20% 有 4.83），定的是"同一条通道
+   只用两档数"：danger / info 20%、primary 25%。 */
+.el-tag--dark.el-tag--success,
 .el-tag--dark.el-tag--warning,
 .el-tag--dark.el-tag--danger {
   --el-tag-text-color: var(--app-surface-contrast);
@@ -285,6 +292,13 @@ code,
 
 .workspace-theme .el-tag--plain.el-tag--primary {
   --el-tag-text-color: color-mix(in srgb, var(--el-color-primary), white 25%);
+}
+
+/* 与 danger 同一档幅度（20%）。这里不是"最小够线"：info 抬 15% 就有 4.92，已经过 4.5，
+   20% 得 5.38、25% 得 5.90——留 20% 是为了和 danger 用同一个幅度（拍板那一条），
+   而不是让同一条通道上出现两种没道理的小数。守卫的 plainLifts 从这段文本现读幅度，不在别处重抄。 */
+.workspace-theme .el-tag--plain.el-tag--info {
+  --el-tag-text-color: color-mix(in srgb, var(--el-color-info), white 20%);
 }
 
 /* §10.36(a) 走 ①（2026-10-08 D155）：**EP 的默认 effect 就是 `light`**，全仓 102 个 `<el-tag>`
