@@ -7,6 +7,7 @@ import {
   CONFIDENCE_LEVELS,
   FOLLOW_UP_LEVELS,
   FUNNEL_ACCENTS,
+  LAYOUT_CHIP_COLORS,
   PRIORITY_LEVELS,
   SEVERITY_LEVELS,
   STAGE_ACCENTS,
@@ -1614,6 +1615,21 @@ describe('style debt ratchet', () => {
       unstyled: [],
       siblings: [],
     },
+    {
+      /* D160 那次"硬深色岛"普查撞出来的**第五站**：应用外壳自己也在发 `dot-*`
+         （`DefaultLayout.vue:76` 的演示模式灯 `runtime.demoMode ? 'dot-amber' : 'dot-green'`、
+         `:97` 的通知徽标 `class="badge-dot dot-blue"`），而 (前缀, 文件) 这张表里一直没有它——
+         这正是 D78 那一幕的形状："同一族多一个拼类名的站点，没人登记，规则与值域就各走各的"。
+         这一站还有一件前四站都没有的事：它的**宿主不跟主题走**（`.aside-chip #1a1c26`、
+         `.badge` / `.user-chip #1c1e28` 是写死的深色），所以摘掉 `.workspace-theme` 之后这两枚点
+         的相邻面对比一字不变（2026-10-08 实测 5.58 / 7.18）。它是 main.css:3 那句
+         "dark command surfaces + light reading flows" 里"深色指令面"那一半，不是漏网的浅色面。 */
+      prefix: 'dot',
+      values: LAYOUT_CHIP_COLORS,
+      file: 'src/layouts/DefaultLayout.vue',
+      unstyled: [],
+      siblings: [],
+    },
   ]
 
   it('keeps concatenated state classes aligned with their backend value domain', () => {
@@ -1781,16 +1797,46 @@ describe('style debt ratchet', () => {
       '往权重表插一档颜色，解析必须看见'
     ).toContain('magenta')
 
-    /* 前缀共用语义不共用：`dot-` 载着四个互不相干的域（优先级 / 状态 / accent / 权重色），
-       所以"某一站缺一条规则"必须能被单独发现——这里数的是站点的文件数，不是前缀数。 */
+    /* 第五站的域由**模板自己**定：`:76` 那个三元产出 amber / green，`:97` 那颗徽标静态挂 blue。
+       所以这里不抄一份常量表，直接从源码解析出集合再与 `LAYOUT_CHIP_COLORS` 对拉——
+       有人给演示灯加第三档而没配规则，或者撤掉一档没删域里的值，都会在这里红。 */
+    const layout = readFileSync('src/layouts/DefaultLayout.vue', 'utf8')
+    /* 模板里发这一族有**两种写法**，都得算进去：`:76` 是三元里的引号字面量（`'dot-amber'`），
+       `:97` 是静态挂上的 `class="badge-dot dot-blue"`。只认前一种会得到两个值、少一根 `dot-blue`
+       ——那正是"站点表登记了、域却少一档"的形态，所以这里两种一起扫。 */
+    const chipColorsIn = (text) =>
+      [
+        ...new Set([
+          ...[...text.matchAll(/['"`](dot-[a-z]+)['"`]/g)].map((m) => m[1].slice(4)),
+          ...[...text.matchAll(/class="[^"]*\bdot-([a-z]+)\b/g)].map((m) => m[1]),
+        ]),
+      ].sort()
+    const parsedChips = chipColorsIn(layout)
+    expect(parsedChips, 'DefaultLayout 模板里发出去的 dot- 颜色与 LAYOUT_CHIP_COLORS 分叉').toEqual(
+      [...LAYOUT_CHIP_COLORS].sort()
+    )
+    /* 反证：把演示灯那一支换成一个域里没有的颜色，解析必须看见（看不见这条腿就是空转）。 */
+    const planted = layout.replace(
+      "runtime.demoMode ? 'dot-amber' : 'dot-green'",
+      "runtime.demoMode ? 'dot-chartreuse' : 'dot-green'"
+    )
+    expect(planted, '植入没落进副本（模板写法变了，这条反证要跟着改）').not.toBe(layout)
+    expect(chipColorsIn(planted), '改一支颜色，解析集合要跟着变').toContain('chartreuse')
+
+    /* 前缀共用语义不共用：`dot-` 载着五个互不相干的域（优先级 / 状态 / accent / 权重色 /
+       外壳那两颗点），所以"某一站缺一条规则"必须能被单独发现——这里数的是站点的文件数，不是前缀数。
+       第五站是 D160 普查撞出来的：它一直在发 `dot-*`，而这张表里没有它。 */
     const dotSites = STATE_CLASS_SITES.filter((s) => s.prefix === 'dot').map((s) => s.file)
     expect(new Set(dotSites).size, 'dot- 的每一站必须是不同文件').toBe(dotSites.length)
-    expect(dotSites, 'dot- 前缀的站点清单（四个域）').toEqual([
-      'src/features/shell/views/Home.vue',
-      'src/features/shell/views/TaskCenter.vue',
-      'src/features/pipeline/components/BoardPane.vue',
-      'src/features/jobs/views/OfferCompare.vue',
-    ])
+    expect(dotSites, 'dot- 前缀的站点清单（五个域；第六次数这一族之前先看 D160 那条注释）').toEqual(
+      [
+        'src/features/shell/views/Home.vue',
+        'src/features/shell/views/TaskCenter.vue',
+        'src/features/pipeline/components/BoardPane.vue',
+        'src/features/jobs/views/OfferCompare.vue',
+        'src/layouts/DefaultLayout.vue',
+      ]
+    )
   })
 
   /* 图形那一族（状态点 / 漏斗柱）第一次从"一次性读数"变成门。门槛是 **3:1**（WCAG 1.4.11
@@ -1845,6 +1891,29 @@ describe('style debt ratchet', () => {
         'dot-red': 4.76,
         'dot-teal': 5.03,
       },
+    },
+    /* ―― D160：应用外壳那两颗点（第五站的两枚座）。这一站有两件前四站都没有的性质，
+       所以单独记、不并到别的站里：
+       ① 它的**宿主是字面量深色面**——`.aside-chip #1a1c26`、`.badge #1c1e28`（`DefaultLayout.vue:513/611`），
+          不是 `--app-*` 令牌。后果是"摘掉 `.workspace-theme` 之后读数一字不变"：2026-10-08 逐座实测，
+          aside-chip 上 绿 5.58 / 琥珀 6.42、badge 上 青 7.18，深色与浅色两遍**每个数都相同**。
+          这正是 `main.css:3` 那句 "dark command surfaces + light reading flows" 里"深色指令面"那一半，
+          所以 §10.37 里"字与底方向相反"那个矛盾**对这两枚点不存在**，只对会翻色的三站存在。
+       ② `.dot-blue` 在这里是 `#22b8e8`（青），而看板列头那枚 `.dot-blue` 是 `var(--app-primary)`（3.39）——
+          **同一个类名在两个文件里是两种颜色**，所以图形门只能按 (文件, 座) 记，按类名记会串色。 ―― */
+    {
+      label: '外壳那颗演示模式灯',
+      file: 'src/layouts/DefaultLayout.vue',
+      host: 'aside-chip',
+      seats: ['dot-green', 'dot-amber'],
+      measured: { 'dot-green': 5.58, 'dot-amber': 6.42 },
+    },
+    {
+      label: '外壳那颗通知徽标点',
+      file: 'src/layouts/DefaultLayout.vue',
+      host: 'badge',
+      seats: ['dot-blue'],
+      measured: { 'dot-blue': 7.18 },
     },
   ]
 
@@ -1984,7 +2053,7 @@ describe('style debt ratchet', () => {
       below.map((p) => `${p.site} / ${p.seat} = ${p.ratio}`),
       `图形对比度低于 ${GRAPHIC_FLOOR}:1（WCAG 1.4.11）`
     ).toEqual([])
-    /* 静态尺必须复现活页实测：18 对逐对对齐到 0.02 以内。 */
+    /* 静态尺必须复现活页实测：21 对（看板 7 + 漏斗 5 + 权重 6 + 外壳 3）逐对对齐到 0.02 以内。 */
     const drift = []
     for (const site of GRAPHIC_SITES) {
       for (const p of pairs.filter((x) => x.site === site.label)) {

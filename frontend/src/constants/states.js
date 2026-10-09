@@ -93,6 +93,20 @@ export const FUNNEL_ACCENTS = Object.freeze(['slate', 'blue', 'amber', 'violet',
 export const WEIGHT_DOT_COLORS = Object.freeze(['blue', 'violet', 'green', 'amber', 'red', 'teal'])
 
 /**
+ * 应用外壳（侧栏 + 顶栏）自己那两颗状态点的颜色。出处是**模板里的两处字面量**：
+ * `DefaultLayout.vue:76` 的演示模式灯 `runtime.demoMode ? 'dot-amber' : 'dot-green'`，
+ * 和 `:97` 的通知徽标 `class="badge-dot dot-blue"`。这是 `dot-` 前缀的**第五个**域（D160 普查撞出来的：
+ * 这条站点在 (前缀, 文件) 的登记表里一直缺席）。
+ * 这一族与前面四个有一件本质不同：它的宿主是**不跟主题走的硬深色面**——`.aside-chip` 与 `.badge` /
+ * `.user-chip` 的底都是写在布局里的字面量（`DefaultLayout.vue:513`、`:611`、`:638`），不是 `--app-*` 令牌，
+ * 所以摘掉 `.workspace-theme` 之后这两枚点的相邻面对比一字不变（2026-10-08 逐座实测：外壳灯 5.58、
+ * 徽标点 7.18，深色与浅色两遍每个数都相同）。它是 `main.css:3` 那句 "dark command surfaces + light
+ * reading flows" 里"深色指令面"那一半，不是漏网的浅色面。
+ * @typedef {'amber' | 'green' | 'blue'} LayoutChipColor
+ */
+export const LAYOUT_CHIP_COLORS = Object.freeze(['amber', 'green', 'blue'])
+
+/**
  * 拼 class 用的那一个函数：它**不做兜底**——值域外的值今天就是没样式，
  * 那是正向守卫要报的错，不该在这里被悄悄抹平（抹平等于把"后端加了一档"这件事变成看不见的视觉缺失）。
  * @param {string} prefix
