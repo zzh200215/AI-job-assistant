@@ -13,6 +13,8 @@ rowcount 语义只能靠注释里的理由保证，测试量不到。
 
 from __future__ import annotations
 
+import threading
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -206,6 +208,39 @@ def test_a_row_the_claim_refused_never_gets_submitted(db_session, make_interview
     assert len(seen) == 1, "扫描压根没试着认领，那条 ==1 的判断根本没被执行到"
     # 观测值必须是这一行**被读到那一刻**的状态，否则 WHERE 条件对不上、凭证毫无意义。
     assert seen[0][1] == "pending"
+
+
+def test_the_requeue_hands_work_to_the_real_executor_and_does_not_wait_for_it(
+    db_session, make_interview_session, monkeypatch
+):
+    """扫描必须"投完就走"，而且投的是**真**线程池——这两件事以前没被任何东西钉住。
+
+    写库那一半由 `test_background_worker_persists_score_evidence_and_memory` 管；这条管的是另外两种
+    会悄悄坏掉的形状：① 启动钩子在调用线程里就地跑完一题评分（那等于让一次 LLM 调用堵住应用启动）；
+    ② `submit_turn_evaluation` 被换成直接调 `process_turn_evaluation`，投递变成空话。
+    """
+    session_id = make_interview_session(status="completed")
+    row = _row(db_session, session_id, status="pending")
+
+    handed: list[tuple[int, int]] = []
+    release = threading.Event()
+    started = threading.Event()
+
+    def _stub_process(sid: int, eid: int) -> None:
+        handed.append((sid, eid))
+        started.set()
+        release.wait(5.0)
+
+    monkeypatch.setattr(svc, "process_turn_evaluation", _stub_process)
+
+    t0 = time.perf_counter()
+    assert svc.requeue_stale_turn_evaluations(db=db_session) == 1
+    elapsed = time.perf_counter() - t0
+
+    assert started.wait(5.0), "线程池压根没执行这一题：投递是空的"
+    assert handed == [(session_id, row.id)], "跑完的题号不是刚被认领的那一行"
+    assert elapsed < 1.0, f"扫描在调用线程里等完了评分（{elapsed:.2f}s）：启动钩子会被一题 LLM 调用拖住"
+    release.set()
 
 
 def test_the_recovery_is_wired_at_both_call_sites():
