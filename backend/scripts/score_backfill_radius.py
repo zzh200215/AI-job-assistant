@@ -54,7 +54,7 @@ AUTHORITY_LANDED_AT = datetime(2026, 9, 20)
 AUTHORITY_MARKER_KEYS = ("score_method", "match_score_method")
 
 
-def _authority_marker(row: AnalysisRecord) -> str | None:
+def authority_marker(row: AnalysisRecord) -> str | None:
     report = row.match_report if isinstance(row.match_report, dict) else {}
     for key in AUTHORITY_MARKER_KEYS:
         method = report.get(key)
@@ -112,7 +112,7 @@ def build_report(db: Session, detail_limit: int) -> dict:
     detail = []
 
     for row in rows:
-        if _authority_marker(row):
+        if authority_marker(row):
             summary["with_authority_marker"] += 1
             continue
         summary["without_authority_marker"] += 1
