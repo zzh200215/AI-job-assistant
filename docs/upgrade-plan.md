@@ -4080,7 +4080,7 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **回写三处旧指针**：E 表 `:22` 第②项、E16 那一行的"仍在：跨副本亲和"（`:585`）、以及 `test_single_process_shape_is_pinned.py` 文件头那句"跨副本亲和仍未解"——三处现在都按现量改了口径：**亲和不是未解，而是压根不是那条债**；真正未解的是"扩副本那一刻"的 Chroma 单进程持有与 6→7 条定时任务没有主选举（重复触发问题，与 WS 无关，本次没动）。
 
-**验收**：backend 全量 **850 passed / 94.46s**（832 → 841：+9 恢复路径本体；841 → 850：+1 线程池交接那条腿，N7 验它）；改动文件 `ruff check` 与 `ruff format --check` 全 clean；**未验**（补掉一条之后剩下的两件）：**真并发**（多进程 + 真 MySQL）下的认领互斥——内存 SQLite 的 rowcount 是匹配数，M1 在那里只能表现为"认领什么都没改"，那种"两个进程都以为自己抢到"本机量不到；以及**一发真 provider 响应穿过整条链**（一场面试在发布途中被打断、重启之后终报真被补齐），那要花 qwen 的钱，本轮没有跑任何真写路径。
+**验收**：backend 全量 **850 passed / 94.46s**（832 → 841：+9 恢复路径本体；841 → 850：+1 线程池交接那条腿，N7 验它）；改动文件 `ruff check` 与 `ruff format --check` 全 clean；**未验**（补掉一条之后剩下的两件）：**真并发**（多进程 + 真 MySQL）下的认领互斥——内存 SQLite 的 rowcount 是匹配数，M1 在那里只能表现为"认领什么都没改"，那种"两个进程都以为自己抢到"本机量不到；以及**一发真 provider 响应穿过整条链**（一场面试在发布途中被打断、重启之后终报真被补齐），那要花 qwen 的钱，本轮没有跑任何真写路径。**（2026-10-09 更新：恢复链那一半已由 D170 用 mock provider 在真 MySQL 上跑通并留了读数，还顺带抓出 `autoflush=False` 那条完成路径 bug；剩下未验的只是"一发真 qwen 响应穿过它"与"多进程互斥"，两条都按他的决定没做。）**
 
 #### 已交付：D166 两条路径的权威标记收敛成一个键名，并给"第三种拼法"装了门
 
@@ -4119,6 +4119,34 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 **两次仪器自伤（记下来是给下一个人）**：`window.__probe.fixtureLog` 与 `fixtureMisses` 是**函数不是数组**——先按 `p.fixtureLog.map(...)` 写抛了 `TypeError`，再按 `JSON.stringify(p.fixtureMisses).slice()` 写又抛一次（`JSON.stringify(undefined)` 返回 `undefined`）。副作用是**这两次失败的调用各自已经把「查看」点下去了**，所以日志里是三条同样的请求而不是"重复触发"这种缺陷——读 `fixtureLog` 的长度之前先想清楚自己点了几次。
 
 **门**：`npm test`、`vitest`（含 `probeRewriteChain` 那 3 条，它直接解析这份夹具表）、`eslint`、`prettier --check` 全部 exit 0；prettier 第一版红过一次（手写格式），按 `--write` 让它自己决定后复跑。
+
+#### 已交付：D169 那组分叉一次收完：两条路径现在写同一组键名，词表由一条门守着
+
+**他点的第二档**：`cap_applied` 与 `skill_gap` 一起收。**改动**：`match_service.py:99-106` 现在写 `score_method` / `cap_applied` / `skill_gap` 三个键，与 `strategies.py:262-264` 逐字同形（`cap_applied` 两边都是 `bool(...)`）；`match_score_raw` 只有 match_service 写（strategies 不落这个量），留着、不算分叉，写进词表并注明。
+
+**守卫从"一个键"扩成"一组词表"**：扫描的键正则现在是 `method|cap|gap|raw`，目标是名字带 `match` 的字典；断言两件事——写入集合 ⊆ `{score_method, cap_applied, skill_gap, match_score_raw}`，以及那三个权威量**每个都由两个文件各写一次**。反证打在副本上，两种旧拼法（`match_score_method`、`match_score_cap_applied`）塞回去都必须被认出来，且"居然还算在词表里"视为门没装。
+
+**三次变异**：Q1 cap 退回旧名 → 2 条红（门 + 行为）；Q2 不写 `skill_gap` → 2 条红；Q3 造第四个名字 `gap_skills` → 2 条红。
+
+**射程与边界照旧写清**：`job_recommend_engine.py:222` 那个 `"match_score_method"` 是**推荐接口自己的响应字段**（dict 字面量 + dataclass 字段名），不是 `match_report` 的标记，不在这一条的范围内——收它要动的是响应契约，不是这里。
+
+#### 已交付：D170 mock + 真 MySQL 把恢复链跑通，顺带抓到一条"测试永远不会红"的完成路径 bug
+
+**他点的第三档**：只验恢复链（不碰真 provider）。仪器是一次性脚本（未入库，跑完删）：往开发库种一行 40 分钟前的 `pending` 逐题评分 + 把该会话设成"终报没齐"的样子，跑 `requeue_stale_turn_evaluations`，轮询到出分为止，结尾**按 before-image 逐列还原并复核**。跑法 `LLM_PROVIDER=mock .venv/Scripts/python.exe .d170_probe.py`——脚本自己先检查 provider 不是 mock 就拒绝执行。
+
+**跑出来两件事。** 第一件是预期的：恢复链通 —— `turn.status=completed`、`source='answer_evaluation_agent'`（mock 模板给的分数经 `_score` 落成 0，这条不证明分数数值）、消息 1→2、`pending_count=0`。
+
+第二件是**没预期的**：第一次跑，`evaluation_status` 停在 `processing`、`should_refresh_report` 不成立。查下来不是探针坏了也不是重投没生效，而是 **`SessionLocal` 的 `autoflush=False`**（`core/database.py:38`）：`process_turn_evaluation` 里 `_complete_record` 刚把这一题写成 completed，紧接着 `build_memory_snapshot` 与 `_evaluation_status` 都用**查询**去读，读到的是自己还没 flush 的写——于是 memory_snapshot 少算刚跑完的这一题，`_evaluation_status` 数到"还有一题没跑完"，把 `processing` 又写回去，终报永远不齐。**这条 bug 在测试套件里不可能现形**，因为 conftest 那个 `sessionmaker(bind=connection)` 的 autoflush 是**开**的：同名测试 `test_background_worker_persists_score_evidence_and_memory` 一直是绿的。
+
+**修复**：`_append_evaluation_message` 之后加一句 `db.flush()`，再算那两个派生读。**回归测试**把 `db_session.autoflush = False` 显式关掉跑同一条链，断言 `evaluation_status == 'completed'`、`completed_turns == 1`、`pending_turns == 0`、且 `refresh_completed_report` 被回调恰好一次。变异 **R1**（把 flush 删掉）→ 红在 `assert 'processing' == 'completed'`，正是真库上读到的那个值。
+
+**修完之后同一台仪器再跑一遍**：`turn.status=completed` / `evaluation_status='completed'` / `pending_count=0` / 消息 1→2 / 报告显示为 `True`，退出码 0。**清理复核两次都是 `interview_turn_evaluation 0 → 0 行；会话七列逐字还原=True`**（status、messages、evaluation_status、memory_snapshot、answered_count、timeout_count、evaluation 一列一列比），所以共享开发库现在是种探针之前的样子，只有自增 id 往前走到了 3。
+
+**仪器自身的两次自伤（记下来）**：① 第一版轮询只 `expire_all()` 不结束事务，MySQL 默认 REPEATABLE READ 把快照钉死，别的连接提交的行**永远看不见**——我当时把"恢复链没跑完"读成了结论；改成每轮 `db.rollback()` 再读才是真读数。② 那台一次性脚本的 `finally` 我第一版写成了废代码（`... if False else None`），没跑就发现，重写后才允许它碰库。
+
+**B1 剩下的未验因此只剩一条**：**多进程 + 真 MySQL 的认领互斥**（他没点这条；SQLite 的 rowcount 是匹配数，那种"两个进程都以为自己抢到"本机量不到）。
+
+
 
 
 

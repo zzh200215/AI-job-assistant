@@ -246,3 +246,64 @@ def test_background_worker_persists_score_evidence_and_memory(db_session, make_i
     assert record.evidence["source"] == "answer_evaluation_agent"
     assert engine.session.memory_snapshot["completed_turns"] == 1
     assert any(item["type"] == "evaluation" for item in engine.session.messages)
+
+
+def test_completion_reads_its_own_writes_with_the_apps_autoflush_setting(
+    db_session, make_interview_session, monkeypatch
+):
+    """D170：`SessionLocal` 的 `autoflush=False`（`core/database.py:38`）让"改完再查"读到旧值。
+
+    上面那条同名测试用的是 conftest 的 `db_session`，那个 sessionmaker 的 autoflush 是**开**的——
+    所以这个 bug 在测试套件里永远不会现形，而真库里天天发生：`_complete_record` 把这一题写成
+    completed 之后，`build_memory_snapshot` 与 `_evaluation_status` 都用查询去读，读到的还是
+    "这一题没跑完"。后果是 `evaluation_status` 恒被写回 processing、`should_refresh_report` 永不成立，
+    **面试终报永远不会齐**。这里把 autoflush 关掉跑同一条链，钉的是那两处派生读 + 一次回调。
+    """
+    session_id = make_interview_session(status="completed")
+    record = InterviewTurnEvaluation(
+        session_id=session_id,
+        turn_id="q-1",
+        question_index=0,
+        question="项目题",
+        category="project",
+        user_answer="我通过队列和指标解决了稳定性问题。",
+        status="pending",
+    )
+    db_session.add(record)
+    db_session.commit()
+    target = db_session.get(InterviewSession, session_id)
+    target.evaluation_status = "processing"
+    db_session.commit()
+
+    refreshed: list[int] = []
+    monkeypatch.setattr(interview_evaluation_service, "refresh_completed_report", lambda sid: refreshed.append(sid))
+    monkeypatch.setattr(interview_evaluation_service, "SessionLocal", lambda: db_session)
+    monkeypatch.setattr(db_session, "close", lambda: None)
+
+    class FakeAgent:
+        def run_impl(self, _context):
+            return {
+                "completeness": 84,
+                "accuracy": 82,
+                "depth": 80,
+                "expression": 78,
+                "overall_score": 82,
+                "feedback": "项目表达清楚。",
+                "improvement": "补充业务收益。",
+            }
+
+    monkeypatch.setattr(interview_evaluation_service, "AnswerEvaluationAgent", FakeAgent)
+
+    db_session.autoflush = False  # 与生产那一台 sessionmaker 一致
+    try:
+        interview_evaluation_service.process_turn_evaluation(session_id, record.id)
+    finally:
+        db_session.autoflush = True
+
+    db_session.refresh(record)
+    db_session.refresh(target)
+    assert record.status == "completed"
+    assert target.evaluation_status == "completed", "刚跑完的这一题没被 flush，派生读把它算成了还在排队"
+    assert target.memory_snapshot["completed_turns"] == 1
+    assert target.memory_snapshot["pending_turns"] == 0
+    assert refreshed == [session_id], "该生成终报了却没生成——should_refresh_report 被那个旧读数挡住了"

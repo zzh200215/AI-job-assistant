@@ -209,6 +209,14 @@ def process_turn_evaluation(session_id: int, evaluation_id: int) -> None:
             )
 
         _append_evaluation_message(session, record)
+        # 这一句 flush 是必须的，不是卫生代码：`SessionLocal` 的 `autoflush=False`
+        # （`core/database.py:38`），而下面两处都是"读自己刚写的东西"——不 flush 就看不见。
+        # 后果有两个，2026-10-09 由 D170 那台 mock 仪器在真 MySQL 上抓到：
+        #   · `build_memory_snapshot` 少算刚刚这一题（它的 `completed_turns` 恒比实际少 1）；
+        #   · `_evaluation_status` 数到"还有一题没跑完"，于是把 `processing` 写回去，
+        #     `should_refresh_report` 因此永远不成立，**面试终报永远不会齐**。
+        # 测试里看不见这件事，是因为 conftest 那个 sessionmaker 的 autoflush 是**开**的。
+        db.flush()
         session.memory_snapshot = build_memory_snapshot(db, session_id)
         session.evaluation_status = _evaluation_status(db, session_id, session.status)
         db.commit()
