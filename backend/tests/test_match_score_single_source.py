@@ -272,7 +272,13 @@ def test_orchestration_marks_the_score_unavailable_instead_of_borrowing_the_llm_
     assert db_session.get(Resume, 9998) is None and db_session.get(JobDescription, 9999) is None
 
 
-MARKER_WRITE = re.compile(r'([A-Za-z_]\w*)\["(\w*method\w*)"\]\s*=')
+MARKER_WRITE = re.compile(r'([A-Za-z_]\w*)\["(\w*(?:method|cap|gap|raw)\w*)"\]\s*=')
+
+# 这两条路径**都**该写的权威量，基准是 `strategies.py:262-264`。
+CANONICAL_REPORT_KEYS = {"score_method", "cap_applied", "skill_gap"}
+# 词表：这一族里允许出现在新写入中的键名。`match_score_raw` 只有 match_service 写（strategies 不落
+# 这个量），留着但不算分叉。
+ALLOWED_REPORT_KEYS = CANONICAL_REPORT_KEYS | {"match_score_raw"}
 
 
 def _app_sources():
@@ -280,11 +286,11 @@ def _app_sources():
     return {p: p.read_text(encoding="utf-8") for p in root.rglob("*.py")}
 
 
-def marker_keys_written_into_a_match_report(sources: dict) -> dict[str, list[str]]:
-    """扫"往名字里带 match 的字典里盖 method 类键"的赋值。
+def report_keys_written_into_a_match_report(sources: dict) -> dict[str, list[str]]:
+    """扫"往名字里带 match 的字典里盖 method/cap/gap/raw 类键"的赋值。
 
     必须按目标变量名筛一遍：`runtime_metrics.py` 里有一处 `["method_totals"] = `，那是请求计数器的
-    桶名，与匹配分标记无关——**这条我自己先撞了一次**（不加筛就是假阳性）。
+    桶名，与匹配分无关——**这条我自己先撞了一次**（不加筛就是假阳性）。
     """
     found: dict[str, list[str]] = {}
     for path, text in sources.items():
@@ -294,30 +300,39 @@ def marker_keys_written_into_a_match_report(sources: dict) -> dict[str, list[str
     return found
 
 
-def test_only_one_spelling_of_the_authority_marker_is_written():
-    """D166：往报告字典里盖权威标记的赋值，键名**只许一种**。
+def test_both_write_paths_stamp_the_same_canonical_vocabulary():
+    """D166 + D169：权威算出来的那几个量，两条落库路径必须用**同一组键名**。
 
-    历史是两种（`strategies.py` 写 `score_method`、`match_service.py` 曾写 `match_score_method`），
-    而全树唯一的读者是两个回算脚本——只认一种的话，另一条路径写的行会被当成旧形状重算：值相同、Δ0，
-    屏幕上没有任何异常，只有半径虚高，而那张表唯一的用途就是定半径。判据继续认旧键（防已有行），
-    但**新写入**不许再长出第三个名字。
+    历史欠账：`strategies.py` 写 `score_method` / `cap_applied` / `skill_gap`，而 `match_service.py`
+    曾写 `match_score_method` / `match_score_cap_applied` 且不写 `skill_gap`。全树唯一的读者是两个
+    回算脚本，所以分叉的后果不是报错而是**半径虚高**——已经被权威管着的行被当成旧形状重算一遍，
+    值相同、Δ0，屏幕上什么都没有，而那张表唯一的用途就是定半径。
 
-    射程说清楚：扫的是 `xxx["key"] = ` 这种赋值形式，且**目标变量名里得带 match**（不然会被
-    `runtime_metrics.py` 的 `["method_totals"]` 顶出假阳性，见那个 helper 的注释）。
-    `job_recommend_engine.py:222` 那处 `"match_score_method": self.match_score_method` 是**推荐接口
-    自己的响应字段**，不是 `match_report` 的标记，也不在这一条的范围内——别把它读成"还有第三种拼法"。
+    判据（`score_backfill_radius.AUTHORITY_MARKER_KEYS`）继续认历史那两种拼法，因为旧键已经落在
+    历史行里；但**新写入只许这一组词表**，长出第三个名字就红。
+
+    射程：`xxx["key"] = ` 这种赋值形式，且目标变量名里得带 `match`（不然被 `method_totals` 顶出
+    假阳性）。`job_recommend_engine.py:222` 的 `"match_score_method": …` 是**推荐接口自己的响应字段**
+    （dict 字面量，不是这种赋值），不在这一条里——别把它读成"还有第三种拼法"。
     """
-    written = marker_keys_written_into_a_match_report(_app_sources())
-
-    assert set(written) <= {"score_method"}, f"出现了第二种标记拼法：{written}"
-    assert "score_method" in written, "扫描没命中任何写入点——这条守卫在数空气"
-    assert sorted(written["score_method"]) == ["match_service.py", "strategies.py"], "两条落库路径都该在场"
-
-    # 反证（打在副本上，不动工作树）：把旧键塞回 match_service，这条必须认出来。
     sources = _app_sources()
-    match_service = next(p for p in sources if p.name == "match_service.py")
-    mutated = sources[match_service].replace(
-        'match["score_method"] = canonical["method"]', 'match["match_score_method"] = canonical["method"]'
-    )
-    assert mutated != sources[match_service], "锚点变了，反证没落进副本"
-    assert "match_score_method" in marker_keys_written_into_a_match_report({match_service: mutated})
+    written = report_keys_written_into_a_match_report(sources)
+
+    assert set(written) <= ALLOWED_REPORT_KEYS, f"这一族里出现了词表外的键名：{written}"
+    for key in CANONICAL_REPORT_KEYS:
+        assert sorted(written.get(key, [])) == [
+            "match_service.py",
+            "strategies.py",
+        ], f"{key} 不是两条路径都写：{written.get(key)}"
+
+    # 反证（打在副本上，不动工作树）：D166 那个旧标记键、D169 那个旧 cap 键，塞回去都必须被认出来。
+    match_service = next(f for f in sources if f.name == "match_service.py")
+    for old, new in (
+        ('match["score_method"]', 'match["match_score_method"]'),
+        ('match["cap_applied"]', 'match["match_score_cap_applied"]'),
+    ):
+        assert old in sources[match_service], f"锚点变了（{old}），反证落不进副本"
+        discovered = report_keys_written_into_a_match_report({match_service: sources[match_service].replace(old, new)})
+        bad = new.split('"')[1]
+        assert bad in discovered, f"{bad} 这种拼法必须被这条门认出来"
+        assert not set(discovered) <= ALLOWED_REPORT_KEYS, f"{bad} 竟然还算在词表里——等于没装门"
