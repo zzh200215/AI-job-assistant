@@ -8,6 +8,7 @@ from datetime import timedelta
 from threading import Lock
 from typing import Any
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.agents.answer_evaluation_agent import AnswerEvaluationAgent
@@ -77,6 +78,8 @@ def create_pending_turn_evaluation(
         existing.evidence = None
         existing.error_msg = ""
         existing.completed_at = None
+        # 重新作答的题要立刻可被认领，不能背着上一轮的租约（D178）。
+        existing.claimed_at = None
         db.flush()
         return existing
 
@@ -110,26 +113,37 @@ def submit_turn_evaluation(session_id: int, evaluation_id: int) -> None:
 STALE_STATUSES = ("pending", "running")
 
 
-def _claim_status(db: Session, row_id: int, expected: str) -> int:
+def _claim_status(db: Session, row_id: int, expected: str, *, lease_minutes: int | None = None) -> int:
     """把一行挪出**这次扫描看见它时**的那个状态，用 rowcount 当"我抢到了"的凭证。
 
     MySQL 的 UPDATE rowcount 数的是**被改动**的行，不是被匹配的行（驱动默认不带
     CLIENT_FOUND_ROWS）。所以"同值写回"是一种假认领：WHERE 命中了、值没变、rowcount=0，
-    两个进程各自以为对方抢到了——或者反过来都以为是自己抢到的，于是同一道题付两遍 qwen 调用。
-    认领必须改变 status：`pending → running`（从没起跑）、`running → pending`（起跑过、
-    进程已不在）。两种落点都还在 `STALE_STATUSES` 里，所以重投期间报告不会提前定稿。
+    谁都以为自己没抢到。认领必须改变 status：`pending → running`（从没起跑）、
+    `running → pending`（起跑过、进程已不在）。两种落点都还在 `STALE_STATUSES` 里，
+    所以重投期间报告不会提前定稿。
 
-    **但这把凭证是 per-transition 的，不是 per-row 的（D177 真 8 进程 + 真 MySQL 现量）**：
-    A 先 `pending→running` 认领成功，B 在那一题跑完之前扫到的是 `running`，B 用
-    `running→pending` 同样能拿到 rc=1，于是两个进程都 submit 同一道题。实测八个 rc 是
-    `1 0 0 1 0 0 0 0`（两个赢家，分属两个 transition）。要做到 per-row 单飞需要行上有一个
-    "谁在什么时候领的"可判据（租约列 / 第三方原子槽位），三条修法的代价已配数交他点，本条未修。
+    **光改 status 只做到 per-transition 单飞**（D177 真 8 进程 + 真 MySQL 现量：八个 rc 是
+    `1 0 0 1 0 0 0 0`，两个赢家各领了一条 transition，因为 B 扫到时看到的是 A 刚写上的 `running`）。
+    D178 补的是第二半把凭证：`claimed_at` 租约。它让"这一行在租约内已经被任何人领过"成为
+    WHERE 的一部分，于是同一行只有一个赢家——不管对方按哪个 observed status 来抢。
+    租约下界 = 单题最坏 184.5s（`INTERVIEW_EVALUATION_CLAIM_LEASE_MINUTES` 那条注释里的推导），
+    取 `lease_minutes=0` 等于关掉租约，测试用它复现旧的 per-transition 形状。
     """
     target = "running" if expected == "pending" else "pending"
+    minutes = settings.INTERVIEW_EVALUATION_CLAIM_LEASE_MINUTES if lease_minutes is None else lease_minutes
+    stamp = utc_now_naive()
+    cutoff = stamp - timedelta(minutes=max(0, int(minutes or 0)))
     return (
         db.query(InterviewTurnEvaluation)
-        .filter(InterviewTurnEvaluation.id == row_id, InterviewTurnEvaluation.status == expected)
-        .update({InterviewTurnEvaluation.status: target}, synchronize_session=False)
+        .filter(
+            InterviewTurnEvaluation.id == row_id,
+            InterviewTurnEvaluation.status == expected,
+            or_(InterviewTurnEvaluation.claimed_at.is_(None), InterviewTurnEvaluation.claimed_at < cutoff),
+        )
+        .update(
+            {InterviewTurnEvaluation.status: target, InterviewTurnEvaluation.claimed_at: stamp},
+            synchronize_session=False,
+        )
     )
 
 
@@ -163,8 +177,8 @@ def requeue_stale_turn_evaluations(
         for row in stale:
             if _claim_status(session, row.id, row.status) == 1:
                 claimed.append((row.session_id, row.id))
-            # rowcount 0 = 有人先把这一行从**我看到的**那个状态挪走了，我不重复投递。
-            # 注意这只挡住"同一 transition 的竞争者"；换了 observed 的进程照样能领到（D177）。
+            # rowcount 0 = 这一行在租约内已经被**某个**进程领走了（不管它按哪个 observed
+            # status 来抢），我不重复投递。D178 之前这里只挡同一 transition，于是会双付。
         session.commit()
     finally:
         if owns_session:

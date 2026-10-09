@@ -6,9 +6,11 @@
 → **面试终报永远补齐不了**。开发库现量 `interview_turn_evaluation` 是 0 行（这库里没跑完过一场带
 异步评分的面试），所以这是一处形状缺陷，不是数据事故——正因为如此，它必须在还有数据之前修好。
 
-认领（`_claim_status`）是这条修复里唯一需要证明的部分：它靠"必然改变 status 的条件 UPDATE"发凭证，
-所以同一时刻两个扫描只有一个拿到活。注意这条证明是在 SQL 层面做的（内存 SQLite），MySQL 的行锁与
-rowcount 语义只能靠注释里的理由保证，测试量不到。
+认领（`_claim_status`）是这条修复里唯一需要证明的部分。它的形状改过一次：**D176/D177 用真 8 进程
++ 真 MySQL 撑开重叠窗口，量出只按 status 做条件的认领会跑双赢家**（两条 transition 各一个），
+于是 D178 给行加了 `claimed_at` 租约，凭证从 per-transition 变成 per-row。
+所以"MySQL 的行锁与 rowcount 语义测试量不到"这句现在只对本文件成立（内存 SQLite 走的是谓词形状，
+不是并发）；并发那一半由一次性仪器在真库上量，读数记在 D176/D177/D178。
 """
 
 from __future__ import annotations
@@ -103,8 +105,13 @@ def test_completed_rows_are_never_touched(db_session, make_interview_session, re
     assert row.status == "completed"
 
 
-def test_a_claim_is_handed_out_once_per_observed_status(db_session, make_interview_session):
-    """这就是那条乐观锁本身：同一个"看见的 status"只能中一次。"""
+def test_a_claim_is_handed_out_once_per_row_not_per_transition(db_session, make_interview_session):
+    """D178：租约让同一行只有一个赢家——**换一条 transition 来抢也不行**。
+
+    D177 在真 MySQL + 真 8 进程上量出旧认领形状会跑双赢家（rc 排成 `1 0 0 1 0 0 0 0`）：A 领
+    `pending→running`，B 扫到时看到的是 A 刚写上的 `running`，于是 B 领 `running→pending` 也拿到
+    凭证，两个都 submit，同一道题付两遍 qwen。这条把那个形状钉成"领不到"。
+    """
     session_id = make_interview_session(status="completed")
     row = _row(db_session, session_id, status="pending")
 
@@ -113,16 +120,28 @@ def test_a_claim_is_handed_out_once_per_observed_status(db_session, make_intervi
     assert svc._claim_status(db_session, row.id, "pending") == 0
     db_session.refresh(row)
     assert row.status == "running"
-    # 拿到凭证的人死了之后，下一轮扫描用**新的**观测值再认领一次——恢复就靠这个。
-    assert svc._claim_status(db_session, row.id, "running") == 1
+
+    # 关键的一条：拿着**新观测值**来抢的进程（就是 D177 跑出的第二个赢家）现在领不到。
     assert svc._claim_status(db_session, row.id, "running") == 0
+    db_session.refresh(row)
+    assert row.status == "running", "第二个进程把行翻回去了：租约没生效，双付路径还开着"
+
+    # 反向证据：把租约戳推到**越过租约长度**（默认 5 分钟），再以默认租约来抢就该立刻领到——
+    # 证明拦住它的是租约谓词，不是 status 条件顺手挡的。
+    # （第一版这里写的是 `lease_minutes=0`，那等于要求"上一发的戳严格早于现在"，读的是
+    # DATETIME 的微秒精度；两次全量在这条上红过而单独跑never 红，我复现不出来，
+    # 所以换成不依赖时钟分辨率的形式。老化量必须 > 租约，写 1 秒是我自己算错了。）
+    row.claimed_at = utc_now_naive() - timedelta(minutes=6)
+    db_session.commit()
+    assert svc._claim_status(db_session, row.id, "running") == 1
 
 
-def test_a_later_sweep_can_take_back_a_row_whose_owner_died(db_session, make_interview_session, recorder):
-    """认领不是一次性的：它只保证"同时"唯一，不保证"从此不再被重投"。
+def test_the_lease_expires_so_an_abandoned_row_is_still_recoverable(db_session, make_interview_session, recorder):
+    """认领不是一次性的，但它**在租约内**是一次性的。
 
-    这条区分很重要——写测试时我一度以为第二次扫描必须返回 0，那等于把恢复功能删掉：一个反复崩在
-    同一题上的进程确实会被反复重投，上限是每轮 10 分钟、阈值 15 分钟，而正常单题最坏 3.1 分钟。
+    旧版这条断的是"第二次扫描还得返回 1"，那其实是在给双付开门（D177）。正确的形状是：租约内
+    不再重投，租约到期后同一行仍可被领——反复崩在同一题上的进程确实会被反复重投，上限从"每轮"
+    变成"每个租约"（租约 5 分钟 < 阈值 15 分钟 < 每 10 分钟一拍），恢复照样不丢。
     """
     session_id = make_interview_session(status="completed")
     row = _row(db_session, session_id, status="pending")
@@ -130,9 +149,44 @@ def test_a_later_sweep_can_take_back_a_row_whose_owner_died(db_session, make_int
     assert svc.requeue_stale_turn_evaluations(db=db_session) == 1
     db_session.refresh(row)
     assert row.status == "running"  # 被认领走，但那个进程没跑完
+    assert row.claimed_at is not None, "认领没盖租约戳：per-row 单飞靠的就是这一列"
+
+    assert svc.requeue_stale_turn_evaluations(db=db_session) == 0
+    assert len(recorder) == 1, "租约内又投了一次——这就是 D177 那条双付路径"
+
+    row.claimed_at = utc_now_naive() - timedelta(minutes=6)
+    db_session.commit()
 
     assert svc.requeue_stale_turn_evaluations(db=db_session) == 1
     assert len(recorder) == 2
+
+
+def test_a_re_answered_turn_drops_the_previous_lease(db_session, make_interview_session):
+    """重新作答把行重置回 pending 时，上一轮的租约必须跟着清掉。
+
+    不然这一题在整个租约里没人能领（`create_pending_turn_evaluation` 复用同一行是断线重连/双击
+    那条路，`uq_interview_turn_evaluation_turn` 在那儿会撞唯一约束）。
+    """
+    session_id = make_interview_session(status="completed")
+    row = _row(db_session, session_id, status="running")
+    assert svc._claim_status(db_session, row.id, "running", lease_minutes=60) == 1
+    db_session.commit()
+
+    again = svc.create_pending_turn_evaluation(
+        db_session,
+        session_id=session_id,
+        turn_id="q-1",
+        question_index=0,
+        question="同一题重答",
+        category="project",
+        user_answer="第二次答案",
+        is_follow_up=False,
+    )
+    db_session.commit()
+    assert again.id == row.id, "复用那一行的路没走到，这条测的就不是租约重置"
+    assert again.status == "pending"
+    assert again.claimed_at is None, "旧租约留着：这一题 60 分钟内谁都不许领"
+    assert svc._claim_status(db_session, again.id, "pending", lease_minutes=60) == 1
 
 
 def test_the_claim_keeps_the_row_inside_the_pending_count(db_session, make_interview_session, recorder):

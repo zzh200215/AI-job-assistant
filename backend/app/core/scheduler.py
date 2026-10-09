@@ -219,13 +219,12 @@ def _run_operational_alert_evaluation():
 def _run_interview_evaluation_requeue():
     """捡回"提交它的进程已经没了"的逐题评分。
 
-    D175 之后这条与其余 6 条一样先领跨副本槽位，正常态下每拍只有一个副本在扫。但认领仍然必须
-    能抗并发，因为槽位是 fail-open 的（`REDIS_URL` 没配时必然各扫各的——两份 compose 都没有 redis
-    服务，所以签进树的形态下就是这样）。**抗到什么程度要说清楚（D177 现量作废了 earlier 那句
-    "同一道题不会付两遍模型钱"）**：`_claim_status` 只在**同一个 observed status 的竞争者之间**保证
-    恰好一个赢家；副本 A 先 `pending→running` 认领、副本 B 在那一题跑完之前扫到的是 `running`，
-    于是 B 用 `running→pending` 也能领到一次 rc=1 —— 两个都会 submit，同一道题可以付两遍 qwen。
-    8 进程真 MySQL 实测：`1 0 0 1 0 0 0 0`（两个赢家，各属一个 transition）。修法等他点，未修。
+    D175 之后这条与其余 6 条一样先领跨副本槽位，正常态下每拍只有一个副本在扫。但槽位是 fail-open
+    的，而且**现取到签进树的部署里根本没有 Redis**（两份 compose 都没有 redis 服务、prod env 没有
+    `REDIS_URL`），所以每拍都各扫各的——抗并发全靠认领本身。
+    认领的形状改过一次：只按 `status` 做条件时它是 **per-transition 单飞**，D177 用真 8 进程 +
+    真 MySQL 量出两个副本能各领一条 transition（`1 0 0 1 0 0 0 0`）、同一道题付两遍 qwen。
+    D178 给行加了 `claimed_at` 租约，凭证从此是 **per-row** 的。
     """
     from app.core.database import SessionLocal
     from app.services.interview_evaluation_service import requeue_stale_turn_evaluations

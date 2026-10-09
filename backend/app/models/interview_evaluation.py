@@ -21,6 +21,9 @@ class InterviewTurnEvaluation(Base):
     user_answer = Column(Text, default="")
     is_follow_up = Column(Integer, default=0)
     status = Column(String(20), nullable=False, default="pending", index=True)
+    # 认领租约（D178）：谁在什么时候把这一行挪走的。`_claim_status` 的 WHERE 要求它早于租约，
+    # 于是同一行的两个不同 transition 不能各自领到一次凭证——那是 D177 现量出来的双付路径。
+    claimed_at = Column(DateTime, nullable=True)
     completeness = Column(Integer, default=0)
     accuracy = Column(Integer, default=0)
     depth = Column(Integer, default=0)

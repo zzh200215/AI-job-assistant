@@ -996,6 +996,7 @@ CREATE TABLE interview_turn_evaluation (
 	user_answer TEXT, 
 	is_follow_up INTEGER, 
 	status VARCHAR(20) NOT NULL, 
+	claimed_at DATETIME, 
 	completeness INTEGER, 
 	accuracy INTEGER, 
 	depth INTEGER, 

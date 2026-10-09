@@ -73,6 +73,13 @@ class Settings(BaseSettings):
     # `wait = backoff_factor * (attempt + 1)`，`_LLM_MAX_RETRIES=2`），取 15 分钟远在它之上——
     # 否则一次扫描会把还在跑的评分抢过来重付一遍 qwen 调用。上界是候选人的终报要等多久才能补齐。
     INTERVIEW_EVALUATION_REQUEUE_MINUTES: int = 15
+    # 认领租约（D178）：一行被 claim 之后，多久之内**任何人**都不能再 claim 它——包括换了
+    # observed status 的那个（`pending→running` 与 `running→pending` 是两条 transition，
+    # 只按 status 做条件的旧认领让两个副本各领一次，同一道题付两遍 qwen，2026-10-09 D177
+    # 用真 8 进程 + 真 MySQL 跑出 `1 0 0 1 0 0 0 0`）。下界与上面那条同源：单题最坏 184.5s
+    # ≈ 3.1 分钟，取 5 分钟留出 1.6 倍余量；上界是"主人真死了"的恢复等待，它同时受
+    # REQUEUE_MINUTES(15) 那一关，所以租约取小不会拖慢恢复、取大会双付。
+    INTERVIEW_EVALUATION_CLAIM_LEASE_MINUTES: int = 5
     # 同时在途的面试 WS 上限。**每连接一个引擎 = 一条连接期间持有一个 SQLAlchemy Session**。
     # 取 12 的理由现在写在纸面上而不是注释里：池子上限 10 + 10 = 20 根，留 8 根给同期 HTTP 请求。
     # 改 DB_POOL_SIZE/DB_MAX_OVERFLOW 时必须同时回头看这个数还留不留得出 HTTP 的余量。
