@@ -219,8 +219,10 @@ def _run_operational_alert_evaluation():
 def _run_interview_evaluation_requeue():
     """捡回"提交它的进程已经没了"的逐题评分。
 
-    这条是每副本都会跑的（调度器没有主选举），所以认领必须能抗并发：`_claim_status` 用一次必然
-    改变 status 的条件 UPDATE 当凭证，rowcount=0 的一方就知道别人抢到了，同一道题不会付两遍模型钱。
+    D175 之后这条与其余 6 条一样先领跨副本槽位，正常态下每拍只有一个副本在扫。但认领仍然必须
+    能抗并发：槽位是 fail-open 的（`REDIS_URL` 没配或 Redis 抖动时大家各自扫），所以 `_claim_status`
+    用一次必然改变 status 的条件 UPDATE 当凭证，rowcount=0 的一方就知道别人抢到了，
+    同一道题不会付两遍模型钱。
     """
     from app.core.database import SessionLocal
     from app.services.interview_evaluation_service import requeue_stale_turn_evaluations
