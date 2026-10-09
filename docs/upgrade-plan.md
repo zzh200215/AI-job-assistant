@@ -4140,7 +4140,7 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **修复**：`_append_evaluation_message` 之后加一句 `db.flush()`，再算那两个派生读。**回归测试**把 `db_session.autoflush = False` 显式关掉跑同一条链，断言 `evaluation_status == 'completed'`、`completed_turns == 1`、`pending_turns == 0`、且 `refresh_completed_report` 被回调恰好一次。变异 **R1**（把 flush 删掉）→ 红在 `assert 'processing' == 'completed'`，正是真库上读到的那个值。
 
-**修完之后同一台仪器再跑一遍**：`turn.status=completed` / `evaluation_status='completed'` / `pending_count=0` / 消息 1→2 / 报告显示为 `True`，退出码 0。**清理复核两次都是 `interview_turn_evaluation 0 → 0 行；会话七列逐字还原=True`**（status、messages、evaluation_status、memory_snapshot、answered_count、timeout_count、evaluation 一列一列比），所以共享开发库现在是种探针之前的样子，只有自增 id 往前走到了 3。
+**修完之后同一台仪器再跑一遍**：`turn.status=completed` / `evaluation_status='completed'` / `pending_count=0` / 消息 1→2 / 报告显示为 `True`，退出码 0。**清理复核两次都是 `interview_turn_evaluation 0 → 0 行；会话七列逐字还原=True`**（status、messages、evaluation_status、memory_snapshot、answered_count、timeout_count、evaluation 一列一列比），所以共享开发库的业务列回到种探针之前。**两处残留（2026-10-09 事后重取才发现，之前只记了第一条）**：① `interview_turn_evaluation` 的自增 id 前进到 3；② **`interview_session.updated_at` 被 ORM 的 `onupdate=utc_now` 自动前推了**——我那七个列是逐字比过的，但 `updated_at` 不在快照名单里，所以会话 #1 的"改"时间现在是 2026-10-09 07:20:06 而不是原来的六月。**以后凡是"写生产/开发库的一次性仪器"，快照名单必须把 `onupdate` 列也算进去，或者干脆在复核里打印它**，不然"逐字还原"这句话会盖住一处真实的时间漂移。
 
 **仪器自身的两次自伤（记下来）**：① 第一版轮询只 `expire_all()` 不结束事务，MySQL 默认 REPEATABLE READ 把快照钉死，别的连接提交的行**永远看不见**——我当时把"恢复链没跑完"读成了结论；改成每轮 `db.rollback()` 再读才是真读数。② 那台一次性脚本的 `finally` 我第一版写成了废代码（`... if False else None`），没跑就发现，重写后才允许它碰库。
 
