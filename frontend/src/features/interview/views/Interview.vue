@@ -247,15 +247,23 @@
           <div class="interview-dot" :class="s.status === 'completed' ? 'green' : 'amber'" />
           <div class="interview-info">
             <strong>{{ s.jd_title || s.position || '模拟面试' }}</strong>
-            <span
-              >{{ monthDayTime(s.created_at) }} ·
-              {{ s.status === 'completed' ? '已完成' : '进行中' }}</span
-            >
+            <span>{{ monthDayTime(s.created_at) }} · {{ sessionStatusLabel(s.status) }}</span>
           </div>
           <div v-if="s.overall_score" class="interview-score">
             <strong>{{ s.overall_score }}</strong>
             <span>分</span>
           </div>
+          <!-- 没答完的会话以前只有一扇门：进去接着答。可 30 秒超时计时器与 `end` 消息都只在连接
+               活着时存在，标签页一关就永远停在"进行中"（P4 / D172）。这里给一条不需要
+               WebSocket 的收口。`created`（还没推过题）后端会拒，所以按钮不给它。 -->
+          <el-button
+            v-if="s.status === 'ongoing'"
+            size="small"
+            text
+            :loading="endingId === s.id"
+            @click.stop="endSession(s)"
+            >结束面试</el-button
+          >
           <el-icon class="interview-arrow"><ArrowRight /></el-icon>
         </div>
       </div>
@@ -309,7 +317,7 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue'
 import { ElMessage } from '@/plugins/element-services'
-import { getInterviewList, getQuestionBank } from '@/api/interview'
+import { getInterviewList, getQuestionBank, endInterviewSession } from '@/api/interview'
 import { getAnalysis } from '@/api/analysis'
 import { getJobPipelineList } from '@/api/jobs'
 import { getInterviewGroupTitle, normalizeInterviewQuestions } from '@/utils/interviewQuestions'
@@ -560,6 +568,28 @@ async function loadSessions() {
     sessionsError.value = userErrorCopy(e, '暂时无法读取你的面试记录')
   } finally {
     sessionsLoading.value = false
+  }
+}
+
+function sessionStatusLabel(status) {
+  // 以前只有"已完成 / 进行中"两档，于是从没推过题的 created 也显示成"进行中"。
+  if (status === 'completed') return '已完成'
+  if (status === 'ongoing') return '进行中'
+  return '未开始'
+}
+
+const endingId = ref(0)
+
+async function endSession(session) {
+  endingId.value = session.id
+  try {
+    await endInterviewSession(session.id)
+    ElMessage.success('面试已结束，报告已生成')
+    await loadSessions()
+  } catch (e) {
+    ElMessage.error(userErrorCopy(e, '结束失败，请稍后重试'))
+  } finally {
+    endingId.value = 0
   }
 }
 

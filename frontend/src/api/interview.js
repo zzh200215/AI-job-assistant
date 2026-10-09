@@ -22,6 +22,13 @@ export const getInterviewEvaluations = (sessionId) =>
 // 删除面试
 export const deleteInterview = (sessionId) => request.delete(`/interview/sessions/${sessionId}`)
 
+/**
+ * 主动结束一场面试并出报告。收口不再只有"挂着 WebSocket 时点结束"一条路：
+ * 30 秒超时计时器与 `end` 消息都只在连接活着时存在，标签页一关，会话就永远停在进行中（P4 / D172）。
+ */
+export const endInterviewSession = (sessionId) =>
+  request.post(`/interview/sessions/${sessionId}/end`)
+
 // 获取题库浏览（支持分类/难度/关键词过滤）
 export const getQuestionBank = (params = {}) => request.get('/interview/question-bank', { params })
 

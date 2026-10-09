@@ -4164,6 +4164,24 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **§10.38 到此关闭**：三条路里他点 ③、执行由 D171 完成，界面 D167/D168、键名 D166/D169。**§10 open 回到 0，在册 36 条编号项（1–25、28–38）全部已划。**
 
+#### 已交付：D172 P4 收口端点上线；顺带抓到第二处 autoflush 家族的 bug，以及一条"断言在骗自己"
+
+**交付**：`POST /interview/sessions/{id}/end`（`interview_rest.py:208-248`）+ 前端列表行上的「结束面试」按钮（`Interview.vue`，只给 `ongoing`）+ 三档状态标签。后端 6 条测试、前端 3 条页面断言。
+
+**三档语义是分开写的，不是一把 `completed` 抹平**：`ongoing` → 交卷出报告（一题没答也走 `_fallback_report`，不抛）；`completed` → 幂等返回，不重复生成也不追加 `end` 消息；**`created` → 拒绝**并告诉他"可以删除或重新开始"——给一场从没推过题的会话生成"完成报告"就是把空数据糊在候选人脸上。引擎这次**挂在请求自己那条 session 上**（`engine.db = db`），不再让它自开一个 `SessionLocal`：一条请求一根连接，也顺带没有"忘 cleanup 就永久留一个打开的 Session"那笔 E16 的账。
+
+**顺手抓到第二处同族 bug（方向与 D170 相反）**：`_finish` 原先是"`self.session.evaluation = report` → 再改 report"。JSON 列不是 `MutableDict`，一旦中途被 flush，之后再动那个 dict 不会再有一次 UPDATE。生产 autoflush=False 看不出来，**测试会话 autoflush=True 反而看得见**——`pending_evaluation_count` 那句查询先把当时那份序列化走，于是报告里留着 `"idle"`。改成"算完再一次赋值"。**教训：autoflush 的开与关是两个世界，两边都能过的写法才算钉住。**
+
+**一次"断言在骗自己"（G2 变异逼出来的）**：第一版页面断言写的是"整行文本含『未开始』"，而我的夹具岗位名恰好叫"**从未开始的岗位**"——把 `sessionStatusLabel` 改坏照样全绿。改成只读 `.interview-info span` 那条副标题、夹具名一律中性（岗位甲/乙/丙），之后 G1（去掉 `v-if`）→ 2 条红、G2（状态退回两档）→ 1 条红、G3（失败路径也重拉列表）→ 1 条红、G4（投递 id 错一位）→ 1 条红。**顺带一条口径**：旧模板只有"已完成 / 进行中"两档，所以那 2 场从没推过题的 `created` 一直显示成"进行中"——这也是我把 P4 的半径量出来后才发现的小谎，同批改掉。
+
+**一条工具教训**：中文参数走 bash heredoc / argv 会被控制台代码页吃掉（`assert count == 1` 直接失败、报错信息还是乱码）。改成把待替换字符串写进一个 UTF-8 的 `.py` 文件再执行，四个变异就都能落了。
+
+**没做的两件事**：① 真库里那 4 场僵尸**保持原样**——这条端点是给人点的，我没拿脚本批量动候选人的面试数据（要收口的话在页面上点，或他点名让我跑一次）；② 新按钮没有活页读数（复用既有 `el-button` 与既有行样式，风险集中在文案与位置，由 3 条 jsdom 断言钉）。
+
+**验收**：backend 全量 **859 passed / 118.03s**（前值 853，+6）；frontend `vitest` **90 files / 600 passed**（+3）、`format:check` / `npm test` / `eslint` / `build` 全 exit 0、bundle **2208.92 → 2209.41 kB**（+0.49）。
+
+
+
 
 
 

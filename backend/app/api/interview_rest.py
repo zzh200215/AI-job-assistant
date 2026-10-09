@@ -27,6 +27,7 @@ from app.services.interview_config_service import (
     list_question_banks,
 )
 from app.services.interview_evaluation_service import evaluation_payloads
+from app.services.interview_engine import InterviewEngine
 from app.services.llm_service import chat_json
 from app.services.rag_service import search_knowledge
 from app.services.skill_gap import jd_required_names
@@ -195,6 +196,53 @@ def get_session_evaluations(
             "memory_snapshot": session.memory_snapshot or {},
         }
     )
+
+
+@router.post("/sessions/{session_id}/end", summary="结束面试并出报告（不要求还挂着 WebSocket）")
+def end_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """候选人自己把一场卡住的面试收口。
+
+    为什么要有这一条：唯一的收口路径原本是 WS 里的 `end` 消息与每问 30 秒的计时器，而**两者都只在
+    连接活着时存在**（`interview_ws.py:137-145`）。标签页一关，会话就永远停在 `ongoing`，界面上
+    既进不去也退不出。2026-10-09 现量：开发库 14 场里有 4 场是非终态僵尸（2 场只推过第一题、
+    4 个月没动；2 场从未开始）。
+
+    三种状态的语义是分开的，不是一把 `completed` 抹平：
+    * `ongoing` → 交卷出报告（0 分也走报告兜底，不抛）；
+    * `completed` → 幂等返回，不重复生成；
+    * `created` → 一题都没推过，"结束"会产出一份空报告糊在候选人脸上，所以**拒绝**并告诉他删除或重开。
+    """
+    session = (
+        db.query(InterviewSession)
+        .filter(
+            InterviewSession.id == session_id,
+            InterviewSession.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not session:
+        return fail(message="面试不存在或无权限", code=ERR_PARAM)
+    if session.status == "created":
+        return fail(message="这场面试还没有开始，没有可结束的题目；可以删除它或重新开始一场", code=ERR_PARAM)
+    if session.status == "completed":
+        db.expire_all()
+        return ok(_serialize_session(session, db), message="这场面试已经结束")
+
+    engine = InterviewEngine(session_id)
+    # 把请求那条 session 交给引擎，而不是让它自己再开一个 SessionLocal：一条请求一根连接，
+    # 也顺带消掉"忘了 cleanup 就永久留着一个打开的 Session"那笔 E16 的老账——收尾由 get_db 负责。
+    engine.db = db
+    engine.init()
+    engine.resume()  # 只读：把状态从落库的消息与评分行里重建出来，报告才有真材实料
+    engine.finish()
+
+    db.expire_all()
+    fresh = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
+    return ok(_serialize_session(fresh, db), message="面试已结束，报告已生成")
 
 
 @router.delete("/sessions/{session_id}", summary="删除面试")

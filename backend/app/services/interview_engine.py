@@ -335,7 +335,6 @@ class InterviewEngine:
         except Exception:
             report = self._fallback_report()
 
-        self.session.evaluation = report
         if pending_evaluation_count(self.db, self.session_id):
             self.session.evaluation_status = "processing"
             self.session.memory_snapshot = build_memory_snapshot(self.db, self.session_id)
@@ -344,6 +343,11 @@ class InterviewEngine:
         else:
             self.session.evaluation_status = "completed"
             report["evaluation_status"] = "completed"
+        # 赋值放在改完之后：JSON 列不是 MutableDict，一旦被 flush 出去，之后再动那个 dict 也不会
+        # 再来一次 UPDATE。生产会话 autoflush=False 看不出来，测试会话 autoflush=True、中间那句
+        # `pending_evaluation_count` 会把当时那份先序列化走 —— 于是报告里留着 "idle"。
+        # D170 那条是反方向（autoflush 关着才看不见），两种读数都要能过才算钉住。
+        self.session.evaluation = report
         self.db.commit()
 
         end_message = {
