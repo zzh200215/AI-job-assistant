@@ -11,6 +11,14 @@
 今天没有仪器会因为那一刻而红——`backend/Dockerfile` 的 CMD 不带 `--workers`，两份 compose 里没有任何
 `replicas:`。所以这条守卫不是记录现状，而是把"扩副本的那一刻必须回来拍 §10.3"钉死：谁改动这两个数
 之一，就得先回答向量库与定时任务的重复触发往哪放。
+
+**2026-10-09 D175 之后，这两件事不再等价了**：调度器那一半已经装上跨副本槽位
+（`app/core/scheduler_slot.py`，7 条注册项都经由 `run_exclusive`，见
+`tests/test_scheduler_slot_across_replicas.py`），所以副本 >1 时定时任务**默认不会重复跑**——
+但槽位是 fail-open 的：`REDIS_URL` 没配或 Redis 抖动时，重复跑立刻回到从前的样子，这条守卫
+管不了它。**仍然拦住扩副本的是 Chroma**：嵌入式 persistent client 每进程各持一份，多进程共写
+`backend/chroma_db` 没有任何守卫说它安全。所以下面那句判决现在只剩向量库这一条需要先拍，
+`MAX_PROCESSES_PER_CONTAINER = 1` 也仍然是对的形状。
 """
 
 from __future__ import annotations
@@ -77,8 +85,9 @@ def test_the_shipped_shape_is_one_process_per_container():
     violations = process_shape_violations(_real_texts(), BACKEND_DOCKERFILE.read_text(encoding="utf-8"))
     assert not violations, (
         "部署形状第一次出现多进程/多副本：" + "；".join(violations) + "。"
-        "这一刻 §10.3（服务端向量库）与调度器 7 条定时任务的重复触发同时从"
-        "「将来才会发生」变成「正在发生」，必须先拍那两条再放行这个改动。"
+        "定时任务那一半已由 D175 的跨副本槽位接住（但槽位 fail-open，Redis 不在时重复跑照旧）；"
+        "仍然没有答案的是 §10.3（服务端向量库）——嵌入式 Chroma 每进程一份，"
+        "必须先拍那一条再放行这个改动。"
     )
 
 

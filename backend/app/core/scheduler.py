@@ -4,19 +4,33 @@
 基于 APScheduler 实现，在 FastAPI 启动时自动注册定时任务：
 - 提醒检查（面试/Offer/投递跟进）: 每小时
 - 新JD推送: 每天早上9点
+
+任务清单集中在 `scheduled_job_specs()` 一个表里（D175）：`start_scheduler` 与守卫测试读同一份，
+每条的跨副本去重窗口由它自己的触发器算出来（`app/core/scheduler_slot.py`），不手写第二个数。
 """
 
 import logging
+from collections.abc import Callable
+from functools import partial
+from typing import NamedTuple
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.core.config import settings
+from app.core.scheduler_slot import run_exclusive, slot_ttl_seconds
 
 logger = logging.getLogger(__name__)
 
 _scheduler: BackgroundScheduler | None = None
+
+
+class JobSpec(NamedTuple):
+    job_id: str
+    name: str
+    trigger: CronTrigger | IntervalTrigger
+    fn: Callable[[], None]
 
 
 def get_scheduler() -> BackgroundScheduler:
@@ -28,6 +42,44 @@ def get_scheduler() -> BackgroundScheduler:
     return _scheduler
 
 
+def scheduled_job_specs() -> list[JobSpec]:
+    """7 条定时任务的唯一清单。加一条就改这里，别在 `start_scheduler` 里另写一次 add_job。"""
+    return [
+        # ---- 提醒检查任务：每小时执行一次 ----
+        JobSpec("reminder_check", "面试/Offer/投递跟进提醒", IntervalTrigger(hours=1), _run_reminder_check),
+        # ---- 新JD推送任务：每天早上9点 ----
+        JobSpec("new_jd_push", "新JD推送", CronTrigger(hour=9, minute=0), _run_new_jd_push),
+        # ---- 目标统计刷新：每天凌晨3点 ----
+        JobSpec("target_stats_refresh", "求职目标统计刷新", CronTrigger(hour=3, minute=0), _run_target_stats_refresh),
+        # ---- 运维告警评估：每 5 分钟一次，供管理员跟进与审计 ----
+        JobSpec(
+            "operational_alert_evaluation",
+            "运维告警评估",
+            IntervalTrigger(minutes=5),
+            _run_operational_alert_evaluation,
+        ),
+        # ---- 外部 API 月度结算：每月 1 日 02:30（T6-2） ----
+        # 2026-10-06 真删企业侧第六增量（D136）：这里原来还挂着一小时一次的
+        # `_run_tenant_billing_check`（遍历 `organization` 做到期停用/续费恢复）。organization 0 行，
+        # 所以那个循环从来没进过循环体；候选人那侧的订阅它也不碰（它按 `tenant_id == org.id` 收窄）。
+        JobSpec(
+            "external_api_monthly_billing",
+            "外部 API 月度账单生成",
+            CronTrigger(hour=2, minute=30, day=1),
+            _run_external_api_monthly_billing,
+        ),
+        # ---- 岗位向量补齐：每 30 分钟一次，让候选人那次请求不必为全库付 embedding ----
+        JobSpec("job_embedding_sync", "岗位向量增量同步", IntervalTrigger(minutes=30), _run_job_embedding_sync),
+        # ---- 滞留逐题评分重投：每 10 分钟一次（D163） ----
+        JobSpec(
+            "interview_evaluation_requeue",
+            "滞留逐题评分重投",
+            IntervalTrigger(minutes=10),
+            _run_interview_evaluation_requeue,
+        ),
+    ]
+
+
 def start_scheduler() -> None:
     """启动调度器并注册定时任务"""
     if not settings.RUN_SCHEDULER:
@@ -35,71 +87,14 @@ def start_scheduler() -> None:
         return
 
     scheduler = get_scheduler()
-
-    # ---- 提醒检查任务：每小时执行一次 ----
-    scheduler.add_job(
-        _run_reminder_check,
-        trigger=IntervalTrigger(hours=1),
-        id="reminder_check",
-        name="面试/Offer/投递跟进提醒",
-        replace_existing=True,
-    )
-
-    # ---- 新JD推送任务：每天早上9点 ----
-    scheduler.add_job(
-        _run_new_jd_push,
-        trigger=CronTrigger(hour=9, minute=0),
-        id="new_jd_push",
-        name="新JD推送",
-        replace_existing=True,
-    )
-
-    # ---- 目标统计刷新：每天凌晨3点 ----
-    scheduler.add_job(
-        _run_target_stats_refresh,
-        trigger=CronTrigger(hour=3, minute=0),
-        id="target_stats_refresh",
-        name="求职目标统计刷新",
-        replace_existing=True,
-    )
-
-    # ---- 运维告警评估：每 5 分钟更新一次，供管理员跟进与审计 ----
-    scheduler.add_job(
-        _run_operational_alert_evaluation,
-        trigger=IntervalTrigger(minutes=5),
-        id="operational_alert_evaluation",
-        name="运维告警评估",
-        replace_existing=True,
-    )
-
-    # ---- 外部 API 月度结算：每月 1 日 02:30（T6-2） ----
-    # 2026-10-06 真删企业侧第六增量（D136）：这里原来还挂着一小时一次的
-    # `_run_tenant_billing_check`（遍历 `organization` 做到期停用/续费恢复）。organization 0 行，
-    # 所以那个循环从来没进过循环体；候选人那侧的订阅它也不碰（它按 `tenant_id == org.id` 收窄）。
-    scheduler.add_job(
-        _run_external_api_monthly_billing,
-        trigger=CronTrigger(hour=2, minute=30, day=1),
-        id="external_api_monthly_billing",
-        name="外部 API 月度账单生成",
-        replace_existing=True,
-    )
-
-    # ---- 岗位向量补齐：每 30 分钟一次，让候选人那次请求不必为全库付 embedding ----
-    scheduler.add_job(
-        _run_job_embedding_sync,
-        trigger=IntervalTrigger(minutes=30),
-        id="job_embedding_sync",
-        name="岗位向量增量同步",
-        replace_existing=True,
-    )
-
-    scheduler.add_job(
-        _run_interview_evaluation_requeue,
-        trigger=IntervalTrigger(minutes=10),
-        id="interview_evaluation_requeue",
-        name="滞留逐题评分重投",
-        replace_existing=True,
-    )
+    for spec in scheduled_job_specs():
+        scheduler.add_job(
+            partial(run_exclusive, spec.job_id, slot_ttl_seconds(spec.trigger), spec.fn),
+            trigger=spec.trigger,
+            id=spec.job_id,
+            name=spec.name,
+            replace_existing=True,
+        )
 
     scheduler.start()
     logger.info("Scheduler started with %d jobs", len(scheduler.get_jobs()))
