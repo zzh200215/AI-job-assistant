@@ -118,6 +118,12 @@ def _claim_status(db: Session, row_id: int, expected: str) -> int:
     两个进程各自以为对方抢到了——或者反过来都以为是自己抢到的，于是同一道题付两遍 qwen 调用。
     认领必须改变 status：`pending → running`（从没起跑）、`running → pending`（起跑过、
     进程已不在）。两种落点都还在 `STALE_STATUSES` 里，所以重投期间报告不会提前定稿。
+
+    **但这把凭证是 per-transition 的，不是 per-row 的（D177 真 8 进程 + 真 MySQL 现量）**：
+    A 先 `pending→running` 认领成功，B 在那一题跑完之前扫到的是 `running`，B 用
+    `running→pending` 同样能拿到 rc=1，于是两个进程都 submit 同一道题。实测八个 rc 是
+    `1 0 0 1 0 0 0 0`（两个赢家，分属两个 transition）。要做到 per-row 单飞需要行上有一个
+    "谁在什么时候领的"可判据（租约列 / 第三方原子槽位），三条修法的代价已配数交他点，本条未修。
     """
     target = "running" if expected == "pending" else "pending"
     return (
@@ -157,7 +163,8 @@ def requeue_stale_turn_evaluations(
         for row in stale:
             if _claim_status(session, row.id, row.status) == 1:
                 claimed.append((row.session_id, row.id))
-            # rowcount 0 = 别的进程先改了这一行的 status，不重复付费，也不报错。
+            # rowcount 0 = 有人先把这一行从**我看到的**那个状态挪走了，我不重复投递。
+            # 注意这只挡住"同一 transition 的竞争者"；换了 observed 的进程照样能领到（D177）。
         session.commit()
     finally:
         if owns_session:

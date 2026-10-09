@@ -4267,6 +4267,26 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **验收**：backend 全量 **870 passed / 106.16s**（前值 869，+1）；`ruff check .` All checks passed、`ruff format --check .` 359 files already formatted；一次性仪器与结果文件已删，`git status` 干净。
 
+#### 复核：D177 把 D176 那句"互斥成立"打掉了——同拍量不出双付，撑开重叠窗口就出双赢家
+
+**为什么要再验一次**：D176 那份仪器给的 `[1,0,0,0]` 有个没说的软肋——**MySQL 的行锁本来就会把并发的 UPDATE 排队**，所以"恰好一个赢家"用串行也能得到。要证互斥得先证重叠。重做的仪器让每个子进程①读一次 `status`、②睡 60 ms、③用**自己读到的那个值**调 `_claim_status`，并打印 `t_read / t_fire / t_done`。
+
+**现量结果（真 MySQL、真 8 进程；探针行 id=5 挂在 `created` 那场 session 12，跑完按 id 删回 0→1→0，`interview_session` 14→14）**：
+
+| 轮 | 八个进程读到的值 | 八个 rc | 赢家 |
+|---|---|---|---|
+| 1 | pending, running, pending, running, running, pending, running, pending | `1 0 0 1 0 0 0 0` | **两个**：#0 与 #3 |
+| 2 | pending, running, pending, pending, running, running, running, running | `1 0 0 0 0 1 0 0` | **两个**：#0 与 #5 |
+| 反向对照（四进程都读到 pending） | pending × 4 | `1 0 0 0` | 一个 |
+
+**分组看才说得通**：读到 `pending` 的那一组里恰好一个赢家，读到 `running` 的那一组里也恰好一个赢家——**互斥是 per-transition 成立的，per-row 不成立**。D163/D176 那句"抢到只由值被改动决定"本身没错，但它把两个 transition 混在一个总数里看，于是既没看见双赢家，也没看见真问题。时间戳这边：`last_read_to_winner_done_ms = −46 / −94 ms`，即**后读的进程确实是在第一次 claim 翻转之后才读到 `running` 的**——这正是下面那条缺陷的前提条件，串行版仪器永远造不出它。
+
+**由此暴露的是产品缺陷，不是仪器缺陷**：`requeue_stale_turn_evaluations` 用的正是"按自己扫到的那个 status 去 claim"（`for row in stale: _claim_status(session, row.id, row.status)`）。所以副本 B 在副本 A 认领之后、那一题跑完之前扫到同一行，会看到 `running` 并把它 claim 回 `pending`（rc=1，因为值确实变了），于是**两个人都 submit**。`process_turn_evaluation` 只在 `record.status == "completed"` 时提前返回（`:190`），挡不住这种重入。⇒ **同一道题可以付两遍 qwen**，而 D163 写进注释与台账的那句"rowcount=0 的一方就知道别人抢到了，同一道题不会付两遍模型钱"**不成立**，本条把它作废。窗口宽度 = 那一题从 claim 到 completed 的全程（含一次 LLM 往返），量级**未验**（要真 provider 才能测，他没批）。
+
+**同批现取：D175 的射程也要打折**。`docker-compose.yml` 的服务是 `mysql / backend / migrate / frontend`，`docker-compose.prod.yml` 是 `mysql / backend / migrate / frontend / prometheus / grafana`——**两份都没有 redis 服务**；`REDIS_URL` 只出现在 `backend/.env.example:58`，`.env.production.example` 里连这一行都没有（只有第 51 行一句注释提到它）。⇒ 按签进树的形态跑，`get_slot_client()` 永远返回 None，**槽位每一拍都走 fail-open**：代码接好了、测试也钉住了，但在那套部署里它是空转的。本机能量出效果，是因为 `backend/.env`（不进树）配了 `REDIS_URL` 且这台机器跑着 redis 服务。
+
+**没有当场改**：三条修法射程与代价不同（一条要迁移、一条把单飞搬到 Redis 且继承 fail-open、一条只是把缺陷变成有门看的已知形状并挂决策项），交他点，不替他选。仪器与结果文件已删；本轮**只动文档，零生产代码改动**，上一版那棵树（870 passed）未变。
+
 
 
 
