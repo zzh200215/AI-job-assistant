@@ -4,6 +4,7 @@ from app.models.history import AnalysisRecord, JobDescription, Resume
 from app.models.user import User
 from app.services import interview_service, match_service, optimize_service, resume_export_service
 from app.services.match_score_service import canonical_match_score
+from app.services.scoring_config import SCORE_METHOD
 
 
 def _create_user(db_session, username: str, email: str) -> User:
@@ -126,6 +127,10 @@ def test_match_service_allows_owned_resume_with_public_jd(db_session, monkeypatc
     assert record.match_score != 90
     canonical = canonical_match_score(db_session, resume, public_job, user_id=owner.id, persist=False)["score"]
     assert abs(record.match_score - canonical) < 1
+    # D166：标记键名与 `strategies.py:262` 对齐成同一个。以前这一路写的是 `match_score_method`，
+    # 于是"这行已经走权威"这件事有两个名字，而唯一的读者是回算脚本——只认一种就把新行当旧行重算。
+    assert record.match_report["score_method"] == SCORE_METHOD
+    assert "match_score_method" not in record.match_report
 
 
 def test_match_service_blocks_cross_user_resume_service_bypass(db_session):

@@ -4082,6 +4082,22 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **验收**：backend 全量 **850 passed / 94.46s**（832 → 841：+9 恢复路径本体；841 → 850：+1 线程池交接那条腿，N7 验它）；改动文件 `ruff check` 与 `ruff format --check` 全 clean；**未验**（补掉一条之后剩下的两件）：**真并发**（多进程 + 真 MySQL）下的认领互斥——内存 SQLite 的 rowcount 是匹配数，M1 在那里只能表现为"认领什么都没改"，那种"两个进程都以为自己抢到"本机量不到；以及**一发真 provider 响应穿过整条链**（一场面试在发布途中被打断、重启之后终报真被补齐），那要花 qwen 的钱，本轮没有跑任何真写路径。
 
+#### 已交付：D166 两条路径的权威标记收敛成一个键名，并给"第三种拼法"装了门
+
+**他拍的第四档**：统一成 `score_method`，旧键继续认。落点是 **`match_service.py:103`**（这里要更正我自己：我给选项时把描述写反了，"统一成 score_method"那档我写成了"改 strategies.py:262"——按标签的意思执行，改的是那个异类的一侧）。
+
+**改动**：`match["match_score_method"]` → `match["score_method"]`，与 `strategies.py:262` 对齐。判据 `AUTHORITY_MARKER_KEYS` **继续认两种**（历史行里旧键已经落库，只认新键会把它们当成没人管过的旧形状重算：值相同、Δ0，屏幕无异常，只有半径虚高）。两个脚本从此是这条判据唯一的读者——前后端谁都不读这两个键。
+
+**新装的门**（`test_match_score_single_source.test_only_one_spelling_of_the_authority_marker_is_written`）：扫 `app/**/*.py` 里"往名字带 match 的字典盖一个名字带 method 的键"的赋值，**键名集合只许是 `{score_method}`**，且 `strategies.py` 与 `match_service.py` 两条都必须在场（防空转）；反证打在副本上——把旧键塞回 `match_service` 的源码文本，这条必须认出来。
+
+**一次我自己差点放过去的假阳性（值得记）**：正则最初写成不带目标名的 `\["(\w*method\w*)"\]\s*=`，预览输出里**明明印着 `method_totals`**（`runtime_metrics.py` 的一处请求计数器桶名），我读成了"只有 score_method"。加了"目标变量名必须含 match"这一层筛选之后才干净，而这条筛选本身被 **P3 变异**钉住（把筛选改成永真 → 立刻红并报出 `method_totals`）。**教训：预览一个扫描器输出时，逐行读完再下"没有第三个"的结论——我这次是在已经看到反例的情况下得出了反面的结论。**
+
+**三次红，各有归属**：**P1** 把 `match_service` 改回旧键 → 2 条红（那条结构门 + `test_service_access_guards.py` 里新加的行为断言 `record.match_report["score_method"] == SCORE_METHOD` 且旧键不在）。**P3** 去掉目标名筛选 → 1 条红（假阳性现形）。第三条是设计内的反证（副本植入），不是变异。
+
+**顺带**：`strategies.py` 与 `match_service.py` 对**另外两个派生量**仍有同样的分叉——`cap_applied`（strategies:263）vs `match_score_cap_applied`（match_service:102），以及 `skill_gap` 只在 strategies 写。**这两处分叉今天没有任何读者，所以没代价**，但同一类问题会第三次出现；要不要一起收，等他点（不在这次四档范围内，我没自作主张动）。
+
+**验收**：backend 全量 **851 passed / 98.46s**（前值 850，+1 是那条结构门）；改动文件 `ruff check` / `ruff format --check` clean。
+
 #### 已交付：D164 回算的"写"那一半落成工具——默认 dry-run，`--apply` 还要配 `--backup`，今天一个字都没写
 
 **交付**：`backend/scripts/score_backfill.py` + `backend/tests/test_score_backfill_apply.py` 8 条。§10.38 的 ③ 从此是一条可以一键执行的命令，但**没有执行**——这一步改的是候选人已经看过的数。

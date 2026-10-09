@@ -8,6 +8,9 @@ could disagree about the same job.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 from app.core.security import hash_password
 from app.models.history import JobDescription, Resume
 from app.models.match_score import MatchScore
@@ -267,3 +270,54 @@ def test_orchestration_marks_the_score_unavailable_instead_of_borrowing_the_llm_
     assert record.match_report["model_reported_score"] == 88
     assert "无法按权威算法重算" in record.match_report["score_unavailable_reason"]
     assert db_session.get(Resume, 9998) is None and db_session.get(JobDescription, 9999) is None
+
+
+MARKER_WRITE = re.compile(r'([A-Za-z_]\w*)\["(\w*method\w*)"\]\s*=')
+
+
+def _app_sources():
+    root = Path(__file__).resolve().parents[1] / "app"
+    return {p: p.read_text(encoding="utf-8") for p in root.rglob("*.py")}
+
+
+def marker_keys_written_into_a_match_report(sources: dict) -> dict[str, list[str]]:
+    """扫"往名字里带 match 的字典里盖 method 类键"的赋值。
+
+    必须按目标变量名筛一遍：`runtime_metrics.py` 里有一处 `["method_totals"] = `，那是请求计数器的
+    桶名，与匹配分标记无关——**这条我自己先撞了一次**（不加筛就是假阳性）。
+    """
+    found: dict[str, list[str]] = {}
+    for path, text in sources.items():
+        for target, key in MARKER_WRITE.findall(text):
+            if "match" in target.lower():
+                found.setdefault(key, []).append(path.name)
+    return found
+
+
+def test_only_one_spelling_of_the_authority_marker_is_written():
+    """D166：往报告字典里盖权威标记的赋值，键名**只许一种**。
+
+    历史是两种（`strategies.py` 写 `score_method`、`match_service.py` 曾写 `match_score_method`），
+    而全树唯一的读者是两个回算脚本——只认一种的话，另一条路径写的行会被当成旧形状重算：值相同、Δ0，
+    屏幕上没有任何异常，只有半径虚高，而那张表唯一的用途就是定半径。判据继续认旧键（防已有行），
+    但**新写入**不许再长出第三个名字。
+
+    射程说清楚：扫的是 `xxx["key"] = ` 这种赋值形式，且**目标变量名里得带 match**（不然会被
+    `runtime_metrics.py` 的 `["method_totals"]` 顶出假阳性，见那个 helper 的注释）。
+    `job_recommend_engine.py:222` 那处 `"match_score_method": self.match_score_method` 是**推荐接口
+    自己的响应字段**，不是 `match_report` 的标记，也不在这一条的范围内——别把它读成"还有第三种拼法"。
+    """
+    written = marker_keys_written_into_a_match_report(_app_sources())
+
+    assert set(written) <= {"score_method"}, f"出现了第二种标记拼法：{written}"
+    assert "score_method" in written, "扫描没命中任何写入点——这条守卫在数空气"
+    assert sorted(written["score_method"]) == ["match_service.py", "strategies.py"], "两条落库路径都该在场"
+
+    # 反证（打在副本上，不动工作树）：把旧键塞回 match_service，这条必须认出来。
+    sources = _app_sources()
+    match_service = next(p for p in sources if p.name == "match_service.py")
+    mutated = sources[match_service].replace(
+        'match["score_method"] = canonical["method"]', 'match["match_score_method"] = canonical["method"]'
+    )
+    assert mutated != sources[match_service], "锚点变了，反证没落进副本"
+    assert "match_score_method" in marker_keys_written_into_a_match_report({match_service: mutated})

@@ -100,7 +100,11 @@ def run_full_analysis(db: Session, resume_id: int, jd_id: int, remark: str = "",
         match["match_score"] = canonical["score"]
         match["match_score_raw"] = canonical["raw_score"]
         match["match_score_cap_applied"] = canonical["cap_applied"]
-        match["match_score_method"] = canonical["method"]
+        # 键名与 `strategies.py:262` 对齐成同一个 `score_method`。以前这里写的是
+        # `match_score_method`——同一个事实两种拼法，而全树唯一的读者是回算脚本：只认一种的话
+        # 另一条路径写的行会被当成旧形状重算一遍（值相同、Δ0，屏幕无异常，只有半径虚高）。
+        # 判据仍继续认旧键，所以历史行不会被误判成新行。
+        match["score_method"] = canonical["method"]
     except (RuntimeError, ValueError) as e:
         raise RuntimeError(f"匹配度分析失败: {e}") from e
 

@@ -46,11 +46,12 @@ from app.services.match_score_service import compute_canonical_score  # noqa: E4
 AUTHORITY_LANDED_AT = datetime(2026, 9, 20)
 
 
-# 两条落库路径各自盖的权威标记，**拼法不一样**：
-#   · `app/orchestration/strategies.py:262` 写 `match_result["score_method"]`
-#   · `app/services/match_service.py:103`   写 `match["match_score_method"]`
-# 树里目前没有任何读者（前后端都只写不读），所以这个脚本是它唯一的消费者——只认前一种的话，
-# 经 `POST /analysis/match` 写的行会被当成旧形状重新算一遍（值相同、Δ0，无害但半径虚高）。
+# 权威标记的键名。**D166 之前两条落库路径拼法不一样**：
+#   · `app/orchestration/strategies.py:262` 一直写 `score_method`
+#   · `app/services/match_service.py:103` 曾写 `match_score_method`（2026-10-09 已对齐成前者）
+# 旧键已经落在历史行里，所以判据**继续认两种**——只认新的那一种会把已有行当成没人管过的旧形状
+# 重算一遍（值相同、Δ0，看不出错，只有半径虚高）。新写入只许一种，由
+# `test_match_score_single_source.test_only_one_spelling_of_the_authority_marker_is_written` 钉住。
 AUTHORITY_MARKER_KEYS = ("score_method", "match_score_method")
 
 
