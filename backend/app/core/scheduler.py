@@ -93,6 +93,14 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
+    scheduler.add_job(
+        _run_interview_evaluation_requeue,
+        trigger=IntervalTrigger(minutes=10),
+        id="interview_evaluation_requeue",
+        name="滞留逐题评分重投",
+        replace_existing=True,
+    )
+
     scheduler.start()
     logger.info("Scheduler started with %d jobs", len(scheduler.get_jobs()))
 
@@ -208,6 +216,27 @@ def _run_operational_alert_evaluation():
         logger.info("Operational alert evaluation completed: %d active alerts", len(alerts))
     except Exception as exc:
         logger.error("Operational alert evaluation failed: %s", exc)
+        db.rollback()
+    finally:
+        db.close()
+
+
+def _run_interview_evaluation_requeue():
+    """捡回"提交它的进程已经没了"的逐题评分。
+
+    这条是每副本都会跑的（调度器没有主选举），所以认领必须能抗并发：`_claim_status` 用一次必然
+    改变 status 的条件 UPDATE 当凭证，rowcount=0 的一方就知道别人抢到了，同一道题不会付两遍模型钱。
+    """
+    from app.core.database import SessionLocal
+    from app.services.interview_evaluation_service import requeue_stale_turn_evaluations
+
+    db = SessionLocal()
+    try:
+        count = requeue_stale_turn_evaluations(db=db)
+        if count:
+            logger.info("Interview evaluation requeue: %d stale turns resubmitted", count)
+    except Exception as e:
+        logger.error("Interview evaluation requeue failed: %s", e)
         db.rollback()
     finally:
         db.close()

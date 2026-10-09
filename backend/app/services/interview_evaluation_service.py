@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from threading import Lock
 from typing import Any
 
@@ -15,7 +16,7 @@ from app.core.database import SessionLocal
 from app.models.interview_evaluation import InterviewTurnEvaluation
 from app.models.interview_session import InterviewSession
 from app.orchestration.context import AgentContext
-from app.utils.time_helper import utc_now
+from app.utils.time_helper import utc_now, utc_now_naive
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +96,79 @@ def create_pending_turn_evaluation(
 
 
 def submit_turn_evaluation(session_id: int, evaluation_id: int) -> None:
-    """Schedule a best-effort evaluation. The durable row remains recoverable after a restart."""
+    """Schedule a best-effort evaluation on **this process's** executor.
+
+    The durable row is the source of truth, but nothing here survives the process: a shutdown
+    cancels the queued future (`cancel_futures=True`), and a crash mid-call leaves the row in
+    `running`. Recovery is `requeue_stale_turn_evaluations`, which startup and the scheduler run.
+    """
     _get_executor().submit(process_turn_evaluation, session_id, evaluation_id)
+
+
+# 这两种状态都算"还没出分"：`pending` = 投了但没起跑（关在闸里的线程池被 shutdown 取消），
+# `running` = 起了跑但主人死了。`pending_evaluation_count` 认的就是这两个，口径不能错。
+STALE_STATUSES = ("pending", "running")
+
+
+def _claim_status(db: Session, row_id: int, expected: str) -> int:
+    """把一行挪出**这次扫描看见它时**的那个状态，用 rowcount 当"我抢到了"的凭证。
+
+    MySQL 的 UPDATE rowcount 数的是**被改动**的行，不是被匹配的行（驱动默认不带
+    CLIENT_FOUND_ROWS）。所以"同值写回"是一种假认领：WHERE 命中了、值没变、rowcount=0，
+    两个进程各自以为对方抢到了——或者反过来都以为是自己抢到的，于是同一道题付两遍 qwen 调用。
+    认领必须改变 status：`pending → running`（从没起跑）、`running → pending`（起跑过、
+    进程已不在）。两种落点都还在 `STALE_STATUSES` 里，所以重投期间报告不会提前定稿。
+    """
+    target = "running" if expected == "pending" else "pending"
+    return (
+        db.query(InterviewTurnEvaluation)
+        .filter(InterviewTurnEvaluation.id == row_id, InterviewTurnEvaluation.status == expected)
+        .update({InterviewTurnEvaluation.status: target}, synchronize_session=False)
+    )
+
+
+def requeue_stale_turn_evaluations(
+    *, older_than_minutes: int | None = None, limit: int = 50, db: Session | None = None
+) -> int:
+    """重新投递"提交它的进程已经不在了"的那些逐题评分，返回重投行数。
+
+    这条之前 `submit_turn_evaluation` 的文档串承诺的是假东西：行确实没丢（答案在库里），
+    但**没有任何人会来捡它**——启动钩子只收口 AgentTask，`GET /sessions/{id}/evaluations`
+    只读不投。于是进程一死（发布、崩溃、扩副本都算），那一行永远停在 pending/running，
+    `pending_evaluation_count` 恒大于 0，`evaluation_status` 卡在 processing，
+    面试终报永远不会补齐。多副本时同理：谁持有连接谁投递，别的副本看不见那份队列。
+    """
+    minutes = older_than_minutes if older_than_minutes is not None else settings.INTERVIEW_EVALUATION_REQUEUE_MINUTES
+    cutoff = utc_now_naive() - timedelta(minutes=max(1, int(minutes or 15)))
+    session = db or SessionLocal()
+    owns_session = db is None
+    claimed: list[tuple[int, int]] = []
+    try:
+        stale = (
+            session.query(InterviewTurnEvaluation)
+            .filter(
+                InterviewTurnEvaluation.status.in_(STALE_STATUSES),
+                InterviewTurnEvaluation.created_at < cutoff,
+            )
+            .order_by(InterviewTurnEvaluation.id.asc())
+            .limit(max(1, int(limit)))
+            .all()
+        )
+        for row in stale:
+            if _claim_status(session, row.id, row.status) == 1:
+                claimed.append((row.session_id, row.id))
+            # rowcount 0 = 别的进程先改了这一行的 status，不重复付费，也不报错。
+        session.commit()
+    finally:
+        if owns_session:
+            session.close()
+
+    # 认领先落库、再投递：顺序反过来会让第二个进程在"已经起跑"和"还是旧 status"之间读到窗口。
+    for session_id, evaluation_id in claimed:
+        submit_turn_evaluation(session_id, evaluation_id)
+    if claimed:
+        logger.info("重投滞留的逐题评分 %d 行（阈值 %d 分钟）", len(claimed), minutes)
+    return len(claimed)
 
 
 def complete_turn_evaluation(

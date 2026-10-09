@@ -1,12 +1,16 @@
 """§10.3 / D127：把「一容器一进程一份 Chroma」钉成一条会红的形状。
 
-嵌入式 Chroma persistent client 每个进程各持一份（`app/core/chroma_client.py`），而 E 表里剩下的那
-一行 WebSocket 引擎状态也是按进程持有的（E16 收了"按连接持有、断开必 cleanup"，跨副本亲和仍未解）。
-这两件事的触发点是同一个：**副本数或 worker 数一旦 >1，两份内存状态就开始互相看不见**。
+嵌入式 Chroma persistent client 每个进程各持一份（`app/core/chroma_client.py`）。原先挂在同一行的
+那半句"WebSocket 引擎状态也按进程持有、跨副本亲和未解"在 2026-10-09 的 D163 里被现量推翻了：E16
+之后引擎工作态全部从落库消息推断，副本之间看不见的是容量计数器与在途 30 秒计时器（都无害），
+真缺陷是逐题评分投给本进程线程池而**全树无人重扫**——那条已经由 `requeue_stale_turn_evaluations`
+收掉，而且它不需要等多副本，一次发布就能触发。
 
+现在这个守卫盯的是同一时刻剩下的两件事：**Chroma 每进程一份**，以及**调度器 7 条任务没有主选举**
+（副本数 >1 就每人跑一遍：提醒重发、账单重复生成）。触发点仍是同一个——副本数或 worker 数一旦 >1。
 今天没有仪器会因为那一刻而红——`backend/Dockerfile` 的 CMD 不带 `--workers`，两份 compose 里没有任何
 `replicas:`。所以这条守卫不是记录现状，而是把"扩副本的那一刻必须回来拍 §10.3"钉死：谁改动这两个数
-之一，就得先回答向量库与服务端会话状态往哪放。
+之一，就得先回答向量库与定时任务的重复触发往哪放。
 """
 
 from __future__ import annotations
@@ -73,7 +77,7 @@ def test_the_shipped_shape_is_one_process_per_container():
     violations = process_shape_violations(_real_texts(), BACKEND_DOCKERFILE.read_text(encoding="utf-8"))
     assert not violations, (
         "部署形状第一次出现多进程/多副本：" + "；".join(violations) + "。"
-        "这一刻 §10.3（服务端向量库）与 E 表里 WebSocket 引擎的跨副本亲和同时从"
+        "这一刻 §10.3（服务端向量库）与调度器 7 条定时任务的重复触发同时从"
         "「将来才会发生」变成「正在发生」，必须先拍那两条再放行这个改动。"
     )
 

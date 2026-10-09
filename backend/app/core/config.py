@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     DB_MAX_OVERFLOW: int = 10
     DB_POOL_TIMEOUT: int = 30
     INTERVIEW_EVALUATION_MAX_WORKERS: int = 2
+    # 逐题评分是投给**本地线程池**的：进程一死，那一行就留在 pending/running，没人来捡。
+    # 这个阈值就是"认定提交它的进程已经不在了"要等多久。下界有数：单题最坏 = LLM_TIMEOUT(60s)
+    # × 3 次尝试 + 线性退避(1.5s + 3.0s) = 184.5s ≈ 3.1 分钟（`utils/retry.py:49` 的
+    # `wait = backoff_factor * (attempt + 1)`，`_LLM_MAX_RETRIES=2`），取 15 分钟远在它之上——
+    # 否则一次扫描会把还在跑的评分抢过来重付一遍 qwen 调用。上界是候选人的终报要等多久才能补齐。
+    INTERVIEW_EVALUATION_REQUEUE_MINUTES: int = 15
     # 同时在途的面试 WS 上限。**每连接一个引擎 = 一条连接期间持有一个 SQLAlchemy Session**。
     # 取 12 的理由现在写在纸面上而不是注释里：池子上限 10 + 10 = 20 根，留 8 根给同期 HTTP 请求。
     # 改 DB_POOL_SIZE/DB_MAX_OVERFLOW 时必须同时回头看这个数还留不留得出 HTTP 的余量。

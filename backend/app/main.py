@@ -29,7 +29,10 @@ from app.core.runtime_metrics import record_request
 from app.core.scheduler import shutdown_scheduler, start_scheduler
 from app.core.schema_drift import log_drift
 from app.core.threadpool import apply_thread_limit
-from app.services.interview_evaluation_service import shutdown_interview_evaluation_executor
+from app.services.interview_evaluation_service import (
+    requeue_stale_turn_evaluations,
+    shutdown_interview_evaluation_executor,
+)
 from app.services.orchestration_runner import mark_stale_running_tasks_failed, shutdown_orchestration_executor
 from app.utils.response import ERR_AUTH, ERR_COMMON, ERR_PARAM, fail, ok
 
@@ -52,6 +55,13 @@ async def lifespan(_app: FastAPI):
     # 第一次能在启动日志里看到"忘了跑 alembic upgrade head"，而不是等第一条查询报 no such column。
     log_drift(engine)
     mark_stale_running_tasks_failed()
+    # 上一回进程的逐题评分不会有人来捡（线程池随进程一起没了），启动时先扫一遍。
+    # 阈值照旧生效：多副本同时启动时，一行年轻的 pending 可能属于另一个还活着的副本。
+    # 这一句包起来是刻意的：恢复扫描是锦上添花，它坏了不能把应用启动变成硬失败。
+    try:
+        requeue_stale_turn_evaluations()
+    except Exception as exc:
+        logger.warning("逐题评分重投扫描失败，跳过启动恢复：%s", exc)
     start_scheduler()
     yield
     shutdown_scheduler()
