@@ -26,8 +26,8 @@ from app.services.interview_config_service import (
     get_question_bank,
     list_question_banks,
 )
-from app.services.interview_evaluation_service import evaluation_payloads
 from app.services.interview_engine import InterviewEngine
+from app.services.interview_evaluation_service import evaluation_payloads
 from app.services.llm_service import chat_json
 from app.services.rag_service import search_knowledge
 from app.services.skill_gap import jd_required_names

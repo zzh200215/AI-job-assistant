@@ -47,7 +47,11 @@ def client_for(db_session):
 
         app.dependency_overrides[get_db] = _override
         client = TestClient(app)
-        client.headers.update({"Authorization": f"Bearer {create_access_token({'sub': str(user.id), 'email': user.email, 'username': user.username})}"})
+        client.headers.update(
+            {
+                "Authorization": f"Bearer {create_access_token({'sub': str(user.id), 'email': user.email, 'username': user.username})}"
+            }
+        )
         return client
 
     return _make
@@ -78,7 +82,9 @@ def test_ending_an_ongoing_session_writes_a_report_and_leaves_ongoing(db_session
         db_session,
         user,
         status="ongoing",
-        messages=[{"role": "assistant", "type": "question", "content": "介绍一个你主导的项目。", "metadata": {"round": 1}}],
+        messages=[
+            {"role": "assistant", "type": "question", "content": "介绍一个你主导的项目。", "metadata": {"round": 1}}
+        ],
     )
 
     response = client.post(f"/interview/sessions/{row.id}/end")
