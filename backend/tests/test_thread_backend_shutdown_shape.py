@@ -1,4 +1,4 @@
-"""P3 第一项（D173）：`thread` 后端的两条边界，都被钉成会红的形状。
+"""P3 第一项（D173，D176 加第三条腿）：`thread` 后端的三条边界，都钉成会红的形状。
 
 现量的事实（2026-10-09，开发库 + 两份 compose）：
 
@@ -8,12 +8,15 @@
   这条不在门的射程里，门钉的是"签进树的默认值 + 签进树的编排"。
 * **两份 compose 里都没有任何 worker 服务**（grep `worker|run_orchestration` 零命中），
   `scripts/run_orchestration_worker.py` 只活在 README 的常用命令表里。
-* `ThreadOrchestrationBackend.shutdown()` 用的是 `cancel_futures=False`
-  （`orchestration_backend.py:96`）：优雅退出时**排队里的任务不会被取消**，解释器 atexit 会等线程池把
-  它们跑完。所以"thread 后端会在关闭时丢任务"这句常见说法只对**硬杀**（SIGKILL / OOM / 容器被删）成立。
+* 树里有**两个**线程池，关闭语义**相反**：编排池 `ThreadOrchestrationBackend.shutdown()` 用
+  `cancel_futures=False`（`orchestration_backend.py:96`），所以"thread 后端会在关闭时丢任务"这句
+  常见说法**对编排池只对硬杀成立**；而逐题评分池 `shutdown_interview_evaluation_executor()` 用
+  `cancel_futures=True`（`interview_evaluation_service.py:42`，`main.py:68` 在关停时调），它是真的会取消
+  ——那一题靠 D163 的重投扫描捡回来，不靠排空。
 
-下面两条把这两件事分别钉住：① 优雅关闭不丢排队任务（改成 `cancel_futures=True` 立刻红）；
-② 谁哪天把默认值翻成 `redis_queue` 而 compose 里没有消费它的 worker 服务，就得先被这条拦住——
+三条腿各自钉一件事：① 编排池优雅关闭不丢排队任务（改成 `cancel_futures=True` 立刻红）；
+② 评分池确实会取消排队任务（改成 `cancel_futures=False` 立刻红）——这条是防"有人把两处统一成一种语义"；
+③ 谁哪天把默认值翻成 `redis_queue` 而 compose 里没有消费它的 worker 服务，就得先被这条拦住——
 那种部署下任务是**入队即永远不跑**，30 分钟后才被 `mark_stale_running_tasks_failed` 标成 failed，
 候选人看到的是"分析失败"而队列里那条元素还躺着。
 """
@@ -72,7 +75,49 @@ def test_graceful_shutdown_still_runs_every_queued_task():
     assert sorted(done) == list(range(8)), f"优雅关闭吞掉了 {8 - len(done)} 个还在排队的任务：{sorted(done)}"
 
 
-# ---------------------------------------------------------------- ② 默认值与 worker 服务的耦合
+# ---------------------------------------------------------------- ② 另一个线程池故意是反的
+
+
+def test_the_interview_evaluation_pool_cancels_queued_work_on_purpose():
+    """树里有两个线程池、两种关闭语义，而且是**反着**的，这条钉住第二处。
+
+    编排池 `cancel_futures=False`（上面 ①）；逐题评分池 `cancel_futures=True`
+    （`interview_evaluation_service.py:42`，由 `main.py:68` 在关停时调）。取消不是漏：那一题的
+    durable 行留在库里，由 `requeue_stale_turn_evaluations` 在下次启动与每 10 分钟那一拍捡回来
+    （D163）。这条守卫拦的是"有人把两处统一成一种语义"：编排池改成 True 会吞掉候选人已经点下去
+    的分析；评分池改成 False 会让每次发布去等一个还在打 provider 的线程，拖长停机又没有任何补偿。
+    """
+    from app.services import interview_evaluation_service as iev
+
+    monkey = iev.settings
+    original = monkey.INTERVIEW_EVALUATION_MAX_WORKERS
+    monkey.INTERVIEW_EVALUATION_MAX_WORKERS = 2
+    try:
+        ran: list[int] = []
+        lock = threading.Lock()
+
+        def task(i: int) -> None:
+            with lock:
+                ran.append(i)
+            time.sleep(0.05)
+
+        executor = iev._get_executor()
+        for i in range(8):
+            executor.submit(task, i)
+
+        iev.shutdown_interview_evaluation_executor()  # 等价于发布时 uvicorn 关停里那一步
+        deadline = time.time() + 3.0
+        while len(ran) < 8 and time.time() < deadline:
+            time.sleep(0.02)
+        assert (
+            len(ran) < 8
+        ), f"取消语义不见了：8 个任务跑完了 {len(ran)} 个，其中排队里的本该被 cancel_futures=True 丢掉"
+    finally:
+        monkey.INTERVIEW_EVALUATION_MAX_WORKERS = original
+        iev.shutdown_interview_evaluation_executor()
+
+
+# ---------------------------------------------------------------- ③ 默认值与 worker 服务的耦合
 
 
 def defaults_in_text(text: str) -> list[str]:
