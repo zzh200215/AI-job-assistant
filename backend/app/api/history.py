@@ -73,6 +73,7 @@ def list_history(
     for it in items:
         r = rid_to_resume.get(it.resume_id)
         j = jid_to_jd.get(it.jd_id)
+        report = it.match_report if isinstance(it.match_report, dict) else {}
         data.append(
             {
                 "id": it.id,
@@ -83,6 +84,9 @@ def list_history(
                 "jd_title": j.title if j else None,
                 "jd_company": j.company if j else None,
                 "match_score": it.match_score,
+                # 键名与 `match_report` 里那个**逐字相同**（D166 刚收掉过一次"同一个事实两个名字"）。
+                # 没被回算过的行是 None，前端据此一个字都不画。
+                "displayed_before_backfill": report.get("displayed_before_backfill"),
                 "remark": it.remark,
                 "create_time": it.create_time.isoformat() if it.create_time else None,
             }

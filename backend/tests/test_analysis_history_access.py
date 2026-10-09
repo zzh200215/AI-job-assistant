@@ -87,13 +87,14 @@ def _create_record(
     resume_id: int,
     jd_id: int,
     match_score: int = 88,
+    report: dict | None = None,
 ) -> AnalysisRecord:
     record = AnalysisRecord(
         user_id=user_id,
         resume_id=resume_id,
         jd_id=jd_id,
         match_score=match_score,
-        match_report={"summary": "ok"},
+        match_report=report or {"summary": "ok"},
         optimize_suggestions={"items": []},
         interview_questions=[],
         remark="test",
@@ -226,3 +227,35 @@ def test_history_delete_rejects_foreign_record(access_client, db_session):
     body = response.json()
     assert body["code"] == ERR_PARAM
     assert body["message"] == "记录不存在或无权限"
+
+
+def test_history_list_carries_the_pre_backfill_number_only_for_backfilled_rows(access_client, db_session):
+    """D167：回算过的行要把"候选人当时看到的那个数"带到列表上；没回算过的必须是 None。
+
+    键名与 `match_report` 里那个**逐字相同**（`displayed_before_backfill`）——D166 刚收掉过一次
+    "同一个事实两个名字"，这里不能再造一个。列表只带这一个标量，不整份吐 `match_report`。
+    """
+    owner = _create_user(db_session, "backfill_owner", "backfill_owner@example.com")
+    resume = _create_resume(db_session, user_id=owner.id, file_name="mine.pdf")
+    job = _create_job(db_session, user_id=owner.id, title="My Job")
+    plain = _create_record(db_session, user_id=owner.id, resume_id=resume.id, jd_id=job.id, match_score=16)
+    backfilled = _create_record(
+        db_session,
+        user_id=owner.id,
+        resume_id=resume.id,
+        jd_id=job.id,
+        match_score=16,
+        report={"summary": "ok", "displayed_before_backfill": 85, "score_method": "rubric_6dim_v2"},
+    )
+
+    listing = access_client.get("/history", headers=_auth_headers(owner))
+    assert listing.status_code == 200
+    items = {item["id"]: item for item in listing.json()["data"]["items"]}
+    assert set(items) == {plain.id, backfilled.id}
+    assert items[backfilled.id]["displayed_before_backfill"] == 85
+    # 没回算过的行：键在、值是 None。前端靠这一句决定画不画，键缺席会让它读到 undefined。
+    assert "displayed_before_backfill" in items[plain.id]
+    assert items[plain.id]["displayed_before_backfill"] is None
+
+    detail = access_client.get(f"/history/{backfilled.id}", headers=_auth_headers(owner))
+    assert detail.json()["data"]["match_report"]["displayed_before_backfill"] == 85

@@ -46,6 +46,9 @@ async function renderHistory(payload) {
 
 describe('History 列表对响应形状的假设', () => {
   beforeEach(() => {
+    // 弹窗是 teleport 到 body 的，而这个文件里的用例不 unmount；不清干净的话
+    // `document.querySelector('.el-dialog')` 会抓到上一用例留下的对话框。
+    document.body.innerHTML = ''
     api.listHistory.mockReset()
     api.getHistoryDetail.mockReset()
     api.deleteHistory.mockReset()
@@ -72,5 +75,73 @@ describe('History 列表对响应形状的假设', () => {
     expect(rows[0].text()).toContain('92')
     expect(rows[1].text()).toContain('61')
     expect(wrapper.find('.history-focus-strip').exists(), '摘要条被 v-if 掉了').toBe(true)
+  })
+
+  /* D167：§10.38 点的是"回算但保留原值"，所以候选人得能看到"当时显示 85、现在这个 16 是重算的"。
+     后端把 `match_report.displayed_before_backfill` 原样带到列表（键名逐字相同，D166 才刚收掉一次
+     "同一个事实两个名字"）。这里两条都要钉：**有值的行画出来**、**没值的行一个字都不多**——
+     后者是这一刀的全部观感风险，70 行里今天还没有一行被回算过。 */
+  it('被回算过的行多一句「当时显示 N」，没回算过的行一个字都不多', async () => {
+    const { wrapper, errors } = await renderHistory({
+      total: 2,
+      items: [
+        {
+          id: 1,
+          match_score: 16,
+          resume_name: '简历A',
+          jd_title: '岗位A',
+          displayed_before_backfill: 85,
+        },
+        {
+          id: 2,
+          match_score: 42,
+          resume_name: '简历B',
+          jd_title: '岗位B',
+          displayed_before_backfill: null,
+        },
+      ],
+    })
+    expect(errors).toEqual([])
+    const rows = wrapper.findAll('.el-table__row')
+    expect(rows[0].text(), '回算过的行没有把旧分数画出来').toContain('当时显示 85')
+    expect(rows[1].text()).not.toContain('当时显示')
+
+    // 反证：键整个缺席时也必须不画（后端对没回算的行给的是 None，但老响应/别的消费者可能没这个键）。
+    const { wrapper: bare, errors: bareErrors } = await renderHistory({
+      total: 1,
+      items: [{ id: 1, match_score: 16, resume_name: '简历A', jd_title: '岗位A' }],
+    })
+    expect(bareErrors).toEqual([])
+    expect(bare.findAll('.el-table__row')[0].text()).not.toContain('当时显示')
+  })
+
+  it('详情弹窗里那句还说明这个数是按权威算法重算的', async () => {
+    api.getHistoryDetail.mockResolvedValue({
+      id: 1,
+      match_score: 16,
+      match_report: { displayed_before_backfill: 85, summary: '模型写的那段话' },
+    })
+    const { wrapper, errors } = await renderHistory({
+      total: 1,
+      items: [
+        {
+          id: 1,
+          match_score: 16,
+          resume_name: '简历A',
+          jd_title: '岗位A',
+          displayed_before_backfill: 85,
+        },
+      ],
+    })
+
+    const viewButton = wrapper.findAll('.el-table__row')[0].findAll('button')[0]
+    await viewButton.trigger('click')
+    await flushPromises()
+
+    expect(api.getHistoryDetail.mock.calls, '点「查看」没有去取详情').toEqual([[1]])
+    const dialog = document.querySelector('.el-dialog')
+    expect(dialog, '详情弹窗没有渲染').not.toBeNull()
+    expect(dialog.textContent).toContain('当时显示 85，现按权威算法重算')
+    expect(errors).toEqual([])
   })
 })

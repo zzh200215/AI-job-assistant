@@ -980,6 +980,10 @@ const FIXTURES = [
           jd_title: '平台后端工程师',
           jd_company: '示例公司',
           match_score: 92,
+          // D167：这一行是"被回算过"的样子（`displayed_before_backfill` 由
+          // `backend/app/api/history.py:76-91` 从 match_report 原样带出）。其余几行没有这个键，
+          // 于是活页上同时有"该画一句"和"一个字都不许多"两种现场。
+          displayed_before_backfill: 85,
           remark: '高匹配',
           create_time: '2026-10-01T09:00:00',
         },

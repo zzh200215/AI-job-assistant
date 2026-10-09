@@ -76,6 +76,10 @@
         <el-table-column label="匹配度" width="120">
           <template #default="{ row }">
             <el-tag :type="scoreToneTagType(row.match_score)">{{ row.match_score ?? '-' }}</el-tag>
+            <!-- 只有被回算过的行才有这一句；没回算过的行观感零变化（D167）。 -->
+            <div v-if="row.displayed_before_backfill != null" class="muted">
+              当时显示 {{ row.displayed_before_backfill }}
+            </div>
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="120" />
@@ -118,6 +122,9 @@
             <el-tag :type="scoreToneTagType(detail.match_score)" size="small">{{
               detail.match_score
             }}</el-tag>
+            <div v-if="detail.match_report?.displayed_before_backfill != null" class="muted">
+              当时显示 {{ detail.match_report.displayed_before_backfill }}，现按权威算法重算
+            </div>
           </el-descriptions-item>
           <el-descriptions-item label="分析时间">{{ detail.create_time }}</el-descriptions-item>
           <el-descriptions-item label="简历">
