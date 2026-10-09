@@ -1038,6 +1038,41 @@ const FIXTURES = [
       ],
     },
   ],
+  /* D168：详情那条路的夹具。列表用的是 `/\/history(\?|$)/`，它**匹配不到** `/history/99`，
+     所以点「查看」在探针里一直落空返回 `{}` —— D167 因此只能把"详情那一句"记成未验。
+     字段照 `backend/app/api/history.py:112-127` 逐字抄。 */
+  [
+    /\/history\/\d+$/,
+    'get',
+    {
+      id: 99,
+      resume_id: 1,
+      jd_id: 7,
+      resume: {
+        id: 1,
+        name: '探针简历',
+        file_name: '探针简历.pdf',
+        parsed: { current_title: '后端工程师' },
+      },
+      jd: {
+        id: 7,
+        title: '平台后端工程师',
+        company: '示例公司',
+        parsed: { title: '平台后端工程师' },
+      },
+      match_score: 92,
+      match_report: {
+        summary: '模型写的那段话',
+        recommendation: '谨慎投递',
+        displayed_before_backfill: 85,
+        score_method: 'rubric_6dim_v2',
+      },
+      optimize_suggestions: { items: [] },
+      interview_questions: [],
+      remark: '回算样例',
+      create_time: '2026-10-01T09:00:00',
+    },
+  ],
 ]
 
 /* 夹具命中账：这一屏到底发过哪些请求、哪一条没夹具可落（落空就是 `{}`，
