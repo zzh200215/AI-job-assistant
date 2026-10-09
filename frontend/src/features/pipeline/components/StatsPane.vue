@@ -319,8 +319,10 @@ const stageToRate = (from, to) => boardStageToRate(props.counts, from, to)
 }
 
 /* 与 BoardPane 的 `.dot-slate` 同一档、同一刀：手挑灰蓝换成 `--app-muted`（跟着主题走）。
-   这一档在漏斗里读数取决于轨道：今天轨道是 EP 的 `--el-fill-color`（浅色遗留），
-   挂在它上面只有 2.29（图形门槛 3:1）；换成深色轨道后是 7.35。轨道本身另有一格等拍（§10.35）。 */
+   这一档在漏斗里的读数取决于轨道，而轨道已经定过两次（§10.35 由 D153 按 ① 关闭、D154 按他
+   的指令把令牌换回 `--app-surface-contrast`）——**逐档的数不写在这里**：它住在守卫
+   `styleDebtRatchet` 的 `GRAPHIC_SITES` 里（那条门同时要求它与活页实测逐对对齐），
+   写一份第二处只会过期。上一版这句注释里就带着两个已经作废的数。 */
 .fill-slate {
   background: var(--app-muted);
 }
