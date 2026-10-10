@@ -161,6 +161,18 @@ const ANALYSIS_RECORD = {
 /* 相对"今天"的时间戳：`followUpLevel` 的两个阈值（>=7 / >=3 天）只有用相对天数才能长期各就各位。 */
 const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString()
 
+/* ―― D183：面试列表上那条"不需要 WebSocket 的收口"（D172 加的按钮）第一次要有活页读数。
+   列表夹具是**有状态**的：点过结束的那一行在重拉时必须已经是已完成，否则"点了之后行落到哪一档"
+   这一条就只能靠 jsdom 说。岗位名一律中性（甲/乙/丙）——D172 那次教训是夹具名"从未开始的岗位"
+   里含着"未开始"三个字，把状态标签的断言变成了空话。 ―― */
+const probeEndedSessions = new Set()
+const INTERVIEW_LIST_ROWS = [
+  { id: 91, jd_title: '岗位甲', created_at: daysAgo(1), overall_score: 0 },
+  { id: 92, jd_title: '岗位乙', created_at: daysAgo(2), overall_score: 0 },
+  { id: 93, jd_title: '岗位丙', created_at: daysAgo(3), overall_score: 82 },
+]
+const INTERVIEW_LIST_STATUS = { 91: 'ongoing', 92: 'created', 93: 'completed' }
+
 const FIXTURES = [
   [/\/auth\/me$/, 'get', { id: 1, username: 'probe', role: 'candidate', nickname: '探针' }],
   [/\/resume\/?(\?|$)/, 'get', [{ id: 1, title: '探针简历', created_at: '2026-09-01' }]],
@@ -480,6 +492,34 @@ const FIXTURES = [
      `isSameSession` 不同就会把 messages 清空），WS 连不上只会把 status 打成 error 并留下一句提示。
      五条 evaluation 各占一个分数档（INTERVIEW_SCORE_BANDS 是 85 / 70 / 55），加上 `score` 缺失那条走
      unknown，五档一次量齐。字段名照 `TranscriptPane.vue:38-52` 的取法写，不是照后端模型猜。 */
+  /* D183：列表与收口那两条（`api/interview.js:11` 的 GET `/interview/sessions` 与
+     `:29-30` 的 POST `/interview/sessions/{id}/end`）。正则用 `$` 收口，所以不会与下面
+     那条房间详情 `/\/interview\/sessions\/\d+$/` 抢；顺序上列表这条在前，先命中先得。 */
+  [
+    /\/interview\/sessions(\?|$)/,
+    'get',
+    () => ({
+      items: INTERVIEW_LIST_ROWS.map((row) => ({
+        ...row,
+        status: probeEndedSessions.has(row.id) ? 'completed' : INTERVIEW_LIST_STATUS[row.id],
+      })),
+      total: INTERVIEW_LIST_ROWS.length,
+    }),
+  ],
+  [
+    /\/interview\/sessions\/\d+\/end$/,
+    'post',
+    (body, url) => {
+      const id = Number((url || '').match(/sessions\/(\d+)\/end/)?.[1] ?? -1)
+      probeEndedSessions.add(id)
+      return {
+        session_id: id,
+        status: 'completed',
+        overall_score: 0,
+        message: '面试已结束，评分按已作答的题生成。',
+      }
+    },
+  ],
   [
     /\/interview\/sessions\/\d+$/,
     'get',
@@ -1101,7 +1141,8 @@ request.defaults.adapter = async (config) => {
   /* 夹具可以是函数：跟进档位那一条按 `Date.now()` 算相对天数，写死日期的话过几天整条档就跳了，
      读数会静默变成另一档（和 [[eval-gates-must-beat-chance]] 里"旧基线作废"同一类坑）。 */
   const raw = hit ? hit[2] : {}
-  const data = typeof raw === 'function' ? raw(body) : raw
+  // D183：函数夹具多收一个 `url`——有状态的收口那条要从 URL 里取 session id。
+  const data = typeof raw === 'function' ? raw(body, url) : raw
   fixtureLog.push({ url, method, hit: !!hit, body })
   return {
     data: { code: 0, message: 'ok', data },

@@ -4389,6 +4389,27 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **验收**：本轮**零生产代码改动**，树未变（backend 全量 **879 passed** 沿用 D181 的读数）；库内终态现取：`resume 1` 三列全等、`resume_version` 0 行、`interview_turn_evaluation` 0 行、`interview_session` 14 行、`prompt_trace` 1601 行；仪器与转储文件全部删除，`git status` 干净。
 
+#### 已交付：D183 那个"不需要 WebSocket 的收口"按钮有活页读数了——点通了，10.72:1，一发 POST 打到它自己的 id
+
+**收的是 D172 自己留的那格**："新按钮没有活页读数（复用既有 `el-button` 与既有行样式，风险集中在文案与位置，由 3 条 jsdom 断言钉）"。不需要起后端——探针的夹具层就能给真浏览器读数，**零 DB 写、零 provider**。
+
+**改动（只动探针）**：`probe/dead-style.entry.js` 加两条夹具 + 匹配器多传一个参数。
+- 列表夹具是**有状态**的（`probeEndedSessions` 这个 Set）：点过结束的那一行在重拉时必须自己变成已完成，否则"点了之后落到哪一档"只能靠 jsdom 说；岗位名一律中性（甲/乙/丙）——D172 那次教训是夹具名叫"从未开始的岗位"里含着"未开始"，把状态标签的断言变成空话。
+- `end` 那条写成函数夹具，**session id 从 URL 里取**，所以匹配器从 `raw(body)` 改成 `raw(body, url)`（现有函数夹具都只收一个参数，向后兼容）。
+
+**活页读数（`?to=/interview` 直挂，先证屏幕真是那一页：`h2 = 面试作战室`——hidden 标签页不发 rAF 那个坑每次都查）**：
+- 三行副标题 = `进行中 / 未开始 / 已完成`，三档标签在真浏览器里各就各位；`结束面试` 按钮**恰好 1 个**，且就在第 0 行（唯一 `ongoing` 那行）。
+- 计算样式：字 `rgb(200, 202, 212)`，按钮**自身 bg 透明** ⇒ 往上走到第三层祖先才找到承托面 `.interview-list` 的 `rgb(23, 25, 34)`，**对比度 10.72:1**（12px 文字；AA 要 4.5、AAA 要 7）。
+- 点下去：POST **恰好一发**，打到 `/interview/sessions/91/end`（91 就是那一行自己的 id），`body=null`（`api/interview.js:29-30` 本来就是无体 POST）；重拉后第 0 行副标题变 `已完成`、全表按钮数 **0**、ElMessage 出「**面试已结束，报告已生成**」。
+
+**两条现取的探针缺口，我没顺手补**：这一页从来没被探针走过，`fixtureLog` 里 `/interview/question-bank` 与 `/interview/performance` 都是 `hit=false` ⇒ 每日一题与表现那两块面板在探针里是空的。补它们要先照消费者的读法抄形状，**凭猜写夹具正是 D162/D172 记过的那族错**，所以记为已知缺口而不是"已覆盖"。
+
+**两处我自己的仪器错**：① 第一次起 vite 我写成 `npx vite --port 5174 --host 127.0.0.1 probe`——那个位置参数把 **root 设成了 `frontend/probe`**，于是所有 `/@fs/.../src/*` 模块 500、`window.__probe` 不存在，症状长得像"探针坏了"，其实是启动参数错（记忆里那条命令是不带位置参数的）；② 停服按 PID 杀，且**先核对命令行里确实有 vite** 再 `Stop-Process`。另外并发读数第三次出现：hook 那份报 601，清空并发后单跑是 **90 files / 600 passed**——报数以单独跑为准。
+
+**验收**：`npm run format:check` 全仓 Prettier 通过、`node scripts/dead-style.mjs --selftest` 四页候选 0 / 全仓候选 0、`npm run test:unit` **90 files / 600 passed**；改动只有 `probe/dead-style.entry.js` 一个文件（非产品代码，构建图不含它），后端零改动。
+
+**至此 P5 那两条"要花钱/要多进程才能验的未验"全部收口**：① 一发真 provider 响应——恢复链与建议→应用→撤销**两支都由 D182 跑通并留了读数**；② 多进程认领互斥——由 D178 加租约、D180 在真库上量到"总赢家 1"。账上剩下的未验因此是另外三件，都不是 P5：真发全量 RAG 评估（连发撞 429、且建议那一发已经贴着 60s 超时线）、rerank 的本地 cross-encoder（`.venv` 里没有 torch/transformers，真模型从未加载过）、`vue-tsc` 基线（从未取到有效退出码，CI 也不跑它）。
+
 
 
 
