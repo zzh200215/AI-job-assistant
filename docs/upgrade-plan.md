@@ -4263,7 +4263,7 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **一处端口现取（不动它）**：`127.0.0.1:8000` 上的监听者按 PID 核过命令行 = `D:\AI\ACD\envs\llmXM\python.exe -m uvicorn src.api.main:app`，**不是本项目**（本项目入口是 `app.main`）。所以开发机上没有本项目的调度器在跑，仪器那一行不会被重投扫描捡走（何况它的 `created_at` 是当下，15 分钟阈值也够不到）。没有杀、没有碰那个进程。
 
-**未验因此从七条减到四条**：还欠的是"一发真 provider 响应穿过恢复链与撤销链"（花钱，他仍没批）、D174 的端到端延迟、D172 新按钮的活页读数、`vue-tsc` 与 rerank 真模型（后两条是环境装不了，不是没测）。**没动的那件仍然是候选人数据**：库里 `interview_session` 现取 14 行 = completed 10 / `ongoing` 2 / `created` 2，那 4 场非终态还在（id 1、3、12、13），收口端点已经上线但没人点过它。
+**未验因此从七条减到四条**：还欠的是"一发真 provider 响应穿过恢复链与撤销链"（花钱，他仍没批）、D174 的端到端延迟、D172 新按钮的活页读数、`vue-tsc` 与 rerank 真模型（后两条是环境装不了，不是没测）。**没动的那件仍然是候选人数据**：库里 `interview_session` 现取 14 行 = completed 10 / `ongoing` 2 / `created` 2，那 4 场非终态还在（id 1、3、12、13），收口端点已经上线但没人点过它。**（2026-10-10 D192 清完：`ongoing` 两场走 `end`、`created` 两场走 DELETE，库里现 12 行全部 completed、非终态 0 场；那条端点路径从此有现场读数，且实测零 provider 调用。）**
 
 **验收**：backend 全量 **870 passed / 106.16s**（前值 869，+1）；`ruff check .` All checks passed、`ruff format --check .` 359 files already formatted；一次性仪器与结果文件已删，`git status` 干净。
 
@@ -4556,6 +4556,26 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 **§10.39 的重开条件（可查，不是感觉）**：`prompt_trace` 里出现 `status='failed'` 且 `error_message LIKE '%空内容%'` 且 `degraded=1` 的行——那意味着主备两个型号同一发都空答，① 已经救不了，必须回到 ② 或 ③。
 
 **验收**：backend 全量 **902 passed / 118.77s**（含本条新增的 7 个 case）、`ruff check .` clean、`ruff format --check .` **363 files already formatted**（本条第一次跑那步时报了测试文件要重排，`ruff format` 单文件后即转绿）；frontend 零改动。
+
+#### 已执行：D192 那 4 场非终态面试会话清完了——两半各走端点自己那条路径，实测零 provider 调用
+
+**账上原来怎么写的**：D172 上线收口端点时留了一句"库里 4 场非终态（id 1、3、12、13），端点没人点过"。2026-10-10 他点名清这批。
+
+**动手前只读现取的三件事**：① id 1/3 是 `ongoing`，各只有 1 条 `question` 消息、0 条作答、**0 条 `interview_turn_evaluation`**；id 12/13 是 `created`、0 条消息。② `created` 那一档收口端点**按设计拒绝**（`interview_rest.py:229-230`："这场面试还没有开始…可以删除它或重新开始一场"），所以它们没有"结束"这条路，只有删除或留着。③ 全库引用 `interview_session` 的外键**只有一条**：`interview_turn_evaluation.session_id`，`ON DELETE CASCADE`——而这两场的子行是 0 ⇒ 删除不会级联带走别的东西。**这是删之前该查的那一行，不是"看起来是两张空会话"。**
+
+**第一半：`ongoing` 两场走 `end`**（复刻 `interview_rest.py:238-241` 那四行 `engine.db = db → init() → resume() → finish()`，不起 8010、不绕过任何业务判断）：
+- 状态分布 `completed 10 / created 2 / ongoing 2` ⇒ **`completed 12 / created 2 / ongoing 0`**。
+- id 1、3 各：`evaluation_status` `idle → completed`、`completed_at = 2026-10-10 12:48:39`、消息 `[question] → [question, end]`、报告 `overall_score=0` / `answered_questions=0` / `overall_evaluation="当前有效作答不足，暂时无法生成完整评估。"` / `improvement_suggestions=["请至少完成一道题后再查看复盘报告。"]`。
+- **`prompt_trace` 1601 → 1601、`interview_turn_evaluation` 0 → 0**：零 provider 调用是**量出来的**，不是 docstring 里的承诺——机制在 `_generate_report:375`，没有有效评分时直接返回 `_fallback_report()`，所以既没花一次模型、也没有给候选人伪造一份 AI 评分。
+- **均分没被动**：`interview_rest.py:834` 那条是 `if t["overall_score"] > 0` 才进平均。user 2 现取 11 场已完成里 **9 场是 0 分**（含这两场），进平均的只有 id 2 = 56 与 id 4 = 28 ⇒ `avg 42.0 / max 56`——这两场落进的是**本来就有 7 个 0 分的那个桶**，候选人看到的两个数一个都没变。
+
+**第二半：`created` 两场走 `DELETE`**（这一档他单独点的名；复刻 `:251-270`：按 `(id, user_id)` 取行 → `db.delete` → `commit`，没额外发明删除逻辑）：`14 → 12` 场、ids 12/13 消失、`by_status` 只剩 `completed 12`、`turn_evaluations` 与 `prompt_trace` 逐字不变 ⇒ **非终态 0 场**。
+
+**两条仪器纪律直接用上了**：所有读数一律 `engine.connect()` 新连接取（D189 那条：同事务 REPEATABLE READ 快照里的"删除成功/还原成功"是自证不是证据）。**还原件**：`D:/AI/llmXM/_backfills/interview-sessions-before-2026-10-10.json`（21,034 字节，**四行、每行每一列**，含 `messages` / `evaluation` 原文与主键 id）——那两行删掉的要回来就是照这份 INSERT，跟 D171 那批回算同一个规矩：**写之前先落 before-image，且落在仓库外**。
+
+**未验（如实）**：屏幕没再验一次。`_serialize_session` 是历史列表的读者、数据面读数齐了，但"这两场现在以'作答不足'的形态出现在 user 2 的面试历史里"没有活页读数——起 8010 会为一次纯展示把 lifespan 的写库副作用引进来，我没起。
+
+**验收**：代码零改动（本条是一次数据操作 + 台账），临时脚本与读数跑完即删，`git status` 只剩这一份文档。
 
 
 
