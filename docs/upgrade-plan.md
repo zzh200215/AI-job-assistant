@@ -4443,6 +4443,20 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **验收**：backend 全量 **883 passed / 106.01s**（前值 882，+1）、`test_interview_evaluation_requeue.py` 12 passed；`ruff check .` All checks passed、`ruff format --check .` 361 files already formatted。改动：`config.py`、`interview_evaluation_service.py`（两处推导注释）、requeue 测试、`.env.example` / `.env.production.example` / 两份 compose 的各一行。
 
+#### 已交付：D186 D185 那五处是我手工对齐的——现在有一条门看着它
+
+**补的是自己留下的洞**：D185 把 `LLM_TIMEOUT` 从 5 个地方各自 60 改成 120，靠的是我逐处 grep；**下一个人半改（只改代码默认值，或只改一份 compose）不会有任何东西变红**。这与 D166 那族完全同形（同一个量在多处各写一遍），解法也照抄：一条静态门。
+
+**门有两条腿，少一条就是空转**（`tests/test_llm_config_values_agree_across_files.py`，3 条）：① `LLM_TIMEOUT` / `LLM_MODEL` 在代码默认值 + 两个 `.env.*.example` + 两份 compose 的 `${VAR:-default}` 里必须**唯一**；② 每一处**必须真的读到值**——读到 0 次或 2 次直接红，因为"键名被改"最容易伪装成"少比了一处，于是全绿"。对照物取 `Settings.model_fields[...].default`（类上的），不是实例——实例会被本机 `backend/.env` 覆盖，那正是 D179 那条"测 `Settings` 要显式给字段"的教训。
+
+**三个变异全部落牙**：Y1 单点改 `docker-compose.yml` 的 120→90 → **1 红**（红在该键那条参数化上）；Y2 把 `backend/.env.example` 的键名改成 `LLM_MODELL` → **1 红，且红在"锚点变了"那句 assert**——这正是第二半条腿存在的理由，没有它 Y2 会表现为"只读到 3 处且值相同 ⇒ 绿"；Y3 只改代码默认值 → **2 红**（漂移那条 + 钉当前值那条）。三次都 `restored=True`。
+
+**自己的一次锚点写错，被门当场逮住**：第一版把两份 compose 写成 `backend/docker-compose.yml`，实际在仓库根 ⇒ 测试直接红"文件不见了"。这条守卫连我写它的第一个错都拦下来了，算它存在的价值。
+
+**边界（没顺手扩）**：只管这两个键。树里还有别的多写点（`ORCHESTRATION_*`、`DB_POOL_*`），扩之前要先确认那一处**真的必须相同**——compose 的 `${X:-}` 与 example 的默认值不总是同一件事（前者是"运维没配时的兜底"，后者是"给人抄的样板"）。
+
+**验收**：backend 全量 **886 passed / 105.81s**（前值 883，+3）；`ruff check .` All checks passed、`ruff format --check .` 362 files already formatted。**推送仍未成功**：`github.com:443` 连接超时（DNS 解析正常 20.205.243.166，而 `api.github.com:443` 与 `dashscope.aliyuncs.com:443` 都通），是网络侧对该主机的可达性问题，不是权限拦截；本地因此有 3 个未推提交（D184/D185/D186）。
+
 
 
 
