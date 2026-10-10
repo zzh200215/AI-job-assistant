@@ -4305,6 +4305,24 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **验收**：backend 全量 **871 passed / 107.58s**（前值 870，+1）；`ruff check .` All checks passed、`ruff format --check .` **360 files already formatted**；`scripts/export_schema_baseline.py --check` **OK**（快照里 `claimed_at DATETIME` 在第 999 行）。
 
+#### 已交付：D179 模型供应商从 dashscope 换到 SenseNova（本机 `.env`，不进树）+ 一条"两家供应商"的配置守卫
+
+**为什么换**：他报"项目配置的模型额度用完了"，并给了一把新 key 与一张模型目录截图。**前提当场被测量打掉一次**：新 key 在 `https://dashscope.aliyuncs.com/compatible-mode/v1/models` 上是 **401**，而旧 key 在同一端点是 **200 / 262 个模型**——端点是好的，是两把 key 不同家。截图里没有端点信息，所以我没有猜 URL：查到 SenseNova 官方文档写明的两个兼容端点后，用他的 key 各试一次，`https://token.sensenova.cn/v1` **200**（`/models` 现量 7 个 ID 与截图逐一对上：`deepseek-v4-flash`、`deepseek-flash`、`deepseek-v4.1-flash`、`glm-5.2`、`kimi-k3`、`sensenova-6.8-flash-lite`、`sensenova-u1.5-lite`），海外那个 `.ai` 是 **401**。
+
+**配置落在 `backend/.env`（gitignored；两个 `.env.*.example` 不含任何真值）**：`LLM_PROVIDER=openai`（型号不再是阿里自家的；代码路径与 `qwen` 是同一条 `llm_service.py:1060`）、`LLM_MODEL=deepseek-v4-flash`、`LLM_FALLBACK_MODEL=glm-5.2`、`LLM_BASE_URL=https://token.sensenova.cn/v1`。
+
+**他选的"向量化那一档不动"按代码做不到——这是本轮真正的收获**：`embedding_service.py:317/333/337` 是 `EMBEDDING_API_KEY or LLM_API_KEY`、`EMBEDDING_BASE_URL or LLM_BASE_URL`，而原来的 `.env` 里 `EMBEDDING_*` 只有 provider 与 model 两行，key/base 全空 ⇒ 一旦换 `LLM_API_KEY`，向量化会跟着去新供应商找 `text-embedding-v3`（那家 `/models` 现量**没有任何向量模型**），RAG 整条静默挂掉、界面上却一切正常。所以 `.env` 里显式钉回两行 `EMBEDDING_API_KEY` / `EMBEDDING_BASE_URL`，并把这条变成守卫（见下）。
+
+**真跑通的读数（走项目自己的 `chat_json`，不是裸 HTTP）**：返回 `{"en": "Interview evaluation requires evidence.", "words": 4}`；provenance `source=real, degraded=false, cache_hit=false`；`prompt_trace` 1596 → **1597**，那一行是 `openai / deepseek-v4-flash / success / 128 prompt + 119 completion tokens`；`embed_texts` 返回 **1024 维**（首三维 `-0.089483 / -0.007181 / -0.028978`）仍走 dashscope；**两个型号都支持项目用的 `json_mode=True`**（`deepseek-v4-flash` 回 `{"ok": true}`、`glm-5.2` 回带换行的同义 JSON）——fallback 那条路现在是验过的，不是等出事才第一次走。**一个运营事实**：连发会撞 **HTTP 429**，这一轮日志里出现 3 次 `调用失败将重试(1/2)`、`(2/2)`，全部被项目自带的重试链（2 次、退避 1.5s/3s）吸收；单发没问题，批量（如全量 RAG 评估）会顶到限流墙。
+
+**守卫（`core/config.py` 新增 `_reject_split_provider_embedding_fallback` + 5 条测试）**：`LLM_PROVIDER` 与 `EMBEDDING_PROVIDER` 是**不同的网络供应商**且 `EMBEDDING_API_KEY` / `EMBEDDING_BASE_URL` 有空 ⇒ 生产 `ValueError`、非生产 `logger.warning`；报错只点名**缺的那几行**，不写死供应商名。`tests/test_split_provider_embedding_guard.py` 5 条：生产拒绝并点名两行、只缺一行时不冤枉另一行、两行都钉则放行、同一供应商不需要额外东西、开发机只 warning。**变异**（摘掉那一句调用）→ **3 红**，`restored=True`。文档同步：`backend/.env.example` 的 EMBEDDING 块加了这条规则与代码行号，`docs/setup-and-security.md` 的生产清单加一项。
+
+**两次我自己的仪器错（都记下来）**：① 第一版冒烟把 `_openai_compatible_chat` 当 2 元组解包（`ValueError: too many values to unpack`）——内层函数只回 `raw`，provenance 是 `_call_with_fallbacks` 那一层给的；② dev-warning 那条第一版没显式给 `EMBEDDING_API_KEY/BASE_URL` 空串，pydantic-settings 从本机 `.env` 读到真值 ⇒ 判据在数空气，"没 warning"被读成产品坏了。**凡是构造 `Settings` 的测试，参与判断的字段一律显式给**，否则测的是这台机器而不是代码。
+
+**未验 / 未做**：没跑真发全量评估（会连打几十次 LLM，且新供应商有限流）；`LLM_INPUT/OUTPUT_COST_PER_1K_CENTS` 仍是 `0.0` ⇒ 账上看不见钱，token 数是唯一信号。**D178 的 `alembic upgrade head` 第二次被权限层拦下**（"往连着凭据的开发库做 schema 变更"），没绕道，仍等他一句话；`5ef0359` 未推。另：这把 key 已进过对话，建议用完轮换。
+
+**验收**：backend 全量 **876 passed**（前值 871，+5）；`ruff check .` All checks passed、`ruff format --check .` 361 files already formatted。
+
 
 
 

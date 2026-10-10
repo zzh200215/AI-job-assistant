@@ -140,6 +140,11 @@ Before running `docker compose -f docker-compose.prod.yml up -d`, verify:
 - [ ] `JWT_SECRET` is at least 32 characters long and uniquely generated.
 - [ ] `LLM_PROVIDER` and `EMBEDDING_PROVIDER` are explicitly set to real providers (not `mock`).
 - [ ] `LLM_API_KEY` and `EMBEDDING_API_KEY` are populated.
+- [ ] If `LLM_PROVIDER` and `EMBEDDING_PROVIDER` are **different vendors**, both `EMBEDDING_API_KEY`
+      and `EMBEDDING_BASE_URL` are set explicitly. Left empty they fall back to the `LLM_*` pair
+      (`services/embedding_service.py:317/333/337`), which sends embedding requests to the LLM
+      vendor — and most chat-only gateways do not serve `text-embedding-v3`. Production startup
+      refuses this combination (`core/config.py`, D179).
 - [ ] Alembic migrations have been run with the `migrate` profile.
 - [ ] At least one admin account has been created with `backend/scripts/create_admin.py`.
 - [ ] Rate-limit values are appropriate for your expected traffic.
