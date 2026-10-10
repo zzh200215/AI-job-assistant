@@ -4731,6 +4731,35 @@ select count(*) from rewrite_suggestion_job
 
 **验收**：代码零改动、库零写入、§10 不挂新项（仍在册 37 条、open 0），第 39 条补记"按 A 收，重开条件 = 上面那条查询"。
 
+#### 已量：D203 把"仍在请求里同步等模型的路由"点清了——11 条，全是 `def`，一条 `async def` 都没有
+
+**为什么这是"剩余任务"而不是新活**：D189 那条未验③与 D200 那条未验③都写着"全仓其余同步等模型的路由没清点"，而 nginx 那 180s 的注释因此只能说"保护某一族、是谁不知道"。这一条把那一句换成清单。
+
+**先说一条失败的尝试**（免得下次有人再来试）：想用 `prompt_trace` 直接枚举调用点是**行不通**的——1601 行里 **1215 行的 `source` 就是 `chat_json`**（多数调用点没 `set_llm_trace_context`），带得出来源的只有 `llm_service.chat_json` 277、`FinalReportAgent.run_impl` 100、`AnswerEvaluationAgent` 5、`build_rewrite_suggestions` 2、`career_path_agent.recommend` 1、`unknown` 1。所以只能走静态图。
+
+**方法**：两跳 ast 调用图——路由体里调到的名字 → 该名字所在服务模块内直接调 `chat_json` / `chat_with_tools` 的函数。**两跳是刻意的界**：再深就走进 `agents/` 与 strategies 那套编排，那是后台任务、不在请求里等。全部 11 条命中逐条附 `文件:行号`，并抽了 3 条回读确认真伪（工具自己有"同名函数跨模块会合并"的界，只数总数不够）。
+
+| # | 路由 | 处理函数 | 打到模型的函数 |
+| --- | --- | --- | --- |
+| 1 | `POST /api/analysis/match` | `analysis.py:207 full_match` | `match_service.py:31 run_full_analysis` → `:47 chat_json` |
+| 2 | `POST /api/analysis/{id}/optimize/regenerate` | `analysis.py:248` | `regenerate_optimize` |
+| 3 | `POST /api/analysis/{id}/interview/regenerate` | `analysis.py:279` | `regenerate_interview` |
+| 4 | `POST /api/jd/parse` | `jd.py:44` | `jd_service.parse_and_save` → `:28 chat_json` |
+| 5 | `POST /api/jd/import-url` | `jd.py:137` | 同上 |
+| 6 | `POST /api/jd/batch-import` | `jd.py:189` | 同上（**一条请求里可能多发**） |
+| 7 | `POST /api/resume/parse` | `resume.py:234` | `resume_service.parse_and_save` |
+| 8 | `POST /api/resume/{id}/generate-optimized` | `resume.py:655` | `generate_optimized` |
+| 9 | `POST /api/resume/{id}/tailor` | `resume.py:981` | `resume_tailor_service.tailor_resume_for_jd` |
+| 10 | `POST /api/resume/{id}/analyze` | `resume.py:1169` | `resume_analysis_service.analyze_resume` → `:69 chat_json` |
+| 11 | `POST /api/resume/{id}/diagnose` | `resume.py:1202` | 同上 |
+
+**三条能用的话**：① **11 条全是 sync `def`、0 条 `async def`**——它们占的是 anyio 那 20 根线程（`core/threadpool.py` 钉成连接池 10+10），不是卡事件循环，所以 D200 那套"改作业"的模式可以照搬到任何一条上，但**没有一条今天需要搬**（都没撞墙：`LLM_TIMEOUT=120`、nginx 180s 都在）。② nginx 那 180s 从此有名有姓，注释已换成这张清单（原来那句是"保护某一族、是谁未验"）。③ 真正值得注意的不是超时而是**并发**：`/jd/batch-import` 一条请求里可以打多发，20 根线程在这种路由下会先饱和——这是"要不要把它也作业化"的第一个真实候选，**但它是容量问题不是正确性问题，我没顺手做**。
+
+**未验**：两跳之外有没有漏（走 `agents/` 一跳以上才到模型、且被某条 `def` 路由同步等的）——**没查**，那是三跳图的事。`llm_service.chat_json` 那 277 行来源不明说明静态图与真实调用面还会有出入，这张表当"路由清单"用可以，当"全量调用图"用不行。
+
+**验收**：代码零改动（只改 `nginx.conf` 的注释 + 本条台账），前端 `rewriteSuggestionJobFlow` 对 nginx 的两条断言（180s、含 `364.5s`）仍绿，`format:check` clean；清点脚本与读数跑完即删。
+
+
 
 
 
