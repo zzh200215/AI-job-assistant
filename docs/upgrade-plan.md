@@ -4670,12 +4670,33 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 **门禁**：backend **919 passed / 113.72s**（前值 908，+11）、`ruff check .` clean、`ruff format --check .` **363 files already formatted**；frontend **91 files / 609 passed**、`npm run lint` 0 error（仅既有 `paidOrders` warning）、`format:check` clean、`vite build` exit 0、`dead-style --selftest` 四页与全仓候选 0；包体积 **2209.44 → 2210.07 kB（+0.63）**。
 
 **未验（不粉饰）**：
-1. **迁移没执行**：`sa.inspect(engine).has_table('rewrite_suggestion_job')` 现取 **False**，开发库里这张表还不存在 ⇒ **"真 provider 走一遍新的异步路径"今天没有读数**。上一次 `alembic upgrade head` 是他亲口点了才跑的（D180），这条同样等那一句，我不自己动 schema。
-2. **pending→completed 那一跳在视图层没被测过**：靠的是轮询器自身的覆盖（`tests/agentTaskPolling.test.mjs` 里有 pending→completed 那条）加视图的形状断言，不是端到端。
+1. ~~**迁移没执行**~~ —— **同日他点了"跑"**：`alembic upgrade head` 执行，`alembic current` 现取 **`20261010_0028 (head)`**，表 16 列 / 4 条索引、ORM 与库**零漂移**；新的异步路径也跑了真 provider（读数见下面 D201）。
+2. **pending→completed 那一跳在视图层仍没被测过**：靠的是轮询器自身的覆盖（`tests/agentTaskPolling.test.mjs` 里有 pending→completed 那条）加视图的形状断言。D201 补的是**真库真模型**上同一读路径走到了终态，不是浏览器那一跳。
 3. 全仓**其余仍在同步等模型的路由没有重新清点**，所以 nginx 那 180s 保留、注释里明写它现在保护的是那一族、而那一族是谁未验。
 4. `REWRITE_JOB_MAX_WORKERS=2` 是按连接池推的数，**不是压测出来的吞吐**；`threadpool.py:32` 那个 limiter 只在进程内生效，跨副本不设防（与 D175 调度槽位同一族）。
 
 **§10 计数**：没挂新项；仍在册 **37 条（1–25、28–39）、open 0**，第 39 条补记"③ 已由 D200 落地"。
+
+#### 已量：D201 真 provider 走了一遍新的异步路径，两臂都有读数——提交那一趟是 11 毫秒，不是 4.5 到 90 秒
+
+走的是**产品代码**（`create_rewrite_job` → `submit_rewrite_job` 进真线程池 → 读路径拿终态），不是复刻 payload。**两次端到端里第一次是我把 `user_id` 写错撞出来的失败臂**（resume 20 的 owner 现取是 9），反而把"失败那一臂不泄漏"这条验在了真库上。
+
+| 读数 | 失败臂（user 写错） | 成功臂 |
+| --- | --- | --- |
+| 提交那一趟 `create + submit` 的 wall | **0.011 s** | **0.025 s** |
+| 作业到终态 | 2.01 s | **16.02 s**（内含 2 次 HTTP 429 重试，第 3 次成） |
+| 终态 | `failed` | `completed` |
+| 采纳 / 被拒 | 0 / 0 | **4 / 1**（`self_evaluation`、`proj[0..2].desc` 采纳；`skills` 仍是 `unchanged`） |
+| 载荷里有没有失败原因那个键 | **没有** | 没有 |
+| 简历三列 + 版本哈希 | 逐字不变 | 逐字不变 |
+| `prompt_trace` / 作业行数 | 1601→1601（**模型一次都没被打**，`get_owned_resume` 在调模型之前就拒了） | 1601→1601（打了 1 发，`response_source=real`、`degraded=0`） |
+
+- **这条改造真正买到的东西现在有数了**：请求的关键路径从"4.5–90 秒挂着一个连接 + 一根 anyio 线程"变成 **11–25 毫秒**；那 10–16 秒挪到后台，候选人那边是轮询。
+- **清理可核**：`deleted = {jobs: 1, traces: 1}`，删完用**新连接**复数 `prompt_trace = 1601`、`rewrite_suggestion_job = 0`（`restored = True`）；表内当前最大 id 仍是 1626，说明我这发写的 1627 已删干净。
+- **`skills` 那块被逐字照抄**在第四、第五个样本里又出现（D198 三次 + D201 一次），所以它不是偶发：关掉思考链之后模型对罗列型文本基本不改。**采纳数 0/2/3/0/3/4 的分布仍然很宽**——③ 把"等多久"解决了，没把"给不给得出建议"解决。
+- **一条真实抖动**：成功那一跑前两次尝试被 **429** 拒（今天在这个端点上第 12–13 发），`retry_call` 第三次兑现吸收能力；在这家供应商上批量打真上游要预留限流。
+
+**验收**：代码零改动（本条是执行 + 读数）；迁移已在开发库执行；临时件跑完即删。
 
 
 
