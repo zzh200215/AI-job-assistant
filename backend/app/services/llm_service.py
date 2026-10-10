@@ -917,7 +917,18 @@ def _openai_compatible_chat(prompt: str, base_url: str = None, *, json_mode: boo
             resp.raise_for_status()
             data = resp.json()
             _record_usage(data.get("usage"), model=payload["model"])
-            return data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            message = choice["message"]
+            content = message["content"]
+            if not (content or "").strip():
+                # 空 content 不是"JSON 不合法"：`finish_reason=length` + 一整串 reasoning token
+                # 才是这一族的真形状（D189 在真上游量到 95.33s、8192 token 全花在思考链上）。
+                # 判成 provider 失败：同一型号再打两次还是空，所以不进重试；但兜底链会换一发型号。
+                raise LLMProviderError(
+                    f"LLM 返回空内容 (finish_reason={choice.get('finish_reason')}, "
+                    f"reasoning_chars={len(message.get('reasoning_content') or '')})"
+                )
+            return content
         except requests.Timeout as e:
             raise _RetryableLLMError(f"AI 请求超时（{settings.LLM_TIMEOUT}s）") from e
         except requests.HTTPError as e:

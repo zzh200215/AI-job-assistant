@@ -200,3 +200,78 @@ def test_tool_loop_executes_two_rounds_against_the_wire(provider):
     assert second[2]["tool_calls"][0]["function"]["name"] == "probe_tool"
     assert "未知工具" in second[3]["content"]
     assert llm_service.get_llm_provenance()["source"] == "real"
+
+
+def _empty_content(reasoning_chars: int = 40) -> tuple[int, dict]:
+    """D189 在真上游量到的那一发的形状：HTTP 200、`finish_reason=length`、
+    8192 个 completion token 全是 reasoning、`content` 长度 0。"""
+    return (
+        200,
+        {
+            "choices": [
+                {
+                    "message": {"content": "", "reasoning_content": "思" * reasoning_chars},
+                    "finish_reason": "length",
+                }
+            ],
+            "usage": {"prompt_tokens": 1121, "completion_tokens": 8192, "total_tokens": 9313},
+        },
+    )
+
+
+def test_empty_content_is_reported_as_no_answer_not_as_bad_json(provider):
+    """改之前这一发走到 `extract_json("")`，报的是"AI 返回内容不是合法 JSON"——那是误诊：
+    模型没写坏格式，是一个字都没写。"""
+    provider.responses = [_empty_content()]
+
+    with pytest.raises(llm_service.LLMProviderError) as info:
+        llm_service.chat_json("思考链吃光预算的那一发")
+
+    message = str(info.value)
+    assert "空内容" in message
+    assert "finish_reason=length" in message
+    assert "reasoning_chars=40" in message
+    assert "合法 JSON" not in message, "误诊那句不能再从空内容这一发出来"
+
+
+def test_empty_content_does_not_retry_the_same_model(provider, monkeypatch):
+    monkeypatch.setattr(llm_service, "_LLM_MAX_RETRIES", 2)
+    provider.responses = [_empty_content()]
+
+    with pytest.raises(llm_service.LLMProviderError):
+        llm_service.chat_json("会不会白打三次")
+
+    assert len(provider.requests) == 1, "同一型号再打两次还是空，重试没有意义"
+
+
+@pytest.mark.parametrize("content", ["", "   \n ", None])
+def test_three_ways_of_being_empty_all_count_as_empty(provider, content):
+    provider.responses = [provider.completion({"content": content, "reasoning_content": "x"})]
+
+    with pytest.raises(llm_service.LLMProviderError) as info:
+        llm_service.chat_json("空串 / 全空白 / 缺字段")
+
+    assert "空内容" in str(info.value)
+
+
+def test_non_empty_prose_still_reports_a_parse_failure(provider):
+    """反向：有内容但不是 JSON 必须仍算解析失败，两类不许并进同一个新错误。"""
+    provider.responses = [_content_response("这是一段散文，不是 JSON")]
+
+    with pytest.raises(ValueError) as info:
+        llm_service.chat_json("散文")
+
+    assert "合法 JSON" in str(info.value)
+
+
+def test_empty_content_lets_the_fallback_model_answer(provider):
+    """这条才是补判据的回报：空内容以前在兜底链**之外**（`extract_json` 在链之后跑），
+    所以主模型空答时备模型根本没机会；现在它进链了。"""
+    provider.responses = [_empty_content(), _content_response({"suggestions": [{"block_id": "skills"}]})]
+    settings.LLM_FALLBACK_MODEL = "backup-model"
+
+    result = llm_service.chat_json("主模型空答，备模型补上")
+
+    assert result == {"suggestions": [{"block_id": "skills"}]}
+    assert [r["body"]["model"] for r in provider.requests] == ["configured-model", "backup-model"]
+    assert llm_service.get_llm_provenance()["source"] == "fallback_model"
