@@ -342,9 +342,9 @@ def _record_usage(usage: dict | None, model: str | None = None) -> None:
     prompt_tokens = int(usage.get("prompt_tokens") or 0)
     completion_tokens = int(usage.get("completion_tokens") or 0)
     total_tokens = int(usage.get("total_tokens") or (prompt_tokens + completion_tokens))
-    cost_cents = (prompt_tokens / 1000.0) * float(settings.LLM_INPUT_COST_PER_1K_CENTS or 0.0) + (
-        completion_tokens / 1000.0
-    ) * float(settings.LLM_OUTPUT_COST_PER_1K_CENTS or 0.0)
+    # 单价按型号取（`config.unit_costs_for`）：主备是两个不同型号，两个全局数表达不了。
+    input_cost, output_cost = settings.unit_costs_for(model)
+    cost_cents = (prompt_tokens / 1000.0) * input_cost + (completion_tokens / 1000.0) * output_cost
 
     current = _LLM_USAGE_CONTEXT.get()
     if current is None:

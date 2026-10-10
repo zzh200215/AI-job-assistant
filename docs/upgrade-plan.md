@@ -4457,6 +4457,25 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **验收**：backend 全量 **886 passed / 105.81s**（前值 883，+3）；`ruff check .` All checks passed、`ruff format --check .` 362 files already formatted。**推送仍未成功**：`github.com:443` 连接超时（DNS 解析正常 20.205.243.166，而 `api.github.com:443` 与 `dashscope.aliyuncs.com:443` 都通），是网络侧对该主机的可达性问题，不是权限拦截；本地因此有 3 个未推提交（D184/D185/D186）。
 
+#### 已交付：D177 之后又一次前提更正——管理页那列成本不是坏的，是真的 0；补的是"按型号分价"的机制
+
+**先打掉题设**：我上一轮说"`avg_cost_cents` 那一列是死的"。查了 SenseNova 官方页（`sensenova.cn/token-plan`）：**"公测期完全免费开放，付费档位即将上线"** ⇒ 今天 `cost_cents = 0` 是**准的**，不是漏配。所以这一条**不编任何单价**，只补结构；把数随手填进去会把"真 0"变成"假 0.02"，比现在更糟（这条判断本身也被钉成测试）。
+
+**结构问题在哪**：`_record_usage(usage, model)` **早就收得到型号**（调用点 `llm_service.py:919/1166` 传的是 `payload["model"]`），却只用 `LLM_INPUT/OUTPUT_COST_PER_1K_CENTS` 两个**全局**数算钱。而 2026-10-10 起主备是两个不同型号（`deepseek-v4-flash` + `glm-5.2`），付费档位上线那天两个数无法分别表达。
+
+**改了什么**：
+- `LLM_MODEL_COSTS: str = ""`，格式 `model:输入分:输出分` 逗号分隔（照 `CORS_ORIGINS` / `ADMIN_USERNAMES` 那族家规），配 `Settings.llm_model_costs` 与 `unit_costs_for(model)`；**未列出的型号退回两个全局数**，所以今天的行为一字不变。
+- 坏条目**跳过并 warning，不抛**：单价表是运维配置，一个逗号不该让算钱或启动崩；但也不静默吞——那正是"看着是 0 其实配错了"的形状。
+- **顺带逮到一条透传缺口**：全仓 grep 成本键，只有 `backend/.env.example` 提过（还是本条刚加的），**两份 compose 与 `.env.production.example` 一行都没有** ⇒ 在生产里运维把单价填进 `.env` 也**进不了容器**。已补两份 compose 的 `${LLM_INPUT_COST_PER_1K_CENTS:-0}` / `${LLM_MODEL_COSTS:-}` 与 prod example 三行。这与 D184 那条"compose 的 `${X:-}` 与 example 不总是同一件事"是同一族。
+
+**9 条测试 + 4 个变异，每个都红在自己那条上**：Z1 算钱退回只看全局 → 红在 `test_record_usage_prices_by_the_model_that_answered`；Z2 坏条目改成抛 → 红在 `test_malformed_entries_are_skipped_with_a_warning_not_a_crash`；Z3 去掉大小写归一 → 红在 `test_the_lookup_is_case_and_space_tolerant`；Z4 未列型号不再兜底 → 红在 `test_a_listed_model_beats_the_global_pair_and_an_unlisted_one_falls_back`。全部 `restored=True`。
+
+**没跑成的那一发**：想让单价真落进 `prompt_trace.cost_cents` 做一次真调用，被权限层拦下（它要你对"这一次具体调用"单独点头），没绕道。所以**落库那一程目前是代码路径论证，不是实测**：`LLMTraceScope.call_usage()` 取的是含 `cost_cents` 的上下文计数器差、`persist()` 写 `cost_cents=usage["cost_cents"]`（`llm_service.py:203-208`、`:243-247`）⇒ 与 `_record_usage` 算的是同一个数。**这一路没有真跑过一次。**
+
+**未验**：带单价的真发一次、看 `prompt_trace.cost_cents` 落库；SenseNova 付费档位上线后的实际单价（届时只改 `.env` 三行，不改代码——这正是本条存在的理由）。
+
+**验收**：backend 全量 **895 passed / 101.29s**（前值 886，+9）；`ruff check .` All checks passed、`ruff format --check .` **363 files already formatted**。改动：`config.py`、`llm_service.py`、新测试 `test_llm_model_costs.py`、`backend/.env.example`、`.env.production.example`、两份 compose。远端 `origin/master = c686255`（D184/D185/D186 都已推上去）。
+
 
 
 

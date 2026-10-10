@@ -24,6 +24,10 @@ x-backend-environment: &backend-environment
   LLM_BASE_URL: ${LLM_BASE_URL:-}
   LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
   LLM_TIMEOUT: ${LLM_TIMEOUT:-120}
+  # 成本单价（分/1k tokens）。不写这三行，运维在 .env 里填了也进不了容器（D187 发现的透传缺口）。
+  LLM_INPUT_COST_PER_1K_CENTS: ${LLM_INPUT_COST_PER_1K_CENTS:-0}
+  LLM_OUTPUT_COST_PER_1K_CENTS: ${LLM_OUTPUT_COST_PER_1K_CENTS:-0}
+  LLM_MODEL_COSTS: ${LLM_MODEL_COSTS:-}
   # ---- Embedding ----
   EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-mock}
   EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}

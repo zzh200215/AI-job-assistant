@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     LLM_ALLOW_MOCK_FALLBACK: bool = False
     LLM_INPUT_COST_PER_1K_CENTS: float = 0.0
     LLM_OUTPUT_COST_PER_1K_CENTS: float = 0.0
+    # 按型号的单价，逗号分隔：`model:输入分/1k:输出分/1k`，例如
+    #   LLM_MODEL_COSTS=deepseek-v4-flash:0.02:0.2,glm-5.2:0.06:0.4
+    # 为什么要有它：`_record_usage` 拿得到 `model`（`llm_service.py:919/1166`）却只用两个**全局**
+    # 数算钱，而 2026-10-10 起主备是两个不同型号（`deepseek-v4-flash` + `glm-5.2`），
+    # 再叠上"换供应商只改 .env 三行"这条路——两个全局数无法表达按型号分价，成本会静默错。
+    # 现量事实：SenseNova 官方页写"公测期完全免费开放，付费档位即将上线"，所以**今天留空是对的**
+    # （成本真的是 0）；这条机制是为了付费档位上线那天不必改代码，而不是为了补一个我编的数。
+    LLM_MODEL_COSTS: str = ""
 
     ORCHESTRATION_STRATEGY: str = "linear"
     ORCHESTRATION_ENGINE: str = "native"
@@ -185,6 +193,40 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.APP_ENV.strip().lower() in {"prod", "production"}
+
+    @property
+    def llm_model_costs(self) -> dict[str, tuple[float, float]]:
+        """`LLM_MODEL_COSTS` 解析成 `{model: (输入分/1k, 输出分/1k)}`。
+
+        写错的条目**跳过并留一条 warning**，不抛：单价表是运维配置，一个逗号不该让整站在
+        启动或算钱时崩掉；但也不能静默吞——那正是"成本看着是 0 其实是配错了"的形状。
+        """
+        costs: dict[str, tuple[float, float]] = {}
+        for entry in (self.LLM_MODEL_COSTS or "").split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            parts = [part.strip() for part in entry.split(":")]
+            if len(parts) != 3 or not parts[0]:
+                logging.getLogger(__name__).warning(
+                    "LLM_MODEL_COSTS 里有一条读不懂，已跳过：%r（应为 model:输入分:输出分）", entry
+                )
+                continue
+            try:
+                in_cost, out_cost = float(parts[1]), float(parts[2])
+            except ValueError:
+                logging.getLogger(__name__).warning("LLM_MODEL_COSTS 里的单价不是数字，已跳过：%r", entry)
+                continue
+            costs[parts[0].lower()] = (in_cost, out_cost)
+        return costs
+
+    def unit_costs_for(self, model: str | None) -> tuple[float, float]:
+        """这一发按哪个单价算钱：型号表里有就用它，否则退回两个全局数（今天的行为）。"""
+        costs = self.llm_model_costs
+        hit = costs.get((model or "").strip().lower())
+        if hit is not None:
+            return hit
+        return float(self.LLM_INPUT_COST_PER_1K_CENTS or 0.0), float(self.LLM_OUTPUT_COST_PER_1K_CENTS or 0.0)
 
     @model_validator(mode="after")
     def _check_security_defaults(self):
