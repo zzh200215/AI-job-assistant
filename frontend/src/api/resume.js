@@ -30,20 +30,19 @@ export const getResume = (id) => request.get(`/resume/${id}`)
 
 // 行级改写：建议按 block_id 锚定到简历里的具体文本，采纳后才写回
 /**
- * 建议那一发是**同步等 LLM** 的，而 axios 全局超时是 60s（`request.js:15`）——D182 在真库上量到
- * 它一次撞满 60s 被客户端掐断、重试才成功。三层墙必须同序，谁单独抬都会把墙推到别层：
- * 服务端单次 `LLM_TIMEOUT=120s` < 本条 150s < nginx `/api/` 的 180s（`frontend/nginx.conf`）。
- * D189 用 75s 假上游把这三层各量了一遍：只吃实例 60000 时 60.02s 断，带本条时 75.02s 通。
- * 但那句同序**只在单次成立**：`chat_json` 外面套着 `_LLM_MAX_RETRIES=2`（退避 1.5s + 3s），
- * 实测上游一直挂着时 60s 那一档要到 184.56s 才失败，即服务端最坏 = 3×120+4.5 = **364.5s**。
- * 所以本条 150s 是"候选人先看到错误"的兜底，不是与服务端的配平。
+ * 建议那一发现在是**后台作业**：POST 立刻返回 `job_id`，结果靠轮询取。
+ *
+ * 为什么不是同步等：它是**一次**模型调用，实测 4.58–12.08s（关掉思考链，D196）到 91.77s
+ * 且返回空 content（开着思考链，D189）。同步写法下这一发会占住 anyio 20 根线程里的一根
+ * （`backend/app/core/threadpool.py` 把上限钉成连接池 10+10）整整一分多钟，候选人还要对着
+ * spinner 等。所以这一对函数**不带** per-request 超时：每一趟请求都是毫秒级返回的。
+ * 轮询的总预算由调用方给（`ResumeUpload.vue` 的 maxPollCount × intervalMs）。
  */
-export const REWRITE_SUGGESTIONS_TIMEOUT_MS = 150000
+export const createRewriteSuggestionJob = (resumeId, jdId = null) =>
+  request.post(`/resume/${resumeId}/rewrite-suggestion-jobs`, jdId ? { jd_id: jdId } : {})
 
-export const getRewriteSuggestions = (resumeId, jdId = null) =>
-  request.post(`/resume/${resumeId}/rewrite-suggestions`, jdId ? { jd_id: jdId } : {}, {
-    timeout: REWRITE_SUGGESTIONS_TIMEOUT_MS,
-  })
+export const getRewriteSuggestionJob = (jobId) =>
+  request.get(`/resume/rewrite-suggestion-jobs/${jobId}`)
 
 export const applyResumeRewrites = (resumeId, edits, jdId = null) =>
   request.post(`/resume/${resumeId}/apply-rewrites`, { edits, ...(jdId ? { jd_id: jdId } : {}) })

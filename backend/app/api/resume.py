@@ -14,17 +14,20 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.history import Resume, ResumeVersion
+from app.models.rewrite_job import RewriteSuggestionJob
 from app.models.user import User
 from app.schemas.resume import ResumeParseResp, ResumeUploadResp
 from app.services import resume_export_service, resume_service
 from app.services.resume_analysis_service import analyze_resume, quick_score_resume
-from app.services.resume_rewrite_service import (
-    apply_rewrite_suggestions,
-    build_rewrite_suggestions,
-    revert_rewrite_suggestions,
-)
+from app.services.resume_rewrite_service import apply_rewrite_suggestions, revert_rewrite_suggestions
 from app.services.resume_tailor_service import tailor_resume_for_jd
 from app.services.resume_workspace_service import build_ats_snapshot, build_markdown_diff
+from app.services.rewrite_job_service import (
+    create_rewrite_job,
+    serialize_job,
+    submit_rewrite_job,
+    touch_job_for_read,
+)
 from app.services.subscription_service import check_quota
 from app.utils.file_access import resolve_upload_path
 from app.utils.job_access import get_accessible_job
@@ -1017,23 +1020,62 @@ def tailor_resume(
 # ============================================================
 
 
-@router.post("/{resume_id}/rewrite-suggestions", summary="生成行级简历改写建议")
-def rewrite_suggestions(
+@router.post("/{resume_id}/rewrite-suggestion-jobs", summary="提交一次行级改写建议作业（立刻返回，不等模型）")
+def create_rewrite_suggestion_job(
     resume_id: int,
     payload: dict | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """每条建议锚定一个文本块，返回 原文 → 改后；不落库，采纳与否由候选人决定。"""
+    """把"生成改写建议"改成后台作业。
+
+    为什么不再是同步那一发：它是**一次**模型调用，实测 4.58–12.08s（关思考链，D196）到
+    91.77s 且返回空 content（开思考链，D189）。同步写法下这一发会占住 anyio 20 根线程中的一根
+    （`core/threadpool.py` 把上限钉成连接池的 10+10），候选人还要对着 spinner 等满。
+    现在 POST 只做两件事：落一行作业、投进本进程的池子，然后返回 `job_id`。
+
+    "建议不落库"这条对外承诺没有被推翻：这一张表存的是**没被采纳的候选文本**，`tb_resume.parsed_json`
+    一个字都不写；采纳仍然只发生在 `apply-rewrites` 那一步。
+    """
     jd_id = (payload or {}).get("jd_id")
-    try:
-        result = build_rewrite_suggestions(db, resume_id, jd_id=int(jd_id) if jd_id else None, user_id=current_user.id)
-        return ok(result, message=f"生成 {len(result['suggestions'])} 条改写建议")
-    except ValueError as exc:
-        return fail(message=str(exc), code=ERR_PARAM)
-    except Exception as exc:
-        traceback.print_exc()
-        return fail(message=f"改写建议生成失败: {exc}", code=ERR_AI)
+    # 归属在**这里**判，不留给后台那一跑：作业内部也会判（`build_rewrite_suggestions` 带
+    # user_id），但把别人的 resume_id 变成一行 failed 作业同样是写库、同样占一个作业槽位。
+    # 用的是本文件那一条既有判据（`_get_owned_resume` / `get_accessible_job`），不另立一套——
+    # 同一个事实两处各写一遍是这个仓库反复记过的分叉源。
+    if _get_owned_resume(db, resume_id, current_user.id) is None:
+        return fail(message="简历不存在或无权限", code=ERR_PARAM)
+    jd_id_int = int(jd_id) if jd_id else None
+    if jd_id_int is not None and get_accessible_job(db, jd_id_int, current_user) is None:
+        return fail(message="目标岗位不存在或无权限", code=ERR_PARAM)
+    job = create_rewrite_job(
+        db,
+        user_id=current_user.id,
+        resume_id=resume_id,
+        jd_id=jd_id_int,
+    )
+    submit_rewrite_job(job.id)
+    return ok({"job_id": job.id, "status": "pending"}, message="改写建议开始生成")
+
+
+@router.get("/rewrite-suggestion-jobs/{job_id}", summary="查一次改写建议作业的结果")
+def get_rewrite_suggestion_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """轮询这一条。载荷里没有 `error_msg`——那句可能带模型返回的内容，而这是对外端点。"""
+    job = (
+        db.query(RewriteSuggestionJob)
+        .filter(RewriteSuggestionJob.id == job_id, RewriteSuggestionJob.user_id == current_user.id)
+        .first()
+    )
+    if job is None:
+        return fail(message="作业不存在或无权限", code=ERR_PARAM)
+    # 读路径顺手做恢复：进程死在半路留下的 running/pending 在这里退回并补投，
+    # 所以不需要再加一条调度任务（候选人一定会来读，轮询本身就是那条扫描）。
+    payload = serialize_job(job)
+    payload["status"] = touch_job_for_read(db, job)
+    return ok(payload)
 
 
 @router.post("/{resume_id}/apply-rewrites", summary="应用行级改写并重算匹配分")

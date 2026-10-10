@@ -539,8 +539,9 @@
 
 <script setup>
 import { userErrorCopy } from '@/utils/requestTracing'
-import { computed, reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { createAgentTaskPoller } from '@/utils/agentTaskPolling'
 import {
   UploadFilled,
   MoreFilled,
@@ -560,7 +561,8 @@ import {
   getResumeVersions,
   getResumeQuickScore,
   diagnoseResume,
-  getRewriteSuggestions,
+  createRewriteSuggestionJob,
+  getRewriteSuggestionJob,
   applyResumeRewrites,
   revertResumeRewrite,
   deleteResume,
@@ -664,23 +666,57 @@ const rewriteScoreLine = computed(() => {
   return `匹配分 ${before} → ${after}`
 })
 
+/* 改写建议的轮询：**复用**那条既有的 `createAgentTaskPoller`，不另写第二个轮询器。
+   这个作业没有分步日志（它就是一次模型调用），所以 `getAgentSteps` 给一个空数组——
+   那条链的 `steps` 只喂 `onProgress`，这里没人用它。
+   预算 = 75 × 2000ms = 150 秒，与被它替掉的那条 per-request 超时同一个数；不一样的是
+   这 150 秒里浏览器没有挂着的请求、服务端也没有占着 anyio 那 20 根线程中的一根。 */
+const REWRITE_JOB_POLL_INTERVAL_MS = 2000
+const REWRITE_JOB_POLL_MAX_ATTEMPTS = 75
+
+const rewritePoller = createAgentTaskPoller(
+  {
+    getAgentTask: (jobId) => getRewriteSuggestionJob(jobId),
+    getAgentSteps: async () => ({ steps: [] }),
+  },
+  {
+    setPollingState(value) {
+      // 与"应用/撤销"共用同一把 `applying` 之外，这一位只管按钮上那个 spinner。
+      rewrite.loading = value
+    },
+  }
+)
+
+onUnmounted(() => rewritePoller.stopPolling())
+
 async function generateRewrites() {
   const resumeId = currentDiagnosis.value?.resume_id
   if (!resumeId || rewrite.loading) return
-  rewrite.loading = true
   rewrite.error = ''
   rewrite.result = null
   rewrite.snapshotId = null
   rewrite.lastAction = ''
+  rewrite.items = []
+  rewrite.dropped = []
   try {
-    const data = await getRewriteSuggestions(resumeId, currentDiagnosis.value?.jd_id || null)
-    rewrite.items = (data?.suggestions || []).map((s) => ({ ...s, _accepted: true }))
-    rewrite.dropped = data?.rejected || []
+    rewrite.loading = true
+    const created = await createRewriteSuggestionJob(
+      resumeId,
+      currentDiagnosis.value?.jd_id || null
+    )
+    const job = await rewritePoller.pollTask(created.job_id, {
+      maxPollCount: REWRITE_JOB_POLL_MAX_ATTEMPTS,
+      intervalMs: REWRITE_JOB_POLL_INTERVAL_MS,
+      timeoutMessage: '改写建议这次没跑完，稍后再试',
+      // 轮询器失败那一支会优先念载荷里那句"服务端写的失败原因"；作业端点**不给**那个键
+      // （它可能带模型返回的原文），所以这里这句通用措辞就是候选人实际看到的那一句。
+      failedMessage: '改写建议这次没生成成功，稍后再试',
+    })
+    rewrite.items = (job?.suggestions || []).map((s) => ({ ...s, _accepted: true }))
+    rewrite.dropped = job?.rejected || []
     rewrite.loaded = true
     if (!rewrite.items.length) {
-      ElMessage.info(
-        data?.note || '模型没有给出值得采纳的改写；不是错误，可能这份简历这几处已经写清楚了'
-      )
+      ElMessage.info(job?.note || '这次没有给出可用的改写，可以再问一次')
     }
   } catch (e) {
     rewrite.items = []

@@ -102,6 +102,10 @@ CREATE INDEX ix_prompt_trace_user_id ON prompt_trace (user_id);
 CREATE INDEX ix_resume_version_parent_version_id ON resume_version (parent_version_id);
 CREATE INDEX ix_resume_version_resume_id ON resume_version (resume_id);
 CREATE INDEX ix_resume_version_target_jd_id ON resume_version (target_jd_id);
+CREATE INDEX ix_rewrite_suggestion_job_create_time ON rewrite_suggestion_job (create_time);
+CREATE INDEX ix_rewrite_suggestion_job_resume_id ON rewrite_suggestion_job (resume_id);
+CREATE INDEX ix_rewrite_suggestion_job_status ON rewrite_suggestion_job (status);
+CREATE INDEX ix_rewrite_suggestion_job_user_id ON rewrite_suggestion_job (user_id);
 CREATE INDEX ix_subscription_order_tenant_user ON subscription_order (tenant_id, user_id);
 CREATE INDEX ix_subscription_order_user_id ON subscription_order (user_id);
 CREATE INDEX ix_subscription_plan_tenant_id ON subscription_plan (tenant_id);
@@ -561,6 +565,28 @@ CREATE TABLE organization_sso_state (
 	provider VARCHAR(20) NOT NULL, 
 	expires_at DATETIME NOT NULL, 
 	created_at DATETIME NOT NULL, 
+	PRIMARY KEY (id)
+)
+
+;
+
+CREATE TABLE rewrite_suggestion_job (
+	id BIGINT NOT NULL, 
+	user_id BIGINT NOT NULL, 
+	resume_id BIGINT NOT NULL, 
+	jd_id BIGINT, 
+	status VARCHAR(20) NOT NULL, 
+	claimed_at DATETIME, 
+	finished_at DATETIME, 
+	block_total INTEGER NOT NULL, 
+	suggestions JSON, 
+	rejected JSON, 
+	note VARCHAR(200), 
+	provenance JSON, 
+	error SMALLINT NOT NULL, 
+	error_msg TEXT, 
+	create_time DATETIME NOT NULL, 
+	update_time DATETIME, 
 	PRIMARY KEY (id)
 )
 

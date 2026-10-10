@@ -25,6 +25,7 @@ from app.models.notification import Notification
 from app.models.operational_alert import OperationalAlert
 from app.models.organization import Organization, OrganizationMembership, OrganizationSSOIdentity, OrganizationSSOState
 from app.models.prompt_trace import PromptTrace
+from app.models.rewrite_job import RewriteSuggestionJob
 from app.models.subscription import SubscriptionOrder, SubscriptionPlan, UserSubscription
 from app.models.tenant import TenantConfig, TenantDomainBinding
 from app.models.user import User
@@ -68,6 +69,7 @@ __all__ = [
     "PromptTrace",
     "Resume",
     "ResumeVersion",
+    "RewriteSuggestionJob",
     "RetrievalLog",
     "SelfCheckLog",
     "SubscriptionOrder",

@@ -96,6 +96,21 @@ class Settings(BaseSettings):
     # 改 DB_POOL_SIZE/DB_MAX_OVERFLOW 时必须同时回头看这个数还留不留得出 HTTP 的余量。
     WS_MAX_LIVE_INTERVIEWS: int = 12
 
+    # D200：行级改写建议改成后台任务之后的三个数。
+    # 线程数取 2 是拿连接池算过的：作业在等模型的那一段时间里，它那条 Session 仍占着一个连接
+    # （`build_rewrite_suggestions` 读简历与调模型用的是同一条会话），而池子上限是
+    # `DB_POOL_SIZE + DB_MAX_OVERFLOW = 20`，anyio 的 HTTP 线程上限也钉在同一个 20
+    # （`core/threadpool.py`）。2 = 最多 2 个连接被作业按住，剩下 18 个仍够同期 HTTP 用；
+    # 再大就会开始出现"请求没超时但看起来死了"的那幅形状。
+    REWRITE_JOB_MAX_WORKERS: int = 2
+    # 租约下界有数：最坏一发 = 主模型 3 次尝试 + 备模型 3 次尝试，各带 `LLM_TIMEOUT=120`，
+    # 加上线性退避 1.5s/3s ≈ **729s ≈ 12.2 分钟**（D189 量的 364.5s 只是单型号那一半）。
+    # 取 15 分钟在它之上，否则一次扫描会把还在跑的作业抢过来重付一遍模型调用。
+    REWRITE_JOB_LEASE_MINUTES: int = 15
+    # 终态作业留几天。这一张表存的是候选人**没采纳**的文本，留着只有排障价值；
+    # 清理走"提交新作业时顺带删掉本人过期的"，不另立一条调度任务（见 rewrite_job_service）。
+    REWRITE_JOB_RETENTION_DAYS: int = 7
+
     # Operations alerting: thresholds are deliberately configurable per deployment.
     OPERATIONS_ALERT_WINDOW_MINUTES: int = 60
     OPERATIONS_ALERT_QUEUE_BACKLOG_THRESHOLD: int = 100

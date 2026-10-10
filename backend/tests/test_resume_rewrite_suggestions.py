@@ -14,6 +14,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from app.api import resume as resume_api
 from app.api.auth import get_current_user
 from app.api.resume import router as resume_router
 from app.core.database import get_db
@@ -21,6 +22,7 @@ from app.core.security import hash_password
 from app.models.history import JobDescription, Resume, ResumeVersion
 from app.models.user import User
 from app.services import resume_rewrite_service as svc
+from app.services import rewrite_job_service as job_service
 from app.services.match_score_service import canonical_match_score, resume_version_of
 from app.services.resume_blocks import build_resume_blocks
 from app.services.scoring_config import SCORE_METHOD
@@ -273,15 +275,18 @@ def test_cross_user_resume_and_missing_job_are_refused(db_session, actor, monkey
 # ---------------------------------------------------------------- wiring
 
 
-def test_the_endpoint_is_registered():
+def test_the_job_endpoints_are_registered_and_the_sync_one_is_gone():
     app = FastAPI()
     app.include_router(resume_router, prefix="/resume")
     paths = {route.path for route in app.routes}
 
-    assert "/resume/{resume_id}/rewrite-suggestions" in paths
+    assert "/resume/{resume_id}/rewrite-suggestion-jobs" in paths
+    assert "/resume/rewrite-suggestion-jobs/{job_id}" in paths
+    # 同步那一发必须真的出树。留着它就是两条路径写同一件事——这仓库反复记过的那种分叉源。
+    assert "/resume/{resume_id}/rewrite-suggestions" not in paths
 
 
-def test_the_endpoint_reports_rejected_anchors_to_the_client(db_session, actor, monkeypatch):
+def test_the_job_round_trip_reports_rejected_anchors_to_the_client(db_session, actor, monkeypatch):
     user, _ = actor
     resume = _resume_row(db_session, user)
     monkeypatch.setattr(
@@ -294,13 +299,26 @@ def test_the_endpoint_reports_rejected_anchors_to_the_client(db_session, actor, 
             ]
         },
     )
+    # POST 只负责投递；起跑由下面那一行代做，走的是**同一个** `run_job_on`，
+    # 不是测试里另写一份"看起来一样"的执行逻辑。
+    monkeypatch.setattr(resume_api, "submit_rewrite_job", lambda job_id: None)
 
     with TestClient(_resume_client(db_session, user)) as client:
-        body = client.post(f"/resume/{resume.id}/rewrite-suggestions", json={}).json()
+        posted = client.post(f"/resume/{resume.id}/rewrite-suggestion-jobs", json={}).json()
+        assert posted["code"] == 0
+        assert posted["data"]["status"] == "pending"
+        job_id = posted["data"]["job_id"]
+
+        assert job_service.run_job_on(db_session, job_id) is True
+
+        body = client.get(f"/resume/rewrite-suggestion-jobs/{job_id}").json()
 
     assert body["code"] == 0
+    assert body["data"]["status"] == "completed"
     assert len(body["data"]["suggestions"]) == 1
     assert body["data"]["rejected"][0]["reason"] == "unknown_block"
+    # 轮询载荷里不许出现失败原因那句话：它可能带模型返回的内容，而这是对外端点。
+    assert "error_msg" not in body["data"]
 
 
 # ---------------------------------------------------------------- applying

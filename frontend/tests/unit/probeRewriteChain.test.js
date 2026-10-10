@@ -17,13 +17,18 @@ const probe = readFileSync('probe/dead-style.entry.js', 'utf8')
 const apiResume = readFileSync('src/api/resume.js', 'utf8')
 const view = readFileSync('src/features/resume/views/ResumeUpload.vue', 'utf8')
 
-/* 端点尾段从 api 层现取，不在这里重抄一遍 URL（重抄就是第二个出处）。 */
-const TAILS = ['diagnose', 'rewrite-suggestions', 'apply-rewrites', 'revert-rewrite']
+/* 端点尾段从 api 层现取，不在这里重抄一遍 URL（重抄就是第二个出处）。
+   D200 之后改写那一发是**两条**同尾端点：POST `/resume/{id}/rewrite-suggestion-jobs`（建作业）
+   与 GET `/resume/rewrite-suggestion-jobs/{job_id}`（取结果），所以两种 URL 写法都要认。 */
+const TAILS = ['diagnose', 'rewrite-suggestion-jobs', 'apply-rewrites', 'revert-rewrite']
 const apiDeclaredTails = () => {
   const set = new Set()
   for (const m of apiResume.matchAll(
     /request\.(?:get|post|put|delete)\(\s*[`'"]\/resume\/\$\{[^}]+\}\/([a-z-]+)/g
   )) {
+    set.add(m[1])
+  }
+  for (const m of apiResume.matchAll(/request\.(?:get|post)\(\s*[`'"]\/resume\/([a-z-]+)\/\$\{/g)) {
     set.add(m[1])
   }
   return set
@@ -40,18 +45,18 @@ const entriesFrom = (text) => [
     at: m.index,
   })),
 ]
-const fixtureFor = (tail, entries = entriesFrom(probe)) =>
-  entries.find((e) => e.method === 'post' && e.pattern.includes(tail))
+const fixtureFor = (tail, entries = entriesFrom(probe), method = 'post') =>
+  entries.find((e) => e.method === method && e.pattern.includes(tail))
 
 /* 该夹具那条表项的源码块：从它的 `[` 起到下一个只缩进两格的 `],` 收尾。 */
-const blockIn = (text, tail, entries = entriesFrom(text)) => {
-  const entry = fixtureFor(tail, entries)
+const blockIn = (text, tail, method = 'post', entries = entriesFrom(text)) => {
+  const entry = fixtureFor(tail, entries, method)
   if (!entry) return null
   const rest = text.slice(entry.at)
   const end = rest.indexOf('\n  ],')
   return end < 0 ? null : rest.slice(0, end)
 }
-const blockFor = (tail) => blockIn(probe, tail)
+const blockFor = (tail, method = 'post') => blockIn(probe, tail, method)
 
 /* 视图在写操作上 deref 的键，从函数体现取，并**按兜底形态分两类**：
    · `data?.k`（没有兜底）与 `data?.k || []`（空数组兜底）都算必读——后者缺键的表现正是
@@ -65,7 +70,7 @@ const derefedKeys = (fnName) => {
   const body = view.slice(start, view.indexOf('\n}', start))
   const required = new Set()
   const textFallback = new Set()
-  for (const m of body.matchAll(/data\??\.([a-z_]+)/g)) {
+  for (const m of body.matchAll(/(?:data|job)\??\.([a-z_]+)/g)) {
     const after = body.slice(m.index + m[0].length).replace(/^\s+/, '')
     const fb = /^(?:\?\?|\|\|)\s*/.exec(after)
     const tail = fb ? after.slice(fb[0].length) : after
@@ -100,7 +105,7 @@ describe('改写 → 应用 → 撤销那条链的屏幕入口', () => {
       '撤掉 revert 夹具之后这条守卫还认得出缺条目，说明它没有在空转'
     ).toBeFalsy()
     /* 另外三条不能跟着一起掉——不然"掉下来"这件事没有区分力。 */
-    for (const tail of ['diagnose', 'rewrite-suggestions', 'apply-rewrites']) {
+    for (const tail of ['diagnose', 'rewrite-suggestion-jobs', 'apply-rewrites']) {
       expect(fixtureFor(tail, entries), `副本里不该一起丢 ${tail}`).toBeTruthy()
     }
     /* 反向的下限：表里那四条确实各占一条，不是一条例式覆盖四家。 */
@@ -111,18 +116,19 @@ describe('改写 → 应用 → 撤销那条链的屏幕入口', () => {
 
   it('keeps the undo-chain fixtures declaring every key the view dereferences', () => {
     const pairs = [
-      ['rewrite-suggestions', 'generateRewrites'],
-      ['apply-rewrites', 'applyRewrites'],
-      ['revert-rewrite', 'revertRewrite'],
+      // 作业链上"视图取值"发生在**轮询那一条**（GET），建作业那条只回 job_id。
+      ['rewrite-suggestion-jobs', 'generateRewrites', 'get'],
+      ['apply-rewrites', 'applyRewrites', 'post'],
+      ['revert-rewrite', 'revertRewrite', 'post'],
     ]
-    for (const [tail, fnName] of pairs) {
+    for (const [tail, fnName, method] of pairs) {
       const { required, textFallback } = derefedKeys(fnName)
       expect(
         required.length,
-        `${fnName} 里没有一条 data?.x 的取值？守卫要看的东西变了`
+        `${fnName} 里没有一条 data?.x / job?.x 的取值？守卫要看的东西变了`
       ).toBeGreaterThan(0)
-      const block = blockFor(tail)
-      expect(block, `读不到 ${tail} 那条夹具的块（写法变了）`).not.toBeNull()
+      const block = blockFor(tail, method)
+      expect(block, `读不到 ${tail} 那条夹具的块（写法变了，或方法认错了）`).not.toBeNull()
       const missing = required.filter((k) => !new RegExp(`(^|[{,\\s])${k}\\s*:`).test(block))
       expect(
         missing,
@@ -130,7 +136,7 @@ describe('改写 → 应用 → 撤销那条链的屏幕入口', () => {
       ).toEqual([])
       /* 分类本身也要自检：`note` 是空串兜底的那一个，它必须落在 skipped 里而不是 required 里，
          否则这条判据退化成"全都算必读"，下一轮就有人把它整条放宽。 */
-      if (tail === 'rewrite-suggestions') {
+      if (tail === 'rewrite-suggestion-jobs') {
         expect(textFallback, '`note` 的分类不再是"空串兜底"了（判据要重新看）').toContain('note')
         expect(required).not.toContain('note')
       }

@@ -233,12 +233,19 @@ const FIXTURES = [
       jd_id: null,
     },
   ],
+  /* D200：改写建议改成后台作业之后，屏幕上那一条链变成"POST 建作业 → GET 轮询取结果"。
+     轮询夹具直接给 `completed`：探针所在的 hidden 标签页不发 rAF、定时器也不可靠（D150 那条机制），
+     把 pending→completed 那一跳放在这里等 2 秒去读，量到的是仪器而不是产品。
+     "作业还在跑时按钮是 spinner、跑完才出卡片"这一跳由 jsdom 的单测钉（时间可控）。 */
+  [/\/resume\/\d+\/rewrite-suggestion-jobs$/, 'post', { job_id: 77, status: 'pending' }],
   [
-    /\/resume\/\d+\/rewrite-suggestions$/,
-    'post',
+    /\/resume\/rewrite-suggestion-jobs\/\d+$/,
+    'get',
     {
+      job_id: 77,
       resume_id: 1,
       jd_id: null,
+      status: 'completed',
       block_total: 3,
       suggestions: [
         {
@@ -259,6 +266,7 @@ const FIXTURES = [
         },
       ],
       rejected: [],
+      note: null,
     },
   ],
   [
