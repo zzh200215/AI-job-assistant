@@ -4321,7 +4321,7 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **未验 / 未做**：没跑真发全量评估（会连打几十次 LLM，且新供应商有限流）；`LLM_INPUT/OUTPUT_COST_PER_1K_CENTS` 仍是 `0.0` ⇒ 账上看不见钱，token 数是唯一信号。**D178 的 `alembic upgrade head` 第二次被权限层拦下**（"往连着凭据的开发库做 schema 变更"），没绕道，仍等他一句话；`5ef0359` 未推。另：这把 key 已进过对话，建议用完轮换。
 
-**验收**：backend 全量 **876 passed**（前值 871，+5）；`ruff check .` All checks passed、`ruff format --check .` 361 files already formatted。
+**验收**：backend 全量 **876 passed**（前值 871，+5）；`ruff check .` All checks passed、`ruff format --check .` 361 files already formatted。**（同批的守卫下一轮被自己人打掉三条误杀，见 D181——本条那句"生产 raise / 开发 warn"仍然成立，但判据从"provider 字符串不同"改成了"跨供应商家族 + 按两条真实借用路径分别要求"。）**
 
 #### 已交付：D180 迁移执行完了，D177 那台仪器原样重跑在修好的认领上——总赢家从 2 变成 1
 
@@ -4342,6 +4342,24 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 **善后**：探针行 `id=6`（挂在 `created` 那场 session 12）按 id 删回，`interview_turn_evaluation` 0 → 1 → 0、`interview_session` 14 → 14；仪器与结果文件已删，工作树干净。
 
 **验收**：backend 全量 **876 passed / 97.94s**（树未变，这是迁移落库之后重跑的数）；`ruff check .` All checks passed、`ruff format --check .` 361 files already formatted。**仍未做**：真发全量 RAG 评估（新供应商连发会撞 429）；`5ef0359`、`f05f46f` 与这条一起等推送授权。
+
+#### 已交付：D181 自查 D179 那条守卫——它误杀了三种合法配置，其中两种在生产起不来
+
+**推送之后我做的第一件事是回头量自己刚写进生产启动路径的那条闸**（`f05f46f` 已推，所以这是 fix-forward 而不是"顺手改改"）。三条误杀，全部现取代码路径后确认：
+
+1. **`EMBEDDING_PROVIDER=dashscope` 根本不读 `EMBEDDING_BASE_URL`**——它走阿里云 SDK（`embedding_service.py:306-319` 的 `TextEmbedding.call`），只有 HTTP 那一支（`_openai_embed:337`）才会 `EMBEDDING_BASE_URL or LLM_BASE_URL`。D179 按"两家不同就必须钉 base_url"判 ⇒ 这份合法配置**生产直接拒绝启动**。
+2. **`qwen` 与 `dashscope` 是同一家**（都是阿里云、同一把 key），D179 比的是 provider 字符串 ⇒ `LLM_PROVIDER=qwen` + `EMBEDDING_PROVIDER=dashscope` 被判成"跨供应商"，误杀。
+3. 跨家族走 SDK 时，D179 的报错把 `EMBEDDING_BASE_URL` 一起点名——那一支用不到它，**报错在误导排障的人**。
+
+**改法**：判据从"字符串不同"换成**家族表 + 两条真实借用路径分别要求**——家族 `openai→openai / qwen→aliyun / dashscope→aliyun / local→local`，同家族直接放行；`EMBEDDING_API_KEY` 跨家族就必须显式；`EMBEDDING_BASE_URL` **只在 embedding 走 HTTP 那一支**才要求。报错文案跟着说清楚借的是"端点/密钥"还是只有"密钥"。
+
+**证据不是"看起来对"**：把 D179 那版 `config.py` 用 `git show f05f46f:...` 取回（cp 备份 + cp 还原，**不用 `git checkout`**），三条新测试在它上面 **3 全红**（`test_dashscope_embedding_does_not_need_a_base_url`、`test_same_vendor_under_two_names_is_not_a_split`、`test_cross_family_still_refuses_a_borrowed_key_on_the_sdk_path`），在这版上全绿，还原核对 `RESTORED=True`。原有 5 条一条没动——D179 那条真阳性（`openai` + `qwen` 且两行都空 ⇒ 拒绝并点名两行）照旧。
+
+**一条仪器教训（记忆里早写着，我又撞一次）**：第一次对照实验把临时文件放在 Git Bash 的 `/tmp`，**Windows 侧的 python 看不见那个路径** ⇒ 采集脚本直接 `FileNotFoundError`，而链上的 `cp` 还原却执行了（bash 能看见 /tmp），差点留下"文件没还原"的假象。改用工作区内路径一次跑通。
+
+**未验**：没有真起一次生产容器去验守卫的放行/拒绝——判据全部是离线构造 `Settings` 测出来的；`docker-compose.prod.yml` 里 `EMBEDDING_API_KEY/BASE_URL` 是 `${...:-}`（默认空），所以那两行留空 + 跨家族的组合，现在会在容器启动时就把话说清楚，而不是等 RAG 静默挂。
+
+**验收**：backend 全量 **879 passed / 103.36s**（前值 876，+3）；`ruff check .` All checks passed、`ruff format --check .` 361 files already formatted。**远端**：`origin/master = d4606a3`（D178/D179/D180 三条已按他"推送"那句推上去），本条待推。
 
 
 

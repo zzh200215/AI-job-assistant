@@ -234,35 +234,42 @@ class Settings(BaseSettings):
         return self
 
     def _reject_split_provider_embedding_fallback(self) -> None:
-        """LLM 与向量化分属两家时，embedding 的 key/base 必须**显式**写出来。
+        """向量化会借用 LLM 那一套 key/base 的时候，必须说清楚。
 
-        起因（2026-10-09 真撞）：`embedding_service.py:317/333/337` 是
-        `EMBEDDING_API_KEY or LLM_API_KEY`、`EMBEDDING_BASE_URL or LLM_BASE_URL`。把 LLM 从
-        dashscope 换到另一家 OpenAI 兼容供应商时，如果只改 `LLM_*`，向量化会跟着去新供应商找
-        `text-embedding-v3`——新供应商通常没有向量模型，于是 RAG 整条静默挂掉，而界面上一切正常。
-        生产直接拒绝启动；非生产留一条 warning（开发机上换供应商是常态，不该被硬挡）。
+        起因（2026-10-09 真撞）：`embedding_service.py` 里是 `EMBEDDING_API_KEY or LLM_API_KEY`、
+        `EMBEDDING_BASE_URL or LLM_BASE_URL`。把 LLM 从 dashscope 换到另一家 OpenAI 兼容供应商时，
+        如果只改 `LLM_*`，向量化会跟着去新供应商找 `text-embedding-v3`——新供应商通常没有向量模型，
+        于是 RAG 整条静默挂掉，而界面上一切正常。生产直接拒绝启动；非生产留一条 warning
+        （开发机上换供应商是常态，不该被硬挡）。
+
+        判据按**两条真实的借用路径**分别算，不一刀切（第一版一刀切误杀了两种合法配置，D181 修）：
+        * `base_url` 只有走 OpenAI 兼容 HTTP 的那一支会用到（`_openai_embed:337`）；
+          `dashscope` 走阿里云 SDK（`_dashscope_embed:306-319`）**不读 base_url**，要求它就是误杀。
+        * 同一家族之间借 key 是合法的——`qwen` 与 `dashscope` 都是阿里云、同一把 key；跨家族才要显式。
         """
         llm = str(self.LLM_PROVIDER or "").strip().lower()
         emb = str(self.EMBEDDING_PROVIDER or "").strip().lower()
-        network = {"openai", "qwen", "dashscope", "local"}
-        if llm in network and emb in network and llm != emb:
-            missing = [
-                name
-                for name, value in (
-                    ("EMBEDDING_API_KEY", self.EMBEDDING_API_KEY),
-                    ("EMBEDDING_BASE_URL", self.EMBEDDING_BASE_URL),
-                )
-                if not (value or "").strip()
-            ]
-            if missing:
-                message = (
-                    f"LLM_PROVIDER={llm} 与 EMBEDDING_PROVIDER={emb} 不是同一家，但 {', '.join(missing)} 没配："
-                    "embedding 会回退到 LLM 那一家的端点/密钥，向量化大概率直接失败。"
-                    "要么两家合一，要么把缺的那两行显式写上。"
-                )
-                if self.is_production:
-                    raise ValueError(message)
-                logging.getLogger(__name__).warning(message)
+        family = {"openai": "openai", "qwen": "aliyun", "dashscope": "aliyun", "local": "local"}
+        if llm not in family or emb not in family or family[llm] == family[emb]:
+            return
+
+        missing: list[str] = []
+        if not (self.EMBEDDING_API_KEY or "").strip():
+            missing.append("EMBEDDING_API_KEY")
+        if emb in {"openai", "qwen"} and not (self.EMBEDDING_BASE_URL or "").strip():
+            missing.append("EMBEDDING_BASE_URL")
+        if not missing:
+            return
+
+        borrowed = "端点/密钥" if emb in {"openai", "qwen"} else "密钥"
+        message = (
+            f"LLM_PROVIDER={llm} 与 EMBEDDING_PROVIDER={emb} 跨供应商家族（{family[llm]} → {family[emb]}），"
+            f"但 {', '.join(missing)} 没配：embedding 会回退到 LLM 那一家的{borrowed}，"
+            "向量化大概率直接失败。要么两家合一，要么把缺的那几行显式写上。"
+        )
+        if self.is_production:
+            raise ValueError(message)
+        logging.getLogger(__name__).warning(message)
 
 
 settings = Settings()
