@@ -4577,6 +4577,24 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **验收**：代码零改动（本条是一次数据操作 + 台账），临时脚本与读数跑完即删，`git status` 只剩这一份文档。
 
+#### 已量：D193 §10.39 的 ③（改异步）半径——它不是"活大"，是撞在一条被测试钉住的产品不变量上
+
+**为什么要量**：① 关掉的是"错误说谎"，那发请求本身还是同步等 LLM。③ 一直是"正解但半径最大"这句没有数。这一条把半径量出来，**只读、零 provider 花费、零写入**。（② 探输出预算字段要真打一发才知道 SenseNova 认不认，那笔花费他没点，我把探针脚本删了没跑。）
+
+**半径（逐项我自己复过的数）**：
+- **后端本体：2 个文件 / 1 次 LLM 调用 / 0 次写库。** 路由是 sync `def`（`app/api/resume.py:1021`），全文件只有 2 条 `async def`（`:168`、`:920`）；链尾唯一那次模型调用是 `resume_rewrite_service.py:162` 的 `chat_json`（该文件里 `chat_json` 只出现 2 次：import 与调用，**没有第二次模型调用**）。相邻的 `apply-rewrites`（`:1039`）与 `revert-rewrite`（`:1068`）**都不走 LLM**。
+- **前端：2 个文件 / 1 个调用点 / 0 个进度 UI。** `api/resume.js:43` 定义 → `features/resume/views/ResumeUpload.vue:563` import、`:676` 唯一调用点；loading 只是一个布尔锁（声明 `:617`，用在模板 `:303` 按钮与 `:322` spinner），**没有轮询也没有百分比**；失败文案走 `:688` 的 `userErrorCopy(e, '改写建议生成失败')`。`REWRITE_SUGGESTIONS_TIMEOUT_MS` 在 src 里只有 `resume.js:45` 一个读者。
+- **可借的异步设施是"长编排"那一族，不是短任务。** `AgentTask.status` 六个取值，进度**不落库**（`task_center_service.py:41-104` 由 `AgentStepLog` 现算）；前端拿进度靠轮询（`utils/agentTaskPolling.js:33` 默认 2000ms×120 次）。而 `redis_queue` 那一半的消费者是**手工脚本** `scripts/run_orchestration_worker.py:23`，compose 里没有任何服务起它——这条正被 `tests/test_thread_backend_shutdown_shape.py:156` 钉着。
+- **最接近的先例不在 `agent_task` 上，是面试逐题异步评分**：`services/interview_evaluation_service.py:47`（写 pending 行）→ `:101-108`（自有线程池提交）→ `:111-190`（认领/重投，D163/D178 那套），前端 `InterviewReport.vue:415-416` 每 2s 回读。**形状对得上**（一次模型调用出一个 JSON、状态推进、页面轮询），改造可以照它而不是照 orchestration。
+
+**真正的拦路石（这条才是结论）**：这一发的对外契约是**"建议一律不落库"**——写在 `resume.py` 那条路由的 docstring 与 `resume_rewrite_service.py:9-11` 的模块注释里，并且有测试正面守卫（`tests/test_resume_rewrite_suggestions.py` 32 条 `def test_` 里 6 条碰这条链）。而异步化**必须**把那次的 JSON 存到某处，才能被第二次请求读回。仓库里能装的东西只有两处：`AgentTask.final_report`（`models/agent.py:31`，但同文件 **`:24` 的 `jd_id` 是 `nullable=False`**，而这一发的 `jd_id` 是**可选**的）与 `InterviewTurnEvaluation`（面试专用）。**没有"每用户一次性建议 payload"的表或字段，也没有清理先例**（`runner:257` 的 `mark_stale_running_tasks_failed` 只清状态不清正文）。所以 ③ 不是"多写几行"，它要改的是**一条被测试钉住的产品不变量**：建议的生命周期到底是不是"只活在这一次响应里"。
+
+**会红的守卫（各注明为什么）**：`tests/test_resume_rewrite_suggestions.py:278` 同步读 `data.suggestions`，改造后必红（子代理最初报 `:263`，我自己复数是 `:278`）；前端 `rewriteSuggestionTimeout.test.js` 6 条 `it` 里 `:42/:55` 钉的"per-request timeout 在 axios post 第三槽"与 `:67-88` 钉的"服务端 120 < 客户端 150 < nginx 180"三层顺序**判据作废**（异步后这三层墙不再存在，不是通过而是没有对象），`:105-142` 那条推 364.5s 并要求两条注释含字面量的也会连带失去靶子。`test_no_blocking_in_event_loop.py` 只扫 `async def`（`:111/:137`）、`:258` 明收 sync 路由，不红；但 `test_threadpool_and_route_shapes.py:31` + `scripts/scan_blocking_route_shapes.py:90-94` 会把"async def + `Depends(get_db)` + 体内无 await"记成可改判象，新路由若写成那副形状要重取判据。
+
+**因此这条没做，也不该顺手做**：`§10.39` 保持关闭状态不变（他点的是 ①），这一份只是把 ③ 从"半径最大"变成上面这些数。
+
+**验收**：代码零改动、库零写入、provider 零调用；两个承重数（`agent.py:24` 的 NOT NULL 与那个测试文件的 32/6/`:278`）我自己复过并订正了一处行号。
+
 
 
 
