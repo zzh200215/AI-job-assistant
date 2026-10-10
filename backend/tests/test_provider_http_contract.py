@@ -275,3 +275,70 @@ def test_empty_content_lets_the_fallback_model_answer(provider):
     assert result == {"suggestions": [{"block_id": "skills"}]}
     assert [r["body"]["model"] for r in provider.requests] == ["configured-model", "backup-model"]
     assert llm_service.get_llm_provenance()["source"] == "fallback_model"
+
+
+def test_the_default_arm_still_calls_the_client_with_the_old_shape(provider, monkeypatch):
+    """这一条钉的是"只这一发关"的范围：默认臂对 `_openai_compatible_chat` 的调用签名必须与改动前
+    逐字相同。D196 落地时先写成无条件传这个 kwarg，`test_llm_provenance.py` 里四条按旧签名打桩的
+    `responder()` 当场全 `TypeError` —— 那四条红就是这条判据的现实版本。"""
+    seen = []
+
+    def old_shape(candidate_prompt, base_url=None, *, json_mode=True, model=None):
+        seen.append({"json_mode": json_mode, "model": model, "base_url": base_url})
+        return json.dumps({"ok": True})
+
+    monkeypatch.setattr(llm_service, "_openai_compatible_chat", old_shape)
+
+    assert llm_service.chat_json("默认臂的调用形状") == {"ok": True}
+    assert seen == [{"json_mode": True, "model": None, "base_url": None}]
+
+
+def test_the_opt_in_arm_is_the_only_one_that_passes_the_kwarg(provider, monkeypatch):
+    seen = []
+
+    def new_shape(candidate_prompt, base_url=None, *, json_mode=True, model=None, disable_thinking=None):
+        seen.append(disable_thinking)
+        return json.dumps({"ok": True})
+
+    monkeypatch.setattr(llm_service, "_openai_compatible_chat", new_shape)
+
+    llm_service.chat_json("关的那一臂", disable_thinking=True)
+
+    assert seen == [True], "只有 opt-in 这一臂出现这个 kwarg，且值是 True"
+
+
+def test_disable_thinking_is_sent_only_when_asked(provider):
+    """② 的那一位默认不发：其余 34 个 `chat_json` 调用方的请求形状必须与改动前逐字相同。"""
+    provider.responses = [_content_response(CHOICE_CONTENT)]
+
+    llm_service.chat_json("默认那一臂")
+    assert "thinking" not in provider.requests[0]["body"]
+
+    llm_service.clear_llm_cache()
+    llm_service.chat_json("关思考链那一臂", disable_thinking=True)
+    assert provider.requests[1]["body"]["thinking"] == {"type": "disabled"}
+
+
+def test_the_two_arms_never_share_one_cache_entry(provider):
+    """同一份 prompt 的两臂不许互喂：D195 实测同一份简历 prompt 关链出 3 条建议、开链出空
+    content——两臂的答案不是同一个东西，缓存键把这一位算进去才是对的。"""
+    provider.responses = [_content_response({"arm": "no-thinking"})]
+    llm_service.chat_json("同一份 prompt", disable_thinking=True)
+
+    provider.responses = [_content_response({"arm": "thinking"})]
+    result = llm_service.chat_json("同一份 prompt")
+
+    assert result == {"arm": "thinking"}, "第二臂拿到了第一臂的缓存 ⇒ 缓存键没算这一位"
+    assert len(provider.requests) == 2
+
+
+def test_disable_thinking_survives_the_fallback_arm(provider):
+    """兜底链换型号时这一位要跟着走：glm-5.2 是同一族形状（D194 实测 543 token 里 526 花在
+    思考上），换过去却仍开着思考链，那一发照样可能吃光预算。"""
+    provider.responses = [_empty_content(), _content_response({"ok": True})]
+    settings.LLM_FALLBACK_MODEL = "backup-model"
+
+    llm_service.chat_json("主模型空答时也带着这一位", disable_thinking=True)
+
+    assert [r["body"]["model"] for r in provider.requests] == ["configured-model", "backup-model"]
+    assert all(r["body"]["thinking"] == {"type": "disabled"} for r in provider.requests)

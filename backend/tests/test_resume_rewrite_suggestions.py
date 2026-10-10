@@ -194,7 +194,7 @@ def test_an_unparseable_resume_never_costs_an_llm_call(db_session, actor, monkey
     user, _ = actor
     resume = _resume_row(db_session, user, parsed={"name": "张三"})
     calls = []
-    monkeypatch.setattr(svc, "chat_json", lambda prompt: calls.append(prompt) or {})
+    monkeypatch.setattr(svc, "chat_json", lambda prompt, **kw: calls.append(prompt) or {})
 
     result = svc.build_rewrite_suggestions(db_session, resume.id, user_id=user.id)
 
@@ -208,7 +208,9 @@ def test_suggestions_never_touch_the_stored_resume(db_session, actor, monkeypatc
     resume = _resume_row(db_session, user)
     before = json.dumps(resume.parsed_json, ensure_ascii=False, sort_keys=True)
     monkeypatch.setattr(
-        svc, "chat_json", lambda prompt: {"suggestions": [_suggestion(proposed="三年后端开发经验，专注高并发订单链路")]}
+        svc,
+        "chat_json",
+        lambda prompt, **kw: {"suggestions": [_suggestion(proposed="三年后端开发经验，专注高并发订单链路")]},
     )
 
     result = svc.build_rewrite_suggestions(db_session, resume.id, user_id=user.id)
@@ -222,7 +224,7 @@ def test_the_prompt_carries_anchors_inside_a_data_boundary(db_session, actor, mo
     user, _ = actor
     resume = _resume_row(db_session, user)
     prompts = []
-    monkeypatch.setattr(svc, "chat_json", lambda prompt: prompts.append(prompt) or {"suggestions": []})
+    monkeypatch.setattr(svc, "chat_json", lambda prompt, **kw: prompts.append(prompt) or {"suggestions": []})
 
     svc.build_rewrite_suggestions(db_session, resume.id, user_id=user.id)
 
@@ -232,11 +234,30 @@ def test_the_prompt_carries_anchors_inside_a_data_boundary(db_session, actor, mo
     assert "prompt-render-v1" in prompt
 
 
+def test_the_rewrite_call_is_the_one_arm_that_turns_thinking_off(db_session, actor, monkeypatch):
+    """② 的落点就在这一发，而且**只有**这一发：这一发同步等 LLM，D189 量到开着思考链时
+    91.77s / 95.33s 返回的 `content` 长度是 0，D195 关掉后 10.68s 出 3 条通过校验的建议。
+    其余 `chat_json` 调用方必须继续用默认那一臂（反向证据由 provider 契约测试钉住）。"""
+    user, _ = actor
+    resume = _resume_row(db_session, user)
+    seen = {}
+
+    def fake_chat(prompt, **kwargs):
+        seen.update(kwargs)
+        return {"suggestions": []}
+
+    monkeypatch.setattr(svc, "chat_json", fake_chat)
+
+    svc.build_rewrite_suggestions(db_session, resume.id, user_id=user.id)
+
+    assert seen == {"disable_thinking": True}
+
+
 def test_cross_user_resume_and_missing_job_are_refused(db_session, actor, monkeypatch):
     user, other = actor
     resume = _resume_row(db_session, user)
     job = _job_row(db_session, other)
-    monkeypatch.setattr(svc, "chat_json", lambda prompt: {"suggestions": []})
+    monkeypatch.setattr(svc, "chat_json", lambda prompt, **kw: {"suggestions": []})
 
     with pytest.raises(ValueError):
         svc.build_rewrite_suggestions(db_session, resume.id, user_id=other.id)
@@ -266,7 +287,7 @@ def test_the_endpoint_reports_rejected_anchors_to_the_client(db_session, actor, 
     monkeypatch.setattr(
         svc,
         "chat_json",
-        lambda prompt: {
+        lambda prompt, **kw: {
             "suggestions": [
                 _suggestion(proposed="三年后端开发经验，主导过订单链路重构"),
                 _suggestion(block_id="work[3].desc", original="不存在"),

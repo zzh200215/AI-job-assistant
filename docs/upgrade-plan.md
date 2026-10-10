@@ -4621,6 +4621,34 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **验收**：代码零改动；库零写入（6 发都没走 `chat_json`，`prompt_trace` 计数不变）；`_d194*` / `_d195*` 临时件读数取完即删。
 
+#### 已交付：D196 ② 落地在"只这一发"那一层——顺带用五发真调用把我自己上一条的单发结论打掉
+
+**改了什么（三处，全在一位开关上）**：`chat_json` 新增 keyword-only `disable_thinking=False`（`:1031`）；`_openai_compatible_chat` 同名参数，True 时给 payload 加 `thinking = {"type": "disabled"}`（`:911-914`）；调用点只有 `resume_rewrite_service.py:165` 传 `disable_thinking=True`。**其余 34 个 `chat_json` 调用方的请求形状与改动前逐字相同**——这是"只这一发关"那档的全部含义。
+
+**一处形状设计是被红牌逼出来的（值得单独记）**：第一版我把这个 kwarg **无条件**往下传，`tests/test_llm_provenance.py` 里四条按旧签名打桩的 `responder()` 当场全 `TypeError`（`:1089`）。那四条不是噪音，是这次改造的真实半径。所以改成 `thinking_kwargs = {"disable_thinking": True} if disable_thinking else {}`——默认臂连这个 kwarg 都不出现，并补了一条判据把这件事钉住（`test_the_default_arm_still_calls_the_client_with_the_old_shape`），而不是留一句注释。
+
+**缓存那一臂是真隐患**：`_cache_key` 原来只算 `provider|model|prompt`。同一份 prompt 在开/关两臂下**不是同一个答案**（下面有实测），所以这一位进了键。变异 N2 把它摘掉 ⇒ `test_the_two_arms_never_share_one_cache_entry` 红。
+
+**六个新用例、四个变异**：字段只在 opt-in 时上 wire（默认臂断言 `"thinking" not in body`）／两臂不共享缓存／opt-in 时兜底链那一臂也带着（因为 D194 量到 `glm-5.2` 是同族形状）／默认臂的调用签名不变／opt-in 臂是唯一传这一位的／调用点断言 `seen == {"disable_thinking": True}`。变异：**N1** 收字段但不发 ⇒ 2 红；**N2** 缓存键去掉这一位 ⇒ 1 红；**N4** 调用点不再 opt-in ⇒ 1 红；**N5** 无条件传 kwarg ⇒ **6 红**（其中 4 条就是 provenance 那批旧签名桩，把上面那段历史复现了一遍）。
+
+**五发真调用走的是产品代码本身（不是复刻 payload），它把 D195 的单发结论打掉了**：
+
+| 采样 | wall | 模型原始返回条数 | 采纳 | 被拒理由 | provenance | 调用点 kwargs |
+| --- | --- | --- | --- | --- | --- | --- |
+| D197 | 10.27s | 5 | **0** | `unchanged` ×5 | real | `{'disable_thinking': True}` |
+| D198-0 | 10.05s | 5 | 2 | `unchanged` ×3 | real | 同上 |
+| D198-1 | 12.08s | 5 | 3 | `unchanged` ×2 | real | 同上 |
+| D198-2 | **4.58s** | **1** | **0** | `unchanged` ×1 | real | 同上 |
+| D198-3 | 11.17s | 5 | 3 | `unchanged` ×2 | real | 同上 |
+
+- **先说我自己错在哪**：D195 那发采纳 3 条，我就写了"② 成了"。D197 同一份 prompt、同一条产品路径采纳 **0** 条。**单发读数不是结论**，这条在账上撞过不止一次，这次是我自己撞。
+- **两种 0 不是同一件事**：D198-0/1/3 里的 `unchanged` 我逐块比对过原文与"改后"——`skills` 那块 `identical=True`，**模型是逐字照抄**（这是质量，不是接线）；而 D198-2 那次 0 是模型总共只返回了 **1 条**建议（`raw_suggestion_count=1`），另外四个块它根本没答（这是漏块）。
+- **接线本身是通的**：五发的 `kwargs` 每一次都是 `{'disable_thinking': True}`，provenance 全 `real`，时长 **4.58–12.08s**（对照 D189 开着思考链那两臂：91.77s / 95.33s 且 `content` 长度 0）。
+- **所以这条的真实边界是**：② 买到的是"不再 90 秒空答"，**没买到**"每次都有可用建议"——5 次采样里 2 次给 0 条。③（异步）那句仍然挂着，但这里多了一条便宜得多的路：单发既然只有 10s 量级，**全拒时再问一次**的代价已经很小，不需要先把端点改成任务。
+- **库侧**：这 5 发每发写 1 行 `prompt_trace`，跑完按 `id > max_before` 删掉，**换新连接复数 1601**（D189 那条教训直接落地：不在同一事务里自证）；`resume_version` 与 `resume.update_time` 逐字不变 ⇒ 那条"建议一律不落库"的不变量在改造后仍然成立。
+
+**验收**：backend 全量 **908 passed / 109.91s**（前值 902，+6 条新用例）、`ruff check .` clean、`ruff format --check .` **363 files already formatted**；前端零改动（那三层墙与 364.5s 的字面量判据都没动，也不该动——它们钉的是"开关关掉之前"的形状）。
+
 
 
 
@@ -5406,7 +5434,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
     - **附带一条已定案的前提更正**（记在 D162）：A 表原写"第二条落库路径没接上唯一权威"，实测不成立——`match_service.py:99` 由 `e1054c9`（2026-09-19）接上，比 strategies 的 `1d4e16a`（09-20）**还早一天**，且 `test_service_access_guards.py:126-128` 早就在钉它。这条待拍项里**没有**"前瞻修复"那一半，只剩上面那个 70 行的决定，以及"同一个事实两种拼法"（`score_method` / `match_score_method`）要不要统一。
 
 39. ~~**行级改写建议那一发现在以"空答案"失败，不再以超时失败（2026-10-10 D189 两发真 provider 实测；三条路都配了数）**~~ —— **已按 ① 落地并关闭（同日 D191；②③ 他没点）**。60s 那三道墙由 D188 抬开、D189 五层各量一遍确认有效（75s 假上游在客户端 75.02s / 服务端 75.02s / dev 代理 75.02s / uvicorn 75.05s 全通）。**抬开之后露出来的才是这个端点真正的病**：同一支 prompt（真简历 resume 20 的 5 个块 + jd 72，2163 字符）打 SenseNova `deepseek-v4-flash`，**HTTP 200 at 95.33s、`finish_reason="length"`、`completion_tokens=8192` 全部是 `reasoning_tokens`、`content` 长度 0**（`reasoning_content` 有 15491 字符）——整份补全预算被思考链吃光，一个字答案都没写。`response_format: {"type":"json_object"}` 拦不住它。走 `chat_json` 的那一发（91.77s）因此报的是 **`AI 返回内容不是合法 JSON，无法解析`**，这句是**误诊**：不是格式坏了，是没内容。同一文件里工具链 `_openai_compatible_chat_with_tools:1301` **有**空内容判据（`LLM 返回空内容且无工具调用 (finish_reason=…)`），而 JSON 链 `_openai_compatible_chat:889` **没有**——一有一无。
-    - 三条路：**① 补一条与 `:1301` 同形的空 content 判据**（一行级；把误诊换成真原因，且能触发兜底链。代价：兜底链再多打一发，最坏 91 + ? 秒，候选人对着 spinner 更久，而且备模型 glm-5.2 是不是也吃预算**未验**）。**② 给这一发设输出/思考预算**（真解；要先摸清那一边认哪个字段名 `max_tokens` / `thinking budget` / `reasoning_effort`，本机零证据，属要试的一发）。**③ 把它改成异步任务**（D188 就写明的正解：走已有 orchestration / TaskCenter，spinner 那 150 秒整个消掉；半径最大，动的是端点契约与前端两处调用点）。**我的读法：①是"别再误诊"，③才是"能用"，②能不能成取决于一发未花的探测。** **他点的是 ①**（2026-10-10），已由 D191 落地：空 content 判成 provider 失败、不进同型号重试、从而真的进兜底链，五个用例三个变异，backend 全量 902 passed。**代价如实写着**：最坏那一档现在多花一发备模型的时长（91s 量级），客户端 150s 仍会先断——因为 ② 与 ③ 都没点。**重开条件是可查的**：`prompt_trace` 里 `status='failed'` 且 `error_message LIKE '%空内容%'` 且 `degraded=1` ⇒ 主备同发都空答，① 救不了，必须回到 ② 或 ③。
+    - 三条路：**① 补一条与 `:1301` 同形的空 content 判据**（一行级；把误诊换成真原因，且能触发兜底链。代价：兜底链再多打一发，最坏 91 + ? 秒，候选人对着 spinner 更久，而且备模型 glm-5.2 是不是也吃预算**未验**）。**② 给这一发设输出/思考预算**（真解；要先摸清那一边认哪个字段名 `max_tokens` / `thinking budget` / `reasoning_effort`，本机零证据，属要试的一发）。**③ 把它改成异步任务**（D188 就写明的正解：走已有 orchestration / TaskCenter，spinner 那 150 秒整个消掉；半径最大，动的是端点契约与前端两处调用点）。**我的读法：①是"别再误诊"，③才是"能用"，②能不能成取决于一发未花的探测。** **他点的是 ①**（2026-10-10），已由 D191 落地：空 content 判成 provider 失败、不进同型号重试、从而真的进兜底链，五个用例三个变异，backend 全量 902 passed。**代价如实写着**：最坏那一档现在多花一发备模型的时长（91s 量级），客户端 150s 仍会先断——因为 ② 与 ③ 都没点。**重开条件是可查的**：`prompt_trace` 里 `status='failed'` 且 `error_message LIKE '%空内容%'` 且 `degraded=1` ⇒ 主备同发都空答，① 救不了，必须回到 ② 或 ③。**同日他接着点了 ②，已由 D196 落地在"只这一发"那一层**：`chat_json(prompt, disable_thinking=True)` 只给 `build_rewrite_suggestions` 用，其余 34 个调用方的请求形状逐字不变；实测从 91.77s 空答降到 **4.58–12.08s**。**但这条没关掉"能不能出建议"**：走产品代码的五发采样采纳数是 **0 / 2 / 3 / 0 / 3**，且两种 0 成因不同（`skills` 那块被逐字照抄 vs 模型只答了 1 个块）。③ 仍挂着；D196 顺带量出一条便宜得多的路——单发既然只有 10s 量级，**全拒时再问一次**不必先把端点改成任务。
 
 ## 11. 附录：本方案未采纳的一条建议
 

@@ -159,7 +159,10 @@ def build_rewrite_suggestions(
         jd_text=jd_text,
         max_suggestions=MAX_SUGGESTIONS,
     )
-    result = chat_json(prompt)
+    # 这一发是同步等 LLM 的，所以关掉思考链：D189 量到同一份 prompt 开着思考链时 91.77s / 95.33s
+    # 返回的 `content` 长度为 0（8192 个 completion token 全花在 reasoning 上），D195 关掉后
+    # 10.68s 出 3 条通过校验的建议。其它调用方不开这一位。
+    result = chat_json(prompt, disable_thinking=True)
 
     suggestions, rejected = validate_rewrite_suggestions(blocks, result)
     return {

@@ -296,8 +296,10 @@ class LLMTraceScope:
         self.persist(status="failed", error_message=str(error), provenance=provenance)
 
 
-def _cache_key(provider: str, prompt: str) -> str:
-    raw = f"{provider}|{settings.LLM_MODEL}|{prompt}"
+def _cache_key(provider: str, prompt: str, disable_thinking: bool = False) -> str:
+    # 同一个 prompt 在"关思考链"与"开思考链"两臂下不是同一个答案：D195 实测同一份简历 prompt
+    # 关链给 3 条建议、开链给空 content。所以这个位必须进键，否则一臂的结果会喂给另一臂。
+    raw = f"{provider}|{settings.LLM_MODEL}|{int(bool(disable_thinking))}|{prompt}"
     return hashlib.md5(raw.encode("utf-8")).hexdigest()
 
 
@@ -886,7 +888,14 @@ def _mock_chat(prompt: str) -> str:
 # ===================== 真实 LLM 调用 =====================
 
 
-def _openai_compatible_chat(prompt: str, base_url: str = None, *, json_mode: bool = True, model: str = None) -> str:
+def _openai_compatible_chat(
+    prompt: str,
+    base_url: str = None,
+    *,
+    json_mode: bool = True,
+    model: str = None,
+    disable_thinking: bool = False,
+) -> str:
     """
     OpenAI 兼容协议调用（OpenAI / Qwen 兼容模式）
     用 requests 减少 SDK 依赖；生产可换成 openai SDK。
@@ -910,6 +919,9 @@ def _openai_compatible_chat(prompt: str, base_url: str = None, *, json_mode: boo
     }
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
+    if disable_thinking:
+        # 那一边照单执行，不是把未知字段丢掉（D194：reasoning_tokens=0、reasoning_content 消失）。
+        payload["thinking"] = {"type": "disabled"}
 
     def _do():
         try:
@@ -1028,7 +1040,7 @@ def provider_allows_mock_fallback() -> bool:
 # ===================== 对外统一接口 =====================
 
 
-def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, Any]:
+def chat_json(prompt: str, schema: type[BaseModel] | None = None, *, disable_thinking: bool = False) -> dict[str, Any]:
     """
     唯一对外接口：输入 prompt，输出解析后的 dict
     - mock：本地模板，无网络
@@ -1037,6 +1049,10 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
     异常处理：
     - AI 调用失败 → 抛 RuntimeError
     - 返回内容非合法 JSON → 尝试提取，仍失败抛 ValueError
+
+    `disable_thinking` 只给**同步等这一发、且输出预算会被思考链吃光**的调用（默认 False ⇒ 其余
+    34 个调用方行为不变）。它不是性能开关：D189 量到同一份简历 prompt 开着思考链 91.77s / 95.33s
+    返回 `content` 长度 0，D195 关掉后 10.68s 出 3 条可用建议。
     """
     provider = (settings.LLM_PROVIDER or "mock").lower()
     # E28：真花钱之前先扣用户的额度。放在 trace 之前，超额的那次不会留下"看起来跑过"的审计行；
@@ -1047,7 +1063,7 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
 
     # ---- 0) 查缓存（命中则返回深拷贝，避免调用方改动污染缓存）----
     # 只有 source=real 的结果会被写入，所以命中必然等价于一次真实应答。
-    key = _cache_key(provider, prompt)
+    key = _cache_key(provider, prompt, disable_thinking)
     with _LLM_CACHE_LOCK:
         cached = _LLM_CACHE.get(key)
         if cached is not None:
@@ -1063,6 +1079,10 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
     provenance = _provenance("unknown")
     set_llm_provenance(provenance)
 
+    # 只在关的那一臂上出现这个 kwarg：默认臂对 `_openai_compatible_chat` 的调用形状与改动前
+    # 逐字相同，其余 34 个调用方（以及按旧签名打桩的测试）一律不受影响。
+    thinking_kwargs = {"disable_thinking": True} if disable_thinking else {}
+
     # ---- 1) 调用 AI 获取原始文本 ----
     try:
         if provider == "mock":
@@ -1070,7 +1090,9 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
             provenance = _provenance("mock", reason="LLM_PROVIDER=mock，内容由本地模板生成，非模型输出")
         elif provider in ("openai", "qwen"):
             raw, provenance = _call_with_fallbacks(
-                lambda candidate_prompt, model: _openai_compatible_chat(candidate_prompt, json_mode=True, model=model),
+                lambda candidate_prompt, model: _openai_compatible_chat(
+                    candidate_prompt, json_mode=True, model=model, **thinking_kwargs
+                ),
                 prompt,
             )
         elif provider == "local":
@@ -1080,6 +1102,7 @@ def chat_json(prompt: str, schema: type[BaseModel] | None = None) -> dict[str, A
                     base_url=settings.LLM_BASE_URL or "http://localhost:11434/v1",
                     json_mode=True,
                     model=model,
+                    **thinking_kwargs,
                 ),
                 prompt,
             )
