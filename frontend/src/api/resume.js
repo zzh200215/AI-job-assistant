@@ -29,8 +29,17 @@ export const parseResume = (resumeId) => request.post('/resume/parse', { resume_
 export const getResume = (id) => request.get(`/resume/${id}`)
 
 // 行级改写：建议按 block_id 锚定到简历里的具体文本，采纳后才写回
+/**
+ * 建议那一发是**同步等 LLM** 的，而 axios 全局超时是 60s（`request.js:15`）——D182 在真库上量到
+ * 它一次撞满 60s 被客户端掐断、重试才成功。三层墙必须同序，谁单独抬都会把墙推到别层：
+ * 服务端单次 `LLM_TIMEOUT=120s` < 本条 150s < nginx `/api/` 的 180s（`frontend/nginx.conf`）。
+ */
+export const REWRITE_SUGGESTIONS_TIMEOUT_MS = 150000
+
 export const getRewriteSuggestions = (resumeId, jdId = null) =>
-  request.post(`/resume/${resumeId}/rewrite-suggestions`, jdId ? { jd_id: jdId } : {})
+  request.post(`/resume/${resumeId}/rewrite-suggestions`, jdId ? { jd_id: jdId } : {}, {
+    timeout: REWRITE_SUGGESTIONS_TIMEOUT_MS,
+  })
 
 export const applyResumeRewrites = (resumeId, edits, jdId = null) =>
   request.post(`/resume/${resumeId}/apply-rewrites`, { edits, ...(jdId ? { jd_id: jdId } : {}) })

@@ -4476,6 +4476,23 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **验收**：backend 全量 **895 passed / 101.29s**（前值 886，+9）；`ruff check .` All checks passed、`ruff format --check .` **363 files already formatted**。改动：`config.py`、`llm_service.py`、新测试 `test_llm_model_costs.py`、`backend/.env.example`、`.env.production.example`、两份 compose。远端 `origin/master = c686255`（D184/D185/D186 都已推上去）。
 
+#### 已交付：D188 那一发的 60 秒墙其实是三道——只抬一层等于把墙推到下一层
+
+**先纠正我上一轮说错的一句**：我说"nginx 有 300s 所以不是瓶颈"。现取 `frontend/nginx.conf`：那两行 `proxy_read_timeout 300s` 挂在 **`location /ws/`**（面试 WebSocket）上，**`location /api/` 里一行超时都没有** ⇒ 走 nginx 默认 **60s**。所以这道请求外面套着**三道 60 秒墙**：axios 全局 `timeout: 60000`（`src/api/request.js:15`）、nginx `/api/` 默认 60s、服务端 `LLM_TIMEOUT`（D185 已抬到 120）。D182 量到的"撞满 60s 被掐断、重试才成功"就是这三道里的某一道先动的手。
+
+**改了什么**：
+- `getRewriteSuggestions` 带上 per-request 超时，常量导出：`REWRITE_SUGGESTIONS_TIMEOUT_MS = 150000`（axios 的 `post(url, body, config)` 第三槽）。
+- `nginx.conf` 的 `location /api/` 加 `proxy_read_timeout 180s; proxy_send_timeout 180s;`。**没为那一个端点单开正则 location**——那样要复制 7 行 `proxy_set_header`，是 D166/D185/D187 记过的下一族漂移。
+- 三层顺序钉成一条可执行判据：**服务端单次 120 < 客户端 150 < nginx 180**。
+
+**顺带现取的两件事**：① 那颗按钮**已经有** `:loading="rewriteLoading"`（`JobSearch.vue:220`），所以 D172 那族"点了没反应 / 连点两发在途"在这里不是缺口；② 调用点有两个（`JobSearch.vue:863` 与 `ResumeUpload.vue:676`），两处共用同一个 api 函数，所以一处改完两处都受保护。
+
+**四个变异，各红在自己那一层**：F1 去掉 per-request timeout → **2 红**（两条请求形状断言）；F2 把全局 axios 抬到 180s → **1 红**（这条专门钉"不许用全局抬一下糊掉这一发的问题"）；F3 删掉 nginx 那行 → **1 红**；F4 把服务端 `LLM_TIMEOUT` 抬到 200（越过客户端）→ **1 红**。全部 `restored=True`；跨层读文件的解析用"必须唯一命中否则红"的 `only()`，防止 `/api/` 块被删后误抓到 `/ws/` 的 300。
+
+**边界与未验（不粉饰）**：这只是把"客户端先放弃"那道墙抬开——服务端仍可能跑很久，候选人对着 spinner 最多 150 秒。**真正的解法是把它改成异步任务**（走已有 orchestration / TaskCenter），那是更大的改动，本条没做。也**没有真发一次 >60s 的请求去验三层端到端**（要花钱、还要故意拖慢），实测数据点只有 D182 那一次；p50/p95 延迟仍未知。
+
+**验收**：前端 `npm run format:check` 通过、`eslint` 静默、`npx vitest run` **91 files / 605 passed**（前值 90/600，+1 文件 +5 条）；后端零改动（`test_llm_model_costs` + `test_interview_evaluation_requeue` 复跑 21 passed）。
+
 
 
 
