@@ -4408,7 +4408,7 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **验收**：`npm run format:check` 全仓 Prettier 通过、`node scripts/dead-style.mjs --selftest` 四页候选 0 / 全仓候选 0、`npm run test:unit` **90 files / 600 passed**；改动只有 `probe/dead-style.entry.js` 一个文件（非产品代码，构建图不含它），后端零改动。
 
-**至此 P5 那两条"要花钱/要多进程才能验的未验"全部收口**：① 一发真 provider 响应——恢复链与建议→应用→撤销**两支都由 D182 跑通并留了读数**；② 多进程认领互斥——由 D178 加租约、D180 在真库上量到"总赢家 1"。账上剩下的未验因此是另外三件，都不是 P5：真发全量 RAG 评估（连发撞 429、且建议那一发已经贴着 60s 超时线）、rerank 的本地 cross-encoder（`.venv` 里没有 torch/transformers，真模型从未加载过）、`vue-tsc` 基线（从未取到有效退出码，CI 也不跑它）。
+**至此 P5 那两条"要花钱/要多进程才能验的未验"全部收口**：① 一发真 provider 响应——恢复链与建议→应用→撤销**两支都由 D182 跑通并留了读数**；② 多进程认领互斥——由 D178 加租约、D180 在真库上量到"总赢家 1"。账上剩下的未验因此是另外三件，都不是 P5：真发全量 RAG 评估（连发撞 429、且建议那一发已经贴着 60s 超时线）、rerank 的本地 cross-encoder（`.venv` 里没有 torch/transformers，真模型从未加载过）、`vue-tsc` 基线（从未取到有效退出码，CI 也不跑它）。**（2026-10-10 D190：这第三件的前提不成立——`npm run typecheck` 当场给出 exit 0 / 0 条，而 CI 的 `npm test` 里 `tests/typeDebtRatchet.test.mjs` 早就用 `spawnSync` 跑同一支 vue-tsc，还带"退出码只许 0 或 2"与两条文件数下限。两个变异各红一条（`.js` 与 `.vue` 各一处 TS2322），所以那 66 个 SFC 真在 program 里。剩下的未验是两件，不是三件。）**
 
 #### 已交付：D184 换供应商之后的假设审计——`openai` 不再等于"用 OpenAI 的端点"，这条现在是启动时拒的
 
@@ -4527,6 +4527,21 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 **未验（不粉饰）**：① nginx `/api/` 那 180s **没在真 nginx 上量过**——本机无 nginx 二进制、本地镜像里没有可用的 nginx 站，拉外部镜像被权限层挡下。它今天仍是"配置文件里读到的数 + nginx 默认 60s 这条已知语义"。② 端点**没有跑在真的 HTTP 站上过一发**（要起 8010，其 lifespan 会写库），所以"整条路从浏览器按钮到屏幕"这件事仍只有 D183 那种活页读数，本条量的是**各层墙**，不是那一次点击。③ glm-5.2 备模型会不会同样吃光预算：**未知**（没打）。④ 真上游 p50/p95 仍未知——两个样本（91.77s / 95.33s）不是分布，加上 D182b 那次成功的 78.822s 一共三个点。⑤ 一发 sync `def` 端点在睡 75s 时，同一个 uvicorn 进程还答不答应别的请求（上面自查第二条撤回的那个读数的正面版本）：**未验**。
 
 **验收**：前端 `npx vitest run` **91 files / 606 passed**（前值 91/605，+1 条腿）；删完临时件后 `npm run format:check` clean；后端零改动（`ruff` 两步无需重跑——本条没动一个后端文件，那次 `llm_service.py` 的改动是变异且已按备份还原）。
+
+#### 已交付：D190 账上那条"`vue-tsc` 从未取到有效退出码、CI 也不跑它"两头都不成立
+
+**题设先打掉**：D189 收口时我把"还剩哪些未验"照账复述了一遍，其中一条是 D167 写的"`vue-tsc` 这次没取到有效退出码（那条命令的 `$?` 取到的是 `tail` 的），CI 也不跑它"。现取之后**两句都是错的**：
+
+- **有效退出码今天就有**：`cd frontend && npx vue-tsc --noEmit -p tsconfig.json > 一个文件 2>&1; echo $?` ⇒ **exit 0，错误 0 条**。（当年那个坑是仪器写法：命令后面接 `| tail` 再取 `$?`，取到的是 `tail` 的退出码——改成"重定向到文件、`$?` 单独 echo"就干净了。）
+- **CI 跑它，而且早就在跑**：`ci.yml:127` 的 `npm test` = `node --test tests/*.test.mjs`，里面 `tests/typeDebtRatchet.test.mjs` 用 `spawnSync` 起的正是**同一支** `vue-tsc --noEmit -p tsconfig.json`；它比裸命令多三条牙——① 退出码必须是 **0 或 2**，别的（崩了/参数错了）当场红，防止"0 条错"是假绿灯；② `.vue` 与 `.js` 各自"看见的文件数"有下限，`include` 根丢了就红；③ 计数棘轮 `BUDGET = 0` 且**只许降不许静默**（真降下去会报"去把 BUDGET 改成 N"）。单跑 `node --test tests/typeDebtRatchet.test.mjs` ⇒ **3 passed / 14.4s**；全量 `npm test` ⇒ **33 pass / 0 fail**。
+
+**两个变异证明这把尺不是空转**（各只动一个文件、跑完按 `cp` 备份还原、`git status` 复归干净）：
+- 往 `src/api/resume.js` 末尾塞 `/** @type {number} */ const X = "串"` ⇒ **exit 2**、`src/api/resume.js(109,7): error TS2322`。
+- 往 `src/components/ui/AppLoadError.vue` 的 `<script setup>` 塞同一条 ⇒ **exit 2**、`AppLoadError.vue(30,7): error TS2322`。**这一条是决定项**：它证明那 66 个 SFC 真进了 program，而不是只查了 `.js`。（第一版我用中文全角引号写这条变异，拿到的是 `TS1127 Invalid character` 4 条——那是语法错不是类型错，换成 ASCII 引号才拿到想要的那条 TS2322。）
+
+**所以**：D189"未验"清单与 P5 那条"账上剩下的未验"里，`vue-tsc` 这一项**从今天的账上划掉**——不是我把它测出来的，是它本来就有一条在 CI 里的硬零门，我把它复述成了"未验"。剩下的三件仍是：真发全量 RAG 评估（花钱 + 连发撞 429）、rerank 的本地 cross-encoder（`.venv` 无 torch/transformers）、以及本条顺带新确认的一条——**D189 的 nginx 那 180s**：想按 `frontend/Dockerfile:24` 那个 `nginx:1.25-alpine` 起真站量，本机没有 nginx 二进制、本地镜像池里没有 nginx，动手时 Docker daemon 已不可达（十几分钟前 `docker images` 还通，随后 `npipe ... dockerDesktopLinuxEngine` 连接失败）。**没去启动 Docker Desktop**——那是机器级动作，不在这轮授权里。
+
+**验收**：前端零改动（两次变异都按 `cp` 副本还原，`git status` 干净），`npm test` 33 pass / 0 fail，`node --test tests/typeDebtRatchet.test.mjs` 3 passed，`npx vue-tsc --noEmit -p tsconfig.json` exit 0 / 0 条。本条只改台账这一处。
 
 
 
