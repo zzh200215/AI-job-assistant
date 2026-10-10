@@ -1,11 +1,15 @@
-"""D179：LLM 与向量化分属两家时，embedding 的 key/base 必须显式钉住——这条今天真撞过。
+"""启动期的两条"供应商形状"守卫（D179/D181 那条 embedding 回退 + D184 那条 LLM 端点）。
 
-现量经过：把 LLM 从 dashscope（`qwen-turbo`，额度耗尽）换到另一家 OpenAI 兼容供应商时，
-`backend/.env` 里原来只有 `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` 两行，key 与 base 都是空的——
-`embedding_service.py:317/333/337` 写的是 `EMBEDDING_API_KEY or LLM_API_KEY`、
-`EMBEDDING_BASE_URL or LLM_BASE_URL`。于是"向量化那一档不动"这句在代码上做不到：换了 LLM key，
-向量化会跟着去新供应商找 `text-embedding-v3`（那家的 `/models` 现量 7 个 ID 全是生成侧，没有向量模型），
-RAG 整条静默挂掉。这条守卫把它变成启动时就说话。
+**为什么两条放一个文件**：它们判的是同一件事——`LLM_*` 与 `EMBEDDING_*` 这几行配错时，
+坏的不是某一次请求，而是"整条链静默走错端点"。分开两个文件就会各测各的，而真正会同时
+踩到它们的是同一个人、同一次改配置。
+
+embedding 那一条的起因（2026-10-09 真撞）：`embedding_service.py` 里是
+`EMBEDDING_API_KEY or LLM_API_KEY`、`EMBEDDING_BASE_URL or LLM_BASE_URL`。把 LLM 从 dashscope
+换到另一家 OpenAI 兼容供应商时，如果只改 `LLM_*`，向量化会跟着去新供应商找 `text-embedding-v3`
+（那家 `/models` 现量 7 个 ID 全是生成侧，没有向量模型），RAG 整条静默挂掉。
+LLM 端点那一条是同一次切换的另一半：`openai` 这个值从此只表示"走兼容协议"，
+留空 `LLM_BASE_URL` 会静默打到 `api.openai.com`。
 """
 
 from __future__ import annotations
@@ -96,6 +100,54 @@ def test_cross_family_still_refuses_a_borrowed_key_on_the_sdk_path():
     assert "EMBEDDING_API_KEY" in message
     assert "EMBEDDING_BASE_URL" not in message, f"dashscope 不读 base_url，点它是误导：{message}"
     assert "SDK" in message or "密钥" in message
+
+
+def test_production_refuses_a_network_llm_without_an_explicit_endpoint():
+    """2026-10-09 换供应商之后，`openai` 只表示"走 OpenAI 兼容协议"，不再等于"用 OpenAI 的端点"。
+
+    留空 `LLM_BASE_URL` 会静默落到代码里的 `api.openai.com` 默认值 ⇒ 新供应商的 key 被发给旧端点，
+    每次调用都 401；而 `/api/system` 那一格只看 `bool(api_key)`（`api/system.py:86-88`），
+    管理员面板上仍然写着 "Configured"。所以这条必须在启动时就拒绝。
+    """
+    with pytest.raises(ValueError) as caught:
+        _settings(LLM_BASE_URL="")
+    assert "LLM_BASE_URL" in str(caught.value)
+
+
+def test_the_shipped_production_example_still_boots():
+    """新守卫不许把**文档里那条路**堵死：`.env.production.example` 的 provider 行必须能启动。
+
+    D181 刚教过我一课——守卫写进生产启动路径之后，第一件事是量它会不会误杀合法配置。
+    这里不复制值（复制就会漂），直接把 example 里的 provider 相关行读进来。
+    """
+    from pathlib import Path
+
+    lines = (Path(__file__).resolve().parents[2] / ".env.production.example").read_text(encoding="utf-8").splitlines()
+    provider = {}
+    for line in lines:
+        key = line.split("=", 1)[0].strip()
+        if key.startswith(("LLM_", "EMBEDDING_")):
+            provider[key] = line.split("=", 1)[1].strip()
+    assert provider.get("LLM_BASE_URL"), "example 里 LLM_BASE_URL 没了——这条测试的锚点要重取"
+
+    ok = _settings(**provider)
+    assert provider["LLM_PROVIDER"] == ok.LLM_PROVIDER
+    assert provider["LLM_BASE_URL"] == ok.LLM_BASE_URL
+
+
+def test_production_refuses_a_mock_llm_and_that_is_a_different_rule():
+    """生产不许把 LLM 配成 `mock`——这条早就在，但从没被测过（本条补上）。
+
+    **这条的边界要写清楚，别把它当成端点判据的守卫**：变异 W2 把 `mock` 加进端点判据的
+    provider 集合里，本条**照样绿**——因为 `mock` 先被前面那条判据拒了，端点那条根本走不到它。
+    所以它钉的是"抛的是哪条规则的话"，不钉端点判据的射程；端点判据的红绿由
+    `test_production_refuses_a_network_llm_without_an_explicit_endpoint` 与变异 W1 负责。
+    """
+    with pytest.raises(ValueError) as caught:
+        _settings(LLM_PROVIDER="mock", LLM_API_KEY="", LLM_BASE_URL="")
+    message = str(caught.value)
+    assert "mock" in message
+    assert "LLM_BASE_URL" not in message
 
 
 def test_development_warns_instead_of_refusing_the_same_shape(caplog):

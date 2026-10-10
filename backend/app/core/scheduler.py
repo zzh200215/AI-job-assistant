@@ -223,7 +223,7 @@ def _run_interview_evaluation_requeue():
     的，而且**现取到签进树的部署里根本没有 Redis**（两份 compose 都没有 redis 服务、prod env 没有
     `REDIS_URL`），所以每拍都各扫各的——抗并发全靠认领本身。
     认领的形状改过一次：只按 `status` 做条件时它是 **per-transition 单飞**，D177 用真 8 进程 +
-    真 MySQL 量出两个副本能各领一条 transition（`1 0 0 1 0 0 0 0`）、同一道题付两遍 qwen。
+    真 MySQL 量出两个副本能各领一条 transition（`1 0 0 1 0 0 0 0`）、同一道题付两遍模型钱。
     D178 给行加了 `claimed_at` 租约，凭证从此是 **per-row** 的。
     """
     from app.core.database import SessionLocal

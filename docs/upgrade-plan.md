@@ -4410,6 +4410,23 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **至此 P5 那两条"要花钱/要多进程才能验的未验"全部收口**：① 一发真 provider 响应——恢复链与建议→应用→撤销**两支都由 D182 跑通并留了读数**；② 多进程认领互斥——由 D178 加租约、D180 在真库上量到"总赢家 1"。账上剩下的未验因此是另外三件，都不是 P5：真发全量 RAG 评估（连发撞 429、且建议那一发已经贴着 60s 超时线）、rerank 的本地 cross-encoder（`.venv` 里没有 torch/transformers，真模型从未加载过）、`vue-tsc` 基线（从未取到有效退出码，CI 也不跑它）。
 
+#### 已交付：D184 换供应商之后的假设审计——`openai` 不再等于"用 OpenAI 的端点"，这条现在是启动时拒的
+
+**审计范围**：`backend/app` + `backend/scripts` 里 `qwen|dashscope|text-embedding|gpt-4|gpt-3` 的字面量 **41 处**，逐条分类后只有一处承重：
+
+- **承重，已修**：`config.py` 新增生产判据——网络型 `LLM_PROVIDER`（`openai`/`qwen`/`local`）留空 `LLM_BASE_URL` 直接拒绝启动。理由链是现取的：`docker-compose.prod.yml:34` 写的是 `LLM_BASE_URL: ${LLM_BASE_URL:-}`（**默认为空**），`api/system.py:86-88` 判 `configured` 只看 `bool(api_key)`（只有 `qwen` 额外要求 base_url），而 `_openai_compatible_chat` 在 base_url 为空时落到代码里的 `api.openai.com` 默认值 ⇒ 配 `openai` + 新 key + 空端点 = **每一次调用都 401，而管理员面板写 "Configured"**。前端只读那个布尔（`SystemStatus.vue:62,65`），所以我没动端点的响应形状，只在启动时说话。
+- **无害但会腐烂，已改**：三处注释把一件与供应商无关的事写成"付两遍 **qwen** 调用"（`config.py:76`、`config.py:80`、`scheduler.py:226`）——换成 SenseNova 之后这种写法会把人往错的方向带。一律改成"模型钱"。
+- **无害，留着**：`_mock_embedding_dimension`（只在 mock 路，且有 512 兜底）、`system.py:79` 的 supported 集合（`openai` 覆盖任何兼容端点）、embedding 批量上限 10（向量那一档仍钉在 dashscope，见 D179）。
+
+**三条新测试 + 两个变异，其中一个变异逮到我自己写的空测试**：
+- W1（把端点判据关掉）→ **1 红**，红在该说的那条上 ✓。
+- **W2（把 `mock` 加进端点判据的 provider 集合）→ 0 红**：因为 `mock` 先被前面那条"生产不许配 mock"拒了，端点判据根本走不到它 ⇒ 我原本为它写的那条测试是**空测试**（怎么写都绿）。已改写成它真正能钉的东西——"生产拒绝 `LLM_PROVIDER=mock`"这条老规则此前**从未被测过**（全仓 grep 只有脚本侧的 `test_eval_provider_guard`），并在 docstring 里明写"本条不钉端点判据的射程"。
+- 把 D181 那条教训用在自己身上：**新守卫必须不堵死文档里那条路** ⇒ `test_the_shipped_production_example_still_boots` 直接读 `.env.production.example` 的 provider 行（不复制值，复制就会漂）断言能启动。
+
+**没动的两件（都是产品决定，等他点）**：`LLM_TIMEOUT=60` 该抬（D182 实测建议那一发贴着线、超时后重试才成功，抬它会同时拉长停机等待）；`config.py:44` 的默认型号 `gpt-3.5-turbo` 是过时名字，但它是被 `.env` 覆盖的兜底值，改它等于替所有部署选型号。
+
+**验收**：backend 全量 **882 passed / 103.72s**（前值 879，+3）；`ruff check .` All checks passed、`ruff format --check .` 361 files already formatted。改动：`config.py`（一条判据 + 两处注释）、`scheduler.py`（一处注释）、守卫测试文件（+3 条、docstring 改写）。
+
 
 
 
