@@ -33,6 +33,10 @@ export const getResume = (id) => request.get(`/resume/${id}`)
  * 建议那一发是**同步等 LLM** 的，而 axios 全局超时是 60s（`request.js:15`）——D182 在真库上量到
  * 它一次撞满 60s 被客户端掐断、重试才成功。三层墙必须同序，谁单独抬都会把墙推到别层：
  * 服务端单次 `LLM_TIMEOUT=120s` < 本条 150s < nginx `/api/` 的 180s（`frontend/nginx.conf`）。
+ * D189 用 75s 假上游把这三层各量了一遍：只吃实例 60000 时 60.02s 断，带本条时 75.02s 通。
+ * 但那句同序**只在单次成立**：`chat_json` 外面套着 `_LLM_MAX_RETRIES=2`（退避 1.5s + 3s），
+ * 实测上游一直挂着时 60s 那一档要到 184.56s 才失败，即服务端最坏 = 3×120+4.5 = **364.5s**。
+ * 所以本条 150s 是"候选人先看到错误"的兜底，不是与服务端的配平。
  */
 export const REWRITE_SUGGESTIONS_TIMEOUT_MS = 150000
 

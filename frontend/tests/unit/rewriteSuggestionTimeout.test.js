@@ -97,4 +97,47 @@ describe('那一发同步 LLM 请求的三层超时', () => {
     expect(stripped).not.toMatch(/proxy_read_timeout/)
     expect(stripped).not.toContain('300')
   })
+
+  /* D189：上面那条"服务端 120 < 客户端 150"只算了单次。真量出来的是——上游一直挂着不答时，
+     60s 那一档要跑到 184.56s 才失败（3 次尝试 + 退避 1.5s、3s），即同序那一句在服务端最坏
+     那里不成立。这条不把它变成"要求"，而是把**那个数从源码推出来**并钉进两条注释：
+     谁动了 LLM_TIMEOUT 或重试次数，推导值就变了，注释必须跟着改，否则红。 */
+  it('服务端最坏 = 单次 ×(1+重试) + 退避和；两条注释写的就是这个推导值', () => {
+    const fromBackend = (path, pattern, label) =>
+      Number(only(read(`../../../backend/${path}`), pattern, label))
+    const server = fromBackend(
+      'app/core/config.py',
+      'LLM_TIMEOUT:\\s*int\\s*=\\s*(\\d+)',
+      '服务端 LLM_TIMEOUT'
+    )
+    const retries = fromBackend(
+      'app/services/llm_service.py',
+      '_LLM_MAX_RETRIES = (\\d+)',
+      'LLM 重试次数'
+    )
+    const backoff = fromBackend(
+      'app/utils/retry.py',
+      'backoff_factor: float = ([\\d.]+)',
+      '退避系数'
+    )
+    const worst = server * (1 + retries) + backoff * ((retries * (retries + 1)) / 2)
+
+    /* 公式对照实测：D189-A 把单次设成 60（改动前那一档）量到 184.56s，同式给 60×3+4.5=184.5。
+       容差取 0.5s（连接建立与 python 的那 0.06s）；不算重试的话是 60，差 124.5s，红。 */
+    expect(60 * (1 + retries) + backoff * ((retries * (retries + 1)) / 2)).toBeCloseTo(184.56, 0)
+    expect(worst).toBe(364.5)
+    /* 最坏那一档比客户端与 nginx 都久——所以客户端那 150s 是兜底，不是配平。 */
+    expect(worst).toBeGreaterThan(REWRITE_SUGGESTIONS_TIMEOUT_MS / 1000)
+
+    const apiBlock = only(
+      read('../../nginx.conf'),
+      'location /api/ \\{([\\s\\S]*?)\\n    \\}',
+      'nginx /api 块'
+    )
+    expect(
+      Number(only(apiBlock, 'proxy_read_timeout (\\d+)s', 'nginx proxy_read_timeout'))
+    ).toBeLessThan(worst)
+    expect(read('../../src/api/resume.js')).toContain(`${worst}s`)
+    expect(read('../../nginx.conf')).toContain(`${worst}s`)
+  })
 })
