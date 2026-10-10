@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "mock"
     LLM_API_KEY: str | None = None
     LLM_BASE_URL: str | None = None
-    LLM_MODEL: str = "gpt-3.5-turbo"
-    LLM_TIMEOUT: int = 60
+    LLM_MODEL: str = "gpt-4o-mini"
+    LLM_TIMEOUT: int = 120
     LLM_FALLBACK_MODEL: str | None = None
     LLM_ALLOW_MOCK_FALLBACK: bool = False
     LLM_INPUT_COST_PER_1K_CENTS: float = 0.0
@@ -70,18 +70,19 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = 30
     INTERVIEW_EVALUATION_MAX_WORKERS: int = 2
     # 逐题评分是投给**本地线程池**的：进程一死，那一行就留在 pending/running，没人来捡。
-    # 这个阈值就是"认定提交它的进程已经不在了"要等多久。下界有数：单题最坏 = LLM_TIMEOUT(60s)
-    # × 3 次尝试 + 线性退避(1.5s + 3.0s) = 184.5s ≈ 3.1 分钟（`utils/retry.py:49` 的
-    # `wait = backoff_factor * (attempt + 1)`，`_LLM_MAX_RETRIES=2`），取 15 分钟远在它之上——
+    # 这个阈值就是"认定提交它的进程已经不在了"要等多久。下界有数：单题最坏 = LLM_TIMEOUT(120s)
+    # × 3 次尝试 + 线性退避(1.5s + 3.0s) = 364.5s ≈ 6.1 分钟（`utils/retry.py:49` 的
+    # `wait = backoff_factor * (attempt + 1)`，`_LLM_MAX_RETRIES=2`），取 15 分钟仍在它之上——
     # 否则一次扫描会把还在跑的评分抢过来重付一遍模型调用。上界是候选人的终报要等多久才能补齐。
     INTERVIEW_EVALUATION_REQUEUE_MINUTES: int = 15
     # 认领租约（D178）：一行被 claim 之后，多久之内**任何人**都不能再 claim 它——包括换了
     # observed status 的那个（`pending→running` 与 `running→pending` 是两条 transition，
     # 只按 status 做条件的旧认领让两个副本各领一次，同一道题付两遍模型钱，2026-10-09 D177
-    # 用真 8 进程 + 真 MySQL 跑出 `1 0 0 1 0 0 0 0`）。下界与上面那条同源：单题最坏 184.5s
-    # ≈ 3.1 分钟，取 5 分钟留出 1.6 倍余量；上界是"主人真死了"的恢复等待，它同时受
-    # REQUEUE_MINUTES(15) 那一关，所以租约取小不会拖慢恢复、取大会双付。
-    INTERVIEW_EVALUATION_CLAIM_LEASE_MINUTES: int = 5
+    # 用真 8 进程 + 真 MySQL 跑出 `1 0 0 1 0 0 0 0`）。下界与上面那条同源：单题最坏 364.5s
+    # ≈ 6.1 分钟 ⇒ 原来的 5 分钟在 D185 把 LLM_TIMEOUT 抬到 120s 之后就**短于在途时长**了
+    # （租约过期等于把双付路径重新打开），所以取 10 分钟 = 1.64 倍余量；它仍小于
+    # REQUEUE_MINUTES(15)，所以"主人真死了"的恢复等待没有被拉长——那条上界一直是 15 分钟。
+    INTERVIEW_EVALUATION_CLAIM_LEASE_MINUTES: int = 10
     # 同时在途的面试 WS 上限。**每连接一个引擎 = 一条连接期间持有一个 SQLAlchemy Session**。
     # 取 12 的理由现在写在纸面上而不是注释里：池子上限 10 + 10 = 20 根，留 8 根给同期 HTTP 请求。
     # 改 DB_POOL_SIZE/DB_MAX_OVERFLOW 时必须同时回头看这个数还留不留得出 HTTP 的余量。

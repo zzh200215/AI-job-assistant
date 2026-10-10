@@ -126,7 +126,8 @@ def _claim_status(db: Session, row_id: int, expected: str, *, lease_minutes: int
     `1 0 0 1 0 0 0 0`，两个赢家各领了一条 transition，因为 B 扫到时看到的是 A 刚写上的 `running`）。
     D178 补的是第二半把凭证：`claimed_at` 租约。它让"这一行在租约内已经被任何人领过"成为
     WHERE 的一部分，于是同一行只有一个赢家——不管对方按哪个 observed status 来抢。
-    租约下界 = 单题最坏 184.5s（`INTERVIEW_EVALUATION_CLAIM_LEASE_MINUTES` 那条注释里的推导），
+    租约下界 = 单题最坏 364.5s（`INTERVIEW_EVALUATION_CLAIM_LEASE_MINUTES` 那条注释里的推导，
+    它跟着 `LLM_TIMEOUT` 走：120s × 3 次尝试 + 退避 4.5s），
     取 `lease_minutes=0` 等于关掉租约，测试用它复现旧的 per-transition 形状。
     """
     target = "running" if expected == "pending" else "pending"

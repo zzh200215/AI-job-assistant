@@ -28,7 +28,7 @@ from app.services import interview_evaluation_service as svc
 from app.utils.time_helper import utc_now_naive
 
 STALE = 20  # 比默认阈值（15 分钟）老
-FRESH = 5  # 比阈值年轻：可能正被另一个副本跑着（单题最坏 ≈ 3.1 分钟，见阈值那条注释）
+FRESH = 5  # 比阈值年轻：可能正被另一个副本跑着（单题最坏 ≈ 6.1 分钟，见阈值那条注释）
 
 
 def _row(db, session_id: int, *, status: str, minutes_ago: int = STALE, turn_id: str = "q-1"):
@@ -79,7 +79,7 @@ def test_each_kind_of_leftover_is_claimed_out_of_the_status_it_was_seen_in(
 def test_a_row_younger_than_the_threshold_is_left_for_whoever_is_running_it(
     db_session, make_interview_session, recorder
 ):
-    """阈值不是官僚主义：单题最坏 = 60s × 3 次尝试 + 线性退避 4.5s = 184.5s ≈ 3.1 分钟。
+    """阈值不是官僚主义：单题最坏 = LLM_TIMEOUT(120s) × 3 次尝试 + 线性退避 4.5s = 364.5s ≈ 6.1 分钟。
 
     比这更年轻的 running 行完全可能正被**另一个副本**跑着，抢过来就是同一道题付两遍模型钱。
     """
@@ -131,7 +131,8 @@ def test_a_claim_is_handed_out_once_per_row_not_per_transition(db_session, make_
     # （第一版这里写的是 `lease_minutes=0`，那等于要求"上一发的戳严格早于现在"，读的是
     # DATETIME 的微秒精度；两次全量在这条上红过而单独跑never 红，我复现不出来，
     # 所以换成不依赖时钟分辨率的形式。老化量必须 > 租约，写 1 秒是我自己算错了。）
-    row.claimed_at = utc_now_naive() - timedelta(minutes=6)
+    # 老化量必须**越过租约**（默认 10 分钟，D185 起随 LLM_TIMEOUT 走），所以取 11 分钟。
+    row.claimed_at = utc_now_naive() - timedelta(minutes=11)
     db_session.commit()
     assert svc._claim_status(db_session, row.id, "running") == 1
 
@@ -154,11 +155,35 @@ def test_the_lease_expires_so_an_abandoned_row_is_still_recoverable(db_session, 
     assert svc.requeue_stale_turn_evaluations(db=db_session) == 0
     assert len(recorder) == 1, "租约内又投了一次——这就是 D177 那条双付路径"
 
-    row.claimed_at = utc_now_naive() - timedelta(minutes=6)
+    # 老化量必须**越过租约**（默认 10 分钟，D185 起随 LLM_TIMEOUT 走），所以取 11 分钟。
+    row.claimed_at = utc_now_naive() - timedelta(minutes=11)
     db_session.commit()
 
     assert svc.requeue_stale_turn_evaluations(db=db_session) == 1
     assert len(recorder) == 2
+
+
+def test_the_three_timeout_numbers_stay_in_order():
+    """`LLM_TIMEOUT×3 + 退避 < 租约 < REQUEUE` —— 这三行只有这一个约束，D185 把它变成算式。
+
+    抬 `LLM_TIMEOUT` 会**同时**改掉另外两行的下界：在途最长从 184.5s 变 364.5s，5 分钟的租约
+    就短于在途时长了（租约过期等于把 D177 那条双付路径重新打开）。以前这三行只靠注释里的
+    算术互相约束，谁改谁记得；现在它是一条会红的断言，第二个 assert 钉住当前那三个数，
+    动任何一个都要人来这里改一次——这正是 D166 那条词表守卫的写法。
+    """
+    from app.core.config import settings
+
+    worst_case_seconds = settings.LLM_TIMEOUT * 3 + 1.5 + 3.0
+    lease_seconds = settings.INTERVIEW_EVALUATION_CLAIM_LEASE_MINUTES * 60
+    requeue_seconds = settings.INTERVIEW_EVALUATION_REQUEUE_MINUTES * 60
+    assert (
+        worst_case_seconds < lease_seconds < requeue_seconds
+    ), f"在途最坏 {worst_case_seconds}s / 租约 {lease_seconds}s / 阈值 {requeue_seconds}s 不再单调，双付或恢复变慢"
+    assert (
+        settings.LLM_TIMEOUT,
+        settings.INTERVIEW_EVALUATION_CLAIM_LEASE_MINUTES,
+        settings.INTERVIEW_EVALUATION_REQUEUE_MINUTES,
+    ) == (120, 10, 15), "改了这三个数，就要连带把 config.py 里那两段推导一起改"
 
 
 def test_a_re_answered_turn_drops_the_previous_lease(db_session, make_interview_session):

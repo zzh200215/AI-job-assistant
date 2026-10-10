@@ -4427,6 +4427,22 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **验收**：backend 全量 **882 passed / 103.72s**（前值 879，+3）；`ruff check .` All checks passed、`ruff format --check .` 361 files already formatted。改动：`config.py`（一条判据 + 两处注释）、`scheduler.py`（一处注释）、守卫测试文件（+3 条、docstring 改写）。
 
+#### 已交付：D185 抬 `LLM_TIMEOUT` 与换默认型号一起做——真正被改的其实是那条把它们串起来的算式
+
+**他点的是两个数，动的是三个**：`LLM_TIMEOUT` 一变，"单题在途最坏"就变，而那条最坏时长同时是 **REQUEUE 阈值**与 **D178 认领租约**的下界。所以这一批的核心产出是第三条不变量，不是那两个值。
+
+**先量再改（现取）**：同一个 `LLM_TIMEOUT` 在树里有 **5 个地方**——代码默认 60、`backend/.env.example:44`、`.env.production.example:32`、`docker-compose.yml:26` 与 `docker-compose.prod.yml:36` 的 `${LLM_TIMEOUT:-60}`。只改代码默认值就是 D166 那族"同一个数分叉"的再现，**五处一起改成 120**。另外两处约束也量了：前端 axios 全局 `timeout: 60000`（`src/api/request.js:15`）、nginx `proxy_read_timeout 300s`（`frontend/nginx.conf:69`）。
+
+**级联的算术**：在途最坏 = `LLM_TIMEOUT × 3 + 退避(1.5+3.0)` ⇒ 从 **184.5s** 变 **364.5s ≈ 6.1 分钟**。于是原来那个 **5 分钟的租约短于在途时长**——租约一过期，D177 那条双付路径就自己重新打开。所以 `INTERVIEW_EVALUATION_CLAIM_LEASE_MINUTES` 5 → **10**（1.64 倍余量），`REQUEUE_MINUTES=15` 不动。**候选人可见的恢复等待没有变长**：第一发重投受的是 `created_at > 15 分钟` 那一关；变长的只是"反复崩在同一题上的进程被重投的间隔"（5 → 10 分钟）。
+
+**一条要说清的边界：同步 HTTP 那条路不在这次保护范围内**。浏览器 60 秒就放弃了，服务端等到 120 秒只是让 worker 多持有一段。真要修 `rewrite-suggestions` 的体验（D182 实测它贴着超时线），得给那一发单独设 axios 超时或把它改成异步任务——那是新决定，没顺手做：**全局把 axios 抬到 120 会让每一个请求都多等一倍，方向不对**。
+
+**默认型号**：`gpt-3.5-turbo` → `gpt-4o-mini`，改三处（`config.py:44`、`backend/.env.example:43`、`docker-compose.yml:25`）与 prod 那两处对齐 ⇒ 树里现在只有**一个**默认型号名，且不是已退役的那个。本机 `backend/.env`（不进树）的 `LLM_TIMEOUT` 也跟着 60 → 120。
+
+**把算式变成会红的东西**：新增 `test_the_three_timeout_numbers_stay_in_order` —— 断 `在途最坏 < 租约 < 阈值`，再钉住当前那三个数 `(120, 10, 15)`（动任何一个都必须连带改注释，写法照 D166 那条词表守卫）。**变异 X1**（租约退回 5）→ 1 红，红在这条上。另外两处老化量从 6 分钟改成 11 分钟——它们必须**越过**新租约，否则测的就不是"租约过期"。
+
+**验收**：backend 全量 **883 passed / 106.01s**（前值 882，+1）、`test_interview_evaluation_requeue.py` 12 passed；`ruff check .` All checks passed、`ruff format --check .` 361 files already formatted。改动：`config.py`、`interview_evaluation_service.py`（两处推导注释）、requeue 测试、`.env.example` / `.env.production.example` / 两份 compose 的各一行。
+
 
 
 
