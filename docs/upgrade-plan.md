@@ -4771,13 +4771,29 @@ select count(*) from rewrite_suggestion_job
 
 **写这 4 条时我自己错两次，都记下来**：① hoisted 的 spy **跨用例不清计数**，于是"只建一个作业"读成了"建了 4 个"——第一次跑那 4 次正好是前三条用例留下的，差点被我当成产品 bug 去改代码；② 我在最后 `await` 了那个挂在轮询上的 promise，测试直接 20 秒超时——**而这一次超时反倒量出一个真实的小事**（见下）。
 
-**量出来的小事（记着，不顺手改）**：`agentTaskPolling.js` 的 `stopPolling()` 既不 resolve 也不 reject，所以组件卸载后 `generateRewrites()` 那个 `await` **永不落地**、`finally` 里的 `rewrite.loading = false` 也不会跑。组件已经不在了 ⇒ 候选人看不到任何后果；要治得改**共享**轮询器的停止语义（`AgentAnalysis`／`MultiAgentAnalysis`／`TaskCenter` 都在用），那条改动不在本条范围里。
+**量出来的小事（记着，不顺手改）**：`agentTaskPolling.js` 的 `stopPolling()` 既不 resolve 也不 reject，所以组件卸载后 `generateRewrites()` 那个 `await` **永不落地**、`finally` 里的 `rewrite.loading = false` 也不会跑。组件已经不在了 ⇒ 候选人看不到任何后果；要治得改**共享**轮询器的停止语义（`AgentAnalysis`／`MultiAgentAnalysis`／`TaskCenter` 都在用），那条改动不在本条范围里。**（同日 D205 治了：`rejectOnStop` 开关式新增，默认关闭，三个既有调用方逐字不变。）**
 
 **两句我自己写过的不准确说法，一并纠正**：
 - `resumeRewriteUndo.test.js` 那句"轮询由 `rewriteSuggestionJobFlow` 单独钉" → 改成指向这个新文件（当时是空的承诺）。
 - `rewriteSuggestionJobFlow.test.js` 那句"**前端一处都不读** `error_msg`" → 不准确：共享轮询器失败那一支读的正是 `taskData?.error_msg`。真正守住这道门的是 `userErrorCopy` 只认 `err.userMessage`、从不看 `err.message`（`requestTracing.js:156-159`）。断言保留（视图与 api 层确实不读那个键），但**机制改写成实测过的说法**，并加了一条 `expect(requestTracing).toMatch(/err\?\.userMessage/)` 把真正的守门者钉住；哨兵那条端到端行为在新文件里。
 
 **验收**：前端 **92 files / 613 passed**（前值 91/609，+1 文件 +4 条）、`npm run lint` **0 error / 1 warning**（那 1 条是既有 `paidOrders`；我新文件一度带来第 2 条 `'first' is assigned but never used`，改成不接那个 promise 后回到 1）、`format:check` clean；后端与 `src/` 产品代码零改动。§10 不挂新项（在册 37、open 0）。
+
+#### 已交付：D205 把 D204 量到那件"永不落地的 await"治了——开关式新增，默认关闭所以三个既有调用方逐字不变
+
+**为什么这条不是新活**：D204 我自己记了"组件卸载后那个 `await` 永不落地、`finally` 里的 `loading = false` 不跑，要治得改共享轮询器"。这一步就是去治它，而不是把它当已知限制留着。
+
+**改了什么**（`src/utils/agentTaskPolling.js` 一处新增，默认值保持原行为）：`runtimeOptions.rejectOnStop = false`；打开时 `stopPolling()` 会用 `createPollingError('轮询已停止', 'polling_stopped')` 把在途的 promise 落地。改写建议那一发（`ResumeUpload.vue:685`）是唯一打开它的调用方；`AgentAnalysis`／`MultiAgentAnalysis`／`TaskCenter` 都走默认档，**行为一字不变**。
+
+**一处顺序是这次真正的坑**：`resolveWith`／`rejectWith` 里原来第一件事就是 `stopPolling()`。如果不在它们前面先立"已落地"的位，**成功那一发会被自己的停表逻辑改判成拒绝**——即 `rejectOnStop: true` 一开，跑完的任务反而报错。所以 `settled` 位先立、再停表，并且专门为这条写了一例（第三个测试：开着 `rejectOnStop` 时 `completed` 仍要 `resolve`）。**这类"新开关把老路径打歪"的形状，只有专门一例能抓住**，注释抓不住。
+
+**测试**：`tests/agentTaskPolling.test.mjs` 33 → **36 pass**，新增三条就是上面那三种落点——① 默认档 `stopPolling()` 之后 promise 仍是 `pending`（钉"三个既有调用方没被动过"）；② 打开后落地且 `error.code === 'polling_stopped'`；③ 开着开关的成功任务仍 `resolve`。视图侧 `resumeRewriteJobPolling` 那条"卸载后不再打接口"顺手升级成断言 **`finally` 跑了**（`rewrite.loading === false`）——它原来会 `await` 一个永不落地的 promise 而超时，那正是 D204 量到的现象。
+- 一条更正：我先把断言写成"以 `polling_stopped` 拒绝"，跑出来是**解决**。原因是视图自己有 `catch`，拒绝在里面被换成 `rewrite.error` 文案。**该钉的不是拒绝形态，是 `finally` 有没有执行**——写错这一条差点让我去"修"一个不存在的问题。
+- **M6 反向确认**：把视图里那行开关删掉 ⇒ 恰好 **1 红**（就是这一条），说明这条腿不是恒绿的装饰。
+
+**门禁**：前端 **92 files / 613 passed**、`npm test` **36 pass / 0 fail**（前值 33）、`lint` 0 error / 1 warning（既有的 `paidOrders`）、`format:check` clean、`vite build` exit 0、包体积 **2210.07 → 2210.20 kB（+0.13）**；后端零改动。
+
+**没做的**：没把默认档也改成"停止即落地"。那会让另外三个调用方在卸载时各自多走一条 `catch` 分支（它们现在没有），是行为改动而不是修 bug——要改得单独一次，并且先看那三个视图的 `catch` 会不会把"取消"显示成"失败"。
 
 
 

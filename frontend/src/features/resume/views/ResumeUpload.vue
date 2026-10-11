@@ -680,6 +680,9 @@ const rewritePoller = createAgentTaskPoller(
     getAgentSteps: async () => ({ steps: [] }),
   },
   {
+    // 卸载即落地：不打开的话 `stopPolling()` 只清表，那个 `await` 永不返回、下面 `finally`
+    // 里的 `loading = false` 也永不执行（D204 量到的）。默认关闭，这里按需要开。
+    rejectOnStop: true,
     setPollingState(value) {
       // 与"应用/撤销"共用同一把 `applying` 之外，这一位只管按钮上那个 spinner。
       rewrite.loading = value

@@ -98,3 +98,72 @@ test('pollTask retries after a transient polling error and still resolves', asyn
   assert.equal(result.status, 'partial')
   assert.equal(taskCallCount, 2)
 })
+
+/* D204 新增的 `rejectOnStop`：两个方向都要钉。默认那一半是**既有三个调用方**
+   （AgentAnalysis / MultiAgentAnalysis / TaskCenter）现在的行为，改它等于改它们；
+   开了的那一半是改写建议那一发要的"卸载即落地"。 */
+function neverEndingPoller() {
+  return {
+    async getAgentTask() {
+      return { id: 9, status: 'running' }
+    },
+    async getAgentSteps() {
+      return { steps: [] }
+    },
+  }
+}
+
+/** 给一个 promise 一小段时间，看它落地了没有（落地 = 'settled'，没落地 = 'pending'）。 */
+async function settleState(promise, ms = 30) {
+  return Promise.race([
+    promise.then(
+      () => 'resolved',
+      () => 'rejected'
+    ),
+    new Promise((resolve) => setTimeout(() => resolve('pending'), ms)),
+  ])
+}
+
+test('stopPolling leaves the awaited promise unsettled by default (existing callers unchanged)', async () => {
+  const poller = createAgentTaskPoller(neverEndingPoller())
+  const pending = poller.pollTask(9, { intervalMs: 60000 })
+
+  await settleState(pending, 5)
+  poller.stopPolling()
+
+  assert.equal(await settleState(pending), 'pending', '默认档不该改变停止时的语义')
+})
+
+test('rejectOnStop makes stopPolling settle the awaited promise with a code', async () => {
+  const poller = createAgentTaskPoller(neverEndingPoller(), { rejectOnStop: true })
+  const pending = poller.pollTask(9, { intervalMs: 60000 })
+
+  await settleState(pending, 5)
+  poller.stopPolling()
+
+  assert.equal(await settleState(pending), 'rejected')
+  await pending.catch((error) => {
+    assert.equal(error.code, 'polling_stopped')
+  })
+})
+
+test('a completed task still resolves: the stop inside the success path must not reject it first', async () => {
+  let calls = 0
+  const poller = createAgentTaskPoller(
+    {
+      async getAgentTask() {
+        calls += 1
+        return { id: 9, status: 'completed' }
+      },
+      async getAgentSteps() {
+        return { steps: [] }
+      },
+    },
+    { rejectOnStop: true }
+  )
+
+  const result = await poller.pollTask(9, { intervalMs: 0 })
+
+  assert.equal(result.status, 'completed')
+  assert.equal(calls, 1)
+})

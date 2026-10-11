@@ -173,7 +173,7 @@ describe('改写建议作业在视图层的那一跳', () => {
     })
 
     const wrapper = await mountWithDiagnosis()
-    start(wrapper)
+    const done = start(wrapper)
     await tick(0)
     const callsWhileMounted = api.getRewriteSuggestionJob.mock.calls.length
     expect(callsWhileMounted).toBeGreaterThan(0)
@@ -184,10 +184,11 @@ describe('改写建议作业在视图层的那一跳', () => {
       api.getRewriteSuggestionJob.mock.calls.length,
       '卸载之后还在继续打接口：那条轮询器没被停掉'
     ).toBe(callsWhileMounted)
-    /* 顺带量到的一件小事，写在这而不是藏起来：`stopPolling()` 既不 resolve 也不 reject，所以
-       `generateRewrites()` 里那个 `await` 永不落地、`finally` 里的 `rewrite.loading = false`
-       也不会跑。组件已经不在了 ⇒ 候选人看不到任何后果，但它是一个悬着的 promise；要治得改共享
-       轮询器的停止语义（别的调用方在用），不在这一条里顺手做。 */
+    /* 卸载之后那个 await 要**落地**（D204 量到过：不落地时 `finally` 里的 `loading = false`
+       永不执行）。视图自己吞 `catch`，所以落地的形态是"解决"而不是"拒绝"——真正要钉的是
+       `finally` 跑没跑：spinner 那位不许被永久留在 true。 */
+    await expect(done).resolves.toBeUndefined()
+    expect(wrapper.vm.rewrite.loading, '卸载后 finally 没跑，loading 被留在 true').toBe(false)
     vi.useRealTimers()
   })
 

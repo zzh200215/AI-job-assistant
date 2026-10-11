@@ -18,9 +18,18 @@ export function createAgentTaskPoller(apiClient, runtimeOptions = {}) {
     setTimeoutFn = setTimeout,
     clearTimeoutFn = clearTimeout,
     setPollingState = () => {},
+    /**
+     * D204 量到的那件小事的开关：`stopPolling()` 原来只是清表，**不落地**那个 `await`，
+     * 所以调用方（组件卸载时）等下去的 promise 永不 settle，它后面的 `finally` 也就永不跑。
+     * 默认 `false` —— 保持既有三个调用方（`AgentAnalysis`／`MultiAgentAnalysis`／`TaskCenter`）
+     * 的行为逐字不变。需要"停止即结束"的调用方自己打开。
+     */
+    rejectOnStop = false,
   } = runtimeOptions
 
   let pollTimer = null
+  let settleReject = null
+  let settled = true
 
   function stopPolling() {
     if (pollTimer) {
@@ -28,6 +37,13 @@ export function createAgentTaskPoller(apiClient, runtimeOptions = {}) {
       pollTimer = null
     }
     setPollingState(false)
+    // 只在"没人已经落地过"且调用方要这个语义时才 reject；否则与改动前完全一致。
+    if (rejectOnStop && settleReject && !settled) {
+      settled = true
+      const reject = settleReject
+      settleReject = null
+      reject(createPollingError('轮询已停止', 'polling_stopped'))
+    }
   }
 
   async function pollTask(taskId, options = {}) {
@@ -52,6 +68,8 @@ export function createAgentTaskPoller(apiClient, runtimeOptions = {}) {
     setPollingState(true)
 
     return new Promise((resolve, reject) => {
+      settled = false
+      settleReject = reject
       let count = 0
 
       const scheduleNext = (delay) => {
@@ -59,6 +77,9 @@ export function createAgentTaskPoller(apiClient, runtimeOptions = {}) {
       }
 
       const rejectWith = async (error, callback, taskData, steps) => {
+        // 先立"已落地"再停表：否则 `rejectOnStop` 会在真正的失败原因之前先把 promise 改成
+        // `polling_stopped`，把这次跑失败的真实理由抹掉。
+        settled = true
         stopPolling()
         if (callback) {
           await callback(error, taskData, steps)
@@ -67,6 +88,8 @@ export function createAgentTaskPoller(apiClient, runtimeOptions = {}) {
       }
 
       const resolveWith = async (taskData, steps) => {
+        // 同一条理由：这一下如果排在 stopPolling 之后，成功的那一发会被自己的停表逻辑改判成拒绝。
+        settled = true
         stopPolling()
         const result = onCompleted ? await onCompleted(taskData, steps) : taskData
         resolve(result)
