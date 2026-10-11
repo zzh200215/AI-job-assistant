@@ -4834,8 +4834,14 @@ select count(*) from rewrite_suggestion_job
 
 **验收**：`format:check` clean；`lint` 0 error / 1 warning（`admin/Overview.vue:131 'paidOrders' is never used`，企业侧留下的旧警告，与本条无关）；`vite build` ok；`bundle-size` TOTAL **2210.20 → 2210.33 kB（+0.13）**；`dead-style --selftest` 候选 0。
 
+**D207 补：按同一条判据回查了 D205 那个调用方，并把"两处静默"从一次阅读变成一条门**。
+- 回查结果：**D205 那条链没有这个毛病**。`ResumeUpload.vue:724` 的 catch 写的是 `rewrite.error = userErrorCopy(...)`——一句**行内**文案，而 `rewrite` 是 `<script setup>`（`:540`）里 `:618` 那个 `reactive({...})`，**每个实例一份**，卸载之后落在一台已经不存在的屏幕上；这一趟路径里没有任何 `ElMessage`（唯一那句 `ElMessage.info` 在成功分支 `:722`，且只在"没有可用改写"时说）。所以 `rejectOnStop` 对它是纯收益，不需要上面 3、4 那种配套。
+- 新增 `tests/unit/pollStopStaysSilent.test.js`（3 条）：判"这两个视图的外层 catch 里没有一句要给人看的话"。锚点是 `await pollAgentTask(`，取 `} catch {` 到 `} finally {` 之间那段，判 `/ElMessage|userErrorCopy/` 不命中；**取不到锚点就红**，否则重构一次会把守卫悄悄变成永久通过。两次变异各打红一条：`} catch {` → `} catch (e) {` 报"锚点失效"；形状不动、只加一句 `ElMessage.error('分析已中断')` 报"这个 catch 现在会出声了，而它出声的那一发正是『页面被卸载』"。变异跑完按 `git status` 确认两个视图文件都回到 HEAD（工作树只剩这一个新文件）。
+- 这条把下面未验第 1 项的证据**换了一格**：那两处不再是"只有我读过代码"，而是"有一行门盯着"。没变的是那道仪器限制——卸载后读不到已销毁实例的状态。
+- 补之后的读数：`vitest run` 94 files / 618 → **95 files / 621 passed**；`format:check` clean（新文件按 prettier 重写了一次）；`lint` 仍 0 error / 1 warning；`vite build` ok；`bundle-size` TOTAL **2210.33 kB，与补之前同一个数**（只加测试文件、src 一字未动——仍然现取，不拿"应该不变"当读数）。
+
 **未验（不粉饰）**：
-1. `AnalysisResult.vue` 与 `SmartAnalysis.vue` 那两处的"卸载后 `loading` 归位"**没有视图级读数**。这是仪器限制而不是省事：`unmount()` 之后读不到已销毁实例的 setupState，而给视图手搭 replica 测到的是我的副本。它们今天的证据只有两条——真组合层证明"卸载会产生 `polling_stopped` 落地"，加上两处外层 `catch {}` 静默、`finally` 只写组件内 ref（现取 `AnalysisResult.vue:577`/`:580`、`SmartAnalysis.vue:765`/`:768`）。
+1. `AnalysisResult.vue` 与 `SmartAnalysis.vue` 那两处的"卸载后 `loading` 归位"**没有视图级读数**。这是仪器限制而不是省事：`unmount()` 之后读不到已销毁实例的 setupState，而给视图手搭 replica 测到的是我的副本。它们今天的证据有两条——真组合层证明"卸载会产生 `polling_stopped` 落地"，加上 `pollStopStaysSilent.test.js` 那条门盯住"这两处的外层 catch 里没有人给人看的话"（`finally` 只写组件内 ref 这点是现取 `AnalysisResult.vue:577`/`:580`、`SmartAnalysis.vue:765`/`:768` 读来的，没变成门）。
 2. 上面第 2 项那条"接管"分支今天不可达，所以它的新腿钉的是一个走不到的形状——价值在将来会红，不在今天修了什么。
 3. 全程 vitest/jsdom，**没在真浏览器里点过**（8010 后端自 D189 之后一直没起）。
 
