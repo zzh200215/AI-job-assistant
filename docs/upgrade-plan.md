@@ -4873,6 +4873,31 @@ select count(*) from rewrite_suggestion_job
 
 **§10 计数**：没挂新项（那条界面不一致只写在这里，等他要不要修），在册 **37 条（1–25、28–39）、open 0**。
 
+#### 已交付：D209 修掉"重进职业规划页目标岗位是空的"——A/B 在真浏览器里做完了，但中途我把一发真请求放了出去
+
+**改了什么**（`CareerPlanning.vue` 一处，半径先量过：`restoreSelections` 全仓只有 2 个文件——`usePlanningOptions.js` 与这一页 ⇒ 这个顺序问题只这一家有）：把 watch 里那一填抽成 `adoptCurrentTitle()`（判据仍是 §10.11 ① 那一条：职称非空 **且** 候选人没亲手编辑过那一格），除了换简历时跑，`onMounted` 在 `await refreshBaseOptions()` 之后**再跑一次**——因为 `restoreSelections()` 在列表到达之前就把简历 id 置上了，那一刻 `selectedResume` 还是空的，而列表随后装上时 id 已不再变，watch 不会重跑。
+
+**测试**：`careerPlanningTargetRoleFollow.test.js` 4 → **6 条**。新腿"重进"把那个顺序原样搭出来（先挂组件、让 watch 跑完并断言它确实先发过 `/career-path/recommend`，**再**把 `/resume/list` settle 上去）；反证腿用一份**没有 `current_title`** 的简历（`RESUMES` 加了 id 9）⇒ 输入框必须仍是空的、点下去仍只得到那句 warning，这条挡住"修成无脑填一格"。这个文件原来没有 `ElMessage` 桩，本次补了 `vi.mock('@/plugins/element-services')`。
+**变异**：把 `onMounted` 里新增那一行抽掉 ⇒ **只有"重进"那条红**（`expected '' to be '数据分析师'`），其余 5 条绿。
+
+**真浏览器 A/B**（同一台仪器，D208 那套 8010 + 5174 + 探针账号）：先确认这次确实走"重进"那条路——页内 `recruit.lastResumeId.23 = 62`，即恢复选择在列表之前；
+- 抽掉修复 → reload → 输入框 `''`、摘要卡写 **"待填写"**（D208 的症状原样复现）；
+- 装回修复 → reload → 输入框 `'Java后端开发工程师'`、摘要卡同一格变成该职称。
+⇒ 修复的效果在真 DOM 上有两臂读数，不只是 jsdom。
+
+**事故（这条是本页的主要内容，不粉饰）**：装回那一臂我按 D208 的配方重装 axios adapter 夹具，**这次它没有生效**。机制：服务重启后 Vite 重新预打包，axios 的 dep hash 从 `?v=79d0c7ca` 变成 `?v=604bb981`，而我 `import('/src/api/request.js')` 拿到的那个实例**不是应用正在用的那一份**。我做的自检是"用我自己那个实例发一发 `/auth/me`"——它成功了，于是我以为夹具是活的；**这句自检是假的**，它验的是我手里的对象，不是应用手里的那个。结果那一发点击真发出了 `POST /api/jd`（建 `tb_jd` 120）与 `POST /api/analysis/full`（建 `agent_task` 97）。我发现"probe 三个计数全 0"与"屏幕已经分析中"矛盾，去 `list_network_requests` 读到那两发真 POST 之后，在 13:20 定点停掉后端（停前 `Get-CimInstance` 核对过命令行是这个 uvicorn，没按镜像名杀）。
+- **真实花费读数**：`prompt_trace` 里 **0 条新行**（`created_at >= 2026-10-11 05:16:40` 计数 0；最近 5 条是 10-09/10-10 那批 D196–D202 的，别拿它们当这次的账）；`agent_step_log` 对 97 **0 行**（对照：库里 84–89 每个正常任务都是 7 行）；`agent_run` / `agent_message` / `agent_result` 里 97 各 0 行；`tb_analysis_record` 用户 23 共 0 行。⇒ 这 205 秒里**没有任何一次模型调用落了账**。
+- **证不了的那半**：trace 行是在调用**返回时**才写的，所以"有一个在途请求被我切掉"这个可能性我排不掉，只能写成未验。
+- **顺带量到、但没查也没挂新项的一件事**：拿 `seed-demo` 那类演示简历点"开始职业规划"，任务 205 秒里 0 step、0 trace 地停在 `running`；而 84–89 那批是 7 step、13–32 秒完成（数据是 2026-06-17 的）。差别在哪我没查，只把现象记在这里。
+
+**仪器口径（这次学到的，值得钉住）**：往页面里装传输层夹具之后，**不许**用"我自己调一次那个对象也能通"当生效证据；要用**应用自己会发的那一发请求**去验（例如点"刷新数据"看计数器有没有加），或者直接比对模块实例身份。D208 那次侥幸生效是因为页面刚装载、模块图没被重新解析过。
+
+**验收**：`npm test` 37 pass；`vitest run` **95 files / 623 passed**；`format:check` clean；`lint` 0 error / 1 warning（企业侧那条旧 warning）；`vite build` ok；`bundle-size` TOTAL **2210.33 → 2210.35 kB（+0.02）**；`dead-style --selftest` 候选 0。两个临时进程已定点停（8010/5174 现取 0 监听），5173 那个不是我的、始终没碰。
+
+**残留**：`agent_task` 97 停在 `running`（现取全库唯一一条非终态任务）与 `tb_jd` 120 是这次误发的产物——删不删等他一句；账号 `d207_probe`（uid 23）与它的 6 份演示简历按他点的**留着当夹具**。
+
+**§10 计数**：没挂新项；按现取标题行（`## 10` 在 5538、`## 11` 在 5668）算得 **在册 37 条（1–25、28–39）、open 0**。
+
 
 
 

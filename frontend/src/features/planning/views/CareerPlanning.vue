@@ -1036,16 +1036,24 @@ const strategyTagType = computed(
     })[strategySummary.value.mode] || 'info'
 )
 
+/* §10.11 ① 的那一填，抽出来是因为它要在**两个**时刻跑：换简历时（下面的 watch），以及
+   重进这一页时——`onMounted` 里 `restoreSelections()` 先把简历 id 置上，那一刻
+   `resumeOptions` 还没到，watch 读 `selectedResume` 只能读到空；等列表装上，id 已经没再变，
+   watch 不会重跑。判据仍然只有一条：职称非空，且候选人没有亲手编辑过那一格。 */
+function adoptCurrentTitle() {
+  const title = selectedResume.value?.parsed?.current_title || ''
+  if (title && !targetRoleEdited.value) {
+    targetRole.value = title
+  }
+}
+
 watch(selectedResumeId, async (value) => {
   if (!value) {
     clearCareerPaths()
     return
   }
   selection.rememberResume(value)
-  const title = selectedResume.value?.parsed?.current_title || ''
-  if (title && !targetRoleEdited.value) {
-    targetRole.value = title
-  }
+  adoptCurrentTitle()
   await loadCareerPaths()
   await loadSalaryMarket()
 })
@@ -1061,6 +1069,8 @@ watch(selectedJDId, (value) => {
 onMounted(async () => {
   restoreSelections()
   await refreshBaseOptions()
+  // 列表这时候才真的有内容：见 `adoptCurrentTitle` 上面那段
+  adoptCurrentTitle()
 })
 
 /* 表单守卫留在页面：两句 warning 都必须在 running 亮起来之前拦住，否则按钮会带着空输入转圈。 */
