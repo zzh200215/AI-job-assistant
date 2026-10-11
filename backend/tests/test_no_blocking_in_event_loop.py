@@ -9,7 +9,11 @@
   1. 传递阻塞：路由 → 本文件的 sync 函数 / 别的服务模块 → requests。看不见。
   2. 路由体内定义的 sync 闭包：`await run_in_threadpool(_closure)` 是对的，直接 `_closure()`
      也看不见——因为这两种写法在 AST 上无法区分（后者要追到调用点）。
-所以这个门的定位是"**别在 `async def` 里新写一次同步出网**"，不是"证明全仓无阻塞"。
+  3. **D219 新加的那一族有自己的盲区**：数据库调用要按点号名认，所以会话对象必须挂在
+     `db` / `session`（或 `x.db`）这个名字上；把 Session 存成别的变量名（`conn`、`s`）就看不见。
+     这一条不写进测试是因为它无法用一条合成源码证伪——但它是真的限制，不是"已全覆盖"。
+
+所以这个门的定位是"**别在 `async def` 里新写一次同步出网或同步落库**"，不是"证明全仓无阻塞"。
 """
 
 from __future__ import annotations
@@ -62,6 +66,47 @@ BLOCKING_NAMES = {
 }
 HTTP_VERBS = {"get", "post", "put", "patch", "delete", "head", "options", "api_route", "websocket"}
 
+# D219：数据库会话调用。这一族以前**不在任何一把尺子里**——`requests.*`、`time.sleep`、`chat_json`
+# 都认，`db.commit()` 不认。于是 6 条 `async def` 路由在事件循环线程上做数据库往返，其中 4 条是
+# E15/D110 那两轮"体内没有 await 才改成 def"筛漏的：它们各自还留着一个 await（替爬虫、替上传），
+# 所以整条被判定为"合法协程路由"，落库那一段就一直挂在循环上。
+#
+# 口径按 E25/A5 那两条注释自己给的做法来：**点号名逐个列，绝不按裸名**。`seen.add(x)` 与
+# `db.add(x)` 在 AST 上只差一个点号，按短名匹配会把集合操作判成写库——那正是当初不加这一族的理由，
+# 不是这一族不能管，是不能那么管。
+DB_RECEIVERS = {"db", "session"}
+DB_SESSION_METHODS = {
+    "add",
+    "add_all",
+    "commit",
+    "rollback",
+    "flush",
+    "refresh",
+    "delete",
+    "merge",
+    "execute",
+    "query",
+    "scalars",
+    "get",
+    "close",
+}
+
+
+def _is_db_session_call(name: str) -> bool:
+    head, _, last = name.rpartition(".")
+    if last not in DB_SESSION_METHODS:
+        return False
+    # 认 `db.commit()` 也认 `self.db.commit()`，但**必须有显式的会话接收者**：裸名 `commit()` /
+    # `add()` / `get()` 一律不算——`seen.add(x)`、`payload.get("a")` 在同一次 AST 里就长得一样。
+    # （`test_db_rule_does_not_read_bare_names_as_session_calls` 就是这条的反向证据。）
+    return head.rpartition(".")[2] in DB_RECEIVERS
+
+
+def _blocking_hit(name: str) -> bool:
+    """一处判据，两把尺子共用（以前这段条件在三个地方各写了一遍，加一族要改三处就会分叉）。"""
+    last = name.rpartition(".")[2]
+    return name in BLOCKING_DOTTED or (last in BLOCKING_NAMES and "." not in name) or _is_db_session_call(name)
+
 
 def _dotted(node: ast.AST) -> str:
     parts: list[str] = []
@@ -112,8 +157,7 @@ def violations_in_source(src: str, filename: str = "<src>") -> list[str]:
             continue
         for call in _calls_inside_route_body(node):
             name = _dotted(call.func)
-            last = name.split(".")[-1]
-            if name in BLOCKING_DOTTED or (last in BLOCKING_NAMES and "." not in name):
+            if _blocking_hit(name):
                 out.append(f"{filename}:{call.lineno} {node.name} -> {name}")
     return out
 
@@ -138,8 +182,7 @@ def _scan_app() -> tuple[list[str], int, int]:
                 routes += 1
                 for call in _calls_inside_route_body(node):
                     name = _dotted(call.func)
-                    last = name.split(".")[-1]
-                    if name in BLOCKING_DOTTED or (last in BLOCKING_NAMES and "." not in name):
+                    if _blocking_hit(name):
                         violations.append(f"{path.relative_to(APP_ROOT)}:{call.lineno} {node.name} -> {name}")
     return violations, routes, all_routes
 
@@ -238,6 +281,56 @@ async def good_helper_route(db, raw):
     return await run_in_threadpool(knowledge_service.save_and_process, db, raw)
 """
 
+# ---- D219：数据库会话调用这一族的正反两种形状 ----
+db_src_blocking = """
+from fastapi import APIRouter, Depends
+router = APIRouter()
+
+@router.post("/x")
+async def db_route(db=Depends(get_db)):
+    db.add({"title": "x"})
+    db.commit()
+    return {"ok": True}
+"""
+
+db_src_via_helper = """
+from fastapi import APIRouter, Depends
+router = APIRouter()
+
+def _save(db):
+    db.commit()
+
+@router.post("/x")
+async def helper_db_route(db=Depends(get_db)):
+    return _save(db)
+"""
+
+db_src_correct_forms = """
+from fastapi import APIRouter, Depends
+from fastapi.concurrency import run_in_threadpool
+router = APIRouter()
+
+def _save(db):
+    db.commit()
+
+@router.post("/threadpool")
+async def wrapped_db_route(db=Depends(get_db)):
+    return await run_in_threadpool(_save, db)
+
+@router.post("/sync")
+def sync_db_route(db=Depends(get_db)):
+    _save(db)
+    return {"ok": True}
+
+@router.post("/bare-names")
+async def collection_route():
+    seen = set()
+    seen.add("k")
+    payload = {"a": 1}
+    row = db_rows[0]
+    return {"kept": len(seen), "a": payload.get("a"), "t": row.title}
+"""
+
 
 def test_guard_fires_on_a_real_violation():
     """反方向自证：把违规写回来看得见吗。看不见的话，上面那条"全绿"没有意义。"""
@@ -251,6 +344,20 @@ def test_guard_fires_on_a_slow_project_helper():
     assert len(hits) == 1 and "knowledge_service.save_and_process" in hits[0], hits
 
 
+def test_guard_fires_on_a_database_call_on_the_loop():
+    """D219 那条腿的反向证据：`async def` 里写 `db.add/db.commit` 要被抓到，两条都算。"""
+    hits = violations_in_source(db_src_blocking, "db_bad.py")
+    assert len(hits) == 2, hits
+    assert {"db.add", "db.commit"} == {h.split(" -> ")[1] for h in hits}, hits
+
+
+def test_transitive_guard_fires_on_a_helper_that_writes_the_database(tmp_path):
+    """路由体内只调 helper、helper 里才 `db.commit()` —— 这一族 A5 那把尺子现在也认得。"""
+    hits, routes = indirect_offenders(_snippet_app(tmp_path, db_src_via_helper))
+    assert hits == {"app.x.helper_db_route"}, hits
+    assert routes == 1, routes
+
+
 @pytest.mark.parametrize(
     "src, label",
     [
@@ -261,6 +368,17 @@ def test_guard_fires_on_a_slow_project_helper():
 )
 def test_guard_passes_the_correct_forms(src, label):
     assert violations_in_source(src, "ok.py") == [], label
+
+
+def test_db_rule_does_not_read_bare_names_as_session_calls(tmp_path):
+    """反向自证 D219 那条口径：`seen.add()` / `payload.get()` / `row.title` 都不是写库。
+
+    以前不加这一族就是因为按裸名匹配会把集合操作判成写库；这条就是"那么加确实不行"的证据，
+    而按点号名加是行的（上一条测试）。同一条夹具里还放了两种**合法**的写库形状
+    （包进线程池、整条 `def`），它们都不许报——否则修好之后守卫反而长红。
+    """
+    assert violations_in_source(db_src_correct_forms, "ok_db.py") == []
+    assert indirect_offenders(_snippet_app(tmp_path, db_src_correct_forms))[0] == set()
 
 
 def test_guard_blind_spots_are_pinned():
@@ -354,8 +472,7 @@ def _build_graph(root: pathlib.Path) -> tuple[dict[str, _Fn], dict[str, dict[str
                         if not isinstance(call, ast.Call):
                             continue
                         name = _dotted(call.func)
-                        last = name.split(".")[-1]
-                        if name in TRANSITIVE_PRIMITIVES or last in BLOCKING_NAMES:
+                        if name in TRANSITIVE_PRIMITIVES or _blocking_hit(name):
                             fn.blocks = True
                         if name:
                             fn.calls.append(name)
@@ -415,7 +532,7 @@ def indirect_offenders(root: pathlib.Path = APP_ROOT) -> tuple[set[str], int]:
     hits = set()
     for fn in routes:
         # 直接命中的那类归上面那把尺子管，这里只报"要往下钻才看得见"的
-        if any(c.split(".")[-1] in BLOCKING_NAMES or c in BLOCKING_DOTTED for c in fn.calls):
+        if any(_blocking_hit(c) for c in fn.calls):
             continue
         for callee in fn.calls:
             nxt = _resolve(funcs, imports, fn.module, callee)

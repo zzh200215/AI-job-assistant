@@ -7,7 +7,6 @@ import traceback
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
-from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -168,7 +167,7 @@ def _match_summary(value: Any) -> str:
 
 
 @router.post("/upload", summary="Upload resume")
-async def upload_resume(
+def upload_resume(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -192,7 +191,10 @@ async def upload_resume(
                 code=ERR_FILE,
             )
 
-    raw = await file.read()
+    # D219：这条路由在事件循环线程上做了三件同步事——读整份上传文件（上限 10MB）、把文件写到磁盘、
+    # 再加一次数据库往返。改成 `def` 之后全部落在 anyio 线程里；文件读要跟着换成同步形态，
+    # 这里没有别的 await 需要协程陪着了。
+    raw = file.file.read()
     if len(raw) > MAX_FILE_SIZE:
         return fail(
             message=f"File is too large: {len(raw) / 1024 / 1024:.1f}MB (max 10MB).",
@@ -920,7 +922,7 @@ def export_resume(
 
 
 @router.get("/{resume_id}/download", summary="Download exported resume")
-async def download_resume_export(
+def download_resume_export(
     resume_id: int,
     format: str = Query("docx"),
     version: str = Query("optimized"),
@@ -929,6 +931,9 @@ async def download_resume_export(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # D219：E15 只把渲染（DOCX/PDF，秒级）包进了线程池，取简历的那两次数据库查询
+    # （`_get_owned_resume` / `_get_resume_version`）一直留在协程体里。整条改 `def` 之后
+    # 渲染与查库在同一条线程上，占的线程数不变。
     resume = _get_owned_resume(db, resume_id, current_user.id)
     error = _validate_export_request(resume, format, version)
     if error:
@@ -938,10 +943,9 @@ async def download_resume_export(
 
     try:
         if format == "docx":
-            # 渲染文档是 CPU + 磁盘活（PDF 那支还要跑 WeasyPrint），秒级；这条路由是 `async def`，
-            # 不挪出事件循环就会把同期所有请求一起停住（E15 同一类）。
-            rel_path = await run_in_threadpool(
-                resume_export_service.export_docx,
+            # 渲染文档是 CPU + 磁盘活（PDF 那支还要跑 WeasyPrint），秒级；整条路由已经是 `def`，
+            # FastAPI 把它整个丢进 anyio 线程池，这里直接调就行（D219）。
+            rel_path = resume_export_service.export_docx(
                 resume_id,
                 version,
                 db,
@@ -951,8 +955,7 @@ async def download_resume_export(
             )
             media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         else:
-            rel_path = await run_in_threadpool(
-                resume_export_service.export_pdf,
+            rel_path = resume_export_service.export_pdf(
                 resume_id,
                 version,
                 db,

@@ -222,11 +222,14 @@ def delete_document(
 
 
 @router.post("/{doc_id}/reprocess", summary="Reprocess a knowledge document")
-async def reprocess_document(
+def reprocess_document(
     doc_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # D219：这条以前是 `async def`——E15 把重活包进了线程池，但查文档的 `db.get` 与权限判断里
+    # 那次 `db.query` 仍留在事件循环线程上。改成 `def` 之后整条同线程，也不再出现
+    # "会话在循环线程上创建、却交给 worker 线程用"这种跨线程形状。
     doc = db.get(KnowledgeDocument, doc_id)
     if not doc:
         return fail(message="document not found", code=ERR_PARAM)
@@ -234,7 +237,7 @@ async def reprocess_document(
     if not _can_manage_document(db, doc, current_user):
         return fail(message="permission denied", code=ERR_AUTH)
 
-    processed = await run_in_threadpool(knowledge_service.reprocess_document, db, doc_id)
+    processed = knowledge_service.reprocess_document(db, doc_id)
     if not processed:
         return fail(message="document not found", code=ERR_PARAM)
     return ok(data=_serialize_document(processed), message=f"status={processed.status}")
@@ -316,7 +319,8 @@ async def rebuild_all(
 
 
 @router.get("/admin/embedding-stats", summary="Get embedding runtime stats")
-async def embedding_stats(current_user: User = Depends(get_current_user)):
+def embedding_stats(current_user: User = Depends(get_current_user)):
+    # D219：体内一个 await 都没有，却在事件循环线程上跑 `get_embedding_daily_stats` 的数据库查询。
     if not _is_admin(current_user):
         return fail(message="admin only", code=ERR_AUTH)
     runtime = get_embedding_stats()

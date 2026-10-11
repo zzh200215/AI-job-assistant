@@ -5154,6 +5154,41 @@ p50 一致、p95 差 6µs，**在这口池的抖动里量不出稳定差别**。
 
 
 
+#### 已交付：D219 八条 `async def` 路由在事件循环线程上写数据库——先把我上一条"四个接口"更正掉
+
+**为什么现在才发现**：这一族**不在任何一把尺子的原语表里**。`test_no_blocking_in_event_loop.py` 认 `requests.*`、`time.sleep`、`chat_json` 这些名字，不认 `db.commit()`；而它自己的注释（E25 / A5）早写过不加这一族的理由是"按裸名匹配 `add`/`query` 会把 `seen.add(x)` 判成写库"，并且给了正路："真要管，就按 `xxx.add(...)` 的点号名逐个列"。D211 那张传递闭包图追的是"出网/模型调用"，所以也没数它。**这条不是新踩的坑，是一把尺子的量程边界，今天把边界往外推了一格。**
+
+**先更正我上一条口误**：跟他解释时我说"4 个接口"，现取是 **8 条 `async def` 路由**——6 条体内直接写会话方法，2 条经由 sync helper 才到库。第一版量具（我自己手拼 AST）两处不可信：漏了 2 条，还把 WS 里 `seen.add(...)` 当成写库计进直接那一栏；第二版改用守卫自己的图与 `_resolve`，并加了非空转自检（`_save_external_jobs` / `check_quota` 必须被认出是真到库），才得到"直接 6 / 传递 2"。第一版那次"传递 0 条"是**解析器根本没解析出任何 callee** 换来的假数。
+
+**改了哪 8 条**：
+* `job_recommend.py` `batch_import`（解析整份 CSV/JSON + 每行 `db.add` + 一次 commit，`await file.read()` 改成 `file.file.read()`）；
+* `job_search.py` `search_external_jobs`、`fetch_job_detail`（E15 当年只把爬虫包进线程池，落库那段留在协程体内；整条改 `def` 后爬虫直接调，占的线程数不变）；
+* `knowledge.py` `reprocess_document`、`embedding_stats`（后者体内一个 await 都没有，是 D110 那一轮"体内没有 await 才改 def"筛漏的——它以前调过 `run_in_threadpool`，那轮之后只剩查库）；
+* `resume.py` `upload_resume`（读整份上传文件 ≤10MB + 落盘 + 写库，三件事全在循环上）、`download_resume_export`（渲染早在线程池里，前面两次取简历的查询在循环上）；
+* `interview_ws.py` `interview_websocket`——WebSocket 必须留协程，所以把建连那一次读抽成 `_session_owner_and_status` 交给 `anyio.to_thread.run_sync`。**D213 搬的是循环体内的五步，建连那两次读是它没覆盖的那半。**
+* 顺带：`run_in_threadpool` 在 `job_search.py` / `resume.py` 变成未用 import，删掉（ruff F401 报的，不是我预判的）。
+
+**守卫加了第三条腿**：`_is_db_session_call` = **显式会话接收者**（`db`、`session`，或 `x.db`）× 13 个会话方法，直接尺子和传递尺子都接；顺手把原先在三个地方各写一遍的匹配条件收成 `_blocking_hit()` 一处（加一族要改三处 = 一定会分叉）。口径照 E25/A5 给的那句走：只认点号名，裸名 `commit()`/`add()`/`get()` 不算。
+
+**现量（真 MySQL；事务里 `flush()` 发真 INSERT 然后 `rollback()`，库里不留行——跑完复查 `d219-probe` 行数 = 0，代价只是自增 id 前进）。尺子是仓里那把 `_latency_while_something_blocks`，同一时刻发两个请求，量"快的那个"排队多久：**
+
+| 形状 | 它自己耗时 | 同期请求排队：在循环上 | 在线程里 |
+| --- | --- | --- | --- |
+| 批量导入 50 行 | 20.4 ms | 21.7 ms | 0.35 ms |
+| 批量导入 300 行 | 98.7 ms | 104.7 ms | 0.33 ms |
+| 批量导入 2000 行 | 677.3 ms | 693.9 ms | 0.31 ms |
+| 单行写 + 一次读（上传简历那种） | 2.7 ms | 2.8 ms | 0.28 ms |
+
+读法：**一次导入把整台 worker 冻住的时长 ≈ 它自己的耗时，而且随行数线性涨**（2000 行就是 0.7 秒），改到线程里之后同期请求只等 0.3ms。第一版这里 off-loop 报的是 11.9ms——那是冷启动/首次建线程的开销，改成每档三取中位数才落到 0.3ms；第一版那个数没进任何结论。
+
+**测试**：`test_no_blocking_in_event_loop.py` 收条 **14 → 17**（新三条腿：直接抓到 `db.add`+`db.commit` 两个都算、传递抓到"只调 helper"的那条、以及一条同时钉住"裸名不算写库"和"两种合法形状不许报"的反向夹具）。**5 发变异各打红对应那一条**（脚本仓库外，锚点全不含行尾符——D218 那条教训）。第一刀我要验的是"`not head` 这个短路是承重的"，结果**它没红**：接收者那一半本来就挡住了裸名，`not head` 是冗余判断 ⇒ 删掉冗余、把变异改打真正的接收者要求才有牙。这条按惯例记下来，别以后把那个短路当成保护。
+
+**未验**：① 这 8 条一条都没在真浏览器/真并发下跑过；行为等价靠既有全量测试与静态守卫，不是端到端证据。② 改 `def` 之后每条请求**全程**占一根 anyio 线程（以前在 await 期间会让出），所以 D215/D218 那笔"20 根线程 = 池子"的账形状变了但总数没变——这句是推理，没重跑压测。③ 接收者白名单只有 `{db, session}` 与 `x.db`：谁把 Session 存成 `conn`/`s`，这条腿看不见。已写进模块 docstring 的盲区清单，但它没法用一条合成源码证伪，所以**不是"已全覆盖"**。④ `run_in_threadpool(knowledge_service.rebuild_all, db)` 这种"会话在循环线程创建、交给 worker 用"的形状仍然放行（`knowledge.py` 里还有 5 处）——那是协程写法、顺序使用，不动它是口径决定，不是漏扫。
+
+**验收**：backend 全量 **944 passed**；`ruff check .` All checks passed；`ruff format --check .` 368 files already formatted；守卫单文件 17 passed；重测两条量具都是**直接 0 / 传递 0**（async 路由从 27 条降到 20 条）。
+
+**§10 计数**：没挂新项（这是发现的缺陷，不是待拍板事项）；现取标题行（`grep -n '^## 10\.\|^## 11\.'`，别沿用历史行号）重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+
 #### 已交付：D164 回算的"写"那一半落成工具——默认 dry-run，`--apply` 还要配 `--backup`，今天一个字都没写
 
 **交付**：`backend/scripts/score_backfill.py` + `backend/tests/test_score_backfill_apply.py` 8 条。§10.38 的 ③ 从此是一条可以一键执行的命令，但**没有执行**——这一步改的是候选人已经看过的数。

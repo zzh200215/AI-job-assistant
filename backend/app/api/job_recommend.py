@@ -1010,13 +1010,16 @@ def recommend_jobs(
 
 
 @router.post("/batch-import", summary="Batch import jobs")
-async def batch_import(
+def batch_import(
     file: UploadFile = File(...),
     source: str = Form("imported"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    content = await file.read()
+    # D219：`async def` + 解析整个文件 + 每行 `db.add` + 一次 commit —— 一条请求把整台 worker 的
+    # 事件循环占住，导入的文件越大停得越久。改成 `def` 之后 FastAPI 把整个处理丢进 anyio 线程池，
+    # 上传文件也改成同步读（协程版的 `await file.read()` 在这里没有别的 await 陪着了）。
+    content = file.file.read()
     file_name = (file.filename or "").lower()
     count = 0
 

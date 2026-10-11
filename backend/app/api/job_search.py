@@ -5,7 +5,6 @@ from __future__ import annotations
 import traceback
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import String, cast, or_
 from sqlalchemy.orm import Session
 
@@ -252,7 +251,7 @@ def _dedupe_jobs(items: list[dict]) -> list[dict]:
 
 
 @router.post("/search-external", summary="搜索外部招聘岗位")
-async def search_external_jobs(
+def search_external_jobs(
     keyword: str = Query(..., min_length=1, description="搜索关键词"),
     city: str = Query("", description="城市"),
     source: str = Query("boss", description="来源: boss/all"),
@@ -261,10 +260,12 @@ async def search_external_jobs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # D219：整条改成 `def`。E15 当年只把爬虫（requests + `time.sleep`，秒级）包进线程池，
+    # 落库那一段（`_save_external_jobs` 里每行一次 add、最后一次 commit）留在协程体内，
+    # 于是这条路由仍然在事件循环线程上做数据库往返。FastAPI 对 `def` 路由自己丢线程池，
+    # 爬虫那一次占的还是同一个线程，没有多花一根。
     try:
-        # 爬虫内部是 requests + 退避 `time.sleep`，秒级起步；这条是 `async def`，
-        # 直接调会把整台 worker 的事件循环停住（E15 同一类，当时只扫了 primitives 没扫项目 helper）。
-        external_jobs, external_error = await run_in_threadpool(spider.search, keyword, city, source, page)
+        external_jobs, external_error = spider.search(keyword, city, source, page)
     except Exception as exc:
         traceback.print_exc()
         external_jobs, external_error = [], f"外部抓取异常: {str(exc)[:80]}"
@@ -287,7 +288,7 @@ async def search_external_jobs(
         else:
             demo_jobs = [job for job in external_jobs if _is_demo_source(job.source)]
             if not demo_jobs:
-                demo_jobs, _ = await run_in_threadpool(spider.demo, keyword, city)
+                demo_jobs, _ = spider.demo(keyword, city)
             external_results, _ = _save_external_jobs(db, demo_jobs, current_user, save=False)
             result_mode = "demo_fallback"
             info_message = "当前未获取到真实岗位，已展示演示数据"
@@ -318,14 +319,16 @@ async def search_external_jobs(
 
 
 @router.post("/fetch-detail", summary="抓取岗位详情")
-async def fetch_job_detail(
+def fetch_job_detail(
     source: str = Query(..., description="来源: boss"),
     url: str = Query(..., description="岗位 URL"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # D219：同 `/search-external` —— 抓取早就在线程池里了，但查重的那次 `db.query` 与
+    # `db.add/commit/refresh` 一直在事件循环线程上跑。
     try:
-        job = await run_in_threadpool(spider.fetch_detail, source, url)
+        job = spider.fetch_detail(source, url)
         if not job or not job.raw_text:
             return fail(message="抓取详情失败", code=ERR_COMMON)
 

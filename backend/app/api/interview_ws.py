@@ -106,6 +106,25 @@ async def _emit_snapshot(websocket: WebSocket, new_messages: list[dict], fallbac
         await websocket.send_json(fallback)
 
 
+def _session_owner_and_status(session_id: int) -> tuple[int | None, str | None]:
+    """建连阶段那一次读：找不到就返回 `(None, None)`。
+
+    D213 把循环体内的每一步都搬进了 worker，但**连接阶段**这两次读还留在 `async def` 里——
+    WebSocket 处理器必须保持协程，所以这里整段搬出去（D219 量的那一类：一条协程路由在事件循环
+    线程上做一次数据库往返，同期所有请求都得等它）。
+    """
+    db = SessionLocal()
+    try:
+        session = db.get(InterviewSession, session_id)
+        if session is None:
+            return None, None
+        # 标量在这条 Session 关掉之前就取出来：往下要传出去的是值，不是一只 detached ORM 对象
+        # ——那东西以后被 worker 线程碰一下就 DetachedInstanceError。
+        return session.user_id, session.status
+    finally:
+        db.close()
+
+
 @router.websocket("/ws/interview/{session_id}")
 async def interview_websocket(websocket: WebSocket, session_id: int):
     token, accept_subprotocol = _read_subprotocol_token(websocket)
@@ -120,24 +139,16 @@ async def interview_websocket(websocket: WebSocket, session_id: int):
         await websocket.close(code=4001, reason="认证失败: 无效 Token")
         return
 
-    db = SessionLocal()
-    try:
-        session = db.get(InterviewSession, session_id)
-        if not session:
-            await websocket.close(code=4004, reason="面试会话不存在")
-            return
-        # 标量在这条 Session 关掉之前就取出来：往下要传出去的是值，不是一只 detached ORM 对象
-        # ——那东西以后被 worker 线程碰一下就 DetachedInstanceError。
-        owner_id = session.user_id
-        status = session.status
-        if owner_id != user_id:
-            await websocket.close(code=4003, reason="无权访问此面试")
-            return
-        if status == "completed":
-            await websocket.close(code=4000, reason="面试已结束")
-            return
-    finally:
-        db.close()
+    owner_id, status = await anyio.to_thread.run_sync(_session_owner_and_status, session_id)
+    if owner_id is None:
+        await websocket.close(code=4004, reason="面试会话不存在")
+        return
+    if owner_id != user_id:
+        await websocket.close(code=4003, reason="无权访问此面试")
+        return
+    if status == "completed":
+        await websocket.close(code=4000, reason="面试已结束")
+        return
 
     if live_interview_count() >= settings.WS_MAX_LIVE_INTERVIEWS:
         logger.warning("面试 WS 容量已满：%s 条在途，拒绝 session_id=%s", live_interview_count(), session_id)
