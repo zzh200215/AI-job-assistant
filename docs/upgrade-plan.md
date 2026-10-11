@@ -4898,6 +4898,26 @@ select count(*) from rewrite_suggestion_job
 
 **§10 计数**：没挂新项；按现取标题行（`## 10` 在 5538、`## 11` 在 5668）算得 **在册 37 条（1–25、28–39）、open 0**。
 
+#### 已查：D210 D209 那条"205 秒 0 step 0 trace"的根因——不是代码，是我漏起了 worker，顺带把上一轮的"证不了的那半"补掉了
+
+**链条（现取，四处读到的）**：`.env` 里 `ORCHESTRATION_BACKEND=redis_queue` ⇒ `app/api/analysis.py:175` 那个 `POST /full` 只做两件事：`run_smart_analysis`（`analysis_service.py:24`）→ `run_strategy_async`（`orchestration_runner.py:132`：先 `create_task` 落一行 `status=running`，再 `_get_backend().submit(payload, _run_task_payload)` 把它推进 Redis 队列）。**执行者是另一个进程**：`backend/scripts/run_orchestration_worker.py`（README:427 点名这条）。我这一轮只起了 uvicorn。
+
+**证据不是推理，是直接读到那条 payload 还在队列里**：`LLEN analysis-tasks = 1`，`LINDEX analysis-tasks 0` = `{"v": 1, "attempts": 0, "payload": {"strategy_name": "linear", "task_id": 97, "resume_id": 62, "jd_id": 120, "user_id": 23, "run_id": null}}`。`attempts: 0` ⇒ 没有任何进程 `brpoplpush` 取过它 ⇒ 从没进过 `_run_task_payload`。
+
+**这条把 D209 里我写"排不掉"的那半补掉了**：D209 的边界第 2 条写的是"trace 行是调用**返回时**才写的，所以'有一个在途请求被我切掉'排不掉"。现在排得掉——payload 从未被消费，所以**一次模型请求都不曾发出**，这次误发的花费是**确定的 0**（不再是"落账 0 + 可能有一个在途"）。
+
+**处置（他点的顺序里的第 1 件，做法选了"留痕"而不是删，因为第 2 件的证据就在这两行上）**：
+- `agent_task` 97：`UPDATE ... SET status='failed', error_msg='probe artifact of D209 browser test ...', end_time=NOW() WHERE id=97 AND status='running'` → 改动 1 行；全库非终态任务 **1 → 0**。**before-image 在仓库外**：`D:/AI/llmXM/_probes/d209_agent_task97_before.json`（1788 字节，含 97 整行与 `tb_jd` 120 整行）。
+- `tb_jd` 120：**保留**（97 那行 `jd_id` 引用它，删了会留一个悬空外键；而它是这次唯一多出来的业务行）。
+- 队列里我自己那条积压：`LREM analysis-tasks 0 <原值>` → `LLEN 1 → 0`。为什么要清：任务已经作废，但 payload 还在，**以后谁起一个 worker 就会真跑一遍这条已作废任务、白付一遍模型钱**。
+- 同一台 Redis 上另有 `celery` 队列 **215 条**积压——树内没有 celery 依赖（`requirements.txt`/`config.py` 都没命中），那是本机另一个服务的，**没碰**。
+
+**没查的一条对照**：库里 84–89 每个任务 7 条 step、13–32 秒完成，但那批数据是 2026-06-17 的。它们当时是 thread 后端还是有个 worker 在跑，我没查——不影响上面的结论，因为这次的判据是"直接读到 payload 没被取走"，不是"和历史比少了什么"。
+
+**未验**：worker 起起来之后这条链真能跑通，**没测**——那要付 7 个块的模型调用，不在他点名的范围里，我没自己花。
+
+**§10 计数**：没挂新项；按现取标题行（`## 10` 在 5563、`## 11` 在 5693）算得 **在册 37 条（1–25、28–39）、open 0**。
+
 
 
 
