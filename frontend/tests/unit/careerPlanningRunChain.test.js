@@ -32,6 +32,8 @@ vi.mock('@/composables/useAgentTaskPolling', () => ({
   useAgentTaskPolling: () => ({
     isPolling: { value: false },
     pollTask: async (_taskId, handlers) => {
+      if (poll.behaviour === 'stopped')
+        throw Object.assign(new Error('轮询已停止'), { code: 'polling_stopped' })
       if (poll.behaviour === 'failed') return handlers.onFailed(new Error('炸了'))
       if (poll.behaviour === 'cancelled') return handlers.onCancelled({ code: 'task_cancelled' })
       if (poll.behaviour === 'timeout') return handlers.onTimeout()
@@ -132,6 +134,20 @@ describe('运行链的四条终止路径都要把 running 放下来', () => {
     expect(chain.taskStatusLabel.value).toBe('已取消')
     expect(chain.running.value).toBe(false)
     expect(outcome.ok).toBe(true) // 取消不是异常：pollTask 正常返回
+  })
+
+  it('轮询被卸载打断：既不算失败，也不要把 running 留在原地', async () => {
+    /* D207。卸载那一跳现在会让 await 以 `polling_stopped` 落地，运行链必须把它和"任务真失败"
+       分开：写成 failed 的话，页面那句 `ElMessage.error` 会给一个已经不在这一屏的人弹错。 */
+    poll.behaviour = 'stopped'
+    const { chain, finished } = makeRun()
+    const outcome = await chain.startCareerPlanning()
+    expect(outcome.ok).toBe(false)
+    expect(outcome.reason).toBe('polling-stopped')
+    expect(chain.taskStatus.value).toBe('running') // 不是 failed：这一屏没人看过
+    expect(chain.taskStatusLabel.value).toBe('执行中')
+    expect(chain.running.value).toBe(false) // finally 这一回真的跑了
+    expect(finished).toEqual([])
   })
 
   it('没有记录 id：抛出来的那句错误要被收进 failed，不能留下 running', async () => {

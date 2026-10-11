@@ -21,9 +21,9 @@ export function createAgentTaskPoller(apiClient, runtimeOptions = {}) {
     /**
      * D204 量到的那件小事的开关：`stopPolling()` 原来只是清表，**不落地**那个 `await`，
      * 所以调用方（组件卸载时）等下去的 promise 永不 settle，它后面的 `finally` 也就永不跑。
-     * 默认 `false` —— 保持既有三个调用方（`AnalysisResult.vue:388`、`SmartAnalysis.vue:532`、
-     * `useCareerPlanningRun.js:27`，都经 `useAgentTaskPolling` 拿同一个 poller）的行为逐字不变。
-     * 需要"停止即落地"的调用方自己打开。
+     * 默认 `false`（纯工具层不假设调用方要这个语义）；`useAgentTaskPolling` 在 D207 把它打开，
+     * 因为那条链正是把 `stopPolling` 挂在 `onUnmounted` 上的，而 `ResumeUpload.vue` 的改写建议
+     * 轮询自己开了一份（D205）。
      */
     rejectOnStop = false,
   } = runtimeOptions
@@ -65,6 +65,11 @@ export function createAgentTaskPoller(apiClient, runtimeOptions = {}) {
       onTimeout,
     } = options
 
+    /* 开新一趟之前先"接管"上一趟：这一发 stop 只负责清表，不能把上一趟判成 `polling_stopped`。
+       上一趟一旦落地就会跑自己的 `finally`，而它写的 `loading` 是与这一趟共用的同一批 refs——
+       按钮会在第二趟还在飞的时候被松开。D207 只把"卸载"那一跳打开拒绝。 */
+    settled = true
+    settleReject = null
     stopPolling()
     setPollingState(true)
 

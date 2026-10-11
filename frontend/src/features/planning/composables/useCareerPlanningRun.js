@@ -122,6 +122,12 @@ export function useCareerPlanningRun({ getResumeId, resolveJdId, onAnalysisFinis
       if (analysisRecordId.value) await onAnalysisFinished()
       return { ok: true }
     } catch (error) {
+      if (error?.code === 'polling_stopped') {
+        /* 走到这里只可能是页面被卸载（`useAgentTaskPolling` 把 stopPolling 挂在 onUnmounted 上）。
+           任务本身既没失败也没取消：不写 taskStatus（写了也没人看，但下一屏读不到这一屏），
+           更不把它报成 run-failed——那是页面弹错误 toast 的开关。 */
+        return { ok: false, reason: 'polling-stopped', error }
+      }
       taskStatus.value = error?.code === 'task_cancelled' ? 'cancelled' : 'failed'
       return { ok: false, reason: 'run-failed', error }
     } finally {

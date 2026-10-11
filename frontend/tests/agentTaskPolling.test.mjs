@@ -167,3 +167,23 @@ test('a completed task still resolves: the stop inside the success path must not
   assert.equal(result.status, 'completed')
   assert.equal(calls, 1)
 })
+
+/* D207 的射程边界：`pollTask` 开头那一发 stopPolling 是**接管**，不是"调用方要它落地"。
+   把它也判成 polling_stopped 的话，上一趟的 `finally` 会写这一趟正在用的同一批 refs
+   （按钮在第二趟还在飞的时候被松开）。三个调用方各只有一处 pollAgentTask，所以今天打不到，
+   但这条边界不钉住的话，下次有人加第二个入口就是静默的竞态。 */
+test('starting a second poll takes over without settling the first one', async () => {
+  const poller = createAgentTaskPoller(neverEndingPoller(), { rejectOnStop: true })
+  const first = poller.pollTask(9, { intervalMs: 60000 })
+  await settleState(first, 5)
+
+  const second = poller.pollTask(10, { intervalMs: 60000 })
+
+  assert.equal(await settleState(first), 'pending', '接管不该把上一趟改判成 polling_stopped')
+
+  poller.stopPolling()
+  await assert.rejects(second, (error) => {
+    assert.equal(error.code, 'polling_stopped')
+    return true
+  })
+})

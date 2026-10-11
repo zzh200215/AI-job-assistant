@@ -4809,10 +4809,37 @@ select count(*) from rewrite_suggestion_job
 
 **顺带量到三件事**：
 1. **`KeepAlive` 全仓 0 处**（`grep -rn "KeepAlive\|keep-alive" src/` 无命中）⇒ 路由换页必走 `onUnmounted` ⇒ `useAgentTaskPolling.js:16` 那句 `onUnmounted(poller.stopPolling)` 真的会跑，所以**不存在"导航走了还在后台打接口"**。我原先担心"翻面就停不下来"，答案是停得下来。
-2. 但**同一个悬挂 await 的毛病这三处都有**（默认档下 `stopPolling()` 不落地）：跑到一半被卸载 ⇒ 它们的 `finally { loading/running = false }` 永不执行。查下来**良性**：`running`/`loading` 都是建在组件 setup（或 composable 的一次调用）里的 `ref()`，随实例一起消失；又没有 KeepAlive ⇒ 不会出现"下次进来按钮还在转"。**所以把默认档翻过来今天没有任何收益，只有代价**（三处各多走一条 `catch`，其中 `useCareerPlanningRun` 那条会把"卸载"错标成 `taskStatus='failed'`）。维持 D205 的开关式做法。
+2. 但**同一个悬挂 await 的毛病这三处都有**（默认档下 `stopPolling()` 不落地）：跑到一半被卸载 ⇒ 它们的 `finally { loading/running = false }` 永不执行。查下来**良性**：`running`/`loading` 都是建在组件 setup（或 composable 的一次调用）里的 `ref()`，随实例一起消失；又没有 KeepAlive ⇒ 不会出现"下次进来按钮还在转"。**所以把默认档翻过来今天没有任何收益，只有代价**（三处各多走一条 `catch`，其中 `useCareerPlanningRun` 那条会把"卸载"错标成 `taskStatus='failed'`）。维持 D205 的开关式做法。**（同日 D207 他点名要修这一条。修的时候发现这句"代价"我写小了：不止错标，`CareerPlanning.vue:1077` 那一句 `if (!outcome.ok)` 会在卸载之后真弹一句 `ElMessage.error`——变异跑出来的，不是我推出来的，见 D207。）**
 3. 还有一条不是"未验"而是"根本没有入口"：`cancelAgentTask` 全仓只有 `TaskCenter.vue:251` 一个调用方，而 TaskCenter 用的是自己的 10 秒列表轮询、不接这条 poller ⇒ **分析／规划那三个页面上没有"取消任务"的按钮**。也就是说上表那三个 `onCancelled` 分支只在"任务被别处取消、而你恰好还挂着轮询"时才走得到——**这条分支今天没有被任何测试或屏幕覆盖**（我没为它写用例：没有可点开的入口，测它只能测一个手搭的假场景）。
 
 **验收**：只改注释与台账（`agentTaskPolling.js`、`agentTaskPolling.test.mjs` 各一处注释），`node --test tests/agentTaskPolling.test.mjs` **36 pass**、`vitest run` **92 files / 613 passed**、`format:check` clean；产品行为零改动。
+
+#### 已交付：D207 那三处悬挂 await 现在落地了——但这条真正要守的是"落地之后别把卸载说成失败"
+
+**这一步是他点名的**（"开始修复 D204 那个真缺陷"）。D206 我自己的结论是"翻默认档没有收益、只有代价"；两边都成立：收益仍然只有一项（那条 promise 从"永不 settle"变成"settle"、`finally` 真的跑），而代价**比我当时写的更大**——见下面"为什么 3、4 必须一起改"。
+
+**改了什么**（4 个文件，候选人可见的文案零改动）：
+1. `src/composables/useAgentTaskPolling.js:17` 打开 `rejectOnStop: true`。开在**这一层**而不是把工具层默认值翻过来，因为只有这一层把 `stopPolling` 绑在 `onUnmounted` 上（同文件 `:21`）；`agentTaskPolling.js` 的默认仍是 `false`，`ResumeUpload.vue` 自己那份照旧。
+2. `src/utils/agentTaskPolling.js`：`pollTask()` 开头那一发 `stopPolling()` 从此是**接管**、不是"停止"——先把 `settled = true` / `settleReject = null` 立起来再清表，所以起第二趟不会把第一趟判成 `polling_stopped`。为什么要在意：第一趟一落地就跑自己的 `finally`，而它写的 `loading` 是与第二趟**共用的同一批 refs** ⇒ 按钮会在第二趟还在飞的时候被松开。现取全仓 `await pollTask(`/`await pollAgentTask(` 只有 **3 处**（`SmartAnalysis.vue:732`、`AnalysisResult.vue:550`、`useCareerPlanningRun.js:96`），每个视图各一处 ⇒ 这条路今天走不到；钉它是因为"下次有人加第二个入口"时它就成了一条静默竞态，而那正是 D44 那一族"没人查是因为没有门会红"。
+3. `useCareerPlanningRun.js:124` 的 `catch` 分流：`error.code === 'polling_stopped'` ⇒ 返回 `{ok:false, reason:'polling-stopped'}` 且**不写 `taskStatus`**（任务既没失败也没取消，只是没人看了）。
+4. `CareerPlanning.vue:1079`：toast 的开关从 `!outcome.ok` 换成 `outcome.reason === 'run-failed'`。
+
+**为什么 3、4 必须一起改**（这条是 D207 的主要内容，不是附带说明）：只做 1 的话，卸载 → `catch` 把 `taskStatus` 写成 `failed` → 页面 `if (!outcome.ok)`（改前 `:1077`）弹一句 `ElMessage.error('职业规划生成失败')`。**给一个已经离开这一屏的人弹一句错，而那句话出现在他看到的下一屏上**——D206 那句"只有代价"当时只说到"错标成 failed"为止，把这一半漏了。
+
+**两次变异，各打红一条**：
+- 把 `rejectOnStop` 关回去 ⇒ `agentTaskPollingUnmount` 报 `expected 'pending' to be 'rejected'`。这条症状就是 D204 描述的那个现象，所以这条腿测的正是它。
+- 把页面守卫退回 `!outcome.ok` ⇒ `careerPlanningUnmountNoToast` 的卸载那条报 `expected "spy" to not be called at all, but actually been called 1 times`；同一文件的反证（任务真 `failed` ⇒ `ElMessage.error` 确实被调到）保持绿 ⇒ 这条守卫不是把 toast 整条掐掉。
+
+**测试**：`npm test` 36 → **37 pass**（新增"第二趟接管、第一趟仍 pending"）；`vitest run` 92 files / 613 → **94 files / 618 passed**。新增分布：`agentTaskPollingUnmount.test.js` 2 条（真组合层 + 真轮询器，卸载落地 / 成功那一发不被自己的停表改判）、`careerPlanningUnmountNoToast.test.js` 2 条（挂载真页面走真运行链，只把传输层换掉）、`careerPlanningRunChain.test.js` 加 1 条（`polling-stopped` 的返回值形状与 `taskStatus` 不动）。
+
+**验收**：`format:check` clean；`lint` 0 error / 1 warning（`admin/Overview.vue:131 'paidOrders' is never used`，企业侧留下的旧警告，与本条无关）；`vite build` ok；`bundle-size` TOTAL **2210.20 → 2210.33 kB（+0.13）**；`dead-style --selftest` 候选 0。
+
+**未验（不粉饰）**：
+1. `AnalysisResult.vue` 与 `SmartAnalysis.vue` 那两处的"卸载后 `loading` 归位"**没有视图级读数**。这是仪器限制而不是省事：`unmount()` 之后读不到已销毁实例的 setupState，而给视图手搭 replica 测到的是我的副本。它们今天的证据只有两条——真组合层证明"卸载会产生 `polling_stopped` 落地"，加上两处外层 `catch {}` 静默、`finally` 只写组件内 ref（现取 `AnalysisResult.vue:577`/`:580`、`SmartAnalysis.vue:765`/`:768`）。
+2. 上面第 2 项那条"接管"分支今天不可达，所以它的新腿钉的是一个走不到的形状——价值在将来会红，不在今天修了什么。
+3. 全程 vitest/jsdom，**没在真浏览器里点过**（8010 后端自 D189 之后一直没起）。
+
+**§10 计数**：没挂新项；同一算法现取仍是**在册 37 条（1–25、28–39）、open 0**。
 
 
 
