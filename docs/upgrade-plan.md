@@ -4981,6 +4981,40 @@ select count(*) from rewrite_suggestion_job
 
 **§10 计数**：第 40 条**按 ② 关闭**（D212）⇒ 现取标题行重算：在册 **38 条（1–25、28–40）、open 0**。
 
+#### 已交付：D213 D207 那条"卸载即落地"的兄弟——D212 自己引入的池连接占用，量出来并修掉
+
+**为什么会查这一条**：D212 落地后回头读自己的改动，看见一个没想到的形状——循环线程从此**不再 commit**。而 SQLAlchemy 的读事务会把借来的连接一路握到 commit/rollback。先在**生产那套池参数**上做了直接实验（不是推理）：
+
+```
+baseline                checkedout=0  overflow=-10  size=10
+读完不提交               checkedout=1   ← 连接被这条事务钉住
+rollback() 之后          checkedout=0
+```
+
+对上的数就是账里那三个：`WS_MAX_LIVE_INTERVIEWS=12`（config.py:97）× 1 根长期不放的连接，压在 `DB_POOL_SIZE + DB_MAX_OVERFLOW = 10 + 10 = 20`（:76-77）上，再叠每步 worker 那一根 ⇒ 12 条在途面试就能把池吃穿，超出的人在 `pool_timeout=30s` 上排队——**这正是 `core/threadpool.py` 那段 docstring 自己写的"请求没超时但看起来死了"的形状**。D212 之前不会，因为循环线程每存一条消息就 commit 一次，连接在两次消息之间是还回去的。
+
+**两条死路（记下来，别再试）**：
+1. 连接阶段读完之后 `engine.db.rollback()` ⇒ 生产语义对，但**测试夹具表达不了**：它是 one-connection-per-test + 每个 Session 一个 SAVEPOINT，rollback 把 SAVEPOINT 记账打乱（`no such savepoint: sa_savepoint_8`），两条用例收尾报错。
+2. 改成 `engine.db.close()` ⇒ 同样扰动，症状换成 user 插入 `IntegrityError`（外层事务被提前结束，下一个用例看见重复键）。
+⇒ 结论：不该"中途归还"，该**根本不借**。
+
+**最终改法**（`interview_ws.py`，比前两条都小）：循环线程不再开 Session。连接阶段需要的 `status` 其实**认证那一段早就读过**并且在那里就 `db.close()` 归还了（那条路径 13 条用例一直绿），现在把两个标量（`owner_id`、`status`）传出去；`_handle_ws_loop` 的签名因此不再收 `InterviewSession`——顺带拆掉一颗更大的雷：**detached ORM 对象穿过线程边界**（以后谁在 worker 里碰它就 `DetachedInstanceError`）。`engine.init()`（连接阶段唯一剩下的库访问）也去掉。于是每场面试最多只占一根连接、且只占**一步的时长**（worker 的 Session 在步骤结束 `cleanup()` 归还），与 D212 之前同形；而"步"仍走 `anyio.to_thread.run_sync`，吃的还是 `threadpool.py` 钉住的那 20 根线程 ⇒ 那条不变量没被绕过。
+
+**测试**：`tests/test_interview_ws.py` → **13 条**（D212 的 4 条 + D213 新增 1 条 + 既有 8 条）。
+- 新增 `test_the_loop_thread_never_opens_a_db_session_while_the_interview_runs`：**不打桩**走真 `start` / `ping` / `skip`（skip 那条正好跑满"两步同一个 worker"），断言全程 `engine.db is None`。
+- E16 那条 `engine.db is not None`（"这条连接真走通了"）改成 `is None`——**口径变强**：原来测"断开后那个 Session 被关掉了"，现在测"全程就没有 Session"，漏无可漏；`live_interview_count()` 归零那半仍在。
+- **M3 变异**（把 `engine.init()` 加回循环线程）⇒ **只有这两条红**，其余 11 条绿。
+- 顺带把 D212 那条线程身份腿的参照物从 `InterviewEngine.init` 换成 `_emit_snapshot`（init 已经不在循环线程跑了，参照物本身要跟着换，否则那条腿会退化成永远成立）。
+
+**未验**：
+1. "每场面试一根、且只占一步"里**那一根**没实测——要在真 MySQL 上并发跑 12 条 WS 才量得出checkedout 曲线，没做。实测的是机制那一半（读完不提交 ⇒ `checkedout=1`）与代码路径那一半（`engine.db is None`）。
+2. timer 的守卫多一次 worker 往返（`_get_state`），开销**没量**；相对 30 秒计时窗应当可忽略，这是推理。
+3. `handle_answer` 那条腿在测试里没跑真路（它会 `submit_turn_evaluation` 投进执行器），只测了 start/ping/skip。
+
+**验收**：`pytest`（backend 全量）**924 passed**；`ruff check .` All checks passed；`ruff format --check .` 367 files already formatted；面试三文件 **54 passed**；清点脚本仍只在仓库外。
+
+**§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+
 
 
 

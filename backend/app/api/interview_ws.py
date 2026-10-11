@@ -126,10 +126,14 @@ async def interview_websocket(websocket: WebSocket, session_id: int):
         if not session:
             await websocket.close(code=4004, reason="面试会话不存在")
             return
-        if session.user_id != user_id:
+        # 标量在这条 Session 关掉之前就取出来：往下要传出去的是值，不是一只 detached ORM 对象
+        # ——那东西以后被 worker 线程碰一下就 DetachedInstanceError。
+        owner_id = session.user_id
+        status = session.status
+        if owner_id != user_id:
             await websocket.close(code=4003, reason="无权访问此面试")
             return
-        if session.status == "completed":
+        if status == "completed":
             await websocket.close(code=4000, reason="面试已结束")
             return
     finally:
@@ -140,26 +144,29 @@ async def interview_websocket(websocket: WebSocket, session_id: int):
         await websocket.close(code=4005, reason="并发面试已达上限")
         return
 
-    return await _handle_ws_loop(websocket, session_id, session, accept_subprotocol)
+    return await _handle_ws_loop(websocket, session_id, owner_id, status, accept_subprotocol)
 
 
 async def _handle_ws_loop(
     websocket: WebSocket,
     session_id: int,
-    session: InterviewSession,
+    owner_id: int,
+    status: str,
     accept_subprotocol: str | None,
 ):
     await websocket.accept(subprotocol=accept_subprotocol)
-    logger.info("WS connected: session_id=%s user_id=%s", session_id, session.user_id)
+    logger.info("WS connected: session_id=%s user_id=%s", session_id, owner_id)
 
-    # 引擎按连接建：工作态全部能从落库的消息里推断（见模块 docstring），进程内不留长期对象。
+    # 引擎按连接建，但**这只对象从不开 Session**：读也在 worker 线程里做（见
+    # `_engine_steps_snapshot`）。原因是 D212 之后循环线程不再 commit，而 SQLAlchemy 的读事务会把
+    # 那根连接一路握到 commit/rollback——真 MySQL 池实测：读完不提交 `checkedout=1`，`rollback()`
+    # 之后回到 `0`。那样每条在途面试都长期钉住一根池连接，而 `WS_MAX_LIVE_INTERVIEWS=12` 对上的
+    # 正是 `DB_POOL_SIZE + DB_MAX_OVERFLOW = 10 + 10`（config.py:76-77、96）。连接阶段需要的
+    # `status` 已经在认证那一步读过一次并在那里归还了连接，这里只接标量。
     engine = InterviewEngine(session_id)
     _active_engines.add(engine)
-    engine.init()
     current_task: asyncio.Task | None = None
-    # 连接上这只引擎现在只管资格与容量，不写库——每一步都在 worker 线程里跑（见
-    # `_engine_steps_snapshot`）。所以"这是第几题"只能从**发给客户端的那一问**里取，
-    # 不能再去读 `engine.current_index`：它停在连接建立那一刻。
+    # "这是第几题"从**发给客户端的那一问**里取：循环线程不碰库，读不到 worker 刚推进到的位置。
     current_round = 0
 
     def _arm(payload: dict | None) -> None:
@@ -187,10 +194,9 @@ async def _handle_ws_loop(
             await websocket.close(code=1000, reason="interview finished")
 
     try:
-        engine._load_session()
         result: dict | None = None
-        if engine.session.status == "ongoing":
-            result = engine.resume()
+        if status == "ongoing":
+            _, result = await _step(session_id, "resume")
             if result:
                 await websocket.send_json(result)
             else:

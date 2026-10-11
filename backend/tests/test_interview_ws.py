@@ -126,7 +126,12 @@ def _wait_until(predicate, timeout=3.0) -> bool:
 
 
 def test_engine_is_released_when_the_client_disconnects(ws_client, normal_user, db_session, monkeypatch):
-    """这条就是"每放弃一场面试永久漏一个开着的 Session"那半边。"""
+    """这条就是"每放弃一场面试永久漏一个开着的 Session"那半边。
+
+    D213 之后这条连接**根本不开 Session**（读也走 worker），所以"漏一个开着的 Session"变成结构上
+    不可能；`_active_engines` 里留的只是容量记账用的引擎对象。断言因此从"断开后那个 db 被关掉了"
+    改成"全程就没有 db"——后者更强：只要有人在循环线程里再加一次库访问，这条就红。
+    """
     sid = _make_session(db_session, normal_user)
 
     monkeypatch.setattr(InterviewEngine, "resume", lambda self: None)
@@ -141,16 +146,12 @@ def test_engine_is_released_when_the_client_disconnects(ws_client, normal_user, 
         assert ws.receive_json()["type"] == "question"
         assert interview_ws.live_interview_count() == 1
         engine = next(iter(interview_ws._active_engines))
-        assert engine.db is not None, "引擎还没拿到 DB 会话，说明这条连接没真的走通"
+        assert engine.db is None, "循环线程又开 Session 了：那条读事务会把一根池连接占到 commit/rollback 为止"
 
-    # 两个条件放在同一个谓词里等：`finally` 里 `_active_engines.discard(engine)` 与
-    # `engine.cleanup()` 是相邻两条语句、中间没有 await，但线程可以在两条之间被换下去。
-    # D212 改完之后这条曾经单独红过一次（先看见 count==0、再读 db 还在），就是踩在这个缝上。
+    # 谓词里两个条件一起等：`finally` 中 `discard()` 与 `cleanup()` 之间没有 await，但线程可以在
+    # 两条语句之间被换下去。D212 之后这条曾单独红过一次（先看见 count==0、再读 db 还在）就是这个缝。
     released = _wait_until(lambda: interview_ws.live_interview_count() == 0 and engine.db is None)
-    assert (
-        released
-    ), "客户端断开后连接仍占着在途名额，或那个 Session 还开着（旧实现是前者：_engine_pool 只在结束/异常时清）"
-    assert engine.db is None, "cleanup() 没跑：那个 Session（以及它占的那根连接）永久留在进程里"
+    assert released, "客户端断开后连接仍占着在途名额（旧实现正是这样：_engine_pool 只在结束/异常时清）"
 
 
 def test_two_connections_to_one_session_do_not_share_one_engine(ws_client, normal_user, db_session, monkeypatch):
@@ -206,12 +207,13 @@ def test_the_model_capable_step_runs_off_the_event_loop_thread(ws_client, normal
     loop_threads: list[int] = []
     step_threads: dict[str, list[int]] = {"next_question": [], "finish": []}
 
-    original_init = InterviewEngine.init
+    original_emit = interview_ws._emit_snapshot
 
-    def spy_init(self):
-        # 连接阶段这一步仍在事件循环线程里 —— 拿它当"循环线程是谁"的参照
+    async def spy_emit(websocket, new_messages, fallback=None):
+        # 这一步回到循环线程 —— 拿它当"事件循环是谁"的参照（D213 之后连接阶段也不再碰库，
+        # 原来借 `InterviewEngine.init` 取循环线程 ident 的做法没有落点了）
         loop_threads.append(threading.get_ident())
-        return original_init(self)
+        return await original_emit(websocket, new_messages, fallback)
 
     def spy(name):
         def impl(self):
@@ -222,7 +224,7 @@ def test_the_model_capable_step_runs_off_the_event_loop_thread(ws_client, normal
 
         return impl
 
-    monkeypatch.setattr(InterviewEngine, "init", spy_init)
+    monkeypatch.setattr(interview_ws, "_emit_snapshot", spy_emit)
     monkeypatch.setattr(InterviewEngine, "resume", lambda self: None)
     monkeypatch.setattr(InterviewEngine, "next_question", spy("next_question"))
     monkeypatch.setattr(InterviewEngine, "finish", spy("finish"))
@@ -303,3 +305,34 @@ def test_a_session_without_evaluations_still_takes_the_fallback_and_pays_nothing
     assert calls == []
     assert payload["metadata"]["answered_questions"] == 0
     assert payload["metadata"]["improvement_suggestions"] == ["请至少完成一道题后再查看复盘报告。"]
+
+
+def test_the_loop_thread_never_opens_a_db_session_while_the_interview_runs(
+    ws_client, normal_user, db_session, monkeypatch
+):
+    """D212 自己引入的那条容量回归，得有腿盯着。
+
+    机制是实测的：SQLAlchemy 的**读事务**会把那根连接一路握到 commit/rollback——真 MySQL 池上
+    读完不提交 `checkedout=1`，`rollback()` 之后回到 `0`。D212 之后循环线程不再 commit，所以只要
+    它还开一次 Session，每条在途面试就长期钉住一根池连接，而 `WS_MAX_LIVE_INTERVIEWS=12` 对上的
+    正是 `DB_POOL_SIZE + DB_MAX_OVERFLOW = 10 + 10` 那口池。修法是让循环线程**根本不开 Session**
+    （连接阶段的读也走 worker），所以这条断言的是"全程 `engine.db is None`"。
+
+    这里不打桩：走的是真 `start`/`next_question`/`skip`，只有这条路才会去碰库，才测得出"没碰"。
+    """
+    sid = _make_session(db_session, normal_user)
+
+    with ws_client.websocket_connect(f"/ws/interview/{sid}", subprotocols=["jwt", _token_for(normal_user)]) as ws:
+        first = ws.receive_json()
+        assert first["type"] == "question", f"没拿到第一题：{first}"
+        engine = next(iter(interview_ws._active_engines))
+        assert engine.db is None, "循环线程开了 Session：它会替这条面试长期占着一根池连接"
+
+        ws.send_json({"type": "ping"})
+        assert ws.receive_json()["type"] == "pong"
+
+        ws.send_json({"type": "skip"})
+        assert ws.receive_json()["type"] == "system"  # 那条"已跳过"的消息必须还在
+        assert ws.receive_json()["type"] == "question"
+
+        assert engine.db is None, "跑完 skip（两步同一个 worker）之后循环线程又开了 Session"
