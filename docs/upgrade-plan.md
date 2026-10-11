@@ -4671,7 +4671,7 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 
 **未验（不粉饰）**：
 1. ~~**迁移没执行**~~ —— **同日他点了"跑"**：`alembic upgrade head` 执行，`alembic current` 现取 **`20261010_0028 (head)`**，表 16 列 / 4 条索引、ORM 与库**零漂移**；新的异步路径也跑了真 provider（读数见下面 D201）。
-2. **pending→completed 那一跳在视图层仍没被测过**：靠的是轮询器自身的覆盖（`tests/agentTaskPolling.test.mjs` 里有 pending→completed 那条）加视图的形状断言。D201 补的是**真库真模型**上同一读路径走到了终态，不是浏览器那一跳。
+2. ~~**pending→completed 那一跳在视图层仍没被测过**~~ —— **同日 D204 补上了**：`resumeRewriteJobPolling.test.js` 4 条挂载用例（running 期间 spinner 亮且卡片不许提前出现／失败时哨兵字符串上不了屏／卸载后不再打接口／在途重复点击只建一个作业）。
 3. 全仓**其余仍在同步等模型的路由没有重新清点**，所以 nginx 那 180s 保留、注释里明写它现在保护的是那一族、而那一族是谁未验。
 4. `REWRITE_JOB_MAX_WORKERS=2` 是按连接池推的数，**不是压测出来的吞吐**；`threadpool.py:32` 那个 limiter 只在进程内生效，跨副本不设防（与 D175 调度槽位同一族）。
 
@@ -4758,6 +4758,27 @@ select count(*) from rewrite_suggestion_job
 **未验**：两跳之外有没有漏（走 `agents/` 一跳以上才到模型、且被某条 `def` 路由同步等的）——**没查**，那是三跳图的事。`llm_service.chat_json` 那 277 行来源不明说明静态图与真实调用面还会有出入，这张表当"路由清单"用可以，当"全量调用图"用不行。
 
 **验收**：代码零改动（只改 `nginx.conf` 的注释 + 本条台账），前端 `rewriteSuggestionJobFlow` 对 nginx 的两条断言（180s、含 `364.5s`）仍绿，`format:check` clean；清点脚本与读数跑完即删。
+
+#### 已交付：D204 把 D200 欠的"视图层那一跳"补成 4 条挂载用例——顺带纠正我自己两句不准确的话
+
+**为什么这条不算新活**：D200 交付时我自己写着"pending→completed 那一跳在视图层没被测过"，而 `resumeRewriteUndo.test.js` 里那行注释还声称"轮询由 `rewriteSuggestionJobFlow` 单独钉"——**那个文件当时只有源码形状断言，一句都没钉**。所以这一步是把自己发的货补齐，不是扩范围。
+
+**新增 `tests/unit/resumeRewriteJobPolling.test.js`（4 条，全部挂载真组件 + 假定时器）**：
+- `running → running → completed`：spinner 在两发 `running` 期间必须一直亮、`rewrite.items` 必须一直是空（卡片不许提前出现），到 `completed` 才落地；GET 恰好 3 次。
+- **失败臂带哨兵**：载荷里放 `error_msg: 'MODEL_RAW_TEXT_should_never_reach_the_screen'`，断言 `wrapper.text()` 与 `rewrite.error` 都不含它。
+- **卸载后不再打接口**：`unmount()` 后推进 20 秒，GET 调用数不许再涨（`onUnmounted → stopPolling` 那条真起了作用）。
+- **在途重复点击只建一个作业**：第二次 `generateRewrites()` 直接返回 `undefined`，POST 恰好 1 次。
+
+**写这 4 条时我自己错两次，都记下来**：① hoisted 的 spy **跨用例不清计数**，于是"只建一个作业"读成了"建了 4 个"——第一次跑那 4 次正好是前三条用例留下的，差点被我当成产品 bug 去改代码；② 我在最后 `await` 了那个挂在轮询上的 promise，测试直接 20 秒超时——**而这一次超时反倒量出一个真实的小事**（见下）。
+
+**量出来的小事（记着，不顺手改）**：`agentTaskPolling.js` 的 `stopPolling()` 既不 resolve 也不 reject，所以组件卸载后 `generateRewrites()` 那个 `await` **永不落地**、`finally` 里的 `rewrite.loading = false` 也不会跑。组件已经不在了 ⇒ 候选人看不到任何后果；要治得改**共享**轮询器的停止语义（`AgentAnalysis`／`MultiAgentAnalysis`／`TaskCenter` 都在用），那条改动不在本条范围里。
+
+**两句我自己写过的不准确说法，一并纠正**：
+- `resumeRewriteUndo.test.js` 那句"轮询由 `rewriteSuggestionJobFlow` 单独钉" → 改成指向这个新文件（当时是空的承诺）。
+- `rewriteSuggestionJobFlow.test.js` 那句"**前端一处都不读** `error_msg`" → 不准确：共享轮询器失败那一支读的正是 `taskData?.error_msg`。真正守住这道门的是 `userErrorCopy` 只认 `err.userMessage`、从不看 `err.message`（`requestTracing.js:156-159`）。断言保留（视图与 api 层确实不读那个键），但**机制改写成实测过的说法**，并加了一条 `expect(requestTracing).toMatch(/err\?\.userMessage/)` 把真正的守门者钉住；哨兵那条端到端行为在新文件里。
+
+**验收**：前端 **92 files / 613 passed**（前值 91/609，+1 文件 +4 条）、`npm run lint` **0 error / 1 warning**（那 1 条是既有 `paidOrders`；我新文件一度带来第 2 条 `'first' is assigned but never used`，改成不接那个 promise 后回到 1）、`format:check` clean；后端与 `src/` 产品代码零改动。§10 不挂新项（在册 37、open 0）。
+
 
 
 

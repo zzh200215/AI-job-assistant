@@ -97,9 +97,14 @@ describe('改写建议的作业化形状', () => {
     expect(view).toMatch(/onUnmounted\(\(\) => rewritePoller\.stopPolling\(\)\)/)
   })
 
-  it('前端一处都不读 error_msg：那句里可能有模型返回的原文', () => {
+  it('视图与 api 层一处都不读失败原因那个键：那句里可能有模型返回的原文', () => {
     expect(view).not.toMatch(/error_msg/)
     expect(read('../../src/api/resume.js')).not.toMatch(/error_msg/)
+    /* 但"所以屏幕上不可能出现那句"不成立：共享轮询器 `agentTaskPolling.js` 失败那一支读的是
+       `taskData?.error_msg`。真正把这道门守住的是 `userErrorCopy` 只读 `err.userMessage`、
+       从不读 `err.message`（`requestTracing.js:156-159`）。这条链路端到端的行为由
+       `resumeRewriteJobPolling.test.js` 用哨兵字符串钉，不在这条源码扫描里。 */
+    expect(read('../../src/utils/requestTracing.js')).toMatch(/err\?\.userMessage/)
   })
 
   it('这一族复用既有的轮询实现，不另建第二个轮询器', () => {

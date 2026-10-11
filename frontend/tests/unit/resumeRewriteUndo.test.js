@@ -111,8 +111,8 @@ async function renderAndApply(applyPayload = APPLIED) {
   wrapper.vm.currentDiagnosis = { ...DIAGNOSIS, resume_id: 1, jd_id: null }
 
   api.createRewriteSuggestionJob.mockResolvedValue({ job_id: 77, status: 'pending' })
-  // 第一次轮询就给终态：这条用例要钉的是"应用 → 撤销"那一跳，不是轮询本身（轮询由
-  // `rewriteSuggestionJobFlow.test.js` 单独钉）。
+  // 第一次轮询就给终态：这条用例要钉的是"应用 → 撤销"那一跳，不是轮询本身（中间那一跳
+  // running→completed 由 `resumeRewriteJobPolling.test.js` 的 4 条钉）。
   api.getRewriteSuggestionJob.mockResolvedValue({
     job_id: 77,
     status: 'completed',
