@@ -4847,6 +4847,32 @@ select count(*) from rewrite_suggestion_job
 
 **§10 计数**：没挂新项；同一算法现取仍是**在册 37 条（1–25、28–39）、open 0**。
 
+#### 已量：D208 真浏览器里跑了一遍 D207 那条卸载路径——两臂都有读数，另有一条界面不一致顺带量到（没改）
+
+**为什么要这一发**：D207 的未验第 3 项写的是"全程 vitest/jsdom，没在真浏览器里点过"。这一步就是把它变成读数。
+
+**环境（两处坑，都记下来）**：8010 必须用 `backend/.venv/Scripts/python.exe` 起——系统那个 python 没装 `slowapi`，第一次启动直接 `ModuleNotFoundError` 挂在导入期。另外 5173 上**本来就有一个不是我起的** vite dev 站，而它的代理目标是 `http://localhost:8000`（`vite.config.js:70` 的默认值，仓库里没有 `.env` 覆盖它），所以那个站接不到 8010；我没动它，另起 5174 并显式 `VITE_PROXY_TARGET=http://127.0.0.1:8010`。
+
+**会话与数据**：注册一次性账号 `d207_probe`（uid 23），登录走 app 自己的 `POST /auth/login`（在页面里 fetch，token 只落在浏览器 localStorage，没有经过我、也没进任何文件）；`POST /resume/seed-demo` 造 6 份演示简历，第一份 `parsed.current_title = 'Java后端开发工程师'` ⇒ 两道表单守卫都能自动过。
+
+**夹具（只两发 POST，其余全真）**：在 axios 的 **adapter 层**接住 `POST /analysis/full` 与 `POST /jd`，返回合成 `task_id` 与合成 JD id；真适配器从 `axios.defaults.adapter`（现取 `['xhr','http','fetch']`）经 `getAdapter()` 取回，所以别的请求原样出网。**夹具确实落进去了**的三条证据：patch 之后 `inst.get('/auth/me')` 仍返回 uid 23；`startHits=1 / jdHits=1`；库里扫过 52 张表，带 `user_id` 且属于 23 的行**只有 `tb_resume=6`**——没有任何 `agent_task`、`jd`、`analysis_record`、`rewrite_suggestion_job` 合成行，也**没有一发真 provider 请求发出去**（成本 0）。
+
+**主臂（跑到一半导航走）**：点"开始职业规划" ⇒ 按钮 `is-loading`、状态"分析中 / Agent 正在生成职业规划"；轮询真的在飞（`GET /api/agent/task/999999` 打**真后端**拿 404，按 `errorIntervalMs=3000` 重试；adapter 计数 22 = 11 轮 × task+steps 两个请求）；点导航"首页" ⇒ URL `/home`、`.action-buttons` **已从 DOM 消失**（这一条是仪器自检：D150 那族"hidden 标签页不发 rAF ⇒ 卡在 fade-leave"今天没有发生，视图真卸载了）；**导航之后 49.4 秒新增 GET = 0**、`.el-message` 节点 **0**、MutationObserver 记到的 toast 列表 **空**。
+**控制臂（真失败必须弹）**：同一夹具改成回答 `status='failed' / error_msg='夹具：模型超时'` ⇒ 状态"失败 / 生成失败，请重试"，并且 **toast 真出现了："职业规划生成失败"** ⇒ D207 那句守卫没有把合法错误一起掐掉。
+**负读数的自检**：控制臂之前有一次点击时"目标岗位"是空的，第二道守卫当场被 MutationObserver 记到"请填写目标岗位，或直接选择一个现有 JD" ⇒ "没有 toast"这个负数不是瞎的。
+
+**顺带量到一条真的界面不一致（本次没改，等他拍）**：**第一次**进"职业规划"会自动把简历的 `current_title` 填进"目标岗位"，**重进**这一页它是空的、点下去只得到那句 warning。因果现取：`onMounted` 先 `restoreSelections()` 把 `selectedResumeId` 置上，而那一刻 `resumeOptions` 还是空的 ⇒ `CareerPlanning.vue:1045` 那个 watch 里 `selectedResume.value?.parsed?.current_title` 取到 `''` 就不填；随后 `refreshBaseOptions()` 把列表装上，但 id 没再变、那条 watch 不会重跑。第一趟之所以正常，是因为那时是 `refreshBaseOptions` 自己做的首次自动选中。
+
+**收口**：我起的两个进程按 PID 定点停（`Get-CimInstance` 核对过命令行是 `uvicorn app.main:app --host 127.0.0.1 --port 8010` 与 `vite --port 5174` 才 `Stop-Process -Id`），8010/5174 现取 0 个监听；5173 那个不是我的，没碰。**残留**：库里留下 uid 23 这个一次性账号与它的 6 份演示简历——要删我按他点名执行。
+
+**边界（不粉饰）**：
+1. 主臂是**确认**读数，不是前后差分：修之前那个 await 悬挂着、同样不会弹 toast，所以"没弹"本身不区分 pre/post。区分性的证据在 D207 的变异（守卫退回旧写法真弹了 1 次），这一发证的是"修好之后在真栈里行为正确"。
+2. "await 真的落地了"在浏览器里仍然只能间接读：DOM 消失了、轮询停了，而 `running`/`taskStatus` 住在已销毁实例里读不到（D207 未验第 1 项那道仪器限制没变）。
+3. 这条链没有穿过一发真 provider 响应（两发 POST 被夹具接住）。
+4. **数 §10 的锚点会漂**：这一轮我先跑了一次"在册 35 / open 3"，是错的——`## 10` 因为前面追加了两条 D207 条目从 5479 移到了 5512，我把上一次的行号区间当成了固定值。按现取标题行（5512–5642）重跑才是 **在册 37 条、open 0**。以后跑这条要先 `grep -n "^## 10\.\|^## 11\."` 再算。
+
+**§10 计数**：没挂新项（那条界面不一致只写在这里，等他要不要修），在册 **37 条（1–25、28–39）、open 0**。
+
 
 
 
