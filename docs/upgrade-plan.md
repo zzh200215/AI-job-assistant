@@ -4918,6 +4918,40 @@ select count(*) from rewrite_suggestion_job
 
 **§10 计数**：没挂新项；按现取标题行（`## 10` 在 5563、`## 11` 在 5693）算得 **在册 37 条（1–25、28–39）、open 0**。
 
+#### 已查：D211 把 D203 那句"两跳之外没查"换成传递闭包图——18 条命中，比那张表多 7 条，其中一条是 `async` 的 WS
+
+**答案：漏了。** D203 的表 11 条，这台新图 **18 条**（`ROUTES_TOTAL 217`）。判据不是"我多找到几条"这种自证——脚本里钉了一条**必须覆盖 D203 那 11 行**的自检，现取 **11/11 OK**；覆盖不了就说明图是瞎的（第一版就是这样，只找到 5 条，跑了自检才发现）。
+
+**为什么那台两跳图会漏，两个原因都不是"深度不够"**：
+1. **WS 路由根本没进枚举**：`app.routes` 里 `WebSocketRoute` 没有 `methods` 属性，D203 那台按 `methods` 取端点 ⇒ 全仓唯一那条 `@router.websocket("/ws/interview/{session_id}")`（`interview_ws.py:86`）不在视野里。它一进枚举就翻出一条 **`async`** 命中。
+2. **类方法解析不到**：那台只认"模块级函数"。`CareerPathAgent().recommend`、`engine.finish()`、`MatchExplainer._llm_explain` 这一族在它那儿是断边。补上 `Foo().bar()`、`x = Foo()` 后 `x.bar()`（含跨模块 import 的类）、`Class.method` 三种形式，深度 3 与 5 自己就出来了。
+
+**新增的 7 条**：
+
+| 路由 | sync/async | 深度 | 到模型的那条链 |
+| --- | --- | --- | --- |
+| `WS /ws/interview/{session_id}` | **async** | 5 | `interview_ws.py:206 engine.finish()` → `interview_engine.py:324 finish` → `:327 _finish` → `:371 _generate_report` → `:411 FinalReportAgent()` → `answer_evaluation_agent.py:65 run_impl` → `:97 chat_json` |
+| `POST /api/interview/sessions/{session_id}/end` | sync | 5 | 同上那串 finish → 终报 |
+| `POST /api/analysis/explain-match` | sync | 3 | `match_explainer_service.py:200 MatchExplainer.explain` → `:476 _llm_explain` → `chat_json` |
+| `POST /api/career-path/recommend` | sync | 2 | `career_path_agent.py:152 CareerPathAgent.recommend` → `chat_json` |
+| `POST /api/v1/external/resume/parse` | sync | 2 | `external_service.py:58 parse_resume_text` → `chat_json` |
+| `POST /api/v1/external/match/evaluate` | sync | 2 | `external_service.py:84 evaluate_match` → `chat_json` |
+| `POST /api/v1/external/interview/simulate` | sync | 2 | `external_service.py:106 generate_interview_questions` → `chat_json` |
+
+**要紧的是第一条**：`async def` 的处理函数里同步等模型 ⇒ 卡的是**事件循环**（这个 worker 进程里所有连接、所有请求一起停），不是 anyio 那 20 根线程中的一根。所以 D203 那句"11 条全是 sync def、0 条 `async def` ⇒ 它们不卡事件循环"**只覆盖了 HTTP 面**，WS 面它没看过——那句话现在要按这个范围读。最坏时长按 D189 的公式 `120×(1+2)+1.5+3 = 364.5s`。
+
+**顺带纠正我自己仪器报的那条路径**：BFS 给 WS 报的最短路径走的是 `_evaluate_answer`（逐题评分）。回读代码后这条不成立——那一支要 `defer_evaluation=False`，而全仓唯一的调用点 `interview_ws.py:189` 传的是 `True`（走 `submit_turn_evaluation` 交给执行器，就是 D163 那条）。**今天可达的是 `finish()` 这一支**（`grep to_thread|run_in_threadpool|run_in_executor` 在 `interview_ws.py` 与 `interview_rest.py` 里 **0 命中**，所以它确实是裸的同步调用）。这条差值是仪器给不了的：静态图只说"图上可达"，不说"运行时可达"。
+
+**另外说一句外部面那三条**：`/api/v1/external/*` 是对外能力面。D203 那张表没点它，`nginx.conf` 那条注释（D203 换上去的"180s 保护的是这一族"）也只列了内部路由名 ⇒ 那条注释现在看不全，这是账要补的一处。
+
+**下界，不是全量**：`UNRESOLVED_EDGES 2718`。一跳未解析的绝大多数是 `db.query` / `Depends` / `payload.model_dump` / `router.post` 这类噪声（我逐条看过形态才这么说，不是猜），但**残余风险在**：某条路由的中途断边仍可能藏着一条到模型的路。所以 **18 是下界**。
+
+**仪器**：脚本在仓库外 `D:/AI/llmXM/_probes/llm_reach.py`（D203 的先例是"跑完即删"；这次留一份，是因为那条 11/11 的自检要能重跑，不然下一个人只能再猜一次图有没有瞎）。跑的时候 cwd 必须是 `backend/`，且 `ROUTES_TOTAL` 是从 `app.routes` 现取的（217 条含方法与 WS）。
+
+**没做的**：本轮**代码零改动**，前后端门禁没跑（没有可跑的改动面）；`backend/llm_reach.py` 那份临时副本已删，`git status` 干净。这条 `async` 卡循环是要修的，但它动的是面试收尾，三档修法各配了数，挂成 §10.40 等他点。
+
+**§10 计数**：**挂出第 40 条**（WS 收尾同步等模型这条）⇒ 在册 **38 条（1–25、28–40）、open 1**。
+
 
 
 
@@ -5709,6 +5743,14 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
     - 三条路：**① 补一条与 `:1301` 同形的空 content 判据**（一行级；把误诊换成真原因，且能触发兜底链。代价：兜底链再多打一发，最坏 91 + ? 秒，候选人对着 spinner 更久，而且备模型 glm-5.2 是不是也吃预算**未验**）。**② 给这一发设输出/思考预算**（真解；要先摸清那一边认哪个字段名 `max_tokens` / `thinking budget` / `reasoning_effort`，本机零证据，属要试的一发）。**③ 把它改成异步任务**（D188 就写明的正解：走已有 orchestration / TaskCenter，spinner 那 150 秒整个消掉；半径最大，动的是端点契约与前端两处调用点）。**我的读法：①是"别再误诊"，③才是"能用"，②能不能成取决于一发未花的探测。** **他点的是 ①**（2026-10-10），已由 D191 落地：空 content 判成 provider 失败、不进同型号重试、从而真的进兜底链，五个用例三个变异，backend 全量 902 passed。**代价如实写着**：最坏那一档现在多花一发备模型的时长（91s 量级），客户端 150s 仍会先断——因为 ② 与 ③ 都没点。**重开条件是可查的**：`prompt_trace` 里 `status='failed'` 且 `error_message LIKE '%空内容%'` 且 `degraded=1` ⇒ 主备同发都空答，① 救不了，必须回到 ② 或 ③。**同日他接着点了 ②，已由 D196 落地在"只这一发"那一层**：`chat_json(prompt, disable_thinking=True)` 只给 `build_rewrite_suggestions` 用，其余 34 个调用方的请求形状逐字不变；实测从 91.77s 空答降到 **4.58–12.08s**。**但这条没关掉"能不能出建议"**：走产品代码的五发采样采纳数是 **0 / 2 / 3 / 0 / 3**，且两种 0 成因不同（`skills` 那块被逐字照抄 vs 模型只答了 1 个块）。③ 仍挂着；D196 顺带量出一条便宜得多的路——单发既然只有 10s 量级，**全拒时再问一次**不必先把端点改成任务。**（同日他点了 B 档，③ 已由 D200 落地：新表 `rewrite_suggestion_job` + 建作业/轮询两条端点替掉那条同步的，"建议不落库"改成"不污染简历但存进作业表"并重新钉了一条测试。仍未验的是迁移没执行 ⇒ 真 provider 走新路径还没有读数。）**
     - **D200 之后接着量的一件事（D201/D202）**：迁移已执行（`20261010_0028 (head)`），真 provider 走新异步路径两臂都有读数（提交那一趟 **11–25 毫秒**、作业到终态 2.01s / 16.02s）；而"给需要推理的块单开思考链"这个提案**被 8 个样本否掉**——`skills` 在关思考链 6 发里照抄或漏答、开思考链 2 发里整块不提，**采纳 0/8**。他点 **A：接受现状，等样本**。
     - **这条的重开条件是可执行的**（D200 那张表就是采样器，不用另做仪器）：`select count(*) from rewrite_suggestion_job where json_search(suggestions,'one','skills',null,'$[*].block_id') is not null` —— **今天跑通、命中 0**；任何一次真跑让这一列非零，"开思考链救不了 `skills`"就被推翻。
+
+40. **面试收尾那条 WS 在 `async def` 里同步等模型，卡的是事件循环（2026-10-11 D211 传递闭包图现取；三条路都配了数）**
+    - 事实链（逐跳 `文件:行号`）：`interview_ws.py:86 async def interview_websocket` → `:206 result = engine.finish()`（在 `elif msg_type == "end":` 里，**没有 await、没有 threadpool**；`grep -E "to_thread|run_in_threadpool|run_in_executor"` 在 `interview_ws.py` 与 `interview_rest.py` 两个文件 **0 命中**）→ `interview_engine.py:324 finish` → `:327 _finish` → `:371 _generate_report` → `:411 FinalReportAgent()` → `answer_evaluation_agent.py:97 chat_json`。最坏时长按 D189 现量的公式 `120×(1+2)+1.5+3 = **364.5s**`。这一发跑起来，**同进程内所有 HTTP 请求与所有 WS 连接一起停**——不是只停他这一条连接。今天单副本（D127 那条守卫钉着 `replicas=1`），所以半径就是整个后端进程。
+    - 三条路：**① 不动**，只记成已知限制。代价 0，但"AI 降级对候选人静默"这条产品口径在这里不成立：被卡住的是**别人**的请求，不是他自己的。并且 D203 那句"11 条全是 sync `def`、0 条 `async def` ⇒ 不卡事件循环"要永久按"只覆盖 HTTP 面"来读。
+    **② 把 `finish()` 挪出事件循环**（`await anyio.to_thread.run_sync(...)`，项目已用 anyio、线程上限由 `core/threadpool.py` 钉成 20）。**它不是三行**，有一条实测拦路：`InterviewEngine.db` 是在 `_load_session`（`:55-56`）里懒建并**挂在实例上**的，而 WS 在循环线程里早就调过 `engine.init()` ⇒ 那个 Session 属于循环线程，而 SQLAlchemy 的 Session 不跨线程 ⇒ ② 必须让收尾那一趟**自带 session**（或在 worker 侧重建引擎）。做完它仍占 20 根线程里的一根（与另外 17 条同步路由同族），但不再卡循环。
+    **③ 照 `submit_turn_evaluation` 那套改成"落库 + 执行器 + 恢复重扫"**（同一文件 `interview_evaluation_service.py:101` 就是参照实现，恢复腿是 `requeue_stale_turn_evaluations`，startup 与调度器都跑）。这是三档里唯一把 364.5s **彻底移出请求生命周期**的，代价最大：WS 协议要加一型"报告生成中"的消息、前端收尾态要改成轮询、终报要有可幂等的落库行——**动的是三处协议/界面，不是一行**。
+    - 我的建议是 **②**：③ 会把"候选人收尾时看到什么"这个新问题端到你面前，而 ② 已经能止住"一个人点结束、全进程停摆"；②落地后可以再把 D211 那台图扩成一条门（判据：`async` 端点到 `chat_json` 的可达路径必须经过一次显式 thread handoff）。
+    - 重开/关闭条件：任一档落地即关闭本条；未落地之前，`nginx.conf` 的注释与 D203 那张表都要带着"WS 面未覆盖、另有 7 条未被那张表点名"这句读（清单在 D211）。
 
 ## 11. 附录：本方案未采纳的一条建议
 
