@@ -4783,7 +4783,7 @@ select count(*) from rewrite_suggestion_job
 
 **为什么这条不是新活**：D204 我自己记了"组件卸载后那个 `await` 永不落地、`finally` 里的 `loading = false` 不跑，要治得改共享轮询器"。这一步就是去治它，而不是把它当已知限制留着。
 
-**改了什么**（`src/utils/agentTaskPolling.js` 一处新增，默认值保持原行为）：`runtimeOptions.rejectOnStop = false`；打开时 `stopPolling()` 会用 `createPollingError('轮询已停止', 'polling_stopped')` 把在途的 promise 落地。改写建议那一发（`ResumeUpload.vue:685`）是唯一打开它的调用方；`AgentAnalysis`／`MultiAgentAnalysis`／`TaskCenter` 都走默认档，**行为一字不变**。
+**改了什么**（`src/utils/agentTaskPolling.js` 一处新增，默认值保持原行为）：`runtimeOptions.rejectOnStop = false`；打开时 `stopPolling()` 会用 `createPollingError('轮询已停止', 'polling_stopped')` 把在途的 promise 落地。改写建议那一发（`ResumeUpload.vue:685`）是唯一打开它的调用方；三个既有调用方都走默认档，**行为一字不变**。**（D206 更正：这一句原本点的是 `AgentAnalysis`／`MultiAgentAnalysis`／`TaskCenter`——那是我从 D193 子代理报告里抄来的，没验就是错的，那三个视图各有各的 `setTimeout`/`setInterval`、根本不碰这条轮询器。真的三个调用方是 `AnalysisResult.vue:388`、`SmartAnalysis.vue:532`、`useCareerPlanningRun.js:27`，全都经 `useAgentTaskPolling` 拿 poller。代码注释与测试注释已同步改正。）**
 
 **一处顺序是这次真正的坑**：`resolveWith`／`rejectWith` 里原来第一件事就是 `stopPolling()`。如果不在它们前面先立"已落地"的位，**成功那一发会被自己的停表逻辑改判成拒绝**——即 `rejectOnStop: true` 一开，跑完的任务反而报错。所以 `settled` 位先立、再停表，并且专门为这条写了一例（第三个测试：开着 `rejectOnStop` 时 `completed` 仍要 `resolve`）。**这类"新开关把老路径打歪"的形状，只有专门一例能抓住**，注释抓不住。
 
@@ -4793,7 +4793,27 @@ select count(*) from rewrite_suggestion_job
 
 **门禁**：前端 **92 files / 613 passed**、`npm test` **36 pass / 0 fail**（前值 33）、`lint` 0 error / 1 warning（既有的 `paidOrders`）、`format:check` clean、`vite build` exit 0、包体积 **2210.07 → 2210.20 kB（+0.13）**；后端零改动。
 
-**没做的**：没把默认档也改成"停止即落地"。那会让另外三个调用方在卸载时各自多走一条 `catch` 分支（它们现在没有），是行为改动而不是修 bug——要改得单独一次，并且先看那三个视图的 `catch` 会不会把"取消"显示成"失败"。
+**没做的**：没把默认档也改成"停止即落地"。那会让另外三个调用方在卸载时各自多走一条 `catch` 分支（它们现在没有），是行为改动而不是修 bug——要改得单独一次，并且先看那三个视图的 `catch` 会不会把"取消"显示成"失败"。**（这句"先看"当天就做完了，见 D206。）**
+
+#### 已查：D206 那三个视图取消时的表现——没有一处把"取消"显示成"失败"，但先纠正了我自己点错的三个名字
+
+**先纠错**（同一类毛病第二次）：D205 我写"三个既有调用方是 `AgentAnalysis`／`MultiAgentAnalysis`／`TaskCenter`"——那是从 D193 子代理报告里抄的，**我没验就写了**。现取：那三个视图各自用 `setTimeout(pollSteps, 1500)`／`setTimeout(pollDetail, 1500)`／`setInterval(loadTasks, 10000)`，**根本不 import 这条轮询器**。真正的三个调用方是 `AnalysisResult.vue:388`、`SmartAnalysis.vue:532`、`useCareerPlanningRun.js:27`（都经 `useAgentTaskPolling` 拿 poller）。代码与测试的注释已同步改正——**注释里点错一个不存在的调用方比没注释更坏**：下一个人会去那两个文件里找一段不存在的逻辑。
+
+**问题本身的答案：三处都各自处理了"取消"，没有一处显示成失败。**
+
+| 调用方 | 取消怎么落 | 具体判据 |
+| --- | --- | --- |
+| `SmartAnalysis.vue:756` | `onCancelled` → `taskOutcome='cancelled'` + `ElMessage.warning('分析任务已取消')` | 与 `onFailed`（error 级、文案带"失败"）是**两条分开的回调** |
+| `AnalysisResult.vue:570` | 同上：`onCancelled` → warning，`onFailed` → error | 同上 |
+| `useCareerPlanningRun.js:114` 与 `:125` | `onCancelled()` 置 `taskStatus='cancelled'`；外层 `catch` 写的是 `error?.code === 'task_cancelled' ? 'cancelled' : 'failed'` | 连"被 catch 兜住"那一层都按 code 分了流 |
+
+**顺带量到三件事**：
+1. **`KeepAlive` 全仓 0 处**（`grep -rn "KeepAlive\|keep-alive" src/` 无命中）⇒ 路由换页必走 `onUnmounted` ⇒ `useAgentTaskPolling.js:16` 那句 `onUnmounted(poller.stopPolling)` 真的会跑，所以**不存在"导航走了还在后台打接口"**。我原先担心"翻面就停不下来"，答案是停得下来。
+2. 但**同一个悬挂 await 的毛病这三处都有**（默认档下 `stopPolling()` 不落地）：跑到一半被卸载 ⇒ 它们的 `finally { loading/running = false }` 永不执行。查下来**良性**：`running`/`loading` 都是建在组件 setup（或 composable 的一次调用）里的 `ref()`，随实例一起消失；又没有 KeepAlive ⇒ 不会出现"下次进来按钮还在转"。**所以把默认档翻过来今天没有任何收益，只有代价**（三处各多走一条 `catch`，其中 `useCareerPlanningRun` 那条会把"卸载"错标成 `taskStatus='failed'`）。维持 D205 的开关式做法。
+3. 还有一条不是"未验"而是"根本没有入口"：`cancelAgentTask` 全仓只有 `TaskCenter.vue:251` 一个调用方，而 TaskCenter 用的是自己的 10 秒列表轮询、不接这条 poller ⇒ **分析／规划那三个页面上没有"取消任务"的按钮**。也就是说上表那三个 `onCancelled` 分支只在"任务被别处取消、而你恰好还挂着轮询"时才走得到——**这条分支今天没有被任何测试或屏幕覆盖**（我没为它写用例：没有可点开的入口，测它只能测一个手搭的假场景）。
+
+**验收**：只改注释与台账（`agentTaskPolling.js`、`agentTaskPolling.test.mjs` 各一处注释），`node --test tests/agentTaskPolling.test.mjs` **36 pass**、`vitest run` **92 files / 613 passed**、`format:check` clean；产品行为零改动。
+
 
 
 

@@ -100,8 +100,8 @@ test('pollTask retries after a transient polling error and still resolves', asyn
 })
 
 /* D204 新增的 `rejectOnStop`：两个方向都要钉。默认那一半是**既有三个调用方**
-   （AgentAnalysis / MultiAgentAnalysis / TaskCenter）现在的行为，改它等于改它们；
-   开了的那一半是改写建议那一发要的"卸载即落地"。 */
+   （AnalysisResult / SmartAnalysis / useCareerPlanningRun，全走 useAgentTaskPolling）现在的行为，
+   改它等于改它们；开了的那一半是改写建议那一发要的"卸载即落地"。 */
 function neverEndingPoller() {
   return {
     async getAgentTask() {

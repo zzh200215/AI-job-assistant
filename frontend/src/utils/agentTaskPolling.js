@@ -21,8 +21,9 @@ export function createAgentTaskPoller(apiClient, runtimeOptions = {}) {
     /**
      * D204 量到的那件小事的开关：`stopPolling()` 原来只是清表，**不落地**那个 `await`，
      * 所以调用方（组件卸载时）等下去的 promise 永不 settle，它后面的 `finally` 也就永不跑。
-     * 默认 `false` —— 保持既有三个调用方（`AgentAnalysis`／`MultiAgentAnalysis`／`TaskCenter`）
-     * 的行为逐字不变。需要"停止即结束"的调用方自己打开。
+     * 默认 `false` —— 保持既有三个调用方（`AnalysisResult.vue:388`、`SmartAnalysis.vue:532`、
+     * `useCareerPlanningRun.js:27`，都经 `useAgentTaskPolling` 拿同一个 poller）的行为逐字不变。
+     * 需要"停止即落地"的调用方自己打开。
      */
     rejectOnStop = false,
   } = runtimeOptions
