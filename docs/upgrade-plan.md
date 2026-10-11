@@ -4673,7 +4673,7 @@ D21 那行写下的是"`Privacy`(2) 的覆盖与 `panels.css` 只差 1px padding
 1. ~~**迁移没执行**~~ —— **同日他点了"跑"**：`alembic upgrade head` 执行，`alembic current` 现取 **`20261010_0028 (head)`**，表 16 列 / 4 条索引、ORM 与库**零漂移**；新的异步路径也跑了真 provider（读数见下面 D201）。
 2. ~~**pending→completed 那一跳在视图层仍没被测过**~~ —— **同日 D204 补上了**：`resumeRewriteJobPolling.test.js` 4 条挂载用例（running 期间 spinner 亮且卡片不许提前出现／失败时哨兵字符串上不了屏／卸载后不再打接口／在途重复点击只建一个作业）。
 3. 全仓**其余仍在同步等模型的路由没有重新清点**，所以 nginx 那 180s 保留、注释里明写它现在保护的是那一族、而那一族是谁未验。
-4. `REWRITE_JOB_MAX_WORKERS=2` 是按连接池推的数，**不是压测出来的吞吐**；`threadpool.py:32` 那个 limiter 只在进程内生效，跨副本不设防（与 D175 调度槽位同一族）。
+4. ~~`REWRITE_JOB_MAX_WORKERS=2` 是按连接池推的数，**不是压测出来的吞吐**~~ —— **同日 D214 量完了，结论不变**：8 个作业在 W=1/2/4/8 下墙钟 85.73 / 42.89 / 21.48 / 10.80 秒，严格线性，rate = W/单发；观测 `pool.checkedout()` 峰值 = W+1。2 是**池子给 HTTP 留余量**的下界，不是吞吐下界（数字都在 D214）。后半句仍然成立：`threadpool.py:32` 那个 limiter 只在进程内生效，跨副本不设防（与 D175 调度槽位同一族）。
 
 **§10 计数**：没挂新项；仍在册 **37 条（1–25、28–39）、open 0**，第 39 条补记"③ 已由 D200 落地"。
 
@@ -5012,6 +5012,32 @@ rollback() 之后          checkedout=0
 3. `handle_answer` 那条腿在测试里没跑真路（它会 `submit_turn_evaluation` 投进执行器），只测了 start/ping/skip。
 
 **验收**：`pytest`（backend 全量）**924 passed**；`ruff check .` All checks passed；`ruff format --check .` 367 files already formatted；面试三文件 **54 passed**；清点脚本仍只在仓库外。
+
+**§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+
+#### 已量：D214 `REWRITE_JOB_MAX_WORKERS=2` 现在有吞吐数了——零模型花费，线性到 W=8，结论是不改
+
+**为什么能量得零花费**：这一条要的不是模型的真实性状，是**队列与池子的形状**，所以把那一发换成 `time.sleep(10.68)`（D201 实测关思考链那一臂的 p50），桩打在**引用处** `rewrite_job_service.build_rewrite_suggestions`（D200 那条教训：打在服务模块上等于打空枪）。DB 走真 MySQL 开发库，作业行挂在探针账号 uid 23 名下，跑完自己删。脚本在仓库外 `_probes/rewrite_job_throughput.py`。
+
+**读数**（每档 K=8 个作业，`settings.REWRITE_JOB_MAX_WORKERS` 改完 `shutdown_rewrite_job_executor()` 让下一批重新建池）：
+
+| W | 墙钟 (s) | 最慢一发 (s) | rate (job/s) | 观测 `pool.checkedout()` 峰值 |
+| --- | --- | --- | --- | --- |
+| 1 | 85.73 | 85.0 | 0.093 | 2 |
+| 2 | 42.89 | 43.0 | 0.187 | 3 |
+| 4 | 21.48 | 22.0 | 0.372 | 5 |
+| 8 | 10.80 | 11.0 | 0.741 | 9 |
+
+三件事由此成立：① **严格线性**（85.73/10.80 = 7.94，8 倍线程几乎 8 倍吞吐）——这一路上没有可测的争用；② rate 就等于 `W / 单发时长`（W=2 实测 0.187，理论 2/10.68 = 0.187）；③ **`checkedout` 峰值 = W+1**，把 D200 那句"作业在等模型的那段时间里，它那条 Session 仍占着一个连接"从推理变成了读数。
+
+**结论：2 不改，但理由要说准**。把前端那 150s 轮询预算（`REWRITE_JOB_POLL_MAX_ATTEMPTS 75 × 2000ms`）折回来，W=2 时最慢一发 43s，预算内能接的并发是 **26 发**；就算按 D201 量到的最坏单发 16.02s 重算，也还有 **18 发**。这进程是单副本（D127 的守卫钉着 `replicas=1`）、候选人侧要同时点出 18–26 发改写，HTTP 那 20 根 anyio 线程早就先饱和了。所以 **2 是"给 HTTP 留余量"的下界，不是吞吐下界**——D200 那句话方向对、缺数，现在数有了，配置注释里也写进去了。
+
+**这台仪器量不到的（别拿它当压测报告）**：
+1. 单发被换成**恒定** 10.68s；真队列在方差下更差（D201 的区间是 4.58–16.02s），"26 发"这个数用的是 p50 口径，16.02s 那一档是**算术**不是实测。
+2. 只驱动了 rewrite 这一池。同一进程里还有 `INTERVIEW_EVALUATION_MAX_WORKERS=2`、`orchestration_backend.py:82` 那个 thread 兜底池、以及 `orchestration/strategies.py:632` 每跑一次开一个 `max_workers=len(agent_names)` 的池——它们与 anyio 那 20 根**共享同一个 20 连接的池**，合起来会不会把 `pool_timeout=30s` 触发，**没测**。这条是下一个可做的量。
+3. 没测真模型下的行为（429 排队、退避、以及 D201 那次撞过的限流），也不打算测——花钱。
+
+**验收与现场清理**：`pytest tests/test_rewrite_job.py` **11 passed**；backend 全量 **924 passed**（改动只是注释与本台账，仍跑了一遍全量，不拿"应该不影响"当验收）；`ruff check .` All checks passed；`ruff format --check .` 367 files already formatted。脚本收尾打印 `CLEANED_ROWS 32`、`REMAINING_ROWS_FOR_UID_23 0`（四次配置各 8 行），`FINAL_pool ... Checked out connections: 0`。**没动产品代码**，所以本轮没有行为改动需要新腿。
 
 **§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
 
