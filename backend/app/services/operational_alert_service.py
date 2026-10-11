@@ -21,6 +21,7 @@ def collect_operational_alerts(
     model_runtime: dict[str, Any],
     queue_health: dict[str, Any],
     runtime_metrics: dict[str, Any],
+    db_pool: dict[str, Any],
 ) -> list[dict[str, Any]]:
     """Return the currently breached alert conditions without writing state."""
     now = utc_now()
@@ -163,6 +164,59 @@ def collect_operational_alerts(
                     "error_requests": error_requests,
                     "error_rate": round(error_rate, 4),
                     "threshold": settings.OPERATIONS_ALERT_HTTP_ERROR_RATE_THRESHOLD,
+                },
+            )
+        )
+
+    # D218：连接池排队。两条分开判，因为后果不同——p95 高是"用户在等但会成功"，
+    # 越过 `DB_POOL_TIMEOUT` 是"已经抛 TimeoutError 了"（路由 500 / 后台作业 failed）。
+    # D215 实测掺进 2 个后台作业后最差等待 11.73s，而当时**没有任何一条规则会因此变红**：
+    # 池子只用到 16/20（不是贴住 capacity 那种形状），HTTP 错误率也没动。这一对就是补那个盲区。
+    pool_samples = int(db_pool.get("samples") or 0)
+    p95 = db_pool.get("p95_seconds")
+    pool_threshold = settings.OPERATIONS_ALERT_DB_ACQUIRE_P95_SECONDS
+    if p95 is not None and pool_samples >= settings.OPERATIONS_ALERT_DB_ACQUIRE_MIN_SAMPLES and p95 >= pool_threshold:
+        alerts.append(
+            _alert(
+                "db_pool_acquire_slow",
+                "warning",
+                "数据库连接池取连接排队",
+                f"最近一段窗口里，取连接等待的 p95 已达 {p95}s（阈值 {pool_threshold}s）。"
+                "请求还没失败但都在等：先核 DB_POOL_SIZE + DB_MAX_OVERFLOW 与同进程内的后台并发"
+                "（rewrite / 逐题评分 / 面试 WS 抢的是同一口池子）。",
+                {
+                    "p95_seconds": p95,
+                    "avg_seconds": db_pool.get("avg_seconds"),
+                    "samples": pool_samples,
+                    "window_seconds": db_pool.get("window_seconds"),
+                    "checked_out": db_pool.get("checked_out"),
+                    "capacity": db_pool.get("capacity"),
+                    "threshold_seconds": pool_threshold,
+                    "min_samples": settings.OPERATIONS_ALERT_DB_ACQUIRE_MIN_SAMPLES,
+                },
+            )
+        )
+
+    timeout_samples = int(db_pool.get("over_pool_timeout_samples") or 0)
+    timeout_seconds = db_pool.get("pool_timeout_seconds")
+    if timeout_samples >= settings.OPERATIONS_ALERT_DB_TIMEOUT_SAMPLES:
+        alerts.append(
+            _alert(
+                "db_pool_acquire_timeout",
+                "critical",
+                "取连接等待越过池超时阈值",
+                f"最近一段窗口里有 {timeout_samples} 次取连接等待超过 DB_POOL_TIMEOUT={timeout_seconds} —— "
+                "那几次直接抛 TimeoutError，对应的是接口 500 或后台作业 failed，不是慢。"
+                "先按 D215 那张表核对谁在占连接：rewrite / 逐题评分 / 面试 WS 与 HTTP 抢的是同一口池子。",
+                {
+                    "over_pool_timeout_samples": timeout_samples,
+                    "pool_timeout_seconds": timeout_seconds,
+                    "samples": pool_samples,
+                    "p95_seconds": p95,
+                    "window_seconds": db_pool.get("window_seconds"),
+                    "checked_out": db_pool.get("checked_out"),
+                    "capacity": db_pool.get("capacity"),
+                    "threshold": settings.OPERATIONS_ALERT_DB_TIMEOUT_SAMPLES,
                 },
             )
         )

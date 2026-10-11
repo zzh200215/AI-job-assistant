@@ -5107,11 +5107,37 @@ p50 一致、p95 差 6µs，**在这口池的抖动里量不出稳定差别**。
 
 **验收**：backend 全量 **929 passed**（927 + 2 条新腿）；`ruff check .` All checks passed；`ruff format --check .` 367 files already formatted；`test_prometheus_metrics.py` **11 passed**。
 
-**§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+**§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。（这一行在 D217 提交时被重复写进了三遍，D218 一并删掉两遍——重复的那两条没有内容差异，只是同句复制。）
 
-**§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+#### 已交付：D218 把"取连接等了多久"接进运维告警——判据读的是两次评估之间的增量，不是自启动的累计
 
-**§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+**为什么还差这一步**：D217 的 未验② 写的是"谁来抓、多久抓一次仍未定"。他点的是先把**告警**这一半接上（调度器那 5 分钟一拍已经在跑 `build_operational_alert_snapshot`，7 条规则里没有一条看得见池子）。指标没有判据就只是图上一条线，D215 那个 11.73s 到今天为止仍然只存在于一份一次性脚本里。
+
+**判据为什么不能直接读累计**：`prometheus_client` 的桶只增不减，`p95 > 1s` 对累计成立的话会在**第一次越过之后永远红**。所以 `db_pool_window()` 维护一份"上一次读取"的基线（桶累计值 + count + sum + 单调时钟），报的是两次读取之间的增量；读到 count 变小（进程重启、指标被重建）时没有东西可减，退回"把累计当增量"并把 `window_seconds` 报成 `None`，把这个不确定性写给读的人看。
+
+**两条规则，后果不同所以不合并**：
+- `db_pool_acquire_slow`（warning）——窗口里 p95 ≥ `OPERATIONS_ALERT_DB_ACQUIRE_P95_SECONDS=1.0` 且样本 ≥ `OPERATIONS_ALERT_DB_ACQUIRE_MIN_SAMPLES=20`。请求还在成功，但都在等。
+- `db_pool_acquire_timeout`（critical）——有样本越过 `DB_POOL_TIMEOUT=30` 就醒，一次即醒（阈值为 1）。那几次抛的是 TimeoutError，对应接口 500 / 后台作业 failed，不是"慢"。
+
+1.0s 这条线两头都有数：D217 量到空闲 **0.0003s**、D215 掺进 2 个后台作业最差 **10.68–11.73s**，1s 在两者之间留出一个数量级。最小样本量那条守卫是因为 p95 是小样本统计量——一个窗口只有 3 次取连接时它等于那次的最大值，不构成门；这条刻意**不复用** `OPERATIONS_ALERT_MIN_REQUESTS`（那条数 HTTP 请求，这条数取连接，一拍定时任务就能只贡献后者）。
+
+**现量（真 MySQL 池，只读 `SELECT 1`，不写库）**：23 根线程抢容量 20 的池，每根占住 0.25s ⇒ `samples=23`、`window_seconds=0.531`、`p95_seconds=0.4042`、`avg_seconds=0.0482`、`over_pool_timeout_samples=0`。**这一窗不报警，是设计意图**（3/23 排了 0.25s 不是运维事件）。顺带把桶内插值的性质量出来了：真实最长排队约 0.25s，插值报 0.4042 —— 与 Prometheus `histogram_quantile` 同一套算法，报的是**档内估计**不是测量值；阈值 1s 远大于相关档宽（0.25→0.5），判据不受它影响。落在 `+Inf` 档时不假装能插值，报该档下界（`60.0`，意思是"至少这么久"）。
+
+**读取代价量了**：`db_pool_window()` **0.026 ms/次**，同机对照一次真取连接 + `SELECT 1` 是 **0.518 ms** ⇒ 每 5 分钟一次的这一读约等于一次普通 DB 往返的 5%。
+
+**改了什么**：`prometheus_metrics.py` 加 `db_pool_window()` / `reset_db_pool_window()`（基线在锁内换）、把容量式子抽成 `_configured_pool_capacity()` 让 D216 那根 Gauge 与这一读共用一份；`operational_alert_service.collect_operational_alerts` 多一个必填 `db_pool` 入参与上面两条规则；`build_operational_alert_snapshot()` 多喂 `"db_pool"`；`config.py` 三条新阈值（未进 env 示例文件——那里本来就不列 `OPERATIONS_ALERT_*`，默认值即生效）。
+
+**测试**：新增 `tests/test_db_pool_acquire_alert.py` **7 条**（含一条真池→真 histogram→规则的整链腿，和一条"真 builder 的产出直接喂真评估函数、再评估一次不新增行"的调度器路径腿）；`tests/test_prometheus_metrics.py` **11 → 16 条**（窗口增量、指标重建不读负数、timeout 桶界、`+Inf` 报下界、**桶表变了不许 KeyError**）。**9 发变异各打红对应的那一条**：不读增量 / `+Inf` 返回 `inf` / 桶界取严格小于 / 仪器把等待记成 0 / 拆掉最小样本量 / 拆掉 critical / builder 不再喂 `db_pool` / 阈值判据恒真 / 去掉桶表变化那条判据。变异脚本与还原断言在仓库外 `D:/AI/llmXM/_probes/d218_mutations.py`（每刀先断言锚点恰好出现一次，落不进文件就报 SKIP 而不是假绿——第一版我拿带行尾符的锚点去撞 CRLF 的 `prometheus_metrics.py`，就是这样被 SKIP 抓住的，换成不含行尾符的锚点后才有牙）。
+
+写最后那条腿时才发现 `db_pool_window()` 里有一条能崩的路：桶表与基线对不上时（改桶、指标被重建）按基线取数会抛 KeyError，而这一读挂在调度器上——**症状是每 5 分钟静默失败一次、告警表一个字不动**，比漏报糟得多，所以判据补了"桶表变了就整份当没有基线"。
+
+**顺带修掉一条仪器缺陷（不是产品缺陷）**：`test_llm_degraded_visibility.py` 那条计数器腿在文件顶部 `from ... import REGISTRY`，而 D217 加的 autouse 夹具会 reload 指标模块、换掉整份注册表 ⇒ 只要不按字母序指定文件就红（本轮我在命令行上先跑 `test_prometheus_metrics.py` 就撞到了）。改成从当下的模块对象取 `m.REGISTRY`，两种文件顺序各跑一遍都绿。
+
+**未验**：① **射程只有一个进程**：`redis_queue` 后端下编排在 `scripts/run_orchestration_worker.py` 里跑（现取该脚本：只 import runner，不起调度器），那份进程自有一口池与一只 histogram，既没有调度器也没有 `/metrics` ⇒ **worker 的排队不会响**。"API 进程 = 全部 HTTP 流量"这个前提由 `test_single_process_shape_is_pinned.py` 盯着，副本/worker 一旦 >1，这一读就只代表其中一个进程。② 手工 `POST /system/alerts/evaluate` 与调度器共用同一份基线，手点一次会把下一拍的窗口切短——记进 builder 的 docstring，当作已知语义而不是缺陷。③ **从没在真过载下跑过**：`db_pool_acquire_timeout` 这条 critical 只有夹具读数，一次真实的 >30s 等待（连 `TimeoutError` 一起）没在活体上制造过。④ Prometheus 抓取那一半仍未定（`require_metrics_reader` 只保证不是谁都能看，不保证有人在看）。
+
+**验收**：backend 全量 **939 passed**（929 + 10 条新腿）；`ruff check .` All checks passed；`ruff format --check .` 368 files already formatted。
+
+**§10 计数**：没挂新项（这一刀是 D216"先上可观测"那条决定的收尾，不是新的待拍板事项）；现取标题行（本次跑出来的区间是 `## 10.` 在 5802、`## 11.` 在 5940，**这两个数每次往上加一条交付都会漂，别沿用**）重算仍是 **在册 38 条（1–25、28–40）、open 0**。仍等他点的池子尺寸那一档（保持 20 / 抬池子 / 把 anyio 顶压到 16）——D216/D217/D218 把这三条路都变成了有数可查的，没有替他选。
 
 
 

@@ -24,6 +24,8 @@ def _snapshot(*, ready: bool) -> dict:
         },
         "queue_health": {"ok": True, "backend": "thread", "queue_length": 0},
         "runtime_metrics": {"total_requests": 0, "error_requests": 0},
+        # 空窗口：D218 那两条池子规则不该被这个夹具点燃
+        "db_pool": {"samples": 0, "p95_seconds": None, "over_pool_timeout_samples": 0},
     }
 
 

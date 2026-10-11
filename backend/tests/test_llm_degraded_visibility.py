@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from app.core.prometheus_metrics import REGISTRY
 from app.core.security import hash_password
 from app.models.prompt_trace import PromptTrace
 from app.models.user import User
@@ -21,6 +20,8 @@ _SNAPSHOT_OK = {
     "model_runtime": {"ready": True, "llm": {"mode": "live"}, "embedding": {"mode": "live"}},
     "queue_health": {"ok": True, "backend": "thread", "queue_length": 0},
     "runtime_metrics": {"total_requests": 0, "error_requests": 0},
+    # 空窗口：D218 那两条池子规则不该被这个夹具点燃
+    "db_pool": {"samples": 0, "p95_seconds": None, "over_pool_timeout_samples": 0},
 }
 
 
@@ -180,10 +181,13 @@ def test_degraded_and_trace_failure_counters_exist():
     m.record_llm_degraded_response(provider="qwen", model="qwen-turbo", response_source="mock")
     m.record_prompt_trace_write_failure("chat_json")
 
-    degraded = REGISTRY.get_sample_value(
+    # 从**当下那个**模块对象上取 REGISTRY：`test_prometheus_metrics.py` 的 autouse 夹具会 reload
+    # 指标模块并换掉整份注册表，文件顶部 import 进来的那个名字在那之后就是旧的（全量跑按字母序
+    # 碰不到，单独指定文件顺序就会红）。
+    degraded = m.REGISTRY.get_sample_value(
         "llm_degraded_responses_total",
         {"provider": "qwen", "model": "qwen-turbo", "response_source": "mock"},
     )
-    failures = REGISTRY.get_sample_value("prompt_trace_write_failures_total", {"stage": "chat_json"})
+    failures = m.REGISTRY.get_sample_value("prompt_trace_write_failures_total", {"stage": "chat_json"})
     assert degraded is not None and degraded >= 1
     assert failures is not None and failures >= 1

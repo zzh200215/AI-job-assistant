@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import math
 
 import pytest
 
@@ -264,3 +265,128 @@ def test_pool_connect_wrap_records_the_queue_wait():
     waited = after_sum - baseline_sum
     assert observed >= 2, f"包住之后没记下任何样本（observed={observed}）"
     assert waited >= 0.29, f"没量到那截 0.3 秒的排队：sum 只增加了 {waited:.4f}s"
+
+
+# ------------------------------------------------- D218：告警要的是"两次读取之间"而不是累计
+
+
+def test_the_window_is_the_delta_between_reads():
+    """累计桶判阈值会在第一次越过之后永远红——这条盯的就是"不许 latch"。
+
+    第二段时间里只有那发 5s 的等待，p95 必须回到 5s 那一档，而不是继续报上一段的结果。
+    """
+    from app.core import prometheus_metrics as m
+
+    m.reset_db_pool_window()
+    for _ in range(3):
+        m.db_pool_connection_acquire_seconds.observe(0.0004)
+    first = m.db_pool_window()
+
+    m.db_pool_connection_acquire_seconds.observe(5.0)
+    second = m.db_pool_window()
+
+    assert first["samples"] == 3, first
+    assert first["window_seconds"] is None, "第一次读没有基线，窗口长度要如实报 None"
+    assert second["samples"] == 1, second
+    assert second["window_seconds"] is not None and second["window_seconds"] >= 0
+    assert second["p95_seconds"] > first["p95_seconds"], (first, second)
+    assert 2.5 < second["p95_seconds"] <= 5.0, second
+
+
+def test_a_rebuilt_histogram_does_not_read_negative(monkeypatch):
+    """计数器变小 = 进程重启/指标被重建（`REGISTRY` 会被测试与热重载换掉）。
+
+    这时候没有东西可减：把累计当增量报，而不是让 p95 变成 None 之外的任何负数形状。
+    """
+    from prometheus_client import Histogram
+
+    from app.core import prometheus_metrics as m
+
+    m.reset_db_pool_window()
+    for _ in range(4):
+        m.db_pool_connection_acquire_seconds.observe(0.4)
+    m.db_pool_window()  # 基线里存下 4 个样本
+
+    old = m.db_pool_connection_acquire_seconds
+    # 桶界从旧的那根读出来，不在测试里抄第二份表（抄了就会和承重的那份分叉）
+    bounds = [
+        float(sample.labels["le"])
+        for metric in old.collect()
+        for sample in metric.samples
+        if sample.name.endswith("_bucket")
+    ]
+    bounds = [bound for bound in bounds if math.isfinite(bound)]
+    fresh = Histogram("db_pool_connection_acquire_seconds", "replacement", buckets=bounds, registry=None)
+    fresh.observe(0.4)
+    monkeypatch.setattr(m, "db_pool_connection_acquire_seconds", fresh)
+
+    window = m.db_pool_window()
+    assert window["samples"] == 1, window
+    assert 0.25 < window["p95_seconds"] <= 0.5, window
+
+
+def test_a_changed_bucket_table_is_treated_as_no_baseline(monkeypatch):
+    """桶表变了（改桶、指标被重建）时不许 KeyError。
+
+    这一读挂在调度器上：那里抛异常的后果是每 5 分钟静默失败一次、告警表一个字不动，
+    比漏报一条告警糟得多。
+    """
+    from prometheus_client import Histogram
+
+    from app.core import prometheus_metrics as m
+
+    m.reset_db_pool_window()
+    m.db_pool_connection_acquire_seconds.observe(0.4)
+    m.db_pool_window()  # 基线里存下原来那张桶表
+
+    old = m.db_pool_connection_acquire_seconds
+    bounds = [
+        float(sample.labels["le"])
+        for metric in old.collect()
+        for sample in metric.samples
+        if sample.name.endswith("_bucket") and sample.labels["le"] != "+Inf"
+    ]
+    widened = Histogram(
+        "db_pool_connection_acquire_seconds",
+        "wider table",
+        buckets=[*bounds, 120.0],
+        registry=None,
+    )
+    for _ in range(5):
+        widened.observe(0.4)
+    monkeypatch.setattr(m, "db_pool_connection_acquire_seconds", widened)
+
+    window = m.db_pool_window()
+    assert window["samples"] == 5, window  # 没有基线可减 ⇒ 累计即增量
+    assert window["window_seconds"] is None, window
+
+
+def test_only_waits_past_db_pool_timeout_land_in_the_timeout_count():
+    """`over_pool_timeout_samples` 的边界：29s 不算越线，45s 算。
+
+    45s 落在 (30, 60] 那一档，而这一档的下界已经高于 `DB_POOL_TIMEOUT=30` —— 这正是"越过池超时
+    的那几次"，判据取的是"最后一个 le <= 30 的桶之上"，所以桶表里 30.0 这一档是承重的。
+    """
+    from app.core import prometheus_metrics as m
+
+    m.reset_db_pool_window()
+    m.db_pool_connection_acquire_seconds.observe(29.0)
+    assert m.db_pool_window()["over_pool_timeout_samples"] == 0
+
+    m.reset_db_pool_window()
+    m.db_pool_connection_acquire_seconds.observe(45.0)
+    window = m.db_pool_window()
+    assert window["over_pool_timeout_samples"] == 1, window
+    assert window["pool_timeout_seconds"] == 30.0, window
+
+
+def test_a_quantile_inside_the_open_bucket_reports_its_lower_bound():
+    """+Inf 那一档没有上界：报下界（"至少 60s"）而不是假装能插出一个精确值。"""
+    from app.core import prometheus_metrics as m
+
+    m.reset_db_pool_window()
+    m.db_pool_connection_acquire_seconds.observe(500.0)
+    window = m.db_pool_window()
+
+    assert window["p95_seconds"] == 60.0, window
+    assert window["over_pool_timeout_samples"] == 1, window

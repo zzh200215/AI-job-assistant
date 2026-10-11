@@ -135,6 +135,18 @@ class Settings(BaseSettings):
     OPERATIONS_ALERT_TRACE_WRITE_FAILURE_THRESHOLD: int = 1
     OPERATIONS_ALERT_MIN_REQUESTS: int = 20
     OPERATIONS_ALERT_HTTP_ERROR_RATE_THRESHOLD: float = 0.15
+    # D218：取连接排队（`db_pool_connection_acquire_seconds`，D217 装的仪器）进告警。
+    # 1s 这条线来自 D215 的实测：掺进 2 个后台作业之后最差等待 10.68–11.73s，而**没有任何**
+    # 一条现有规则会因此变红（池子还是 16/20，HTTP 错误率也没动）。1s 在"空闲 0.0003s"与
+    # "排队 11s"之间，留出一个数量级的余量。
+    OPERATIONS_ALERT_DB_ACQUIRE_P95_SECONDS: float = 1.0
+    # p95 是小样本统计量：一个窗口只有 3 次取连接时，p95 就等于那一次的最大值，不构成门。
+    # 20 与 `OPERATIONS_ALERT_MIN_REQUESTS` 同量级但**故意不是同一个设置**——那条数的是 HTTP 请求，
+    # 这条数的是取连接次数，一条定时任务一拍就能贡献后者而不贡献前者。
+    OPERATIONS_ALERT_DB_ACQUIRE_MIN_SAMPLES: int = 20
+    # 越过 `DB_POOL_TIMEOUT` 的等待 = 直接抛 TimeoutError（路由 500 / 后台作业 failed），
+    # 一次就要醒：它是"已经在丢请求"，不是"有点慢"。
+    OPERATIONS_ALERT_DB_TIMEOUT_SAMPLES: int = 1
 
     # AI release governance. Every configured report type must have current, thresholded evidence.
     AI_RELEASE_REQUIRED_EVALUATION_TYPES: str = "rag,agent,recommend"

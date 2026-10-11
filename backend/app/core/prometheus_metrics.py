@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import math
 import time
+from threading import Lock
+from typing import Any
 
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
@@ -175,6 +178,13 @@ def _pool_stat(name: str) -> int:
     return int(fn()) if callable(fn) else -1
 
 
+def _configured_pool_capacity() -> int:
+    """池子容量。按设置算，不借用 `configured_thread_limit()`：D215 的结论正是"这两个数今天相等，
+    但那是巧合不是定义"。谁以后把线程顶改成 `20 − 后台并发`，这里仍要说池子的真话。
+    """
+    return max(1, int(settings.DB_POOL_SIZE)) + max(0, int(settings.DB_MAX_OVERFLOW))
+
+
 def refresh_db_pool_gauges() -> None:
     """每次抓取前刷新池子三个数。`prometheus_client` 没有 GaugeFunc，set 是它的等价物。
 
@@ -183,9 +193,7 @@ def refresh_db_pool_gauges() -> None:
     """
     db_pool_checked_out.set(_pool_stat("checkedout"))
     db_pool_overflow.set(_pool_stat("overflow"))
-    # 容量按设置算，不借用 `configured_thread_limit()`：D215 的结论正是"这两个数今天相等，
-    # 但那是巧合不是定义"。谁以后把线程顶改成 `20 − 后台并发`，这根仍要说池子的真话。
-    db_pool_capacity.set(max(1, int(settings.DB_POOL_SIZE)) + max(0, int(settings.DB_MAX_OVERFLOW)))
+    db_pool_capacity.set(_configured_pool_capacity())
 
 
 def instrument_db_pool_connect(engine) -> bool:
@@ -215,6 +223,128 @@ def instrument_db_pool_connect(engine) -> bool:
     timed_connect.__pool_timing__ = True
     pool.connect = timed_connect
     return True
+
+
+# ------------------------------------------------------------------- D218：把等待变成告警
+#
+# 判阈值不能用累计值：histogram 的桶只增不减，"p95 > 1s"对累计成立的话会在第一次越过之后
+# 永远红。所以这里维护一份"上一次读取"的基线，报的是**两次读取之间**的形状。
+
+_acquire_window_lock = Lock()
+_acquire_window_state: dict[str, Any] | None = None
+
+
+def _acquire_cumulative() -> tuple[dict[float, float], float, float]:
+    """把那只 Histogram 读成 `{桶上界: 累计计数}`、总计数、总耗时。
+
+    走 `collect()`（就是 /metrics 出口那套公开格式）而不是 `_sum`/`_bucket` 私有属性，也不在这里
+    复制第二份 buckets 列表：桶改了这里自动跟着走。`float("+Inf")` 在 Python 里就是 `inf`。
+    """
+    buckets: dict[float, float] = {}
+    count = 0.0
+    total_seconds = 0.0
+    for metric in db_pool_connection_acquire_seconds.collect():
+        for sample in metric.samples:
+            if sample.name.endswith("_bucket"):
+                buckets[float(sample.labels["le"])] = float(sample.value)
+            elif sample.name.endswith("_count"):
+                count = float(sample.value)
+            elif sample.name.endswith("_sum"):
+                total_seconds = float(sample.value)
+    return buckets, count, total_seconds
+
+
+def _quantile_from_cumulative(bounds: list[float], cumulative: list[float], q: float) -> float | None:
+    """桶内线性插值求分位数，和 Prometheus 的 `histogram_quantile` 同一个算法。
+
+    落进 `+Inf` 那一档时报的是它的**下界**（"至少这么久"）——那一档没有上界，插不出值，
+    假装能插会得到一个看起来精确的假数。
+    """
+    if not bounds or cumulative[-1] <= 0:
+        return None
+    total = cumulative[-1]
+    rank = q * total
+    before = 0.0
+    lower = 0.0
+    for bound, cum in zip(bounds, cumulative, strict=True):
+        if cum >= rank:
+            in_bucket = cum - before
+            if math.isinf(bound):
+                return lower
+            if in_bucket <= 0:
+                return bound
+            value = lower + (bound - lower) * (rank - before) / in_bucket
+            return round(value, 4)
+        before = cum
+        lower = bound
+    return None
+
+
+def db_pool_window() -> dict[str, Any]:
+    """上一次读取之后的取连接等待形状，外加池子当下的占用——运维告警的输入。
+
+    窗口 = **本函数两次调用之间**，不是写死的 5 分钟：调度器那一拍和管理员手点
+    `POST /system/alerts/evaluate` 共用同一份基线，谁读走算谁的。第一次读、以及读到计数变小
+    （进程重启或指标被重建）时没有基线可减，报的是自进程启动以来的累计，此时 `window_seconds`
+    为 None，把这个不确定性说给告警读者看。
+
+    射程要说清楚两件事：
+    * 这根 histogram 是**进程内**的。编排跑 `redis_queue` 后端时在
+      `scripts/run_orchestration_worker.py` 那个独立进程里（各自一份池子），那边没有调度器也没有
+      `/metrics`，所以 worker 的排队不在本函数射程内。"API 进程 = 全部 HTTP 流量"这个前提由
+      `tests/test_single_process_shape_is_pinned.py` 盯着（backend 只有 1 个进程时才绿）。
+    * `over_pool_timeout_samples` 用的是"最后一个 `le <= DB_POOL_TIMEOUT` 的桶"，所以它报的是
+      "等待超过 ≤30s 的最高那个桶界"。今天桶界正好有 30.0，与 `DB_POOL_TIMEOUT` 严丝合缝。
+    """
+    global _acquire_window_state
+    buckets, count, total_seconds = _acquire_cumulative()
+    bounds = sorted(buckets)
+    now = time.monotonic()
+    with _acquire_window_lock:
+        previous = _acquire_window_state
+        _acquire_window_state = {"buckets": dict(buckets), "count": count, "sum": total_seconds, "at": now}
+
+    stale = (
+        previous is None
+        # 桶表变了就整份当"没有基线"：下面那条按基线取数的式子要求两边的桶一一对得上，
+        # 而对不上是可能发生的（指标被重建、桶表被改）。调度器里抛 KeyError 的话，
+        # 症状是每 5 分钟失败一次而告警表一个字不动——比漏报更糟。
+        or set(buckets) != set(previous["buckets"])
+        or count < previous["count"]
+        or any(buckets[bound] < previous["buckets"][bound] for bound in bounds)
+    )
+    if stale:
+        window_cumulative = [buckets[bound] for bound in bounds]
+        sum_delta = total_seconds
+        samples = int(count)
+        window_seconds: float | None = None
+    else:
+        window_seconds = round(now - previous["at"], 3)
+        window_cumulative = [max(0.0, buckets[bound] - previous["buckets"][bound]) for bound in bounds]
+        sum_delta = max(0.0, total_seconds - previous["sum"])
+        samples = int(max(0.0, count - previous["count"]))
+
+    timeout_seconds = float(settings.DB_POOL_TIMEOUT)
+    # 桶是累计的，所以"到 timeout 为止一共多少个"就是所有 bound <= timeout 里最大的那个累计值。
+    covered = sum(cum for bound, cum in zip(bounds, window_cumulative, strict=True) if bound <= timeout_seconds)
+    return {
+        "samples": samples,
+        "window_seconds": window_seconds,
+        "p95_seconds": _quantile_from_cumulative(bounds, window_cumulative, 0.95),
+        "avg_seconds": round(sum_delta / samples, 4) if samples else 0.0,
+        "over_pool_timeout_samples": max(0, samples - int(covered)),
+        "pool_timeout_seconds": timeout_seconds,
+        "checked_out": _pool_stat("checkedout"),
+        "overflow": _pool_stat("overflow"),
+        "capacity": _configured_pool_capacity(),
+    }
+
+
+def reset_db_pool_window() -> None:
+    """丢掉基线：下一次 `db_pool_window()` 从头算。测试用，生产没有调用点。"""
+    global _acquire_window_state
+    with _acquire_window_lock:
+        _acquire_window_state = None
 
 
 def record_http_request(method: str, status_code: int, path: str, duration_seconds: float) -> None:

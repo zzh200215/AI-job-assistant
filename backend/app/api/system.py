@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.core.config import settings
 from app.core.database import engine, get_db
-from app.core.prometheus_metrics import get_metrics_response
+from app.core.prometheus_metrics import db_pool_window, get_metrics_response
 from app.core.runtime_metrics import get_runtime_metrics
 from app.core.user_roles import ADMIN_ROLE
 from app.models.ai_release import AIRelease
@@ -118,11 +118,17 @@ def _model_runtime_status() -> dict:
 
 
 def build_operational_alert_snapshot() -> dict:
-    """Collect the non-persistent inputs used by the alert evaluator."""
+    """Collect the non-persistent inputs used by the alert evaluator.
+
+    `db_pool` 那一读会**推进**进程内的窗口基线（见 `db_pool_window`）：这个函数的每一个调用方都算
+    "读了一拍"。今天两个调用方是调度器那 5 分钟一拍和管理员手点的 `POST /system/alerts/evaluate`，
+    它们共用同一份基线，所以手工点一次会把下一拍的窗口缩短——这是刻意的，不是待修的缺陷。
+    """
     return {
         "model_runtime": _model_runtime_status(),
         "queue_health": get_queue_health(),
         "runtime_metrics": get_runtime_metrics(),
+        "db_pool": db_pool_window(),
     }
 
 
