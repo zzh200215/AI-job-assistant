@@ -5064,6 +5064,27 @@ rollback() 之后          checkedout=0
 
 **验收**：`ruff check .` All checks passed；`ruff format --check .` 367 files already formatted；`test_threadpool_and_route_shapes.py` + `test_db_pool_settings.py` **11 passed**；backend 全量 **924 passed**。现场：脚本自己建的作业行已删（`CLEANED 4`），探针账号名下 `rewrite_suggestion_job` 归零。
 
+#### 已交付：D216 按他点的"先上可观测"——连接池三个数进 `/system/metrics`，看不见的写 -1 不写 0
+
+**为什么先做这个**：D215 把"要不要动尺寸"变成一个要看真数的问题，而现取之后发现**这三个数从来没被采过**——`prometheus_metrics.py` 里搜不到 `checkedout`/`overflow`/池子相关的任何东西，全仓唯一一处提到 `pool.checkedout()` 的是 D214 我刚写的那句注释。没有指标的话，下一轮讨论又会变回推演。
+
+**改了什么**（`app/core/prometheus_metrics.py`）：三个 Gauge —— `db_pool_checked_out`、`db_pool_overflow`、`db_pool_capacity`，配 `refresh_db_pool_gauges()`，挂在**已有的出口**上（`get_metrics_response()` → `app/api/system.py` 那条 `/system/metrics`，不新造路由）。
+
+**四条设计决定，每条都有理由**：
+1. **看不见 ⇒ 写 `-1`，不写 `0`**。测试与内存 sqlite 那条路用的是 StaticPool，它**根本没有** `checkedout()` 这个方法（现取实验：`AttributeError: 'StaticPool' object has no attribute 'checkedout'`）。写成 0 会被读成"池子空着"，而这正是 D215 那张表最不该被误读的地方。
+2. **容量按 `settings` 算，不借 `configured_thread_limit()`**。两者今天相等，但那是巧合不是定义；谁以后真按 D215 的建议把线程顶改成 `20 − 后台并发`，这根仍要说池子的真话。
+3. **我一开始加了第四根 `http_thread_limit`，写完撤了**：它按定义恒等于容量（`configured_thread_limit()` 就是那两数之和），多一根只是噪声——这条按"不加推测性通用件"的口径记下来，免得下次又有人加。
+4. `_pool_stat` 里对 `app.core.database` 用**惰性 import**：否则"导入 metrics"会连带"导入数据库"（engine 在模块导入时就建）。
+出口的安全不是新问题：`/system/metrics` 早就有 `require_metrics_reader`（`app/api/system.py:50`，采集令牌或管理员会话、**永不接受匿名**，401/403 各有测试），新指标自动继承，不用另做。
+
+**测试**：`tests/test_prometheus_metrics.py` 6 → **9 条**。三腿各测一件事：① 真值（喂一只会报 7/-3 的假池，断言三个数 + 出口文本里真出现 `db_pool_checked_out 7.0`）；② 看不见那一支（用**真测试库的 StaticPool**，断言 `-1` 而容量 `> 0`）；③ 抓取路径确实调了刷新。两发变异各打红一条（`else -1` → `else 0` 只红②；把 `refresh_db_pool_gauges()` 从出口摘掉只红③），而①在两发下都绿 ⇒ 三条不重叠。
+
+**这套指标量不到的（别把它当答案）**：D215 那个"最差等待 11.73s"**不在**这三个数里——排队发生在 SQLAlchemy 内部，`QueuePool` 没有公开"等了多久"的事件，也没有超时计数。所以图上能看的是**贴没贴近 capacity**（以及 StaticPool 下那个 -1 表示"这台看不见"），要看"排队多久"得另一条路：给 `SessionLocal` 包一层取连接的计时。这条**没做**，要不要做等他点。
+
+**验收**：backend 全量 **927 passed**（924 + 3 条新腿）；`ruff check .` All checks passed；`ruff format --check .` 367 files already formatted；`test_prometheus_metrics.py` + `test_system_health.py` + `test_system_status.py` **23 passed**。尺寸**没动**（不动 / 加大池子 / 降 anyio 那一档仍挂着——其中降 anyio 我已算过：把 WS 那 12 根算进去会低到 `20−2−2−12=4`，不成立，所以那一档只能覆盖 rewrite+评分，是半个方案）。
+
+**§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+
 **§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
 
 

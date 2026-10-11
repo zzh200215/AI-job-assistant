@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Counter, Histogram, generate_latest
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
+
+from app.core.config import settings
 
 REGISTRY = CollectorRegistry()
 
@@ -121,6 +130,49 @@ auth_rate_limited_total = Counter(
     registry=REGISTRY,
 )
 
+# D215：连接池那三个数。量出来的是"anyio 那 20 根顶 = 池子"这个等式只在**只有 HTTP 用它**时成立——
+# 同进程里 rewrite(2) + 逐题评分(2) + 面试 WS（一步一根，D213 之后一步结束就还）抢的是同一口
+# `DB_POOL_SIZE + DB_MAX_OVERFLOW`。实测 20 根 HTTP 单独跑是 0 个排队，掺进 2 个后台作业就变成
+# 2/22 排队、最差 11.73s。要不要动尺寸，得看真并发下这两个数贴得多近，而不是再推一轮。
+db_pool_checked_out = Gauge(
+    "db_pool_checked_out",
+    "DB connections checked out now; -1 means this pool class does not report it (StaticPool on "
+    "sqlite) — it is not the same as 0",
+    registry=REGISTRY,
+)
+db_pool_overflow = Gauge(
+    "db_pool_overflow",
+    "DB pool overflow counter (negative = spare capacity inside DB_POOL_SIZE); -1 = not reported " "by this pool class",
+    registry=REGISTRY,
+)
+db_pool_capacity = Gauge(
+    "db_pool_capacity",
+    "DB_POOL_SIZE + DB_MAX_OVERFLOW — the number core/threadpool.py pins the HTTP thread limit to",
+    registry=REGISTRY,
+)
+
+
+def _pool_stat(name: str) -> int:
+    # 惰性 import 是有用的而不是洁癖：`app.core.database` 在建 engine 时会读 settings，
+    # 让指标模块去顶层拉它，等于把"导入 metrics"变成"导入数据库"。
+    from app.core.database import engine
+
+    fn = getattr(engine.pool, name, None)
+    return int(fn()) if callable(fn) else -1
+
+
+def refresh_db_pool_gauges() -> None:
+    """每次抓取前刷新池子三个数。`prometheus_client` 没有 GaugeFunc，set 是它的等价物。
+
+    StaticPool（测试与内存 sqlite 那条路）没有 `checkedout()`/`overflow()`，这里写 **-1 而不是 0**：
+    "看不见"和"看见是 0"是两件事，后者会让人以为池子空着。
+    """
+    db_pool_checked_out.set(_pool_stat("checkedout"))
+    db_pool_overflow.set(_pool_stat("overflow"))
+    # 容量按设置算，不借用 `configured_thread_limit()`：D215 的结论正是"这两个数今天相等，
+    # 但那是巧合不是定义"。谁以后把线程顶改成 `20 − 后台并发`，这根仍要说池子的真话。
+    db_pool_capacity.set(max(1, int(settings.DB_POOL_SIZE)) + max(0, int(settings.DB_MAX_OVERFLOW)))
+
 
 def record_http_request(method: str, status_code: int, path: str, duration_seconds: float) -> None:
     http_requests_total.labels(method=method, status=str(status_code), path=path).inc()
@@ -175,4 +227,5 @@ def record_rate_limited(path: str) -> None:
 
 
 def get_metrics_response() -> tuple:
+    refresh_db_pool_gauges()
     return generate_latest(REGISTRY), 200, {"Content-Type": CONTENT_TYPE_LATEST}

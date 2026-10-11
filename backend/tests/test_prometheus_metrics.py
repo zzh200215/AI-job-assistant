@@ -136,3 +136,59 @@ def test_get_metrics_response():
     # Verify it contains some metric names
     content = data.decode("utf-8")
     assert "http_requests_total" in content or "python_info" in content
+
+
+# ------------------------------------------------------------- D216：连接池那三个数（接 D215 的实测）
+
+
+def test_db_pool_gauges_read_the_live_pool(monkeypatch):
+    from prometheus_client import generate_latest
+
+    from app.core import prometheus_metrics as m
+    from app.core.config import settings
+
+    class _ReportingPool:
+        def checkedout(self):
+            return 7
+
+        def overflow(self):
+            return -3
+
+    class _Engine:
+        pool = _ReportingPool()
+
+    monkeypatch.setattr("app.core.database.engine", _Engine())
+    m.refresh_db_pool_gauges()
+
+    assert m.db_pool_checked_out._value.get() == 7
+    assert m.db_pool_overflow._value.get() == -3
+    assert m.db_pool_capacity._value.get() == settings.DB_POOL_SIZE + settings.DB_MAX_OVERFLOW
+    # 出口真吐得出来，不是只在 Python 里看得见
+    assert b"db_pool_checked_out 7.0" in generate_latest(m.REGISTRY)
+
+
+def test_a_pool_that_cannot_report_is_minus_one_not_zero():
+    """测试库是 StaticPool——它**没有** `checkedout()`。
+
+    写 0 会让人以为"池子空着"，那是 D215 那张表最不该被读错的一种误读，所以看不见必须留 -1。
+    """
+    from app.core import prometheus_metrics as m
+
+    m.refresh_db_pool_gauges()
+
+    assert m.db_pool_checked_out._value.get() == -1
+    assert m.db_pool_overflow._value.get() == -1
+    assert m.db_pool_capacity._value.get() > 0  # 容量来自设置，任何池类都该报得出
+
+
+def test_the_scrape_path_refreshes_the_pool_gauges(monkeypatch):
+    """不挂在抓取路径上，这三个数就是死的——所以这条测的是"每次 scrape 真的去读池子"。"""
+    from app.core import prometheus_metrics as m
+
+    seen = []
+    monkeypatch.setattr(m, "refresh_db_pool_gauges", lambda: seen.append(1))
+
+    _, status_code, _ = m.get_metrics_response()
+
+    assert status_code == 200
+    assert seen == [1]
