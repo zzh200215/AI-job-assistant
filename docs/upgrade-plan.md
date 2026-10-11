@@ -5041,6 +5041,31 @@ rollback() 之后          checkedout=0
 
 **§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
 
+#### 已量：D215 anyio 那 20 根"等于池子"的等式，只在只有 HTTP 用它时成立——后台池进来就排队
+
+**为什么这条不是重复 D214**：D214 量的是 rewrite 那一池自己值几个连接；这一条量的是**几个池子加起来**抢同一口 `DB_POOL_SIZE + DB_MAX_OVERFLOW = 20` 时，`core/threadpool.py:9` 那句"没有线程会因为等连接而排队"还算不算数。D200 那条未验写的是"跨副本不设防"，同进程这一半从没被量过。
+
+**方法（零花费）**：`_probes/pool_contention.py`。HTTP 那一侧是**真机制**——`apply_thread_limit()` + `anyio.to_thread.run_sync`，跟 FastAPI 丢 sync 路由走的是同一条路；rewrite 那一侧是**真服务真池**（桩打在引用处，`sleep(10.68s)` = D201 的 p50）；评分与面试 WS 两池按**形状**模拟（一条线程持 Session 睡过一发模型）。形状的依据不是猜：`process_turn_evaluation` 在 `:216` commit **之后**还要读 `record.question`（`expire_on_commit=True` ⇒ 重开事务 ⇒ 到 `:223` 那发模型调用时连接是借着的），而 rewrite 同一形状 D214 已实测 `checkedout = W+1`。
+
+| 场景 | 需求 | `checkedout` 峰值 | 等 >0.5s | 最差等待 | 墙钟 |
+| --- | --- | --- | --- | --- | --- |
+| A 只有 HTTP | 20 | 20 | **0/20** | 0.02s | 10.7s |
+| B + 真 rewrite 2 | 22 | 20 | 2/22 | 11.73s | — |
+| C + 评分 2 + WS 形状 12 | 36 | 20 | **16/34** | 10.68s | 21.5s（= 2.0× A） |
+
+**三条能用的话**：
+1. A 证明那台仪器不是自己吓自己：只有 HTTP 时确实一根都不等。B/C 证明**加了后台池就开始等**——所以 `configured_thread_limit() = 20` 的"等式"是有前提的，真正的余量是 **`20 − 后台并发`**。
+2. `DB_POOL_TIMEOUT=30` 这一层**没被撞到**（最差 11.73s，恰好一个 p50 波次）。但那是"单发按 10.68s 算"的结果；一发走满 D189 那条最坏路径（重试链 364.5s、主备双模型 729s）时，队列后面就会撞上它——**撞上的表现不是变慢，是 `sqlalchemy.exc.TimeoutError`**：sync 路由变 500、后台作业把那一行写成 `failed`。
+3. MySQL 侧不拦：现取 `max_connections=151`、`Threads_connected=1`。**拦的只有我们自己的算术**，所以"加大池子"是一条真实存在的选项，不是必须等硬件。
+
+**改了什么**：只改 `app/core/threadpool.py` 的模块 docstring——把那句被证伪的一般性保证降级成"只有 HTTP 时成立"，并把这张表和它的边界写进去。**没改任何尺寸**：降 anyio 顶、加池子、还是维持现状，三条都有代价，挂在下面等他点（不占 §10 编号，这是一次读数之后自然要拍的部署决定）。
+
+**未验**：① 评分与 WS 两池是形状模拟，没真驱动那两个服务的代码；② 单发是**恒定** 10.68s，真方差（4.58–16.02s）下的排队分布没测；③ `orchestration_backend.py:82` 的 thread 兜底池与 `strategies.py:632` 的 fan-out **没进这场实验**（本机是 `redis_queue` + `linear`，两者都不建/不开）——换成 thread 后端或 layered 策略时这两维要补。
+
+**验收**：`ruff check .` All checks passed；`ruff format --check .` 367 files already formatted；`test_threadpool_and_route_shapes.py` + `test_db_pool_settings.py` **11 passed**；backend 全量 **924 passed**。现场：脚本自己建的作业行已删（`CLEANED 4`），探针账号名下 `rewrite_suggestion_job` 归零。
+
+**§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+
 
 
 
