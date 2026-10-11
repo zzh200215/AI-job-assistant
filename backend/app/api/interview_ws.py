@@ -17,6 +17,7 @@ import contextlib
 import json
 import logging
 
+import anyio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.core.config import settings
@@ -61,21 +62,44 @@ def _payload_from_message(message: dict) -> dict:
     }
 
 
-def _new_server_messages(engine: InterviewEngine, previous_count: int) -> list[dict]:
-    messages = (engine.session.messages if engine.session else []) or []
-    return [
-        item for item in messages[previous_count:] if not (item.get("role") == "user" and item.get("type") == "answer")
+def _engine_steps_snapshot(session_id: int, plan: list[tuple[str, tuple, dict]]) -> tuple[list[dict], object]:
+    """在**别的线程**里跑完一组引擎步骤，带回"这一组新增的服务端消息"与最后一步的 payload。
+
+    为什么必须在别的线程（D211 现取的链）：`finish` / `handle_timeout` / `next_question`（题库耗尽
+    那支）/ `handle_answer`（它自己就调 `next_question`）都会走到 `_finish` → `_generate_report` →
+    `FinalReportAgent.run_impl` → `chat_json`，那是同步的 `requests`，最坏 364.5s（D189 的公式）。
+    这些调用原来直接写在 `async def` 的处理函数里 ⇒ 卡的不是这条连接，是**整个进程的事件循环**。
+
+    为什么新建引擎而不是把连接上那只递过去：SQLAlchemy 的 Session 不跨线程，而
+    `InterviewEngine.db` 是 `_load_session` 懒建后挂在实例上的（`interview_engine.py:55-56`）。
+
+    为什么第一步必须是 `resume()`：`_generate_report` 吃的是 `self.evaluations`
+    （`interview_engine.py:373`），内存里那份为空就会被静默换成兜底报告。`resume()` 正是本模块
+    docstring 写的那条既有机制——工作态全部从落库推断（含超时那几项，`:611-629`）。
+    """
+    worker = InterviewEngine(session_id)
+    worker.resume()
+    before = len(worker.session.messages or []) if worker.session else 0
+
+    result: object = None
+    for method, args, kwargs in plan:
+        result = getattr(worker, method)(*args, **kwargs)
+
+    messages = (worker.session.messages if worker.session else []) or []
+    new_messages = [
+        item for item in messages[before:] if not (item.get("role") == "user" and item.get("type") == "answer")
     ]
+    worker.cleanup()
+    return new_messages, result
 
 
-async def _emit_engine_messages(
-    websocket: WebSocket,
-    engine: InterviewEngine,
-    previous_count: int,
-    fallback: dict | None = None,
-):
+async def _step(session_id: int, method: str, *args, **kwargs) -> tuple[list[dict], dict]:
+    return await anyio.to_thread.run_sync(_engine_steps_snapshot, session_id, [(method, args, kwargs)])
+
+
+async def _emit_snapshot(websocket: WebSocket, new_messages: list[dict], fallback: dict | None) -> None:
     emitted = False
-    for message in _new_server_messages(engine, previous_count):
+    for message in new_messages:
         await websocket.send_json(_payload_from_message(message))
         emitted = True
     if not emitted and fallback:
@@ -133,17 +157,34 @@ async def _handle_ws_loop(
     _active_engines.add(engine)
     engine.init()
     current_task: asyncio.Task | None = None
+    # 连接上这只引擎现在只管资格与容量，不写库——每一步都在 worker 线程里跑（见
+    # `_engine_steps_snapshot`）。所以"这是第几题"只能从**发给客户端的那一问**里取，
+    # 不能再去读 `engine.current_index`：它停在连接建立那一刻。
+    current_round = 0
+
+    def _arm(payload: dict | None) -> None:
+        nonlocal current_task, current_round
+        if not payload or payload.get("type") != "question":
+            return
+        round_num = int((payload.get("metadata") or {}).get("round") or 0)
+        if round_num:
+            current_round = round_num
+        if current_task and not current_task.done():
+            current_task.cancel()
+        current_task = asyncio.create_task(timeout_timer(current_round))
 
     async def timeout_timer(round_num: int):
         await asyncio.sleep(InterviewEngine.TIMEOUT_SECONDS)
-        engine._load_session()
-        if engine.session and engine.session.status == "ongoing" and engine.current_index == round_num - 1:
-            logger.info("Timeout: session=%s round=%s", session_id, round_num)
-            before_count = len(engine.session.messages or [])
-            result = engine.handle_timeout()
-            await _emit_engine_messages(websocket, engine, before_count, fallback=result)
-            if result.get("type") == "end":
-                await websocket.close(code=1000, reason="interview finished")
+        # 守卫原来读连接这只引擎的 status/current_index，而它看不到 worker 的新写入；
+        # 所以这一步的读也交给 worker——`resume()` 从落库推断，`_get_state()` 就是那份推断结果。
+        _, state = await _step(session_id, "_get_state")
+        if state.get("status") != "ongoing" or state.get("current_index") != round_num - 1:
+            return
+        logger.info("Timeout: session=%s round=%s", session_id, round_num)
+        new_messages, result = await _step(session_id, "handle_timeout")
+        await _emit_snapshot(websocket, new_messages, result)
+        if result.get("type") == "end":
+            await websocket.close(code=1000, reason="interview finished")
 
     try:
         engine._load_session()
@@ -153,16 +194,13 @@ async def _handle_ws_loop(
             if result:
                 await websocket.send_json(result)
             else:
-                before_count = len(engine.session.messages or [])
-                result = engine.next_question()
-                await _emit_engine_messages(websocket, engine, before_count, fallback=result)
+                new_messages, result = await _step(session_id, "next_question")
+                await _emit_snapshot(websocket, new_messages, result)
         else:
-            before_count = len(engine.session.messages or [])
-            result = engine.start()
-            await _emit_engine_messages(websocket, engine, before_count, fallback=result)
+            new_messages, result = await _step(session_id, "start")
+            await _emit_snapshot(websocket, new_messages, result)
 
-        if result and result.get("type") == "question":
-            current_task = asyncio.create_task(timeout_timer(result["metadata"]["round"]))
+        _arm(result)
 
         while True:
             raw = await websocket.receive_text()
@@ -183,38 +221,39 @@ async def _handle_ws_loop(
                 await websocket.send_json({"type": "pong", "content": ""})
                 continue
 
-            before_count = len(engine.session.messages or [])
-
             if msg_type == "answer":
-                result = engine.handle_answer(content, defer_evaluation=True)
-                await _emit_engine_messages(websocket, engine, before_count, fallback=result)
+                new_messages, result = await _step(session_id, "handle_answer", content, defer_evaluation=True)
+                await _emit_snapshot(websocket, new_messages, result)
 
             elif msg_type == "skip":
-                engine.save_message(
-                    {
-                        "role": "system",
-                        "type": "system",
-                        "content": f"第 {engine.current_index + 1} 题已跳过，进入下一题。",
-                        "metadata": {"round": engine.current_index + 1},
-                        "timestamp": utc_now().isoformat(),
-                    }
+                skip_message = {
+                    "role": "system",
+                    "type": "system",
+                    "content": f"第 {current_round} 题已跳过，进入下一题。",
+                    "metadata": {"round": current_round},
+                    "timestamp": utc_now().isoformat(),
+                }
+                # 这两步必须在**同一个** worker 引擎里连着跑：拆成两次 handoff 的话，第二次的
+                # `before` 已经包含这条跳过消息，候选人就再也看不到它了。
+                new_messages, result = await anyio.to_thread.run_sync(
+                    _engine_steps_snapshot,
+                    session_id,
+                    [("save_message", (skip_message,), {}), ("next_question", (), {})],
                 )
-                result = engine.next_question()
-                await _emit_engine_messages(websocket, engine, before_count, fallback=result)
+                await _emit_snapshot(websocket, new_messages, result)
 
             elif msg_type == "end":
-                result = engine.finish()
-                await _emit_engine_messages(websocket, engine, before_count, fallback=result)
+                new_messages, result = await _step(session_id, "finish")
+                await _emit_snapshot(websocket, new_messages, result)
 
             else:
                 await websocket.send_json({"type": "error", "content": f"未知消息类型: {msg_type}"})
                 continue
 
-            if result.get("type") == "question":
-                current_task = asyncio.create_task(timeout_timer(result["metadata"]["round"]))
-            elif result.get("type") == "end":
+            if result.get("type") == "end":
                 await websocket.close(code=1000, reason="interview finished")
                 break
+            _arm(result)
 
     except WebSocketDisconnect:
         logger.info("WS disconnected: session_id=%s", session_id)

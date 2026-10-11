@@ -4952,6 +4952,35 @@ select count(*) from rewrite_suggestion_job
 
 **§10 计数**：**挂出第 40 条**（WS 收尾同步等模型这条）⇒ 在册 **38 条（1–25、28–40）、open 1**。
 
+#### 已交付：D212 按 ② 把面试 WS 里那一步模型调用挪出事件循环——真正搬的是五个步骤，不是一个
+
+**改动**（`app/api/interview_ws.py`：一处新增 + 六个调用点）：新增 `_engine_steps_snapshot(session_id, plan)`——在**别的线程**里新开一只引擎、先 `resume()` 从落库推断工作态、连着跑完这一组步骤，再把"这一步新增的服务端消息"与最后一步的 payload 一起带回循环（`anyio.to_thread.run_sync`）。配套 `_step(...)` / `_emit_snapshot(...)`。原来的 `_new_server_messages` / `_emit_engine_messages` 从此没人用，删掉。
+
+**为什么范围比 ② 那一档大**：动手时数了一遍——能走到 `_finish` → `_generate_report` → `chat_json` 的**不止 `finish()`**：`next_question`（题库耗尽那支 `interview_engine.py:125`）、`start`（它自己就调 `next_question`）、`handle_answer`（同上）、`handle_timeout`（`:321` 达到上限时）。只搬 `finish()` 的话，同一条阻塞留在"**答完最后一题**"这条最常见的路上。所以六个站点全搬：connect 两处、timer 一处、answer / skip / end 三处。
+
+**连接上那只引擎现在只管资格与容量**：它不再写库，所以"这是第几题"改成从**发给客户端的那一问**里取（`current_round`），timer 的守卫也交给 worker 去读（`_get_state`）——原来那两处读的是这只引擎的 `current_index` / `status`，而这些值现在属于 worker。
+
+**skip 那一步是两条 plan 连着跑**：拆成两次 handoff 的话，第二次的 `before` 已经包含那条"已跳过"消息，候选人就再也看不到它了。
+
+**四条新腿 + 两次变异**（`tests/test_interview_ws.py` 8 → **12 条**）：
+1. 静态门 `_bare_engine_calls()`：源码里不许出现 `engine.<会打模型的步骤>(`；反证内置在判据里（喂它两句退化写法必须认出来）。
+2. 线程身份：`finish` 与 `next_question` 都必须在**不同于**事件循环线程的线程里跑（参照是 `init()` 的 ident）。**M1 变异**把 `end` 那一发退回裸调用 ⇒ 这条与那条静态门**各红一次**，其余 10 条绿。
+3. 报告没被换成兜底：新引擎不先 `resume()` 的话，`_generate_report` 会**静默**走 `_fallback_report`（`:373` 吃的是内存里的 `self.evaluations`）。这条腿放一条已完成的逐题评分 + 假 `chat_json`（按 D200 那条教训打在**引用处** `app.agents.answer_evaluation_agent.chat_json`），断言 `answered_questions == 1`、`hiring_recommendation` 是模型给的那句、收尾消息带回来了。**M2 变异**抽掉 `worker.resume()` ⇒ **只有这条红**。
+4. 反证：没有评分时仍然不调模型、仍然走兜底那一句——新开引擎不该改变这个既有行为。
+
+**顺带修了一条既有用例自己的竞态**：`test_engine_is_released_when_the_client_disconnects` 在全量里**红过一次**——它先等 `live_interview_count()==0`、然后立刻断言 `engine.db is None`，而 `finally` 里 `discard()` 与 `cleanup()` 是相邻两条语句、中间没有 await，线程可以在这两条之间被换下去。改成把两个条件并进同一个谓词再等。连跑 10 轮无复发。**这是仪器的问题不是产品的问题**，但它是在我这次改动之后第一次露头，所以记在这里而不是悄悄改掉。
+
+**修复后的读数**：D211 那台图重跑 ⇒ `ROUTES_TOTAL 217`、命中 **17**（原 18）、`async`/WS 命中 **0**、D203 自检仍 **11/11**。**但这个读数不能当证据**：WS 那一行消失有两个原因——`.run_sync` 被我列进了剪断表，而新代码走 `getattr(worker, method)` 这种动态派发、静态图本来就跟不过去。真正的证据是上面第 2、3 条腿（运行时线程身份 + 报告内容）。`POST /api/interview/sessions/{id}/end` **仍然在表里**：它是 sync `def` ⇒ 占 anyio 那 20 根线程之一，不卡循环，符合 §8 的既有口径，这次不动它。
+
+**验收**：`pytest`（backend 全量）**923 passed**；`ruff check .` All checks passed；`ruff format --check .` 367 files already formatted（这两个文件按 ruff format 重排过一次）；`tests/test_interview_ws.py` 单独连跑 6 轮、三文件组合连跑 4 轮全绿；清点脚本在 `backend/` 里那份临时副本已删，`git status` 只剩这两只改动文件 + 本台账。
+
+**未验**：
+1. **没有一发真模型调用穿过这条链**（假 `chat_json` + 既有夹具），所以"挪出循环之后那一发 364.5s 真的不卡别人"这句只有线程身份读数，没有活页 wall。
+2. WS 的真实端到端（浏览器里跑完一场面试）没测——那要真模型钱。
+3. `handle_timeout` 的守卫现在多一次线程往返（`_get_state`），**没量**开销；相对 30 秒的计时窗口应当可忽略，但这是推理不是读数。
+
+**§10 计数**：第 40 条**按 ② 关闭**（D212）⇒ 现取标题行重算：在册 **38 条（1–25、28–40）、open 0**。
+
 
 
 
@@ -5744,7 +5773,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
     - **D200 之后接着量的一件事（D201/D202）**：迁移已执行（`20261010_0028 (head)`），真 provider 走新异步路径两臂都有读数（提交那一趟 **11–25 毫秒**、作业到终态 2.01s / 16.02s）；而"给需要推理的块单开思考链"这个提案**被 8 个样本否掉**——`skills` 在关思考链 6 发里照抄或漏答、开思考链 2 发里整块不提，**采纳 0/8**。他点 **A：接受现状，等样本**。
     - **这条的重开条件是可执行的**（D200 那张表就是采样器，不用另做仪器）：`select count(*) from rewrite_suggestion_job where json_search(suggestions,'one','skills',null,'$[*].block_id') is not null` —— **今天跑通、命中 0**；任何一次真跑让这一列非零，"开思考链救不了 `skills`"就被推翻。
 
-40. **面试收尾那条 WS 在 `async def` 里同步等模型，卡的是事件循环（2026-10-11 D211 传递闭包图现取；三条路都配了数）**
+40. ~~**面试收尾那条 WS 在 `async def` 里同步等模型，卡的是事件循环（2026-10-11 D211 传递闭包图现取；三条路都配了数）**~~ —— **已按 ② 落地并关闭（同日 D212），但实际范围比 ② 那一档更大**：写代码时数了一遍才发现，能走到 `_finish` → `_generate_report` → `chat_json` 的**不止 `finish()`**——`next_question`（题库耗尽那支 `:125`）、`start`（它自己调 `next_question`）、`handle_answer`（同上）、`handle_timeout`（`:321` 达到上限时）都算，所以五个步骤全部搬出事件循环，而不是只搬你点的那一条。③ 没点。下面三条路的原文与数都留着。
     - 事实链（逐跳 `文件:行号`）：`interview_ws.py:86 async def interview_websocket` → `:206 result = engine.finish()`（在 `elif msg_type == "end":` 里，**没有 await、没有 threadpool**；`grep -E "to_thread|run_in_threadpool|run_in_executor"` 在 `interview_ws.py` 与 `interview_rest.py` 两个文件 **0 命中**）→ `interview_engine.py:324 finish` → `:327 _finish` → `:371 _generate_report` → `:411 FinalReportAgent()` → `answer_evaluation_agent.py:97 chat_json`。最坏时长按 D189 现量的公式 `120×(1+2)+1.5+3 = **364.5s**`。这一发跑起来，**同进程内所有 HTTP 请求与所有 WS 连接一起停**——不是只停他这一条连接。今天单副本（D127 那条守卫钉着 `replicas=1`），所以半径就是整个后端进程。
     - 三条路：**① 不动**，只记成已知限制。代价 0，但"AI 降级对候选人静默"这条产品口径在这里不成立：被卡住的是**别人**的请求，不是他自己的。并且 D203 那句"11 条全是 sync `def`、0 条 `async def` ⇒ 不卡事件循环"要永久按"只覆盖 HTTP 面"来读。
     **② 把 `finish()` 挪出事件循环**（`await anyio.to_thread.run_sync(...)`，项目已用 anyio、线程上限由 `core/threadpool.py` 钉成 20）。**它不是三行**，有一条实测拦路：`InterviewEngine.db` 是在 `_load_session`（`:55-56`）里懒建并**挂在实例上**的，而 WS 在循环线程里早就调过 `engine.init()` ⇒ 那个 Session 属于循环线程，而 SQLAlchemy 的 Session 不跨线程 ⇒ ② 必须让收尾那一趟**自带 session**（或在 worker 侧重建引擎）。做完它仍占 20 根线程里的一根（与另外 17 条同步路由同族），但不再卡循环。
