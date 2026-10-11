@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     CollectorRegistry,
@@ -151,6 +153,18 @@ db_pool_capacity = Gauge(
     registry=REGISTRY,
 )
 
+# D217：那三根 Gauge 只说得出"贴没贴近 capacity"，说不出"等了多久"（D215 的 11.73s 就是这么量的，
+# 一次性脚本）。排队发生在 `Pool.connect()` 里面，SQLAlchemy 2.0 没有公开的"取连接耗时"事件，
+# 所以在 `core/database.py` 建完 engine 后把它包一层（`instrument_db_pool_connect`）。
+# `le="30"` 那一档是有意义的：`DB_POOL_TIMEOUT=30`，越过它就是 `TimeoutError`（路由 500 / 作业 failed）。
+db_pool_connection_acquire_seconds = Histogram(
+    "db_pool_connection_acquire_seconds",
+    "Time to hand a thread a DB connection: queue wait when the pool is saturated, plus connect "
+    "handshake when it is not",
+    buckets=[0.001, 0.005, 0.025, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0],
+    registry=REGISTRY,
+)
+
 
 def _pool_stat(name: str) -> int:
     # 惰性 import 是有用的而不是洁癖：`app.core.database` 在建 engine 时会读 settings，
@@ -172,6 +186,35 @@ def refresh_db_pool_gauges() -> None:
     # 容量按设置算，不借用 `configured_thread_limit()`：D215 的结论正是"这两个数今天相等，
     # 但那是巧合不是定义"。谁以后把线程顶改成 `20 − 后台并发`，这根仍要说池子的真话。
     db_pool_capacity.set(max(1, int(settings.DB_POOL_SIZE)) + max(0, int(settings.DB_MAX_OVERFLOW)))
+
+
+def instrument_db_pool_connect(engine) -> bool:
+    """把 `engine.pool.connect` 包一层，记下"拿到一根连接要多久"。返回 False = 已经包过了。
+
+    为什么是 `Pool.connect`：SQLAlchemy 2.0 的 `Pool` 已经没有公开的 `checkout()`（现取报
+    `'QueuePool' object has no attribute 'checkout'`），而 `Pool.connect()` 是 Connection 取
+    `_ConnectionFairy` 的公开入口，排队就在它里面。实测（`pool_size=1` 的小池子，另起线程去抢）：
+    空闲时 0.0003s、被占住时 **0.3008s**——多出来的那一截正是 D215 用一次性脚本量的那种等待。
+
+    为什么要幂等：`core/database.py` 只在导入时调一次，但测试会重复调；嵌套两层会把同一次等待
+    记两遍，把整个分布往右推——那是比"没有这个指标"更糟的结果。
+    """
+    pool = getattr(engine, "pool", None)
+    original = getattr(pool, "connect", None)
+    if original is None or getattr(original, "__pool_timing__", False):
+        return False
+
+    def timed_connect(*args, **kwargs):
+        started = time.perf_counter()
+        try:
+            return original(*args, **kwargs)
+        finally:
+            # 拿不到也要记：`pool_timeout` 到点抛的是 TimeoutError，那正是最该在图上看见的一档
+            db_pool_connection_acquire_seconds.observe(time.perf_counter() - started)
+
+    timed_connect.__pool_timing__ = True
+    pool.connect = timed_connect
+    return True
 
 
 def record_http_request(method: str, status_code: int, path: str, duration_seconds: float) -> None:

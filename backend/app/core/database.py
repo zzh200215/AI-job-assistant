@@ -7,6 +7,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
+from app.core.prometheus_metrics import instrument_db_pool_connect
 
 
 def engine_kwargs_for(database_url: str) -> dict[str, Any]:
@@ -34,6 +35,9 @@ def engine_kwargs_for(database_url: str) -> dict[str, Any]:
 
 
 engine = create_engine(settings.database_url, **engine_kwargs_for(settings.database_url))
+# D217：把"拿到一根连接要多久"接到指标上。池子满的时候这一截就是排队（D215 用一次性脚本量到
+# 最差 11.73s，但那三个 Gauge 看不出等待），所以包在 `Pool.connect` 上——见函数里的 docstring。
+instrument_db_pool_connect(engine)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

@@ -5083,6 +5083,32 @@ rollback() 之后          checkedout=0
 
 **验收**：backend 全量 **927 passed**（924 + 3 条新腿）；`ruff check .` All checks passed；`ruff format --check .` 367 files already formatted；`test_prometheus_metrics.py` + `test_system_health.py` + `test_system_status.py` **23 passed**。尺寸**没动**（不动 / 加大池子 / 降 anyio 那一档仍挂着——其中降 anyio 我已算过：把 WS 那 12 根算进去会低到 `20−2−2−12=4`，不成立，所以那一档只能覆盖 rewrite+评分，是半个方案）。
 
+#### 已交付：D217 "取连接等了多久"这根指标——先猜错两条路，最后包 `Pool.connect` 才量到
+
+**为什么还差这一根**：D216 那三张表回答"贴没贴近 capacity"，答不了"等了多久"——而 D215 那个 **11.73s** 是一次性脚本量的，不是常读数。他点的"先上可观测"要完整，缺的就是这根。
+
+**仪器先自证，过程里猜错了两次**（都记下来，这类"包一层"的活最容易写成静默无效）：
+1. 想包 `Pool.checkout()` ⇒ **SQLAlchemy 2.0 没这个方法**（现取 `AttributeError: 'QueuePool' object has no attribute 'checkout'`，只有 `checkedout()` 那个计数）。
+2. 想用事件对：`pool "checkout"` 打点 + `"engine_connect"` 收口 ⇒ 实测**顺序是反的**（连接是惰性的，`engine_connect` 在真正取连接之前触发），算出来的 gap 恒为 ~0。
+3. 成立的点是 **`Pool.connect()`**：它是 Connection 取 `_ConnectionFairy` 的公开入口，排队就发生在里面。验证用 `pool_size=1 / max_overflow=0` 的池子另起线程去抢：**空闲 0.0003s、被占住时 0.3008s** ⇒ 量的确实是那一截等待，不是自我安慰。
+
+**改了什么**：`prometheus_metrics.py` 加 `Histogram("db_pool_connection_acquire_seconds", buckets=[0.001 … 30, 60])` 与 `instrument_db_pool_connect(engine)`（靠 `__pool_timing__` 标记幂等；`finally` 里 observe，所以**拿不到连接的那次也记**——`pool_timeout` 到点抛的 TimeoutError 会落进最高档，那正是最该在图上看见的）；`core/database.py` 建完 engine 就包一次。`le="30"` 那一档不是随手分的：它等于 `DB_POOL_TIMEOUT`，越过它就不再是"慢"而是"失败"。
+
+**开销量了，不是"应该可忽略"**：同一口生产池（MySQL QueuePool）各 2000 次 `connect()+close()` 对照——
+| | p50 | p95 |
+| --- | --- | --- |
+| 未包 | 48.2 µs | 109.3 µs |
+| 包了 | 48.1 µs | 115.4 µs |
+p50 一致、p95 差 6µs，**在这口池的抖动里量不出稳定差别**。（第一次对照我拿另一口 sqlite 池当基线，那个数不算数，已经作废重做。）
+
+**测试**：`tests/test_prometheus_metrics.py` 9 → **11 条**。两支新腿：`test_production_engine_is_wrapped_at_import`（接线在不在，顺带验幂等——返回 False 才算没套第二层）与 `test_pool_connect_wrap_records_the_queue_wait`（造真排队，断言样本数 ≥2 且 sum 增量 ≥0.29s；基线取"占住之后"，否则那次很快的占住会把断言放宽到能通过）。三发变异各打红对应的腿：**不 observe** 只红第二支、**不接线** 只红第一支、**去掉幂等守卫** 两支都红。
+
+**未验**：① bucket 边界没测（正好 30s 的样本落哪档、`+Inf` 那一档读法）；② 谁来抓、多久抓一次仍未定——`require_metrics_reader`（`app/api/system.py:50`，采集令牌或管理员会话、永不匿名）只保证"不是谁都能看"，不保证有人在看；③ 每次 scrape 会读一次池状态（`checkedout()`/`overflow()`），这个开销没量，µs 级但是推理。
+
+**验收**：backend 全量 **929 passed**（927 + 2 条新腿）；`ruff check .` All checks passed；`ruff format --check .` 367 files already formatted；`test_prometheus_metrics.py` **11 passed**。
+
+**§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+
 **§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
 
 **§10 计数**：没挂新项；现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。

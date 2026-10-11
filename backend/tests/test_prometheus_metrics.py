@@ -192,3 +192,75 @@ def test_the_scrape_path_refreshes_the_pool_gauges(monkeypatch):
 
     assert status_code == 200
     assert seen == [1]
+
+
+# ------------------------------------------------------------------- D217：取连接等了多久
+
+
+def test_production_engine_is_wrapped_at_import():
+    """包在 `core/database.py` 建 engine 之后：谁把那行删了，指标就悄悄变成永远 0。"""
+    import app.core.database as database
+    from app.core import prometheus_metrics as m
+
+    assert m.instrument_db_pool_connect(database.engine) is False, "生产 engine 没被包上"
+    assert getattr(database.engine.pool.connect, "__pool_timing__", False) is True
+
+
+def test_pool_connect_wrap_records_the_queue_wait():
+    """仪器得先自证：包上之后，被占住的那次 `Pool.connect` 要真记下一截等待。
+
+    没有这条，那个 histogram 可能只是个永远为 0 的装饰。池子故意设成 1 根、不给 overflow，
+    另起一个线程去抢，就能造出一段确定的排队。
+    """
+    import threading
+    import time
+
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.pool import QueuePool
+
+    from app.core import prometheus_metrics as m
+
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        poolclass=QueuePool,
+        pool_size=1,
+        max_overflow=0,
+        pool_timeout=5,
+        connect_args={"check_same_thread": False},
+    )
+    assert m.instrument_db_pool_connect(engine) is True
+    # 幂等：嵌套两层会把同一次等待记两遍，把整个分布往右推
+    assert m.instrument_db_pool_connect(engine) is False
+
+    def samples():
+        # 直读 Histogram 的内部属性不稳（`_count` 就没有），注册表的公开读法才靠谱
+        return (
+            m.REGISTRY.get_sample_value("db_pool_connection_acquire_seconds_count") or 0.0,
+            m.REGISTRY.get_sample_value("db_pool_connection_acquire_seconds_sum") or 0.0,
+        )
+
+    before_count, _ = samples()
+
+    # 先把那唯一一根连接占住：池子 size=1、overflow=0，第二个线程只能排队
+    held = engine.connect()
+    held.execute(text("SELECT 1"))
+    _, baseline_sum = samples()
+
+    def racer():
+        conn = engine.connect()
+        conn.execute(text("SELECT 1"))
+        conn.close()
+
+    thread = threading.Thread(target=racer)
+    thread.start()
+    time.sleep(0.3)
+    held.close()
+    thread.join()
+
+    after_count, after_sum = samples()
+    observed = after_count - before_count
+    # 等待那一截从"占住之后"的基线算起：第一次 acquire（占住那根）本身是快的，
+    # 混进来会让这条断言在"完全没量到排队"时也能勉强通过。
+    waited = after_sum - baseline_sum
+    assert observed >= 2, f"包住之后没记下任何样本（observed={observed}）"
+    assert waited >= 0.29, f"没量到那截 0.3 秒的排队：sum 只增加了 {waited:.4f}s"
