@@ -5402,10 +5402,21 @@ D221 卡在业务规则上（那个账号 6 份简历、免费版限 1 份），
 **验收**：backend 全量 **963 passed**（D226 那 12 条已在上一步跑绿）、`ruff check` 干净；
 frontend `npx vitest run` **96 files / 629 passed**（此前 95/623），`npm test` **39 passed**，
 eslint 对改动文件干净，prettier 只做了属性换行（两个文件改前改后都是纯 LF，实测 CRLF=0）。
-迁移在全新 sqlite 上验过：`job_import_task` 建得出、16 列、3 个索引、`describe_drift` 报无漂移。
+迁移在全新 sqlite 上验过：`job_import_task` 建得出、16 列、3 个索引、`describe_drift` 报无漂移
+（**这只到"形状对"**，那张表在 sqlite 里插不进任何东西，见下面未验 ①b）。
 
 **未验**：① **迁移没在他的 MySQL 上执行**（`alembic upgrade head` 要点名），所以现网开发库还没有这张表——
 在跑这段代码的进程打这个接口会因缺表而失败，这是"已交付"与"已上线"之间那条已经写过的区别。
+行前状态现量过（只读）：库 `llmxm` 52 张表、版本停在 `20261010_0028`、唯一待执行就是 `20261012_0029` 这一条，
+且 **`job_import_task` 这个表名在他库里不存在**（同名孤儿表是 `job_import_batch`，D223 已查），
+所以那条 `_has_table` 守卫不会静默 no-op。
+**①b 我今天试过"绕开 MySQL 做活页验证"，结论是绕不开**：用临时 sqlite 起后端，注册第一个用户就撞
+`IntegrityError: NOT NULL constraint failed: tb_user.id`。这不是迁移链的问题——同一批模型走
+`create_all` 渲染出来的也是 `id BIGINT NOT NULL`；SQLite 只有 `INTEGER PRIMARY KEY` 才是 rowid 别名，
+而本项目 46 张表全是 BigInteger 主键，**能让它们自增的那条 `@compiles(BigInteger, "sqlite")` 钩子只住在测试根
+conftest 里**（E26/E18 那两段记载过同一对矛盾，`tests/test_sqlite_autoincrement_pk.py` 钉着钩子顺序）。
+⇒ 活页验证只能落在 MySQL 上；也因此上面"迁移在 sqlite 上验过"这句**只证明形状（16 列 3 索引、漂移 0 条），
+不证明那张表在 sqlite 里可用**——生产 MySQL 的 `BIGINT AUTO_INCREMENT` 本来就是对的。
 ② MySQL 上 2000 行要多久**没量**（677ms 那发是 sqlite + TestClient）。
 ③ 这一屏**没在真浏览器里走过**：6 条前端腿都是 jsdom 夹具，`el-progress` 的宽度读数是内联 style 而不是计算样式。
 ④ `JOB_IMPORT_MAX_WORKERS=1` 下两个人同时导入会排队，等待时长没量。
