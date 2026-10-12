@@ -5221,6 +5221,33 @@ p50 一致、p95 差 6µs，**在这口池的抖动里量不出稳定差别**。
 
 **§10 计数**：没挂新项；现取标题行（`grep -n '^## 10\.\|^## 11\.'`）重算仍是 **在册 38 条（1–25、28–40）、open 0**。
 
+#### 已交付：D221 真浏览器验 D219 那 8 条——5 条跑通（含两条完整成功路径与两条 WS 分支），2 条按代价跳过，1 条只验到前半段
+
+**形状**：真 Chrome（内嵌标签页）→ 真 uvicorn（127.0.0.1:8010）→ 真 MySQL。账号用的是 **uid 23 `d207_probe`** ——就是他当时点"留着当夹具"那个账号，这次真派上用场了。后端起的时候带 `RUN_SCHEDULER=false`：不是偷懒，是为了让"补岗位向量"那 30 分钟一拍**不会**把我导入的测试行拿去打 embedding API——那是要花他的钱的。
+
+| 接口 | 服务端记录 | 走到哪一步 |
+| --- | --- | --- |
+| `POST /api/resume/upload` | 200 / 44.87 ms | 同步读整份上传文件 + `check_quota` 那次数据库读都真跑了，然后被"免费版最多 1 份简历"这条**业务规则**挡在写库之前 ⇒ **成功路径（`db.add/commit`）这一发没走到** |
+| `POST /api/jobs/batch-import` | 200 / 15.55 ms | 整条跑通：读文件 → 解析 → 每行 add → 一次 commit，真进去 2 行（id 23671、23672）后删回原状 |
+| `GET /api/resume/62/download?version=optimized` | 200 / 6.50 ms | 业务失败"暂无优化版"——**不是缺陷**，这个账号确实没有优化版 |
+| `GET /api/resume/62/download?version=original` | 200 / **254.79 ms** | **完整成功路径**：两次取简历 + 直接调 `export_docx`（就是把 `run_in_threadpool` 拆掉的那处）+ FileResponse，回来 37,221 字节的 docx。这一发按旧形状就是"一个人下载、全服务陪着等 0.25 秒" |
+| `GET /api/knowledge/admin/embedding-stats` | 200 / 5.93 ms | 候选人身份 → `admin only`；管理员那一支（含数据库读）由 `tests/test_knowledge_embedding_stats_api.py:67` 断言，不是这里 |
+| `WS /ws/interview/999999` | 未 accept 即关闭 | +1 次 `interview_session` 主键读 ⇒ 走到了 `(None, None)` 那一支 |
+| `WS /ws/interview/14`（属于 user 9） | 未 accept 即关闭 | 又 +1 次主键读 ⇒ 读到了真实标量再判归属，走的是 4003 那一支 |
+| `POST /knowledge/{doc_id}/reprocess`、`/jobs/search-external`、`/jobs/fetch-detail` | **没跑** | 前者要跑 embedding（花钱），后两者真出网抓第三方招聘站（`job_spider.py:227` 打的是 zhipin 的接口） |
+
+**WS 那两行为什么要用数据库计数器证明**：浏览器只看得到 uvicorn 那句 `403`——服务端的关闭发生在 `accept()` 之前，Chrome 就把 `onerror` 报给你，**4001/4003/4004 三个分支在页面里长得一模一样**。所以改用 MySQL 自己的按表读计数归因：有效 token 两发各 +1，坏 token 那发 +0。分支级的"关闭码等于几"仍由测试套件钉（`test_interview_ws.py:87` 那条对照组断言的就是"走到 4004"）。
+
+**归因仪器自己也错过一次**：第一把用的是 `SHOW GLOBAL STATUS LIKE 'Com_select'`，结果读数被我自己的测量污染——SQLAlchemy 一连上就跑几条 `SELECT @@…`，一次 +5，正好盖掉我要看的那 1 次。换成 performance_schema 的按表计数才干净。
+
+**顺带发现的两件事，都不算"已修"**：
+1. `src/api/interview.js:106-108` 把开发态 WS 基址钉在 `localhost:8000`（注释写的是"前端跑 5173、后端在 8000"这个假设）。所以后端起在 8010 时，页面里的面试 WS 连不上——我是绕开页面直连 8010 才验成的。逃生口 `VITE_WS_BASE` 代码里本来就有，所以这不是缺陷，是那条注释的假设过期了；README 记的是 8010，两边口径不一致这一点值得以后顺手对一下。
+2. 我一开始把 URL 写成 `/api/knowledge/embedding-stats`，拿到 422，差点报成"`/{doc_id}` 把这条路由挡了"。**查注册顺序后是我错**：真实路径带 `/admin/`，没被挡，测试与前端用的都对。记这条是因为"看着像 bug、查下来是自己写错"这一类本仓已经栽过几轮，先把假设证一遍再说话。
+
+**清理核对（每一项都复测过，不是"应该删了"）**：JD 73 → 73、`D219%` 残留 0；user23 简历 6 → 6；这次新生成的那份 docx（`uploads/export/2026/10/resume_62_original_cd6170ce….docx`）已删，`find uploads -newermt "-30 minutes"` 现在是 0；两个进程按核对过的 PID 停掉（18628 uvicorn / 29716 vite，命令行都先看后杀）；端口 8010、5174 都空；工作树干净——**这一刀没改任何产品代码**。
+
+**§10 计数**：没挂新项。两件顺带发现里，WS 基址那条属"README 与代码注释口径不一致"，不构成待拍板；真要做的是把 `VITE_WS_BASE` 写进前端 env 示例，那是下一个小刀。现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+
 #### 已交付：D164 回算的"写"那一半落成工具——默认 dry-run，`--apply` 还要配 `--backup`，今天一个字都没写
 
 **交付**：`backend/scripts/score_backfill.py` + `backend/tests/test_score_backfill_apply.py` 8 条。§10.38 的 ③ 从此是一条可以一键执行的命令，但**没有执行**——这一步改的是候选人已经看过的数。
