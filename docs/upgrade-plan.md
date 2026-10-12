@@ -5361,6 +5361,36 @@ D221 卡在业务规则上（那个账号 6 份简历、免费版限 1 份），
 **§10 计数**：没挂新项（修法那一档我在对话里当面问，不等他不在的时候往账上添条目）。现取标题行重算仍是
 **在册 38 条（1–25、28–40）、open 0**。
 
+#### 已交付：D228 那 8 个提交推上去了，`job_import_task` 的迁移也落到了 `llmXM`
+
+**两件事都按他点名的范围做，没有顺手多做一寸**：
+
+1. **推送**：先 `git fetch` 再核范围——`origin/master..HEAD` 现取 **8 个提交**（D221–D227），涉及 **22 个文件**，
+   逐个过目：真实的 `backend/.env` **不在名单里**（它被 gitignore），唯一被改的模板类文件是
+   `frontend/.env.example`，diff 只加了四行注释、**没有任何真值**；再对整份 diff 扫一遍凭据形态
+   （`sk-…`、`api_key=`、`password="…"`、PEM 头、`ghp_`、`AKIA`）**零命中**。然后 `git push origin master`
+   打出 `3f1dc04..261e7d6`，推完再数一次 `origin/master..HEAD` = **0**。
+2. **迁移**：目标是他点名的 `llmXM`，只走 `20261010_0028 → 20261012_0029` 那一条。
+   动手前用一次性 runner 立了三道拒绝条件（主机必须 `127.x`、库名必须 `llmxm`、`alembic_version` 必须正好是
+   `0028`），并把目标写成**版本号而不是 `head`**——将来链上再挂新迁移也不会被这一发顺手带上。
+   现量：表数 **52 → 53**、版本 **0028 → 0029**、`job_import_task` **16 列 + 3 个二级索引**、
+   `information_schema` 里 `id` 的 `EXTRA=auto_increment`（正是 D226 ①b 那条 sqlite 缺陷在 MySQL 上不成立的原因），
+   抽样的 4 张现有表（`tb_user`/`tb_jd`/`interview_session`/`rewrite_suggestion_job`）**四张都还在**。
+   零写入的活证：让 app 自己的 ORM 在新表上发一条 `SELECT ... WHERE id=987654`，返回 `None`、语句表里只有那一条 SELECT。
+
+**一次失败要记下来，因为它差点变成"我写了库"**：第一版 runner 用了 `alembic upgrade 0028:0029` 这种区间写法，
+`command.upgrade` 直接抛 `CommandError: Range revision not allowed`。看日志能确认它**炸在参数阶段、一条 DDL 都没执行**
+（`Running upgrade` 那行根本没出现，`before` 读数之后就没有别的动作），改写成单版本号才跑通。
+另有一条今天新踩的工具坑：**别把带口令的 URL 塞进 `alembic.ini` 的 `set_main_option`**——它走 configparser 插值，
+口令里的 `%` 会被当成插值标记咬坏；`migrations/env.py` 本来就从 `settings.database_url` 取，不需要外部注入。
+
+**`describe_drift` 在 `llmXM` 上报 5 条 `extra`**：`job_import_batch` / `job_sync_log` / `job_data_source` /
+`candidate_screening_session` 四张孤儿表，加 `tb_user.years_of_experience` 一条孤儿列。这是企业侧代码出树时
+**特意保留**的历史残留（口径见"Project scope"那条账），**一条都不涉及这次的新表**，而且 `kind=extra` 那一支
+按 D222 定的规矩只打 INFO——"升级不会去掉它"。所以这不是新漂移，也别去清。
+
+**§10 计数**：没挂新项。现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+
 #### 已交付：D227 D226 那一屏的真浏览器活页验证——落在他本机 MySQL 上的一块临时库，跑完就删
 
 **为什么是这块库**：D226 的 ②③ 两条未验（MySQL 上多久、这一屏真浏览器走过没有）绕不开一张能写的 MySQL 表
@@ -5392,8 +5422,8 @@ D221 卡在业务规则上（那个账号 6 份简历、免费版限 1 份），
 只是那 11 秒整个落在我两次工具往返的间隙里，我的采样第一次读到的就已经是终态。
 "看到的一直是同一句结算"和"这一发没发生"是两回事，后者要用库里的作业数去判，不能靠屏幕。
 
-**仍然未验（这块临时库给不了的）**：① **迁移仍未在他的 `llmxm` 上执行**——他这轮选的是临时库，
-所以现网开发库至今没有 `job_import_task`，打这个接口照旧因缺表失败；② 完成后的"重取推荐"这一跳
+**仍然未验（这块临时库给不了的）**：① ~~迁移仍未在他的 `llmxm` 上执行~~ **已由 D228 执行完（2026-10-12）**，
+当时写这句的理由仍成立：现网开发库在那一刻还没有 `job_import_task`，打这个接口会因缺表失败；② 完成后的"重取推荐"这一跳
 **活页没走到**：临时库里没有简历，`selectedResumeId` 为空，那一发本来就不该发（它仍只由 jsdom 那条腿 + 变异钉着）；
 ③ 取消只验了**作业主人**这一侧，"别人的作业 id 打过来要 404"仍只有后端那条腿；
 ④ `JOB_IMPORT_MAX_WORKERS=1` 下两人同时导入会排队，没测；
