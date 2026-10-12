@@ -5361,6 +5361,53 @@ D221 卡在业务规则上（那个账号 6 份简历、免费版限 1 份），
 **§10 计数**：没挂新项（修法那一档我在对话里当面问，不等他不在的时候往账上添条目）。现取标题行重算仍是
 **在册 38 条（1–25、28–40）、open 0**。
 
+#### 已交付：D225 逐题点评从 JSON 列搬进表——终报不再会被并发抹掉（会话 15 已现场修复）
+
+**改了形状，没改库结构**：`interview_turn_evaluation` 表早就在（D163/D170/D178 一路建起来的），
+这次改的只是**它成为唯一事实来源**，不需要新迁移、没有 `alembic upgrade head`。三处：
+
+1. **写侧断根**：`interview_evaluation_service.process_turn_evaluation` 不再调用
+   `_append_evaluation_message`（那个函数整个删掉）——它原先做的事是"读整个 JSON 列、加一条、整列写回"，
+   10 个 worker 并发就是后写盖先写。评分数据只留在表行上。
+2. **读侧派生**：新增 `evaluation_frame(row)` + `build_conversation(db, session)`，在**快照出口**
+   （`interview_rest._serialize_session`）把点评按表现算回去，插在"该题答案之后"。规则是表优先、
+   表里没行时**原样透传 JSON**——所以 `interview_turn_evaluation` 建成之前的那 14 场老会话一条点评都不会少
+   （这条不是推演，`test_a_session_without_rows_still_shows_the_evaluations_stored_in_json` 钉着，
+   而且它的反向证据是"改成只认表 → 立刻红"）。前端**一行没改**：payload 形状逐字相同。
+3. **判定与写入串行**：新增 `session_write_lock(session_id)`（进程内 per-session 一把锁），
+   `process_turn_evaluation` 的尾部与 `_finish` 的尾部都在锁内**重读会话再判 pending**；
+   `_finish` 在"评分已齐"那一支不再相信自己手上那份内存视图（D224 那次 40 秒的调用带着空视图回来写，
+   正是把齐了的终报盖成 0 分的路径），而是按表重建后再生成。
+
+**测试**：新增 `tests/test_interview_report_race.py` **5 条**（D224 顺序的原样重放 / worker 不再写 JSON 列 /
+老会话透传 / 表与旧副本不显示两遍 / 快照出口形状不变）。**4 发变异各打红对应那条**：去掉按表重建、
+把点评写回 JSON、改成只认表、去掉按 turn_id 去重。另有一条我一开始挑错了探针（拿"无条件丢 JSON 点评"
+去试"只认表"，那一刀在那条测试的路径上根本不可达），换成 `if not rows: return []` 才红——这跟本轮
+CRLF 锚点那件事是同一类错误：**变异没落进被执行的那段代码，测试当然照绿**。
+
+**现场修复**：会话 15 现在 `evaluation_status=completed`、报告里 10 条点评、总分 44、出口 10 帧。
+**这一步多花了 3 次报告调用（6,838 token）**——因为我把同一个修复跑了三遍，其中两遍是下面这两个我自己的错。
+
+**我这轮的两处测量失误（都记下来，因为它们都会变成假结论）**：
+1. 第一次判定"`refresh_completed_report` 静默失败"是**我的读法错了**：我的脚本自己开着一条事务先读了会话，
+   REPEATABLE READ 让后面那次读停在**刷新之前**的快照上——这正是账上早就写过的那条"跨连接轮询要先结束读事务"。
+   而且我把日志 `tail -10` 了，真有异常也会被截掉。两件事叠在一起，我就差一点把"修好了"报成"修不动"。
+2. 复现脚本里我漏了 `engine.evaluations = ...` 这一步，于是 `_generate_report` 走到 fallback，
+   我一度以为函数本身在生成阶段抛异常。
+
+**未验**：① **锁没有被一条多线程测试钉住**：这几条测试都是"把顺序原样重放"的确定性写法，
+真并发下锁是否真的挡住所有交错，没有证据——现场复现（D224）反而是靠"不重叠就不发生"绕过去的。
+② 锁只在**进程内**：多进程/多副本下它不是一把锁，那需要给会话行加 `FOR UPDATE`（docstring 与账上都写明，
+今天单进程形状由 `test_single_process_shape_is_pinned.py` 盯着）。
+③ 老会话（表建成前的 14 场）现在靠"表为空 → 透传 JSON"这条规则活着；如果哪天有人给它们回填了表行，
+JSON 里那份旧副本会被 `covered` 去掉——那时点的正确性没有被测过（去重那条测试测的是单轮）。
+④ 真实并发下的整场面试（多 worker + 断线重连 + 重投同时发生）没再跑第二遍，因为跑一次就是 2 万 token 级别的开销。
+
+**验收**：backend 全量 **952 passed**（947 + 5 条新腿，其中 1 条是改断言的旧腿）；`ruff check .` 干净；
+`ruff format --check .` 369 files already formatted。本场面试 + 修复的总用量：**14 次调用 / 26,762 token**。
+
+**§10 计数**：没挂新项。现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+
 #### 已交付：D164 回算的"写"那一半落成工具——默认 dry-run，`--apply` 还要配 `--backup`，今天一个字都没写
 
 **交付**：`backend/scripts/score_backfill.py` + `backend/tests/test_score_backfill_apply.py` 8 条。§10.38 的 ③ 从此是一条可以一键执行的命令，但**没有执行**——这一步改的是候选人已经看过的数。

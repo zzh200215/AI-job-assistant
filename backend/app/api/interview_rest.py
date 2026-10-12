@@ -27,7 +27,7 @@ from app.services.interview_config_service import (
     list_question_banks,
 )
 from app.services.interview_engine import InterviewEngine
-from app.services.interview_evaluation_service import evaluation_payloads
+from app.services.interview_evaluation_service import build_conversation, evaluation_payloads
 from app.services.llm_service import chat_json
 from app.services.rag_service import search_knowledge
 from app.services.skill_gap import jd_required_names
@@ -276,6 +276,10 @@ def _serialize_session(
     jd = jd or (db.query(JobDescription).filter(JobDescription.id == session.jd_id).first() if session.jd_id else None)
 
     base = session.to_dict()
+    # D225：逐题点评不再存进 `messages` 这个 JSON 列（那是 10 个评分 worker 互相覆盖的地方），
+    # 所以在这里按表现派生回去 —— 客户端看到的形状与从前逐字相同，老会话（表建成之前那 14 场，
+    # 点评只在 JSON 里）也原样透传，不会因为我改了写入侧而看不见历史点评。
+    base["messages"] = build_conversation(db, session)
     base["resume_summary"] = _build_resume_summary(resume)
     base["jd_summary"] = _build_jd_summary(jd)
     base["question_stats"] = _question_stats(base.get("questions") or [])

@@ -27,6 +27,7 @@ from app.services.interview_evaluation_service import (
     completed_evaluation_payloads,
     create_pending_turn_evaluation,
     pending_evaluation_count,
+    session_write_lock,
     submit_turn_evaluation,
 )
 from app.utils.time_helper import utc_now
@@ -329,26 +330,43 @@ class InterviewEngine:
         self.session.status = "completed"
         self.session.completed_at = utc_now()
         self._stopped = True
+        # 先把"结束"这件事落库再决定报告怎么写：状态晚一步可见，逐题评分那边就会拿着旧的
+        # `session.status` 判定，于是 `_evaluation_status` 永远回不到 completed。
+        self.db.commit()
 
         try:
             report = self._generate_report()
         except Exception:
             report = self._fallback_report()
 
-        if pending_evaluation_count(self.db, self.session_id):
-            self.session.evaluation_status = "processing"
-            self.session.memory_snapshot = build_memory_snapshot(self.db, self.session_id)
-            report["evaluation_status"] = "processing"
-            report["interview_memory"] = self.session.memory_snapshot
-        else:
-            self.session.evaluation_status = "completed"
-            report["evaluation_status"] = "completed"
-        # 赋值放在改完之后：JSON 列不是 MutableDict，一旦被 flush 出去，之后再动那个 dict 也不会
-        # 再来一次 UPDATE。生产会话 autoflush=False 看不出来，测试会话 autoflush=True、中间那句
-        # `pending_evaluation_count` 会把当时那份先序列化走 —— 于是报告里留着 "idle"。
-        # D170 那条是反方向（autoflush 关着才看不见），两种读数都要能过才算钉住。
-        self.session.evaluation = report
-        self.db.commit()
+        # D225：判定放在锁里、并且**重读之后**才判。这两件事都是被现场逼出来的：
+        #   · 生成上面这份报告用的 `self.evaluations` 是本引擎早先重建的，而这一次模型调用
+        #     可能比最后一题的评分还慢（D224：报告调用 40.4s，最后几条评分在那之后才落地），
+        #     于是"我算出来的报告"其实是空的，写下去就把已经齐了的终报盖回 0 分；
+        #   · 评分 worker 也会写这两个字段，没有串行就是后写的赢、而不是对的赢。
+        # 所以：还有 pending 才写这份占位报告；已经齐了就一律不写，交给 refresh 按表重建。
+        with session_write_lock(self.session_id):
+            self.db.refresh(self.session)
+            pending = pending_evaluation_count(self.db, self.session_id)
+            if pending:
+                self.session.evaluation_status = "processing"
+                self.session.memory_snapshot = build_memory_snapshot(self.db, self.session_id)
+                report["evaluation_status"] = "processing"
+                report["interview_memory"] = self.session.memory_snapshot
+                # 赋值放在改完之后：JSON 列不是 MutableDict，一旦被 flush 出去，之后再动那个 dict
+                # 也不会再来一次 UPDATE（D170 那条是同族的反方向）。
+                self.session.evaluation = report
+                self.db.commit()
+            else:
+                # 评分已经全齐：丢掉上面那份可能已经过期的内存视图，按表重建再生成一次。
+                self.evaluations = self._rebuild_evaluations()
+                report = self._generate_report()
+                report["evaluation_status"] = "completed"
+                report["interview_memory"] = build_memory_snapshot(self.db, self.session_id)
+                self.session.evaluation = report
+                self.session.evaluation_status = "completed"
+                self.session.memory_snapshot = report["interview_memory"]
+                self.db.commit()
 
         end_message = {
             "role": "system",

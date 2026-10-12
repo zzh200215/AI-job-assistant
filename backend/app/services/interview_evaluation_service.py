@@ -230,19 +230,18 @@ def process_turn_evaluation(session_id: int, evaluation_id: int) -> None:
                 record, _fallback_evaluation(), source="deterministic_fallback", error_type=type(exc).__name__
             )
 
-        _append_evaluation_message(session, record)
-        # 这一句 flush 是必须的，不是卫生代码：`SessionLocal` 的 `autoflush=False`
-        # （`core/database.py:38`），而下面两处都是"读自己刚写的东西"——不 flush 就看不见。
-        # 后果有两个，2026-10-09 由 D170 那台 mock 仪器在真 MySQL 上抓到：
-        #   · `build_memory_snapshot` 少算刚刚这一题（它的 `completed_turns` 恒比实际少 1）；
-        #   · `_evaluation_status` 数到"还有一题没跑完"，于是把 `processing` 写回去，
-        #     `should_refresh_report` 因此永远不成立，**面试终报永远不会齐**。
-        # 测试里看不见这件事，是因为 conftest 那个 sessionmaker 的 autoflush 是**开**的。
-        db.flush()
-        session.memory_snapshot = build_memory_snapshot(db, session_id)
-        session.evaluation_status = _evaluation_status(db, session_id, session.status)
-        db.commit()
-        should_refresh_report = session.status == "completed" and session.evaluation_status == "completed"
+        # D225：这里**不再**往 `session.messages` 里追加点评（那正是 10 个 worker 互相覆盖
+        # 丢消息的地方）。点评只留在 `interview_turn_evaluation` 的行上，出口由
+        # `build_conversation` 现派生。下面这次 flush/commit 因此只写行与状态。
+        db.flush()  # D170：生产会话 autoflush=False，下面"读自己刚写的"两处不 flush 就看不见
+        with session_write_lock(session_id):
+            # 锁内重读再判定：pending 与状态列都是"别人可能刚改过"的东西，用 worker 自己
+            # 那份内存里的旧值判定，就会把已经齐了的会话又写回 processing（D224 现场）。
+            db.refresh(session)
+            session.memory_snapshot = build_memory_snapshot(db, session_id)
+            session.evaluation_status = _evaluation_status(db, session_id, session.status)
+            db.commit()
+            should_refresh_report = session.status == "completed" and session.evaluation_status == "completed"
     except Exception:
         db.rollback()
         logger.exception(
@@ -302,34 +301,99 @@ def _reference_answer(session: InterviewSession, question_index: int) -> str:
     return ""
 
 
-def _append_evaluation_message(session: InterviewSession, record: InterviewTurnEvaluation) -> None:
+def evaluation_frame(record: InterviewTurnEvaluation) -> dict[str, Any]:
+    """一条逐题点评在客户端里的样子。
+
+    D225：这形状**原来**是被 `_append_evaluation_message` 塞进 `InterviewSession.messages`（一个
+    JSON 列）的，10 个后台 worker 各自"读整列-改-写整列"，后提交的把先提交的抹掉——真跑一场面试
+    （D224）10 条点评只剩 6 条就是这么丢的。现在它是快照出口按 `interview_turn_evaluation` 的行
+    **现派生**出来的，字段与从前逐字相同，所以前端不需要跟着改。
+    """
+    return {
+        "role": "system",
+        "type": "evaluation",
+        "content": record.feedback,
+        "metadata": {
+            "turn_id": record.turn_id,
+            "round": record.question_index + 1,
+            "score": record.overall_score,
+            "completeness": record.completeness,
+            "accuracy": record.accuracy,
+            "depth": record.depth,
+            "expression": record.expression,
+            "improvement": record.improvement,
+            "evidence": record.evidence or {},
+            "async": True,
+        },
+        "timestamp": (record.completed_at or utc_now()).isoformat(),
+    }
+
+
+def build_conversation(db: Session, session: InterviewSession) -> list[dict[str, Any]]:
+    """给客户端的消息列表：JSON 列里原有的条目 + 表里已完成的点评，按"那一题的答案之后"插回去。
+
+    兼容是这里的重点：`interview_turn_evaluation` 是 D163/D170 之后才有的表，**它建成之前的会话**
+    逐题点评只活在 `messages` 这个 JSON 列里。所以既不能"只读表"（老会话的点评会凭空消失），
+    也不能"只读 JSON"（新会话的点评正是要从 JSON 里搬走的那件事）。规则是：
+      * 表里有行 → 以表为准，并丢掉 JSON 里同 `turn_id` 的旧副本（否则同一题显示两遍）；
+      * 表里没行、JSON 里有 → 原样留着（老会话照旧能看）；
+      * 超时那类 `system` 消息不在搬动范围内（`_rebuild_evaluations` 仍靠它推断，见 L3）。
+    """
     messages = list(session.messages or [])
-    if any(
-        (item.get("metadata") or {}).get("turn_id") == record.turn_id and item.get("type") == "evaluation"
-        for item in messages
-    ):
-        return
-    messages.append(
-        {
-            "role": "system",
-            "type": "evaluation",
-            "content": record.feedback,
-            "metadata": {
-                "turn_id": record.turn_id,
-                "round": record.question_index + 1,
-                "score": record.overall_score,
-                "completeness": record.completeness,
-                "accuracy": record.accuracy,
-                "depth": record.depth,
-                "expression": record.expression,
-                "improvement": record.improvement,
-                "evidence": record.evidence or {},
-                "async": True,
-            },
-            "timestamp": utc_now().isoformat(),
-        }
-    )
-    session.messages = messages
+    rows = [row for row in list_turn_evaluations(db, session.id) if row.status == "completed"]
+    if not rows:
+        return messages
+
+    covered = {str(row.turn_id) for row in rows}
+    kept: list[dict[str, Any]] = []
+    for item in messages:
+        meta = item.get("metadata") or {}
+        if item.get("type") == "evaluation" and str(meta.get("turn_id") or "") in covered:
+            continue
+        kept.append(item)
+
+    # 插回原位：紧跟在该题最后一条 answer 之后；找不到就接到尾部（表里有行但答案不在 JSON 里，
+    # 例如中途换过进程），顺序仍以 round 为准。
+    by_round: dict[int, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_round.setdefault(row.question_index + 1, []).append(evaluation_frame(row))
+
+    out: list[dict[str, Any]] = []
+    placed: set[int] = set()
+    for item in kept:
+        out.append(item)
+        meta = item.get("metadata") or {}
+        if item.get("type") == "answer":
+            round_num = int(meta.get("round") or 0)
+            if round_num in by_round:
+                out.extend(by_round[round_num])
+                placed.add(round_num)
+    leftovers = [frame for round_num, frames in sorted(by_round.items()) if round_num not in placed for frame in frames]
+    out.extend(leftovers)
+    return out
+
+
+_SESSION_LOCK_CAP = 512
+_session_locks: dict[int, Lock] = {}
+_session_locks_guard = Lock()
+
+
+def session_write_lock(session_id: int) -> Lock:
+    """同一个会话的"改状态 / 写终报"必须串行（D225）。
+
+    锁住在进程内：这些 worker 本来就是同进程的线程（逐题评分池 + WS 步骤），而 D220 刚量过
+    "API 进程 = 全部 HTTP 流量"。**跨进程不是一把锁**——真要防住那个，得给会话行加
+    `SELECT … FOR UPDATE`；本仓今天的形状是单进程，所以先不背那把复杂度，注释与账上都写明。
+    """
+    with _session_locks_guard:
+        lock = _session_locks.get(session_id)
+        if lock is None:
+            if len(_session_locks) >= _SESSION_LOCK_CAP:
+                # 只挡无界增长，不做引用计数：会话数以千计时会重建条目，代价是一次竞态窗口，
+                # 而那窗口里的两个写者本来就不在锁的设计目标内（同一次终报）。
+                _session_locks.clear()
+            lock = _session_locks[session_id] = Lock()
+        return lock
 
 
 def list_turn_evaluations(db: Session, session_id: int) -> list[InterviewTurnEvaluation]:
@@ -402,28 +466,44 @@ def _evaluation_status(db: Session, session_id: int, session_status: str) -> str
     return "idle"
 
 
-def refresh_completed_report(session_id: int) -> None:
-    """Regenerate the final report only after every deferred score has been persisted."""
+def refresh_completed_report(session_id: int, *, db: Session | None = None) -> None:
+    """Regenerate the final report only after every deferred score has been persisted.
+
+    与 `_finish` 共用同一把会话写锁：终报的"谁最后写"必须和"谁看见 pending 为 0"是同一个判定，
+    否则一条 40 秒的报告调用可以盖掉另一条已经算清楚的写入（D224 现场就是这个形状）。
+
+    `db` 给的是"调用方已经有一条会话了，别再开一条"：生产上少一次无谓的连接，测试里这一点更要紧
+    ——本仓有两块内存库，引擎自己 `SessionLocal()` 会连到另一块上去，然后报"会话不存在"。
+    """
     from app.services.interview_engine import InterviewEngine
 
     engine = InterviewEngine(session_id)
+    if db is not None:
+        engine.db = db
+    owns_db = db is None
     try:
-        engine._load_session()
-        if not engine.session or engine.session.status != "completed":
-            return
-        engine.question_count = len(engine.session.questions or [])
-        engine.evaluations = engine._rebuild_evaluations()
-        engine.start_time = engine._infer_start_time()
-        report = engine._generate_report()
-        report["evaluation_status"] = "completed"
-        report["interview_memory"] = engine.session.memory_snapshot or {}
-        engine.session.evaluation = report
-        engine.session.evaluation_status = "completed"
-        engine.db.commit()
+        with session_write_lock(session_id):
+            engine._load_session()
+            if not engine.session or engine.session.status != "completed":
+                return
+            engine.question_count = len(engine.session.questions or [])
+            engine.evaluations = engine._rebuild_evaluations()
+            engine.start_time = engine._infer_start_time()
+            if pending_evaluation_count(engine.db, session_id):
+                # 拿到锁的一瞬间又有新的 pending（例如重投的那一发刚被领走）：这一趟不写终报，
+                # 让真正最后一个完成评分的 worker 再叫一次。
+                return
+            report = engine._generate_report()
+            report["evaluation_status"] = "completed"
+            report["interview_memory"] = engine.session.memory_snapshot or {}
+            engine.session.evaluation = report
+            engine.session.evaluation_status = "completed"
+            engine.db.commit()
     except Exception:
         logger.exception("Failed to refresh completed interview report session_id=%s", session_id)
     finally:
-        engine.cleanup()
+        if owns_db:
+            engine.cleanup()
 
 
 def _score(value: Any) -> int:

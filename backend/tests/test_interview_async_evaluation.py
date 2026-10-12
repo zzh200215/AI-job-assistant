@@ -245,7 +245,15 @@ def test_background_worker_persists_score_evidence_and_memory(db_session, make_i
     assert record.status == "completed"
     assert record.evidence["source"] == "answer_evaluation_agent"
     assert engine.session.memory_snapshot["completed_turns"] == 1
-    assert any(item["type"] == "evaluation" for item in engine.session.messages)
+    # D225：点评不再写进 `messages` 这个 JSON 列（那是并发互相覆盖的地方）；它从表里派生回去，
+    # 所以对客户端仍然可见——两件事都要断言，只断言"看得到"的话，写回 JSON 也能过。
+    assert not any(item["type"] == "evaluation" for item in engine.session.messages)
+    frames = [
+        m
+        for m in interview_evaluation_service.build_conversation(db_session, engine.session)
+        if m["type"] == "evaluation"
+    ]
+    assert len(frames) == 1 and frames[0]["metadata"]["turn_id"] == record.turn_id
 
 
 def test_completion_reads_its_own_writes_with_the_apps_autoflush_setting(
