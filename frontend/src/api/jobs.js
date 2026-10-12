@@ -7,7 +7,7 @@ export const getJobRecommendations = (params) => request.get('/jobs/recommend', 
 // 写入模拟数据
 export const seedMockJobs = () => request.post('/jobs/seed')
 
-// 批量导入 JD
+// 批量导入 JD —— D226：这条现在只建作业，入库在后台跑，返回的是作业载荷（job_id/status/total）
 export const batchImportJobs = (file, source = 'imported') => {
   const form = new FormData()
   form.append('file', file)
@@ -16,6 +16,12 @@ export const batchImportJobs = (file, source = 'imported') => {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
+
+// 导入作业进度；载荷里没有失败原因原文（那句可能带文件内容），只有计数
+export const getJobImportTask = (jobId) => request.get(`/jobs/batch-import/${jobId}`)
+
+// 停止导入：已经入库的行不回滚，服务端只把剩下的行停住
+export const cancelJobImportTask = (jobId) => request.post(`/jobs/batch-import/${jobId}/cancel`)
 
 // 提交推荐反馈
 export const submitJobFeedback = (resumeId, jdId, feedbackType, matchScore) =>

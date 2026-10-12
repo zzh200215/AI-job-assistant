@@ -106,6 +106,28 @@
           </div>
         </div>
 
+        <!-- D226：入库搬进后台作业之后，这一行是进度唯一的去处。它得自己说完
+             "处理了几行 / 几行进库 / 几行被跳过 / 为什么跳过"，而不是留一个转完圈就没动静的按钮。 -->
+        <div v-if="importJob.jobId" class="import-status">
+          <span class="import-count">{{ importProgressText }}</span>
+          <el-progress
+            v-if="importRunning"
+            class="import-bar"
+            :percentage="importPercent"
+            :show-text="false"
+            :stroke-width="6"
+          />
+          <el-button
+            v-if="importRunning"
+            size="small"
+            :loading="importJob.stopping"
+            @click="stopImport"
+          >
+            停止
+          </el-button>
+          <span v-if="importProblemText" class="import-problem">{{ importProblemText }}</span>
+        </div>
+
         <!-- 空状态引导 -->
         <el-empty v-if="!selectedResumeId && !loading.resumes" :image-size="120" class="empty-hint">
           <template #description>
@@ -585,7 +607,7 @@
 
 <script setup>
 import { userErrorCopy } from '@/utils/requestTracing'
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getResumeList } from '@/api/resume'
 import {
@@ -593,6 +615,8 @@ import {
   getJobFeedbackStats,
   seedMockJobs,
   batchImportJobs,
+  getJobImportTask,
+  cancelJobImportTask,
   submitJobFeedback,
   startFullAnalysis,
   getJobPipelineList,
@@ -623,6 +647,7 @@ import { isTopTier, scoreToneFillClass } from '@/utils/scoreTone'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import { isoMonthDay } from '@/utils/format/date'
 import { useLatestCall } from '@/composables/useLatestCall'
+import { createAgentTaskPoller } from '@/utils/agentTaskPolling'
 
 const router = useRouter()
 const route = useRoute()
@@ -806,17 +831,155 @@ async function seedData() {
   }
 }
 
-async function handleImport(file) {
+// === 批量导入作业（D226）===
+// `polling` 与 `status` 是两件事，分开记：`status` 是库里那一行的状态（进度条按它说话），
+// `polling` 是这条轮询链还活着。超时之后库里可能还是 `running`，但屏幕不该再画一个转动的条。
+const importJob = reactive({
+  jobId: null,
+  fileName: '',
+  status: '',
+  total: 0,
+  done: 0,
+  created: 0,
+  skipped: 0,
+  problems: [],
+  note: '',
+  polling: false,
+  stopping: false,
+})
+
+// 预算 150 × 2000ms = 300 秒。上限不是随手取的：服务端那条租约是 10 分钟，读路径会把超过租约
+// 的 `running` 判成 failed —— 客户端必须在那之前住手，否则看到的是自己造出来的"失败"。
+// D219 现量（sqlite、2000 行 = 677ms）说明 300 秒对 10MB 文件很宽；MySQL 上同样的行数要多久**未验**。
+const IMPORT_POLL_INTERVAL_MS = 2000
+const IMPORT_POLL_MAX_ATTEMPTS = 150
+
+const importRunning = computed(
+  () => importJob.polling && (importJob.status === 'pending' || importJob.status === 'running')
+)
+const importPercent = computed(() =>
+  importJob.total > 0 ? Math.min(100, Math.round((importJob.done / importJob.total) * 100)) : 0
+)
+const importProgressText = computed(() => {
+  const { done, total, created, skipped } = importJob
+  if (importJob.status === 'completed') return `导入完成：${created} 条入库，跳过 ${skipped} 条`
+  if (importJob.status === 'canceled')
+    return `导入已停止：停止前入库 ${created} 条，跳过 ${skipped} 条（已入库的不回滚）`
+  if (importJob.status === 'failed')
+    return `导入失败：已处理 ${done}/${total}，入库 ${created} 条，可把剩下的重新上传${importJob.note ? `：${importJob.note}` : ''}`
+  return `正在导入：已处理 ${done}/${total}，入库 ${created} 条，跳过 ${skipped} 条${importJob.note ? `（${importJob.note}）` : ''}`
+})
+// 跳过的那几十行凭什么被跳过：载荷带前 10 条原因（服务端不把它们静默丢掉，前端也不该）
+const importProblemText = computed(() => {
+  if (!importJob.problems.length) return ''
+  const head = importJob.problems
+    .slice(0, 3)
+    .map((p) => `第 ${p.row} 行${p.reason ? `：${p.reason}` : ''}`)
+    .join('；')
+  const more = importJob.skipped > importJob.problems.length ? ` 等共 ${importJob.skipped} 条` : ''
+  return `跳过原因：${head}${more}`
+})
+
+function applyImportProgress(payload) {
+  if (!payload) return
+  importJob.jobId = payload.job_id ?? importJob.jobId
+  importJob.fileName = payload.file_name ?? importJob.fileName
+  importJob.status = payload.status ?? importJob.status
+  importJob.total = payload.total ?? importJob.total
+  importJob.done = payload.done ?? importJob.done
+  importJob.created = payload.created ?? importJob.created
+  importJob.skipped = payload.skipped ?? importJob.skipped
+  importJob.problems = payload.problems ?? []
+}
+
+const importPoller = createAgentTaskPoller(
+  {
+    getAgentTask: (jobId) => getJobImportTask(jobId),
+    // 这个作业没有分步日志（进度就是那四个计数器），`steps` 只喂 onProgress，这里没人用它。
+    getAgentSteps: async () => ({ steps: [] }),
+  },
+  {
+    // 卸载即落地：不打开的话 `stopPolling()` 只清表，那个 `await` 永不返回（D204 量到的悬挂）。
+    // 打开之后卸载会 reject('polling_stopped')，下面的 catch 对它不出声（D207 口径）。
+    rejectOnStop: true,
+    setPollingState(value) {
+      importJob.polling = value
+    },
+  }
+)
+
+onUnmounted(() => importPoller.stopPolling())
+
+async function runImportJob(jobId) {
   try {
-    const data = await batchImportJobs(file)
-    ElMessage.success(data?.message || '导入成功')
-    if (selectedResumeId.value) {
-      await loadRecommendations()
-    }
+    await importPoller.pollTask(jobId, {
+      maxPollCount: IMPORT_POLL_MAX_ATTEMPTS,
+      intervalMs: IMPORT_POLL_INTERVAL_MS,
+      // 库里那一行的 status 才是进度口径，载荷每读一次就往 importJob 上写一次
+      onProgress: (job) => applyImportProgress(job),
+      onCompleted: (job) => applyImportProgress(job),
+      onCancelled: (_error, job) => applyImportProgress(job),
+      onFailed: (_error, job) => applyImportProgress(job),
+      onTimeout: (_error, job) => applyImportProgress(job),
+      successStatuses: ['completed'],
+      failureStatuses: ['failed'],
+      cancelledStatuses: ['canceled'],
+    })
+  } catch (e) {
+    // `polling_stopped` = 卸载打断，对候选人没发生过任何事，所以不出声（D207 那条口径）。
+    if (e?.code === 'polling_stopped') return
+    // 停止与失败这两支由状态行按库里那一行的 status 说话，这里不另写一句（同 §10.21 的理由：
+    // 一个动作两句措辞迟早漂）。
+    if (e?.code === 'task_cancelled' || e?.code === 'task_failed') return
+    // 剩下的是"我们这双眼睛先闭上了"：轮询超时或进度 GET 连续失败。
+    // **不从 Error 上取原文**：轮询器把服务端那句失败原因装进了它的 Error，而那句可能含文件原文；
+    // 这条链上给人看的话一律由 `userErrorCopy` 或这里写死的中文出。
+    importJob.note =
+      e?.code === 'task_timeout'
+        ? '进度已停止跟踪，可稍后到岗位列表确认结果'
+        : userErrorCopy(e, '导入进度读取失败')
+  }
+  if (importJob.created && selectedResumeId.value) {
+    // 服务端在作业完成时清了推荐缓存，这里把列表重取一次，导入的岗位才会出现在屏上
+    await loadRecommendations()
+  }
+}
+
+async function stopImport() {
+  if (!importJob.jobId || importJob.stopping) return
+  importJob.stopping = true
+  try {
+    applyImportProgress(await cancelJobImportTask(importJob.jobId))
+  } catch {
+    // POST 失败由 request.js 念出来，这里不再补一句，也不把状态改回"还在跑"
+  } finally {
+    importJob.stopping = false
+  }
+}
+
+async function handleImport(file) {
+  // D226：`POST /jobs/batch-import` 现在只回一个作业（job_id + 解析出来的行数），入库在后台跑。
+  // 这一跳不接上进度，屏幕上就只剩一个转完圈就没动静的按钮。
+  if (importJob.polling) {
+    ElMessage.info('上一次导入还在进行中，可先点「停止」')
+    return false
+  }
+  let created
+  try {
+    created = await batchImportJobs(file)
   } catch (e) {
     ElMessage.error('导入失败: ' + userErrorCopy(e, '网络异常，请稍后重试'))
+    return false
   }
-  return false // 阻止默认上传
+  if (!created?.job_id) {
+    // 服务端没给作业 id 就没得轮询，这时候说"已开始"是假话
+    ElMessage.error('导入失败: 服务端没有返回导入任务')
+    return false
+  }
+  applyImportProgress(created)
+  // 不 await：轮询自己往 importJob 上写，这一发得立刻把 before-upload 结掉（返回 false 才是"别真上传"）。
+  void runImportJob(created.job_id)
+  return false
 }
 
 async function analyzeJob(jdId) {
@@ -1328,6 +1491,26 @@ function segmentStyle(value, total) {
 .top-actions {
   display: flex;
   gap: 8px;
+}
+/* D226：导入作业的进度行。放在操作行下面而不是弹层里——它要能一直待在那儿，
+   人在往下翻推荐时也知道上面那一发还没跑完。 */
+.import-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.import-count {
+  font-size: 13px;
+  color: var(--app-text);
+}
+.import-bar {
+  width: 160px;
+}
+.import-problem {
+  font-size: 12px;
+  color: var(--app-muted);
 }
 .empty-hint {
   padding: 24px 0 8px;

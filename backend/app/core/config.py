@@ -119,6 +119,22 @@ class Settings(BaseSettings):
     # 清理走"提交新作业时顺带删掉本人过期的"，不另立一条调度任务（见 rewrite_job_service）。
     REWRITE_JOB_RETENTION_DAYS: int = 7
 
+    # D226：批量导入岗位变成后台作业（`job_import_task`）。
+    # 1 而不是 2：一次导入是纯数据库写，占一根连接 + 一路 INSERT；D214/D215 已经量过"后台并发
+    # 直接从 HTTP 那 20 根里扣"，而这种活儿并排跑只会互相抢池子、没有吞吐收益。
+    JOB_IMPORT_MAX_WORKERS: int = 1
+    # 租约要大于最坏一次跑动。现量（D219，同一份工作：解析 + 每行一个 ORM 对象 + commit）：
+    # 50 行 20ms、300 行 99ms、2000 行 677ms；文件上限 10MB ⇒ 行数上限是万级，秒级到几十秒。
+    # 取 10 分钟留两个数量级余量：宁可晚一步重投，也不要把还在跑的导入抢过来跑第二遍。
+    JOB_IMPORT_LEASE_MINUTES: int = 10
+    # 这张表存的是"导入到第几行、成了几行、跳过了几行"，跑完只对排障有价值，一周足够。
+    JOB_IMPORT_RETENTION_DAYS: int = 7
+    # 每 N 行提交一次并刷进度。太小就把一次导入变成 N 次往返（2000 行按 1 行一提交就是 2000 次），
+    # 太大客户端看不到走动；25 行 ≈ 万级文件也有 400 次刷新。
+    JOB_IMPORT_PROGRESS_EVERY: int = 25
+    # 逐行问题最多记几条：一个 10MB 的坏文件能让 `problems` 长到几十万字节的 JSON。
+    JOB_IMPORT_MAX_PROBLEMS: int = 20
+
     # Operations alerting: thresholds are deliberately configurable per deployment.
     OPERATIONS_ALERT_WINDOW_MINUTES: int = 60
     OPERATIONS_ALERT_QUEUE_BACKLOG_THRESHOLD: int = 100

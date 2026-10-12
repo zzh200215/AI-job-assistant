@@ -15,6 +15,7 @@ from app.models.interview_evaluation import InterviewTurnEvaluation
 from app.models.interview_question import InterviewQuestion
 from app.models.interview_session import InterviewSession
 from app.models.jd_embedding import JobEmbedding
+from app.models.job_import import JobImportTask
 from app.models.job_journal import JobJournal
 from app.models.job_pipeline import JobApplicationPipeline
 from app.models.job_recommend import JobBookmark, JobRecommendationFeedback
@@ -69,6 +70,7 @@ __all__ = [
     "PromptTrace",
     "Resume",
     "ResumeVersion",
+    "JobImportTask",
     "RewriteSuggestionJob",
     "RetrievalLog",
     "SelfCheckLog",

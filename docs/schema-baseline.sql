@@ -49,6 +49,9 @@ CREATE INDEX ix_job_bookmark_action ON job_bookmark (action);
 CREATE INDEX ix_job_bookmark_jd_id ON job_bookmark (jd_id);
 CREATE INDEX ix_job_bookmark_tenant_user ON job_bookmark (tenant_id, user_id);
 CREATE INDEX ix_job_bookmark_user_id ON job_bookmark (user_id);
+CREATE INDEX ix_job_import_task_create_time ON job_import_task (create_time);
+CREATE INDEX ix_job_import_task_status ON job_import_task (status);
+CREATE INDEX ix_job_import_task_user_id ON job_import_task (user_id);
 CREATE INDEX ix_job_journal_created_at ON job_journal (created_at);
 CREATE INDEX ix_job_journal_entry_type ON job_journal (entry_type);
 CREATE INDEX ix_job_journal_jd_id ON job_journal (jd_id);
@@ -403,6 +406,28 @@ CREATE TABLE interview_question (
 	use_count INTEGER, 
 	avg_score INTEGER, 
 	created_at DATETIME, 
+	PRIMARY KEY (id)
+)
+
+;
+
+CREATE TABLE job_import_task (
+	id BIGINT NOT NULL, 
+	user_id BIGINT NOT NULL, 
+	file_name VARCHAR(200) NOT NULL, 
+	source VARCHAR(50) NOT NULL, 
+	status VARCHAR(20) NOT NULL, 
+	claimed_at DATETIME, 
+	finished_at DATETIME, 
+	total INTEGER NOT NULL, 
+	done INTEGER NOT NULL, 
+	created INTEGER NOT NULL, 
+	skipped INTEGER NOT NULL, 
+	problems JSON, 
+	error SMALLINT NOT NULL, 
+	error_msg TEXT, 
+	create_time DATETIME NOT NULL, 
+	update_time DATETIME NOT NULL, 
 	PRIMARY KEY (id)
 )
 

@@ -19,6 +19,7 @@ from app.core.database import get_db
 from app.models.history import JobDescription, Resume
 from app.models.job_recommend import JobBookmark, JobRecommendationFeedback
 from app.models.user import User
+from app.services import job_import_service
 from app.services.job_recommend_engine import JobRecommendationEngine, load_suppressed_reasons
 from app.services.recommendation_tuning import (
     build_feedback_tuning_recommendation,
@@ -1016,72 +1017,49 @@ def batch_import(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # D219：`async def` + 解析整个文件 + 每行 `db.add` + 一次 commit —— 一条请求把整台 worker 的
-    # 事件循环占住，导入的文件越大停得越久。改成 `def` 之后 FastAPI 把整个处理丢进 anyio 线程池，
-    # 上传文件也改成同步读（协程版的 `await file.read()` 在这里没有别的 await 陪着了）。
+    # D226：这条以前是"读整份文件 → 解析 → 每行一个 ORM 对象 → 一次 commit"，全在请求里。
+    # 现量（D219，同一份工作）：50 行 20ms、300 行 99ms、2000 行 **677ms**，而文件上限 10MB
+    # 意味着分母是文件大小而不是运气。入库那一半搬进 `job_import_task` 的作业；**解析留在请求里**
+    # ——它是纯 CPU（毫秒级），而且能把"格式不支持"当场退回，而不是让人拿到一个作业 id 之后
+    # 再去轮询一个永远不会开始的任务。
     content = file.file.read()
-    file_name = (file.filename or "").lower()
-    count = 0
-
+    file_name = file.filename or ""
     try:
-        if file_name.endswith(".csv"):
-            text = content.decode("utf-8-sig")
-            reader = csv.DictReader(io.StringIO(text))
-            for row in reader:
-                title = (row.get("title") or row.get("职位名称") or "").strip()
-                company = (row.get("company") or row.get("公司") or "").strip()
-                raw_text = (
-                    row.get("raw_text") or row.get("rawText") or row.get("JD文本") or row.get("jd_text") or ""
-                ).strip()
-                if not title or not raw_text:
-                    continue
-                db.add(
-                    JobDescription(
-                        user_id=current_user.id,
-                        title=title,
-                        company=company,
-                        location=(row.get("location") or row.get("地点") or "").strip(),
-                        salary_range=(row.get("salary_range") or row.get("薪资") or "").strip(),
-                        industry=(row.get("industry") or row.get("行业") or "").strip(),
-                        raw_text=raw_text,
-                        source=source,
-                    )
-                )
-                count += 1
-        elif file_name.endswith(".json"):
-            text = content.decode("utf-8")
-            data = json.loads(text)
-            items = data if isinstance(data, list) else data.get("jobs", data.get("items", []))
-            for item in items:
-                title = (item.get("title") or item.get("职位名称") or "").strip()
-                raw_text = (
-                    item.get("raw_text") or item.get("rawText") or item.get("jd_text") or item.get("description") or ""
-                ).strip()
-                if not title or not raw_text:
-                    continue
-                db.add(
-                    JobDescription(
-                        user_id=current_user.id,
-                        title=title,
-                        company=(item.get("company") or "").strip(),
-                        location=(item.get("location") or "").strip(),
-                        salary_range=(item.get("salary_range") or "").strip(),
-                        industry=(item.get("industry") or "").strip(),
-                        raw_text=raw_text,
-                        source=source,
-                    )
-                )
-                count += 1
-        else:
-            return fail(message="only CSV and JSON are supported", code=ERR_PARAM)
+        rows = job_import_service.parse_rows(file_name, content)
+    except ValueError as exc:
+        return fail(message=str(exc), code=ERR_PARAM)
+    except Exception as exc:  # noqa: BLE001 - 坏文件（非法编码、坏 JSON）是客户端输入，不是服务端故障
+        return fail(message=f"文件解析失败：{type(exc).__name__}", code=ERR_PARAM)
 
-        db.commit()
-        JobRecommendationEngine.clear_cache()
-        return ok(data={"imported_count": count}, message=f"imported {count} jobs")
-    except Exception as exc:
-        db.rollback()
-        traceback.print_exc()
-        return fail(message=f"import failed: {str(exc)[:100]}", code=ERR_COMMON)
+    job = job_import_service.create_job(
+        db, user_id=current_user.id, file_name=file_name, source=source, total=len(rows)
+    )
+    job_import_service.submit_job(job.id, rows)
+    return ok(data=job.to_progress(), message=f"已开始导入 {len(rows)} 行，可轮询进度或取消")
+
+
+@router.get("/batch-import/{job_id}", summary="Poll a batch import job")
+def batch_import_status(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    job = job_import_service.get_owned_job(db, job_id, current_user.id)
+    if job is None:
+        return fail(message="导入任务不存在", code=ERR_PARAM)
+    return ok(data=job_import_service.touch_job_for_read(db, job))
+
+
+@router.post("/batch-import/{job_id}/cancel", summary="Cancel a batch import job")
+def batch_import_cancel(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    job = job_import_service.get_owned_job(db, job_id, current_user.id)
+    if job is None:
+        return fail(message="导入任务不存在", code=ERR_PARAM)
+    return ok(data=job_import_service.cancel_job(db, job), message="已请求停止，已经导入的行不回滚")
 
 
 @router.post("/seed", summary="Seed demo jobs")
