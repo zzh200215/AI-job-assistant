@@ -5248,6 +5248,41 @@ p50 一致、p95 差 6µs，**在这口池的抖动里量不出稳定差别**。
 
 **§10 计数**：没挂新项。两件顺带发现里，WS 基址那条属"README 与代码注释口径不一致"，不构成待拍板；真要做的是把 `VITE_WS_BASE` 写进前端 env 示例，那是下一个小刀。现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
 
+#### 已交付：D222 两把小刀——漂移话术按方向分开，开发态 WS 端口不再两处各写一遍
+
+**先更正我上一条说错的前提**：我跟他说"README 记的是 8010、代码写死 8000，所以两边打架"。查下来 README 的开发端口**就是 8000**（`README.md:339`、`:426`），跟 `src/api/interview.js` 的默认值一致；**8010 是他本机的习惯**，不在 README 里。所以这不是"文档与代码分叉"，是"改了运行端口没人告诉前端，而且前端也没地方读"。前提错了也照样动手修，但账必须按查到的写。
+
+**第一刀：漂移报告的话术不分方向（`app/core/schema_drift.py`）**
+
+报告刚上线时对**每一条**差异都甩一句"请运行 `alembic upgrade head`（或开 AUTO_CREATE_TABLES）"。差异有两个相反方向：库里**少**东西（没迁移，升级能补）和库里**多**东西（升级不会删掉任何东西）。本仓的开发库正好落在后一半：4 张表 + `tb_user.years_of_experience` 一列，是历史上企业侧代码出树时故意留下的 schema（现取 `grep` 过：`app/` 里没有任何代码引用这几张表，所以确实是孤儿结构而不是"模型在别处"）。
+
+这条误导性不是推演：**D221 那次真浏览器验证里，我读乱码日志把方向读反了**，回报成"有表没建、要去跑迁移"，而 `alembic current` 已经在 head。所以修的是"一句会让人做错动作的提示"：
+- `describe_drift` 从 `list[str]` 改成 `list[Drift]`（`kind` ∈ `missing` / `extra` + `text`），判等级和话术**靠 kind，不靠猜文案**——文案以后还会改，靠 `startswith("缺表")` 判断就是下一个分叉点；
+- 缺 → WARNING + 给出跑得动的动作；多 → INFO + 明说"升级不会去掉它，要删得单独拍一次"；
+- `log_drift` 仍返回文本列表，`app/main.py` 那一个调用点不用改。
+
+**第二刀：开发态 WS 端口（前端）**
+
+`src/api/interview.js:106-108` 在没设 `VITE_WS_BASE` 时把面试 WS 推成 `ws://localhost:8000`。默认值本身对得上 README，问题有两个：一是**这个事实写在了两个地方**（README 一份、代码一份），谁改另一边都不响；二是本机换端口时没有提示。做了三件事，都不动行为：
+- 新增守卫 `tests/wsDevPortMatchesReadme.test.mjs`：从 README 现取 `uvicorn ... --port (\d+)`、从代码现取推断那支的端口，判两边相等；另有一条防空转（匹不到锚点就红，不绿着骗人）。**变异验过牙**：把代码里的端口改成 8011 → 1 红，`cp` 还原 → 2 绿，且文件字节一致（回退用 cp 副本，不碰 `git checkout`）。
+- `.env.example` 把 `VITE_WS_BASE` 写进示例（含"后端跑在别的端口就必须设它，否则页面里的面试连接静默连不上"）；
+- 代码注释改成说清"这个数必须等于 README 记的开发端口 + 有守卫盯着 + 换端口设哪个变量"。
+
+**顺带把本机那份 gitignore 的 `frontend/.env` 加上了 `VITE_WS_BASE=ws://localhost:8010`**（这文件不在版本控制里，是让他本机立刻能用的那一半；注释写了换回 8000 就删掉）。**如实记下另一件事**：`vite.config.js` 的 HTTP 代理目标只读 shell 环境变量（`process.env.VITE_PROXY_TARGET`），`.env` 里的同名项对它无效——所以"代理指向哪个后端"这件事仍然只能靠启动命令传，这条我没改（超出一刀的范围，且要动 vite 配置读法）。
+
+**现量（真环境，不是推演）**
+- 真开发库上跑体检：5 条差异，全部 `kind=extra`，全部 INFO，**WARNING 0 条**——正是当初骗到我的那 5 行，现在不再喊"跑迁移"。
+- 量具自己也错过一次：第一次忘了 `import app.models`，`Base.metadata` 只是子集，于是报出 51 条"多出"。那个文件顶上本来就写着这条坑（"不 import 模型，Base.metadata 只是子集"），我没先读就下结论。补上 import 才是上面那个 5。
+- 前端那半用真浏览器验：装一个 `window.WebSocket` 记录仪，再 `import('/src/api/interview.js')` 调**应用自己的** `connectInterviewWS(999999, …)`，它拨出去的是 `ws://localhost:8010/ws/interview/999999`（以前是 :8000），后端日志同刻出现对应的握手记录。先试过走路由进房间页（`/interview/room/999999`），页面因为会话不存在直接退回配置页、根本没拨 WS——所以那一次不算证据，改用模块自己的函数才算。
+
+**测试**：`tests/test_schema_drift.py` **7 → 10 条**（缺→WARNING 且含补救动作 / 多→INFO 且不含"请运行" / `kind` 是承重件），3 发变异各打红对应那条（话术退回一锅端、方向标签贴错、缺的那侧丢掉补救动作）；`frontend/tests/wsDevPortMatchesReadme.test.mjs` 新增 2 条，1 发变异打红。
+
+**未验**：① 那条 INFO 文案说"要删需要单独决定"，但**没有**任何地方登记过"这 4 张表是刻意留的"这条决定的落点（我只在过程账里找到企业侧出树那几条）。文案因此是"不指挥动作"而不是"指出权威来源"——真要说清得回头把那次决定指出来。② 生产库里如果真出现 `missing` 那侧，这一刀没在活体上验过（只在合成 sqlite 上验了等级与话术）。③ 后端跑 8000 的那条默认路径没重验（我只验了 8010 这一支）。
+
+**验收**：backend 全量 **947 passed**（944 + 3 条新腿）、`ruff check .` All checks passed、`ruff format --check .` 368 files already formatted；frontend `npm test` **39 pass / 0 fail**（37 + 2）、`npx vitest run` **95 个文件全过**、`eslint` 对碰过的两个文件 0 问题、`prettier --check` 对这两个文件通过且 CR 行数 = 0（本机行尾干净，结论才敢用）。
+
+**§10 计数**：没挂新项（两条都是我 own 的发现，直接修）。现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+
 #### 已交付：D164 回算的"写"那一半落成工具——默认 dry-run，`--apply` 还要配 `--backup`，今天一个字都没写
 
 **交付**：`backend/scripts/score_backfill.py` + `backend/tests/test_score_backfill_apply.py` 8 条。§10.38 的 ③ 从此是一条可以一键执行的命令，但**没有执行**——这一步改的是候选人已经看过的数。

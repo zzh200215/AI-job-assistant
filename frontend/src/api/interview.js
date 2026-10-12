@@ -97,8 +97,11 @@ export function connectInterviewWS(sid, onMessage, onError, onClose) {
   // 如果已有连接的 ws，先关闭
   disconnectInterviewWS()
 
-  // WS 基础地址：优先用环境变量 VITE_WS_BASE，否则按当前页面推断
-  // 开发态前端常跑在 5173，后端在 8000，故 localhost 默认指向 8000
+  // WS 基础地址：优先用环境变量 VITE_WS_BASE，否则按当前页面推断。
+  // 推断那支的 8000 不是随手写的：它必须等于 README 里记的后端开发端口
+  // （`python -m uvicorn ... --port 8000`），两边各写一遍迟早分叉，所以有一条守卫盯着
+  // （tests/wsDevPortMatchesReadme.test.mjs）。后端跑在别的端口时（例如本机习惯的 8010），
+  // 不必改代码——在 frontend/.env 里设 VITE_WS_BASE=ws://localhost:8010 即可。
   const wsBase = import.meta.env.VITE_WS_BASE
   let base
   if (wsBase) {
