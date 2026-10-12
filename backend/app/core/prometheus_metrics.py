@@ -295,6 +295,10 @@ def db_pool_window() -> dict[str, Any]:
       `tests/test_single_process_shape_is_pinned.py` 盯着（backend 只有 1 个进程时才绿）。
     * `over_pool_timeout_samples` 用的是"最后一个 `le <= DB_POOL_TIMEOUT` 的桶"，所以它报的是
       "等待超过 ≤30s 的最高那个桶界"。今天桶界正好有 30.0，与 `DB_POOL_TIMEOUT` 严丝合缝。
+
+    **`samples` 的单位**（D220 现量：20 并发 × 每请求 10 次查询，取连接正好 20 次 = 每请求 1.0 次）：
+    一个样本 = 一次 `Pool.connect()` ≈ **一个请求**，不是"一次查询"——一条请求里那 10 次
+    `db.execute` 共用同一根连接。所以 p95 的分母是请求数，读的时候别把它当成每次查询的耗时。
     """
     global _acquire_window_state
     buckets, count, total_seconds = _acquire_cumulative()
