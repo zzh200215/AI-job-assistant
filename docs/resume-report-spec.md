@@ -117,6 +117,9 @@
   **反推所用的那份真人成品没有进仓**：它的姓名、手机号、邮箱在进 `tests/fixtures/` 时被换成
   `示例候选人 / 13600000001 / probe@example.com` 三个假 token，结构一字未动。
   mock 夹具除外——mock 载荷必须带 `（mock）` 前缀，机检把带 `（mock）` 的文件判为夹具。
+  **一个刻意的例外（D231）**：批改稿的 `ins` 不带这个前缀，因为它是会被"采纳"原样写回简历正文的那一位，
+  带标记的简历文本没人能用；标记落在同一条批注的 `note` 上。由
+  `backend/tests/test_resume_report_mock_stages.py::test_mock_payloads_are_marked_as_fixtures` 钉住这一条例外。
 - AI 降级对候选人静默：模型不可用时报告不出现"AI 挂了"这类话，走 §2 的"未知"口径。
 
 ---
