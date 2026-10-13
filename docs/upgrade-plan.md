@@ -6700,7 +6700,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
 
 41. ~~**智能分析那一页的"简历诊断评分"与六模块报告的总分是两套口径，屏幕上没人说清（2026-10-13 D231 现查；三条路都配了半径）**~~ —— **已按 ③ 落地并关闭（同日 D232：`resume-agent-v2` 注入同一张七维表、总分与等级由服务端算、汇总那一格由 `resume_diagnosis_from` 折出来；② 那一档没点，仍归他拍）**。落地时先翻案了本条前半句：`AGENT_REPORT_PROMPT` 从没要求过 `resume_diagnosis`，所以真 provider 下那一格一直是空白，演示里那个 78 只住在 mock 载荷里——形状不是"两个数打架"而是"屏幕读着一个谁都没生产的键"。数与读数见 D232。**下面三条路的原文与半径留着。**
     - 事实：`MultiAgentAnalysis.vue:167` 那一格 `<b>评分：</b>{{ summaryReport.resume_diagnosis?.score }}`，
-      数来自编排的 `FinalReportAgent`——`app/prompts/resume_agent.py:29` 要的是 **`score: 0-100` 自由分**（还另有一个 `format_score: 0-100`），
+      数来自编排的 `FinalReportAgent`——`app/prompts/resume_agent.py:29` 要的是 **`score: 0-100` 自由分**（还另有一个 `format_score: 0-100`），**〔D232 翻案：这一句当时就写错了——`AGENT_REPORT_PROMPT` 从没要求过 `resume_diagnosis`，真 provider 下那一格一直是空白，78 只住在 mock 载荷里〕**
       而六模块评估报告的权威是**七个维度各自满分相加**（`docs/resume-report-spec.md` §2 + `resume_report_rubric.py`，
       模型自报的那个数只进 `model_reported_total` 且被两道视图挡在候选人屏外）。
       同一份简历因此可以在「智能分析」上显示一个 0–100 的自由分、在「评估报告」上显示 `65 / C`，**两个数不同尺、也没有任何一处解释**。
