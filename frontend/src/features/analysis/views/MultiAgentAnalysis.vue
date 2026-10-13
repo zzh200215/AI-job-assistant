@@ -164,12 +164,21 @@
         </el-tab-pane>
 
         <el-tab-pane label="简历诊断">
-          <p><b>评分：</b>{{ summaryReport.resume_diagnosis?.score }}</p>
-          <ul>
-            <li v-for="(f, i) in summaryReport.resume_diagnosis?.key_findings || []" :key="i">
-              {{ f }}
-            </li>
-          </ul>
+          <template v-if="resumeDiagnosis">
+            <p>
+              <b>七维总分：</b>{{ diagnosisScoreText
+              }}<template v-if="resumeDiagnosis.grade"> · {{ resumeDiagnosis.grade }} 档</template>
+            </p>
+            <p>{{ resumeDiagnosis.scale_note }}</p>
+            <ul>
+              <li v-for="(f, i) in resumeDiagnosis.key_findings || []" :key="i">
+                {{ f }}
+              </li>
+            </ul>
+          </template>
+          <!-- 这一格读的是编排里「简历诊断」那一步的七维结果，由服务端相加，不是模型自报的数。
+               那一步没跑就直说没有，不拿空壳占位。 -->
+          <p v-else>这次编排没跑「简历诊断」那一步，所以这一格没有内容。</p>
         </el-tab-pane>
 
         <el-tab-pane label="岗位分析">
@@ -297,6 +306,12 @@ const statusLabel = computed(
 )
 const statusTag = computed(() => tagTypeFor(TASK_STATUS_TAGS, run.value?.status))
 const summaryReport = computed(() => run.value?.summary_report || null)
+
+const resumeDiagnosis = computed(() => summaryReport.value?.resume_diagnosis || null)
+const diagnosisScoreText = computed(() => {
+  const total = resumeDiagnosis.value?.total_score
+  return total === null || total === undefined ? '未评分（七维里还有没读出来的）' : `${total} / 100`
+})
 
 // Dispatch decision: prefer full output from Dispatcher message, fallback to run fields
 const dispatch = computed(() => {

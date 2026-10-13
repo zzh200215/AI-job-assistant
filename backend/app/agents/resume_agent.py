@@ -10,6 +10,7 @@ from app.models.history import Resume
 from app.orchestration.context import AgentContext
 from app.prompts.rendering import render_prompt
 from app.prompts.resume_agent import RESUME_AGENT_PROMPT
+from app.services import resume_report_rubric as rubric
 from app.services.llm_service import chat_json
 
 
@@ -27,13 +28,25 @@ class ResumeAgent(BaseAgent):
             raise ValueError(f"简历 {resume_id} 不存在")
 
         resume_json = json.dumps(resume.parsed_json or {}, ensure_ascii=False)
-        prompt = render_prompt(RESUME_AGENT_PROMPT, resume_json=resume_json)
+        prompt = render_prompt(
+            RESUME_AGENT_PROMPT,
+            resume_json=resume_json,
+            rubric_block=rubric.rubric_prompt_block(),
+        )
 
         result: dict[str, Any] = chat_json(prompt)
+        # §10.41 那档"综合报告与评估报告共用一把尺"落在这里：这一发的分数与等级
+        # 和评估报告走同一个读法与同一条合计规则，缺维度就是未知、不是 0 分。
+        dimensions = rubric.read_dimensions(result.get("dimensions"))
+        total = rubric.total_of(dimensions)
+        result["dimensions"] = dimensions
+        result["total_score"] = total
+        result["grade"] = rubric.grade_of(total)
         return result
 
     def _make_summary(self, result: dict[str, Any]) -> str:
         name = result.get("basic_info", {}).get("name", "未知")
-        score = result.get("format_score", 0)
+        total = result.get("total_score")
+        score = "未评分" if total is None else f"{total}/100 {result.get('grade') or ''}".strip()
         issues = len(result.get("weaknesses", []))
-        return f"简历诊断: {name} | 格式评分 {score} | 发现 {issues} 个问题"
+        return f"简历诊断: {name} | 七维总分 {score} | 发现 {issues} 个问题"

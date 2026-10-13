@@ -616,13 +616,37 @@ _MOCK_AGENT_RESUME = {
             "suggestion": "删除并替换为 RAG/Agent 等岗位关键词",
         },
     ],
-    "expression_quality": {
-        "score": 75,
-        "issues": ["部分经历用被动语态", "动词使用单调"],
-        "tips": ["统一用动词开头", "按 STAR 法则改写项目"],
+    "dimensions": {
+        "metric_ownership": {
+            "score": 12,
+            "note": "（mock）工作经历那条只写负责什么，没有个人达成数；项目里那个日均量级是团队口径。",
+        },
+        "interview_hooks": {
+            "score": 5,
+            "note": "（mock）只有「日均 1w+」一个数字钩子，权衡、边界、踩坑三类都缺，追到第二层没纸可指。",
+        },
+        "role_fit": {
+            "score": 16,
+            "note": "（mock）技能写了 LangChain 但项目里没有对应实践，RAG / Agent 两条词表都没出现。",
+        },
+        "transferability": {
+            "score": 10,
+            "note": "（mock）技能清单是并列名词，没有选型依据与边界，看不出哪些能做主。",
+        },
+        "project_depth": {
+            "score": 13,
+            "note": "（mock）解析服务只有一句「基于 LLM 的结构化解析」，切片口径与失败处理都没写。",
+        },
+        "expression_structure": {
+            "score": 6,
+            "note": "（mock）通篇职责陈述句，没有一处结果句；自我评价里的年限与工作经历一致，这点好。",
+        },
+        "advantage_section": {
+            "score": 3,
+            "note": "（mock）有独立优势段，但讲覆盖面不讲差异化，没有方法论标签。",
+        },
     },
     "missing_keywords": ["RAG", "Agent", "向量检索", "高并发"],
-    "format_score": 78,
     "format_tips": ["保持一页", "技术栈分行清晰列出", "统一时间格式 YYYY-MM"],
     "overall_assessment": "技术基础扎实、AI 经验突出，主要短板是成果未量化与关键词缺失，优化后竞争力强。",
     "optimization_priority": [
@@ -790,17 +814,15 @@ _MOCK_AGENT_CAREER = {
 _MOCK_AGENT_SUMMARY = {
     "report_title": "智能招聘综合分析报告",
     "generated_at": "2026-06-06",
+    # 这里**没有** `resume_diagnosis`：真 prompt（`AGENT_REPORT_PROMPT`）从没要求过这个键，
+    # 而屏幕上那一格现在由 `SummaryAgent` 从 ResumeAgent 的七维结果拼出来（§10.41 ③）。
+    # 留着它只会让 mock 演示出一个真链路里不存在的数据来源。
     "summary": {
         "candidate": "张三",
         "target_position": "Python 后端开发工程师",
         "target_company": "示例科技",
         "match_score": 82,
         "verdict": "技术与岗位高度匹配，建议推进面试",
-    },
-    "resume_diagnosis": {
-        "score": 78,
-        "key_findings": ["技术栈契合", "AI 经验突出", "成果未量化"],
-        "top_improvements": ["量化项目成果", "补充岗位关键词", "删除无效技能词"],
     },
     "job_analysis": {
         "position_summary": "Python 后端 + AI 融合岗位",
