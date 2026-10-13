@@ -8,11 +8,14 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from app.api import resume as resume_api
 from app.core.security import hash_password
 from app.models.user import User
+from app.services import llm_service
 from app.services import resume_analysis_service as service
 
 # mock 载荷（`llm_service._MOCK_REPORT_OVERVIEW`）：七维之和 65，自报总分 72。
@@ -236,3 +239,79 @@ def _user_other(db):
     db.add(user)
     db.commit()
     return user
+
+
+# ---------------------------------------------------------------- 概览那一发的重复付费
+# 简历中心「AI诊断」弹窗与报告作业的阶段一是**同一个函数、同一组入参**，所以这两条路
+# 会不会各付一遍概览的钱（D230 实测单发 27.86s / 3,985 token），取决于
+# `llm_service` 那个进程内 LRU 是否接得住。下面两条把"接得住"与"接不住的那一档"都钉住。
+
+
+@pytest.fixture
+def real_provider_counting_calls(monkeypatch):
+    """把真 transport 换成一个只记 prompt 的桩：既不动钱，也看得见"这一发到底打没打"。"""
+    from app.core.config import settings
+
+    calls: list[str] = []
+
+    def boom(prompt, base_url=None, *, json_mode=True, model=None, disable_thinking=False):
+        calls.append(prompt)
+        raise RuntimeError("探针：不许真打出去")
+
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "openai")
+    monkeypatch.setattr(llm_service, "_openai_compatible_chat", boom)
+    llm_service.clear_llm_cache()
+    try:
+        yield calls
+    finally:
+        llm_service.clear_llm_cache()
+
+
+def _prime_cache(prompt: str, result: dict) -> None:
+    """按 `chat_json` 自己的写入形状把上一发的结果放进缓存（只有 source=real 才会被写）。"""
+    from app.core.config import settings
+
+    key = llm_service._cache_key(settings.LLM_PROVIDER, prompt, True)
+    with llm_service._LLM_CACHE_LOCK:
+        llm_service._LLM_CACHE[key] = {"result": result, "source": "real"}
+
+
+def test_the_second_identical_overview_call_is_absorbed_by_the_llm_cache(
+    db_session, make_resume, real_provider_counting_calls
+):
+
+    user = _user(db_session)
+    rid = make_resume(user_id=user.id, parsed_json={"name": "张三", "self_evaluation": "5 年后端"})
+
+    with pytest.raises(llm_service.LLMProviderError):
+        service.analyze_resume(db_session, rid, user_id=user.id)
+    cached_result = json.loads(
+        llm_service._wrap_json(llm_service._MOCK_REPORT_OVERVIEW).strip().strip("`").removeprefix("json").strip()
+    )
+    _prime_cache(real_provider_counting_calls[0], cached_result)
+
+    before = len(real_provider_counting_calls)
+    result = service.analyze_resume(db_session, rid, user_id=user.id)
+    provenance = llm_service.get_llm_provenance()
+
+    assert len(real_provider_counting_calls) == before, "缓存里已有同一发，却还是又打了一次"
+    assert result["total_score"] == MOCK_DIMENSION_SUM
+    assert provenance["cache_hit"] is True and provenance["source"] == "real"
+
+
+def test_a_different_target_position_is_a_different_prompt_and_pays_again(
+    db_session, make_resume, real_provider_counting_calls
+):
+    """接不住的那一档写清楚：岗位名进了 prompt，换岗位就是另一发，本来就该再付一次。"""
+    user = _user(db_session)
+    rid = make_resume(user_id=user.id, parsed_json={"name": "张三", "self_evaluation": "5 年后端"})
+
+    with pytest.raises(llm_service.LLMProviderError):
+        service.analyze_resume(db_session, rid, user_id=user.id)
+    with pytest.raises(llm_service.LLMProviderError):
+        service.analyze_resume(db_session, rid, target_position="RAG 应用开发", user_id=user.id)
+
+    # 每一发在降级链里会试主备两次，所以数的是**不同的 prompt**：两个岗位名 = 两发不同的钱。
+    # 如果这里变成 1，说明岗位没进 prompt（那一档就白分了）；如果缓存把第二发吃掉，也到不了这里。
+    assert len(set(real_provider_counting_calls)) == 2
+

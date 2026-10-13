@@ -78,8 +78,11 @@ def _resume(db, user) -> int:
 
 
 def _fake_stages(monkeypatch, redline_payload, interview_payload):
-    """概览那一发仍走 mock 分发（`_MOCK_REPORT_OVERVIEW`，七维之和 65），
-    批改与面试那两支 prompt 在 mock 下分不到载荷，所以由用例直接给。"""
+    """概览那一发仍走 mock 分发（`_MOCK_REPORT_OVERVIEW`，七维之和 65）；
+    批改与面试两支由用例直接给载荷——这一族要的是"给这一份简历喂一条/零条能过的批改"，
+    而仓库那份 mock 载荷（`_MOCK_REPORT_REDLINE`）的 `del` 逐字锚在 `_MOCK_RESUME` 上，
+    与本族的 `PARSED` 不是同一份简历，命中不了。六节齐那条走真派发，见
+    `test_mock_provider_alone_renders_every_module_and_passes_the_lint`。"""
     from app.services import llm_service
 
     def fake_chat(prompt, **kwargs):
@@ -175,6 +178,54 @@ def test_the_stored_report_renders_a_lint_clean_standalone_html(run_job, db_sess
     # 从库里那一行还原时不能丢字段：填空与标题姓名都是下载那份文件的成分。
     assert "本报告的两处填空" in document
     assert "简历评估报告 · 示例候选人" in document
+
+
+def test_mock_provider_alone_renders_every_module_and_passes_the_lint(db_session):
+    """开发态/演示态（provider=mock，不打任何补丁）六节必须齐。
+
+    D231 之前这一条是不成立的：mock 只派得出概览那一段，批改与面试两节整块缺席，
+    六模块页面在演示环境里根本看不到，那两节的形状也就从没被真浏览器读过。
+    这里不打补丁，走的就是 `llm_service._mock_chat` 的真派发。
+    """
+    from app.services import llm_service
+
+    user = _user(db_session)
+    resume = Resume(
+        name="示例候选人",
+        file_name="mock.pdf",
+        file_path="uploads/mock.pdf",
+        file_type="pdf",
+        file_size=1024,
+        user_id=user.id,
+        parsed_json=llm_service._MOCK_RESUME,
+    )
+    db_session.add(resume)
+    db_session.commit()
+
+    job = jobs.create_report_job(db_session, user_id=user.id, resume_id=resume.id, jd_id=None, target_position="")
+    jobs.run_job_on(db_session, job.id)
+    db_session.expire_all()
+
+    job = db_session.get(ResumeReportJob, job.id)
+    report = job.report_json
+
+    assert job.status == "completed"
+    assert job.total_score == 65 and job.grade == "C"
+    assert report["redline"]["total"] == 6 and report["redline"]["key_total"] == 3
+    assert report["interview"]["distribution"]["total"] == 8
+    assert len(report["apply_strategy"]["chapters"]) == 5
+    assert (job.errors_json or {}).get("stage_errors", {}) == {}
+    assert job.lint_failures == 0
+    assert {stage: row["source"] for stage, row in (job.provenance_json or {}).items()} == {
+        "overview": "mock",
+        "redline": "mock",
+        "interview": "mock",
+    }
+
+    document = resume_api.download_report_html(job.id, db=db_session, current_user=user).body.decode("utf-8")
+    assert lint_report_html(document) == []
+    for anchor in ("m-summary", "m-score", "m-fit", "m-resume", "m-interview", "m-boss"):
+        assert f'id="{anchor}"' in document, anchor
 
 
 def test_applying_a_mark_goes_through_the_existing_rewrite_path(run_job, db_session):
