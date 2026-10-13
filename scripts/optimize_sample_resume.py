@@ -11,8 +11,8 @@ from docx.shared import Cm, Pt, RGBColor
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET = ROOT / "曾子豪_大模型应用开发工程师.docx"
-BACKUP = ROOT / "曾子豪_大模型应用开发工程师.原始备份.docx"
+TARGET = ROOT / "示例候选人_大模型应用开发工程师.docx"
+BACKUP = ROOT / "示例候选人_大模型应用开发工程师.原始备份.docx"
 
 
 def configure_document(doc: Document) -> None:
@@ -98,7 +98,7 @@ def build_resume() -> Document:
 
     add_paragraph(
         doc,
-        "曾子豪",
+        "示例候选人",
         bold=True,
         size=22,
         color=RGBColor(0x1A, 0x3A, 0x5C),
@@ -113,7 +113,7 @@ def build_resume() -> Document:
     )
     add_paragraph(
         doc,
-        "17779699791  |  2974467965@qq.com  |  江西吉安  |  2025届本科",
+        "13600000001  |  probe@example.com  |  示例省市  |  2025届本科",
         size=9.2,
         color=RGBColor(0x44, 0x44, 0x44),
         align=WD_ALIGN_PARAGRAPH.CENTER,
@@ -129,7 +129,7 @@ def build_resume() -> Document:
 
     add_section_title(doc, "教育背景")
     p = doc.add_paragraph()
-    run = p.add_run("南昌大学科学技术学院")
+    run = p.add_run("示例科技学院")
     run.bold = True
     run.font.size = Pt(10.5)
     run2 = p.add_run("    计算机科学与技术 本科    2021.09 - 2025.06")

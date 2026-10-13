@@ -81,7 +81,7 @@ def add_proj_header(name, time, tech):
 # 正文
 # =========================================================================
 
-p = add_normal("曾子豪", bold=True, size=22, color=RGBColor(0x1A, 0x3A, 0x5C),
+p = add_normal("示例候选人", bold=True, size=22, color=RGBColor(0x1A, 0x3A, 0x5C),
                align=WD_ALIGN_PARAGRAPH.CENTER)
 p.paragraph_format.space_after = Pt(2)
 
@@ -89,14 +89,14 @@ add_normal("求职意向：大模型应用开发工程师 / AI 应用开发",
            color=RGBColor(0x66, 0x66, 0x66), size=10,
            align=WD_ALIGN_PARAGRAPH.CENTER)
 
-add_normal("📞 17779699791  |  📧 2974467965@qq.com  |  📍 江西吉安  |  🎂 22岁",
+add_normal("📞 13600000001  |  📧 probe@example.com  |  📍 示例省市  |  🎂 22岁",
            size=9, color=RGBColor(0x44, 0x44, 0x44),
            align=WD_ALIGN_PARAGRAPH.CENTER)
 
 # ===== 教育背景 =====
 add_section_title("教育背景")
 p = doc.add_paragraph()
-run = p.add_run("南昌大学科学技术学院")
+run = p.add_run("示例科技学院")
 run.bold = True
 run.font.size = Pt(10.5)
 run2 = p.add_run("    计算机科学与技术  本科    2021.09 – 2025.06")
@@ -234,6 +234,6 @@ for item in [
     add_bullet(item)
 
 # ===== 保存 =====
-output_path = "曾子豪_大模型应用开发工程师.docx"
+output_path = "示例候选人_大模型应用开发工程师.docx"
 doc.save(output_path)
 print(f"简历已更新: {output_path}")
