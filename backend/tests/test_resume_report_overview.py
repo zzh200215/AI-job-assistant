@@ -279,7 +279,6 @@ def _prime_cache(prompt: str, result: dict) -> None:
 def test_the_second_identical_overview_call_is_absorbed_by_the_llm_cache(
     db_session, make_resume, real_provider_counting_calls
 ):
-
     user = _user(db_session)
     rid = make_resume(user_id=user.id, parsed_json={"name": "张三", "self_evaluation": "5 年后端"})
 
@@ -314,4 +313,3 @@ def test_a_different_target_position_is_a_different_prompt_and_pays_again(
     # 每一发在降级链里会试主备两次，所以数的是**不同的 prompt**：两个岗位名 = 两发不同的钱。
     # 如果这里变成 1，说明岗位没进 prompt（那一档就白分了）；如果缓存把第二发吃掉，也到不了这里。
     assert len(set(real_provider_counting_calls)) == 2
-
