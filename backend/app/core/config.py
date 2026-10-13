@@ -119,6 +119,15 @@ class Settings(BaseSettings):
     # 清理走"提交新作业时顺带删掉本人过期的"，不另立一条调度任务（见 rewrite_job_service）。
     REWRITE_JOB_RETENTION_DAYS: int = 7
 
+    # D229：简历评估报告（六模块）是一项后台作业。
+    # 一次报告最多三发模型调用（概览、批改稿、面试预演），投递策略那一节不过模型。
+    # 所以池子比改写作业更小：同一时刻多一个报告，就从 HTTP 那 20 根连接里多扣一根。
+    REPORT_JOB_MAX_WORKERS: int = 1
+    # 租约 = 改写作业那 15 分钟的最坏单发 × 三发。短于此会把还在跑的报告抢过来重付模型钱。
+    REPORT_JOB_LEASE_MINUTES: int = 45
+    # 这一张表存的是整份报告（含批改稿原文），体积比建议那一份大得多，保留期因此取 3 天。
+    REPORT_JOB_RETENTION_DAYS: int = 3
+
     # D226：批量导入岗位变成后台作业（`job_import_task`）。
     # 1 而不是 2：一次导入是纯数据库写，占一根连接 + 一路 INSERT；D214/D215 已经量过"后台并发
     # 直接从 HTTP 那 20 根里扣"，而这种活儿并排跑只会互相抢池子、没有吞吐收益。

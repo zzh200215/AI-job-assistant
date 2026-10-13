@@ -19,6 +19,8 @@ function routeBlock(name) {
 test('candidate workflow routes remain available and role-protected', () => {
   const contracts = [
     ['resume-compare', "path: 'resume/compare/:id'"],
+    // 六模块评估报告那一页也在候选人侧，入口是简历中心行下拉的「评估报告」
+    ['resume-report', "path: 'resume/report'"],
     ['task-center', "path: 'tasks'"],
     ['pipeline-kanban', "path: 'jobs/pipeline/kanban'"],
   ]

@@ -66,14 +66,13 @@ def test_padding_a_resume_does_not_improve_quality_wording(db_session, make_resu
 
 def test_diagnose_does_not_backfill_total_score_from_completeness(db_session, monkeypatch, make_resume):
     """Previously `overall_score` absent meant the completeness number appeared
-    as the overall quality score."""
+    as the overall quality score. 报告改成七维之后这条更要紧：七个维度读不出来就是
+    未知，85 分的"填了几个模块"不许顶上去。"""
+    from app.services import resume_analysis_service as service
+
     user = _user(db_session)
     rid = make_resume(user_id=user.id, parsed_json={"name": "A", "work_experience": [{"t": "x"}]})
-    monkeypatch.setattr(
-        resume_api,
-        "analyze_resume",
-        lambda *a, **k: {"dimensions": {}, "critical_issues": [], "strengths": []},
-    )
+    monkeypatch.setattr(service, "chat_json", lambda prompt, **kw: {"overall_score": 88, "dimensions": {}})
 
     result = _call_diagnose(db_session, rid, user)
 
@@ -82,20 +81,25 @@ def test_diagnose_does_not_backfill_total_score_from_completeness(db_session, mo
     assert result["completeness_issues"]  # rule output still available, correctly named
 
 
-def test_diagnose_does_not_invent_issues_when_nothing_matched(db_session, monkeypatch, make_resume):
+def test_diagnose_does_not_invent_dimension_notes_when_the_model_said_nothing(db_session, monkeypatch, make_resume):
+    """上一版在这里给"结构问题/表达问题"兜了一批现成句子（"结构松散"之类），
+    候选人读到的是一句库存建议，却被排版成对这份简历的分析。"""
+    from app.services import resume_analysis_service as service
+
     user = _user(db_session)
     rid = make_resume(user_id=user.id, parsed_json={"name": "A"})
     monkeypatch.setattr(
-        resume_api,
-        "analyze_resume",
-        lambda *a, **k: {"overall_score": 70, "dimensions": {}, "critical_issues": ["目标岗位偏后端"]},
+        service,
+        "chat_json",
+        lambda prompt, **kw: {"overall_score": 70, "dimensions": {}, "to_next_grade": [], "competition": {}},
     )
 
     result = _call_diagnose(db_session, rid, user)
 
-    assert result["structure_issues"] == [], "stock advice must not appear as analysis"
-    assert result["expression_issues"] == []
-    assert result["total_score"] == 70
+    assert [row["note"] for row in result["dimensions"]] == [""] * 7
+    assert [row["score"] for row in result["dimensions"]] == [None] * 7
+    assert result["to_next_grade"] == []
+    assert result["missing_keywords"] == []
 
 
 def _call_diagnose(db_session, resume_id, user):

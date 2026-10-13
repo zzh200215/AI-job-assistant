@@ -5,19 +5,37 @@ from __future__ import annotations
 import os
 import traceback
 from typing import Any
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
-from app.models.history import Resume, ResumeVersion
+from app.models.history import JobDescription, Resume, ResumeVersion
+from app.models.report_job import ResumeReportJob
 from app.models.rewrite_job import RewriteSuggestionJob
 from app.models.user import User
 from app.schemas.resume import ResumeParseResp, ResumeUploadResp
 from app.services import resume_export_service, resume_service
+from app.services.report_job_service import (
+    create_report_job as _create_report_job,
+)
+from app.services.report_job_service import (
+    report_from_dict,
+)
+from app.services.report_job_service import (
+    serialize_job as _serialize_report_job,
+)
+from app.services.report_job_service import (
+    submit_report_job as _submit_report_job,
+)
+from app.services.report_job_service import (
+    touch_job_for_read as _touch_report_job_for_read,
+)
 from app.services.resume_analysis_service import analyze_resume, quick_score_resume
+from app.services.resume_report_html import render_report_html
 from app.services.resume_rewrite_service import apply_rewrite_suggestions, revert_rewrite_suggestions
 from app.services.resume_tailor_service import tailor_resume_for_jd
 from app.services.resume_workspace_service import build_ats_snapshot, build_markdown_diff
@@ -92,78 +110,13 @@ def _get_resume_version(db: Session, resume_id: int, version_id: int) -> ResumeV
     )
 
 
-def _as_text_list(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [str(item).strip() for item in value if isinstance(item, str | int | float) and str(item).strip()]
+# 报告里那个"模型自报的总分"只作对照，绝不上候选人的屏（七维之和才是出分口径）。
+# 任何把 `analyze_resume` 的结果原样返回的路由都必须先过这一道。
+_INTERNAL_ANALYSIS_KEYS = ("model_reported_total",)
 
 
-def _number_or_none(value: Any) -> int | float | None:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        return None
-    return value
-
-
-def _dimension(dimensions: Any, key: str) -> dict[str, Any]:
-    """Read one analysis dimension whatever shape the model emitted.
-
-    The analysis prompt asks for {score, issues, suggestions} per dimension and
-    the response is never schema-checked, so a bare number must also work. Reading
-    `dimensions.get(key, 0)` directly handed the whole dict to the UI as a "score",
-    which rendered as a JSON blob beside a 0-width progress bar.
-    """
-    value = dimensions.get(key) if isinstance(dimensions, dict) else None
-    if isinstance(value, dict):
-        return {
-            "score": _number_or_none(value.get("score")),
-            "issues": _as_text_list(value.get("issues")),
-            "suggestions": _as_text_list(value.get("suggestions")),
-            "missing_keywords": _as_text_list(value.get("missing_keywords")),
-        }
-    return {"score": _number_or_none(value), "issues": [], "suggestions": [], "missing_keywords": []}
-
-
-def _roadmap_items(value: Any) -> list[str]:
-    """Flatten quick_wins / medium_effort / major_rework into one list.
-
-    A dict-shaped roadmap used to fail an `isinstance(value, list)` check and be
-    discarded, so the roadmap panel read "暂无改进建议" for every report that
-    actually followed the schema.
-    """
-    if isinstance(value, dict):
-        items = [
-            item
-            for track in ("quick_wins", "medium_effort", "major_rework")
-            for item in _as_text_list(value.get(track))
-        ]
-        if items:
-            return items
-        return [str(v).strip() for v in value.values() if isinstance(v, str) and str(v).strip()]
-    return _as_text_list(value)
-
-
-def _match_summary(value: Any) -> str:
-    if isinstance(value, str):
-        return value.strip()
-    if not isinstance(value, dict):
-        return ""
-
-    def _join(items: list[str]) -> str:
-        # Model-emitted items often already end in a full stop, which reads badly
-        # once they are joined with "；".
-        return "；".join(item.rstrip("。；; ") for item in items if item.rstrip("。；; "))
-
-    parts = []
-    level = value.get("match_level")
-    if level:
-        parts.append(f"匹配度：{level}")
-    gaps = _as_text_list(value.get("gap_analysis"))
-    if gaps:
-        parts.append("差距：" + _join(gaps))
-    bridge = _as_text_list(value.get("bridge_strategies"))
-    if bridge:
-        parts.append("弥补方式：" + _join(bridge))
-    return "。".join(parts)
+def _to_candidate_view(analysis: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in analysis.items() if key not in _INTERNAL_ANALYSIS_KEYS}
 
 
 @router.post("/upload", summary="Upload resume")
@@ -1176,12 +1129,8 @@ def analyze_resume_api(
     current_user: User = Depends(get_current_user),
 ):
     """
-    AI深度分析简历，包含5维度评分、改进路线图、目标岗位匹配差距分析。
-    - structure: 结构完整性
-    - content_quality: 内容质量
-    - keyword_density: 关键词密度
-    - differentiation: 差异化竞争力
-    - ats_friendly: ATS友好度
+    按七维口径深度分析简历：首屏结论段 + 七维评分概览 + 竞争分析。
+    七个维度与满分见 `docs/resume-report-spec.md` §2；总分由七维之和算，不是模型自报的那一个。
     """
     target_position = ""
     if payload:
@@ -1193,7 +1142,7 @@ def analyze_resume_api(
 
     try:
         result = analyze_resume(db, resume_id, target_position=target_position, user_id=current_user.id)
-        return ok(result, message="简历深度分析完成")
+        return ok(_to_candidate_view(result), message="简历深度分析完成")
     except ValueError as exc:
         return fail(message=str(exc), code=ERR_PARAM)
     except Exception as exc:
@@ -1201,7 +1150,7 @@ def analyze_resume_api(
         return fail(message=f"分析失败: {exc}", code=ERR_AI)
 
 
-@router.post("/{resume_id}/diagnose", summary="简历诊断（快速评分+AI分析聚合）")
+@router.post("/{resume_id}/diagnose", summary="简历诊断（七维评分 + 竞争分析 + 完整度检查）")
 def diagnose_resume(
     resume_id: int,
     payload: dict = None,
@@ -1209,21 +1158,15 @@ def diagnose_resume(
     current_user: User = Depends(get_current_user),
 ):
     """
-    聚合诊断接口：合并快速评分与 AI 深度分析，返回结构化诊断报告。
-    用于简历中心页面的「AI诊断」弹窗。
+    评估报告的模块一/二/三，加上规则侧完整度检查，供简历中心「AI诊断」弹窗取用。
+
     返回：
-    - total_score: 综合评分
-    - structure_score: 结构评分
-    - expression_score: 表达评分
-    - keyword_score: 关键词覆盖评分
-    - highlight_score: 亮点评分
-    - structure_issues: 结构问题列表
-    - expression_issues: 表达问题列表
-    - missing_keywords: 缺失关键词列表
-    - highlights: 亮点列表
-    - match_analysis: 岗位匹配分析
-    - ats_score: ATS 友好度评分
-    - ats_issues: ATS 问题列表
+    - verdict / total_score / grade / grade_desc / grade_scale / dimensions / to_next_grade：
+      首屏结论段与七维评分概览（dimensions 每行含 key/label/full/score/star/note）
+    - missing_keywords：词表覆盖缺口（住在 role_fit 那一档，这里汇总）
+    - competition：竞争分析（档位徽标、能打的牌、要补的短板、针对性建议、期望薪资口径）
+    - completeness_score / completeness_grade / completeness_issues / module_check：
+      规则算的"填了多少个模块"，与上面的七维不同尺，所以键名各自带 completeness 前缀
     """
     resume = _get_owned_resume(db, resume_id, current_user.id)
     if not resume:
@@ -1234,74 +1177,25 @@ def diagnose_resume(
         target_position = payload.get("target_position", "")
 
     try:
-        # 1. 快速评分（规则引擎）
         quick_result = quick_score_resume(db, resume_id, user_id=current_user.id)
-
-        # 2. AI 深度分析
-        analysis_result = analyze_resume(
+        analysis = analyze_resume(
             db,
             resume_id,
             target_position=target_position,
             user_id=current_user.id,
         )
 
-        # 3. 聚合诊断报告
-        dimensions = analysis_result.get("dimensions", {})
-        issues = _as_text_list(analysis_result.get("critical_issues"))
-        strengths = _as_text_list(analysis_result.get("strengths"))
-        roadmap = _roadmap_items(analysis_result.get("improvement_roadmap"))
-        target_match = _match_summary(analysis_result.get("target_position_match", ""))
-
-        structure = _dimension(dimensions, "structure")
-        content = _dimension(dimensions, "content_quality")
-        keyword = _dimension(dimensions, "keyword_density")
-        differentiation = _dimension(dimensions, "differentiation")
-        ats = _dimension(dimensions, "ats_friendly")
-
-        # `analyze_resume` returns whatever the model emitted with no schema, so
-        # overall_score can legitimately be absent. It must not be backfilled
-        # from quick_score_resume: that number counts how many resume sections
-        # are populated, which is a completeness measure, not a quality one.
-        total_score = _number_or_none(analysis_result.get("overall_score"))
-
-        # The model attributes issues to dimensions itself; keyword-classifying
-        # the free-text critical_issues list is only the fallback. An empty bucket
-        # means "not identified", never "nothing wrong" — the previous hardcoded
-        # defaults presented stock advice as if it came from this resume.
-        structure_issues = structure["issues"] or [
-            issue
-            for issue in issues
-            if any(kw in issue.lower() for kw in ["结构", "格式", "布局", "顺序", "section", "缺少", "缺失"])
-        ]
-        expression_issues = content["issues"] or [
-            issue
-            for issue in issues
-            if any(kw in issue.lower() for kw in ["表达", "描述", "语言", "措辞", "啰嗦", "模糊", "简略"])
-        ]
-        missing_keywords = keyword["missing_keywords"]
-        highlights = strengths[:5]
-
-        # These come from the rule-based completeness check ("缺少工作经历"), so
-        # they are not ATS parseability findings and are no longer labelled as
-        # such. The ATS score itself is the model's `ats_friendly` dimension.
+        # 这些句子来自规则侧完整度检查（"缺少工作经历"），说的是模块填没填，
+        # 不是这份简历写得好不好，所以一律待在 completeness_* 名下。
         completeness_issues = quick_result.get("issues", []) if isinstance(quick_result.get("issues"), list) else []
 
         result = {
-            "total_score": total_score,
-            "structure_score": structure["score"],
-            "expression_score": content["score"],
-            "keyword_score": keyword["score"],
-            "highlight_score": differentiation["score"],
-            "ats_score": ats["score"],
-            "structure_issues": structure_issues,
-            "expression_issues": expression_issues,
-            "missing_keywords": missing_keywords[:10],
-            "highlights": highlights,
-            "match_analysis": target_match,
+            **_to_candidate_view(analysis),
+            "report_date": utc_now().strftime("%Y-%m-%d"),
             "completeness_issues": completeness_issues,
             "completeness_score": quick_result.get("completeness_score"),
+            "completeness_grade": quick_result.get("completeness_grade"),
             "module_check": quick_result.get("module_check", {}),
-            "improvement_roadmap": roadmap,
         }
         return ok(result, message="简历诊断完成")
     except ValueError as exc:
@@ -1309,3 +1203,138 @@ def diagnose_resume(
     except Exception as exc:
         traceback.print_exc()
         return fail(message=f"诊断失败: {exc}", code=ERR_AI)
+
+
+# ------------------------------------------------------------------ 简历评估报告（六模块）
+# 一次报告最多三发模型调用，所以它和改写作业同一族形状：投一行、立刻返回、前端轮询。
+# 路由都挂在 `/report-jobs` 这一段，与 `/{resume_id}` 那种一段式路径不会互相抢匹配。
+
+
+@router.post("/{resume_id}/report-jobs", summary="提交一次简历评估报告作业（立刻返回，不等模型）")
+def create_report_job_api(
+    resume_id: int,
+    payload: dict = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    resume = _get_owned_resume(db, resume_id, current_user.id)
+    if not resume:
+        return fail(message="简历不存在或无权限", code=ERR_PARAM)
+    if not (resume.parsed_json or resume.raw_text):
+        return fail(message="简历内容为空，先生成报告前请先解析", code=ERR_PARAM)
+
+    body = payload or {}
+    jd_id = body.get("jd_id")
+    target_position = str(body.get("target_position") or "")
+    if jd_id is not None and db.get(JobDescription, int(jd_id)) is None:
+        return fail(message="目标岗位不存在或无权限", code=ERR_PARAM)
+
+    job = _create_report_job(
+        db,
+        user_id=current_user.id,
+        resume_id=resume_id,
+        jd_id=int(jd_id) if jd_id is not None else None,
+        target_position=target_position,
+    )
+    _submit_report_job(job.id)
+    return ok({"job_id": job.id, "status": job.status}, message="报告生成已开始")
+
+
+@router.get("/report-jobs/{job_id}", summary="查一次报告作业的状态与结果")
+def get_report_job_api(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    job = db.get(ResumeReportJob, job_id)
+    if job is None or job.user_id != current_user.id:
+        return fail(message="作业不存在或无权限", code=ERR_PARAM)
+    _touch_report_job_for_read(db, job)
+    return ok(_serialize_report_job(job), message="ok")
+
+
+@router.post("/report-jobs/{job_id}/apply-redline", summary="采纳批改稿里的若干处改动（写回简历并重算匹配分）")
+def apply_redline_api(
+    job_id: int,
+    payload: dict = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """把选中的编号折成整块改写，走 `apply-rewrites` 那条既有写路径。
+
+    句级记号只是另一种寻址方式，不是第二条写入路径：快照、撤销、`expected_original`
+    防过期锚点、重算匹配分全都复用，避免"改简历"这件事出现两个权威。
+    """
+    job = db.get(ResumeReportJob, job_id)
+    if job is None or job.user_id != current_user.id:
+        return fail(message="作业不存在或无权限", code=ERR_PARAM)
+    if job.status != "completed" or not job.report_json:
+        return fail(message="这一份报告还没有可用结果", code=ERR_PARAM)
+
+    marks = (payload or {}).get("marks")
+    if not isinstance(marks, list) or not marks:
+        return fail(message="marks 必须是非空编号列表", code=ERR_PARAM)
+
+    report = report_from_dict(job.report_json)
+    if report.redline is None:
+        return fail(message="这一份报告里没有批改稿", code=ERR_PARAM)
+    try:
+        wanted = [int(mark) for mark in marks]
+    except (TypeError, ValueError):
+        return fail(message="marks 里只能放编号", code=ERR_PARAM)
+
+    known_marks = {edit.mark for edit in report.redline.edits}
+    unknown = [mark for mark in wanted if mark not in known_marks]
+    if unknown:
+        # 先判编号存不存在，再判可不可写回：候选人点了个不存在的号，
+        # 那句"属于需要自己改的栏目"会把人引到错的方向上。
+        return fail(message=f"编号不存在：{unknown}", code=ERR_PARAM)
+
+    edits = report.redline.edits_for_apply(wanted)
+    if not edits:
+        return fail(
+            message="这些编号都落在需要自己在简历文件里改的那几栏（基本信息、经历抬头、技术栈、教育背景）",
+            code=ERR_PARAM,
+        )
+
+    try:
+        result = apply_rewrite_suggestions(
+            db,
+            job.resume_id,
+            edits,
+            jd_id=job.jd_id,
+            user_id=current_user.id,
+        )
+    except ValueError as exc:
+        return fail(message=str(exc), code=ERR_PARAM)
+    result["requested_marks"] = wanted
+    return ok(result, message="批改已写回简历")
+
+
+@router.get("/report-jobs/{job_id}/report.html", summary="下载自包含的简历评估报告 HTML")
+def download_report_html(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """现渲一份自包含 HTML：文本→HTML 是纯函数，不存盘就没有会过期的一致性副本。"""
+    job = db.get(ResumeReportJob, job_id)
+    if job is None or job.user_id != current_user.id:
+        return fail(message="作业不存在或无权限", code=ERR_PARAM)
+    if job.status != "completed" or not job.report_json:
+        return fail(message="这一份报告还没有可用结果", code=ERR_PARAM)
+
+    try:
+        document = render_report_html(report_from_dict(job.report_json))
+    except RuntimeError as exc:
+        traceback.print_exc()
+        return fail(message=str(exc), code=ERR_AI)
+
+    resume = _get_owned_resume(db, job.resume_id, current_user.id)
+    name = report_from_dict(job.report_json).verdict.get("candidate_name") or (resume.name if resume else "") or "简历"
+    quoted = quote(f"简历评估报告_{name}.html")
+    return Response(
+        content=document,
+        media_type="text/html; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quoted}"},
+    )

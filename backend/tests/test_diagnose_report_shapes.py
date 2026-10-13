@@ -1,57 +1,40 @@
-"""The diagnosis report must survive a model that follows its own schema.
+"""报告形状必须扛得住"模型自己决定怎么填"。
 
-`/resume/{id}/diagnose` used to read `dimensions.get("structure", 0)` and hand the
-result straight to the UI. The analysis prompt asks for
-`{"score": .., "issues": [], "suggestions": []}` per dimension, so every
-schema-conforming response rendered as a JSON blob next to a 0-width bar, the
-dict-shaped `improvement_roadmap` was dropped by an `isinstance(list)` check, and
-the model's `missing_keywords` — nested inside its dimension — never appeared, so
-the keywords panel told candidates "覆盖良好" about a resume with five named gaps.
+`/resume/{id}/diagnose` 这一段历史上翻过三次车：把整个维度 dict 当分数交给前端（五条维度条
+显示成 JSON 文本 + 0 宽进度条）、`improvement_roadmap` 是 dict 时被 `isinstance(list)` 判断丢弃、
+模型放在 `keyword_density` 里的 `missing_keywords` 从未被读取（缺 5 个关键词的简历被告知"覆盖良好"）。
+见 `dfee148`。
+
+这一族打的是**模型返回层**（`chat_json`），所以下面每一条都走完整的服务与路由，
+不是只在纯函数里自证。七维口径本身由 `test_resume_report_rubric.py` 钉，
+自报总分不上屏由 `test_resume_report_overview.py` 钉。
 """
 
 from __future__ import annotations
 
+import pytest
+
 from app.api import resume as resume_api
 from app.core.security import hash_password
 from app.models.user import User
+from app.services import resume_analysis_service as service
 
-SCHEMA_ANALYSIS = {
-    "overall_score": 65,
-    "dimensions": {
-        "structure": {
-            "score": 60,
-            "issues": ["缺少明确的个人简介模块"],
-            "suggestions": ["添加个人简介"],
-        },
-        "content_quality": {"score": 65, "issues": ["描述过于笼统"], "suggestions": ["补充成果"]},
-        "keyword_density": {
-            "score": 70,
-            "issues": [],
-            "suggestions": [],
-            "missing_keywords": ["RESTful API", "微服务架构", "CI/CD"],
-        },
-        "differentiation": {"score": 50, "issues": ["缺乏差异化亮点"], "suggestions": []},
-        "ats_friendly": {"score": 75, "issues": [], "suggestions": []},
-    },
-    "strengths": ["4 年经验", "掌握 Python"],
-    "critical_issues": ["目标岗位偏后端"],
-    "improvement_roadmap": {
-        "quick_wins": ["1 小时内：补一行个人简介"],
-        "medium_effort": ["1-2 天：重写项目描述"],
-        "major_rework": ["需要重构：职业主线"],
-    },
-    "target_position_match": {
-        "match_level": "中",
-        "gap_analysis": ["技能展示不全"],
-        "bridge_strategies": ["补充关键词"],
-    },
+SEVEN = {
+    "metric_ownership": {"score": 12, "note": "指标只有绝对值"},
+    "interview_hooks": {"score": 5, "note": "只有数字型钩子"},
+    "role_fit": {"score": 16, "note": "方向标签要读完整份才判得出", "missing_keywords": ["RAG", "LangGraph"]},
+    "transferability": {"score": 10, "note": "选型依据没写"},
+    "project_depth": {"score": 13, "note": "约束与代价一处都没有"},
+    "expression_structure": {"score": 6, "note": "全篇职责句没有结果句"},
+    "advantage_section": {"score": 3, "note": "没有方法论标签"},
 }
+SEVEN_SUM = sum(row["score"] for row in SEVEN.values())
 
 
-def _user(db):
+def _user(db, tag: str):
     user = User(
-        username="diag_owner",
-        email="diag_owner@example.com",
+        username=f"shape_{tag}",
+        email=f"shape_{tag}@example.com",
         password=hash_password("StrongP@ssw0rd"),
         role="candidate",
     )
@@ -61,114 +44,119 @@ def _user(db):
     return user
 
 
-def _diagnose(db, resume_id, user, analysis, monkeypatch):
-    monkeypatch.setattr(resume_api, "analyze_resume", lambda *a, **k: analysis)
-    # §10.15：`diagnose_resume` 改成 def 路由（同步会话进 anyio 线程池），这里同步调用即可——
-    # 这条测试量的是报告形状，不是路由的 async 形状。
-    body = resume_api.diagnose_resume(resume_id, {"target_position": ""}, db=db, current_user=user)
+def _diagnose(db, model_payload, monkeypatch, tag="owner"):
+    user = _user(db, tag)
+    rid = _make_resume(db, user)
+    monkeypatch.setattr(service, "chat_json", lambda prompt, **kw: model_payload)
+    body = resume_api.diagnose_resume(rid, {"target_position": ""}, db=db, current_user=user)
     assert body["code"] == 0, body
-    return body["data"]
+    return user, body["data"]
 
 
-def test_dimension_scores_are_numbers_not_blobs(db_session, make_resume, monkeypatch):
-    user = _user(db_session)
-    rid = make_resume(user_id=user.id, parsed_json={"name": "A", "self_evaluation": "x"})
+def _make_resume(db, user) -> int:
+    from app.models.history import Resume
 
-    result = _diagnose(db_session, rid, user, SCHEMA_ANALYSIS, monkeypatch)
-
-    assert result["structure_score"] == 60
-    assert result["expression_score"] == 65
-    assert result["keyword_score"] == 70
-    assert result["highlight_score"] == 50
-    assert result["ats_score"] == 75
-    assert result["total_score"] == 65
-
-
-def test_the_models_own_dimension_issues_win_over_keyword_guessing(db_session, make_resume, monkeypatch):
-    user = _user(db_session)
-    rid = make_resume(user_id=user.id, parsed_json={"name": "A", "self_evaluation": "x"})
-
-    result = _diagnose(db_session, rid, user, SCHEMA_ANALYSIS, monkeypatch)
-
-    assert result["structure_issues"] == ["缺少明确的个人简介模块"]
-    assert result["expression_issues"] == ["描述过于笼统"]
+    obj = Resume(
+        name="测试用户",
+        file_name="resume.pdf",
+        file_path="uploads/resume.pdf",
+        file_type="pdf",
+        file_size=1024,
+        user_id=user.id,
+        parsed_json={"name": "测试用户", "self_evaluation": "3 年后端", "work_experience": [{"t": "x"}]},
+    )
+    db.add(obj)
+    db.commit()
+    return obj.id
 
 
-def test_missing_keywords_reach_the_report(db_session, make_resume, monkeypatch):
-    user = _user(db_session)
-    rid = make_resume(user_id=user.id, parsed_json={"name": "A", "self_evaluation": "x"})
+def test_a_schema_conforming_response_yields_seven_rows_and_a_sum(db_session, monkeypatch):
+    payload = {"overall_score": 72, "dimensions": SEVEN, "verdict": {"direction": "RAG 应用"}, "competition": {}}
 
-    result = _diagnose(db_session, rid, user, SCHEMA_ANALYSIS, monkeypatch)
+    _user_row, data = _diagnose(db_session, payload, monkeypatch, "sum")
 
-    assert result["missing_keywords"] == ["RESTful API", "微服务架构", "CI/CD"]
-
-
-def test_a_dict_shaped_roadmap_is_not_discarded(db_session, make_resume, monkeypatch):
-    user = _user(db_session)
-    rid = make_resume(user_id=user.id, parsed_json={"name": "A", "self_evaluation": "x"})
-
-    result = _diagnose(db_session, rid, user, SCHEMA_ANALYSIS, monkeypatch)
-
-    assert result["improvement_roadmap"] == [
-        "1 小时内：补一行个人简介",
-        "1-2 天：重写项目描述",
-        "需要重构：职业主线",
-    ]
+    assert [row["key"] for row in data["dimensions"]] == list(SEVEN)
+    assert [row["score"] for row in data["dimensions"]] == [12, 5, 16, 10, 13, 6, 3]
+    assert [row["full"] for row in data["dimensions"]] == [20, 10, 20, 15, 20, 10, 5]
+    assert data["total_score"] == SEVEN_SUM
+    assert data["grade"] == "C"
+    assert "D 0–64" in data["grade_scale"]
+    # 姓名由服务端从 `tb_resume.name` 注入，不是模型给的（报告标题与下载文件名都读这一位）。
+    assert data["verdict"] == {"direction": "RAG 应用", "candidate_name": "测试用户"}
+    # 待优化点是模型写给这份简历的那句话，服务端不掺任何通用建议。
+    assert data["dimensions"][0]["note"] == "指标只有绝对值"
 
 
-def test_match_analysis_renders_as_a_sentence(db_session, make_resume, monkeypatch):
-    user = _user(db_session)
-    rid = make_resume(user_id=user.id, parsed_json={"name": "A", "self_evaluation": "x"})
+def test_a_bare_number_per_dimension_still_reads(db_session, monkeypatch):
+    """早期模型直接给分数而不是对象；两种形状都得读，这条与 `dfee148` 同源。"""
+    flat = {key: row["score"] for key, row in SEVEN.items()}
 
-    result = _diagnose(db_session, rid, user, SCHEMA_ANALYSIS, monkeypatch)
+    _user_row, data = _diagnose(db_session, {"dimensions": flat}, monkeypatch, "flat")
 
-    assert result["match_analysis"] == "匹配度：中。差距：技能展示不全。弥补方式：补充关键词"
+    assert data["total_score"] == SEVEN_SUM
+    assert all(row["note"] == "" for row in data["dimensions"])
 
 
-def test_punctuated_items_do_not_double_up(db_session, make_resume, monkeypatch):
-    user = _user(db_session)
-    rid = make_resume(user_id=user.id, parsed_json={"name": "A", "self_evaluation": "x"})
-    analysis = dict(SCHEMA_ANALYSIS)
-    analysis["target_position_match"] = {
-        "match_level": "中",
-        "gap_analysis": ["技能展示不全。", "缺少关键词。"],
-        "bridge_strategies": [],
+def test_two_missing_dimensions_make_the_total_unknown_not_lower(db_session, monkeypatch):
+    partial = dict(SEVEN)
+    partial.pop("interview_hooks")
+    partial.pop("advantage_section")
+
+    _user_row, data = _diagnose(db_session, {"dimensions": partial}, monkeypatch, "partial")
+
+    assert [row["score"] for row in data["dimensions"]] == [12, None, 16, 10, 13, 6, None]
+    assert data["total_score"] is None, "少两维不是扣两维的分，是这份报告还不知道"
+    assert data["grade"] is None
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [True, "12", 120, -3, None],
+)
+def test_a_number_that_cannot_be_a_score_is_left_unknown(db_session, monkeypatch, raw):
+    payload = dict(SEVEN)
+    payload["role_fit"] = {"score": raw, "note": "x"}
+
+    _user_row, data = _diagnose(db_session, {"dimensions": payload}, monkeypatch, f"bad{raw}")
+
+    assert data["dimensions"][2]["score"] is None
+    assert data["total_score"] is None
+
+
+def test_a_note_the_model_wrote_as_an_object_is_not_printed_as_python(db_session, monkeypatch):
+    payload = dict(SEVEN)
+    payload["project_depth"] = {"score": 13, "note": {"问题": "没写代价"}}
+
+    _user_row, data = _diagnose(db_session, {"dimensions": payload}, monkeypatch, "dictnote")
+
+    assert data["dimensions"][4]["note"] == ""
+    assert "问题" not in str(data["dimensions"][4])
+
+
+def test_keywords_the_model_split_across_dimensions_are_collected_once(db_session, monkeypatch):
+    payload = {
+        "dimensions": {
+            **SEVEN,
+            "role_fit": {"score": 16, "note": "n", "missing_keywords": ["RAG", "评测集", "RAG"]},
+            "transferability": {"score": 10, "note": "n", "missing_keywords": ["评测集", "RRF"]},
+        }
     }
 
-    result = _diagnose(db_session, rid, user, analysis, monkeypatch)
+    _user_row, data = _diagnose(db_session, payload, monkeypatch, "kw")
 
-    assert result["match_analysis"] == "匹配度：中。差距：技能展示不全；缺少关键词"
+    assert data["missing_keywords"] == ["RAG", "评测集", "RRF"], "缺口分散在维度里就没汇总过一次的老账"
 
 
-def test_a_flat_model_response_still_works(db_session, make_resume, monkeypatch):
-    """Earlier models emitted bare numbers; both shapes must read."""
-    user = _user(db_session)
-    rid = make_resume(user_id=user.id, parsed_json={"name": "A", "self_evaluation": "x"})
-    flat = {
-        "overall_score": 70,
-        "dimensions": {"structure": 80, "ats_friendly": 90},
-        "critical_issues": ["结构松散", "表达啰嗦"],
-        "strengths": [],
-        "improvement_roadmap": ["直接给条列"],
-        "target_position_match": "整体匹配",
+def test_competition_lists_survive_a_model_that_wrote_them_as_prose(db_session, monkeypatch):
+    payload = {
+        "dimensions": SEVEN,
+        "to_next_grade": "补两处基线",
+        "competition": {"cards": "就一张牌", "gaps": ["年限", 7, "  "], "positioning_badge": {"档": "B"}},
     }
 
-    result = _diagnose(db_session, rid, user, flat, monkeypatch)
+    _user_row, data = _diagnose(db_session, payload, monkeypatch, "comp")
 
-    assert result["structure_score"] == 80
-    assert result["ats_score"] == 90
-    assert result["keyword_score"] is None, "an absent dimension is unknown, not zero"
-    assert result["structure_issues"] == ["结构松散"]
-    assert result["expression_issues"] == ["表达啰嗦"]
-    assert result["improvement_roadmap"] == ["直接给条列"]
-    assert result["match_analysis"] == "整体匹配"
-
-
-def test_a_boolean_score_is_not_a_score(db_session, make_resume, monkeypatch):
-    user = _user(db_session)
-    rid = make_resume(user_id=user.id, parsed_json={"name": "A", "self_evaluation": "x"})
-    weird = {"dimensions": {"structure": {"score": True}}, "critical_issues": [], "strengths": []}
-
-    result = _diagnose(db_session, rid, user, weird, monkeypatch)
-
-    assert result["structure_score"] is None
+    assert data["to_next_grade"] == []
+    assert data["competition"]["cards"] == []
+    assert data["competition"]["gaps"] == ["年限", "7"]
+    assert data["competition"]["positioning_badge"] == ""

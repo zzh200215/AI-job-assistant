@@ -832,6 +832,63 @@ _MOCK_AGENT_SUMMARY = {
 }
 
 
+_MOCK_REPORT_OVERVIEW = {
+    "overall_score": 72,
+    "verdict": {
+        "direction": "（mock）Python 后端 + AI 应用落地（RAG 方向）",
+        "direction_basis": "（mock）未附目标岗位，按简历关键词自动识别",
+        "target_level": "中级",
+        "level_basis": "（mock）相关工作年限 5 年、计算机强相关、本科，项目为生产级、角色为主程，落在中级区间",
+    },
+    "dimensions": {
+        "metric_ownership": {
+            "score": 12,
+            "note": "（mock）工作经历那条「负责招聘平台后端开发与维护」只写了负责什么，没有达成数；"
+            "项目成果「支撑日均 1w+ 解析」是团队量级，看不出你负责的模块贡献了多少。"
+            "补一个你自己达成/优化出来的指标，口径写清楚。",
+        },
+        "interview_hooks": {
+            "score": 5,
+            "note": "（mock）钩子只有「日均 1w+」一个数字型钩子，权衡、边界、踩坑三类都没有。"
+            "面试官追到第二层就没有纸面上的数可指。",
+        },
+        "role_fit": {
+            "score": 16,
+            "note": "（mock）技能区写了 LangChain，但项目技术栈里没有对应实践；"
+            "RAG / Agent 两条词表都没出现，方向标签要读完整份简历才判得出。",
+            "missing_keywords": ["RAG", "LangGraph", "评测集"],
+        },
+        "transferability": {
+            "score": 10,
+            "note": "（mock）技能清单是并列的名词堆，没有选型依据与边界，" "看不出哪些是 L2 能做主、哪些只是 L0 会用。",
+        },
+        "project_depth": {
+            "score": 13,
+            "note": "（mock）项目「智能简历解析服务」只有一句「基于 LLM 的结构化解析」，"
+            "解析用的切片与字段口径、失败样本怎么处理都没写，约束和代价一处都没有。",
+        },
+        "expression_structure": {
+            "score": 6,
+            "note": "（mock）自我评价「5 年后端开发经验，专注 Python / AI 应用落地」与工作经历的"
+            "「5 年」一致，这点好；但通篇是职责陈述句，没有一处结果句。",
+        },
+        "advantage_section": {"score": 3, "note": "（mock）有独立优势段，但讲的是覆盖面不是差异化，没有方法论标签。"},
+    },
+    "to_next_grade": [
+        "① 工作经历那一条补一个你负责并达成的指标（带口径），这一处补上就能过 75",
+        "② 项目成果补「优化前 → 优化后」，把「日均 1w+」拆成你负责的那一段",
+    ],
+    "competition": {
+        "positioning_badge": "（mock）B 档（中上）",
+        "positioning_note": "（mock）这里评的是背景在同类人里站哪，与七维评级不是一回事："
+        "5 年经验加生产级项目是硬的基本盘，拖后腿的是没有一处可核验的个人指标，只能靠补数据走。",
+        "cards": ["（mock）「解析链路和评测是我负责的那一段」——打招呼第一句就说这句"],
+        "gaps": ["（mock）项目成果只有团队量级，1–2 天能补出个人口径"],
+        "advice": ["（mock）投 AI 应用开发的方向，别去碰纯后端，你的差异化在 LLM 落地这条线上"],
+        "salary_note": "（mock）候选人未提供期望薪资，按中级档给参考：15K–22K，这是参考不是报价",
+    },
+}
+
 _MOCK_DISPATCH = {
     "intent": "full",
     "target_agents": ["ResumeAgent", "JobAgent", "MatchAgent", "InterviewAgent", "CareerAgent"],
@@ -860,6 +917,13 @@ def _mock_chat(prompt: str) -> str:
         return _wrap_json(_MOCK_AGENT_CAREER)
     if "主控专家" in prompt:
         return _wrap_json(_MOCK_AGENT_SUMMARY)
+
+    # ---- 第五阶段：简历评估报告 · 概览段（模块一/二/三）----
+    # 关键字取正文那行「本次任务」，与 RESUME_REPORT_OVERVIEW_PROMPT 同处改动；
+    # 该 prompt 的 `overall_score` 与七维之和不等于同一个数（65 vs 72），正是
+    # `test_resume_report_overview.py` 要用的现成对照。
+    if "简历评估报告 · 概览段" in prompt:
+        return _wrap_json(_MOCK_REPORT_OVERVIEW)
 
     # ---- 第三阶段：Agentic RAG 工作流 + 基础解析 ----
     if "意图识别专家" in prompt:

@@ -41,19 +41,28 @@ const row = (id, name) => ({
   parsed: { current_title: '后端工程师' },
 })
 
+// 与 /diagnose 现在的载荷同形（七行维度 + 结论段 + 竞争分析）。
 const DIAGNOSIS = {
   total_score: 70,
-  structure_score: 70,
-  expression_score: 70,
-  keyword_score: 70,
-  highlight_score: 70,
-  ats_score: 70,
-  completeness_score: 70,
-  structure_issues: [],
-  expression_issues: [],
+  grade: 'C',
+  grade_desc: '项目描述需要重构后再投',
+  grade_scale: 'A 85–100 / B 75–84 / C 65–74 / D 0–64',
+  report_date: '2026-10-13',
+  dimensions: [20, 10, 20, 15, 20, 10, 5].map((full, i) => ({
+    key: `dim_${i}`,
+    label: `维度${i}`,
+    full,
+    star: i < 2,
+    score: Math.round((70 / 100) * full),
+    note: '',
+  })),
+  verdict: { direction: 'RAG 应用', target_level: '中级' },
+  to_next_grade: [],
   missing_keywords: [],
-  highlights: [],
-  match_analysis: '',
+  competition: { positioning_badge: '', cards: [], gaps: [], advice: [], salary_note: '' },
+  completeness_score: 70,
+  completeness_issues: [],
+  module_check: {},
 }
 
 const SUGGESTION = {

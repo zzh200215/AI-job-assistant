@@ -23,6 +23,8 @@ _UNTRUSTED_FIELD_TAGS = {
     "directions_json": "job_directions",
     "user_request": "user_request",
     "answer": "candidate_answer",
+    # 目标岗位是请求体里的自由文本，和简历同级：候选人（或脚本）可以在这一位上写指令。
+    "target_position": "target_position",
 }
 
 

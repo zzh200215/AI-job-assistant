@@ -152,7 +152,7 @@
         :title="diagnosisError"
       />
       <div v-else-if="currentDiagnosis" class="diagnosis-body">
-        <!-- 综合评分 -->
+        <!-- 七维合计与逐维（满分各不相同，所以条与色调都按"拿到该维满皮的几成"画） -->
         <div class="diag-score-row">
           <div class="diag-score-gauge">
             <div class="gauge-ring">
@@ -180,20 +180,22 @@
               <!-- 0 would read as a terrible score; say we do not know instead -->
               <span class="gauge-text">{{ currentDiagnosis.total_score ?? '未评分' }}</span>
             </div>
-            <div class="diag-score-label">综合评分</div>
+            <div class="diag-score-label">
+              {{ currentDiagnosis.grade ? `${currentDiagnosis.grade} 级 · 七维合计` : '七维合计' }}
+            </div>
           </div>
           <div class="diag-dims">
-            <div v-for="dim in diagnosisDims" :key="dim.key" class="diag-dim-item">
+            <div v-for="dim in currentDiagnosis.dimensions" :key="dim.key" class="diag-dim-item">
               <div class="dim-label">
                 <span>{{ dim.label }}</span>
-                <strong :style="{ color: scoreToneTextColor(dim.score) }">{{
-                  dim.score ?? '—'
-                }}</strong>
+                <strong :style="{ color: scoreToneTextColor(dimRate(dim)) }"
+                  >{{ dim.score ?? '—' }} / {{ dim.full }}</strong
+                >
               </div>
               <el-progress
                 v-if="typeof dim.score === 'number'"
-                :percentage="dim.score"
-                :color="scoreToneColor(dim.score)"
+                :percentage="dimRate(dim)"
+                :color="scoreToneColor(dimRate(dim))"
                 :stroke-width="6"
               />
               <p v-else class="dim-none">本次分析未给出该维度评分</p>
@@ -201,27 +203,44 @@
           </div>
         </div>
 
+        <p v-if="currentDiagnosis.verdict?.direction" class="diag-note">
+          方向定位：{{ currentDiagnosis.verdict.direction }}
+          <template v-if="currentDiagnosis.verdict.target_level">
+            ｜目标等级：{{ currentDiagnosis.verdict.target_level }}</template
+          >
+          <template v-if="currentDiagnosis.report_date">
+            ｜日期：{{ currentDiagnosis.report_date }}</template
+          >
+        </p>
+        <p v-if="currentDiagnosis.grade_desc" class="diag-note">
+          {{ currentDiagnosis.grade_scale }}。{{
+            currentDiagnosis.grade_desc
+          }}——分数代表的是现在这份简历的竞争力，不是你的能力上限。
+        </p>
+
         <!-- 诊断详情 -->
         <el-collapse v-model="diagActivePanels" class="diag-details">
-          <el-collapse-item title="📐 结构问题" name="structure">
-            <div v-if="currentDiagnosis.structure_issues?.length">
-              <p v-for="(item, i) in currentDiagnosis.structure_issues" :key="i" class="diag-issue">
-                <el-icon><WarningFilled /></el-icon> {{ item }}
+          <el-collapse-item title="📋 七维待优化点" name="notes">
+            <div v-if="dimensionNotes.length">
+              <p v-for="dim in dimensionNotes" :key="dim.key" class="diag-issue">
+                <el-icon><WarningFilled /></el-icon>
+                <strong>{{ dim.label }}</strong
+                >：{{ dim.note }}
               </p>
             </div>
-            <el-empty v-else :image-size="60" description="结构良好" />
+            <el-empty v-else :image-size="60" description="本次分析没有逐维写出待优化点" />
           </el-collapse-item>
-          <el-collapse-item title="✏️ 表达问题" name="expression">
-            <div v-if="currentDiagnosis.expression_issues?.length">
+          <el-collapse-item title="🚀 距上一档还差什么" name="next">
+            <div v-if="currentDiagnosis.to_next_grade?.length">
               <p
-                v-for="(item, i) in currentDiagnosis.expression_issues"
+                v-for="(item, i) in currentDiagnosis.to_next_grade"
                 :key="i"
-                class="diag-issue"
+                class="diag-issue diag-good"
               >
-                <el-icon><WarningFilled /></el-icon> {{ item }}
+                <el-icon><CircleCheckFilled /></el-icon> {{ item }}
               </p>
             </div>
-            <el-empty v-else :image-size="60" description="表达清晰" />
+            <el-empty v-else :image-size="60" description="本次分析未给出升档项" />
           </el-collapse-item>
           <el-collapse-item title="🔑 关键词缺失" name="keywords">
             <div v-if="currentDiagnosis.missing_keywords?.length">
@@ -234,33 +253,42 @@
                 {{ kw }}
               </el-tag>
             </div>
-            <el-empty v-else :image-size="60" description="关键词覆盖良好" />
+            <el-empty v-else :image-size="60" description="本次分析未点名缺失关键词" />
           </el-collapse-item>
-          <el-collapse-item title="✨ 亮点分析" name="highlights">
-            <div v-if="currentDiagnosis.highlights?.length">
+          <el-collapse-item title="⚔️ 竞争分析" name="competition">
+            <div v-if="hasCompetition">
+              <p class="diag-note">
+                竞争力档位：<strong>{{ currentDiagnosis.competition.positioning_badge }}</strong>
+              </p>
+              <p v-if="currentDiagnosis.competition.positioning_note" class="diag-issue">
+                {{ currentDiagnosis.competition.positioning_note }}
+              </p>
               <p
-                v-for="(item, i) in currentDiagnosis.highlights"
-                :key="i"
+                v-for="(item, i) in currentDiagnosis.competition.cards"
+                :key="`c${i}`"
                 class="diag-issue diag-good"
               >
-                <el-icon><CircleCheckFilled /></el-icon> {{ item }}
+                <el-icon><CircleCheckFilled /></el-icon> 能打的牌：{{ item }}
+              </p>
+              <p
+                v-for="(item, i) in currentDiagnosis.competition.gaps"
+                :key="`g${i}`"
+                class="diag-issue"
+              >
+                <el-icon><WarningFilled /></el-icon> 要补的短板：{{ item }}
+              </p>
+              <p
+                v-for="(item, i) in currentDiagnosis.competition.advice"
+                :key="`a${i}`"
+                class="diag-issue diag-good"
+              >
+                <el-icon><CircleCheckFilled /></el-icon> 针对性建议：{{ item }}
+              </p>
+              <p v-if="currentDiagnosis.competition.salary_note" class="diag-issue">
+                期望薪资：{{ currentDiagnosis.competition.salary_note }}
               </p>
             </div>
-            <el-empty v-else :image-size="60" description="尚未发现突出亮点" />
-          </el-collapse-item>
-          <el-collapse-item title="🎯 岗位匹配度" name="match">
-            <div v-if="currentDiagnosis.match_analysis">
-              <p>{{ currentDiagnosis.match_analysis }}</p>
-            </div>
-            <el-empty v-else :image-size="60" description="未指定对比岗位" />
-          </el-collapse-item>
-          <el-collapse-item title="🤖 ATS 友好度" name="ats">
-            <div v-if="typeof currentDiagnosis.ats_score === 'number'">
-              <p class="diag-note">
-                模型评分 {{ currentDiagnosis.ats_score }}，用于估计格式与关键词的可解析性。
-              </p>
-            </div>
-            <el-empty v-else :image-size="60" description="本次分析未给出 ATS 维度评分" />
+            <el-empty v-else :image-size="60" description="本次分析未给出竞争分析" />
           </el-collapse-item>
           <el-collapse-item title="模块完整度（规则检查，非 AI）" name="completeness">
             <div v-if="currentDiagnosis.completeness_issues?.length">
@@ -273,21 +301,6 @@
               </p>
             </div>
             <el-empty v-else :image-size="60" description="未检出缺失模块" />
-          </el-collapse-item>
-          <el-collapse-item title="📈 改进路线图" name="roadmap">
-            <div v-if="currentDiagnosis.improvement_roadmap?.length">
-              <p
-                v-for="(item, i) in currentDiagnosis.improvement_roadmap"
-                :key="i"
-                class="diag-issue diag-good"
-              >
-                <el-icon><CircleCheckFilled /></el-icon>
-                {{
-                  typeof item === 'string' ? item : item.title || item.keyword || item.action || ''
-                }}
-              </p>
-            </div>
-            <el-empty v-else :image-size="60" description="暂无改进建议" />
           </el-collapse-item>
           <el-collapse-item name="rewrite">
             <template #title>
@@ -437,6 +450,7 @@
                   }}</el-dropdown-item>
                   <el-dropdown-item command="optimize">AI优化</el-dropdown-item>
                   <el-dropdown-item command="diagnose">AI诊断</el-dropdown-item>
+                  <el-dropdown-item command="report">评估报告</el-dropdown-item>
                   <el-dropdown-item command="compare">版本对比</el-dropdown-item>
                   <el-dropdown-item command="analyze">深度分析</el-dropdown-item>
                   <el-dropdown-item v-if="r.id !== defaultResumeId" command="setDefault"
@@ -819,13 +833,29 @@ onMounted(() => {
   loadList()
 })
 
-const diagnosisDims = [
-  { key: 'structure_score', label: '结构', score: 0 },
-  { key: 'expression_score', label: '表达', score: 0 },
-  { key: 'keyword_score', label: '关键词覆盖', score: 0 },
-  { key: 'highlight_score', label: '亮点', score: 0 },
-  { key: 'ats_score', label: 'ATS友好度', score: 0 },
-]
+/* 七维的满分各不相同（5 到 20），所以色调与进度条都按"拿到该维满皮的几成"算：
+   直接拿原始分上色，个人优势那一档最高也只有 5 分，会被读成一个大红项。 */
+function dimRate(dim) {
+  if (typeof dim?.score !== 'number' || !dim?.full) return 0
+  return Math.round((dim.score / dim.full) * 100)
+}
+
+const dimensionNotes = computed(() =>
+  (currentDiagnosis.value?.dimensions || []).filter((dim) => dim.note)
+)
+
+const hasCompetition = computed(() => {
+  const c = currentDiagnosis.value?.competition
+  if (!c) return false
+  return Boolean(
+    c.positioning_badge ||
+    c.positioning_note ||
+    c.cards?.length ||
+    c.gaps?.length ||
+    c.advice?.length ||
+    c.salary_note
+  )
+})
 
 function formatSize(n) {
   if (!n) return '-'
@@ -943,7 +973,7 @@ const customUpload = async ({ file }) => {
   }
 }
 
-// ---- 行下拉的 11 个命令：一个分支一个函数，再由 handleCmd 查表派发 ----
+// ---- 行下拉的 12 个命令：一个分支一个函数，再由 handleCmd 查表派发 ----
 /* 原来 11 个分支共用一个函数体，D32 要给「解析」加竞态令牌时卡在这里：令牌得按分支领，
    而分支们挤在同一个 if-else 链里，谁都说不清自己那一份的意图边界。拆开之后每个分支都能
    单独决定自己要不要令牌——现在只有 parse 需要（它写的是全局唯一的那个抽屉）。 */
@@ -978,10 +1008,17 @@ function openCompareRow(r) {
   router.push(`/resume/compare/${r.id}`)
 }
 
+/* 六模块评估报告是**另一条链**（异步作业 + 轮询），不在这个弹窗里嵌第二套渲染：
+   那一页拿到 resume_id 后自己决定是接住已有作业还是新建一次。 */
+function openReportRow(r) {
+  router.push({ name: 'resume-report', query: { resume_id: r.id } })
+}
+
 const ROW_COMMANDS = {
   parse: parseResumeRow,
   optimize: optimizeResume,
   diagnose: showDiagnosisDialog,
+  report: openReportRow,
   compare: openCompareRow,
   analyze: goAnalysis,
   setDefault: setDefaultResumeRow,
@@ -1104,28 +1141,24 @@ async function showDiagnosisDialog(r) {
   currentDiagnosis.value = {
     resume_id: r.id,
     total_score: d.total_score ?? null,
-    structure_score: d.structure_score ?? null,
-    expression_score: d.expression_score ?? null,
-    keyword_score: d.keyword_score ?? null,
-    highlight_score: d.highlight_score ?? null,
-    ats_score: d.ats_score ?? null,
-    structure_issues: d.structure_issues || [],
-    expression_issues: d.expression_issues || [],
+    grade: d.grade ?? null,
+    grade_desc: d.grade_desc || '',
+    grade_scale: d.grade_scale || '',
+    dimensions: Array.isArray(d.dimensions) ? d.dimensions : [],
+    verdict: d.verdict || {},
+    to_next_grade: d.to_next_grade || [],
     missing_keywords: d.missing_keywords || [],
-    highlights: d.highlights || [],
-    match_analysis: d.match_analysis || '',
+    competition: d.competition || {},
     completeness_issues: d.completeness_issues || [],
     completeness_score: d.completeness_score ?? null,
+    completeness_grade: d.completeness_grade ?? null,
     module_check: d.module_check || {},
-    improvement_roadmap: d.improvement_roadmap || [],
+    report_date: d.report_date || '',
     // /diagnose 打分的是**一个岗位名称字符串**，不是库里存的 JD：响应里没有 jd_id，
     // 也没有分析记录。这个字段只为行级改写接口保留"无目标 JD"的入参形状，
     // 不能拿来跳分析详情页（那条路由要的是 AnalysisRecord 的 id）。
     jd_id: d.jd_id ?? null,
   }
-  diagnosisDims.forEach((dim) => {
-    dim.score = d[dim.key] ?? null
-  })
   r._diagnosisScore = d.total_score
   diagnosisLoading.value = false
 }

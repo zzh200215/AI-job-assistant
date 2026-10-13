@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<!--
+  ============================================================================
+  简历评估技能 · HTML 完整报告骨架（唯一交付物）
+  文件命名：简历评估报告_{姓名}.html
+  ============================================================================
+
+  【这是什么】
+    简历评估技能的**唯一交付物**——报告的完整成品本身就是这份 HTML：
+    顶部有一条「模块快速导航」（点一下跳到对应模块，滚动时自动高亮当前模块，
+    右下角可回到顶部），方便学员在手机 / 电脑上直接看。
+    （2026-09-12 起不再产出 Markdown 报告；`report-template.md` 只是写作规范，
+    用来指导正文内容怎么写，不另存成稿。）
+
+  【怎么用】
+    1. 复制本文件，改名为 `简历评估报告_{姓名}.html`。
+    2. 把 <title>、顶栏标题、评级徽标、以及 6 个模块的全部示例内容
+       替换成这份简历的真实结论（示例里的「李明」「81/100」「企业知识库问答助手」
+       等必须全部换掉，一个都不能留）。
+    3. 模块只允许这 6 个，顺序不许变，id 不许改（导航靠 id 跳转）：
+         #m-summary   首屏结论段（**不设小标题**，直接一段话：四字段单行，不写"结论先行"补充段；
+                      顶部导航第一项文案固定为「**小结**」——那只是导航标签，不是正文标题）
+         #m-score     一、评分概览（七维表 + 等级结论行）
+         #m-fit       二、竞争分析
+         #m-resume    三、修改建议（Word 审阅式批改稿：以原简历为主体就地批改——红删除线 = 建议改掉
+                      的原话、蓝下划线 = 建议改成的内容、右栏批注 + 「关键」徽标，可切「仅看改后净稿」）
+         #m-interview 四、面试预演（未达门禁分时整块换成"暂缓生成"版）
+         #m-boss      五、投递策略（逐字复制 boss-strategy.md 第一至五节）
+    4. 交付前跑 `scripts/report_html_lint.py` 机检（导航 ↔ 模块是否一一对应、
+       必需模块是否齐、有没有漏掉内部机制字眼或没替换的示例内容）。
+
+  【第三节「修改建议」怎么写（Word 审阅式）】
+    · 主体必须是学员的**原简历**：按原简历的章节与项目顺序铺开，未改动的句子原样保留（不加任何标记），
+      不得重排、合并、删节章节。
+    · **原简历全部内容都要出现**——基本信息 / 个人优势 / 技能清单 / **每一段项目经历（第 1 个、第 2 个……
+      一直写到最后一个项目）/ 工作经历等，一段都不许省**；每个项目块保留原结构与原条目数、完整铺开。
+      **严禁「P2 … Pn 同样处理 / 同上 / 以此类推 / 其余项目照此 / 此处省略」这类省略写法**
+      （机检第 12 项命中即报错）——那样学员拿到的是半份稿子。
+    · **改动分两档、两档都要写出来**：**P0 必改**（改完能过 80 分线的关键项）→ 编号与批注加 class="key"、
+      标「关键」；**P1 建议改**（责任颗粒度、约束 / 代价 / 口径补齐、表述呼应等提升项）→ 照常挂 sup.mk
+      编号 + 普通 div.note 批注、但**不标「关键」**。只写 P0、把 P1 略过视为未完成；**纯润色 = P2 档、不写**。
+    · **两套记号别混**：档位 `P0 / P1` 说的是**改动优先级**，项目编号 `P1 / P2 …` 说的是**第几个项目**——
+      成稿里档位只以「关键」徽标体现、**不写 P0 / P1 字样**，项目一律写成 `P2 · 项目名`。
+    · 要动的地方才标：del 标签写「建议改掉的原话」、ins 标签写「建议改成的内容」，紧跟 sup.mk 编号。
+    · 右栏 aside.rvside 里每个 div.note 对应一处改动，编号与正文 sup.mk 严格一一对应、
+      不多不少；批注先写「这么改解决什么（面试官会怎么追问 / 现在卡在哪）」，再给动作。
+    · 不值得让学员动手改的纯润色项保持原样、不标编号；顶部 .rvstat 的「共 n 处 / 其中 m 处关键项」
+      必须与正文实际数量一致（机检第 12 项会核对声明数与实际编号数）。
+    · **「零改动 / 极少改动」怎么办（重要，别为过机检硬凑）**：简历本身已经达标时，本节就老实铺原文、只在真值得动的地方标几笔。
+      .rvstat 三档写法：① 有关键必改项 →「共 n 处改动，其中 m 处是关键项」；② 只有可选优化 →「共 n 处可选优化，没有必改项」；
+      ③ 一处都不必改 →「这一版可以原样用，无需改动」。第 ②③ 种情况下 **del/ins 可以为空**，此时 .rvside 里放一条**不带编号**的 .note 说明理由
+      （如"这句原本就写得具体，改写反而会把它磨平，保持原样更好"）。机检看到 .rvstat 里带「可选优化 / 无需改动」时会跳过「没有改动标记」的告警。
+    · 打印引导：`.rvbar` 后面有一个 `.print-only` 段落（**只在打印 / 导出 PDF 时出现**）——提醒"本页是批改稿，
+      要净稿先切「仅看改后净稿」"；切到净稿模式后打印会自动隐藏它（`body.rg-only .print-only{display:none}`）。
+      这段别删——学员常直接打印 / 导出 PDF 当简历用。
+    · 按钮 id 固定：「仅看改后净稿」= rv-toggle、「复制净稿」= rv-copy，脚本已在页尾接好，不要改 id。
+      rv-copy 会把改后文本（去删除线 / 编号 / 批注 / `.gen-note` 示例说明，ins 还原为正文）写进剪贴板，
+      file:// 下自动退回 execCommand。**给学员看的展开说明写成 class="muted gen-note"，复制时会被自动剔除**。
+
+  【写法红线（违反即不合格）】
+    · 成稿措辞：不得出现兜底 / 总分兜底 / 不低于 65 / 严格制 / 软下限 / 门禁 /
+      可面试水位 / 硬条件 / 双轴 / 收敛 / 档内区分项 等内部机制字眼，也不解释给分机制。
+    · 事实边界：严禁把「参与 / 协助」写成「主导 / 负责」，只做职责颗粒度细化。
+    · 不编数字：没实测过的写 `【待补：按 X 路径跑一遍得到实测值】`。
+    · 全文口径自洽：分数、等级、薪资数字、面试题状态前后一致，不得出现两种说法。
+
+  【技术约束】
+    纯内联 CSS/JS，不引用任何外部资源（无 CDN、无字体、无图片），双击即开、离线可用。
+    浅色主题、可打印（打印时自动隐藏导航与回到顶部按钮）。
+  ============================================================================
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>简历评估报告 · 示例候选人</title>
+<style>
+:root{
+  --bg:#f4f6fa; --card:#ffffff; --ink:#1e2430; --ink2:#5a6478; --ink3:#8b94a8;
+  --line:#e6eaf2; --line2:#d9e2f2;
+  --brand:#2f6df6; --brand2:#1b4fd8; --brand-soft:#edf3ff;
+  --hot:#d81b47; --hot-soft:#fff5f7;
+  --ok:#0f9960; --warn:#b5730a; --warn-soft:#fff8ec;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:15px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+/* ---------- 顶栏 + 模块导航 ---------- */
+.topbar{
+  position:sticky; top:0; z-index:50;
+  background:rgba(255,255,255,.95);
+  -webkit-backdrop-filter:saturate(180%) blur(10px);
+  backdrop-filter:saturate(180%) blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.tb{max-width:1000px; margin:0 auto; padding:12px 22px 0}
+.tb-row{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.brand{font-size:17px; font-weight:700; letter-spacing:.2px}
+.brand em{font-style:normal; color:var(--ink3); font-weight:500; font-size:13px; margin-left:6px}
+.tb-right{margin-left:auto; display:flex; gap:8px; flex-wrap:wrap}
+.pill{
+  display:inline-flex; align-items:center; gap:5px;
+  padding:3px 11px; border-radius:999px; font-size:12.5px; font-weight:600;
+  background:#f2f5fb; color:var(--ink2); border:1px solid var(--line);
+}
+.pill.grade{background:var(--brand-soft); color:var(--brand2); border-color:#d5e3ff}
+.pill.grade b{font-size:13.5px}
+.modnav{
+  display:flex; gap:6px; overflow-x:auto; padding:9px 0 11px; margin-top:1px;
+  scrollbar-width:none;
+}
+.modnav::-webkit-scrollbar{display:none}
+.modnav a{
+  flex:0 0 auto; padding:6px 13px; border-radius:999px; font-size:13px;
+  color:var(--ink2); text-decoration:none; border:1px solid transparent; white-space:nowrap;
+  transition:background .15s,color .15s,border-color .15s;
+}
+.modnav a:hover{background:var(--brand-soft); color:var(--brand2); border-color:#d5e3ff}
+.modnav a.on{background:var(--brand); color:#fff; border-color:var(--brand)}
+/* ---------- 容器与卡片 ---------- */
+.wrap{max-width:1000px; margin:0 auto; padding:20px 22px 90px}
+.card{
+  background:var(--card); border:1px solid var(--line); border-radius:16px;
+  padding:24px 26px; margin-bottom:18px; scroll-margin-top:112px;
+  box-shadow:0 1px 2px rgba(20,30,60,.04);
+}
+h2.ct{
+  display:block; margin:0 0 16px; padding-left:13px; font-size:19px; line-height:1.5;
+  border-left:4px solid var(--brand); color:var(--ink);
+}
+h2.ct span.tip{display:block; font-size:13px; font-weight:400; color:var(--ink3); margin-top:2px}
+h3.sub{font-size:15.5px; margin:22px 0 10px; color:var(--ink)}
+h4.sub2{font-size:14.5px; margin:16px 0 8px; color:var(--ink2)}
+p{margin:9px 0}
+.hr{height:1px; background:var(--line); margin:20px 0; border:0}
+.muted{color:var(--ink3); font-size:13px}
+/* ---------- 模块一：首屏结论段（不设小标题，直接一段话） ---------- */
+.verdict{
+  background:var(--brand-soft); border:1px solid var(--line2); border-left:4px solid var(--brand);
+  border-radius:12px; padding:15px 18px; font-size:15px; line-height:1.95;
+}
+.verdict .sep{color:#b7c4de; padding:0 7px}
+.verdict b.g{color:var(--brand2)}
+/* ---------- 模块二：评分概览（表格 + 结论） ---------- */
+.tbl{width:100%; border-collapse:collapse; font-size:14px}
+.tbl th,.tbl td{border:1px solid var(--line); padding:9px 11px; vertical-align:top; text-align:left}
+.tbl thead th{background:#f7f9fd; font-size:13px; color:var(--ink2); font-weight:600}
+.tbl td.n{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
+.tbl tr.hot td{background:var(--hot-soft)}
+.tbl tr.hot td:first-child{color:var(--hot)}
+.tbl tr.total td{background:#f7f9fd; font-weight:700}
+.concl{margin-top:13px; font-size:14px; color:var(--ink2); line-height:1.85}
+/* ---------- 模块三：竞争力 ---------- */
+.fitline{font-size:15px; margin:0 0 4px}
+.badge{
+  display:inline-block; padding:2px 10px; border-radius:999px; font-size:13px; font-weight:700;
+  background:var(--brand-soft); color:var(--brand2); border:1px solid #d5e3ff;
+}
+ul.bul{margin:8px 0 0; padding-left:20px}
+ul.bul li{margin:5px 0}
+ul.bul li b{color:var(--ink)}
+/* ---------- 模块三：修改建议（Word 审阅式批改稿） ---------- */
+.rvbar{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 14px}
+.rvstat{font-size:13.5px; color:var(--ink2)}
+.rvstat b{color:var(--hot)}
+.rvbtn{
+  padding:6px 15px; border-radius:999px; cursor:pointer;
+  font:inherit; font-size:13px; font-weight:600; color:var(--brand2);
+  background:var(--brand-soft); border:1px solid #d5e3ff;
+}
+.rvbtn:first-of-type{margin-left:auto}
+.rvbtn:hover{background:#e2ecff}
+.rvbtn.primary{background:var(--brand); color:#fff; border-color:var(--brand)}
+.rvbtn.primary:hover{background:var(--brand2); border-color:var(--brand2)}
+.rvbtn.copied{color:#0f7a4d; background:#eaf8f1; border-color:#bfe6d3}
+.rv{display:grid; grid-template-columns:minmax(0,1fr) 268px; gap:20px; align-items:start}
+.rvside{position:sticky; top:122px; max-height:calc(100vh - 165px); overflow:auto; padding-right:2px}
+.paper{
+  background:#fcfdff; border:1px dashed #cbd8ef; border-radius:12px; padding:20px 22px;
+}
+.paper h3{margin:0 0 4px; font-size:16px}
+.paper .meta{color:var(--ink3); font-size:13px; margin-bottom:12px}
+.paper .blk{margin:14px 0 0}
+.paper .blk .lb{font-weight:700; font-size:14px; color:var(--brand2)}
+/* 批改痕迹：红色删除线 = 建议改掉的原话；蓝色下划线 = 建议改成的内容 */
+del{
+  color:var(--hot); background:var(--hot-soft); text-decoration:line-through;
+  text-decoration-thickness:1.5px; padding:0 3px; border-radius:3px;
+}
+ins{
+  color:var(--brand2); background:var(--brand-soft); text-decoration:underline;
+  text-underline-offset:3px; text-decoration-thickness:1.5px; padding:0 3px; border-radius:3px;
+}
+sup.mk{
+  display:inline-block; min-width:17px; height:17px; line-height:17px; text-align:center;
+  margin-left:4px; padding:0 2px; border-radius:9px; vertical-align:3px;
+  background:#e8edf8; color:var(--ink2); font-size:11px; font-weight:700;
+}
+sup.mk.key{background:var(--hot); color:#fff}
+/* 右栏批注 */
+.note{
+  background:#fffdf3; border:1px solid #efe3c4; border-left:3px solid #ddb44e;
+  border-radius:9px; padding:9px 12px; font-size:12.5px; line-height:1.7;
+  color:#6b5420; margin:0 0 9px;
+}
+.note .mk{
+  display:inline-block; min-width:18px; height:18px; line-height:18px; text-align:center;
+  border-radius:9px; background:#ddb44e; color:#fff; font-size:11px; font-weight:700; margin-right:5px;
+}
+.note.key{background:var(--hot-soft); border-color:#f2c8d2; border-left-color:var(--hot); color:#8a1732}
+.note.key .mk{background:var(--hot)}
+.note .tag{
+  display:inline-block; margin-left:6px; padding:0 6px; border-radius:5px;
+  font-size:11px; font-weight:700; background:#fff; border:1px solid currentColor;
+}
+.print-only{display:none}
+/* 「仅看改后净稿」：隐藏删除线与批注，插入内容变回正常文字 */
+body.rg-only del{display:none}
+body.rg-only ins{background:none; color:inherit; text-decoration:none; padding:0}
+body.rg-only sup.mk{display:none}
+body.rg-only .rvside{display:none}
+body.rg-only .rv{grid-template-columns:minmax(0,1fr)}
+.replaced{
+  display:inline-block; margin-left:8px; padding:1px 8px; border-radius:6px;
+  font-size:12px; font-weight:600; color:var(--warn); background:var(--warn-soft); border:1px solid #f0dfc0;
+}
+.todo{color:var(--hot); font-weight:600}
+.warnbox{
+  background:var(--warn-soft); border:1px solid #f0dfc0; border-radius:10px;
+  padding:11px 15px; font-size:13.5px; color:#7a5210; margin-top:12px;
+}
+/* ---------- 模块五：面试题 ---------- */
+.q{border-top:1px dashed var(--line2); padding-top:15px; margin-top:16px}
+.q:first-of-type{border-top:0; padding-top:0; margin-top:0}
+.q .no{font-weight:700; color:var(--brand2)}
+.lbl{display:block; font-weight:700; font-size:13.5px; color:var(--brand); margin:11px 0 4px}
+.lbl.z{color:var(--ink2)}
+.q p{margin:5px 0 0}
+.st{display:inline-block; margin-top:10px; font-size:13px; font-weight:600; color:var(--ok)}
+.st.warn{color:var(--warn)}
+.st.risk{color:var(--hot)}
+/* ---------- 模块六：BOSS ---------- */
+.boss-blk{margin-bottom:16px}
+.boss-blk h3{margin:0 0 6px; font-size:15px; color:var(--ink)}
+.boss-blk p{margin:4px 0; color:var(--ink2); font-size:14px}
+/* ---------- 回到顶部 ---------- */
+.totop{
+  position:fixed; right:20px; bottom:24px; z-index:60; display:none;
+  width:42px; height:42px; border-radius:50%; border:1px solid var(--line2);
+  background:#fff; color:var(--brand2); font-size:16px; cursor:pointer;
+  box-shadow:0 6px 18px rgba(30,50,100,.14);
+}
+.totop.show{display:block}
+footer.ft{max-width:1000px; margin:0 auto; padding:0 22px 40px; color:var(--ink3); font-size:12.5px}
+/* ---------- 打印 ---------- */
+@media print{
+  body{background:#fff}
+  .topbar{position:static; background:#fff; border-bottom:0}
+  .modnav,.totop,.rvbtn{display:none !important}
+  .wrap{max-width:none; padding:0}
+  .card{break-inside:avoid; page-break-inside:avoid; box-shadow:none; border-color:#d5dbe8; margin-bottom:12px}
+  .card{scroll-margin-top:0}
+  .q{break-inside:avoid}
+  .rv{grid-template-columns:1fr}
+  .rvside{position:static; max-height:none; overflow:visible; margin-top:14px}
+  .print-only{display:block; margin:0 0 10px; font-size:12.5px; color:#8a93a6}
+  body.rg-only .print-only{display:none}
+}
+/* ---------- 窄屏 ---------- */
+@media (max-width:860px){
+  .rv{grid-template-columns:1fr}
+  .rvside{position:static; max-height:none; overflow:visible; margin-top:14px}
+  .rvbtn:first-of-type{margin-left:0}
+  .rvbar{gap:8px}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="tb">
+    <div class="tb-row">
+      <div class="brand">简历评估报告<em>示例候选人</em></div>
+      <div class="tb-right">
+        <span class="pill grade">评级 <b>B</b> · 84/100</span>
+        <span class="pill">目标等级 中级</span>
+        <span class="pill">方向 RAG 应用（Agent）</span>
+      </div>
+    </div>
+    <nav class="modnav" aria-label="报告模块快速导航">
+      <a href="#m-summary">小结</a>
+      <a href="#m-score">一、评分概览</a>
+      <a href="#m-fit">二、竞争分析</a>
+      <a href="#m-resume">三、修改建议</a>
+      <a href="#m-interview">四、面试预演</a>
+      <a href="#m-boss">五、投递策略</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ============ 首屏结论段（不设小标题，直接一段话；不写"结论先行"补充段） ============ -->
+  <section class="card" id="m-summary">
+    <div class="verdict">
+      方向定位：RAG 应用（Agent / Workflow）<span class="sep">|</span>
+      目标等级：中级（按背景五因子综合判定；相关工作年限约 1.7 年、计算机强相关、普通本科，落在中级区间）<span class="sep">|</span>
+      评级：<b class="g">B（84/100）</b><span class="sep">|</span>
+      日期：2026-09-12
+    </div>
+  </section>
+
+  <!-- ============ 一、评分概览 ============ -->
+  <section class="card" id="m-score">
+    <h2 class="ct">一、评分概览（七维 100 分）</h2>
+    <table class="tbl">
+      <thead>
+        <tr><th>维度</th><th class="n">得分</th><th class="n">满分</th><th>待优化点</th></tr>
+      </thead>
+      <tbody>
+        <tr class="hot">
+          <td><b>指标责任与达成（C）★</b></td><td class="n"><b>15</b></td><td class="n"><b>20</b></td>
+          <td>只算你自己负责并达成 / 优化出来的指标，团队成果和来源不明的数字不计入。三个项目都写明了「检索链路与 Agent 流程是我搭的」，责任归属清楚，指标也都带口径（法律 92% 注明判定标准、金融 9.3%→1.0% 注明 50 案例 / 139 标注点、电网 85% 注明约 300 条标注集）。缺两样：① 法律 92%、电网 85% 只有绝对值，没有「优化前 → 优化后」（项目 1 成果、项目 3 成果）；② 三个项目都没有工程指标（检索 P90 或单次调用成本）。金融那组 9.3%→1.0% 是三个里唯一一处完整的前后对比，照它的写法改另外两个。</td>
+        </tr>
+        <tr class="hot">
+          <td><b>面试钩子设计（E）★</b></td><td class="n"><b>8</b></td><td class="n"><b>10</b></td>
+          <td>钩子 5 个、覆盖 4 类（数字 / 权衡 / 边界 / 踩坑），分布法律 2、金融 2、电网 1，没有会把你带进坑里的钩子。三处钩子停在「为什么做」，代价那一层还没数：法律图谱那一路的维护成本（项目 1 职责 2）、HITL 的人工介入率（项目 1 职责 4）、电网的清洗前后条数（项目 3 职责 1）——面试官追到第三层时要现场补数。</td>
+        </tr>
+        <tr>
+          <td>岗位契合度（赛道定位）</td><td class="n">19</td><td class="n">20</td>
+          <td>方向标签 5 秒可判：求职意向写的是「AI 应用开发工程师（RAG/Agent）」，个人优势第一句直接点到检索链路与 Agent 流程两块；RAG / Agent / 评测三条词表都覆盖到了。技能区写了 LlamaIndex、ReAct，项目里没有对应实践——这类只提示、不扣分，面试前想清楚每个名词能不能聊 30 秒，聊不了的先撤下来。</td>
+        </tr>
+        <tr>
+          <td>技术可迁移性</td><td class="n">14</td><td class="n">15</td>
+          <td>L0 / L1 / L2 占比 ≈ 0 / 15 / 85（L0 会用 / L1 懂原理 / L2 能做主），多数条目写出了选型依据与边界。法律、金融、电网三个垂类都留了一层能带走的判断（强合规场景的拒答与确定性终判、长链路的规划执行分离、历史工单类语料先清洗），不算「只懂这一小块」。</td>
+        </tr>
+        <tr>
+          <td>项目深度与真实感</td><td class="n">17</td><td class="n">20</td>
+          <td>一眼看过去像真做过：细节密度高（800 条评测集、50 案例 / 139 标注点、1200+ 工单、50+ Runbook、约 300 条测试集），约束与代价都写了（复杂任务跑一半挂掉重来成本高、状态要持久化的代价），踩坑也有一处（原始工单不清洗、召回全是重复）。差一点现场感：法规与工单的切片 / 解析参数写得少。</td>
+        </tr>
+        <tr>
+          <td>表达与结构</td><td class="n">7</td><td class="n">10</td>
+          <td>句式：项目职责都是动词开头、没有空泛形容词，但技能区「熟练掌握 Python」这类没有佐证的词要换掉，个人优势用的是第一人称「我负责的」，与简历通行的无人称写法不一致。一致性：全篇无错别字、时间线连续，但电网测试集规模前后对不上（个人优势写约 180 条、项目成果写约 300 条），面试官看到一定会问。</td>
+        </tr>
+        <tr>
+          <td>个人优势介绍</td><td class="n">4</td><td class="n">5</td>
+          <td>有独立的优势节，讲的是差异化：不说「精通 XX」，直接说「我负责的是检索链路与 Agent 流程」，并用三个项目的评测集给能力配了证据，与项目一一呼应。略短，缺一条能立住的方法论标签。</td>
+        </tr>
+        <tr class="total">
+          <td>合计</td><td class="n">84</td><td class="n">100</td><td>B</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="concl">等级：<b>A 85+</b>（稀缺档，七维没有明显短板）/ <b>B 75–84</b>（质量过关，可直接投）/ <b>C 65–74</b>（项目描述需要重构后再投）。分数代表的是「现在这份简历的竞争力」，不是「你的能力上限」。<br>距 A 档还差：① 法律、电网两个项目各补 1 处「优化前 → 优化后」的基线（项目 1 成果、项目 3 成果）；② 三个项目补 1 个工程指标（检索 P90 或单次调用成本）。这两样补齐，这份简历就具备冲 A 的条件了。</p>
+  </section>
+
+  <!-- ============ 二、竞争分析 ============ -->
+  <section class="card" id="m-fit">
+    <h2 class="ct">二、竞争分析</h2>
+    <p class="fitline"><b>方向定位</b>：RAG 应用（Agent / Workflow）——三个项目里两个是检索增强问答、三个都带 LangGraph 状态图编排，主线非常集中。判定依据：简历未附 JD，按关键词自动识别。</p>
+    <p class="fitline" style="margin-top:12px"><b>竞争力分析</b>：<span class="badge">B 档（中上）</span>——这是你的背景放在同类竞争者里的位置（和上面的简历评级不是一回事：评级评「这份简历做得好不好」，这里评「这个背景在同类人里站哪」）。专业强相关 + 三个生产级项目 + 模块负责的角色，基本盘很硬；拖后腿的是院校学历普通、年限刚够中级门槛，这两项只能靠时间走。</p>
+    <ul class="bul">
+      <li><b>能打的牌</b>：① 「三个项目的检索链路和 Agent 流程都是我搭的」——打招呼第一句就说这句，直接把你从「参与过 AI 项目」里分出来。② 「先用评测集定位问题、再动手改」——三个项目各一套评测集，多数同级候选人只会说「调 Prompt 优化效果」。③ 强合规场景的边界意识：置信度不够就拒答、合规结论终判交给确定性规则，这两条比单纯讲技术更打动面试官。</li>
+      <li><b>要补的短板</b>：① 法律、电网的指标补上「优化前 → 优化后」的基线，照金融 9.3%→1.0% 的写法改，1–2 天能补；② 把电网测试集规模这个数字统一掉（个人优势 180 条 vs 项目成果 300 条），面试前必须先改。院校和年限这两项靠时间走，不用在此耗精力。</li>
+      <li><b>针对性建议</b>：① 投递方向锁定 RAG / Agent 应用开发的中级岗，别去碰纯后端或传统算法，你的差异化全在检索链路 + 编排 + 评测这条线上。② 把「本人负责的模块 + 指标 + 口径」在简历前三分之一就摊开（你已经做到了，保持住）。③ 院校弱就走作品前置：备一两个项目的评测脚本或 Demo 录屏，把话题从学校引到实操能力上。</li>
+      <li><b>期望薪资</b>：未提供期望薪资，按目标等级区间给参考 —— 合理，建议 BOSS 填 <b>12K–15K</b>。</li>
+    </ul>
+  </section>
+
+  <!-- ============ 三、修改建议（Word 审阅式批改稿） ============ -->
+  <section class="card" id="m-resume">
+    <h2 class="ct">三、修改建议<span class="tip">在你原简历上直接批改：红色删除线 = 建议改掉的原话，蓝色下划线 = 建议改成的内容，右栏批注说明每处为什么这么改；没标注的句子保持原样就能用。带「关键」的是必改项（先做这几处），其余是建议改项</span></h2>
+    <div class="rvbar">
+      <span class="rvstat">共 <b>22</b> 处改动，其中 <b>5</b> 处是关键项（改完并补齐【待补】数据就能投）</span>
+      <button class="rvbtn" type="button" id="rv-toggle" aria-pressed="false">仅看改后净稿</button>
+      <button class="rvbtn primary" type="button" id="rv-copy" title="复制出来的是一份干净、可直接投递的简历文本（不含删除线、批注与编号）">复制净稿</button>
+    </div>
+    <p class="print-only">说明：本页印出的是批改稿（含红色删除线、蓝色下划线、编号与右栏批注）。如果只需要改后的版本，请先在页面上点「仅看改后净稿」，再打印或导出 PDF。</p>
+    <div class="rv">
+      <div class="paper">
+        <h3>基本信息</h3>
+        <div class="meta">示例候选人 · 13600000001 · probe@example.com · 求职意向：AI 应用开发工程师（RAG / Agent）　|　男，24 岁　|　<del>工作经验：2 年</del><ins>工作经验：AI 应用开发 1 年 8 个月（2024.11 起）</ins><sup class="mk">1</sup>　|　籍贯：江西吉安　|　学历：本科</div>
+
+        <div class="blk"><span class="lb">个人优势</span>
+          <p>1 年多 AI 应用开发经验，做过法律、金融合规、电网运维三个场景，我负责的部分是检索链路与 Agent 流程——混合检索与 RRF 融合、LangGraph 状态图编排、HITL 审核环节，三个项目的这几块都是我搭的。</p>
+          <p>习惯用评测集定位问题而不只是调 Prompt：三个项目都建了评测集（法律 N=800 条、<del>电网约 180 条标注</del><ins>电网约 300 条标注</ins><sup class="mk key">2</sup>、金融有回归集与泛化集），效果好或不好时能定位到是检索、引用还是生成那一环出的问题。</p>
+        </div>
+
+        <div class="blk"><span class="lb">个人技能</span>
+          <p><b>RAG 与知识库</b></p>
+          <p><del>熟悉 LangChain、LlamaIndex，文档解析、文档分块、Embedding、召回、Rerank 及生成全流程</del><ins>LangChain：文档解析、分块、Embedding、召回、Rerank 到生成这条链路，三个项目全程在用（法律 / 金融 / 电网）</ins><sup class="mk">3</sup></p>
+          <p>熟悉 Chroma、Milvus、Neo4j，掌握 BM25、RRF、Hybrid Retrieval、Query Rewrite 等检索优化方法</p>
+          <p><b>Agent 智能体开发</b></p>
+          <p><del>熟悉 LangGraph 状态图编排，ReAct、Function Calling、Multi-Agent 及 MCP</del><ins>LangGraph 状态图编排：Supervisor-Worker、条件路由、interrupt + checkpoint 断点续跑，法律和金融两个项目在用；Function Calling、Multi-Agent、MCP 工具封装跟着项目做过；ReAct 只做过方案对比，没进生产链路</ins><sup class="mk">4</sup></p>
+          <p>掌握任务拆解、多步规划、Tool Calling、HITL、Prompt Engineering 及多轮状态管理</p>
+          <p><b>评测与治理</b></p>
+          <p>分层评测集（检索 / 引用 / 回答）、回归集与泛化集、失败样本回流、Langfuse 追踪、ONNX 部署 Embedding</p>
+          <p><b>编程语言与工程基础</b></p>
+          <p><del>熟练掌握 Python</del><ins>Python：三个项目的后端接口、检索链路和评测脚本都是 Python 写的</ins><sup class="mk">5</sup>，熟悉 FastAPI、MySQL、Redis</p>
+          <p>熟悉 Git、Docker、Linux，具备 AI 应用后端接口开发、数据处理、服务部署及问题排查能力</p>
+        </div>
+
+        <div class="blk"><span class="lb">工作经历</span>
+          <p>上海合提信息科技有限公司　AI 应用开发工程师（实习）　2024.11–2025.06</p>
+          <p>上海合提信息科技有限公司　AI 应用开发工程师　2025.07–2026.07</p>
+          <p><ins>负责三个 AI 应用项目的检索链路与 Agent 流程两块：混合检索与 RRF 融合、LangGraph 状态图编排、HITL 审核环节。每个项目各建一套评测集并跑迭代（法律 800 条人工标注、金融回归集 + 泛化集、电网标注集），改动前后各跑一遍再放。线上效果波动时按评测集定位到具体环节（检索 / 引用 / 生成 / Prompt）再改，不靠反复调 Prompt 试。</ins><sup class="mk key">6</sup></p>
+        </div>
+
+        <div class="blk"><span class="lb">项目经验</span>
+          <h4 class="sub2">项目 1 · 法律文书与合同审查智能体平台　|　FastAPI + LangGraph + MCP 的 Agentic RAG 法律辅助平台</h4>
+          <ul class="bul">
+            <li><b>技术栈（保留原结构）</b>：FastAPI、LangGraph、MCP、Chroma、Redis、Docker</li>
+            <li><b>项目背景（保留原结构）</b>：面向个人用户及企业法务场景，构建覆盖法律咨询、合同审查、法律文书起草及律师审核的智能辅助平台，针对通用大模型在法律场景中存在的法规检索不准确、证据引用不完整及高风险结论缺乏人工把关等问题，构建 Agentic RAG 工作流，<del>将任务规划、法规检索、证据校验、风险分析及人工审核串联为完整闭环。</del><ins>把任务规划、法规检索、证据校验、风险分析和人工审核串成一条链路。</ins><sup class="mk">7</sup></li>
+            <li><b>项目职责（保留原结构，逐条就地优化）</b>
+              <ul class="bul">
+                <li>1．基于 LangGraph 构建 Supervisor-Worker 编排：Supervisor 只做任务规划与路由、不干具体活，Worker 并行调工具；为长任务设最大执行步数、失败重试与 Checkpoint 持久化——复杂任务跑到一半挂掉，重来一次成本很高，所以中间状态要能存下来接着跑。<ins>这三个数都写死在配置里：最大执行步数【待补：实际值】、单步超时【待补：实际值】、失败重试【待补：实际值】次；每个节点跑完把状态落到 Checkpoint，长任务断了能接着跑。</ins><sup class="mk">8</sup></li>
+                <li>2．<del>构建用 BM25+向量混合检索、通过 RRF 融合多路结果，并结合 Query Rewrite、BGE-Rerank 及 Neo4j 法规关系检索提升证据召回质量。</del><ins>检索这一段是我负责的：向量和 BM25 各召回 Top 【待补：K 值】条，用 RRF 融合多路结果，再用 BGE-Rerank 精排到 Top 【待补：K 值】，另外叠了 Query Rewrite 和 Neo4j 的法规关系检索。</ins><sup class="mk key">9</sup>加图谱这一路是因为法条之间引用关系很密，只按语义相似检索会漏掉「本法引用了某法」这类关联。<del>引入置信度评估、引用完整性校验与拒答策略——法律场景编一条法条的后果比答不上来严重得多，置信度不够就拒答。</del><ins>另外加了置信度评估、引用完整性校验和拒答三层：法条给不出出处就不答——法律场景编一条法条的后果比答不上来严重得多。拒答的触发比例和误拒率是【待补：跑一遍线上日志统计出来】。</ins><sup class="mk">10</sup></li>
+                <li>3．基于 MCP 将法规检索、文档解析及业务能力封装为 Tool；统一 Schema 校验、权限控制、高风险审批、超时重试和审计，解耦 Agent 决策与底层能力——Agent 侧只写决策逻辑，超时重试这类策略在这一层统一做，不用每个 Tool 各写一遍。<ins>一共封了【待补：N】个 Tool；Schema 校验在进工具前先拦一道，目前拦住的主要是参数类型和必填项写错这类，不用等到工具内部报错。</ins><sup class="mk">11</sup></li>
+                <li>4．针对刑事、人身损害、时效临近、证据不足及高风险合同问题建 HITL：支持通过、退回补事实、转线下、归档，结果版本化回流，能追溯谁改了什么。这五类是按「判错的代价」挑出来的，不是按问题类型挑的。<ins>人工介入率目前是【待补：从 HITL 处理记录统计】，这是我们一直在压的数——压的办法是把不用人看的尽量自动化，而不是减必审项。</ins><sup class="mk">12</sup></li>
+                <li>5．评测与优化：建立法律问题评测集，分别对检索、证据引用及最终回答进行评估——分三层的好处是效果好或不好的时候能定位到是哪一环；通过线上失败样本回流定位检索、Prompt 及 Agent 流程问题，持续优化召回策略、提示词及执行逻辑。<ins>这 800 条是按三层拆开人工标注的，各层的样本量与标注口径是【待补：补上三层构成与标注方式】。</ins><sup class="mk">13</sup></li>
+              </ul>
+            </li>
+            <li><b>项目成果（保留原结构）</b>
+              <ul class="bul">
+                <li><del>在 800 条人工标注法律问题评测集上，证据检索准确率约 92%（以检索结果是否命中预设标准法规条款作为判定标准）、法规引用完整率达到 95%+；复杂问题分钟级完成，高风险任务人工兜底。</del><ins>在 800 条人工标注评测集上（判定方式：检索结果能不能命中预设的标准法规条款），证据检索准确率约 92%、法规引用完整率 95% 以上。同一套 800 条上，只上向量检索、还没加 BM25 和图谱那一档是【待补：改前值】，两层加完到 92%；复杂问题分钟级出结论，高风险任务转人工复核。</ins><sup class="mk key">14</sup></li>
+              </ul>
+            </li>
+          </ul>
+
+          <h4 class="sub2">项目 2 · 金融产品合规智能审查与规则运营平台　|　「规则 + LLM + 人工复核」的营销材料合规审查平台</h4>
+          <ul class="bul">
+            <li><b>技术栈（保留原结构）</b>：Python、FastAPI、LangGraph、Milvus、Neo4j、MySQL、Redis、Docker</li>
+            <li><b>项目背景（保留原结构）</b>：面向银行等金融机构的营销材料合规审查场景，构建「规则 + LLM + 人工复核」的智能审查平台，重点解决法规比对耗时、同义改写违规话术难识别及新规发布后存量材料难以批量复审等问题。</li>
+            <li><b>项目职责（保留原结构，逐条就地优化）</b>
+              <ul class="bul">
+                <li>1．构建规则+LLM 双引擎：规则侧用否定语境抑制减少误报（「不得承诺收益」这类，句子里带否定时规则容易误伤，所以专门做了抑制）；LLM 侧 RRF 混合检索召回法规依据，Function Calling 主动查证。结论按规则命中/LLM 命中/交叉命中分三级置信度，违规结论必须关联到具体法规条款和证据片段—不能只给一个「违规」标签，复核的人要知道依据在哪。<ins>规则侧维护了【待补：N】条，否定语境抑制这一项把「不得承诺收益」这类误伤压掉了【待补：误报下降量】；三级置信度里只有 LLM 单独命中的那一档要人工看一眼，另外两档直接出。</ins><sup class="mk">15</sup></li>
+                <li>2．Multi-Agent + HITL：基于 LangGraph 构建条件路由，按材料类型分发到 3 个子图并行扫描、Reducer 汇聚，高风险问题用 interrupt（）+checkpoint 让高风险问题在中间停等人，人工复核完接着跑，不用从头再来。代价是状态要持久化，恢复时要能拿到暂停前的完整上下文。<ins>3 个子图并行之后，单份材料的初审耗时从【待补：串行时耗时】压到【待补：并行后耗时】；人工介入率是【待补：从处理记录统计】。</ins><sup class="mk">16</sup></li>
+                <li>3．构建监管新规→影响分析→人工确认→批量复审→整改复测→规则演进链路，这条链路把「改一次法要重审多少存量材料」从按周算压到小时级。<ins>影响分析那一步是拿新规和现有规则做条款级比对、只圈改动的部分——圈多了浪费复审、圈少了漏审，所以它的准确率【待补：抽一批历史新规回测】是这条链路上最关键的指标。</ins><sup class="mk">17</sup></li>
+                <li>4．LLM 不参与最终合规决策：只出候选和证据，终判交给确定性规则—模型输出是概率性的，而合规结论要能追溯、能复现，把不确定性挡在终判之外，出问题才知道是哪条规则判的。</li>
+                <li>5．LLMOps：建立回归评测集及泛化测试集（回归集防回退、泛化集防过拟合，两套一起跑），模型/Prompt/Agent 流程每次迭代都跑一遍，确认没有能力回退；接入 Langfuse 做全链路追踪，Embedding 用 ONNX 本地部署省成本。<ins>回归集【待补：N】条、泛化集【待补：N】条；泛化集平时锁着不看，只在发版前跑一次，不然它就从「没见过的数据」变成「见过的数据」了。</ins><sup class="mk">18</sup></li>
+              </ul>
+            </li>
+            <li><b>项目成果（保留原结构）</b>
+              <ul class="bul">
+                <li>单份材料 2 小时→机器初审 3～5 分钟+高风险人工复核约 10 分钟；误报率由裸 LLM 方案的 9.3% 压至 1.0%（50 案例/139 标注点）；监管新规发布后可对存量材料进行小时级批量复审。</li>
+              </ul>
+            </li>
+          </ul>
+
+          <h4 class="sub2">项目 3 · 智能电网运维故障诊断助手　|　三路召回 + 图谱共注入的故障根因定位助手</h4>
+          <ul class="bul">
+            <li><b>技术栈（保留原结构）</b>：Python、FastAPI、LangChain、Milvus、Qwen、Neo4j、BGE-M3、Docker</li>
+            <li><b>项目背景（保留原结构）</b>：面向电网设备运维及故障排查场景，解决设备规程、历史工单、故障案例和专家经验分散，导致的故障定位依赖人工经验、历史案例复用率低、复杂故障排查耗时长等问题。</li>
+            <li><b>项目职责（保留原结构，逐条就地优化）</b>
+              <ul class="bul">
+                <li>1．运维知识库：1200+工单和 50+Runbook 先清洗去重再结构化——原始工单里有大量重复报修和口语化描述，不清洗直接入检索，召回的全是重复内容。BGE-M3 向量化入 Milvus；同时 Qwen 抽取「设备—故障—根因—解决方案」实体关系建 Neo4j。<ins>清洗前后的条数对比是【待补：导一份清洗结果】——去重按「同设备型号 + 同故障描述」合并，不同型号的即使描述像也不合，宁可留一点重复，也不把有差异的合没。</ins><sup class="mk">19</sup></li>
+                <li>2．设计三路召回+轻量 Query Router：设备型号/故障码这类精确 token 走 BM25+Neo4j，自然语言走 Milvus 语义——运维人员的提问两种都有，单一路召回总有一半答不好。置信度不够时自动升级 Hybrid 再捞一轮；RRF 融合后 Reranker 二阶段精排。<ins>三路里哪一路真在起作用我看过：图谱那一路对「某型号常见故障」这类问题帮助最大，精确型号查询主要靠 BM25 + 图谱，口语化提问主要靠向量；各路命中占比和 Hybrid 升级的触发比例是【待补：补上各路贡献与触发比例】。</ins><sup class="mk">20</sup></li>
+                <li>3．故障诊断 Agent 把日志解析、向量检索、图谱查询、案例检索封装成工具，图谱关系和文本证据共注入上下文辅助根因定位——只给文本，模型容易把「某型号常见故障」当成「这次的实际原因」，图谱这层能按设备型号过滤一遍。<ins>代价是图谱得建得准：实体关系一旦抽错，过滤反而会把正确答案筛掉，所以 Qwen 抽出来的关系后面挂了人工抽检；图谱给不出候选型号时退回纯文本检索，不因为图谱没命中就不答。</ins><sup class="mk">21</sup></li>
+              </ul>
+            </li>
+            <li><b>项目成果（保留原结构）</b>
+              <ul class="bul">
+                <li><del>在约 300 条标注测试集上，覆盖设备故障、通信异常、电气异常等主要故障类型，Top-1 根因命中率约 85%，故障排查时间由 30min→3min 内。</del><ins>在约 300 条标注测试集上（覆盖设备故障、通信异常、电气异常等主要类型），Top-1 根因命中率约 85%——同一套集子上，只用向量单路召回时是【待补：改前值】，加上图谱和 Reranker 之后到 85%。故障排查时间从 30 分钟压到 3 分钟以内。</ins><sup class="mk key">22</sup></li>
+              </ul>
+            </li>
+          </ul>
+          <p class="muted gen-note">（第 14 处和第 22 处得你自己跑一遍才有数：把「只上向量 → 加 BM25 / 图谱 → 加 Reranker」每一档在同一套评测集上各跑一遍，记下每档的命中率，改前值就出来了——不用重做项目，把当时跑过的实验重跑一遍取数就行。这段说明不会出现在「复制净稿」的结果里。）</p>
+        </div>
+
+        <div class="blk"><span class="lb">教育背景</span>
+          <p>南昌大学科学技术学院　·　计算机科学与技术　2021.09–2025.06</p>
+        </div>
+      </div>
+
+      <aside class="rvside">
+        <div class="note"><span class="mk">1</span>「工作经验：2 年」和个人优势里的「1 年多 AI 应用开发经验」对不上——2024.11 到 2026.07 是 1 年 8 个月。HR 看时间线只看这两个数，写「2 年」容易被当成把不相干的经历也算了进来。<br>改成实际月份，反而更经得起问。</div>
+        <div class="note key"><span class="mk">2</span>个人优势写「电网约 180 条标注」、项目 3 成果写「约 300 条标注测试集」——同一个项目两个规模，面试官一眼就能看见。<span class="tag">关键</span><br>先按项目成果里的标注测试集口径统一成一个数；如果确实是一个初版、一个扩充版，就写成「初版 180 条，扩充后 300 条」，别让两个数并排出现。</div>
+        <div class="note"><span class="mk">3</span>「熟悉 LangChain、LlamaIndex」是两个词并列，但 LlamaIndex 在三个项目的技术栈里都没出现。技能区堆一个项目里没有的名词，面试官挑中它问，你就得现场接。<br>撤下来，或者补一句你在哪儿用过。</div>
+        <div class="note"><span class="mk">4</span>「ReAct、Function Calling、Multi-Agent 及 MCP」四个词并列，其中只有 Function Calling 和 MCP 在项目里能对上。<br>把真做过的写到具体环节，ReAct 就据实写「做过方案对比」——这样写不丢分，被追问也不会挂。</div>
+        <div class="note"><span class="mk">5</span>「熟练掌握 Python」是一个没有佐证的形容词。<br>换成你拿它写了什么。面试官的问题就从「你有多熟」变成「你写了什么」，主动权回到你手里。</div>
+        <div class="note key"><span class="mk">6</span>工作经历现在只有两个抬头加时间，HR 扫下来看不出你在里面干了什么。<span class="tag">关键</span><br>把个人优势里已经写明的那句「负责检索链路与 Agent 流程」落到这一段，再补上三个项目各建一套评测集、改动前后都跑一遍——这两行是你整份简历的入口，空着太亏。</div>
+        <div class="note"><span class="mk">7</span>项目背景结尾那半句是产品介绍页的写法。<br>改成「串成一条链路」，说的是同一件事，读起来像工程现场记录。</div>
+        <div class="note"><span class="mk">8</span>长任务编排这段最容易被追问「任务跑飞了怎么办」。<br>把最大执行步数、单步超时、重试次数这三个数写出来，答案就落在纸面上；没有这三个数，面试官只能靠追问去猜你到底配没配过。</div>
+        <div class="note key"><span class="mk">9</span>「构建用 BM25+向量混合检索……」读下来更像一句总结，看不到参数。检索这条链路是你负责的，就该把它拆开写。<span class="tag">关键</span><br>各路召回多少条、RRF 怎么融、rerank 精排到几条——面试官问「Top-K 怎么定的」，你有数就有话说；这也是你和其他候选人拉开距离的地方。</div>
+        <div class="note"><span class="mk">10</span>拒答是法律项目里最能体现判断力的一处，现在只剩一句「置信度不够就拒答」。<br>补上触发比例和误拒率，它就从一句态度变成一个能验证的设计——面试官问「拒答会不会把该答的也挡了」，你才有得答。</div>
+        <div class="note"><span class="mk">11</span>MCP 那层写了「统一超时重试和审计」，但没有数量、也没说它实际拦住了什么。<br>补上 Tool 个数、校验拦下的错误类型，别人才知道你抽这一层是真踩过坑，不是照着文档做的。</div>
+        <div class="note"><span class="mk">12</span>「按判错的代价挑五类」这个判断很好，但没写代价。<br>人工介入率是这类设计的必问题——补上之后，「怎么压介入率又不减必审项」你才有得讲。</div>
+        <div class="note"><span class="mk">13</span>800 条评测集写得很实，缺的是三层怎么分的。<br>补上各层样本量与标注口径，面试官才会相信 92% 是分环节量出来的，不是一个总数拍出来的。</div>
+        <div class="note key"><span class="mk">14</span>成果只有绝对值 92%，看不出是优化出来的，还是一开始就有。<span class="tag">关键</span><br>把「只上向量 → 加 BM25 → 加图谱和 rerank」每一档在同一套 800 条上各跑一遍，记下每档准确率，这条就活了。改前值不用重做项目——当时跑过的实验重跑一遍取数就行。</div>
+        <div class="note"><span class="mk">15</span>金融这个是三个项目里写得最完整的（9.3%→1.0% 有前后对比、有样本口径），所以这里只补边角。<br>规则条数、否定语境抑制压掉了多少误报——把「专门做了抑制」这句话变成一个数。</div>
+        <div class="note"><span class="mk">16</span>3 个子图并行是这个项目里最有料的一处，但没写并行的收益。<br>补上串行与并行的耗时对比、再补人工介入率，「为什么要拆子图」就不用靠嘴解释了。</div>
+        <div class="note"><span class="mk">17</span>「影响分析」是这条链路里最难的一步：圈多了浪费复审，圈少了漏审。<br>补上它的准确率口径，这条链路才不是一句「从按周算压到小时级」。</div>
+        <div class="note"><span class="mk">18</span>回归集加泛化集两套一起跑是个很值钱的做法，但两套都没写多大。<br>补上样本量，再补一句「泛化集平时锁着不看」——后半句能说明你真懂防过拟合，不是摆两套集子做样子。</div>
+        <div class="note"><span class="mk">19</span>清洗这段是整份简历里最有现场感的一处。<br>补上清洗前后的条数对比，再补一句「同型号同故障才合并」——后半句说明你知道清洗会误删、而且提前留了边界。</div>
+        <div class="note"><span class="mk">20</span>三路召回写了各自的分工，缺的是哪一路真在起作用。<br>补上各路命中占比和 Hybrid 升级的触发比例，面试官问「哪一路最重要」，你不用现场猜。</div>
+        <div class="note"><span class="mk">21</span>图谱过滤这段把「为什么要有图谱」讲清楚了，但没讲代价。<br>补上实体抽错的风险、人工抽检、以及图谱没命中时退回纯文本——这三句凑齐，它就是一个知道边界在哪的设计。</div>
+        <div class="note key"><span class="mk">22</span>电网成果和项目 1 一样，只有绝对值 85%。<span class="tag">关键</span><br>把单路向量召回和三路加图谱过滤在同一套约 300 条集子上各跑一遍，85% 才有说服力。语料和评测集都是现成的，1 周内能补。</div>
+      </aside>
+    </div>
+    <div class="warnbox">带 <span class="todo">【待补：xxx】</span> 的地方需按报告里的路径跑一遍、填上真实数据后再投。<b>要一份干净、可直接投递的版本</b>：点「复制净稿」一键拿走，或切到「仅看改后净稿」后再打印 / 导出 PDF。</div>
+  </section>
+
+  <!-- ============ 四、面试预演 ============ -->
+  <section class="card" id="m-interview">
+    <h2 class="ct">四、面试预演（含追问与标准答案）<span class="tip">题型分布：基础概念 4 / 项目深挖 9 / 对比权衡 4 / 踩坑与边界 2 / 场景设计 1；法律 5 题、金融 6 题、电网 6 题，另加 3 道通用题。每题的标准答案与追问都是按第一人称写的口述稿，照着念就行</span></h2>
+
+    <div class="q">
+      <p><span class="no">Q1</span> · RAG 是什么？为什么法律、金融这类场景用 RAG 而不是微调？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>我的理解是，RAG 是生成之前先去知识库把证据找出来、再拼进上下文让模型基于证据答，它对付的是大模型两个硬伤：训练数据有时效、私域知识它没有，而且直接答容易编。在这三个项目里我都选了 RAG 而不是微调，核心原因是知识更新频率——法规、监管口径、设备规程都会变，微调一次要重训，成本高还容易把通用能力带偏；RAG 只要更新知识库就能生效。再一个是可溯源，法律和合规的结论必须能指到具体法条和证据片段，微调给不了这个。我在法律项目里还加了一条：置信度不够就拒答，编一条法条的后果比答不上来严重得多。这套判断我后来固定成一条：强时效、强合规的知识场景优先 RAG，只有风格和格式对齐这类需求才考虑微调。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么不用微调把法规直接背进模型里？因为背进去解决不了引用和更新两个问题：模型答出来我拿不到出处，没法核验；法规一改，之前训练进去的就过时了，还得重训。而 RAG 每次检索到的块都带文档 ID 和条款号，答案能回到原文，法规更新只动知识库、不动模型。所以知识类需求我默认走 RAG，微调只留给格式和话术对齐。</p>
+      <span class="lbl z">【追问 2】（权衡/代价）</span>
+      <p>代价主要有两个。一是链路比微调长，多出解析、切片、检索、重排几段，都可能出问题，所以我三个项目都建了评测集，定位是哪一环出的问题。二是检索本身有延迟和成本，尤其是 Rerank，我只让它跑候选集、不跑全库，把开销压住。另外 RAG 上限受知识库质量影响，语料脏了再好的模型也救不回来，所以电网项目上我先做了清洗去重。</p>
+      <span class="lbl z">【追问 3】（边界）</span>
+      <p>我明确一条边界：RAG 解决的是知识时效和溯源，不解决推理能力。像多跳、要把几条法条串起来推理的问题，光靠检索加生成还是会漏，这类我在法律项目里是靠 Neo4j 的法规引用关系和 Agent 拆任务去补的。所以我的做法是分层：知识类走 RAG，需要关系推理的走图谱加 Agent，不指望单靠检索把所有问题都接住。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q2</span> · 混合检索里 BM25 和向量检索各自解决什么问题？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>简单说，BM25 管精确词命中，向量管语义泛化，两者解决的是不同类型的问题。运维和法律这类语料里有大量专有名词、设备型号、故障码、法条编号，这些词向量召回经常抓不住——比如两个只差一位数字的型号，在语义空间里距离很近，很容易召错；BM25 对这种字面匹配很稳。反过来，用户用口语描述「设备老跳闸怎么排查」，字面上跟工单里的「保护装置动作」一个字都不重合，这时候只能靠向量。所以我在法律和电网两个项目里都是两路并行召回，再用 RRF 融合。单用一路的结果我实测过，精确查询或者口语提问，总有一半答不好，这就是为什么必须混合。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么不干脆加大向量的权重、让它自己解决？因为这不是权重问题，是能力问题。向量模型本质是看语义相似度，两个只差一位数字的型号，向量距离很近，你调权重也分不开，只会把错误结果排上来。这类精确 token 只能靠字面匹配。所以我没在权重上调，而是直接补一路 BM25，让各管一段，用 RRF 做融合。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>混合的代价是复杂度和延迟。两路召回加融合比单路慢，还要维护两套索引；RRF 融合本身不复杂，但要给两路各定 Top-K。我的做法是只拿两路的候选做融合，不做全量比对。另外有些场景纯向量就够了，比如开放式问答、没有专有名词的那种，硬上混合反而浪费，所以我会先看语料里精确 token 的比例再决定。</p>
+      <span class="lbl z">【追问 3】（对比）</span>
+      <p>融合方式上我用的是 RRF，没用加权求和。加权求和要先把两路的分数归一化，而 BM25 分和向量相似度分不是一个量纲，归一化之后还得调权重，很依赖经验。RRF 只用排名不用分数，把两路的结果按名次揉在一起，省掉了调权这一步，也更稳。所以项目里我默认用 RRF，只有一种情况会考虑加权——我明确知道两路的可信度差很多。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q3</span> · 什么是 RRF 融合？它比加权求和好在哪？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>RRF 是 Reciprocal Rank Fusion，做法是把每一路召回结果按名次换算成一个分数，再相加排序。它只关心「这条在这路里排第几」，不关心原始分数是多少。我在法律和电网项目里都用了它，原因很直接：BM25 的分数和向量的相似度分数不是一个量纲，一个是关键词打分的绝对值、一个是余弦相似度，直接加权得先归一化，而归一化之后权重还得靠调。RRF 绕开了这两个麻烦，只用排名，融合结果对单路的分数波动不敏感。实话说它不是最精细的融合方式，但在多路召回这种场景里，稳定比精细更重要。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么不给两路分数加权、做得更精细？因为加权求和有两个坑：一是先归一化，BM25 分可能是十几、向量相似度是零点几，不归一化没法加；二是归一化后权重还得调，调权重又要拿评测集试很多轮。RRF 把这两个坑都省了，只看名次算分。我的判断是，多路召回里各路的绝对分数本身不稳，与其精细调权重，不如用对分数不敏感的融合方式。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>RRF 的代价是它丢掉了分数信息。极端情况下，某一路给出置信度特别高的结果，RRF 也只看它的名次，体现不出来。所以如果有一路明显比另一路准很多，RRF 就不合适了，那种情况我会改成加权、把准的那一路权重调高。另外 RRF 有个常数参数，我用的是经验值，没做很细的网格搜索——它在我的评测集上对结果影响不大。</p>
+      <span class="lbl z">【追问 3】（如果……）</span>
+      <p>如果两路召回的结果重合度很高，RRF 还有意义吗？重合度高说明两路在抓同一批内容，融合带来的增量就有限。这种情况下更该做的不是换融合方式，而是先去看是不是有一路没起作用、要不要换检索策略。所以我做检索的时候会先看两路的重合度，如果高得离谱，我先怀疑配置写错了，而不是继续在融合上加东西。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q4</span> · LangGraph 的状态图和简单的 ReAct 循环有什么区别？你为什么用它？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>最大的区别是显式不显式。ReAct 是一个隐式的循环，模型想一步走一步，中间状态在上下文里飘着，没法可靠地中断、回滚或者从某一步接着跑。LangGraph 是把流程写成一张状态图，节点和边都明确写出来，状态是一个可以序列化的对象，所以能在任意节点停下来存下来、之后再恢复。我在法律项目里用它就是被这个需求逼的：高风险任务要中断等人工审核，审核完还得接着跑，ReAct 的隐式循环做不到。另外法律项目的任务有明确阶段，规划、检索、校验、审核，写成图之后每个阶段的输入输出都清清楚楚，调试时能看出是哪一步出的问题，这在长链路里特别重要。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么不用简单循环加人工判断？我想过，但有几个绕不开的点：一个是断点续跑，人工审核隔着几小时，得把当时状态完整存下来；一个是条件分支，不同风险等级走的路不一样，得能明确表达；再一个是调试，隐式循环出错时你看不见中间发生了什么。这三点 LangGraph 都能直接给，硬用简单循环补要写很多额外代码，还不一定可靠。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>LangGraph 的代价是复杂度。ReAct 几行就能跑，状态图要定义节点、边、状态字段，初期搭起来更慢。而且状态要序列化，节点一多就膨胀，我后来裁剪，只留必要字段。另一个是调试链路变长，出问题要先判断是节点逻辑还是状态传递的问题。所以短链路、不需要人工介入的简单任务用 ReAct 就够了，没必要为了架构而架构。</p>
+      <span class="lbl z">【追问 3】（对比）</span>
+      <p>什么情况下我反而会用简单循环？如果任务是单轮工具调用、没有中断需求、也不需要中间分支，LangGraph 就是过度设计。我在项目里也分场景——法律项目的长任务用图，一次性的工具调用直接走 Function Calling，不上图。判断标准就一条：需不需要可中断、可恢复、可回溯的中间状态，需要就上图，不需要就简单来。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q5</span> · 法律项目里 Supervisor-Worker 这套编排是怎么设计的？为什么要这么拆？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>这套编排我拆成两层：Supervisor 只做任务规划和路由，不动手干活；具体执行交给 Worker，Worker 之间并行调工具。起因是规划和执行混在一起时，模型容易在规划上花太多 token、执行反而不稳，长任务里一旦某一步乱了，整条链路就乱了。拆开后，Supervisor 只负责「这个任务分几步、每步干什么」，Worker 只负责「把这一步的工具调好、结果拿回来」。为了防长任务跑飞，我设了最大执行步数、单步超时和失败重试，中间状态用 Checkpoint 落库——复杂任务跑一半挂掉重来的成本太高，必须能接着跑。这样每一步职责都清楚，出问题也容易定位是哪一层的锅。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么规划要单独抽一个角色，不让执行节点自己边干边想？因为我试过混在一起，结果是长任务里模型会反复推翻自己的计划，token 消耗高、执行还不稳。把规划独立出来之后，计划一旦定了就不轻易改，执行节点只关心把当前这步做对。这在法律这种多步骤任务里特别重要，一个合同审查可能要好几步，每步都重新规划的话整条链路就散了。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>代价是多了一层开销，Supervisor 的规划和路由本身也要调模型、也要 token，简单任务上这层就有点浪费。所以简单任务我会走轻量化路径，不是所有请求都过完整的 Supervisor 流程。这是我在这套架构上的一个取舍：架构要能扛复杂任务，但不能让简单任务也背这个成本。</p>
+      <span class="lbl z">【追问 3】（踩坑/如果）</span>
+      <p>最大执行步数这个限制是踩坑踩出来的。之前有一次长任务进了循环，反复调用同一个工具，跑很久也不出结果，还一直烧 token。之后我加了最大步数、单步超时和重试上限，超了就降级——把已经做完的部分和进度返回，剩下的转人工，而不是硬跑到死。这个边界我一直留着，因为 Agent 死循环是这类系统的常见病，得有个确定的止损点。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q6</span> · 为什么在法律项目的检索里要加 Neo4j 图谱这一路？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>一句话：因为法条之间的引用关系是语义检索抓不到的一层。法律语料里「本法引用了某法」「这条的适用要以另一条为前提」这种关联非常密，而向量检索看的是文本语义相似度，它会把内容相近的法条排在一起，但抓不住「A 引用 B」这种结构关系。我遇到过的情况是，用户问的问题答案其实在 B 里，但 A 讲得更像，检索只把 A 拿回来了，引用就不完整。所以我在向量和 BM25 之外补了 Neo4j 这一路，专门收法条之间的引用关系，把「引用了哪条」这层结构补回来。加完之后法规引用完整率到了 95% 以上。凡是有强引用关系的语料，这层结构检索都是必要的。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么不用别的方式，比如把引用关系写进文本、让向量一起检索？试过这个思路，效果不好。把「本法引用某某法第几条」拼进 chunk 之后，语义检索确实多了一点召回，但它分不清方向——是 A 引用 B 还是 B 引用 A，检索结果里方向是乱的，引用链路还是断的。图谱这层能明确存方向，A 指向 B，这是文本拼接给不了的。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>图谱这一路的代价是维护。法条一更新，引用关系就得同步改，人工成本不低。所以我没有做全量建图，只挑了引用关系最密的那几部法来建，其余还是走文本检索。这是我权衡后的结果——全量建图的收益抵不上维护成本，圈一个小的、高频的范围更划算。另外图谱抽取也会出错，所以引用关系进图谱之前有人工抽检兜着。</p>
+      <span class="lbl z">【追问 3】（如果……）</span>
+      <p>如果给你一个新的合规场景，你会不会都上图谱？不会，我会先看这个场景的语料有没有强引用结构。如果是条款之间互相定义、互相引用的，像法规、合同、操作规程，那图谱值当上；如果只是知识问答、条款之间相对独立，那上图谱就是多余的。所以图谱这条路我是按「有没有引用结构」来判的，不是见合规场景就加。</p>
+      <span class="st">状态：⚠️ 需补强（缺：图谱维护的人力成本、关系抽取的准确率）</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q7</span> · 法律项目的 800 条评测集是怎么建的？三层评估分别测什么？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>800 条是人工标注的，按检索、证据引用、最终回答三层分开评。检索层看的是：给定一个问题，系统有没有把预设的标准法规条款召回上来，判定方式就是看检索结果里有没有命中那几条标准条款；引用层看的是：模型给的答案里引用是否完整、是不是引到了正确的条款；回答层看的是最终结论对不对。分三层的原因是定位——效果不好的时候，得能立刻知道是检索没找着、引用引错了，还是生成跑偏了，三层混在一起评就变成一个黑盒，调优只能瞎猜。这个分层评测的思路我后来直接复用到金融项目，那套是回归集加泛化集。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么一定要拆三层，不能只看最终答案？因为只看最终答案没法调。最终答案错了，可能是检索没召回正确条款，也可能是召回对了但引用引错了，还可能引用对了但生成理解偏了，这三种情况的改法完全不同——第一种改检索，第二种改引用校验，第三种改 Prompt。不拆开你不知道该改哪。所以拆层不是为了好看，是为了每次优化都有方向。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>分层评测的代价是标注成本高。三层都要人工标，同样是 800 条，比只标最终答案要费好几倍工。我的做法是先标检索层和引用层，这两层能用「是否命中标准条款」这种相对客观的规则辅助，回答层再让人工判断。另外评测集要防过拟合，所以我会留一部分样本平时不看，只在关键改动后跑。</p>
+      <span class="lbl z">【追问 3】（数据）</span>
+      <p>你一直在说 92%，这个数怎么算出来的？是在这 800 条上逐条看检索结果有没有命中预设的标准法规条款，命中的比例就是检索准确率，差不多 92%。需要说明的是，这个口径是「命中标准条款」，不是「答案完全正确」——检索命中是答案正确的前提，但不等于答案正确。这个口径我在简历里也写清楚了，免得被理解成整条链路的准确率。</p>
+      <span class="st">状态：⚠️ 需补强（缺：标注人员数量、标注一致率、三层样本构成）</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q8</span> · 金融项目里规则 + LLM 双引擎是怎么协同的？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>我的设计是让两者各管一段、互相补位。规则侧管确定性的东西——法规里能写成规则的条款，比如「不得承诺收益」，命中就是命中，不带歧义；但规则有个毛病，遇到同义改写或者带否定的句子会误伤，「不得承诺收益」这句话本身带否定词，规则容易把它当成违规命中，所以我专门做了否定语境抑制。LLM 侧管规则管不了的——它能识别同义改写，也能通过 RRF 混合检索召回法规依据、用 Function Calling 去查证。最后结论按规则命中、LLM 命中、交叉命中分三级置信度：规则单独命中最高，交叉命中次之，只有 LLM 命中的要人工看一眼。这样规则的确定性保住了底线，LLM 的覆盖面补上了长尾。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么不干脆让 LLM 全干，省得维护两套？因为合规场景对确定性要求很高，纯 LLM 会给结论但给不了稳定复现，同一份材料跑两次结论可能不一样，这在线下一个合规审查系统里是不能接受的。规则虽然有覆盖面的问题，但它确定、可追溯。所以我的思路是规则守底线、LLM 拓覆盖，而不是二选一。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>双引擎的代价是复杂度，两套都要维护：规则要跟着法规更新、LLM 侧的检索和 Prompt 也要迭代，两边还得对齐置信度的定义。另外否定语境抑制本身也得维护，因为「不得」和「不推荐」的处理方式不一样。但我认为这个复杂度是值得的，它换来了一个确定性的底线，这在合规场景里是最关键的东西。</p>
+      <span class="lbl z">【追问 3】（数据）</span>
+      <p>误报从 9.3% 压到 1.0%，双引擎贡献多少？主要三件事：否定语境抑制、三级置信度分级、LLM 不参与终判。否定语境抑制削掉「不得承诺收益」这类误伤；三级置信度让只有 LLM 命中的结论不直接出、先过人工；终判交给规则，挡住不可复现的结论。三条合起来把误报压到 1.0%，口径是 50 个案例、139 个标注点。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q9</span> · 金融项目的 HITL 是怎么实现的？interrupt() 加 checkpoint 具体解决了什么？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>我用 LangGraph 的条件路由，把材料按类型分到 3 个子图并行扫描，再用 Reducer 把结果汇聚回来。高风险问题到了该人工看的节点，用 interrupt() 让流程就地停下来，同时 checkpoint 把这一刻的完整状态存下来；人工复核完，流程从暂停点接着跑，不用从头再来一遍。为什么强调「不用从头」？因为一份材料初审可能涉及好几轮检索和查证，从头跑一遍既慢又浪费。interrupt() 解决的是「怎么可靠地暂停」，checkpoint 解决的是「怎么带着完整上下文恢复」，这两个缺一不可。代价是状态必须持久化，恢复时要保证拿到的上下文和暂停那一刻是一致的。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么不让它整份跑完再人工审，偏要在中间停？因为我们做的是风险点审查，人工只需要看那几个高风险的地方，不需要看整份材料。如果跑完再审，等于让人工在结果里再找一遍；在中间停，人一接手看到的就是需要判断的那个点，效率高很多。而且有些高风险任务，后面几步依赖人工的判断结果，必须先停。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>代价是状态版本管理。checkpoint 存了状态，但如果这期间规则或 Prompt 更新了，恢复时用哪一版？我的处理是保证恢复时能拿到暂停那一刻的上下文快照，而不是用最新版的规则去复算，否则人工的复核依据就变了。另外状态持久化本身占存储，长任务的状态对象也不小，所以我对状态做了裁剪，只留复原必要的字段。</p>
+      <span class="lbl z">【追问 3】（如果……）</span>
+      <p>如果人工审核要隔一天才处理，状态能撑住吗？能，这正是用 checkpoint 的原因——状态落库之后不依赖进程活着，人工什么时候处理都行。但我会设一个过期时间，太久没处理的状态会标记出来，避免堆积。另外恢复的时候我会校验状态完整性，如果发现对应的规则版本已经下线了，就提示人工重新审一次，而不是硬用旧状态往下走。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q10</span> · 电网项目的三路召回和 Query Router 是怎么设计的？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>Query Router 的核心是先判断提问形态，再决定走哪一路。运维人员的提问天然分两类：一类是设备型号加故障码这种精确查询，涉及型号、故障码这些精确 token；另一类是「设备老跳闸怎么排查」这种自然语言描述。前者走 BM25 加 Neo4j，靠字面和图谱关系命中；后者走 Milvus 语义检索，靠语义泛化。为什么非要分流？因为单一路总会有一半答不好：纯向量抓不住型号故障码，纯关键词又接不住口语提问。分流之后还有一层补救——初次召回的置信度不够，就自动升级成 Hybrid 再捞一轮。三路结果用 RRF 融合，再过一个 Reranker 精排。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么不直接全部走混合检索，省掉 Router？全部走混合确实能覆盖两类提问，但代价是每次都跑三路，延迟和算力都浪费，而且精确查询其实不需要语义这一路、语义提问也不太依赖图谱。加了 Router 之后，简单查询走短链路、复杂提问走长链路，整体更省。当然 Router 本身也会判错，所以我用置信度不够自动升级来补这一点。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>Router 的代价是多一个判断环节，判错类型就会走偏——把精确查询判成自然语言，型号就召不回来了。所以我在 Router 后面挂了置信度检查，初次结果不够可信就自动升级成混合。这层补救是必要成本，能把 Router 判错的损失压到最小。另外 Router 我用的是轻量判断，没上重型模型，就是怕它变成新的延迟瓶颈。</p>
+      <span class="lbl z">【追问 3】（数据）</span>
+      <p>三路里哪一路的贡献最大？在电网这个场景里，图谱那一路对「某型号常见故障」这类问题的帮助最大，因为它能按设备型号把范围先收窄；精确型号查询主要靠 BM25 加图谱；口语化提问主要靠向量。三路的分工是清楚的，融合之后 Top-1 根因命中率是 85%，口径是约 300 条标注测试集。</p>
+      <span class="st">状态：⚠️ 需补强（缺：三路各自命中贡献、Hybrid 升级触发比例）</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q11</span> · 电网知识库为什么要先清洗去重再入库？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>这一步是踩过坑才加的。最开始我直接拿原始工单建库，检索出来的结果里同类故障翻来覆去，因为原始工单里有大量重复报修，同一个故障被不同的人报过很多次，不清理的话这些重复内容会挤占召回名额，模型被重复信息带偏，根因命中率一直上不去。后来我先做去重，再做口语化归一——「跳闸了」「开关跳了」「保护动作了」这些其实说的是同一件事，得归到同一个故障表述，不然语义检索也是散的。清洗完之后再把 1200+ 工单和 50+ Runbook 结构化、向量化入库。我的体会是，历史工单这类语料，清洗的收益排在检索调优前面，语料不干净，后面怎么调检索都是白费。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>怎么发现是重复的问题？是在排查命中率上不去的时候发现的。我看检索返回的 Top-K 里，好几条内容几乎一样，来源是不同的工单但说的是一回事。那时候模型经常给出一个宽泛的答案，把重复出现的说法当成主流结论。定位到之后我就知道不是检索算法的问题，是入库数据的问题，所以回过头先清洗。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>清洗的代价是有误删风险。去重和口语化归一都可能把本来有差异的工单合并掉，比如两个工单看着像重复，但一个是不同设备的同款故障，合错了就丢信息。所以我做去重的时候保留了设备型号这个维度，同型号同故障才合并，不同型号不合并；口语化归一也是建了映射表、有人工抽检，不是纯自动。宁可得留一点重复，也不要把有差异的合并没。</p>
+      <span class="lbl z">【追问 3】（数据）</span>
+      <p>清洗前后规模差多少？这个数我需要回去调一下数据，原始是 1200+ 工单，去重和归一之后的有效条数我这里没有准确记录，面试前我会把清洗前后的条数导出来补上。可以确定的是重复率不低，从检索结果里同一内容反复出现就能看出来。</p>
+      <span class="st">状态：⚠️ 需补强（缺：清洗前后条数）</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q12</span> · 故障诊断 Agent 为什么要把图谱和文本证据一起注入上下文？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>因为只给文本，模型很容易犯一个特定的错：把「某型号常见故障」当成「这次的实际原因」。设备手册里写着某型号容易出 A 故障，模型看到这个先验就倾向于答 A，但实际上这次可能是 B。图谱这一层能按设备型号先把候选根因收窄，再让文本证据在这个收窄的范围里定位，这样模型的注意力就不会被泛化的先验带跑。我的做法是让图谱做结构化过滤、文本做细节支撑，两者一起进上下文：图谱负责「这个型号可能有哪些根因」，文本负责「这些根因里哪个对得上这次的日志」。加了这层过滤之后，根因命中的准确性明显好于只喂文本。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>不能在 Prompt 里直接让模型「不要被常见故障带偏」吗？试过，效果有限。Prompt 能提醒它，但改不了它的先验偏好，因为「某型号常见故障」本身就在上下文里，而且出现得很靠前。与其靠 Prompt 压，不如在检索阶段就把范围收窄，让模型看不到不相关的常见故障。所以我在数据这一层解决，不在 Prompt 这一层。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>代价是图谱必须建得准。如果实体抽取把型号、故障、根因的关系抽错了，过滤反而会把正确答案筛掉，比不过滤还糟。所以我用了 Qwen 抽关系，但后面挂了人工抽检，抽出来的关系不直接信。这是我在这层上的边界——图谱是增强，不是绝对权威，抽检是必须的。</p>
+      <span class="lbl z">【追问 3】（如果……）</span>
+      <p>如果图谱里没有这个设备型号怎么办？那就退回到纯文本检索。我给这层设计了一个降级路径：图谱能给出候选就用来过滤，给不出就不过滤、直接让文本证据上场，而不是因为图谱没命中就不答。这算是我给这套架构留的一个容错口子，避免图谱覆盖不全把整体拖下水。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q13</span> · 金融项目你提到「LLM 不参与最终合规决策」，具体怎么执行的？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>做法是把职责拆开：LLM 只出候选和证据，判定违规的终判交给确定性规则。流程上，LLM 通过 RRF 混合检索召回可能的法规依据、用 Function Calling 去查证，把「哪里可能违规、依据是哪条」这些候选和证据给出来；然后由规则引擎根据这些候选和既定的确定性规则给出最终判定。这样做的原因很直接：模型输出是概率性的，同一份材料跑两次结论可能不一样，而合规结论必须能追溯、能复现——业务方要能说清是哪条规则判的，出问题才好复盘。把不确定性挡在终判之外，是这套系统能被合规部门接受的前提。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>业务方没意见吗？他们一开始确实更希望 LLM 直接给终判，觉得这样覆盖率高、能多抓一些违规。我拿一批历史案例做了对比，发现同一个材料重复跑结论会变，这类不可复现的结论在合规场景里没法交差——万一判错了，你没法解释为什么这么判。所以最后达成的共识是 LLM 负责找、规则负责定，覆盖率稍微让一点，换可追溯。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>代价是覆盖率会降一些。有些 LLM 觉得可疑、但规则里没有明确条款对应的，就不会被判违规，而是进人工。这在合规场景里我认为是对的取舍——宁可多转人工，也不能给一个不可复现的违规结论。这条边界我和业务方是对齐过的，不是我自己拍的。</p>
+      <span class="lbl z">【追问 3】（如果……）</span>
+      <p>什么情况下可以让 LLM 参与终判？如果场景对可复现性的要求没那么高，比如内部的辅助建议、给人参考不直接出结论的那种，那 LLM 给个判断是可以的。但只要结论要对外、要审计、要复现，我就会把它挡在终判之外。所以这条原则我按场景分，不是一刀切。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q14</span> · 为什么用 LangGraph，而不是简单的 ReAct 循环或者单 Agent？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>核心差别在「能不能可靠地中断和恢复」。单 Agent 跑 ReAct 是隐式循环，中间状态飘在上下文里，我想在某个风险点停下等人工审核，它做不到；就算勉强停，恢复时也拿不回完整的中间状态。而我的法律和金融项目都有强制的 HITL 环节，高风险结论必须等人确认，所以必须用能显式暂停和恢复的方式。LangGraph 把流程写成状态图，节点和边都明确，状态可序列化，能随时打断点续跑，这一点是决定性的。另外它还能明确表达条件分支——不同风险等级走不同的路径，这在 ReAct 里很难写清楚。所以不是为了用新框架，是被 HITL 这个需求逼出来的选择。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>ReAct 就一定不行吗？对短链路、没有人工介入的任务，ReAct 其实够了，我也不会上 LangGraph。但我的场景里任务链条长、还有强制人工节点，ReAct 的隐式状态管理撑不住。所以我是按需求选的，不是按框架新不新选的。这算是我在选型上的一条原则：先看需求有没有状态管理刚需，没有就别上重框架。</p>
+      <span class="lbl z">【追问 2】（权衡）</span>
+      <p>LangGraph 的代价是什么？一是学习和搭建成本，状态图比几行循环代码复杂；二是状态序列化的开销，长任务状态对象会变大，得裁剪；三是调试链路变长，出问题先判断是逻辑错还是状态传递错。我认为这些代价在需要 HITL 的长任务里值得；但简单的一次性工具调用，我会直接用 Function Calling，不上图。</p>
+      <span class="lbl z">【追问 3】（对比）</span>
+      <p>它和 Dify 那种工作流平台比呢？Dify 这类平台搭起来快，适合标准化流程和快速验证，但碰到要自定义状态管理、复杂分支和精细控制的场景，就不够灵活。我这里的流程有版本化回流、驳回补事实、断点续跑这些定制需求，平台覆盖不了，所以走的是自己搭 LangGraph 的路子。如果是标准化客服流程，我会考虑用平台，省事。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q15</span> · 金融项目为什么要建回归集和泛化集两套评测？一套不行吗？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>不行，因为两套集子盯的是两个不同的问题。回归集盯的是「改完有没有变差」——每次动模型、Prompt 或流程，跑一遍回归集，确认原来对的地方还对，防的是能力回退。泛化集盯的是「有没有过拟合到评测集上」——如果我们一直只看一套集子来调，会不自觉地照着它调，越调越好但换批数据就崩。所以泛化集我平时是不看的，只在发版前跑一次，用它来判断这套改动是真变强了、还是只是记住了回归集。这两个问题分开盯，一套集子是做不到的——一套集子既当训练参考又当验收标准，验出来的成绩一定是虚的。说白了，回归集管别退步，泛化集管别自欺，两套一起用才防得住，这也是我在这儿最看重的一条评测习惯。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么泛化集平时不能看？因为一看就会忍不住照着它调。只要它进入你的迭代循环，它就从「没见过的数据」变成「见过的数据」，泛化的意义就没了。所以我把它锁起来，只在发版前跑；而且就算跑出来不好，我也不直接拿它来调参数，而是重新审视是不是过拟合了。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>这样做的问题是反馈慢。回归集能天天跑，泛化集只能在关键节点跑，所以有些过拟合的问题可能到发版前才暴露。我的处理是把省下来的人工放在回归集上，让回归集尽量覆盖已知的 bad case，泛化集只保留最关键的判断。这是速度和严谨之间的一个折中，在合规场景里，我宁可严谨一点。</p>
+      <span class="lbl z">【追问 3】（如果……）</span>
+      <p>如果两套集子的结论打架怎么办？比如回归集通过、泛化集掉分。我会优先信泛化集，因为那说明这次改动更像是在拟合回归集，而不是真的提升了能力，这种情况下我会回退或者重新设计改动。反过来，如果回归集掉、泛化集涨，得先查是不是回归集里的老 case 被改坏了，因为老 case 往往是真实业务里踩过的坑，不能丢。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q16</span> · 混合检索里，你怎么决定用 RRF 还是加权融合？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>我的默认选择是 RRF，只有在明确知道两路可信度差异很大的时候才换成加权。原因是加权融合要先归一化——BM25 的分数和向量相似度不是一个量纲，直接加没有意义；归一化之后两路的权重还得靠调，很依赖经验。RRF 只用名次不用分数，把这些麻烦都绕开了，在多路召回这种场景里更稳。我在法律和电网项目里用的都是 RRF。会换加权的场景是：某一路明显比另一路准，这时候用 RRF 会浪费掉强那一路的信息，改成加权、把强的一路权重调高更合适。所以这是一个默认加例外的选择。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么默认是 RRF 而不是更精细的加权？因为多路召回里各路的绝对分数不稳定——同样的查询换个长度，BM25 的分值分布就变了，向量的相似度也会漂。在本身就不稳的分数上做精细加权，收益不大、风险不小。RRF 对分数波动不敏感，我只要知道名次就够了。所以我的原则是：分数不可靠时用 RRF，分数可靠且差异明确时才加权。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>RRF 的缺点是什么？它丢掉了分数信息，极端情况下某一路给出一个特别高分的正确结果，RRF 也只看它的名次，体现不出这份「特别有把握」。另一个是它有个常数参数，会影响融合结果，我用的是经验值，没做很细的搜索。所以严谨地说 RRF 不是最优解，是个性价比高的稳健解，我接受它带来的这点精度损失。</p>
+      <span class="lbl z">【追问 3】（场景）</span>
+      <p>如果给你一个新场景，你怎么定？我会先跑一版基线，分别看单路的效果和两路的重合度。如果两路各自都不错、重合度也合理，那就直接用 RRF；如果发现某一路明显强，就上加权试试。不会一上来就调权重，因为那是在优化一个还不稳定的东西。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q17</span> · 规则和 LLM 各自适合什么场景？你在金融项目里怎么划分的？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>我的划分标准是「确定性」。规则适合那些能写成明确条件、判定不带歧义的条款，比如「不得承诺收益」这种有明确表述的，命中就是命中，可追溯、可复现。但规则认不了同义改写，句子换个说法它就不认了，还会被否定语境误伤。LLM 反过来，它能识别各种改写、能做语义理解，但它的判断是概率性的，不稳定、不好追溯。所以在金融项目里我是这么分的：规则守那些必须确定的底线条款，LLM 去拓那些需要理解语义的覆盖面，最后用三级置信度把两者串起来——规则单独命中最高、交叉命中次之、只有 LLM 命中的过人工。这样规则的确定性保住了，LLM 的长尾覆盖也有了。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么不把所有条款都写成规则？因为很多违规话术是改写的，规则穷举不完。「保证年化收益」可能写成「收益很有想象空间」，这类你没法用规则一一列出来。规则能覆盖的永远是有限的、形态固定的那部分。所以规则和 LLM 是互补的：规则保证底线不漏，LLM 去抓变体。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>我对 LLM 的信任边界在哪？给的是「只出候选和证据，不出终判」。原因还是可复现性——同一材料跑两次结论会变，这在合规场景是不能接受的。所以 LLM 的价值在召回和解释，不在拍板。这条边界我守得很死，没有因为覆盖率好看就放开，也是和业务方对齐过的、不是我单方面定的。</p>
+      <span class="lbl z">【追问 3】（对比）</span>
+      <p>如果规则和 LLM 结论冲突怎么办？冲突的时候我信规则。因为规则是确定的、可追溯的，LLM 的判断是概率的。当然前提是规则本身没写错、也没被否定语境误伤——这也是我为什么专门做了否定语境抑制。如果发现是规则误伤了，我会去修规则，而不是让 LLM 覆盖它。一句话，冲突时以确定性为准，然后去修确定性那边的问题。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q18</span> · 三个项目里，最失败或者最坑的一次是什么？怎么定位和解决的？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>最坑的是电网项目一开始没清洗工单就建库。当时我急着验证检索效果，直接把 1200+ 条原始工单向量化入 Milvus，结果检索出来的结果里同一类故障翻来覆去，模型给的答案很宽泛，像在念重复的工单。我一开始以为是检索算法的问题，改了好几轮都没起色，后来去看召回的 Top-K 原文，才发现好几条内容几乎一样。这才意识到不是算法问题，是数据问题——原始工单里重复报修太多。之后我回过头做了去重和口语化归一，再重新入库，才把效果拉起来。这次教训挺深的：语料不干净的时候，在检索上怎么调都是白费，得先解决数据。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么一开始没做清洗？因为当时想先跑通链路看效果，觉得数据脏一点没关系，大不了后面再洗。这是典型的顺序错了——我想当然地以为检索能处理数据问题。教训是，用历史工单这类语料，清洗应该排在检索调优前面，不该为了先看到效果而跳过。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>清洗的时候怎么防止删过头？我去重是按「同设备型号加同故障描述」来合并的，不同型号的即使描述像也不合并，防止把有差异的工单误合。口语化归一也是建了映射表、有人工抽检，不是纯自动匹配合并。宁可留一点重复，也不要把有差异的内容合没，这个边界我一直守着。</p>
+      <span class="lbl z">【追问 3】（如果……）</span>
+      <p>如果再来一次，你会怎么做？我会在建库之前先做数据盘点——看看重复率多高、口语化描述占比多少，再决定清洗策略，而不是像当时那样直接入库、出了问题再回头。可以把数据质量检查做成入库流程的固定一步，凡是历史语料都得先过这一关。这一步花不了多少时间，但能省掉后面反复排查的成本。</p>
+      <span class="st">状态：⚠️ 需补强（缺：清洗前后条数）</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q19</span> · 你的系统现在最明显的短板在哪？拒答这条边界怎么定的？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>最明显的短板是覆盖率。法律和金融项目里我都做了拒答和确定性终判，这带来了可追溯性，代价是有一部分本可以答、但置信度不够或者规则没覆盖的问题被挡在外面，进了人工或者直接拒答。另外工程指标这块我还没有硬数据，比如检索的 P90 延迟、单次调用的成本，这在往高级岗位走的时候是要补的。拒答这条边界我不是按「模型觉得不确定」来定，而是按「编错的代价」来定——法律场景编一条法条的后果比答不上来严重得多，所以置信度不够就拒答，这条优先级高于模型想不想答。金融场景同理，给不出可追溯依据的结论就不出。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么愿意接受覆盖率下降？因为在我们这三个场景里，错的代价远大于不答的代价。法律的错误结论会误导用户，合规的错误结论会带来审查风险，这些都是不能接受「差不多」的地方。所以我宁可让系统说「这个问题我没把握」，也不让它编一个看起来像那么回事的答案。</p>
+      <span class="lbl z">【追问 2】（权衡/边界）</span>
+      <p>拒答体验怎么补偿？我给拒答设计了后续路径，不是冷冰冰地说不知道。在 HITL 里，低置信度的会转人工或者退回补事实；在电网项目里，置信度不够的处理是自动升级召回再捞一轮，而不是直接拒。也就是说，拒答是最后一步，前面还有补救的机会；只有在补救之后仍然不可信的时候，才会真的拒掉。</p>
+      <span class="lbl z">【追问 3】（如果……）</span>
+      <p>如果业务方施压要求「必须答」，你怎么办？我会先把代价讲清楚：如果为了覆盖率放开拒答，那给出错误法条或错误合规结论的风险谁承担。在这个基础上再谈折中，比如把「拒答」改成「给候选，并明确标注这是待确认的建议」，让人看到结果的同时知道它有不确定性。但让系统在没有任何依据的情况下给确定结论，这条我不会松。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+
+    <div class="q">
+      <p><span class="no">Q20</span> · 给你一个「公司内部 IT 运维知识问答」的新场景，你会怎么设计？</p>
+      <span class="lbl">【标准答案】</span>
+      <p>我先花半天做需求拆解。先看三件事：知识源（工单、SOP 还是聊天记录）、更新频率、能不能接受答不准。假设是内部 SOP 加历史工单，第一版先清洗结构化——语料里重复和口语化的问题我在电网项目上踩过，得先处理；再用 BGE 向量化入库，检索先上混合——IT 场景既有「报错码 0x8007」这种精确 token，也有「电脑连不上网怎么办」这种口语提问。Query Router 先不上，混合覆盖两类，有评测集再分流。评测先手写 100 条带标准答案的测试集，分层评检索、引用、回答，先测基线，再一轮轮改切片和检索。图谱这次不上，IT 条款引用不密，不划算。给不出出处的就说不确定、转人工。</p>
+      <span class="lbl z">【追问 1】（为什么）</span>
+      <p>为什么第一版不上 Agent、也不上图谱？因为要先有基线。Agent 和图谱都是增加复杂度的东西，得先知道简单方案差在哪、差多少，才知道该不该加。我在这三个项目里的经验也是先跑通基础链路、拿到基线，再决定往哪加。一上来就堆架构，出了问题也不知道是哪一层的锅，还可能白花成本。</p>
+      <span class="lbl z">【追问 2】（权衡）</span>
+      <p>如果清洗成本很高怎么办？如果历史语料特别脏、清洗要花很久，我会先挑一批质量好的 SOP 文档建个最小可用的库，先把链路和评测跑通，再逐步把清洗过的工单加进来。不去等一份完美的语料，而是让系统先能用、再变好。这也是我从电网项目学到的——先盘点数据质量，再定是全面清洗还是小步快跑。</p>
+      <span class="lbl z">【追问 3】（预期指标）</span>
+      <p>你预期第一版能做到什么水平？这个得看数据，我先给判断口径而不是拍数字：第一版的目标是能在自建的 100 条测试集上跑出一个可比较的基线，看 Top-5 命中率大概在什么位置，然后每一轮改动都能看到它涨跌。具体数字我得到时候用真实测试集跑出来才算数，这里不预设目标值，设了目标值容易变成自欺。</p>
+      <span class="st">状态：✅ 可答</span>
+    </div>
+  </section>
+
+  <!-- ============ 五、投递策略 ============ -->
+  <section class="card" id="m-boss">
+    <h2 class="ct">五、投递策略<span class="tip">BOSS 直聘 · 通用投递建议</span></h2>
+    <div class="boss-blk">
+      <h3>1. 先诊断：邀约不足的常见根因</h3>
+      <table class="tbl">
+        <thead>
+          <tr><th>根因</th><th>表现</th><th>自检</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>画像不完整</td><td>在线简历空白、无职业照、未传 PDF</td><td>HR 端打开率 &lt;30%</td></tr>
+          <tr><td>话术模板化</td><td>「您好，我对岗位感兴趣」群发</td><td>回复率 &lt;5%</td></tr>
+          <tr><td>到岗时间/调剂模糊</td><td>空着或不填</td><td>推来不匹配岗</td></tr>
+          <tr><td>时机错误</td><td>周末晚、通勤高峰发</td><td>瞬间被淹没</td></tr>
+          <tr><td>只投不看标签</td><td>不筛「活跃」</td><td>命中率低</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="boss-blk">
+      <h3>2. 投递前：把画像和简历「喂」到位</h3>
+      <p>完善 BOSS 在线简历：清晰职业照、学历/经验完整、求职意向精确到方向（如「大模型应用开发 / RAG」）。</p>
+      <p>上传 <b>PDF 附件简历</b>（与第三节批改稿的净稿一致），防排版乱码。</p>
+      <p>到岗时间、是否接受调剂写清楚。</p>
+    </div>
+    <div class="boss-blk">
+      <h3>3. 打招呼话术：把匹配度「喂」到 HR 眼前（核心）</h3>
+      <p><b>模板（按 JD 微调关键词，占位符保持原样不要填）</b>：</p>
+      <p>您好，我注意到贵司招聘【岗位名】，我有【N 年】大模型应用开发经验，做过【与 JD 匹配的 1–2 个核心项目，含量化成果】，例如【一句话项目亮点 + 数字】。附件是我的简历，期待沟通！</p>
+      <p>⚠️ 话术里的项目表述<b>按你真实的角色写</b>：是主导就写主导，是参与就写「参与 / 负责其中 XX 模块」——<b>不要为了好听把参与说成主导</b>，面试一追就穿。</p>
+      <p>规则：</p>
+      <p>1. 每条必须<b>针对 JD 关键词</b>改 2–3 个词，禁止群发同一句。</p>
+      <p>2. 准备 2–3 个简历版本（偏 RAG / 偏 Agent / 偏部署），投递时按岗位微调。</p>
+      <p>3. 把第三节里的「个人优势」段浓缩成「在线简历一句话标签」，强化第一眼匹配。</p>
+    </div>
+    <div class="boss-blk">
+      <h3>4. 投递节奏与筛选</h3>
+      <p><b>黄金时段</b>：工作日 <b>9:00–11:00</b>、<b>14:00–16:00</b>；避开周末晚上与早晚通勤高峰。</p>
+      <p>优先筛选带 <b>「刚刚活跃」「今日回复」「老板直招」</b> 标签的岗位，回复率最高。</p>
+      <p>每日 <b>15–25 个有效岗位</b>（非海投）；老板直招优先于 HR 代发。</p>
+      <p>标记明显不匹配岗位，减少系统无效推荐。</p>
+    </div>
+    <div class="boss-blk">
+      <h3>5. 跟进与转化</h3>
+      <p>已读不回：2–3 天后补一句，附 <b>作品集 / GitHub / Demo 链接</b> 或证书截图：「补充一份项目 Demo 链接，方便您快速了解我的实操能力」。</p>
+      <p>收到面试：1 小时内确认，问清地址 / 流程 / 需带材料。</p>
+      <p>关注「被查看 → 被邀约」转化率，低于 10% 则<b>优化打招呼话术</b>而非继续海投。</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="ft">报告生成日期：2026-09-12　·　本报告基于你提交的简历文本评估，不含任何未经确认的补充信息。</footer>
+
+<button class="totop" id="totop" title="回到顶部" aria-label="回到顶部">↑</button>
+
+<script>
+(function(){
+  var links = [].slice.call(document.querySelectorAll('.modnav a'));
+  var secs  = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  var totop = document.getElementById('totop');
+
+  function setOn(i){
+    links.forEach(function(a, j){ a.classList.toggle('on', j === i); });
+  }
+  function onScroll(){
+    var y = window.pageYOffset + 150, cur = 0;
+    for (var i = 0; i < secs.length; i++){
+      if (secs[i] && secs[i].offsetTop <= y) cur = i;
+    }
+    setOn(cur);
+    if (totop) totop.classList.toggle('show', window.pageYOffset > 520);
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  window.addEventListener('resize', onScroll);
+  onScroll();
+
+  if (totop){
+    totop.addEventListener('click', function(){
+      window.scrollTo({top:0, behavior:'smooth'});
+    });
+  }
+
+  /* 第三节：批改痕迹 ↔ 改后净稿 切换 */
+  var tg = document.getElementById('rv-toggle');
+  if (tg){
+    tg.addEventListener('click', function(){
+      var on = document.body.classList.toggle('rg-only');
+      tg.textContent = on ? '显示批改痕迹' : '仅看改后净稿';
+      tg.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  /* 第三节：「复制净稿」——取出改后文本（去删除线 / 编号 / 批注，<ins> 还原为正文），
+     写入剪贴板；file:// 下 clipboard API 不可用时自动退回 execCommand。 */
+  var cp = document.getElementById('rv-copy');
+  if (cp){
+    cp.addEventListener('click', function(){
+      var src = document.querySelector('#m-resume .paper');
+      var txt = '';
+      if (src){
+        var clone = src.cloneNode(true);
+        [].forEach.call(clone.querySelectorAll('del, sup.mk, .gen-note'), function(n){
+          n.parentNode.removeChild(n);
+        });
+        [].forEach.call(clone.querySelectorAll('ins'), function(n){
+          n.parentNode.replaceChild(document.createTextNode(n.textContent), n);
+        });
+        clone.style.cssText = 'position:absolute; left:-99999px; top:0; width:640px';
+        document.body.appendChild(clone);
+        txt = (clone.innerText || clone.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+        document.body.removeChild(clone);
+      }
+      var done = function(){
+        var old = cp.textContent;
+        cp.textContent = '已复制 ✓';
+        cp.classList.add('copied');
+        setTimeout(function(){ cp.textContent = old; cp.classList.remove('copied'); }, 1600);
+      };
+      var fallback = function(){
+        var ta = document.createElement('textarea');
+        ta.value = txt; ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:absolute; left:-99999px; top:0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        done();
+      };
+      if (navigator.clipboard && window.isSecureContext){
+        navigator.clipboard.writeText(txt).then(done, fallback);
+      } else {
+        fallback();
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

@@ -197,6 +197,14 @@ export const routes = [
         component: () => import('@/features/resume/views/ResumeCompare.vue'),
         meta: { title: '简历对比', roles: CANDIDATE },
       },
+      // 六模块评估报告：`?resume_id=` 从简历中心带过来，`?job_id=` 是这一页自己写的
+      // （刷新时接住已有作业，不再建第二个）
+      {
+        path: 'resume/report',
+        name: 'resume-report',
+        component: () => import('@/features/resume/views/ResumeReport.vue'),
+        meta: { title: '评估报告', roles: CANDIDATE },
+      },
 
       // ===== 管理员页面（普通用户不可见） =====
       {

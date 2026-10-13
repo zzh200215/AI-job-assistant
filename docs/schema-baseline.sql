@@ -102,6 +102,10 @@ CREATE INDEX ix_prompt_trace_resume_id ON prompt_trace (resume_id);
 CREATE INDEX ix_prompt_trace_source ON prompt_trace (source);
 CREATE INDEX ix_prompt_trace_task_id ON prompt_trace (task_id);
 CREATE INDEX ix_prompt_trace_user_id ON prompt_trace (user_id);
+CREATE INDEX ix_resume_report_job_create_time ON resume_report_job (create_time);
+CREATE INDEX ix_resume_report_job_resume_id ON resume_report_job (resume_id);
+CREATE INDEX ix_resume_report_job_status ON resume_report_job (status);
+CREATE INDEX ix_resume_report_job_user_id ON resume_report_job (user_id);
 CREATE INDEX ix_resume_version_parent_version_id ON resume_version (parent_version_id);
 CREATE INDEX ix_resume_version_resume_id ON resume_version (resume_id);
 CREATE INDEX ix_resume_version_target_jd_id ON resume_version (target_jd_id);
@@ -590,6 +594,30 @@ CREATE TABLE organization_sso_state (
 	provider VARCHAR(20) NOT NULL, 
 	expires_at DATETIME NOT NULL, 
 	created_at DATETIME NOT NULL, 
+	PRIMARY KEY (id)
+)
+
+;
+
+CREATE TABLE resume_report_job (
+	id BIGINT NOT NULL, 
+	user_id BIGINT NOT NULL, 
+	resume_id BIGINT NOT NULL, 
+	jd_id BIGINT, 
+	target_position VARCHAR(200), 
+	status VARCHAR(20) NOT NULL, 
+	claimed_at DATETIME, 
+	finished_at DATETIME, 
+	total_score INTEGER, 
+	grade VARCHAR(4), 
+	report_json JSON, 
+	errors_json JSON, 
+	provenance_json JSON, 
+	lint_failures SMALLINT NOT NULL, 
+	error SMALLINT NOT NULL, 
+	error_msg TEXT, 
+	create_time DATETIME NOT NULL, 
+	update_time DATETIME, 
 	PRIMARY KEY (id)
 )
 

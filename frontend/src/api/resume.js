@@ -47,6 +47,26 @@ export const getRewriteSuggestionJob = (jobId) =>
 export const applyResumeRewrites = (resumeId, edits, jdId = null) =>
   request.post(`/resume/${resumeId}/apply-rewrites`, { edits, ...(jdId ? { jd_id: jdId } : {}) })
 
+/* 简历评估报告（六模块）：**同一族形状**——POST 立刻返回 `job_id`，结果靠轮询，每一发都是毫秒级。
+   这里也**不带** per-request 超时（理由与上面那一对相同：一次报告最多三发模型调用，同步等会占住
+   服务端线程池里的一根）。轮询总预算由调用方给，见 `ResumeReport.vue` 的那两个常量。
+   载荷里**没有**服务端的失败原因，所以这一层也没有任何一处读它。 */
+export const createReportJob = (resumeId, payload = {}) =>
+  request.post(`/resume/${resumeId}/report-jobs`, {
+    jd_id: payload.jd_id ?? null,
+    target_position: payload.target_position || '',
+  })
+
+export const getReportJob = (jobId) => request.get(`/resume/report-jobs/${jobId}`)
+
+/** 采纳批改稿里的若干处改动（按全局编号）。返回形状与 `applyResumeRewrites` 同形。 */
+export const applyReportRedline = (jobId, marks) =>
+  request.post(`/resume/report-jobs/${jobId}/apply-redline`, { marks })
+
+/** 自包含的独立 HTML（离线双击可开），与页面上那一份同源。 */
+export const downloadReportHtml = (jobId) =>
+  request.get(`/resume/report-jobs/${jobId}/report.html`, { responseType: 'blob' })
+
 export const revertResumeRewrite = (resumeId, snapshotVersionId) =>
   request.post(`/resume/${resumeId}/revert-rewrite`, { snapshot_version_id: snapshotVersionId })
 

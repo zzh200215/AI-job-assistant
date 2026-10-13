@@ -34,6 +34,7 @@ from app.services.interview_evaluation_service import (
     shutdown_interview_evaluation_executor,
 )
 from app.services.orchestration_runner import mark_stale_running_tasks_failed, shutdown_orchestration_executor
+from app.services.report_job_service import shutdown_report_job_executor
 from app.services.rewrite_job_service import shutdown_rewrite_job_executor
 from app.utils.response import ERR_AUTH, ERR_COMMON, ERR_PARAM, fail, ok
 
@@ -68,6 +69,7 @@ async def lifespan(_app: FastAPI):
     shutdown_scheduler()
     shutdown_interview_evaluation_executor()
     shutdown_rewrite_job_executor()
+    shutdown_report_job_executor()
     shutdown_orchestration_executor()
 
 

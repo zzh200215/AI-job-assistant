@@ -52,19 +52,36 @@ const row = (id, name) => ({
   parsed: { current_title: '后端工程师' },
 })
 
+const DIM_FULLS = [20, 10, 20, 15, 20, 10, 5]
+
+// 与 /diagnose 现在的载荷同形：七行维度 + 结论段 + 竞争分析（旧的五维平铺键已出树）。
 const diagnosis = (score) => ({
   total_score: score,
-  structure_score: score,
-  expression_score: score,
-  keyword_score: score,
-  highlight_score: score,
-  ats_score: score,
-  completeness_score: score,
-  structure_issues: [],
-  expression_issues: [],
+  grade: score >= 85 ? 'A' : score >= 75 ? 'B' : score >= 65 ? 'C' : 'D',
+  grade_desc: '质量过关，可直接投',
+  grade_scale: 'A 85–100 / B 75–84 / C 65–74 / D 0–64',
+  report_date: '2026-10-13',
+  dimensions: DIM_FULLS.map((full, i) => ({
+    key: `dim_${i}`,
+    label: `维度${i}`,
+    full,
+    star: i < 2,
+    score: Math.round((score / 100) * full),
+    note: i === 0 ? '指标只有绝对值' : '',
+  })),
+  verdict: { direction: 'RAG 应用', target_level: '中级' },
+  to_next_grade: ['补两处优化前后基线'],
   missing_keywords: [],
-  highlights: [],
-  match_analysis: '',
+  competition: {
+    positioning_badge: 'B 档（中上）',
+    cards: [],
+    gaps: [],
+    advice: [],
+    salary_note: '',
+  },
+  completeness_score: score,
+  completeness_issues: [],
+  module_check: {},
 })
 
 let router
