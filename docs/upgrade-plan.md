@@ -5361,6 +5361,57 @@ D221 卡在业务规则上（那个账号 6 份简历、免费版限 1 份），
 **§10 计数**：没挂新项（修法那一档我在对话里当面问，不等他不在的时候往账上添条目）。现取标题行重算仍是
 **在册 38 条（1–25、28–40）、open 0**。
 
+#### 已交付：D229 外部抓取的失败原因不再被降级分支吞掉，并把漏声明两年的 bs4 补上
+
+**为什么现在做**：D228 之后我实测了那条爬虫链（第一次真出网）——纯 HTTP 拿 `{"code":37,"您的环境存在异常"}`，
+真浏览器被弹到 `verify.html`。也就是说**生产里这条链几乎每次都走降级分支**，而降级分支原先的处理是
+"把原因丢掉"：`job_search.py` 在 demo 那一支把 `info_message` 改写成"已展示演示数据"，
+出口又写 `error = None if is_demo`，前端 `SearchPane.vue` 再叠一层 `&& !isDemo` 抑制。
+候选人只看得到"这是演示数据"，永远看不到"因为渠道没返回"。
+
+**改了三处，其中一处是别人定过的老契约**：
+1. 后端：`error` 在任何降级分支都不置空。但**上屏的是 API 层组装的中文那句**
+   （"外部岗位渠道这次没有返回数据（可能被限流或需要身份验证）"），爬虫内部串
+   （`boss search failed: JSONDecodeError…`）不许当用户文案——同 D92 那条口径，原始原因留在
+   `job_spider` 的 `logger.warning` 里给排障。顺带修掉一条**早就存在的泄漏**：`local_fallback`
+   那一支原先直接把 `external_error` 当 `message` 发出去，等于一直在给候选人念内部串。
+2. 前端 `SearchPane.vue`：红色标签去掉 `&& !isDemo`。警告条说"是什么"、红标签说"为什么"，两句并存。
+3. **改了一条老测试的期望值**（`jobSearchRecommendPanes.test.js` 那条"演示数据时只说演示"）：
+   它真正该禁的是"演示态亮『最新结果』"，把"原因"一起禁掉是顺手带上的；新断言两句都在，
+   并额外钉一句"不许出现『最新结果』"，让它原来防的那件事继续有效。
+   它原先用的 `error: '外部渠道超时'` 是老后端**根本发不出来**的载荷（demo 态被置 null），
+   所以那条测试一直在测一个不存在的输入形状。
+
+**bs4**：`beautifulsoup4==4.13.5` 进 `requirements.txt`（本机 venv 里此前**根本没装**，
+`HAS_BS4=False` 让 `fetch_detail()` 不开 socket 就返回 None，并让 `/jd/import-url` 粘网址导入静默失效）。
+新增守卫腿 `test_bs4_declared_in_requirements_is_actually_importable`：谁把这条依赖删了或装不上，CI 当场红，
+而不是等到有人问"为什么抓详情永远失败"。
+
+**测试**：后端新增 `tests/test_external_search_fallback_reason.py` **4 条**（demo 降级仍带原因 +
+内部串不许出现在响应任何一处 / 本地库降级同样 / 真拿到岗位时不许凭空造原因 / bs4 必须可用）；
+前端新增 `tests/unit/jobSearchFallbackReason.test.js` **3 条**（演示态两句并存 / 本地降级态原因照旧 /
+没有原因时不许造标签）。**变异 4 发，每发只红对应那一条**：把 `error` 改回 `None if is_demo`、
+把 message 里的原因去掉、把 `&& !isDemo` 加回去、把红标签改成无条件渲染。
+bs4 那条守卫的反证是"人为 `sys.modules['bs4']=None` ⇒ `HAS_BS4` 立刻 False"，外加今天装它之前本来就是 False。
+
+**验收**：backend 全量 **1086 passed**（含并行工作者的在制品，见下）、`ruff check` 与 `ruff format --check`
+对我这四个文件干净；frontend `npx vitest run` **100 files / 669 passed**、`npm test` **39 passed**、
+eslint 干净、prettier 只重排了我那两个测试文件（改前改后都是纯 LF）。
+
+**同一棵树里有另一个写手，这条必须记**：本轮提交前 `git status` 从 3 个未跟踪文件涨到 **26 个**
+（一整套"简历报告"功能：模型、prompts、服务、**新迁移 `20261013_0030_resume_report_job.py`**、测试、前端视图），
+`backend/app/api/resume.py` 被改成 M、`docs/schema-baseline.sql` 在 12:02 被重新生成——**都不是我做的，
+我一个都没动、也没提交**。我第一次跑后端全量时那条 `test_snapshot_matches_models` 红（漂移来自他们的
+`resume_report_job`），第二次跑就绿了，是他们自己补的基线。所以本条那两个全量数字**含他们的在制品**，
+不是"只有我这刀"的隔离读数；我这刀的隔离证据是上面那 7 条新腿 + 4 发变异。
+
+**未验**：① 这一屏**没在真浏览器里走过**（前端 3 条是 jsdom，后端 4 条是 TestClient）；
+② 真实 zhipin 路径今天实测就是拿不到岗位，所以生产里每次搜索都会显示这句新原因——**它让失败可见，
+但没有让抓取变成功**，那件事仍卡在对方 IP 级风控（D228 之后另记）；③ `_search_local_jobs` 在演示态
+到底该不该同时给本地结果，本轮没动这个口径。
+
+**§10 计数**：没挂新项。现取标题行重算仍是 **在册 38 条（1–25、28–40）、open 0**。
+
 #### 已交付：D228 那 8 个提交推上去了，`job_import_task` 的迁移也落到了 `llmXM`
 
 **两件事都按他点名的范围做，没有顺手多做一寸**：

@@ -270,6 +270,15 @@ def search_external_jobs(
         traceback.print_exc()
         external_jobs, external_error = [], f"外部抓取异常: {str(exc)[:80]}"
 
+    # D229：这一句是"为什么降级"的唯一去处，任何降级分支都不许覆盖它、也不许在出口置空。
+    # 之前 demo 分支把 `info_message` 改写成"已展示演示数据"、又在 payload 里写
+    # `None if is_demo`，于是候选人只看得到"这是演示数据"，永远看不到"因为渠道没返回"。
+    # 但**上屏的必须是中文人话**：`external_error` 是爬虫内部串（"boss search failed:
+    # JSONDecodeError…"），按 D92 那条口径不许拿来当用户文案；原始原因留在 job_spider 的
+    # logger.warning 里给排障用（那才是它该去的地方）。
+    external_reason = external_error or ""
+    external_user_reason = "外部岗位渠道这次没有返回数据（可能被限流或需要身份验证）" if external_reason else ""
+
     has_real_external = any(not _is_demo_source(job.source) for job in external_jobs)
     external_results, saved_count = (
         _save_external_jobs(db, external_jobs, current_user, save) if external_jobs else ([], 0)
@@ -277,14 +286,14 @@ def search_external_jobs(
 
     local_results: list[dict] = []
     result_mode = "external"
-    info_message = external_error or ""
+    info_message = external_user_reason
     is_demo = False
 
     if not has_real_external:
         local_results = _search_local_jobs(db, keyword, city, current_user)
         if local_results:
             result_mode = "local_fallback"
-            info_message = external_error or "外部抓取受限，已切换为本地职位库结果"
+            info_message = external_user_reason or "外部抓取受限，已切换为本地职位库结果"
         else:
             demo_jobs = [job for job in external_jobs if _is_demo_source(job.source)]
             if not demo_jobs:
@@ -312,7 +321,7 @@ def search_external_jobs(
             "jobs": results,
             "is_demo": is_demo,
             "result_mode": result_mode,
-            "error": None if is_demo else (info_message or None),
+            "error": external_user_reason or None,
         },
         message=info_message or f"搜索到 {len(results)} 个岗位",
     )

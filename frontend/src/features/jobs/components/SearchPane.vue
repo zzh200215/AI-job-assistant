@@ -11,7 +11,9 @@
       </el-button>
       <el-tag v-if="resultMode && !isDemo" type="info" effect="plain">{{ stateText }}</el-tag>
       <el-tag v-if="isDemo" type="warning" effect="plain">当前为演示数据</el-tag>
-      <el-tag v-if="searchError && !isDemo" type="danger" effect="plain">{{ searchError }}</el-tag>
+      <!-- D229：这一条原先带 `&& !isDemo`，正好把"演示数据"那一档的原因吃掉——而那是最需要说清
+           为什么的一档。警告条说"是什么"，这一条说"为什么"，两句都要。 -->
+      <el-tag v-if="searchError" type="danger" effect="plain">{{ searchError }}</el-tag>
     </div>
   </div>
 
