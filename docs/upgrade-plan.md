@@ -5361,7 +5361,68 @@ D221 卡在业务规则上（那个账号 6 份简历、免费版限 1 份），
 **§10 计数**：没挂新项（修法那一档我在对话里当面问，不等他不在的时候往账上添条目）。现取标题行重算仍是
 **在册 38 条（1–25、28–40）、open 0**。
 
+#### 已交付：D232 编排里那一发简历诊断换成同一张七维表——并翻案我自己 D231 对那一格行为的描述
+
+**为什么现在做**：D231 挂出的 §10.41 他点了 ③「把编排那一发的评分换成同一张七维表」。
+
+**动手时先推翻我自己在 §10.41 里写的前提**：那条写的是「那一格显示的是模型给的 0–100 自由分，
+和报告的七维总分两套口径并存」。前半句在真链路上**不成立**——`AGENT_REPORT_PROMPT` 的输出形状里
+根本没有 `resume_diagnosis` 这个键（现取：`grep -rn resume_diagnosis app/ --include=*.py` 只命中
+`llm_service.py` 的 mock 载荷），所以真 provider 下屏幕上那一格**一直是空白**，
+演示里看到的那个 78 只存在于 `_MOCK_AGENT_SUMMARY` 里。也就是说这一族的形状不是"两个数打架"，
+而是**一屏读着一个谁都没生产出来的键**（"画得出来但来源不存在"，与抽取搬家那三次同一族）。
+口径并存这半句仍然成立：`resume_agent.py` 那一份要的是 `expression_quality.score` 与 `format_score`
+两个 0–100 自由分，与七维定权是两把尺。
+
+**五条改动**：
+1. `prompts/resume_agent.py` → `resume-agent-v2`：口径段由 `rubric.rubric_prompt_block()` 注入
+   （**不手抄第二份表**，与概览那一支同一个约定），输出形状改成 `dimensions:{七维:{score,note}}`，
+   并明写「不要自己写总分或等级」。旧的 `expression_quality`（含 `score`）与 `format_score` **整块出树**：
+   现查全仓只有 `ResumeAgent._make_summary` 读过 `format_score`，`expression_quality` 除 mock 外无人读——
+   留着就是第三把尺。
+2. `agents/resume_agent.py`：结果里的 `total_score` / `grade` 由 `rubric.read_dimensions` + `total_of` +
+   `grade_of` 算出，**与评估报告是同一组函数**；缺维度 ⇒ `total_score=None` ⇒ 日志摘要写「未评分」，不顶 0 分。
+3. `agents/summary_agent.py`：新增纯函数 `resume_diagnosis_from()`，把 `ResumeAgent` 那一发折成屏上那一格
+   （`total_score` / `grade` / `dimensions` / `key_findings` / `scale_note`），并且——
+   **模型若自己写了一个 `resume_diagnosis` 会被整块覆盖**；那一发没跑就 `pop` 掉，不给空壳。
+   `key_findings` 只收**没到该维满分六成**的那些维且逐条带维度名（一堆"都挺好"的 note 排在屏上等于没信息）。
+4. `llm_service` 两份 mock：`_MOCK_AGENT_RESUME` 的七维取与 `_MOCK_REPORT_OVERVIEW` **同一组数**
+   （12/5/16/10/13/6/3 = 65），所以演示态下「智能分析」与「评估报告」两屏读到同一个 65 / C；
+   `_MOCK_AGENT_SUMMARY` 里那份 `resume_diagnosis: {score: 78}` 删掉——mock 不该演示一个真链路里不存在的数据来源。
+5. `MultiAgentAnalysis.vue`：那一格改成读 `total_score` + 等级 + 口径说明；`total_score` 为 null 时写
+   「未评分（七维里还有没读出来的）」；`resume_diagnosis` 不存在时整格换成一句「这次编排没跑…」。
+   没加任何 CSS 类，`styleDebtRatchet` 那颗文件的色值预算不动。
+
+**测试**：后端新增 `tests/test_orchestration_resume_seven_dims.py` **7 条**
+（同一把尺 / prompt 里是生成的表 / 缺维度是未知不是 0 / 60% 那条筛法 / 覆盖模型自报的数 / 没跑就不出现 / 派发仍对）；
+前端新增 `tests/unit/multiAgentDiagnosisCell.test.js` **4 条**（有数、未评分、整格缺席、
+混进旧那一位自由分也不上屏）。前端这 4 条做了变异：把模板改回 `resumeDiagnosis.score` 并删掉 `v-else` ⇒ 当场红，
+逐字还原后 4 passed。全量：**backend 1119 passed**（D231 收尾 1112）、
+**frontend 102 files / 683 passed**（此前 101/679）、`npm test` 39 passed、
+`ruff check .` 与 `ruff format --check .` 干净、eslint 回到那 1 条既有警告、prettier 干净。
+
+**写测试时撞到的一个形状，值得记**：`ResumeAgent.run_impl` 会往 `chat_json` 返回的那份 dict 里写
+`dimensions` / `total_score`。生产安全——`chat_json` 每次都从文本重新解析出一个新对象；
+但我的桩最初把模块级 `_MOCK_AGENT_RESUME` **原对象**交了出去，于是那份载荷被就地改写，
+后面三条用例读到的是被折成 rows 的 `dimensions`（症状是 `total_of` 返回 None、note 全空，
+看起来像产品坏了）。桩必须给深拷贝。同一族的教训：`run_impl` 改写返回的 dict 这件事本身，
+在"共享载荷对象"的场合就是隐性的全局状态污染源。
+
+**③ 买到的是"一把尺"，不是"一个数"**：两屏仍是两次独立的模型调用（编排那一发 vs 报告阶段一），
+同一张表下**可以给出不同的分**。这比之前好（至少两把尺变成一把），但"同一份简历两个数"这件事没消失。
+要让两屏真共用一个数，是当时那条 ②（谁依赖谁 + 多付一次概览：实测 27.86s / 3,985 token），
+仍归他拍，这次没做也不替他做主。
+
+**未验**：新 prompt 在真 provider 下**一次都没跑过**——要跑需要一次编排链（≥13 个调用点那一族）、
+一个能写的 MySQL 行与一个 redis worker，属花他钱那一档，没自作主张。
+mock 那一臂的形状、合计与屏上读数都已验。真 provider 那半如果要做，最省的姿势是
+起 8010 + 临时库 + `scripts/run_orchestration_worker.py`，跑完按 id 删掉自己那几行并换新连接复测。
+
+**§10 计数**：**41 关闭**（按 ③ 落地；② 那一档仍留在他手上，理由写在上面那段）。
+现取标题行重算 = **在册 39 条（1–25、28–41）、open 0**。
+
 #### 已交付：D231 六模块报告补上 mock 那两支载荷，并第一次把应用内那一页放进真浏览器读
+
 
 **为什么现在做**：D230 收尾时我自己列了三条还挂着的半截——① 演示态（`LLM_PROVIDER=mock`）只出得来三个模块，
 他要么看不到这件交付物，要么再烧一发真模型（105 秒 / 14,183 token）才能看；② 应用内那一页从未进过真浏览器，
@@ -6637,7 +6698,7 @@ D9 点名没动的那一个，量完发现它是**两个**可见问题，都在�
     - 我的建议是 **②**：③ 会把"候选人收尾时看到什么"这个新问题端到你面前，而 ② 已经能止住"一个人点结束、全进程停摆"；②落地后可以再把 D211 那台图扩成一条门（判据：`async` 端点到 `chat_json` 的可达路径必须经过一次显式 thread handoff）。
     - 重开/关闭条件：任一档落地即关闭本条；未落地之前，`nginx.conf` 的注释与 D203 那张表都要带着"WS 面未覆盖、另有 7 条未被那张表点名"这句读（清单在 D211）。
 
-41. **智能分析那一页的"简历诊断评分"与六模块报告的总分是两套口径，屏幕上没人说清（2026-10-13 D231 现查；三条路都配了半径）**
+41. ~~**智能分析那一页的"简历诊断评分"与六模块报告的总分是两套口径，屏幕上没人说清（2026-10-13 D231 现查；三条路都配了半径）**~~ —— **已按 ③ 落地并关闭（同日 D232：`resume-agent-v2` 注入同一张七维表、总分与等级由服务端算、汇总那一格由 `resume_diagnosis_from` 折出来；② 那一档没点，仍归他拍）**。落地时先翻案了本条前半句：`AGENT_REPORT_PROMPT` 从没要求过 `resume_diagnosis`，所以真 provider 下那一格一直是空白，演示里那个 78 只住在 mock 载荷里——形状不是"两个数打架"而是"屏幕读着一个谁都没生产的键"。数与读数见 D232。**下面三条路的原文与半径留着。**
     - 事实：`MultiAgentAnalysis.vue:167` 那一格 `<b>评分：</b>{{ summaryReport.resume_diagnosis?.score }}`，
       数来自编排的 `FinalReportAgent`——`app/prompts/resume_agent.py:29` 要的是 **`score: 0-100` 自由分**（还另有一个 `format_score: 0-100`），
       而六模块评估报告的权威是**七个维度各自满分相加**（`docs/resume-report-spec.md` §2 + `resume_report_rubric.py`，
