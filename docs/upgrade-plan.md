@@ -5361,6 +5361,52 @@ D221 卡在业务规则上（那个账号 6 份简历、免费版限 1 份），
 **§10 计数**：没挂新项（修法那一档我在对话里当面问，不等他不在的时候往账上添条目）。现取标题行重算仍是
 **在册 38 条（1–25、28–40）、open 0**。
 
+#### 已交付：D233 `resume-agent-v2` 那发真跑了一次：整条编排链在真 provider 下跑穿，七维被模型按形状填回
+
+**为什么现在做**：D232 收尾时那半"新 prompt 在真 provider 下一次都没跑过"挂着，他点的事是「跑完整条编排链」，
+所以这一轮花的就是他授权的那一发。
+
+**姿势**（照账上那几条纪律走，一条没跳）：同机临时库 `llmXM_probe_d232` 跑完整链（`alembic upgrade head` 建到 50 张表）
+→ 验 → DROP；**删前删后各读一次 `llmXM` 体检：54 → 54**，临时库删后现计 0。Redis 换到 **db 9**（他的键空间在 db 0），
+`AUTO_CREATE_TABLES=false`、`RUN_SCHEDULER=false`，执行者是显式起的 `scripts/run_orchestration_worker.py`；
+口令只进进程 env，不回显不落文件。库里的行随整块临时库一起消失，所以不存在"删自己那几行"的遗漏面；
+读数为避免 REPEATABLE READ 那条仪器缺陷，**全部换新连接取**（D115/D189 记过的那次假绿就是没换连接）。
+
+**这一发的钱与时长（现取 `prompt_trace` 7 行，合计 44,238 token）**：
+`IntentAgent 4.68s/837` → `JobAgent 17.57s/1,899` → **`ResumeAgent 58.06s/6,594`** → `MatchAgent 153.52s/5,564（degraded=1，主备两臂）`
+→ `InterviewAgent 32.16s/6,020` → `CareerAgent 72.58s/11,321` → `SummaryAgent 47.87s/12,003`；
+整条链墙钟 **342 秒**（`agent_run.status=completed`，7 条 `agent_message` 全 completed）。
+`cost_cents` 仍是 0.0 —— 价目表里没有这两个模型，不等于没花钱（那条既有口径原样适用）。
+
+**D232 那几条设计在真模型下逐条成立**：
+① **模型按形状填回了七维**：`dimensions` 是七个 `{score,note}`，分数 5/5/15/6/5/7/2，
+`total_score=45`、`grade=D` —— **45 正好是七维相加**，服务端那条合计规则第一次有真 provider 读数；
+② **"不要自己写总分或等级"被遵守**：`ResumeAgent` 那份输出顶层键里**没有** `overall_score`
+（也确认了 `format_score` / `expression_quality` 两格自由分已不在载荷里）；
+③ **那一格真的由服务端折出来**：`agent_run.summary_report.resume_diagnosis` 的键是
+`dimensions / grade / key_findings / scale_note / total_score`，`total_score=45`、`grade=D`，
+`key_findings` **5 条**——正是没到该维满分六成那五维（`metric 25%、hooks 50%、transferability 40%、
+project_depth 25%、advantage 40%`；`role_fit 75%` 与 `expression 70%` 被筛掉），
+60% 那条筛法在真实分布上行为对得上；
+④ **§3 那条"必须点名具体位置"在真输出上成立**：note 逐条引着简历里的字，例如
+「只有"日均 1w+ 解析"一个绝对值，缺少口径（统计周期、成功率/准确率、样本量、标注方式），也没有优化前→优化后的对比」
+「两个项目均缺少样本量、标注规模、参数细节和踩坑经历；简历解析项目可补充字段类别数、抽取失败率、回查覆盖范围」
+——这是**读数不是断言**：机器门（那条"每维待优化点必须点名位置"的机检）仍然没建，
+因为一次样本不足以定判据（上一轮定七维禁词表时就是靠成品把先验那版纠正了三次）。
+
+**顺带量到的一件事，不在原计划里**：七条 trace 里只有 `match-agent-v1` 带着 prompt_version，
+其余六条是 `unknown` —— 与 D203 那条"1601 行里 1215 行的 source 就是字面量 `chat_json`"同一件事的另一面：
+**编排这 7 个调用点几乎都没调 `set_llm_trace_context`**，所以事后无法从 trace 表分辨"是谁打的"。
+不在这轮射程，记在这里；要收就是在每个 agent 的调用点补上下文，属另一刀。
+
+**残留**：临时探针 `backend/_live_orch.py` / `_orch_readout.txt` / `_orch_clean.json` 当轮删除；
+后端 8013 与 worker 都按 PID 定点停（`netstat` 复核端口已释放），
+Redis db 9 三条队列均 0、`sched-slot:*` 0 条，db 0 未被这次碰过。
+探针里那个"只改 os.environ 不回头生效"的坑这次按 D231 的纠正写成了
+`settings.DATABASE_URL=` + `assert engine.url.database == TEMP_DB`，播种回来是 `user_id=1 resume_id=1 jd_id=1`（新库该是 1）。
+
+**§10 计数**：没挂新项。现取标题行重算仍是 **在册 39 条（1–25、28–41）、open 0**。
+
 #### 已交付：D232 编排里那一发简历诊断换成同一张七维表——并翻案我自己 D231 对那一格行为的描述
 
 **为什么现在做**：D231 挂出的 §10.41 他点了 ③「把编排那一发的评分换成同一张七维表」。
