@@ -83,6 +83,12 @@ class BaseAgent(ABC):
     description: str = ""
     depends_on: list[str] = []
     result_type: str = ""
+    # 这一发用的是哪个版本的 prompt。写在类上、由 `_seed_trace_context` 带进 trace，
+    # 是为了让 `prompt_trace` 事后能分辨"这条是谁、用哪版打的"——
+    # 2026-10-13 那一整条编排链跑完，7 行 trace 里只有 match 那一发带着版本号，
+    # 其余全是 `unknown`（各 agent 用的是别的 prompt 或干脆没声明）。
+    # 值请从对应的 prompt 模块 import，不要在两处各写一遍字面量。
+    prompt_version: str = ""
 
     def __init__(self, db: Session = None):
         self._db = db
@@ -116,7 +122,7 @@ class BaseAgent(ABC):
             reset_llm_usage()
             reset_llm_provenance()
             retrieval_log.begin()
-            _seed_trace_context(self.name, context)
+            _seed_trace_context(self.name, context, self.prompt_version)
             try:
                 return self.run_impl(context)
             finally:
@@ -172,11 +178,13 @@ class BaseAgent(ABC):
         return context.to_log_dict()
 
 
-def _seed_trace_context(agent_name: str, context: AgentContext) -> None:
-    """给节点内的 LLM 调用打上归属：哪个任务、哪个节点。
+def _seed_trace_context(agent_name: str, context: AgentContext, prompt_version: str = "") -> None:
+    """给节点内的 LLM 调用打上归属：哪个任务、哪个节点、用的是哪版 prompt。
 
     ``chat_json`` 取用一次后会清空该上下文，所以这里覆盖的是节点的首个 LLM 调用；
     自行 set_llm_trace_context 的 agent 会覆盖这份更具体的信息。
+    `prompt_version` 留空时不写这一位——`LLMTraceScope` 会照旧落成 `unknown`，
+    那是"这个 agent 还没声明版本"的信号，而不是一个可以蒙过去的默认值。
     """
     set_llm_trace_context(
         {
@@ -188,6 +196,7 @@ def _seed_trace_context(agent_name: str, context: AgentContext) -> None:
             "db": context.db,
             "agent_name": agent_name,
             "run_id": context.run_id,
+            "prompt_version": prompt_version or None,
         }
     )
 

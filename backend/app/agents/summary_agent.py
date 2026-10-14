@@ -10,12 +10,16 @@ from typing import Any
 from app.agents.base_agent import BaseAgent
 from app.orchestration.context import AgentContext
 from app.prompts.agent_report import AGENT_REPORT_PROMPT
+from app.prompts.agent_report import PROMPT_VERSION as _PROMPT_VERSION
 from app.prompts.rendering import render_prompt
 from app.services.analysis_summaries import jd_digest, resume_digest
 from app.services.llm_service import chat_json
 
 
 class SummaryAgent(BaseAgent):
+    # 与 app.prompts.agent_report 那份 prompt 同源，别在这儿再抄一遍字面量。
+    prompt_version = _PROMPT_VERSION
+
     name = "SummaryAgent"
     description = "汇总报告 Agent — 整合所有分析结果，生成最终报告"
     depends_on: list[str] = ["MatchAnalysisAgent", "ResumeOptimizeAgent", "InterviewQuestionAgent"]

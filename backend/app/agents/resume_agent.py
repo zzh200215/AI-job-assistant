@@ -9,12 +9,16 @@ from app.agents.base_agent import BaseAgent
 from app.models.history import Resume
 from app.orchestration.context import AgentContext
 from app.prompts.rendering import render_prompt
+from app.prompts.resume_agent import PROMPT_VERSION as _PROMPT_VERSION
 from app.prompts.resume_agent import RESUME_AGENT_PROMPT
 from app.services import resume_report_rubric as rubric
 from app.services.llm_service import chat_json
 
 
 class ResumeAgent(BaseAgent):
+    # 与 app.prompts.resume_agent 那份 prompt 同源，别在这儿再抄一遍字面量。
+    prompt_version = _PROMPT_VERSION
+
     name = "ResumeAgent"
     description = "简历诊断智能体 — 提取简历结构、发现问题、优化建议"
     depends_on: list[str] = []

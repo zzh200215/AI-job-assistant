@@ -6,6 +6,7 @@ from typing import Any
 from app.agents.base_agent import BaseAgent
 from app.orchestration.context import AgentContext
 from app.prompts.match_agent import MATCH_AGENT_PROMPT
+from app.prompts.match_agent import PROMPT_VERSION as _PROMPT_VERSION
 from app.prompts.rendering import render_prompt
 from app.services.llm_service import chat_json, set_llm_trace_context
 from app.services.match_score_calibration import apply_match_score_cap
@@ -13,6 +14,9 @@ from app.services.rag_service import search_knowledge
 
 
 class MatchAgent(BaseAgent):
+    # 与 app.prompts.match_agent 那份 prompt 同源；这一发另外还在 run_impl 里自己设了更细的 trace 上下文。
+    prompt_version = _PROMPT_VERSION
+
     name = "MatchAgent"
     description = "匹配度评估智能体 — 计算匹配分、输出优劣势、投递建议"
     depends_on: list[str] = ["ResumeAgent", "JobAgent"]
@@ -41,11 +45,11 @@ class MatchAgent(BaseAgent):
         set_llm_trace_context(
             {
                 "source": "MatchAgent.run_impl",
-                "prompt_version": "match-agent-v1",
+                "prompt_version": _PROMPT_VERSION,
                 "prompt_name": "match-agent",
                 "prompt_family": "agent",
                 "prompt_metadata": {
-                    "prompt_version": "match-agent-v1",
+                    "prompt_version": _PROMPT_VERSION,
                     "prompt_name": "match-agent",
                     "prompt_family": "agent",
                 },

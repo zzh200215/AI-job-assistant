@@ -10,12 +10,16 @@ from typing import Any
 from app.agents.base_agent import BaseAgent
 from app.orchestration.context import AgentContext
 from app.prompts.optimize import OPTIMIZE_PROMPT
+from app.prompts.optimize import PROMPT_VERSION as _PROMPT_VERSION
 from app.prompts.rendering import render_prompt
 from app.services.llm_service import chat_json
 from app.services.rag_service import search_knowledge
 
 
 class ResumeOptimizeAgent(BaseAgent):
+    # 与 app.prompts.optimize 那份 prompt 同源，别在这儿再抄一遍字面量。
+    prompt_version = _PROMPT_VERSION
+
     name = "ResumeOptimizeAgent"
     description = "简历优化 Agent — RAG 检索简历模板 + 生成优化建议"
     depends_on: list[str] = ["MatchAnalysisAgent"]

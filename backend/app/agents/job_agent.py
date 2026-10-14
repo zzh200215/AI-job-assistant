@@ -9,11 +9,15 @@ from app.agents.base_agent import BaseAgent
 from app.models.history import JobDescription
 from app.orchestration.context import AgentContext
 from app.prompts.job_agent import JOB_AGENT_PROMPT
+from app.prompts.job_agent import PROMPT_VERSION as _PROMPT_VERSION
 from app.prompts.rendering import render_prompt
 from app.services.llm_service import chat_json
 
 
 class JobAgent(BaseAgent):
+    # 与 app.prompts.job_agent 那份 prompt 同源，别在这儿再抄一遍字面量。
+    prompt_version = _PROMPT_VERSION
+
     name = "JobAgent"
     description = "岗位分析智能体 — 拆解 JD、提取技能、识别隐性要求"
     depends_on: list[str] = []

@@ -1,5 +1,7 @@
 """意图识别 Prompt：分析用户意图，判断用户想做什么"""
 
+PROMPT_VERSION = "intent-agent-v1"
+
 AGENT_INTENT_PROMPT = """你是一名智能招聘助手的意图识别专家。请根据用户提供的简历信息和岗位 JD 信息，判断用户的核心意图。
 
 【用户当前操作】

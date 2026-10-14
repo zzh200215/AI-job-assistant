@@ -1,5 +1,7 @@
 """简历优化建议 Prompt（支持 RAG 上下文注入）"""
 
+PROMPT_VERSION = "optimize-prompt-v1"
+
 OPTIMIZE_PROMPT = """你是一名资深求职教练，请基于下面的简历 JSON 和 JD JSON，给出**具体可落地**的简历修改建议。
 
 {rag_context}

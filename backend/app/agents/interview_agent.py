@@ -6,12 +6,16 @@ from typing import Any
 from app.agents.base_agent import BaseAgent
 from app.orchestration.context import AgentContext
 from app.prompts.interview_agent import INTERVIEW_AGENT_PROMPT
+from app.prompts.interview_agent import PROMPT_VERSION as _PROMPT_VERSION
 from app.prompts.rendering import render_prompt
 from app.services.llm_service import chat_json
 from app.services.rag_service import search_knowledge
 
 
 class InterviewAgent(BaseAgent):
+    # 与 app.prompts.interview_agent 那份 prompt 同源，别在这儿再抄一遍字面量。
+    prompt_version = _PROMPT_VERSION
+
     name = "InterviewAgent"
     description = "面试辅导智能体 — 生成技术/项目/HR/场景题+回答思路"
     depends_on: list[str] = ["ResumeAgent", "JobAgent", "MatchAgent"]
