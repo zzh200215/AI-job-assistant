@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 from app.services.report_html_lint import (
-    _NOTE_ABSENT,
+    NOTE_ABSENT,
     _check_dimension_notes,
     is_anchored_note,
     lint_report_html,
@@ -43,7 +43,7 @@ def _score_table(notes: list[str], scores: list[int | None] | None = None) -> st
     rows = []
     for index, (note, score) in enumerate(zip(notes, scores, strict=False), start=1):
         cell = "—" if score is None else f"<b>{score}</b>"
-        body = note if note else f'<span class="muted">{_NOTE_ABSENT}</span>'
+        body = note if note else f'<span class="muted">{NOTE_ABSENT}</span>'
         rows.append(
             f'<tr><td><b>维度 {index}</b></td><td class="n">{cell}</td><td class="n"><b>20</b></td><td>{body}</td></tr>'
         )

@@ -15,7 +15,7 @@ import html
 import re
 from typing import Any
 
-from app.services.report_html_lint import MODULES, format_issues, lint_report_html
+from app.services.report_html_lint import MODULES, NOTE_ABSENT, format_issues, lint_report_html
 from app.services.resume_report_schema import (
     STAT_MODE_CHANGES,
     Redline,
@@ -90,9 +90,7 @@ def _score_table(report: Report) -> str:
     for row in report.dimensions:
         score = "—" if row["score"] is None else str(row["score"])
         # 待优化点里点名到具体位置，是这一栏的定义；没写就明说没写，不拿通用建议顶上。
-        note = (
-            _todo_markup(row["note"]) if row["note"] else '<span class="muted">本次分析没有为这一维写出待优化点</span>'
-        )
+        note = _todo_markup(row["note"]) if row["note"] else f'<span class="muted">{NOTE_ABSENT}</span>'
         klass = ' class="hot"' if row["score"] is None or (row["full"] and row["score"] / row["full"] <= 0.7) else ""
         rows.append(
             f"<tr{klass}>\n<td><b>{_e(row['label'])}</b></td>"

@@ -74,7 +74,9 @@ _NOTE_POINTER = re.compile(
 )
 
 # 渲染器在某一维没写出待优化点时打的那句（不是候选人的话，是"这一栏空着"的标记）。
-_NOTE_ABSENT = "本次分析没有为这一维写出待优化点"
+# 公开名：两份渲染形态（下载那一份 HTML 与应用内那一页 Vue）与这条机检必须用同一句话，
+# 否则应用里显示"没写"、下载那一份却照样过机检。跨树那条钉子见 frontend/tests/noteAbsentPhrase.test.mjs。
+NOTE_ABSENT = "本次分析没有为这一维写出待优化点"
 
 
 def is_anchored_note(text: str) -> bool:
@@ -372,7 +374,7 @@ def _check_dimension_notes(body: str) -> list[LintIssue]:
             continue  # 未评分那一行不参与这条判断
         scored += 1
         note = _strip_tags(cells[3]).strip()
-        if not note or _NOTE_ABSENT in note:
+        if not note or NOTE_ABSENT in note:
             issues.append(
                 LintIssue("note-missing", f"{_strip_tags(cells[0]).strip()}：给了 {score_text} 分却没写待优化点")
             )
