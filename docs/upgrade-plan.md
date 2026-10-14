@@ -5397,10 +5397,16 @@ D221 卡在业务规则上（那个账号 6 份简历、免费版限 1 份），
   留余地是因为四份真样本里合法地出现过 1/28，硬拦等于用一次小样本判死合法输出。
   判据函数只有一个出处（`is_anchored_note`），service 里那位数用的也是它，不在第二处再写一遍正则。
 
+**建这道门时顺带收掉一处三处权威**：那句"这一栏空着"的标记原本在机检、HTML 渲染器、Vue 那一页各写了一遍。
+改成机检持有一份公开常量 `NOTE_ABSENT`，HTML 渲染器 import 它（不再重打句子），
+Vue 那一页是另一棵树、由新守卫 `frontend/tests/noteAbsentPhrase.test.mjs`（3 条）逐字比对。
+反向证据现做：把 Vue 里那句改成"这一维这次没给建议" ⇒ 那条跨树钉子当场红，还原后 3 passed。
+不这么钉的后果很具体：应用里显示"没写"、下载那一份却照样过机检，两边各自看起来都正常。
+
 **测试**：新增 14 条（trace 归属 5 + 锚点门 9），其中锚点门那组直接把 28 条真样本当夹具逐条过
 （`tests/fixtures/dimension_note_samples.json`，只含合成简历与假身份），
 并带最强那条反向证据：**人工确认过的那份成品在新门之下仍然零问题**。
-全量 **backend 1133 passed**（D233 时 1124），`ruff check .` 与 `ruff format --check .` 干净。
+全量 **backend 1133 passed**（D233 时 1124）、**frontend 102 files / 683 passed**（未变，那一页的字没动）、`npm test` **42 passed**（此前 39，加的就是那三条跨树钉子），`ruff check .` 与 `ruff format --check .` 干净。
 
 **这轮花的钱与副作用**：4 发概览调用（单发 17.37–22.45s），途中两次 HTTP 429、重试吸收掉
 （SenseNova 连发会撞限流这条早有记载）。取样走的是 `_openai_compatible_chat` 不是 `chat_json`，
