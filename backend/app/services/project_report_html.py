@@ -113,9 +113,11 @@ def _header(report: ProjectReport) -> str:
 
 
 # ------------------------------------------------------------------ 一、项目档案
-def _band(row: dict[str, Any]) -> str:
+def _band(row: dict[str, Any], rank: int) -> str:
     if row.get("positional"):
-        return f"第 {row['score'] or 0} 位"
+        # 落档那一格写的是**排第几**，不是这一维拿了几分：第 1 位得 5 分，
+        # 拿分数当位次会打成"第 5 位"（2026-10-14 活页量出来的第一处，两棵树同时错）。
+        return f"第 {rank} 位"
     if row["score"] is None:
         return "未读出来"
     ratio = row["score"] / row["full"] if row["full"] else 0
@@ -123,6 +125,7 @@ def _band(row: dict[str, Any]) -> str:
 
 
 def _scorecard(report: ProjectReport) -> str:
+    rank = int((report.contribution or {}).get("rank") or (report.project_index + 1))
     rows = []
     for row in report.dimensions:
         score = "—" if row["score"] is None else str(row["score"])
@@ -134,7 +137,7 @@ def _scorecard(report: ProjectReport) -> str:
                     _cell(f"<b>{_e(row['label'])}</b>"),
                     _cell(f"<b>{_e(score)}</b>", klass="n"),
                     _cell(f"<b>{row['full']}</b>", klass="n"),
-                    _cell(_e(_band(row))),
+                    _cell(_e(_band(row, rank))),
                     _cell(note),
                 ],
                 "hot" if low else "",

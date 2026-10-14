@@ -7,7 +7,7 @@
           {{
             report
               ? `${reportName} · 六维评分卡、四张图、使用建议、面试准备`
-              : '量的是**一个项目**：六维 + 位次 + 六条一票否决，与整份简历那份七维报告不是一把尺'
+              : '量的是一个项目：六维 + 位次 + 六条一票否决，与整份简历那份七维报告不是一把尺'
           }}
         </div>
       </div>
@@ -736,7 +736,8 @@ function isLow(row) {
 }
 
 function bandOf(row) {
-  if (row.positional) return `第 ${row.score ?? 0} 位`
+  // 落档那一格是"排第几"，不是这一维的得分：第 1 位拿 5 分，用分数会打成"第 5 位"
+  if (row.positional) return `第 ${report.value?.contribution?.rank ?? row.score ?? 0} 位`
   if (row.score === null) return '未读出来'
   const ratio = row.full ? row.score / row.full : 0
   if (ratio >= 0.9) return '优'
@@ -799,7 +800,11 @@ async function loadOptions() {
   optionsLoading.value = false
 }
 
-/** 项目下拉来自这份简历解析出来的 `project_experience`——位次那一维就是它的顺序。 */
+/**
+ * 项目下拉来自这份简历解析出来的项目条目——位次那一维就是它的顺序。
+ * 键名与后端 `project_report_service.project_entries` 同一条：`project_experience` 优先、
+ * 退回 `projects`。少这一半退，那种简历在下拉里就是"没有项目"，而后端明明能算。
+ */
 async function loadProjects() {
   projects.value = []
   form.projectIndex = null
@@ -807,7 +812,12 @@ async function loadProjects() {
   try {
     const detail = await getResume(form.resumeId)
     const parsed = detail?.parsed || {}
-    const rows = Array.isArray(parsed.project_experience) ? parsed.project_experience : []
+    const raw = Array.isArray(parsed.project_experience)
+      ? parsed.project_experience
+      : Array.isArray(parsed.projects)
+        ? parsed.projects
+        : []
+    const rows = raw.filter((row) => row && typeof row === 'object')
     projects.value = rows.map((row, index) => ({
       index,
       name: row.name || `项目经历 ${index + 1}`,

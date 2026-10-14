@@ -76,10 +76,14 @@ def _issue_codes(html: str, report: ProjectReport) -> set[str]:
 
 
 def test_a_complete_report_passes_the_delivery_lint():
-    document = render_project_report_html(_report())
-    assert lint_project_html(document, _report()) == []
+    report = _report()
+    document = render_project_report_html(report)
+    assert lint_project_html(document, report) == []
     assert "一、项目档案" in document and "四、面试准备" in document
     assert "★ 我负责" in document
+    # 位次那一行的"落档"是排第几，不是这一维的得分（第 1 位拿 5 分）——两棵树同日修，这里钉后端这一侧。
+    assert "第 1 位" in document
+    assert "第 5 位" not in document
 
 
 def test_excluded_report_renders_without_a_score_and_without_questions():

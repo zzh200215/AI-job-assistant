@@ -79,8 +79,12 @@ describe('后端真输出的单项目分析', () => {
     const wrapper = await mountFromBackendBytes()
     const rows = wrapper.findAll('.scorecard tbody tr')
     expect(rows).toHaveLength(DOC.dimensions.length + 1) // 多出来的一行是合计
+    // 落档那一格是"排第几"，不是这一维的得分：第 1 位拿 5 分。
+    // 这条断言原来抄的是 `第 ${positional.score} 位`——把我自己的错钉成了期望，活页读出来才发现。
     const positional = DOC.dimensions.find((row) => row.positional)
-    expect(wrapper.find('#p-profile').text()).toContain(`第 ${positional.score} 位`)
+    expect(DOC.contribution.rank).not.toBe(positional.score)
+    expect(wrapper.find('#p-profile').text()).toContain(`第 ${DOC.contribution.rank} 位`)
+    expect(wrapper.find('#p-profile').text()).not.toContain(`第 ${positional.score} 位`)
     expect(wrapper.find('#score-total').text()).toBe(DOC.score_cell)
     expect(wrapper.find('.scorecard .total').text()).toContain(DOC.grade)
   })
@@ -178,5 +182,45 @@ describe('后端真输出的单项目分析', () => {
     expect(todos.length).toBeGreaterThan(0)
     expect(todos[0].text()).toMatch(/^【待补：.*】$/)
     expect(wrapper.html()).not.toContain('v-html')
+  })
+
+  /* 项目下拉的键名必须和后端 `project_report_service.project_entries` 一样是两级回退：
+     只读 `project_experience` 时，那种把项目存在 `projects` 里的简历在这页上就是"没解析出项目经历"，
+     而后端拿着同一份 parsed_json 能算——两棵树各持一半退，界面就永远够不到那条链。 */
+  async function mountFormOnly(parsed) {
+    api.getResumeList.mockResolvedValue({ items: [RESUME_ROW], total: 1 })
+    api.getResume.mockResolvedValue({ id: 1, parsed })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        {
+          path: '/resume/project-report',
+          name: 'project-report',
+          component: { template: '<div />' },
+        },
+        { path: '/resume/center', name: 'resume-center', component: { template: '<div />' } },
+      ],
+    })
+    await router.push({ name: 'project-report', query: { resume_id: '1' } })
+    await router.isReady()
+    const wrapper = mount(ProjectReport, {
+      attachTo: document.body,
+      global: { plugins: [installElement, router] },
+    })
+    await flushPromises()
+    await flushPromises()
+    return wrapper
+  }
+
+  it('项目存在 projects 键上时，这一页也说得出有几个项目', async () => {
+    const wrapper = await mountFormOnly({ projects: [{ name: '甲项目', desc: '做过的事' }] })
+    expect(wrapper.text()).not.toContain('这份简历里没解析出项目经历')
+    wrapper.unmount()
+  })
+
+  it('真的没有项目时，说的是没解析出项目经历，而不是把下拉空着让人猜', async () => {
+    const wrapper = await mountFormOnly({})
+    expect(wrapper.text()).toContain('这份简历里没解析出项目经历')
+    wrapper.unmount()
   })
 })
