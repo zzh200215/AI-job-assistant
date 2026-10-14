@@ -111,11 +111,14 @@ def rubric_prompt_block() -> str:
     return "\n".join(lines)
 
 
-def _score_or_none(value: Any, full: int) -> int | None:
+def score_or_none(value: Any, full: int) -> int | None:
     """把一个模型给的分数读成 0..full 的整数，读不出就 None。
 
     布尔不是分数（`True` 是 int 的子类，不能只靠 isinstance 放行）；越界不是分数
     ——把 120 夹到 100 会让一个没数过的维度看起来是满分维度。
+
+    七维与六维那张项目尺（`project_report_rubric`）共用这一条读法："越界不当 0 分"
+    是一个量的定义，两张表各写一份，迟早一份被放宽。
     """
     if isinstance(value, bool) or not isinstance(value, int | float):
         return None
@@ -138,14 +141,14 @@ def read_dimensions(raw: Any) -> list[dict[str, Any]]:
         note = ""
         missing: list[str] = []
         if isinstance(value, dict):
-            score = _score_or_none(value.get("score"), full)
+            score = score_or_none(value.get("score"), full)
             # 只收字符串：`str({...})` 会把 Python 表示法印进候选人看到的表格里。
             note = value["note"].strip() if isinstance(value.get("note"), str) else ""
             missing = [
                 item.strip() for item in value.get("missing_keywords") or [] if isinstance(item, str) and item.strip()
             ]
         else:
-            score = _score_or_none(value, full)
+            score = score_or_none(value, full)
         rows.append({"key": key, "label": label, "full": full, "star": star, "score": score, "note": note})
         if missing:
             rows[-1]["missing_keywords"] = missing
@@ -216,5 +219,6 @@ __all__ = [
     "missing_keywords_of",
     "read_dimensions",
     "rubric_prompt_block",
+    "score_or_none",
     "total_of",
 ]

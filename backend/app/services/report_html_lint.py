@@ -67,10 +67,13 @@ MOCK_MARK = "（mock）"
 # （"建议量化项目成果，补充岗位关键词"）五条**一条都不命中**。
 # 两条分别管"逐字引原文"与"指出是哪一块"——只留前者会把合法输出判死（四份里就有一条没带引号），
 # 只留后者会放过通用建议（那种句子本来就写着"项目"两个字）。
+# 2026-10-14 加进 `技术栈`（单项目分析的图解深挖点要点"技术栈里的 X"）：那 28 条真 note 里
+# "技术栈"出现 0 次，所以这一放宽在已校准的那批样本上**不改变任何一条判定**，
+# 由 `tests/test_dimension_note_anchor.py` 那九条继续钉着。
 _NOTE_QUOTE = re.compile(r"['\"“”「」『』]([^'\"“”「」『』]{2,60})['\"“”「」『』]")
 _NOTE_POINTER = re.compile(
-    r"(技能区|技能清单|技能列表|工作经历|项目经验|项目里|项目中|该项目|自我评价|优势段|个人优势|教育背景|求职意向|"
-    r"第\s*\d+\s*[条个段]|这[两三四]\s*条|那[条个]|这一[条处段句]|.{1,12}项目(里|中)|负责的那一[段块]|抬头)"
+    r"(技能区|技能清单|技能列表|技术栈|工作经历|项目经验|项目里|项目中|该项目|自我评价|优势段|个人优势|教育背景|求职意向|"
+    r"第\s*\d+\s*[条个段]|这[两三四]\s*条|那[条个]|那一[条处段句]|这一[条处段句]|.{1,12}项目(里|中)|负责的那一[段块]|抬头)"
 )
 
 # 渲染器在某一维没写出待优化点时打的那句（不是候选人的话，是"这一栏空着"的标记）。
@@ -132,6 +135,38 @@ def _word_check(words: tuple[str, ...], code: str, text: str, why: str) -> list[
     return [LintIssue(code, f"{why}：出现 {hits[:5]}")] if hits else []
 
 
+# 中文没有词边界，"同上"这种两字省略词会被 `合同上传`、`附上说明` 之类的正常句子撞到。
+# 2026-10-14 单项目分析第一次带"合同上传"的载荷就被判成省略写法（假阳性）。
+# 规则：省略词只有**至少一侧是边界**（标点、空白、串首串尾）时才算省略写法；
+# 两侧都是字的就是被夹在句子里的普通词。"此处省略一万字""本项目同上"仍然命中。
+_BOUNDARY_CHARS = set("，。；、：！？…（）()「」『』《》【】〈〉“”\"' \t\n\r|/·——~～")
+
+
+def ellipsis_hits(text: str, words: tuple[str, ...] = FORBIDDEN_ELLIPSIS) -> list[str]:
+    body = text or ""
+    hits: list[str] = []
+    for word in words:
+        cursor = 0
+        while True:
+            index = body.find(word, cursor)
+            if index < 0:
+                break
+            left = body[index - 1] if index > 0 else ""
+            right_index = index + len(word)
+            right = body[right_index] if right_index < len(body) else ""
+            at_edge = left == "" or right == ""
+            if at_edge or left in _BOUNDARY_CHARS or right in _BOUNDARY_CHARS:
+                hits.append(word)
+                break
+            cursor = index + len(word)
+    return hits
+
+
+def _ellipsis_check(text: str, why: str) -> list[LintIssue]:
+    hits = ellipsis_hits(text)
+    return [LintIssue("ellipsis", f"{why}：出现 {hits[:5]}")] if hits else []
+
+
 def _paper_region(html: str) -> str:
     """批改稿左栏那块"候选人原文"（含 del/ins 引文）。
 
@@ -171,7 +206,7 @@ def lint_report_html(html: str, *, allow_mock_samples: bool = False) -> list[Lin
     issues += _check_total_row_matches_dimensions(body)
     issues += _check_dimension_notes(body)
     issues += _check_no_external_resources(html)
-    issues += _word_check(FORBIDDEN_ELLIPSIS, "ellipsis", readable, "批改稿用了省略写法，候选人会拿到半份稿子")
+    issues += _ellipsis_check(readable, "批改稿用了省略写法，候选人会拿到半份稿子")
     issues += _word_check(FORBIDDEN_MECHANISM_WORDS, "mechanism-word", narrative, "正文出现内部机制字眼")
     if not (allow_mock_samples and is_mock):
         issues += _word_check(FORBIDDEN_SAMPLE_VALUES, "unreplaced-sample", readable, "示例内容没有被替换干净")
@@ -417,6 +452,7 @@ def format_issues(issues: list[LintIssue]) -> str:
 __all__ = [
     "FOLLOWUP_ATOMS",
     "FORBIDDEN_ELLIPSIS",
+    "ellipsis_hits",
     "FORBIDDEN_MECHANISM_WORDS",
     "MODULES",
     "MODULE_IDS",

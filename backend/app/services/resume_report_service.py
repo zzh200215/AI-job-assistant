@@ -32,8 +32,8 @@ from app.prompts.resume_report_redline import RESUME_REPORT_REDLINE_PROMPT
 from app.services.llm_service import chat_json, get_llm_provenance, set_llm_trace_context
 from app.services.report_html_lint import (
     FOLLOWUP_ATOMS,
-    FORBIDDEN_ELLIPSIS,
     FORBIDDEN_MECHANISM_WORDS,
+    ellipsis_hits,
     is_anchored_note,
 )
 from app.services.resume_analysis_service import analyze_resume
@@ -80,7 +80,7 @@ def _todo_spans(text: str) -> list[str]:
 
 
 def _blocked_words(text: str) -> list[str]:
-    return [word for word in FORBIDDEN_MECHANISM_WORDS + FORBIDDEN_ELLIPSIS if word in text]
+    return [word for word in FORBIDDEN_MECHANISM_WORDS if word in text] + ellipsis_hits(text)
 
 
 def invented_numbers(written: str, known_text: str) -> list[str]:
@@ -403,7 +403,7 @@ def load_apply_strategy(path: Path | None = None) -> dict[str, Any] | None:
     return {"source": "docs/report-templates/boss_zhipin_strategy.md", "chapters": chapters}
 
 
-def _jd_text(jd: JobDescription | None) -> str:
+def jd_text_for(jd: JobDescription | None) -> str:
     if jd is None:
         return "未指定目标岗位，按通用简历质量批改。"
     parsed = jd.parsed_json or {}
@@ -437,7 +437,7 @@ def build_redline(
     prompt = render_prompt(
         RESUME_REPORT_REDLINE_PROMPT,
         sections_json=json.dumps(_prompt_sections(sections), ensure_ascii=False, indent=2),
-        jd_text=_jd_text(jd),
+        jd_text=jd_text_for(jd),
         max_edits=MAX_REDLINE_EDITS,
     )
     payload = chat_json(prompt, disable_thinking=True)
@@ -603,6 +603,7 @@ __all__ = [
     "build_redline",
     "generate_resume_report",
     "interview_distribution",
+    "jd_text_for",
     "invented_numbers",
     "load_apply_strategy",
     "validate_interview_questions",
