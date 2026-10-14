@@ -205,6 +205,13 @@ export const routes = [
         component: () => import('@/features/resume/views/ResumeReport.vue'),
         meta: { title: '评估报告', roles: CANDIDATE },
       },
+      // 单项目分析（四大节，量的是一个项目）：同一族接法，`?project_index=` 带位次
+      {
+        path: 'resume/project-report',
+        name: 'project-report',
+        component: () => import('@/features/resume/views/ProjectReport.vue'),
+        meta: { title: '项目分析', roles: CANDIDATE },
+      },
 
       // ===== 管理员页面（普通用户不可见） =====
       {

@@ -451,6 +451,7 @@
                   <el-dropdown-item command="optimize">AI优化</el-dropdown-item>
                   <el-dropdown-item command="diagnose">AI诊断</el-dropdown-item>
                   <el-dropdown-item command="report">评估报告</el-dropdown-item>
+                  <el-dropdown-item command="project">项目分析</el-dropdown-item>
                   <el-dropdown-item command="compare">版本对比</el-dropdown-item>
                   <el-dropdown-item command="analyze">深度分析</el-dropdown-item>
                   <el-dropdown-item v-if="r.id !== defaultResumeId" command="setDefault"
@@ -1014,11 +1015,18 @@ function openReportRow(r) {
   router.push({ name: 'resume-report', query: { resume_id: r.id } })
 }
 
+/* 单项目分析也是另一条链（异步作业 + 轮询），量程是**一个项目**：
+   带 resume_id 过去，那一页自己读项目列表、挑第几个、拼位次。 */
+function openProjectRow(r) {
+  router.push({ name: 'project-report', query: { resume_id: r.id } })
+}
+
 const ROW_COMMANDS = {
   parse: parseResumeRow,
   optimize: optimizeResume,
   diagnose: showDiagnosisDialog,
   report: openReportRow,
+  project: openProjectRow,
   compare: openCompareRow,
   analyze: goAnalysis,
   setDefault: setDefaultResumeRow,

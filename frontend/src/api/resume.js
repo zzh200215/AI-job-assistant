@@ -67,6 +67,27 @@ export const applyReportRedline = (jobId, marks) =>
 export const downloadReportHtml = (jobId) =>
   request.get(`/resume/report-jobs/${jobId}/report.html`, { responseType: 'blob' })
 
+/* 单项目分析（四大节，量的是**一个项目**）：与上面那一族同一形状——POST 立刻返回 `job_id`，
+   结果靠轮询，不带 per-request 超时。两处不同是刻意的：
+   * 前三节一次跑完（两发模型调用），**第四节是点按钮才跑的那一发**（`createProjectQuestionsJob`），
+     没点就不花那一发的钱；
+   * `getProjectReportJob` 的 `report` 由服务端装配（父行的三大节 + 最新那一发完成的第四节），
+     前端不自己拼第二份文档——一份文档两个出处迟早长得不一样。 */
+export const createProjectReportJob = (resumeId, payload = {}) =>
+  request.post(`/resume/${resumeId}/project-report-jobs`, {
+    project_index: payload.project_index ?? 0,
+    jd_id: payload.jd_id ?? null,
+    target_position: payload.target_position || '',
+  })
+
+export const getProjectReportJob = (jobId) => request.get(`/resume/project-report-jobs/${jobId}`)
+
+export const createProjectQuestionsJob = (jobId) =>
+  request.post(`/resume/project-report-jobs/${jobId}/questions`)
+
+export const downloadProjectReportHtml = (jobId) =>
+  request.get(`/resume/project-report-jobs/${jobId}/report.html`, { responseType: 'blob' })
+
 export const revertResumeRewrite = (resumeId, snapshotVersionId) =>
   request.post(`/resume/${resumeId}/revert-rewrite`, { snapshot_version_id: snapshotVersionId })
 

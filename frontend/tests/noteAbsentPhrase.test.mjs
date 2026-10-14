@@ -39,3 +39,28 @@ test('the in-app page says exactly the same sentence', () => {
     `应用内那一页的空栏标记与机检不同一句：机检认的是「${absentPhrase}」`
   )
 })
+
+/* 2026-10-14 单项目分析（六维那张表）是**第三与第四个消费者**：同一句"这一栏空着"
+   在四份文件里各写一遍，迟早一份改了另三份没改——那时下载的那份过机检、应用里那句 yet 不一样。
+   这里把新两棵树也纳入同一条比对。 */
+const projectHtmlSource = await read('backend/app/services/project_report_html.py')
+const projectVueSource = await read('frontend/src/features/resume/views/ProjectReport.vue')
+
+test('the project-report renderer consumes it too instead of retyping it', () => {
+  assert.match(
+    projectHtmlSource,
+    /from app\.services\.report_html_lint import[^)\n]*\bNOTE_ABSENT\b/,
+    '单项目分析的渲染器不再从机检那一份取这句话，而是自己重打了一遍'
+  )
+  assert.ok(
+    !projectHtmlSource.includes(absentPhrase),
+    '单项目分析渲染器里又出现这份句子的字面量：两处权威'
+  )
+})
+
+test('the project-analysis page says exactly the same sentence', () => {
+  assert.ok(
+    projectVueSource.includes(absentPhrase),
+    `单项目分析那一页的空栏标记与机检不同一句：机检认的是「${absentPhrase}」`
+  )
+})
