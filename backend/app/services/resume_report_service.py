@@ -30,7 +30,12 @@ from app.prompts.resume_report_interview import RESUME_REPORT_INTERVIEW_PROMPT
 from app.prompts.resume_report_redline import PROMPT_VERSION as REDLINE_PROMPT_VERSION
 from app.prompts.resume_report_redline import RESUME_REPORT_REDLINE_PROMPT
 from app.services.llm_service import chat_json, get_llm_provenance, set_llm_trace_context
-from app.services.report_html_lint import FOLLOWUP_ATOMS, FORBIDDEN_ELLIPSIS, FORBIDDEN_MECHANISM_WORDS
+from app.services.report_html_lint import (
+    FOLLOWUP_ATOMS,
+    FORBIDDEN_ELLIPSIS,
+    FORBIDDEN_MECHANISM_WORDS,
+    is_anchored_note,
+)
 from app.services.resume_analysis_service import analyze_resume
 from app.services.resume_blocks import build_report_sections
 from app.services.resume_report_rubric import interview_allowed
@@ -540,6 +545,15 @@ def generate_resume_report(
     report.competition = overview["competition"]
     report.model_reported_total = overview["model_reported_total"]
     report.provenance["overview"] = get_llm_provenance()
+    # 待优化点的锚定情况：整表通用会被交付前机检拦下，单条飘出去只在这里数、不拦。
+    # 判据与那条机检共用同一个 `is_anchored_note`，不在这里再写一遍正则。
+    scored_rows = [row for row in report.dimensions if row["score"] is not None]
+    unanchored = [row["key"] for row in scored_rows if not is_anchored_note(row["note"])]
+    report.note_anchor_stats = {
+        "scored": len(scored_rows),
+        "anchored": len(scored_rows) - len(unanchored),
+        "unanchored_keys": unanchored,
+    }
 
     # 阶段二：批改稿。挂了只缺这一节。
     sections = build_report_sections(resume.parsed_json)

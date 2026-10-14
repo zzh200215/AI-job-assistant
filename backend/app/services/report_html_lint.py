@@ -61,6 +61,30 @@ FOLLOWUP_ATOMS: frozenset[str] = frozenset(
 
 MOCK_MARK = "（mock）"
 
+# §3 那条"每维的待优化点必须点名这份简历里的具体位置"的可判形式。
+# 判据不是先验拟的：2026-10-13 用真 provider 跑了四份不同成色的简历（84 / 41 / 34 / 21 分），
+# 28 条 note **全部**命中下面两条之一；反过来，改造前那一族通用建议
+# （"建议量化项目成果，补充岗位关键词"）五条**一条都不命中**。
+# 两条分别管"逐字引原文"与"指出是哪一块"——只留前者会把合法输出判死（四份里就有一条没带引号），
+# 只留后者会放过通用建议（那种句子本来就写着"项目"两个字）。
+_NOTE_QUOTE = re.compile(r"['\"“”「」『』]([^'\"“”「」『』]{2,60})['\"“”「」『』]")
+_NOTE_POINTER = re.compile(
+    r"(技能区|技能清单|技能列表|工作经历|项目经验|项目里|项目中|该项目|自我评价|优势段|个人优势|教育背景|求职意向|"
+    r"第\s*\d+\s*[条个段]|这[两三四]\s*条|那[条个]|这一[条处段句]|.{1,12}项目(里|中)|负责的那一[段块]|抬头)"
+)
+
+# 渲染器在某一维没写出待优化点时打的那句（不是候选人的话，是"这一栏空着"的标记）。
+_NOTE_ABSENT = "本次分析没有为这一维写出待优化点"
+
+
+def is_anchored_note(text: str) -> bool:
+    """一条待优化点有没有"点名具体位置"。
+
+    有逐字引用，或指出了是哪一块/哪一条，算锚定；只有形容词与通用建议的不算。
+    """
+    return bool(_NOTE_QUOTE.search(text or "")) or bool(_NOTE_POINTER.search(text or ""))
+
+
 _COMMENT = re.compile(r"<!--.*?-->", re.S)
 _NAV_BLOCK = re.compile(r'<nav[^>]*class="[^"]*modnav[^"]*"[^>]*>(.*?)</nav>', re.S)
 _NAV_LINK = re.compile(r'<a\s+href="#([^"]+)"[^>]*>(.*?)</a>', re.S)
@@ -143,6 +167,7 @@ def lint_report_html(html: str, *, allow_mock_samples: bool = False) -> list[Lin
     issues += _check_redline_counts(body)
     issues += _check_followup_labels(readable)
     issues += _check_total_row_matches_dimensions(body)
+    issues += _check_dimension_notes(body)
     issues += _check_no_external_resources(html)
     issues += _word_check(FORBIDDEN_ELLIPSIS, "ellipsis", readable, "批改稿用了省略写法，候选人会拿到半份稿子")
     issues += _word_check(FORBIDDEN_MECHANISM_WORDS, "mechanism-word", narrative, "正文出现内部机制字眼")
@@ -317,6 +342,52 @@ def _check_total_row_matches_dimensions(body: str) -> list[LintIssue]:
             )
         ]
     return []
+
+
+def _check_dimension_notes(body: str) -> list[LintIssue]:
+    """§3 的交付门：待优化点这一栏不能空，也不能整表都是通用建议。
+
+    两条都刻意留了余地：
+    * **没评分的那一维跳过**——那一行本来就该是"未评分"，不是"待优化点没写"，
+      把"未知"当成不合格会推翻 D230 定的那条"缺维度不等于 0 分"的口径；
+    * **单条飘出去只数不拦**（拦的是整表都没锚点）。四份真样本 28 条里有一条合法地没带引号，
+      按单条硬拦会把合格报告判死；而"整表通用"是改造前那一族的确定形状，判死不会冤枉。
+      飘出去的那一条由 `Report.note_anchor_stats` 数出来，对内可查。
+    """
+    score_section = _section_bodies(body).get("m-score")
+    if not score_section:
+        return []
+
+    issues: list[LintIssue] = []
+    scored = 0
+    anchored = 0
+    for row_html in _table_rows(score_section):
+        if 'class="total"' in row_html or "<th" in row_html:
+            continue
+        cells = re.findall(r"<td[^>]*>(.*?)</td>", row_html, re.S)
+        if len(cells) < 4:
+            continue
+        score_text = _strip_tags(cells[1]).strip()
+        if not re.fullmatch(r"\d+", score_text):
+            continue  # 未评分那一行不参与这条判断
+        scored += 1
+        note = _strip_tags(cells[3]).strip()
+        if not note or _NOTE_ABSENT in note:
+            issues.append(
+                LintIssue("note-missing", f"{_strip_tags(cells[0]).strip()}：给了 {score_text} 分却没写待优化点")
+            )
+            continue
+        if is_anchored_note(note):
+            anchored += 1
+
+    if scored and anchored == 0:
+        issues.append(
+            LintIssue(
+                "notes-unanchored",
+                f"七维的待优化点没有一条点名到简历里的具体位置（{scored} 条都是通用建议）——这一份是改造前那种写法",
+            )
+        )
+    return issues
 
 
 def _check_no_external_resources(html: str) -> list[LintIssue]:

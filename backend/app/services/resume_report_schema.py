@@ -26,7 +26,14 @@ INTERVIEW_DEFERRED_NOTE = (
 )
 
 # 候选人视图里不许出现的内部键（同一个量只留一个权威；被拒条目里可能带模型原文）。
-_INTERNAL_KEYS = ("model_reported_total", "provenance", "stage_errors", "redline_rejected", "interview_rejected")
+_INTERNAL_KEYS = (
+    "model_reported_total",
+    "provenance",
+    "stage_errors",
+    "redline_rejected",
+    "interview_rejected",
+    "note_anchor_stats",
+)
 
 
 @dataclass
@@ -145,6 +152,9 @@ class Report:
     # §7 那两处个性化。算在数据层而不是算在 HTML 渲染器里：应用内那一页与下载的
     # 那一份是同一件事的两个形态，各算一处迟早长得不一样。
     personalization: dict[str, str] = field(default_factory=dict)
+    # 待优化点里"没点名具体位置"的那几条：整表通用会被机检拦下，**单条飘出去只数不拦**
+    # （四份真样本 28 条里有一条合法地没带引号）。所以这一位是给人看的账，不是候选人的屏。
+    note_anchor_stats: dict[str, Any] = field(default_factory=dict)
 
     def interview_allowed(self) -> bool:
         return rubric.interview_allowed(self.total_score)
@@ -180,6 +190,7 @@ class Report:
             "stage_errors": self.stage_errors,
             "redline_rejected": self.redline_rejected,
             "interview_rejected": self.interview_rejected,
+            "note_anchor_stats": self.note_anchor_stats,
         }
 
 
