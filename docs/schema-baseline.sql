@@ -89,6 +89,12 @@ CREATE INDEX ix_organization_sso_identity_user_id ON organization_sso_identity (
 CREATE INDEX ix_organization_sso_state_expires_at ON organization_sso_state (expires_at);
 CREATE INDEX ix_organization_sso_state_organization_id ON organization_sso_state (organization_id);
 CREATE INDEX ix_organization_status ON organization (status);
+CREATE INDEX ix_project_report_job_create_time ON project_report_job (create_time);
+CREATE INDEX ix_project_report_job_parent_job_id ON project_report_job (parent_job_id);
+CREATE INDEX ix_project_report_job_resume_id ON project_report_job (resume_id);
+CREATE INDEX ix_project_report_job_stage ON project_report_job (stage);
+CREATE INDEX ix_project_report_job_status ON project_report_job (status);
+CREATE INDEX ix_project_report_job_user_id ON project_report_job (user_id);
 CREATE INDEX ix_prompt_trace_analysis_record_id ON prompt_trace (analysis_record_id);
 CREATE INDEX ix_prompt_trace_created_at ON prompt_trace (created_at);
 CREATE INDEX ix_prompt_trace_feedback_label ON prompt_trace (feedback_label);
@@ -594,6 +600,36 @@ CREATE TABLE organization_sso_state (
 	provider VARCHAR(20) NOT NULL, 
 	expires_at DATETIME NOT NULL, 
 	created_at DATETIME NOT NULL, 
+	PRIMARY KEY (id)
+)
+
+;
+
+CREATE TABLE project_report_job (
+	id BIGINT NOT NULL, 
+	user_id BIGINT NOT NULL, 
+	resume_id BIGINT NOT NULL, 
+	project_index INTEGER NOT NULL, 
+	project_name VARCHAR(200), 
+	stage VARCHAR(16) NOT NULL, 
+	parent_job_id BIGINT, 
+	jd_id BIGINT, 
+	target_position VARCHAR(200), 
+	status VARCHAR(20) NOT NULL, 
+	claimed_at DATETIME, 
+	finished_at DATETIME, 
+	total_score INTEGER, 
+	grade VARCHAR(8), 
+	difficulty VARCHAR(4), 
+	excluded SMALLINT NOT NULL, 
+	report_json JSON, 
+	errors_json JSON, 
+	provenance_json JSON, 
+	lint_failures SMALLINT NOT NULL, 
+	error SMALLINT NOT NULL, 
+	error_msg TEXT, 
+	create_time DATETIME NOT NULL, 
+	update_time DATETIME, 
 	PRIMARY KEY (id)
 )
 

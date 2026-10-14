@@ -14,11 +14,38 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.history import JobDescription, Resume, ResumeVersion
+from app.models.project_report_job import STAGE_REPORT, ProjectReportJob
 from app.models.report_job import ResumeReportJob
 from app.models.rewrite_job import RewriteSuggestionJob
 from app.models.user import User
 from app.schemas.resume import ResumeParseResp, ResumeUploadResp
 from app.services import resume_export_service, resume_service
+from app.services.project_report_html import render_project_report_html
+from app.services.project_report_job_service import (
+    assemble_document as _assemble_project_document,
+)
+from app.services.project_report_job_service import (
+    create_project_report_job as _create_project_report_job,
+)
+from app.services.project_report_job_service import (
+    create_questions_job as _create_questions_job,
+)
+from app.services.project_report_job_service import (
+    serialize_job as _serialize_project_job,
+)
+from app.services.project_report_job_service import (
+    submit_project_report_job as _submit_project_report_job,
+)
+from app.services.project_report_job_service import (
+    touch_job_for_read as _touch_project_job_for_read,
+)
+from app.services.project_report_schema import (
+    EXCLUDED_NO_QUESTIONS_MESSAGE,
+)
+from app.services.project_report_schema import (
+    report_from_dict as project_report_from_dict,
+)
+from app.services.project_report_service import project_entries as _project_entries
 from app.services.report_job_service import (
     create_report_job as _create_report_job,
 )
@@ -1335,6 +1362,121 @@ def download_report_html(
     quoted = quote(f"简历评估报告_{name}.html")
     return Response(
         content=document,
+        media_type="text/html; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quoted}"},
+    )
+
+
+# ------------------------------------------------------------------ 单项目分析（四大节）
+# 一次作业跑前三节（两发模型调用），第四节是挂在同一份文档上的第二次调用：
+# 他点的口径是"20 题按按钮再跑"，所以它是**另一行作业**，不是同一行的第二次状态。
+# 路由挂在 `/project-report-jobs`，与上面 `/report-jobs` 那一族不互相抢匹配。
+
+
+@router.post("/{resume_id}/project-report-jobs", summary="提交一次单项目分析（前三节，立刻返回不等模型）")
+def create_project_report_job_api(
+    resume_id: int,
+    payload: dict = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    resume = _get_owned_resume(db, resume_id, current_user.id)
+    if not resume:
+        return fail(message="简历不存在或无权限", code=ERR_PARAM)
+
+    body = payload or {}
+    try:
+        project_index = int(body.get("project_index"))
+    except (TypeError, ValueError):
+        return fail(message="project_index 要从 0 开始数的那一个项目", code=ERR_PARAM)
+
+    entries = _project_entries(resume.parsed_json)
+    if not entries:
+        return fail(message="这份简历里没有项目经历，做不了单项目分析", code=ERR_PARAM)
+    if not (0 <= project_index < len(entries)):
+        return fail(message=f"没有第 {project_index + 1} 个项目（这份简历里共 {len(entries)} 个）", code=ERR_PARAM)
+
+    jd_id = body.get("jd_id")
+    target_position = str(body.get("target_position") or "")
+    if jd_id is not None and db.get(JobDescription, int(jd_id)) is None:
+        return fail(message="目标岗位不存在或无权限", code=ERR_PARAM)
+
+    name = str(entries[project_index].get("name") or "").strip()
+    job = _create_project_report_job(
+        db,
+        user_id=current_user.id,
+        resume_id=resume_id,
+        project_index=project_index,
+        project_name=name,
+        jd_id=int(jd_id) if jd_id is not None else None,
+        target_position=target_position,
+    )
+    _submit_project_report_job(job.id)
+    return ok({"job_id": job.id, "status": job.status, "project_index": project_index}, message="项目分析已开始")
+
+
+@router.get("/project-report-jobs/{job_id}", summary="查一次单项目分析作业的状态与结果")
+def get_project_report_job_api(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    job = db.get(ProjectReportJob, job_id)
+    if job is None or job.user_id != current_user.id:
+        return fail(message="作业不存在或无权限", code=ERR_PARAM)
+    status = _touch_project_job_for_read(db, job)
+    document = _assemble_project_document(db, job) if status == "completed" else None
+    return ok(_serialize_project_job(job, document=document), message="ok")
+
+
+@router.post("/project-report-jobs/{job_id}/questions", summary="给这一份项目分析续跑第四节（20 题）")
+def create_project_questions_job_api(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    job = db.get(ProjectReportJob, job_id)
+    if job is None or job.user_id != current_user.id:
+        return fail(message="作业不存在或无权限", code=ERR_PARAM)
+    if job.stage != STAGE_REPORT:
+        return fail(message="只有前三节那一份作业能续跑第四节", code=ERR_PARAM)
+    if job.status != "completed" or not job.report_json:
+        return fail(message="这一份项目分析还没有可用结果", code=ERR_PARAM)
+    if job.excluded:
+        # 命中一票否决的那一份按口径不出题，这一句是对人的说明，不是机制报错。
+        return fail(message=EXCLUDED_NO_QUESTIONS_MESSAGE, code=ERR_COMMON)
+
+    child = _create_questions_job(db, parent=job)
+    _submit_project_report_job(child.id)
+    return ok({"job_id": child.id, "status": child.status, "parent_job_id": job.id}, message="面试准备开始生成")
+
+
+@router.get("/project-report-jobs/{job_id}/report.html", summary="下载自包含的单项目分析 HTML")
+def download_project_report_html(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """现渲一份自包含 HTML：文本→HTML 是纯函数，不存盘就没有会过期的一致性副本。"""
+    job = db.get(ProjectReportJob, job_id)
+    if job is None or job.user_id != current_user.id:
+        return fail(message="作业不存在或无权限", code=ERR_PARAM)
+    if job.status != "completed":
+        return fail(message="这一份项目分析还没有可用结果", code=ERR_PARAM)
+
+    document = _assemble_project_document(db, job)
+    if not document:
+        return fail(message="这一份项目分析还没有可用结果", code=ERR_PARAM)
+    try:
+        rendered = render_project_report_html(project_report_from_dict(document))
+    except RuntimeError as exc:
+        traceback.print_exc()
+        return fail(message=str(exc), code=ERR_AI)
+
+    name = document.get("excerpt", {}).get("name") or f"项目{int(job.project_index) + 1}"
+    quoted = quote(f"项目分析_{name}.html")
+    return Response(
+        content=rendered,
         media_type="text/html; charset=utf-8",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quoted}"},
     )

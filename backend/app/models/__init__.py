@@ -25,6 +25,7 @@ from app.models.match_score import MatchScore
 from app.models.notification import Notification
 from app.models.operational_alert import OperationalAlert
 from app.models.organization import Organization, OrganizationMembership, OrganizationSSOIdentity, OrganizationSSOState
+from app.models.project_report_job import STAGE_QUESTIONS, STAGE_REPORT, ProjectReportJob
 from app.models.prompt_trace import PromptTrace
 from app.models.report_job import ResumeReportJob
 from app.models.rewrite_job import RewriteSuggestionJob
@@ -70,6 +71,9 @@ __all__ = [
     "OrganizationSSOState",
     "PromptTrace",
     "Resume",
+    "ProjectReportJob",
+    "STAGE_QUESTIONS",
+    "STAGE_REPORT",
     "ResumeReportJob",
     "ResumeVersion",
     "JobImportTask",
