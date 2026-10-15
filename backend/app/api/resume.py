@@ -14,12 +14,45 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.history import JobDescription, Resume, ResumeVersion
+from app.models.portfolio_report_job import STAGE_REPORT as PORTFOLIO_STAGE_REPORT
+from app.models.portfolio_report_job import PortfolioReportJob
 from app.models.project_report_job import STAGE_REPORT, ProjectReportJob
 from app.models.report_job import ResumeReportJob
 from app.models.rewrite_job import RewriteSuggestionJob
 from app.models.user import User
 from app.schemas.resume import ResumeParseResp, ResumeUploadResp
 from app.services import resume_export_service, resume_service
+from app.services.portfolio_report_html import render_portfolio_report_html
+from app.services.portfolio_report_job_service import (
+    assemble_document as _assemble_portfolio_document,
+)
+from app.services.portfolio_report_job_service import (
+    create_portfolio_questions_job as _create_portfolio_questions_job,
+)
+from app.services.portfolio_report_job_service import (
+    create_portfolio_report_job as _create_portfolio_report_job,
+)
+from app.services.portfolio_report_job_service import (
+    serialize_job as _serialize_portfolio_job,
+)
+from app.services.portfolio_report_job_service import (
+    submit_portfolio_report_job as _submit_portfolio_report_job,
+)
+from app.services.portfolio_report_job_service import (
+    touch_job_for_read as _touch_portfolio_job_for_read,
+)
+from app.services.portfolio_report_schema import (
+    EXCLUDED_NO_QUESTIONS_MESSAGE as PORTFOLIO_EXCLUDED_NO_QUESTIONS_MESSAGE,
+)
+from app.services.portfolio_report_schema import (
+    MIN_PROJECTS,
+)
+from app.services.portfolio_report_schema import (
+    combo_signature as _combo_signature,
+)
+from app.services.portfolio_report_schema import (
+    report_from_dict as portfolio_report_from_dict,
+)
 from app.services.project_report_html import render_project_report_html
 from app.services.project_report_job_service import (
     assemble_document as _assemble_project_document,
@@ -1368,7 +1401,7 @@ def download_report_html(
 
 
 # ------------------------------------------------------------------ 单项目分析（四大节）
-# 一次作业跑前三节（两发模型调用），第四节是挂在同一份文档上的第二次调用：
+# 一次作业跑前三节（三发模型调用），第四节是挂在同一份文档上的第二次调用：
 # 他点的口径是"20 题按按钮再跑"，所以它是**另一行作业**，不是同一行的第二次状态。
 # 路由挂在 `/project-report-jobs`，与上面 `/report-jobs` 那一族不互相抢匹配。
 
@@ -1475,6 +1508,141 @@ def download_project_report_html(
 
     name = document.get("excerpt", {}).get("name") or f"项目{int(job.project_index) + 1}"
     quoted = quote(f"项目分析_{name}.html")
+    return Response(
+        content=rendered,
+        media_type="text/html; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quoted}"},
+    )
+
+
+# ------------------------------------------------------------------ 组合分析（四大节）
+# 一次作业跑前三节（三发模型调用），第四节是挂在同一份文档上的另一发：
+# 口径与单项目那一族一致——跨项目那 12 题按按钮才跑，所以它是**另一行作业**。
+# 路由挂在 `/portfolio-report-jobs`，与上面两族不互相抢匹配。
+
+
+@router.post("/{resume_id}/portfolio-report-jobs", summary="提交一次组合分析（前三节，立刻返回不等模型）")
+def create_portfolio_report_job_api(
+    resume_id: int,
+    payload: dict = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    resume = _get_owned_resume(db, resume_id, current_user.id)
+    if not resume:
+        return fail(message="简历不存在或无权限", code=ERR_PARAM)
+
+    entries = _project_entries(resume.parsed_json)
+    if not entries:
+        return fail(message="这份简历里没有项目经历，做不了组合分析", code=ERR_PARAM)
+
+    body = payload or {}
+    raw_indices = body.get("project_indices")
+    if not isinstance(raw_indices, list) or not raw_indices:
+        # 默认取全部项目：多数人点开"组合分析"要看的就是他写出来的那几段放在一起的样子。
+        raw_indices = list(range(len(entries)))
+    try:
+        indices = sorted({int(value) for value in raw_indices})
+    except (TypeError, ValueError):
+        return fail(message="project_indices 要用项目序号（从 0 开始）", code=ERR_PARAM)
+    if len(indices) < MIN_PROJECTS:
+        return fail(
+            message=f"组合分析至少要把 {MIN_PROJECTS} 个项目放在一起看（这次只给了 {len(indices)} 个）", code=ERR_PARAM
+        )
+    out_of_range = [index for index in indices if index < 0 or index >= len(entries)]
+    if out_of_range:
+        return fail(
+            message=f"没有第 {out_of_range[0] + 1} 个项目（这份简历里共 {len(entries)} 个）",
+            code=ERR_PARAM,
+        )
+
+    jd_id = body.get("jd_id")
+    target_position = str(body.get("target_position") or "")
+    if jd_id is not None and db.get(JobDescription, int(jd_id)) is None:
+        return fail(message="目标岗位不存在或无权限", code=ERR_PARAM)
+
+    names = [str(entries[index].get("name") or "").strip() or f"项目经历 {index + 1}" for index in indices]
+    job = _create_portfolio_report_job(
+        db,
+        user_id=current_user.id,
+        resume_id=resume_id,
+        combo_key=_combo_signature(indices),
+        project_indices=indices,
+        project_names=names,
+        jd_id=int(jd_id) if jd_id is not None else None,
+        target_position=target_position,
+    )
+    _submit_portfolio_report_job(job.id)
+    return ok(
+        {"job_id": job.id, "status": job.status, "project_indices": indices, "project_count": len(indices)},
+        message="组合分析已开始",
+    )
+
+
+@router.get("/portfolio-report-jobs/{job_id}", summary="查一次组合分析作业的状态与结果")
+def get_portfolio_report_job_api(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    job = db.get(PortfolioReportJob, job_id)
+    if job is None or job.user_id != current_user.id:
+        return fail(message="作业不存在或无权限", code=ERR_PARAM)
+    status = _touch_portfolio_job_for_read(db, job)
+    document = _assemble_portfolio_document(db, job) if status == "completed" else None
+    return ok(_serialize_portfolio_job(job, document=document), message="ok")
+
+
+@router.post("/portfolio-report-jobs/{job_id}/questions", summary="给这一份组合分析续跑第四节（跨项目 12 题）")
+def create_portfolio_questions_job_api(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    job = db.get(PortfolioReportJob, job_id)
+    if job is None or job.user_id != current_user.id:
+        return fail(message="作业不存在或无权限", code=ERR_PARAM)
+    if job.stage != PORTFOLIO_STAGE_REPORT:
+        return fail(message="只有前三节那一份作业能续跑第四节", code=ERR_PARAM)
+    if job.status != "completed" or not job.report_json:
+        return fail(message="这一份组合分析还没有可用结果", code=ERR_PARAM)
+    if job.excluded:
+        # 命中一票否决的那一份按口径不出题，这一句是对人的说明，不是机制报错。
+        return fail(message=PORTFOLIO_EXCLUDED_NO_QUESTIONS_MESSAGE, code=ERR_COMMON)
+
+    child = _create_portfolio_questions_job(db, parent=job)
+    _submit_portfolio_report_job(child.id)
+    return ok({"job_id": child.id, "status": child.status, "parent_job_id": job.id}, message="跨项目面试开始生成")
+
+
+@router.get("/portfolio-report-jobs/{job_id}/report.html", summary="下载自包含的组合分析 HTML")
+def download_portfolio_report_html(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """现渲一份自包含 HTML：文本→HTML 是纯函数，不存盘就没有会过期的一致性副本。"""
+    job = db.get(PortfolioReportJob, job_id)
+    if job is None or job.user_id != current_user.id:
+        return fail(message="作业不存在或无权限", code=ERR_PARAM)
+    if job.status != "completed":
+        return fail(message="这一份组合分析还没有可用结果", code=ERR_PARAM)
+
+    document = _assemble_portfolio_document(db, job)
+    if not document:
+        return fail(message="这一份组合分析还没有可用结果", code=ERR_PARAM)
+    try:
+        rendered = render_portfolio_report_html(portfolio_report_from_dict(document))
+    except RuntimeError as exc:
+        traceback.print_exc()
+        return fail(message=str(exc), code=ERR_AI)
+
+    names = [
+        str(name or "").strip() or f"项目{int(index) + 1}"
+        for name, index in zip(job.project_names or [], job.project_indices or [], strict=False)
+    ]
+    title = "组合分析_" + "·".join(names[: job.project_count]) if names else "组合分析"
+    quoted = quote(f"{title[:80]}.html")
     return Response(
         content=rendered,
         media_type="text/html; charset=utf-8",
