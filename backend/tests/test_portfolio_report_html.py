@@ -130,6 +130,10 @@ def test_泛化到五个项目时列数跟着长且机检仍全过(picked):
         )
         == 2
     )
+    # 1.1 那张评分卡五列固定，吃的是同一个配方里那一个固定地板宽。
+    assert (
+        f'<div class="tscroll"><table class="tbl scorecard" style="min-width:{rubric.SCORECARD_MIN_PX}px">' in document
+    )
 
 
 def test_窄屏地板宽就是那三个常数算出来的():
@@ -140,6 +144,10 @@ def test_窄屏地板宽就是那三个常数算出来的():
     document = render_portfolio_report_html(report)
     assert 'style="min-width:526px"' in document
     assert 'style="min-width:626px"' in document
+    # 评分卡那一档：307px 视口实测"主要扣分理由"63px 宽、一句话 15 行；
+    # 470 取自这张表自己在 560px 那一档的列宽分配（85/41/46/58/240）。
+    assert rubric.SCORECARD_MIN_PX == 85 + 41 + 46 + 58 + 240
+    assert 'style="min-width:470px"' in document
 
 
 def test_剥掉滚动容器机检就红():
@@ -150,6 +158,9 @@ def test_剥掉滚动容器机检就红():
     assert "wide-table-scroll" in _codes(stripped, report)
     wrong = document.replace('style="min-width:354px"', 'style="min-width:240px"', 1)
     assert "wide-table-scroll" in _codes(wrong, report)
+    # 评分卡那一档也咬：它不随 N 长，把那个固定宽改小同样要红。
+    card = document.replace(f'style="min-width:{rubric.SCORECARD_MIN_PX}px"', 'style="min-width:300px"', 1)
+    assert "wide-table-scroll" in _codes(card, report)
 
 
 def test_第四节没生成时那一节整块缺席():

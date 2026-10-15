@@ -214,6 +214,12 @@ def wide_table_min_px(project_count: int, *, with_tail: bool = False) -> int:
     return WIDE_LABEL_PX + WIDE_CELL_PX * int(project_count) + (WIDE_TAIL_PX if with_tail else 0)
 
 
+# 1.1 那张六维评分卡不随项目数长（五列固定），但"主要扣分理由"那一列吃的是长句子：
+# 307px 视口实测它被压到 63px、一句话排 15 行。地板宽同样取自这张表自己的读数——
+# 它在 560px 视口那一档的实测分配是 85/41/46/58/240，合计就是下面这个数。
+SCORECARD_MIN_PX = 470
+
+
 # 跨项目面试的六个题型：反推自参考件那 12 题的实际问法，不是先验拟的。
 QUESTION_KINDS: tuple[str, ...] = ("差异与取舍", "选型与理由", "真实与边界", "评测与归因", "整合与演进", "沉淀与成长")
 QUESTION_STATUSES: tuple[str, ...] = ("可答", "需补强", "高危")
@@ -661,6 +667,7 @@ __all__ = [
     "RANK_SCORES",
     "RED_LINES",
     "RED_LINE_KEYS",
+    "SCORECARD_MIN_PX",
     "SPAN_PENALTY",
     "TARGET_QUESTION_COUNT",
     "TOTAL_FULL",

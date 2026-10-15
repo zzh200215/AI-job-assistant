@@ -83,42 +83,44 @@
         </div>
 
         <h3>1.1 组合六维评分卡</h3>
-        <table class="pf-tbl">
-          <thead>
-            <tr>
-              <th>维度</th>
-              <th class="n">得分</th>
-              <th class="n">满分</th>
-              <th>落档</th>
-              <th>主要扣分理由</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in report.dimensions" :key="row.key" :class="{ hot: isLow(row) }">
-              <td>
-                <b>{{ row.label }}</b>
-              </td>
-              <td class="n">
-                <b>{{ row.score ?? '—' }}</b>
-              </td>
-              <td class="n">{{ row.full }}</td>
-              <td>{{ bandOf(row) }}</td>
-              <td>
-                <ProjectTodoText v-if="row.note" :text="row.note" />
-                <span v-else class="pf-muted">{{ NOTE_ABSENT }}</span>
-              </td>
-            </tr>
-            <tr class="total">
-              <td>合计</td>
-              <td class="n">
-                <b>{{ report.score_cell }}</b>
-              </td>
-              <td class="n">100</td>
-              <td>{{ report.grade || (report.excluded ? '出局' : '—') }}</td>
-              <td>{{ report.grade_desc || '—' }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="pf-scroll">
+          <table class="pf-tbl" :style="{ minWidth: `${SCORECARD_MIN_PX}px` }">
+            <thead>
+              <tr>
+                <th>维度</th>
+                <th class="n">得分</th>
+                <th class="n">满分</th>
+                <th>落档</th>
+                <th>主要扣分理由</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in report.dimensions" :key="row.key" :class="{ hot: isLow(row) }">
+                <td>
+                  <b>{{ row.label }}</b>
+                </td>
+                <td class="n">
+                  <b>{{ row.score ?? '—' }}</b>
+                </td>
+                <td class="n">{{ row.full }}</td>
+                <td>{{ bandOf(row) }}</td>
+                <td>
+                  <ProjectTodoText v-if="row.note" :text="row.note" />
+                  <span v-else class="pf-muted">{{ NOTE_ABSENT }}</span>
+                </td>
+              </tr>
+              <tr class="total">
+                <td>合计</td>
+                <td class="n">
+                  <b>{{ report.score_cell }}</b>
+                </td>
+                <td class="n">100</td>
+                <td>{{ report.grade || (report.excluded ? '出局' : '—') }}</td>
+                <td>{{ report.grade_desc || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <p class="pf-concl">
           {{
             report.grade_scale
@@ -480,6 +482,8 @@ const MARKS = { 重点覆盖: '●', 部分覆盖: '○', 未覆盖: '' }
 const WIDE_LABEL_PX = 96
 const WIDE_CELL_PX = 86
 const WIDE_TAIL_PX = 100
+/* 1.1 那张评分卡五列固定，吃的是后端同一个常数：307px 视口实测"主要扣分理由"63px 宽、一句话 15 行。 */
+const SCORECARD_MIN_PX = 470
 
 function wideStyle(withTail) {
   const n = report.value?.projects?.length || 0

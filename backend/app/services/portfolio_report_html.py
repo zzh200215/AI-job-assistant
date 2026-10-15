@@ -168,7 +168,11 @@ def _scorecard(report: PortfolioReport) -> str:
     )
     return (
         "<h3>1.1 组合六维评分卡</h3>"
-        + _table(["维度", "得分", "满分", "落档", "主要扣分理由"], rows, "tbl scorecard")
+        + _scroll(
+            _table(
+                ["维度", "得分", "满分", "落档", "主要扣分理由"], rows, "tbl scorecard", min_px=rubric.SCORECARD_MIN_PX
+            )
+        )
         + scale
     )
 

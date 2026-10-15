@@ -284,13 +284,16 @@ def _check_compare(html: str, report: PortfolioReport) -> list[LintIssue]:
 
 
 def _check_wide_tables(html: str, report: PortfolioReport) -> list[LintIssue]:
-    """列数随项目数长的那两张表：既要有滚动容器，也要带上按项目数重算出来的地板宽。
+    """三张"压不得"的表：既要有滚动容器，也要带上服务端那一个地板宽。
 
     这条是从活页量出来的，不是拍的：400px 视口下没套容器时，一格压到 36px、一个项目名换三行，
-    五个项目那一版还把整页顶出 86px 的横向滚动条。判据拿服务端的 `wide_table_min_px` 重算一遍再比，
-    所以把 N 或那三个宽改了却忘了同步渲染，红的是这条。
+    五个项目那一版还把整页顶出 86px 的横向滚动条；1.1 那张评分卡在 307px 下把一句扣分理由
+    排成 63px 宽、15 行。前两张按 `wide_table_min_px(N)` 重算，评分卡吃的是固定那一个。
+    所以把 N 或那几个宽改了却忘了同步渲染，红的是这条。
     """
     wanted: list[tuple[str, int]] = []
+    if report.dimensions:
+        wanted.append(("维度", rubric.SCORECARD_MIN_PX))
     if ((report.compare or {}).get("rows") or []) and report.project_count:
         wanted.append(("对比项", rubric.wide_table_min_px(report.project_count)))
     if report.capabilities:

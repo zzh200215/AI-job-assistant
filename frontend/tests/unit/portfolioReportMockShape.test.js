@@ -293,5 +293,9 @@ describe('后端真输出的四个项目一组', () => {
     expect(compare.attributes('style')).toContain(`min-width: ${96 + 86 * N}px`)
     expect(matrix.attributes('style')).toContain(`min-width: ${96 + 86 * N + 100}px`)
     expect(matrix.findAll('tbody tr')[0].findAll('td.cov')).toHaveLength(N)
+    // 1.1 那张评分卡五列固定，吃的是同一个配方里那一个固定宽（后端 SCORECARD_MIN_PX）。
+    const card = wrapper.findAll('#c-profile table')[0]
+    expect(card.element.parentElement.classList.contains('pf-scroll')).toBe(true)
+    expect(card.attributes('style')).toContain('min-width: 470px')
   })
 })
