@@ -84,9 +84,13 @@ def narrative_text(html: str) -> str:
 
 
 def _tables(html: str) -> list[list[list[str]]]:
-    """把页面里每张表的行取出来（每行 = 若干单元格纯文本）。"""
+    """把页面里每张表的行取出来（每行 = 若干单元格纯文本）。
+
+    表标签上可以多带属性（窄屏地板宽就是这么给的），但一层套一层的表这里不支持——
+    页面里本来也没有表套表。
+    """
     out: list[list[list[str]]] = []
-    for table in re.findall(r'<table class="tbl[^"]*">.*?</table>', html, re.S):
+    for table in re.findall(r'<table class="tbl[^"]*"[^>]*>.*?</table>', html, re.S):
         rows: list[list[str]] = []
         for block in re.findall(r"<tr[^>]*>(.*?)</tr>", table, re.S):
             cells = [_visible(cell).strip() for cell in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", block, re.S)]
@@ -110,6 +114,7 @@ def lint_portfolio_html(document: str, report: PortfolioReport, *, allow_mock_sa
     issues += _check_excerpt(html, report)
     issues += _check_language(html)
     issues += _check_compare(html, report)
+    issues += _check_wide_tables(html, report)
     issues += _check_coverage(html, report)
     issues += _check_figures(html, report)
     if not (allow_mock_samples or MOCK_MARK in readable):
@@ -275,6 +280,38 @@ def _check_compare(html: str, report: PortfolioReport) -> list[LintIssue]:
         blanks = [cell for cell in row[1:] if not cell]
         if blanks:
             issues.append(LintIssue("compare-blank", f"横向对比第 {position + 1} 行有空格：{blanks[:2]}"))
+    return issues
+
+
+def _check_wide_tables(html: str, report: PortfolioReport) -> list[LintIssue]:
+    """列数随项目数长的那两张表：既要有滚动容器，也要带上按项目数重算出来的地板宽。
+
+    这条是从活页量出来的，不是拍的：400px 视口下没套容器时，一格压到 36px、一个项目名换三行，
+    五个项目那一版还把整页顶出 86px 的横向滚动条。判据拿服务端的 `wide_table_min_px` 重算一遍再比，
+    所以把 N 或那三个宽改了却忘了同步渲染，红的是这条。
+    """
+    wanted: list[tuple[str, int]] = []
+    if ((report.compare or {}).get("rows") or []) and report.project_count:
+        wanted.append(("对比项", rubric.wide_table_min_px(report.project_count)))
+    if report.capabilities:
+        wanted.append(("能力维度", rubric.wide_table_min_px(report.project_count, with_tail=True)))
+    issues: list[LintIssue] = []
+    for label, min_px in wanted:
+        total = len(re.findall(r'<table class="tbl[^"]*"[^>]*><thead><tr class="hd"><th>' + label + "</th>", html))
+        wrapped = len(
+            re.findall(
+                f'<div class="tscroll"><table class="tbl[^"]*" style="min-width:{min_px}px">'
+                f'<thead><tr class="hd"><th>{label}</th>',
+                html,
+            )
+        )
+        if total != wrapped:
+            issues.append(
+                LintIssue(
+                    "wide-table-scroll",
+                    f"「{label}」那张表页面上有 {total} 处，只有 {wrapped} 处套了地板宽 {min_px}px 的横向滚动容器",
+                )
+            )
     return issues
 
 

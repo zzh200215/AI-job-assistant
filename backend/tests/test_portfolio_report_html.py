@@ -121,6 +121,35 @@ def test_泛化到五个项目时列数跟着长且机检仍全过(picked):
     # 位次那一维跨的位数也一起长：五个项目全选上，占的是第 1~5 位。
     positional = [row for row in report.dimensions if row["positional"]][0]
     assert positional["span"] == [1, n]
+    # 那两张跟着长的表：地板宽按 N 重算，两处矩阵都得套上滚动容器。
+    assert f'<div class="tscroll"><table class="tbl" style="min-width:{rubric.wide_table_min_px(n)}px">' in document
+    assert (
+        document.count(
+            f'<div class="tscroll"><table class="tbl matrix" '
+            f'style="min-width:{rubric.wide_table_min_px(n, with_tail=True)}px">'
+        )
+        == 2
+    )
+
+
+def test_窄屏地板宽就是那三个常数算出来的():
+    """这两个数是在 400px 视口上量出来的：没套容器时格子压到 36px、五个项目把整页顶出 86px 横向滚动条。"""
+    assert rubric.wide_table_min_px(3) == 96 + 86 * 3
+    assert rubric.wide_table_min_px(5, with_tail=True) == 96 + 86 * 5 + 100
+    report = _report([0, 1, 2, 3, 4])
+    document = render_portfolio_report_html(report)
+    assert 'style="min-width:526px"' in document
+    assert 'style="min-width:626px"' in document
+
+
+def test_剥掉滚动容器机检就红():
+    """反向那条：判据真能咬住，不是跟着渲染器一起绿。"""
+    report = _report()
+    document = render_portfolio_report_html(report)
+    stripped = document.replace('<div class="tscroll">', "<div>", 1)
+    assert "wide-table-scroll" in _codes(stripped, report)
+    wrong = document.replace('style="min-width:354px"', 'style="min-width:240px"', 1)
+    assert "wide-table-scroll" in _codes(wrong, report)
 
 
 def test_第四节没生成时那一节整块缺席():

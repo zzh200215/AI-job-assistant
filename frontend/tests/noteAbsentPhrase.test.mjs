@@ -145,3 +145,23 @@ test('应用内那两页说的是同一句', () => {
     )
   }
 })
+
+/* 2026-10-15：那两张随项目数变宽的表，地板宽是**活页量出来的三个数**（96 / 86 / 100），
+   后端机检按它们重算一遍再比，前端那一页把它们抄成了 JS 常量。抄的这份没人比对的话，
+   改后端那三个数时页面会静默地比下载件宽（或窄），而两边各自的测试都还绿。 */
+const rubricSource = await read('backend/app/services/portfolio_report_rubric.py')
+
+test('宽表那三个地板宽，两棵树是同一组数', () => {
+  for (const name of ['WIDE_LABEL_PX', 'WIDE_CELL_PX', 'WIDE_TAIL_PX']) {
+    const back = Number(rubricSource.match(new RegExp(`^${name} = (\\d+)$`, 'm'))?.[1])
+    const front = Number(portfolioVueSource.match(new RegExp(`^const ${name} = (\\d+)$`, 'm'))?.[1])
+    assert.ok(Number.isInteger(back), `后端 rubric 里找不到 ${name}，权威那一侧已经变了`)
+    assert.ok(Number.isInteger(front), `组合分析那一页里找不到 ${name}，前端这一侧断了`)
+    assert.equal(front, back, `${name} 两棵树不一样：后端 ${back}，前端 ${front}`)
+  }
+  const formula = rubricSource.match(/def wide_table_min_px[\s\S]*?return (.+)$/m)?.[1]
+  assert.ok(
+    formula?.includes('WIDE_TAIL_PX'),
+    '地板宽那个函数不再带尾列那一档，前端抄的算法要一起改'
+  )
+})

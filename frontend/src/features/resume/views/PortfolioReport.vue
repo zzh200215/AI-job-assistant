@@ -127,31 +127,33 @@
         </p>
 
         <h3>1.2 项目横向对比</h3>
-        <table class="pf-tbl">
-          <thead>
-            <tr>
-              <th>对比项</th>
-              <th v-for="p in report.projects" :key="p.project_index">{{ labelOf(p) }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in compareRows" :key="row.key">
-              <td>
-                <b>{{ row.label }}</b>
-              </td>
-              <td v-for="p in report.projects" :key="p.project_index">
-                <ProjectTodoText :text="row.cells[String(p.project_index)] || '—'" />
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="pf-scroll">
+          <table class="pf-tbl" :style="wideStyle(false)">
+            <thead>
+              <tr>
+                <th>对比项</th>
+                <th v-for="p in report.projects" :key="p.project_index">{{ labelOf(p) }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in compareRows" :key="row.key">
+                <td>
+                  <b>{{ row.label }}</b>
+                </td>
+                <td v-for="p in report.projects" :key="p.project_index">
+                  <ProjectTodoText :text="row.cells[String(p.project_index)] || '—'" />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <h3>1.3 组合能力覆盖矩阵</h3>
         <!-- 这一张表以前给列头与格子挂了 `.n`（不换行 + 居中），五个项目时它的最小内容宽度
              被五个"项目 N · 一长串项目名"钉死在 897px，容器窄于 900 就压出卡片 280px。
              表头改成可换行，外面再套一层滚动容器兜住更极端的情况。 -->
         <div class="pf-scroll">
-          <table class="pf-tbl pf-matrix">
+          <table class="pf-tbl pf-matrix" :style="wideStyle(true)">
             <thead>
               <tr>
                 <th>能力维度</th>
@@ -471,6 +473,19 @@ const THREE_RUBRICS_NOTE =
 
 /* 格子符号与后端 `portfolio_report_rubric.COVERAGE_MARKS` 同一张表。 */
 const MARKS = { 重点覆盖: '●', 部分覆盖: '○', 未覆盖: '' }
+
+/* 那两张随项目数变宽的表的地板宽，与后端 `portfolio_report_rubric.WIDE_*_PX` 同一组数：
+   这三个数是活页量出来的（400px 视口下格子压到 36px、五个项目把整页顶出 86px 横向滚动条），
+   窄屏上不许继续压表，改成在这一族的外层容器里横向滚。 */
+const WIDE_LABEL_PX = 96
+const WIDE_CELL_PX = 86
+const WIDE_TAIL_PX = 100
+
+function wideStyle(withTail) {
+  const n = report.value?.projects?.length || 0
+  if (!n) return {}
+  return { minWidth: `${WIDE_LABEL_PX + WIDE_CELL_PX * n + (withTail ? WIDE_TAIL_PX : 0)}px` }
+}
 
 /* 前三节三发模型调用：预算 = 报告那一族的 225 次 × 2 秒 × 2。第四节是一发长输出。 */
 const POLL_INTERVAL_MS = 2000
@@ -939,6 +954,10 @@ h3 {
 .pf-scroll {
   /* 表格压不下去时宁可让它在这层里横向滚，别把卡片撑破、把整页顶出滚动条。 */
   overflow-x: auto;
+}
+.pf-matrix td.cov {
+  /* 与下载件同一格宽（`.matrix td.cov`）：这一列只放一个符号，宽一点才不挤。 */
+  width: 86px;
 }
 .cov.full {
   color: var(--app-accent);

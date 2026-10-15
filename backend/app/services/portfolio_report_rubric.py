@@ -200,6 +200,20 @@ COVERAGE_CELLS: tuple[str, ...] = (COVER_FULL, COVER_PARTIAL, COVER_NONE)
 # 参考件图例里用的是 ● / ○，界面与下载共用这一组符号。
 COVERAGE_MARKS: dict[str, str] = {COVER_FULL: "●", COVER_PARTIAL: "○", COVER_NONE: ""}
 
+# 列数跟着项目数长的两张表（1.2 横向对比、1.3/2.1 覆盖矩阵）在窄屏上的地板宽（px）。
+# 这三个数是量出来的，不是拟的：活页与下载件在 400px 视口下格子压到 36px，
+# 一个项目名换三行、能力名一格两个字；同一张表在 700px 以上稳定是 86px 一格。
+# 所以窄屏不许继续压表——按这一组宽算出整张表的最小宽，让它在外层容器里横向滚。
+WIDE_LABEL_PX = 96
+WIDE_CELL_PX = 86
+WIDE_TAIL_PX = 100
+
+
+def wide_table_min_px(project_count: int, *, with_tail: bool = False) -> int:
+    """一张随项目数变宽的表至少要多宽，才不会出现"一格两个字"。"""
+    return WIDE_LABEL_PX + WIDE_CELL_PX * int(project_count) + (WIDE_TAIL_PX if with_tail else 0)
+
+
 # 跨项目面试的六个题型：反推自参考件那 12 题的实际问法，不是先验拟的。
 QUESTION_KINDS: tuple[str, ...] = ("差异与取舍", "选型与理由", "真实与边界", "评测与归因", "整合与演进", "沉淀与成长")
 QUESTION_STATUSES: tuple[str, ...] = ("可答", "需补强", "高危")
@@ -650,6 +664,9 @@ __all__ = [
     "SPAN_PENALTY",
     "TARGET_QUESTION_COUNT",
     "TOTAL_FULL",
+    "WIDE_CELL_PX",
+    "WIDE_LABEL_PX",
+    "WIDE_TAIL_PX",
     "average_of",
     "clean_capability_rows",
     "coverage_verdict",
@@ -685,4 +702,5 @@ __all__ = [
     "stack_reuse",
     "total_of",
     "trigrams",
+    "wide_table_min_px",
 ]

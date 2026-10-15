@@ -66,11 +66,17 @@ def _row(cells: list[str], klass: str = "") -> str:
     return (f'<tr class="{klass}">' if klass else "<tr>") + "".join(cells) + "</tr>"
 
 
-def _table(headers: list[str], rows: list[str], klass: str = "tbl") -> str:
+def _table(headers: list[str], rows: list[str], klass: str = "tbl", min_px: int | None = None) -> str:
     if not rows:
         return ""
     head = _row([_cell(_e(name), "th") for name in headers], "hd")
-    return f'<table class="{klass}"><thead>{head}</thead><tbody>' + "".join(rows) + "</tbody></table>"
+    style = f' style="min-width:{min_px}px"' if min_px else ""
+    return f'<table class="{klass}"{style}><thead>{head}</thead><tbody>' + "".join(rows) + "</tbody></table>"
+
+
+def _scroll(table: str) -> str:
+    """列数随项目数长的那两张表套这一层：窄屏上横向滚，而不是把格子压到一格两个字。"""
+    return f'<div class="tscroll">{table}</div>' if table else ""
 
 
 def _kv_table(pairs: list[tuple[str, Any]]) -> str:
@@ -202,7 +208,7 @@ def _compare_table(report: PortfolioReport) -> str:
         )
         for row in rows
     ]
-    return "<h3>1.2 项目横向对比</h3>" + _table(headers, body)
+    return "<h3>1.2 项目横向对比</h3>" + _scroll(_table(headers, body, min_px=rubric.wide_table_min_px(len(indices))))
 
 
 def _coverage_rows(report: PortfolioReport, *, as_figure: bool) -> str:
@@ -221,7 +227,14 @@ def _coverage_rows(report: PortfolioReport, *, as_figure: bool) -> str:
         body.append(_row([_cell(f"<b>{_e(row['label'])}</b>")] + mark_cells + [_cell(_e(tail))]))
     if not body:
         return ""
-    table = _table(headers, body, "tbl matrix")
+    table = _scroll(
+        _table(
+            headers,
+            body,
+            "tbl matrix",
+            min_px=rubric.wide_table_min_px(len(indices), with_tail=True),
+        )
+    )
     legend = '<p class="note"><span class="cov full">●</span> 重点覆盖　<span class="cov part">○</span> 部分覆盖　空白 未覆盖</p>'
     title = "2.1 组合能力覆盖矩阵" if as_figure else "1.3 组合能力覆盖矩阵"
     note = (
@@ -577,6 +590,7 @@ p{margin:6px 0}
 .tbl tr.hot td{background:var(--hot-soft)}
 .tbl tr.total td{background:#f1f5fb;font-weight:600}
 .tbl td.n,.tbl th.n{text-align:center;white-space:nowrap}
+.tscroll{overflow-x:auto}
 .matrix td.cov{text-align:center;font-weight:700;width:86px}
 .matrix td.cov.full{color:var(--brand2)}
 .matrix td.cov.part{color:var(--ink3)}
@@ -627,6 +641,7 @@ background:#fff;color:var(--brand2);font-size:16px;cursor:pointer;box-shadow:0 6
 footer.ft{max-width:1080px;margin:0 auto;padding:0 22px 40px;color:var(--ink3);font-size:12.5px}
 @media print{body{background:#fff}.top{position:static;background:#fff;border-bottom:0}
 .modnav,.totop{display:none!important}.wrap{max-width:none;padding:0}
+.tscroll{overflow-x:visible}.tscroll table{min-width:0!important}
 .card{break-inside:avoid;box-shadow:none;border-color:#d5dbe8;margin-bottom:12px}
 .qst,.fig{break-inside:avoid}}
 @media (max-width:860px){.node{flex:1 1 100%}}

@@ -281,4 +281,17 @@ describe('后端真输出的四个项目一组', () => {
     expect(wrapper.text()).not.toContain('undefined')
     expect(wrapper.text()).not.toContain('NaN')
   })
+
+  it('那两张跟着长的表套在滚动容器里，地板宽按 N 算', async () => {
+    // 这条钉的是活页量出来的那一处：没套容器时，四个项目那一张把整页顶出横向滚动条，
+    // 格子压到 36px。jsdom 不排版，所以这里比的是**结构 + 内联宽**，像素那一侧由后端机检与量页负责。
+    const wrapper = await mountFromBackendBytes(mockPortfolioJob4)
+    const compare = wrapper.findAll('#c-profile table')[1]
+    const matrix = wrapper.find('.pf-matrix')
+    expect(compare.element.parentElement.classList.contains('pf-scroll')).toBe(true)
+    expect(matrix.element.parentElement.classList.contains('pf-scroll')).toBe(true)
+    expect(compare.attributes('style')).toContain(`min-width: ${96 + 86 * N}px`)
+    expect(matrix.attributes('style')).toContain(`min-width: ${96 + 86 * N + 100}px`)
+    expect(matrix.findAll('tbody tr')[0].findAll('td.cov')).toHaveLength(N)
+  })
 })
