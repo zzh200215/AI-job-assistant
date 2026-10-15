@@ -64,3 +64,46 @@ test('the project-analysis page says exactly the same sentence', () => {
     `单项目分析那一页的空栏标记与机检不同一句：机检认的是「${absentPhrase}」`
   )
 })
+
+/* 2026-10-14 组合分析（第三把尺那张表）是**第五与第六个消费者**。同一条理由：
+   这句话在六份文件里各写一遍，迟早一份改了另五份没改。 */
+const portfolioHtmlSource = await read('backend/app/services/portfolio_report_html.py')
+const portfolioVueSource = await read('frontend/src/features/resume/views/PortfolioReport.vue')
+
+test('the portfolio renderer consumes it instead of retyping it', () => {
+  assert.match(
+    portfolioHtmlSource,
+    /from app\.services\.report_html_lint import[^)\n]*\bNOTE_ABSENT\b/,
+    '组合分析的渲染器不再从机检那一份取这句话，而是自己重打了一遍'
+  )
+  assert.ok(
+    !portfolioHtmlSource.includes(absentPhrase),
+    '组合分析渲染器里又出现这份句子的字面量：两处权威'
+  )
+})
+
+test('the portfolio page says exactly the same sentence', () => {
+  assert.ok(
+    portfolioVueSource.includes(absentPhrase),
+    `组合分析那一页的空栏标记与机检不同一句：机检认的是「${absentPhrase}」`
+  )
+})
+
+test('那一族的"命中红线不出题"也只有一句权威', async () => {
+  /* 与 NOTE_ABSENT 同一条毛病：出局那份不许续跑第四节，接口层与人话说明各有出处。
+     单项目与组合两族的接口都读各自 schema 里那一个常量，而不是在 api 层重打一遍。 */
+  const apiSource = await read('backend/app/api/resume.py')
+  const projectSchema = await read('backend/app/services/project_report_schema.py')
+  const portfolioSchema = await read('backend/app/services/portfolio_report_schema.py')
+  for (const [name, source] of [
+    ['project', projectSchema],
+    ['portfolio', portfolioSchema],
+  ]) {
+    const sentence = source.match(/^EXCLUDED_NO_QUESTIONS_MESSAGE = \(?\s*"(.+?)"$/m)?.[1]
+    assert.ok(sentence, `${name} 那一侧找不到这一句话的权威`)
+    assert.ok(
+      !apiSource.includes(sentence),
+      `api/resume.py 里重打了一遍「${name}」那句人话：两处权威`
+    )
+  }
+})

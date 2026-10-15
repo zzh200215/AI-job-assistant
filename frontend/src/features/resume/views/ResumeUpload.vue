@@ -452,6 +452,7 @@
                   <el-dropdown-item command="diagnose">AI诊断</el-dropdown-item>
                   <el-dropdown-item command="report">评估报告</el-dropdown-item>
                   <el-dropdown-item command="project">项目分析</el-dropdown-item>
+                  <el-dropdown-item command="portfolio">组合分析</el-dropdown-item>
                   <el-dropdown-item command="compare">版本对比</el-dropdown-item>
                   <el-dropdown-item command="analyze">深度分析</el-dropdown-item>
                   <el-dropdown-item v-if="r.id !== defaultResumeId" command="setDefault"
@@ -1021,12 +1022,19 @@ function openProjectRow(r) {
   router.push({ name: 'project-report', query: { resume_id: r.id } })
 }
 
+// 组合分析（四大节，量的是一组项目叠在一起）：不带 project_index，
+// 进页面后再勾"哪几个项目放在一起看"，默认全选。
+function openPortfolioRow(r) {
+  router.push({ name: 'portfolio-report', query: { resume_id: r.id } })
+}
+
 const ROW_COMMANDS = {
   parse: parseResumeRow,
   optimize: optimizeResume,
   diagnose: showDiagnosisDialog,
   report: openReportRow,
   project: openProjectRow,
+  portfolio: openPortfolioRow,
   compare: openCompareRow,
   analyze: goAnalysis,
   setDefault: setDefaultResumeRow,

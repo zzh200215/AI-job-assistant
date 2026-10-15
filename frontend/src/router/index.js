@@ -212,6 +212,14 @@ export const routes = [
         component: () => import('@/features/resume/views/ProjectReport.vue'),
         meta: { title: '项目分析', roles: CANDIDATE },
       },
+      // 组合分析（四大节，量的是几个项目叠在一起）：`?resume_id=` 选简历，
+      // 勾哪几个项目在这一页上选，不带 project_index。
+      {
+        path: 'resume/portfolio-report',
+        name: 'portfolio-report',
+        component: () => import('@/features/resume/views/PortfolioReport.vue'),
+        meta: { title: '组合分析', roles: CANDIDATE },
+      },
 
       // ===== 管理员页面（普通用户不可见） =====
       {
