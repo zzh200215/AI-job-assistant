@@ -9,6 +9,7 @@ import copy
 import hashlib
 import json
 import logging
+import re
 import threading
 import time
 from collections import OrderedDict
@@ -1553,6 +1554,344 @@ _MOCK_PROJECT_QUESTIONS = {
 }
 
 
+# ---------------------------------------------------------------- 组合分析（四大节）的 mock 载荷
+# 这一族比单项目那一族多一件事：它要对着**任意**被选中的项目数（两到 N 个）自己长出形状，
+# 所以四支都现从 prompt 里读项目清单，而不是写死两个项目——写死的夹具只钉得住"两个项目"
+# 那一种组合，第三个项目进来就变成假阳性。读的是服务端 `_projects_block` 渲染的那一行
+# `（project_index=…，简历里第 … 个）` 与其下的正文条目，这条耦合由
+# `tests/test_portfolio_report_mock_stages.py` 钉住。
+# 载荷里除了从原文 lifted 的那一句之外**不写阿拉伯数字**：写了就会被"新数字"那条复核拒掉，
+# 而这一族要演示的恰恰是"该有个数而没有的，走 `【待补】`"。
+
+_PORTFOLIO_PROJECT_HEAD = re.compile(r"【项目 \d+ · (.*?)】（project_index=(\d+)，简历里第 \d+ 个）")
+_PORTFOLIO_POINT_LINE = re.compile(r"^- (.+)$", re.M)
+_PORTFOLIO_KINDS = ("差异与取舍", "选型与理由", "真实与边界", "评测与归因", "整合与演进", "沉淀与成长")
+
+
+def _mock_portfolio_projects(prompt: str) -> list[tuple[int, str, str]]:
+    """[(project_index, 项目名, 这一段的第一条正文)]，按 prompt 里出现的顺序。
+
+    每一段只读到**下一个 `【…】` 区块标题**为止：最后那一条项目的正文后面紧着的是量表与
+    示例 JSON（里面满是数字），一路读到结尾就会把口径行的数字 lift 进答案里，
+    然后被"数字必须来自原文"那条复核判成编造——这是夹具的边界，不是产品该拦的形状。
+    """
+    matches = list(_PORTFOLIO_PROJECT_HEAD.finditer(prompt))
+    out: list[tuple[int, str, str]] = []
+    for position, match in enumerate(matches):
+        stop = prompt.find("\n【", match.end())
+        if position + 1 < len(matches):
+            stop = min(stop if stop > 0 else len(prompt), matches[position + 1].start())
+        if stop < 0 or stop > len(prompt):
+            stop = len(prompt)
+        body = prompt[match.end() : stop]
+        lines = [line.strip() for line in _PORTFOLIO_POINT_LINE.findall(body)]
+        out.append((int(match.group(2)), match.group(1).strip(), lines[0] if lines else ""))
+    return out
+
+
+def _mock_lift(quote: str, limit: int) -> str:
+    """把 lifted 的原文截到 limit，且**截完末尾不许停在数字串里**。
+
+    截出"9."或"3%"这种半截数字，会在"图与表里的数字必须来自原文"那条复核上被判成编造——
+    那是夹具的锅，不是产品该拦的东西。所以末尾落在数字串上时整串退掉。
+    """
+    head = quote[:limit]
+    if head == quote:
+        return quote
+    return head.rstrip("0123456789.,%+－→- ")
+
+
+def _mock_portfolio_quote(projects: list[tuple[int, str, str]], position: int) -> str:
+    """lifted 一条原文当逐字引用：既过"数字必须来自原文"，也天然满足扣分点要点名位置。"""
+    if not projects:
+        return "（mock）这一段项目原文里的一句话"
+    index = position % len(projects)
+    quote = projects[index][2]
+    lifted = _mock_lift(quote, 26) if quote else ""
+    if not lifted:
+        return "（mock）这一段项目原文里的一句话"
+    return f"（mock）「{lifted}」"
+
+
+def _mock_portfolio_cells(projects: list[tuple[int, str, str]], all_full: bool) -> list[dict[str, Any]]:
+    cells = []
+    for position, (index, _name, _quote) in enumerate(projects):
+        if all_full or position == 0:
+            cell = "重点覆盖"
+        elif position == 1:
+            cell = "部分覆盖"
+        else:
+            cell = "未覆盖"
+        cells.append({"project_index": index, "cell": cell})
+    return cells
+
+
+def _mock_portfolio_profile(prompt: str) -> dict[str, Any]:
+    projects = _mock_portfolio_projects(prompt)
+    names = "、".join(name or f"项目 {index + 1}" for index, name, _ in projects) or "（mock）这一组项目"
+    compare_rows = []
+    for key in ("domain", "skeleton", "orchestration", "retrieval", "highlight", "metric", "transferable"):
+        compare_rows.append(
+            {
+                "row": key,
+                "cells": [
+                    {
+                        "project_index": index,
+                        "text": f"（mock）这一行的说法只引用该项目原文里的写法，取自「{_mock_lift(quote, 18)}」"
+                        if _mock_lift(quote, 18)
+                        else "（mock）这一行的说法只引用该项目原文里的写法",
+                    }
+                    for index, _name, quote in projects
+                ],
+            }
+        )
+    capabilities = []
+    for position, key in enumerate(("doc_parsing", "hybrid_retrieval", "agent_orchestration", "refusal", "llmops")):
+        capabilities.append({"capability": key, "cells": _mock_portfolio_cells(projects, all_full=position == 0)})
+    return {
+        "summary": {
+            "projects_line": f"（mock）这一组是 {names} 叠在一起看的组合分析，只用原文里出现过的名词。",
+            "common_skeleton": "（mock）几个项目都落在同一条骨架上：非结构化内容进库、多路召回取依据、在依据上判断、"
+            "把不确定的部分交给人复核。这一句只描述原文写过的做法。",
+            "difference_line": "（mock）差异要一个一个点：每个项目最独特的那一点只能从它自己那段原文里引，"
+            "不能用同一句话套几个项目。",
+        },
+        "dimensions": {
+            "d1_role_signal": {
+                "score": 20,
+                "note": f"{_mock_portfolio_quote(projects, 0)}这一条把技能带对上了岗位方向；"
+                "少的那一层是几个项目叠起来仍然只覆盖检索与编排两段，评测与部署那一段没有落点。",
+            },
+            "d2_combo_distinct": {
+                "score": 16,
+                "note": f"{_mock_portfolio_quote(projects, 1)}几个项目的骨架重合，"
+                "差异只体现在领域词上，技术决策层面说不出「这一个有、那几个没有」的那一条，扣分在这里。",
+            },
+            "d3_metric": {
+                "score": 14,
+                "note": "（mock）几个项目都有绝对量没有差值，归因也没有拆开——"
+                "要补的是【待补：固定其他变量、每次只改一处、同一批样本跑对照得到的差值】。",
+            },
+            "d4_growth_line": {
+                "score": 11,
+                "note": f"{_mock_portfolio_quote(projects, 2)}能看出一条从检索优化往编排走的线，"
+                "但最后一段（工程化与运营）在原文里没有落点，纵深少一层。",
+            },
+            "d5_interview": {
+                "score": 10,
+                "note": "（mock）跨项目那几问里，「只留一个留哪个」与「行业跨度这么大怎么做到的」"
+                "在原文里给不出投入分配与时间线，这两问一追问就空。",
+            },
+        },
+        "red_lines": [],
+        "difficulty": {
+            "level": "L3",
+            "reason": "（mock）这一组叠了检索与编排两类做法，都留有口径但没有微调与多模态那一层，按范式叠加数定这一档。",
+        },
+        "compare": compare_rows,
+        "capabilities": capabilities,
+        "shared_stack": [],
+        "risks": [
+            {
+                "point": "（mock）几个项目说的都是同一套骨架",
+                "detail": f"追问「这几个项目有什么本质不同」时只能把 {_mock_portfolio_quote(projects, 0)}"
+                "那一套做法重说一遍，给不出只有某一个项目才有的技术决策",
+                "fix": "在每个项目那一段里各补一条「别的项目没有的那一个决策」，并写清为什么这个场景要它",
+            },
+            {
+                "point": "（mock）归因都合在一起测",
+                "detail": "几个项目都是两三项改动一起上，各自贡献没拆开，被追问「这一层各值多少」时答不出",
+                "fix": "【待补：固定其他变量、每次只改一处、同一套样本跑对照得到的分项差值】",
+            },
+            {
+                "point": "（mock）业务效果这一族普遍偏薄",
+                "detail": "几个项目都只有技术指标，没有采纳率、人工节省、复用率这类业务口径",
+                "fix": "【待补：按使用埋点跑一遍得到人工复核通过率与退回率的差值】",
+            },
+        ],
+    }
+
+
+def _mock_portfolio_diagrams(prompt: str) -> dict[str, Any]:
+    projects = _mock_portfolio_projects(prompt)
+    stage_names = ("阶段一 · 找得到", "阶段二 · 判得准", "阶段三 · 可运营", "阶段四 · 收得住", "阶段五 · 说得清")
+    stages = []
+    for position, (index, name, quote) in enumerate(projects):
+        points = [
+            f"（mock）这一阶段的每条要点都只写「{_mock_lift(quote, 16)}」这一段的原文里有的动作"
+            if _mock_lift(quote, 16)
+            else "（mock）这一阶段的要点只写原文里有的动作",
+            "（mock）做法：把依据与判断分开，依据不足时不硬下结论",
+            "（mock）痕迹：留下了自己的口径与一次对照，不是照教程搭一遍",
+            "（mock）边界：这一段没有写上线多久、谁在用，追问时要承认没测",
+        ]
+        stages.append(
+            {
+                "project_index": index,
+                "stage_name": stage_names[min(position, len(stage_names) - 1)],
+                "points": points,
+                "core_question": f"（mock）项目 {name or index + 1} 要回答的核心问题是判断能不能复现",
+                "keywords": "（mock）检索、依据、复核",
+            }
+        )
+    rounds = [
+        {
+            "key": "single_deep_dive",
+            "text": "（mock）面试官先挑一个项目问链路与口径，这一轮拿的是单项目的技术深度，"
+            "答案要落到那一段原文写过的动作上。",
+        },
+        {
+            "key": "selection_reason",
+            "text": "（mock）这一轮问的是为什么这么选：为什么用这一种融合而不是加权求和、"
+            "为什么依据和判断要分开——考的是判断，不是执行。",
+        },
+        {
+            "key": "cross_compare",
+            "text": "（mock）这一轮把几个项目放在一起问：有什么本质不同、只留一个留哪个、哪个最难。"
+            "答得好，面试官得到的是「做过三个项目」；答不好，得到的是「有三个项目经历」。",
+        },
+        {
+            "key": "authenticity",
+            "text": "（mock）这一轮质疑真实性：跨度这么大一个人怎么做、栈重叠这么多是不是同一套。"
+            "答得诚实就是边界清楚，答得圆滑就是包装，这两句的差别全在投入分配说不说得清。",
+        },
+        {
+            "key": "next_step",
+            "text": "（mock）收尾问如果继续做怎么改：把没拆开的归因、缺的那一套评测、没埋的业务指标讲成下一步计划。",
+        },
+    ]
+    return {
+        "narrative": {
+            "title": "（mock）把这一组项目讲成一条从「找得到」到「判得准」再到「可运营」的成长线",
+            "stages": stages,
+            "one_line": "（mock）先解决依据从哪来，再解决判断能不能复现，最后解决系统能不能越用越好——"
+            "这几个项目不是同一件事做几遍，是同一套能力在几种约束下的不同组合。",
+        },
+        "rounds": rounds,
+        "reuse_read": "（mock）共用的那几只组件说明这套选型是稳定的，不是每个项目现学一遍。",
+        "unique_read": "（mock）只在一个项目里出现的那几只，说明选型是跟着场景走的，不是照搬上一版。",
+        "sameness_answer": "（mock）回答「是不是换皮」分两层：先说共用栈证明熟练，再说差异栈证明跟着场景走；"
+        "顺序反了就像在辩解，先承认骨架相同再给差异点才站得住。",
+        "strategy": "（mock）每一轮备一段能讲一分钟的口述稿；第三轮与第四轮是组合层的胜负手，"
+        "单项目准备得再足，跨项目对比答不好也显得这几个项目之间没有想过。",
+        "usage": "（mock）讲组合时先看横向对比找到每个项目最独特的那一点，再用叙事主线串成递进，"
+        "陪练时重点过跨项目对比与质疑真实性那两轮。",
+    }
+
+
+def _mock_portfolio_advice(prompt: str) -> dict[str, Any]:
+    projects = _mock_portfolio_projects(prompt)
+    order = [index for index, _name, _quote in projects]
+    reverse = list(reversed(order))
+    arrangements = [
+        {
+            "project_indices": order,
+            "scenario": "（mock）目标岗位偏这条主线时按简历顺序排",
+            "pros": "（mock）最亮的那一条排在前面抓眼球，后面的托底",
+            "cons": "（mock）如果排在第二位的那一份分数更高，会被问为什么不把更强的放前面",
+        }
+    ]
+    if reverse != order:
+        arrangements.append(
+            {
+                "project_indices": reverse,
+                "scenario": "（mock）目标岗位偏另一条方向时把它们倒过来排",
+                "pros": "（mock）指标最完整的那一份放最前面最稳，追问时先立住",
+                "cons": "（mock）最能体现架构能力的那一条被挪到最后，容易被忽略",
+            }
+        )
+    else:
+        arrangements.append(
+            {
+                "project_indices": order,
+                "scenario": "（mock）只保留其中一份时的取舍（两个项目这一种排法与上面相同）",
+                "pros": "（mock）留最完整的那一份，另一份的亮点作为补充讲",
+                "cons": "（mock）少了一个领域跨度，广度这一层要另找地方体现",
+            }
+        )
+    return {
+        "arrangements": arrangements,
+        "default_choice": 0,
+        "default_reason": "（mock）默认按简历顺序，因为它正好形成一条递进；目标岗位明确偏向另一个方向时再调整。",
+        "asked_before": [
+            {
+                "asked": "（mock）这几个项目有什么本质不同？",
+                "answer": "（mock）骨架确实相同，解决的核心问题不一样：一个解决依据从哪来，一个解决判断能不能复现，"
+                "一个解决系统能不能越用越好。所以它们是同一套能力在几种约束下的不同组合。",
+            },
+            {
+                "asked": "（mock）为什么技术栈重叠这么多？",
+                "answer": "（mock）重叠的那几只是这一类系统的基础组件，都用到说明熟练；"
+                "差异的那几只是跟着场景选的，说明不是照搬。两层分开说才不会像在辩解。",
+            },
+            {
+                "asked": "（mock）跨度这么大，你一个人怎么做的？",
+                "answer": "（mock）先说参与边界：每个项目我负责的模块不一样，有的偏检索、有的偏编排、有的偏知识库。"
+                "骨架是通用的，要学的是每个领域的判断标准，那部分是跟业务方一起定的，不是我一个人拍。",
+            },
+            {
+                "asked": "（mock）如果只留一个，你留哪个？",
+                "answer": "（mock）留指标闭环最完整的那一份：它有前后对比、有明确的工程边界、有人工介入的那一档口径，"
+                "从任何角度问都接得住；其余几份的亮点可以作为补充在这一个项目里带出来。",
+            },
+        ],
+        "strengthen": [
+            {
+                "gap": "（mock）归因都合在一起测",
+                "action": "固定其他变量、每次只改一处、同一套样本跑对照，每个项目各补一版分项",
+                "expected": "（mock）组合 D3 指标责任这一维站得住，D2 区分度也更实",
+            },
+            {
+                "gap": "（mock）业务效果普遍偏薄",
+                "action": "每个项目补一到两个业务口径：复核通过率、退回率、复用次数",
+                "expected": "（mock）补上之后 D2 组合区分度与真实感更稳，追问不落空",
+            },
+            {
+                "gap": "（mock）叙事顺序没有设计",
+                "action": "按递进关系重排并给每段写一句「它解决的那一个核心问题」",
+                "expected": "（mock）D6 位次与叙事这一维不靠运气，D4 纵深那条线也看得清",
+            },
+        ],
+        "citation": {
+            "borrow": "（mock）值得学的是这一组的组织方式：每个项目抓一个最独特的点，项目之间形成递进，"
+            "共用栈展示熟练、差异栈展示判断。",
+            "adapt": "（mock）不能照搬的是领域词与指标口径：换个方向就要把自己真做过的那一处决策写出来，"
+            "否则几个项目会塌成同一套技术换个领域。",
+            "breaks": "（mock）一抄就穿的是把几个项目都写成「我主导」、都套同一套指标口径、"
+            "把跨度讲得理所当然——这三处都要先有参与边界与时间线才敢写。",
+        },
+    }
+
+
+def _mock_portfolio_questions(prompt: str) -> dict[str, Any]:
+    projects = _mock_portfolio_projects(prompt)
+    tail = (
+        "把这几个项目放在一起看，骨架确实是同一套：非结构化内容进库、多路召回取依据、在依据上做判断、"
+        "不确定的部分交给人复核。但每个项目要解决的核心问题不一样，所以组合出来的方案也不一样。"
+        "我负责的是把这套通用骨架落到具体领域里，领域的判断标准是跟业务方一起定的、不是我一个人拍的。"
+        "如果重来一次，我会把每一项改动的贡献单独测一遍，而不是几项一起上——归因不清楚，后面的优化方向就是盲目的。"
+    )
+    items = []
+    for position in range(12):
+        kind = _PORTFOLIO_KINDS[position % len(_PORTFOLIO_KINDS)]
+        status = "需补强" if position == 10 else "可答"
+        items.append(
+            {
+                "question": f"（mock）跨项目追问（{kind}这一类）：面试官把几个项目摊在桌上会问出口的那一句",
+                "kind": kind,
+                "answer": _mock_portfolio_quote(projects, position) + tail,
+                "followups": [
+                    {"kind": "为什么", "text": "（mock）追问一：这一条为什么这么定，换一个方案会怎样"},
+                    {"kind": "数据", "text": "（mock）追问二：这一层的口径怎么测、样本量多少、谁在看"},
+                ],
+                "status": status,
+                "missing": ["（mock）缺一个分项差值：没拆开测就不敢说这一层各贡献多少"] if status != "可答" else [],
+                "risk_ref": None,
+            }
+        )
+    return {"questions": items}
+
+
 def _mock_chat(prompt: str) -> str:
     """根据 prompt 关键字返回对应 mock JSON，包裹在 ```json``` 里"""
     # ---- 智能调度层：意图路由（优先级最高）----
@@ -1573,7 +1912,7 @@ def _mock_chat(prompt: str) -> str:
     if "简历评估报告 · 面试预演" in prompt:
         return _wrap_json(_MOCK_REPORT_INTERVIEW)
 
-    # ---- 单项目分析的四支（前三节两发 + 第四节一发）----
+    # ---- 单项目分析的四支（前三节三发 + 第四节一发）----
     # 同样必须排在智能体那一段之前：项目报告的 prompt 里也写着"资深"/"专家"式的角色行，
     # 排在后面就会被智能体的关键字先领走，形状完全不同还不报错（这条教训来自 D231）。
     if "单项目分析 · 一、项目档案" in prompt:
@@ -1584,6 +1923,18 @@ def _mock_chat(prompt: str) -> str:
         return _wrap_json(_MOCK_PROJECT_ADVICE)
     if "单项目分析 · 四、面试准备" in prompt:
         return _wrap_json(_MOCK_PROJECT_QUESTIONS)
+
+    # ---- 组合分析的四支（前三节三发 + 第四节一发）----
+    # 同上，这一族的 prompt 角色行也写着"技术负责人"，必须排在智能体段之前；
+    # 四支都要现读 prompt 里被选中的项目清单，所以不能是写死的字典。
+    if "组合分析 · 一、组合档案" in prompt:
+        return _wrap_json(_mock_portfolio_profile(prompt))
+    if "组合分析 · 二、组合图解" in prompt:
+        return _wrap_json(_mock_portfolio_diagrams(prompt))
+    if "组合分析 · 三、使用建议" in prompt:
+        return _wrap_json(_mock_portfolio_advice(prompt))
+    if "组合分析 · 四、跨项目面试" in prompt:
+        return _wrap_json(_mock_portfolio_questions(prompt))
 
     # ---- 第四阶段：6 个智能体（按角色关键词精确匹配）----
     if "资深简历诊断专家" in prompt:

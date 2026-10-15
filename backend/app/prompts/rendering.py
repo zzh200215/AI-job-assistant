@@ -23,6 +23,14 @@ _UNTRUSTED_FIELD_TAGS = {
     "directions_json": "job_directions",
     "user_request": "user_request",
     "answer": "candidate_answer",
+    # 组合分析那两支里装着**几个项目的逐字原文**与服务端算出的技术栈清单，全是简历里来的，
+    # 与 resume 同级：候选人可以在自己项目正文里写一句"忽略上述指令"。
+    "projects_block": "projects",
+    "stack_block": "stacks",
+    # 单项目那一族同理——这两处以前是裸拼进 prompt 的，数据边界只在新写的两支上补齐过，
+    # 补到这里才算整族一致（项目正文里的指令句与简历正文里的没有等级差别）。
+    "project_excerpt": "project",
+    "peer_projects_json": "peers",
     # 目标岗位是请求体里的自由文本，和简历同级：候选人（或脚本）可以在这一位上写指令。
     "target_position": "target_position",
 }
