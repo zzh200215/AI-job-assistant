@@ -41,9 +41,12 @@ def _report(indices: list[int] | None = None, with_questions: bool = True) -> Po
     )
     report.stack_reuse = rubric.stack_reuse({i: [str(t) for t in ENTRIES_BY_INDEX[i]["tech"]] for i in picked})
     universe = "\n".join(entry["desc"] for entry in entries)
+    # 逐字校验的全集必须跟着勾选走：拿三个项目的并集去核四个项目的载荷，
+    # 多出来那一段的 lifted 原文会被判成"原文里没有的数字"——那是夹具的错，不是判据对。
+    quote_universe = raw_entries_text(entries, picked)
     claimed = list(report.stack_reuse["shared"])[:2]
     profile, rejected = svc.validate_profile(
-        profile_payload(picked, shared_stack=claimed), picked, QUOTES, report.stack_reuse
+        profile_payload(picked, shared_stack=claimed), picked, quote_universe, report.stack_reuse
     )
     assert rejected == []
     report.summary = profile["summary"]
@@ -93,6 +96,31 @@ def test_两个项目的组合同样能过():
     document = render_portfolio_report_html(report)
     assert lint_portfolio_html(document, report) == []
     assert "2 个项目" in document
+
+
+@pytest.mark.parametrize("picked", ([0, 1], [0, 1, 2], [0, 1, 2, 3], [0, 1, 2, 3, 4]))
+def test_泛化到五个项目时列数跟着长且机检仍全过(picked):
+    """这条钉的是他点的那档"2~N 泛化"——参考件只有三个项目，四个五个时**没人看过**。
+
+    断言全部从**数据**推，不写死列数：加一个项目要让三处（表头、叙事段数、排列那一格）
+    一起跟着长，写死任何一处都会在下一个 N 上假绿。
+    """
+    report = _report(list(picked))
+    document = render_portfolio_report_html(report)
+    assert lint_portfolio_html(document, report) == []
+    n = len(picked)
+
+    assert f"{n} 个项目整体分析" in document
+    compare_head = document.split("<h3>1.2 项目横向对比</h3>")[1].split("</thead>")[0]
+    # 数 `<th>` 而不是 `<th`：后者会把 `<thead>` 一起数进去，列数永远多一。
+    assert compare_head.count("<th>") == n + 1, "横向对比的列数没跟着勾选长"
+    assert document.count('<span class="code">PJ-') == n, "叙事主线的段数没跟着勾选长"
+    assert f"PJ-{n:02d}" in document
+    assert len(report.advice["arrangements"][0]["order"]) == n
+    assert report.advice["arrangements"][0]["rendered"].count("→") == n - 1
+    # 位次那一维跨的位数也一起长：五个项目全选上，占的是第 1~5 位。
+    positional = [row for row in report.dimensions if row["positional"]][0]
+    assert positional["span"] == [1, n]
 
 
 def test_第四节没生成时那一节整块缺席():

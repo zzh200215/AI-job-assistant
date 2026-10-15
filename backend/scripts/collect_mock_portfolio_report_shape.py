@@ -43,10 +43,14 @@ from app.models.project_report_job import ProjectReportJob  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.services import portfolio_report_job_service as jobs  # noqa: E402
 from app.services.portfolio_report_schema import combo_signature  # noqa: E402
-from tests.portfolio_report_payloads import PARSED  # noqa: E402
+from tests.portfolio_report_payloads import PARSED, PARSED_FIVE  # noqa: E402
 
+# 两份夹具：一份是参考件那个规模（三个项目），一份是**它没有的规模**（四个）。
+# 只钉 N=3 时，"2~N 泛化"这一档在页面那棵树里其实只验过一个点——列数、段数、
+# 排列那一格都是跟着 N 长的，漂移不会在 N=3 上现形。
 OUT = Path(__file__).resolve().parents[2] / "frontend" / "tests" / "fixtures" / "portfolioReportShape.json"
-INDICES = [0, 1, 2]
+OUT_WIDE = Path(__file__).resolve().parents[2] / "frontend" / "tests" / "fixtures" / "portfolioReportShape4.json"
+COMBOS = (([0, 1, 2], PARSED, OUT), ([0, 1, 2, 3], PARSED_FIVE, OUT_WIDE))
 
 
 @compiles(BigInteger, "sqlite")
@@ -74,15 +78,15 @@ def normalize(payload: dict) -> dict:
     return out
 
 
-def payload_for(db) -> dict:
+def payload_for(db, indices: list[int], parsed: dict) -> dict:
     """在**给定会话**上跑一遍真派发（前三节 + 第四节各一行），返回轮询载荷的字节。
 
     表头「单项目均分」那一格要长出一截真数：所以这里顺手给第一个项目补一行**已完成的**
     单项目分析作业——这一格的两种形态（有与没有）都由前端守卫比对，缺了这份出处就钉不住。
     """
     user = User(
-        username="mock_portfolio_shape",
-        email="mock_portfolio_shape@example.com",
+        username=f"mock_portfolio_shape_{len(indices)}",
+        email=f"mock_portfolio_shape_{len(indices)}@example.com",
         password=hash_password("StrongP@ssw0rd"),
         role="candidate",
     )
@@ -96,7 +100,7 @@ def payload_for(db) -> dict:
         file_type="pdf",
         file_size=1024,
         user_id=user.id,
-        parsed_json=PARSED,
+        parsed_json=parsed,
     )
     db.add(resume)
     db.commit()
@@ -106,7 +110,7 @@ def payload_for(db) -> dict:
             user_id=user.id,
             resume_id=resume.id,
             project_index=0,
-            project_name=PARSED["project_experience"][0]["name"],
+            project_name=parsed["project_experience"][0]["name"],
             stage="report",
             status="completed",
             total_score=88,
@@ -120,9 +124,9 @@ def payload_for(db) -> dict:
         db,
         user_id=user.id,
         resume_id=resume.id,
-        combo_key=combo_signature(INDICES),
-        project_indices=INDICES,
-        project_names=[entry["name"] for entry in PARSED["project_experience"]],
+        combo_key=combo_signature(indices),
+        project_indices=indices,
+        project_names=[entry["name"] for entry in parsed["project_experience"]],
         jd_id=None,
         target_position="大模型应用工程师",
     )
@@ -152,18 +156,24 @@ def main() -> int:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        payload = payload_for(db)
+        for indices, parsed, out in COMBOS:
+            payload = payload_for(db, list(indices), parsed)
+            text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+            out.write_text(text, encoding="utf-8", newline="\n")
+            doc = payload["report"]
+            size = len(text.encode("utf-8")) / 1024
+            print(f"已写 {out.name}（{size:.1f} KB）")
+            print(
+                f"  组合合计 {doc['score_cell']} / 评级 {doc['grade']} / 难度 {doc['difficulty']['level']}"
+                f" / 项目数 {doc['project_count']}"
+            )
+            print(f"  表头均分 {doc['average_cell']}")
+            print(
+                f"  对比 {len(doc['compare']['rows'])} 行 × {doc['project_count']} 列 / 覆盖 {len(doc['capabilities'])} 行"
+            )
+            print(f"  第四节 {doc['questions']['distribution']['total']} 题")
     finally:
         db.close()
-    text = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
-    OUT.write_text(text, encoding="utf-8", newline="\n")
-
-    doc = payload["report"]
-    print(f"已写 {OUT.name}（{len(text.encode('utf-8')) / 1024:.1f} KB）")
-    print(f"  组合合计 {doc['score_cell']} / 评级 {doc['grade']} / 难度 {doc['difficulty']['level']}")
-    print(f"  表头均分 {doc['average_cell']}")
-    print(f"  对比 {len(doc['compare']['rows'])} 行 × {doc['project_count']} 列 / 覆盖 {len(doc['capabilities'])} 行")
-    print(f"  第四节 {doc['questions']['distribution']['total']} 题")
     return 0
 
 

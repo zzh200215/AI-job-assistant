@@ -57,6 +57,34 @@ THIRD = {
     "desc": THIRD_DESC,
     "tech": ["Chroma", "Neo4j", "Qwen"],
 }
+# 第四、第五个项目只为一件事存在：**把 2~N 泛化验到 N=5**。
+# 参考件是三个人的合理规模，而锁死三个会让"多项目"这个功能在两三个以上时静默画歪——
+# 表格列数、叙事段数、排列那一格的 `PJ-0N` 都跟着 N 长，没有样本就没有证据。
+FOURTH_DESC = """设备巡检记录的问答与看板。
+项目描述：巡检工单进 MinIO，结构化记录落 PostgreSQL，指标口径写在 YAML 里。
+核心职责：负责取数与看板两段，缺证据的指标一律标灰不画。
+项目成果：巡检看板出稿由每天 40 分钟缩短到 5 分钟，覆盖 6 类设备。"""
+
+FIFTH_DESC = """内部培训材料的自动生成。
+项目描述：课程大纲与题库存 MySQL，生成结果过一遍逐字回查再发布。
+核心职责：负责生成与回查两段，回查不过的不发布。
+项目成果：一门课的讲义由 3 天缩短到半天，题目复用率约 4 成。"""
+
+FOURTH = {
+    "name": "巡检记录看板",
+    "role": "主程",
+    "start": "2023.09",
+    "end": "2024.03",
+    "desc": FOURTH_DESC,
+    "tech": ["MinIO", "PostgreSQL", "Vue"],
+}
+FIFTH = {
+    "name": "培训材料生成",
+    "role": "算法工程",
+    "desc": FIFTH_DESC,
+    "tech": ["MySQL", "Qwen", "FastAPI"],
+}
+
 # 与 SECOND 逐字相同、只换个名字——红线 1 的形状。
 DUP = {
     "name": "另一份经营分析",
@@ -70,7 +98,8 @@ PROJECT_TOTALS = {0: 88, 1: 79}
 
 PARSED = {"project_experience": [FIRST, SECOND, THIRD]}
 PARSED_WITH_DUP = {"project_experience": [FIRST, SECOND, DUP]}
-ENTRIES_BY_INDEX = {0: FIRST, 1: SECOND, 2: THIRD}
+PARSED_FIVE = {"project_experience": [FIRST, SECOND, THIRD, FOURTH, FIFTH]}
+ENTRIES_BY_INDEX = {0: FIRST, 1: SECOND, 2: THIRD, 3: FOURTH, 4: FIFTH}
 
 ALL_TECH = ["LangGraph", "Chroma", "FastAPI", "Neo4j", "MySQL", "Qwen"]
 

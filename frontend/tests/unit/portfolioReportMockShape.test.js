@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import mockPortfolioJob from '../fixtures/portfolioReportShape.json'
+import mockPortfolioJob4 from '../fixtures/portfolioReportShape4.json'
 import PortfolioReport from '@/features/resume/views/PortfolioReport.vue'
 import { installElement } from '@/plugins/element'
 
@@ -32,13 +33,14 @@ vi.mock('@/plugins/element-services', () => services)
 const DOC = mockPortfolioJob.report
 const RESUME_ROW = { id: 1, name: '张三', file_name: 'mock.pdf' }
 
-async function mountFromBackendBytes() {
+async function mountFromBackendBytes(job = mockPortfolioJob) {
+  const doc = job.report
   api.getResumeList.mockResolvedValue({ items: [RESUME_ROW], total: 1 })
   api.getResume.mockResolvedValue({
     id: 1,
-    parsed: { project_experience: DOC.projects.map((p) => ({ name: p.name })) },
+    parsed: { project_experience: doc.projects.map((p) => ({ name: p.name })) },
   })
-  api.getPortfolioReportJob.mockResolvedValue(mockPortfolioJob)
+  api.getPortfolioReportJob.mockResolvedValue(job)
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -245,5 +247,38 @@ describe('后端真输出的组合分析', () => {
     // 而读者拿到的是少一句话的交付物——这条按**渲染出来的文字**比。
     expect(wrapper.find('#c-profile').text()).toContain('树里有三把尺')
     expect(wrapper.find('#c-profile').text()).toContain('三把尺的分数不能直接比')
+  })
+})
+
+/* 四个项目的那一组是**后端另一条真派发**导出的夹具（同一支 collector 一次跑出来），
+   不是这里手搓的形状。参考件只有三个项目，N 变大时页面那棵树上有三处要跟着长：
+   对比表的列、叙事主线的段、覆盖矩阵的格子；排列那一格还要多画一个箭头。 */
+describe('后端真输出的四个项目一组', () => {
+  const DOC4 = mockPortfolioJob4.report
+  const N = DOC4.project_count
+
+  it('列数、段数、格子数、箭头数都跟着勾选长', async () => {
+    expect(N).toBe(4)
+    const wrapper = await mountFromBackendBytes(mockPortfolioJob4)
+    const compare = wrapper.findAll('#c-profile table')[1]
+    expect(compare.findAll('thead th')).toHaveLength(N + 1)
+    expect(compare.findAll('tbody tr')).toHaveLength(DOC4.compare.rows.length)
+    for (const row of compare.findAll('tbody tr')) {
+      expect(row.findAll('td')).toHaveLength(N + 1)
+    }
+    expect(wrapper.findAll('.pf-node')).toHaveLength(N)
+    expect(wrapper.findAll('.pf-matrix tbody tr')[0].findAll('td.cov')).toHaveLength(N)
+    const firstArrangement = wrapper.findAll('#c-advice table')[0].find('tbody tr').text()
+    expect(firstArrangement).toContain('PJ-04')
+    expect(firstArrangement.match(/→/g)).toHaveLength(N - 1)
+  })
+
+  it('表头那两格说的是四个项目与 1/4 的出处', async () => {
+    const wrapper = await mountFromBackendBytes(mockPortfolioJob4)
+    const pills = wrapper.findAll('.pf-pill').map((node) => node.text())
+    expect(pills[0]).toBe(`项目数${N} 个`)
+    expect(pills.join(' ')).toContain('1/4')
+    expect(wrapper.text()).not.toContain('undefined')
+    expect(wrapper.text()).not.toContain('NaN')
   })
 })
