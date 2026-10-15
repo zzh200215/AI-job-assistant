@@ -147,33 +147,38 @@
         </table>
 
         <h3>1.3 组合能力覆盖矩阵</h3>
-        <table class="pf-tbl pf-matrix">
-          <thead>
-            <tr>
-              <th>能力维度</th>
-              <th v-for="p in report.projects" :key="p.project_index" class="n">
-                {{ labelOf(p) }}
-              </th>
-              <th>组合覆盖</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in report.capabilities" :key="row.key">
-              <td>
-                <b>{{ row.label }}</b>
-              </td>
-              <td
-                v-for="p in report.projects"
-                :key="p.project_index"
-                class="n cov"
-                :class="cellClass(row, p.project_index)"
-              >
-                {{ markOf(row, p.project_index) }}
-              </td>
-              <td>{{ verdictText(row) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- 这一张表以前给列头与格子挂了 `.n`（不换行 + 居中），五个项目时它的最小内容宽度
+             被五个"项目 N · 一长串项目名"钉死在 897px，容器窄于 900 就压出卡片 280px。
+             表头改成可换行，外面再套一层滚动容器兜住更极端的情况。 -->
+        <div class="pf-scroll">
+          <table class="pf-tbl pf-matrix">
+            <thead>
+              <tr>
+                <th>能力维度</th>
+                <th v-for="p in report.projects" :key="p.project_index">
+                  {{ labelOf(p) }}
+                </th>
+                <th>组合覆盖</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in report.capabilities" :key="row.key">
+                <td>
+                  <b>{{ row.label }}</b>
+                </td>
+                <td
+                  v-for="p in report.projects"
+                  :key="p.project_index"
+                  class="cov"
+                  :class="cellClass(row, p.project_index)"
+                >
+                  {{ markOf(row, p.project_index) }}
+                </td>
+                <td>{{ verdictText(row) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <p class="pf-note">
           <span class="cov full">●</span> 重点覆盖&nbsp;<span class="cov part">○</span>
           部分覆盖&nbsp;空白 未覆盖。 「组合覆盖」那一列不是模型写的：由这一行的格子推出来。
@@ -928,6 +933,12 @@ h3 {
 }
 .cov {
   font-weight: 700;
+  /* 居中以前是 `.n` 顺手给的，撤掉那个类就得自己说——格子还是不能左对齐。 */
+  text-align: center;
+}
+.pf-scroll {
+  /* 表格压不下去时宁可让它在这层里横向滚，别把卡片撑破、把整页顶出滚动条。 */
+  overflow-x: auto;
 }
 .cov.full {
   color: var(--app-accent);
