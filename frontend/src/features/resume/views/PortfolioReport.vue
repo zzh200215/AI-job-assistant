@@ -120,9 +120,10 @@
           </tbody>
         </table>
         <p class="pf-concl">
-          {{ report.grade_scale }}。这一档说的是这一组项目叠在一起，与整份简历那份七维报告、
-          单个项目那份六维报告都不是同一把尺；这里的档位区间按组合口径切，
-          同名的那一档与单项目报告里的不是同一个分数带。
+          {{
+            report.grade_scale
+          }}。这一档说的是<b>这一组项目叠在一起</b>；这里的档位区间按组合口径切，
+          同名的那一档与单项目报告里的不是同一个分数带。{{ THREE_RUBRICS_NOTE }}
         </p>
 
         <h3>1.2 项目横向对比</h3>
@@ -458,6 +459,10 @@ const SECTIONS = [
 
 /* 「这一栏空着」那句话与两份渲染器同一句权威（`report_html_lint.NOTE_ABSENT`）。 */
 const NOTE_ABSENT = '本次分析没有为这一维写出待优化点'
+
+/* 这句与两份下载 HTML、单项目那一页同一句权威（`report_html_lint.THREE_RUBRICS_NOTE`）。 */
+const THREE_RUBRICS_NOTE =
+  '树里有三把尺：整份简历那份七维、单个项目那份六维（含位次）、几个项目叠一起那份组合六维（含位次区间）。三把尺的分数不能直接比。'
 
 /* 格子符号与后端 `portfolio_report_rubric.COVERAGE_MARKS` 同一张表。 */
 const MARKS = { 重点覆盖: '●', 部分覆盖: '○', 未覆盖: '' }

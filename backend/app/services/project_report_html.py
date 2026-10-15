@@ -26,7 +26,7 @@ from app.services.project_report_schema import (
     QUESTIONS_READY,
     ProjectReport,
 )
-from app.services.report_html_lint import NOTE_ABSENT
+from app.services.report_html_lint import NOTE_ABSENT, THREE_RUBRICS_NOTE
 
 TITLE = "单项目分析"
 _TODO = re.compile(r"(【待补[^】]*】)")
@@ -572,7 +572,8 @@ def render_project_report_html(report: ProjectReport) -> str:
         + "　·　本文档基于候选人提交的简历文本整理，项目名 / 公司名 / 真实人名按脱敏规则处理；带"
         + '<span class="todo">【待补】</span>'
         + "的地方需由使用者按文中的路径跑一遍、填上真实数据后再使用。<br>"
-        + "这一份用的是<b>项目那把六维尺</b>（含位次），与整份简历报告用的七维尺不是同一把，两个分数不能直接比。"
+        + "这一份用的是<b>项目那把六维尺</b>（含位次）。"
+        + _e(THREE_RUBRICS_NOTE)
         + "</footer>"
         + '<button class="totop" id="totop" type="button" aria-label="回顶部">↑</button>'
     )

@@ -159,7 +159,7 @@
           </tbody>
         </table>
         <p class="pr-concl">
-          评级档位：{{ report.grade_scale }}。这一档说的是这一个项目，不是这份简历。
+          评级档位：{{ report.grade_scale }}。这一档说的是这一个项目。{{ THREE_RUBRICS_NOTE }}
         </p>
 
         <h3>1.2 简历原始档案</h3>
@@ -578,6 +578,13 @@ import {
 } from '@/api/resume'
 import { getJDList } from '@/api/jd'
 import ProjectTodoText from '../components/ProjectTodoText.vue'
+
+/* 这句与两份下载 HTML 同一句权威（`report_html_lint.THREE_RUBRICS_NOTE`）：
+   手里拿着两份交付物时"优秀"那个词是唯一会被当成同一件事读的东西，
+   所以每一份都得自报自己这把尺与另外两把不是一把。跨树那条钉子见
+   frontend/tests/noteAbsentPhrase.test.mjs。 */
+const THREE_RUBRICS_NOTE =
+  '树里有三把尺：整份简历那份七维、单个项目那份六维（含位次）、几个项目叠一起那份组合六维（含位次区间）。三把尺的分数不能直接比。'
 
 /* 锚点与后端 `project_report_html_lint.SECTIONS` 同一张表：两份交付物必须指向同一批 id。 */
 const SECTIONS = [

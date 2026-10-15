@@ -107,3 +107,41 @@ test('那一族的"命中红线不出题"也只有一句权威', async () => {
     )
   }
 })
+
+/* 2026-10-15：树里有了第三把尺之后，"这把尺与另外几把不是一把"那句话本身漂了——
+   两份下载 HTML 与应用内两页 Vue 各写一遍，写的时候都还是"两把尺"的世界。
+   同一条毛病第三次现形，所以这条钉子从"一句话"扩到"这一族的四份交付物"。 */
+const rubricNote = lintSource.match(/^THREE_RUBRICS_NOTE = "(.+)"$/m)?.[1]
+
+test('那把"几把尺"的自报只有一处权威', () => {
+  assert.ok(rubricNote, '没在 report_html_lint.py 里找到 THREE_RUBRICS_NOTE，权威那一侧已经变了')
+  assert.equal(
+    lintSource.match(/^THREE_RUBRICS_NOTE = /gm).length,
+    1,
+    '这句话在机检那一份里出现了两份权威'
+  )
+  for (const [name, source] of [
+    ['单项目', projectHtmlSource],
+    ['组合', portfolioHtmlSource],
+  ]) {
+    assert.match(
+      source,
+      /from app\.services\.report_html_lint import[^)\n]*\bTHREE_RUBRICS_NOTE\b/,
+      `${name}的渲染器不再从权威那一份取这句，而是自己重打了一遍`
+    )
+    assert.ok(!source.includes(rubricNote), `${name}的渲染器里又出现这句的字面量：两处权威`)
+  }
+})
+
+test('应用内那两页说的是同一句', () => {
+  for (const [name, source] of [
+    ['单项目那一页', projectVueSource],
+    ['组合那一页', portfolioVueSource],
+  ]) {
+    assert.ok(
+      source.includes(rubricNote),
+      `${name}的"几把尺"与权威不同一句：权威是「${rubricNote}」。` +
+        '这句话漂成"两把尺"的时候没人会报错——它只是少告诉读者一件事。'
+    )
+  }
+})
