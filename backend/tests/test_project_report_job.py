@@ -222,7 +222,9 @@ def test_questions_stage_refuses_an_excluded_parent(db_session, monkeypatch):
     db_session.expire_all()
     job = db_session.get(ProjectReportJob, job.id)
     assert job.excluded == 1
-    assert job.total_score is not None and job.grade is None
+    # 库里这一列**也不留分**：那一列自己的注释写着"命中红线或没读全就是 NULL，不是 0"，
+    # 而轮询载荷读的就是这一列——一份文档写着"不作数"、轮询里带着 73，是同一件事的两个答案。
+    assert job.total_score is None and job.grade is None
     assert job.report_json["score_cell"] == "不作数"
     assert body  # 逐字引用的那条确实来自这一条项目原文
 

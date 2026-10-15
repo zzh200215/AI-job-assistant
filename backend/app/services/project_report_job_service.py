@@ -198,8 +198,10 @@ def _run_report_stage(db, job: ProjectReportJob) -> None:
         "advice_rejected": report.advice_rejected,
     }
     job.provenance_json = report.provenance
-    job.total_score = report.total_score
-    job.grade = report.grade
+    # 出局那一份库里**也不留总分与等级**：文档那一侧写的是"不作数"，库里却存着 73，
+    # 于是"这一份到底有没有分"就有了两个答案——列表页读列、详情页读文档，两处会打架。
+    job.total_score = None if report.is_excluded() else report.total_score
+    job.grade = None if report.is_excluded() else report.grade
     job.difficulty = report.difficulty.get("level") or None
     job.excluded = 1 if report.is_excluded() else 0
     _try_lint(db, job, report)
