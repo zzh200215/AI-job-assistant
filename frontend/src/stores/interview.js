@@ -12,7 +12,17 @@ import {
   skipQuestion,
 } from '@/api/interview'
 
-const ROUND_SECONDS = 30
+/* 每题的作答预算随 `question` 消息下来（`metadata.timeout_seconds`，见 docs/面试消息协议.md）。
+   这里不留第二个数当权威：老会话落库的消息没这个键，那一条兜到 45——不是老的 30。
+   30 是"系统设计题根本答不完"那条硬伤本身（D238 P1.2），留着它就等于把它藏在兜底分支里。 */
+const FALLBACK_ROUND_SECONDS = 45
+
+/** 从一条 question 消息的 metadata 里取这一题的秒数；脏值（0、负、非整数、布尔）一律兜底。 */
+function roundBudgetOf(meta) {
+  const raw = meta?.timeout_seconds
+  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw <= 0) return FALLBACK_ROUND_SECONDS
+  return raw
+}
 
 export const useInterviewStore = defineStore('interview', () => {
   const session = ref(null)
@@ -26,7 +36,8 @@ export const useInterviewStore = defineStore('interview', () => {
   const lastScore = ref(null)
   const timeElapsed = ref(0)
   const isFollowUp = ref(false)
-  const roundRemaining = ref(ROUND_SECONDS)
+  const roundBudget = ref(FALLBACK_ROUND_SECONDS)
+  const roundRemaining = ref(FALLBACK_ROUND_SECONDS)
 
   let sessionTimer = null
   let roundTimer = null
@@ -56,11 +67,14 @@ export const useInterviewStore = defineStore('interview', () => {
 
   const formattedRoundRemaining = computed(() => {
     const secs = Math.max(roundRemaining.value, 0)
-    return `00:${String(secs).padStart(2, '0')}`
+    // 这一题的预算可以到 120 秒，`00:120` 那种写法（按 30 秒造的）必须换成真的分秒。
+    const mm = Math.floor(secs / 60)
+    const ss = String(secs % 60).padStart(2, '0')
+    return `${String(mm).padStart(2, '0')}:${ss}`
   })
 
   const roundProgress = computed(() => {
-    return Math.max(0, Math.min(100, Math.round((roundRemaining.value / ROUND_SECONDS) * 100)))
+    return Math.max(0, Math.min(100, Math.round((roundRemaining.value / roundBudget.value) * 100)))
   })
 
   function getLatestQuestionRound(items = []) {
@@ -86,7 +100,8 @@ export const useInterviewStore = defineStore('interview', () => {
     lastScore.value = null
     timeElapsed.value = 0
     isFollowUp.value = false
-    roundRemaining.value = ROUND_SECONDS
+    roundBudget.value = FALLBACK_ROUND_SECONDS
+    roundRemaining.value = FALLBACK_ROUND_SECONDS
     stopSessionTimer()
     stopRoundTimer()
     stopEvaluationPolling()
@@ -152,7 +167,8 @@ export const useInterviewStore = defineStore('interview', () => {
       lastScore.value = null
       timeElapsed.value = 0
       isFollowUp.value = false
-      roundRemaining.value = ROUND_SECONDS
+      roundBudget.value = FALLBACK_ROUND_SECONDS
+      roundRemaining.value = FALLBACK_ROUND_SECONDS
     }
     status.value = 'connecting'
     errorMsg.value = ''
@@ -204,6 +220,7 @@ export const useInterviewStore = defineStore('interview', () => {
       currentRound.value = meta.round || currentRound.value + 1
       totalQuestions.value = meta.total || totalQuestions.value
       isFollowUp.value = !!meta.is_follow_up
+      roundBudget.value = roundBudgetOf(meta)
       status.value = 'ongoing'
       startSessionTimer()
       resetRoundTimer()
@@ -378,7 +395,7 @@ export const useInterviewStore = defineStore('interview', () => {
 
   function resetRoundTimer() {
     stopRoundTimer()
-    roundRemaining.value = ROUND_SECONDS
+    roundRemaining.value = roundBudget.value
     roundTimer = setInterval(() => {
       if (roundRemaining.value > 0) {
         roundRemaining.value -= 1
