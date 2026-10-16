@@ -24,6 +24,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import decode_access_token
 from app.models.interview_session import InterviewSession
+from app.services.interview_config_service import TIMEOUT_FLOOR_SECONDS
 from app.services.interview_engine import InterviewEngine
 from app.utils.time_helper import utc_now
 
@@ -32,6 +33,21 @@ router = APIRouter()
 
 # 只为容量上限服务：每条在途连接一个引擎，断开即移除。数量可从 `live_interview_count()` 读到。
 _active_engines: set[InterviewEngine] = set()
+
+
+def timeout_for_payload(payload: dict | None) -> int | None:
+    """这一题该给多少秒。不是题的消息返回 None（不给它起定时器）。
+
+    三种拿不到数的情形都落到**下限 45**，不是 0、也不是老那个 30：
+    本次改动之前落库的会话没有这个字段；脏值（0、负数、字符串）可能来自手改的 JSON 列。
+    睡 0 秒意味着一出题就判超时——那比 30 秒更坏。
+    """
+    if not payload or payload.get("type") != "question":
+        return None
+    raw = (payload.get("metadata") or {}).get("timeout_seconds")
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
+        return TIMEOUT_FLOOR_SECONDS
+    return raw
 
 
 def live_interview_count() -> int:
@@ -182,17 +198,20 @@ async def _handle_ws_loop(
 
     def _arm(payload: dict | None) -> None:
         nonlocal current_task, current_round
-        if not payload or payload.get("type") != "question":
+        budget = timeout_for_payload(payload)
+        if budget is None:
             return
         round_num = int((payload.get("metadata") or {}).get("round") or 0)
         if round_num:
             current_round = round_num
         if current_task and not current_task.done():
             current_task.cancel()
-        current_task = asyncio.create_task(timeout_timer(current_round))
+        current_task = asyncio.create_task(timeout_timer(current_round, budget))
 
-    async def timeout_timer(round_num: int):
-        await asyncio.sleep(InterviewEngine.TIMEOUT_SECONDS)
+    async def timeout_timer(round_num: int, budget: int):
+        # 原来睡的是类常量 `InterviewEngine.TIMEOUT_SECONDS`（全场 30 秒），
+        # 现在睡的是**这一题**随消息带下来的预算：技术题/项目题 120、场景题 90、通用题 45。
+        await asyncio.sleep(budget)
         # 守卫原来读连接这只引擎的 status/current_index，而它看不到 worker 的新写入；
         # 所以这一步的读也交给 worker——`resume()` 从落库推断，`_get_state()` 就是那份推断结果。
         _, state = await _step(session_id, "_get_state")

@@ -29,6 +29,11 @@ class InterviewQuestionBank(Base):
     title = Column(String(100), default="", comment="题型展示名称")
     prompt_template = Column(Text, default="", comment="个性化生成提示词（覆盖内置指令）")
     questions = Column(JSON, nullable=True, comment="静态题列表 [{type,question,intent,ref_answer}]，NULL=回落内置题库")
+    # P1.2：这一题型的作答秒数。NULL=按内置默认（basic 45 / tech 120 / scenario 90 / project 120）。
+    # 填的时候按**运行时题型**那套词表填（basic/tech/project/scenario），本表自己的 type 注释与
+    # DEFAULT_QUESTION_BANKS 是另一套（tech/hr/comprehensive/stress/group），两者只交集于 tech——
+    # 细节写在 `interview_config_service.TYPE_VOCABULARY_MISMATCH`。
+    timeout_seconds = Column(Integer, nullable=True, comment="该题型的作答秒数；NULL=回落内置默认")
     tags = Column(JSON, default=list, comment="标签列表")
     tenant_id = Column(
         BigInteger,

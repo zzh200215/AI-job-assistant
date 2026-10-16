@@ -23,6 +23,7 @@ from app.models.user import User
 from app.prompts.interview import INTERVIEW_PROMPT
 from app.schemas.interview_session import InterviewSessionCreate
 from app.services.interview_config_service import (
+    QUESTION_TYPE_LABELS,
     get_question_bank,
     list_question_banks,
 )
@@ -622,13 +623,10 @@ def _question_stats(questions: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _map_category(q_type: str) -> str:
-    mapping = {
-        "basic": "通用/HR",
-        "tech": "技术基础",
-        "project": "项目经验",
-        "scenario": "场景应对",
-    }
-    return mapping.get(q_type, "通用")
+    """题型 → 中文显示名。词表住在 `interview_config_service.QUESTION_TYPE_LABELS`（唯一出处），
+    引擎那一侧的"标签回推题型"读的是同一张表，两边不可能再漂开。
+    """
+    return QUESTION_TYPE_LABELS.get(q_type, "通用")
 
 
 # ============================================================

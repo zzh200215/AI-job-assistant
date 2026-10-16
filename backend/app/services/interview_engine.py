@@ -21,6 +21,7 @@ from app.agents.answer_evaluation_agent import AnswerEvaluationAgent, FinalRepor
 from app.core.database import SessionLocal
 from app.models.interview_session import InterviewSession
 from app.orchestration.context import AgentContext
+from app.services.interview_config_service import QUESTION_TYPE_LABELS, timeout_for_type
 from app.services.interview_evaluation_service import (
     build_memory_snapshot,
     complete_turn_evaluation,
@@ -32,12 +33,37 @@ from app.services.interview_evaluation_service import (
 )
 from app.utils.time_helper import utc_now
 
+# 标签 → 题型键，`QUESTION_TYPE_LABELS` 的逆。两边同一出处，所以出题侧写的标签和读题侧回推的
+# 标签不可能漂开（这张表以前在 api 层内联写了一遍，那是"两处权威"的老形状）。
+_LABEL_TO_TYPE: dict[str, str] = {label: qtype for qtype, label in QUESTION_TYPE_LABELS.items()}
+
+
+def resolve_question_type(question: dict[str, Any]) -> str:
+    """认出一道题的**题型键**（basic / tech / project / scenario），拿它去查这一题的作答预算。
+
+    为什么要一个解析器而不是直接读字段：`category` 这一个字段装着**两种域**——
+    starter 那条路塞进来的是 `_map_category()` 的中文标签（"技术基础"…），而既有夹具与
+    模型生成的题把英文题型键写在同一个字段里（"tech"…）。只认其中一种，另一整族题就会
+    静默拿下限 45 秒，而屏幕上什么都不会说。
+    优先级：`type` → `category` 本身就是题型键 → `category` 是中文标签则回推 → 都不认得才 general。
+    """
+    if question.get("type"):
+        return str(question["type"])
+    category = str(question.get("category") or "")
+    if category in QUESTION_TYPE_LABELS:
+        return category
+    if category in _LABEL_TO_TYPE:
+        return _LABEL_TO_TYPE[category]
+    return "general"
+
 
 class InterviewEngine:
     """每场面试对应一个引擎实例。"""
 
     MAX_QUESTIONS = 10
-    TIMEOUT_SECONDS = 30
+    # 每题的作答秒数不再是类常量：它按题型取（`interview_config_service.timeout_for_type`），
+    # 并随问题消息一起下发（`metadata.timeout_seconds`）。留着它就等于留一条退路——任何一处
+    # 再引用 `InterviewEngine.TIMEOUT_SECONDS`，全场就又回到 30 秒，所以护栏直接断言这个属性不在。
     MAX_TIMEOUTS = 3
 
     def __init__(self, session_id: int):
@@ -137,6 +163,10 @@ class InterviewEngine:
                 "round": self.current_index + 1,
                 "total": len(questions),
                 "category": category,
+                # 这一题的作答预算随消息一起下去：前端自己那份 30 是个平行真相，
+                # 它同时是三处倒计时的起点**和**进度条的分母，不跟着走就会显示成 120 秒的场次里
+                # 一根 4 秒就到底的进度条。WS 那侧的 `asyncio.sleep` 也只读这一个数。
+                "timeout_seconds": timeout_for_type(self.db, resolve_question_type(question)),
                 "question_id": question.get("id", self.current_index),
                 "turn_id": f"q-{self.current_index + 1}",
             },
@@ -263,6 +293,9 @@ class InterviewEngine:
                     "round": self.current_index + 1,
                     "total": len(questions),
                     "category": category,
+                    # 追问也是"下一题"，同样得带预算——少盖这一处，重连或追问时前端就掉回兜底值，
+                    # 而哪一边都不报错（`test_both_question_emission_sites_stamp_the_field` 守这条）。
+                    "timeout_seconds": timeout_for_type(self.db, resolve_question_type(question)),
                     "question_id": question.get("id", self.current_index),
                     "is_follow_up": True,
                     "turn_id": f"{turn_id}-follow-up",

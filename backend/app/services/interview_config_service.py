@@ -141,3 +141,63 @@ def get_scoring_rules(db: Session) -> list[dict[str, Any]]:
 def scoring_rule_map(db: Session) -> dict[str, float]:
     """dimension → weight 映射，供报告总分加权计算。"""
     return {rule["dimension"]: rule["weight"] for rule in get_scoring_rules(db)}
+
+
+# ==================== 每题作答预算（P1.2）====================
+
+# 题型的中文显示名。**这里是这份词表的唯一出处**：`interview_rest._map_category` 与引擎的
+# 题型回推都读它。它原先在 api 层内联写了一遍，两处一旦漂开，出题侧写的标签和读题侧回推的
+# 标签就对不上——那正下面那条"一词两域"的成因。
+QUESTION_TYPE_LABELS: dict[str, str] = {
+    "basic": "通用/HR",
+    "tech": "技术基础",
+    "project": "项目经验",
+    "scenario": "场景应对",
+}
+
+# 文档 §4 P1.2 那张表：basic 45 / tech 120 / scenario 90 / project 120。
+# 改任何一个数都要同时改那份文档，`test_interview_timeout_per_type` 逐字比着这四个值。
+QUESTION_TIMEOUT_SECONDS: dict[str, int] = {
+    "basic": 45,
+    "tech": 120,
+    "scenario": 90,
+    "project": 120,
+}
+
+# 认不出题型时的**下限**。原来全场都是 30 秒，而 30 就是"系统设计题根本答不完"那条硬伤的根因，
+# 所以认不出时不该继续发 30——发下限 45 秒，与最轻的那一档齐平。
+TIMEOUT_FLOOR_SECONDS = 45
+
+# 词表的坑，实现时量出来的，别当透明：这张表按**运行时题型**索引（basic/tech/scenario/project，
+# 就是 starter 模板与 `_map_category` 实际在用的那套），而 `interview_question_bank.type`
+# 自己的定义与 `DEFAULT_QUESTION_BANKS` 用的是另一套（tech/hr/comprehensive/stress/group）。
+# **两套的交集只有 "tech"**。今天 `interview_question_bank` 是 0 行所以不冲突；
+# 真要在管理端配超时，得先把这两套词表对齐，否则配下去的行永远查不中、静默走内置默认。
+TYPE_VOCABULARY_MISMATCH = (
+    "运行时题型 {basic,tech,project,scenario} 与配置层题型 "
+    "{tech,hr,comprehensive,stress,group} 只交集于 tech；对齐之前不要按配置层那套填超时行"
+)
+
+
+def timeout_for_type(db: Session | None, qtype: str) -> int:
+    """题型 → 这一题的作答秒数。两级回落，与 `get_scoring_rules` 同形：
+    平台配置行（`tenant_id IS NULL` 且启用）→ 内置默认表 → 认不出时的下限 45。
+
+    行存在但 `timeout_seconds` 是 NULL 或 0 时**按该题型的内置默认**回落，不是全局下限——
+    "这一题型配了、只是没配超时"与"这题型压根没配"是两件事，都该拿到自己那一档的默认值。
+    """
+    default = QUESTION_TIMEOUT_SECONDS.get(qtype, TIMEOUT_FLOOR_SECONDS)
+    if db is None or not qtype:
+        return default
+    row = (
+        db.query(InterviewQuestionBank)
+        .filter(
+            InterviewQuestionBank.is_active == 1,
+            InterviewQuestionBank.tenant_id.is_(None),
+            InterviewQuestionBank.type == qtype,
+        )
+        .first()
+    )
+    if row is not None and row.timeout_seconds:
+        return int(row.timeout_seconds)
+    return default

@@ -372,6 +372,7 @@ CREATE TABLE interview_question_bank (
 	title VARCHAR(100), 
 	prompt_template TEXT, 
 	questions JSON, 
+	timeout_seconds INTEGER, 
 	tags JSON, 
 	tenant_id BIGINT, 
 	is_active INTEGER, 
