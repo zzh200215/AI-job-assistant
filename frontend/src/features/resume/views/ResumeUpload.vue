@@ -479,6 +479,16 @@
           </div>
         </div>
 
+        <!-- 解析质量：判据只读后端 `_meta`（`app/services/parse_guard.py` 是唯一的盖章处），
+             前端不再自己推"这份是不是被截断了"——那会变成第二份真相。 -->
+        <el-alert
+          v-if="parseDegraded(r)"
+          type="warning"
+          title="解析不完整，建议检查原文格式"
+          :closable="false"
+          show-icon
+        />
+
         <div class="card-meta">
           <span v-if="r.parsed?.current_title"
             ><el-icon><Briefcase /></el-icon> {{ r.parsed.current_title }}</span
@@ -490,6 +500,11 @@
             ><el-icon><Document /></el-icon> {{ r.file_type?.toUpperCase() }}</span
           >
           <span>{{ formatSize(r.file_size) }}</span>
+          <span v-if="parseDropped(r).length"
+            >解析丢弃了 {{ parseDropped(r).length }} 个低优先级段落（{{
+              parseDropped(r).join('、')
+            }}）</span
+          >
         </div>
 
         <!-- 简历标签 -->
@@ -869,6 +884,11 @@ function formatSize(n) {
 // 诊断分标签只有两档：至少到 good 档才算 success，其余 warning。
 // 分界交给 scoreTone 的 85/70/50，不再在本页抄一份 70。
 const diagnosisTagType = (v) => (scoreToneAtLeast(v, 'good') ? 'success' : 'warning')
+
+/* 解析质量两条提示的取数处。两个判据都只读后端 `_meta`，那两个标记由
+   `app/services/parse_guard.py` 独家盖——前端不重推"这份是不是被截断了"。 */
+const parseDropped = (r) => r.parsed?._meta?.truncation?.dropped_sections || []
+const parseDegraded = (r) => Boolean(r.parsed?._meta?.parse_degraded)
 
 const diagScoreColor = 'var(--app-primary)'
 
