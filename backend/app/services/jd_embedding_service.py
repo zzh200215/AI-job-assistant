@@ -33,6 +33,10 @@ logger = logging.getLogger(__name__)
 # Texts per provider call. The embedding layer itself splits at 10; this only
 # bounds how many rows one sync round holds in memory.
 SYNC_CHUNK = 30
+# 这是 embedding 模型的窗口预算，不是 LLM 上下文预算。`简历与面试优化.md` R5 列出的四处截断里，
+# 前三处（两处简历解析 + 一处 JD 解析）已并进 `parse_guard.PARSE_INPUT_BUDGET = 15000`；
+# **这一处故意不跟**：把 15000 套到 embedding 输入上会把它推过窗口边界，那正是本项目当反面教材的
+# CHUNK_SIZE 超窗同族 bug。要动它，先量 embedder 的实际窗口。
 RAWS_TEXT_LIMIT = 6000
 
 

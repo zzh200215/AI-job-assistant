@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.history import Resume
-from app.prompts.rendering import render_prompt
 from app.prompts.resume_parse import RESUME_PARSE_PROMPT
+from app.schemas.resume import ResumeParsedSchema
 from app.services.llm_service import chat_json
+from app.services.parse_guard import guarded_parse
 from app.utils.file_access import resolve_upload_path
 from app.utils.file_parser import parse_resume
 
@@ -83,12 +84,18 @@ def parse_and_save(db: Session, resume_id: int) -> Resume:
     if not raw_text or not raw_text.strip():
         raise ValueError("从文件中未能提取到有效文本，请检查文件内容")
 
-    # 截断避免超长
-    prompt = render_prompt(RESUME_PARSE_PROMPT, resume_text=raw_text[:6000])
-    parsed: dict[str, Any] = chat_json(prompt)
+    # 预算内取文本（超限时按段落优先级整段丢，不硬切）→ 单发解析 → 结构校验 → 一次自纠。
+    # `raw_text` 列存的仍是全文：裁剪只发生在喂模型的那一份，所以历史行将来能就地重解析。
+    parsed, meta = guarded_parse(
+        raw_text=raw_text,
+        prompt_template=RESUME_PARSE_PROMPT,
+        text_key="resume_text",
+        schema=ResumeParsedSchema,
+        chat=chat_json,
+    )
 
     resume.raw_text = raw_text
-    resume.parsed_json = parsed
+    resume.parsed_json = {**parsed, "_meta": meta} if meta else parsed
     resume.name = parsed.get("name")
     resume.phone = parsed.get("phone")
     resume.email = parsed.get("email")

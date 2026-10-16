@@ -18,10 +18,10 @@ from app.prompts.interview import INTERVIEW_PROMPT
 from app.prompts.match import MATCH_PROMPT
 from app.prompts.rendering import render_prompt
 from app.prompts.resume_parse import RESUME_PARSE_PROMPT
+from app.schemas.resume import ResumeParsedSchema
 from app.services.llm_service import chat_json, set_llm_trace_context
+from app.services.parse_guard import guarded_parse
 from app.utils.file_parser import parse_resume
-
-_RESUME_TEXT_MAX = 6000  # 与 resume_service.parse_and_save 一致
 
 
 def _trace(db, *, source: str, prompt_name: str, **extra: Any) -> None:
@@ -56,12 +56,22 @@ def _jsonify(value: Any) -> dict:
 
 
 def parse_resume_text(raw_text: str, db=None) -> dict:
-    """简历文本 → 结构化 JSON（复用 RESUME_PARSE_PROMPT + chat_json）。"""
+    """简历文本 → 结构化 JSON。
+
+    与 `resume_service.parse_and_save` 共用同一套预算、Schema 与一次自纠——这条以前是
+    `raw_text[:_RESUME_TEXT_MAX]` 单发无防护，两处阈值各写一遍就会各自漂移（文档 R5 记的就是这个）。
+    """
     if not raw_text or not raw_text.strip():
         raise ValueError("content 不能为空")
-    prompt = render_prompt(RESUME_PARSE_PROMPT, resume_text=raw_text[:_RESUME_TEXT_MAX])
     _trace(db, source="external_service.parse_resume_text", prompt_name="resume_parse")
-    return chat_json(prompt) or {}
+    parsed, meta = guarded_parse(
+        raw_text=raw_text,
+        prompt_template=RESUME_PARSE_PROMPT,
+        text_key="resume_text",
+        schema=ResumeParsedSchema,
+        chat=chat_json,
+    )
+    return {**parsed, "_meta": meta} if meta else parsed
 
 
 def parse_resume_file(file_bytes: bytes, filename: str, db=None) -> dict:
