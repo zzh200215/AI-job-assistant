@@ -16,7 +16,7 @@ from app.utils.response import ERR_PARAM, fail, ok
 router = APIRouter()
 
 REPORTS_DIR = Path(__file__).resolve().parents[2] / "reports"
-SUPPORTED_REPORT_TYPES = {"rag", "agent", "recommend"}
+SUPPORTED_REPORT_TYPES = {"rag", "agent", "recommend", "parse"}
 
 
 def _ensure_reports_dir() -> None:
@@ -68,12 +68,17 @@ def _infer_report_type(path: Path, payload: dict[str, Any]) -> str | None:
         return "agent"
     if name.startswith("recommend_eval"):
         return "recommend"
+    if name.startswith("parse_eval"):
+        return "parse"
     if any(str(key).startswith("recall@") for key in payload):
         return "rag"
     if "mae" in payload and "spearman_rho" in payload:
         return "agent"
     if "skill_match_accuracy" in payload and "jd_explanation_consistency" in payload:
         return "recommend"
+    # parse 轨的报告是两臂嵌套的，认它的形状而不是某个键名（别的轨都是平铺指标袋）
+    if isinstance(payload.get("deterministic"), dict) and isinstance(payload.get("instrument_self_check"), dict):
+        return "parse"
     return None
 
 
@@ -139,6 +144,40 @@ def _normalize_report(path: Path, payload: dict[str, Any]) -> dict[str, Any] | N
             "linked_pair_count": int(linkage.get("linked_pair_count") or 0),
             "linked_feedback_count": int(linkage.get("linked_feedback_count") or 0),
             "details_count": len(payload.get("details") or []),
+        }
+
+    if report_type == "parse":
+        # parse 轨的报告是**分臂**的（确定性臂不碰 provider、语义臂要真跑），不是别轨那种一层平铺的指标袋。
+        # 这里摊平给页面用；两臂各自缺不缺数原样带下去，语义臂在 mock 下是 None——
+        # 页面把它显示成"未跑"而不是 0，是这一支唯一的诚实要求。
+        det = payload.get("deterministic") if isinstance(payload.get("deterministic"), dict) else {}
+        sem = payload.get("semantic") if isinstance(payload.get("semantic"), dict) else {}
+        scalar = sem.get("scalar") if isinstance(sem.get("scalar"), dict) else {}
+        lists = sem.get("lists") if isinstance(sem.get("lists"), dict) else {}
+        skills = lists.get("skills") if isinstance(lists.get("skills"), dict) else {}
+        return {
+            **base,
+            "metrics": {
+                "truncated_rate": det.get("truncated_rate"),
+                "tail_keep_rate": det.get("tail_keep_rate"),
+                "first_pass_rate": sem.get("first_pass_rate"),
+                "name_recall": (scalar.get("name") or {}).get("recall")
+                if isinstance(scalar.get("name"), dict)
+                else None,
+                "phone_recall": (scalar.get("phone") or {}).get("recall")
+                if isinstance(scalar.get("phone"), dict)
+                else None,
+                "email_recall": (scalar.get("email") or {}).get("recall")
+                if isinstance(scalar.get("email"), dict)
+                else None,
+                "skills_f1": skills.get("f1"),
+            },
+            "instrument_self_check": payload.get("instrument_self_check") or {},
+            "dropped_sections": det.get("dropped_sections") or {},
+            "deterministic_errors": det.get("errors") or [],
+            "semantic_errors": sem.get("errors") or [],
+            "semantic_ran": bool(sem),
+            "details_count": len(sem.get("per_sample") or []),
         }
 
     score_dist = payload.get("score_dist") if isinstance(payload.get("score_dist"), dict) else {}
@@ -221,6 +260,19 @@ def _compare_reports(left: dict[str, Any], right: dict[str, Any]) -> dict[str, A
                 right["metrics"].get("feedback_agreement_rate"),
             ),
         }
+    if report_type == "parse":
+        keys = (
+            "truncated_rate",
+            "tail_keep_rate",
+            "first_pass_rate",
+            "name_recall",
+            "phone_recall",
+            "email_recall",
+            "skills_f1",
+        )
+        # 语义臂在 mock 那次跑里是 None：两次的这一格有一边没数，差值就是 None 而不是 0，
+        # 否则"这次没跑"会被读成"没变差"。
+        return {key: _delta(left["metrics"].get(key), right["metrics"].get(key)) for key in keys}
     return {
         "mae": _delta(left["metrics"].get("mae"), right["metrics"].get("mae")),
         "spearman_rho": _delta(left["metrics"].get("spearman_rho"), right["metrics"].get("spearman_rho")),

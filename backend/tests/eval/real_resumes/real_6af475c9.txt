@@ -1,0 +1,15 @@
+陈慧敏 简历
+姓名：陈慧敏
+性别：男  年龄：25  学历：本科
+学校：华东师范大学  专业：计算机科学与技术
+电话：13800138002  邮箱：resume02@example.com
+工作经历
+2023.7 - 至今  字节跳动  后端开发工程师
+负责内容：基于 Python / FastAPI / Django 构建高并发招聘业务后端，MySQL + Redis + Docker。
+2022.7 - 2023.6  美团  后端开发实习生
+基于 Java SpringBoot 维护商家系统接口。
+项目经历
+1. 智能推荐系统：Python + PyTorch + FAISS，负责召回与排序模块，QPS 提升 30%。
+2. 招聘平台后端：FastAPI + MySQL + Redis，支持 10 万级职位检索。
+技能
+Python, FastAPI, Django, MySQL, Redis, Docker, Kubernetes, PyTorch, 机器学习, NLP

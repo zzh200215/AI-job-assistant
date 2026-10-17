@@ -101,6 +101,17 @@ jobs:
           DATABASE_URL: sqlite:///./rag_ci.sqlite3
         run: python scripts/eval_agent.py --max-errors 0
 
+      # 第四轨 parse（P2）。这一轨**分两臂**：语义臂要真 provider 才有字段准确率（成文纪律：
+      # mock 的 chat_json 对任何输入回同一份常量，"准确率"是常数对常数），所以 CI 只门确定性臂——
+      # 它不碰 provider：拿语料原文过一遍 P1.1 的截断器，门"超预算时段尾那份最新经历必须还在"。
+      # 1.0 不是理想值，是这套语料当前唯一的真实读数（25/25）；哪天它掉下来，就是截断行为变了。
+      # 语料自身另有两条门（tests/test_eval_datasets.py：每行可解析、且与生成器逐字一致）。
+      - name: Run Parse eval (deterministic arm - the budget must keep the resume tail)
+        run: >
+          python scripts/eval_parse.py
+          --min-tail-keep 1.0
+          --max-errors 0
+
       - name: Dependency vulnerability audit
         run: pip-audit --desc --requirement requirements.txt
 
