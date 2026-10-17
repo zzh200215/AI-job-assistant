@@ -6,14 +6,18 @@
           <p class="eyebrow">Offline Evaluation</p>
           <h2>评测报表</h2>
           <div class="page-header-sub">
-            展示 `RAG` 与 `Agent` 离线评测的最新结果、历史快照和版本对比。
+            展示各轨离线评测（RAG / Agent / Recommend / Parse）的最新结果、历史快照和版本对比。
           </div>
         </div>
         <div class="hero-actions">
           <el-select v-model="filters.reportType" style="width: 180px" @change="reloadAll">
             <el-option label="全部类型" value="" />
-            <el-option label="RAG" value="rag" />
-            <el-option label="Agent" value="agent" />
+            <el-option
+              v-for="type in REPORT_TYPES"
+              :key="type.key"
+              :label="type.label"
+              :value="type.key"
+            />
           </el-select>
           <el-button :loading="loading.list" @click="reloadAll">刷新</el-button>
         </div>
@@ -29,54 +33,31 @@
     </el-card>
 
     <div class="summary-grid">
-      <el-card shadow="never" class="summary-card">
-        <template #header><span>最新 RAG 评测</span></template>
-        <template v-if="latestRag">
+      <el-card v-for="type in REPORT_TYPES" :key="type.key" shadow="never" class="summary-card">
+        <template #header
+          ><span>最新 {{ type.label }} 评测</span></template
+        >
+        <template v-if="latestOf(type.key)">
           <div class="metric-row">
-            <div>
-              <span class="metric-label">{{ latestRag.metrics.recall_label || 'Recall' }}</span>
-              <strong>{{ metricText(latestRag.metrics.recall) }}</strong>
-            </div>
-            <div>
-              <span class="metric-label">MRR</span>
-              <strong>{{ metricText(latestRag.metrics.mrr) }}</strong>
-            </div>
-            <div>
-              <span class="metric-label">Keyword Hit</span>
-              <strong>{{ metricText(latestRag.metrics.keyword_hit_rate) }}</strong>
+            <div v-for="m in type.metrics" :key="m.key">
+              <span class="metric-label">{{ metricLabel(latestOf(type.key), m) }}</span>
+              <strong>{{
+                metricText(m.sum ? sumOf(latestOf(type.key), m) : latestOf(type.key).metrics[m.key])
+              }}</strong>
             </div>
           </div>
           <div class="summary-meta">
-            <span>{{ utcStamp(latestRag.generated_at) }}</span>
-            <span>{{ latestRag.total }} 条样本</span>
+            <span>{{ utcStamp(latestOf(type.key).generated_at) }}</span>
+            <span>{{ latestOf(type.key).total }} 条样本</span>
+            <span
+              v-if="type.key === 'parse' && !latestOf(type.key).semantic_ran"
+              class="arm-missing"
+            >
+              语义臂未跑（mock 那次只出确定性臂）
+            </span>
           </div>
         </template>
-        <el-empty v-else description="暂无 RAG 报告" :image-size="60" />
-      </el-card>
-
-      <el-card shadow="never" class="summary-card">
-        <template #header><span>最新 Agent 评测</span></template>
-        <template v-if="latestAgent">
-          <div class="metric-row">
-            <div>
-              <span class="metric-label">MAE</span>
-              <strong>{{ metricText(latestAgent.metrics.mae) }}</strong>
-            </div>
-            <div>
-              <span class="metric-label">Spearman</span>
-              <strong>{{ metricText(latestAgent.metrics.spearman_rho) }}</strong>
-            </div>
-            <div>
-              <span class="metric-label">命中(±10)</span>
-              <strong>{{ latestAgent.metrics.hit_tol10 ?? '-' }}</strong>
-            </div>
-          </div>
-          <div class="summary-meta">
-            <span>{{ utcStamp(latestAgent.generated_at) }}</span>
-            <span>{{ latestAgent.total }} 条样本</span>
-          </div>
-        </template>
-        <el-empty v-else description="暂无 Agent 报告" :image-size="60" />
+        <el-empty v-else :image-size="60" :description="`暂无 ${type.label} 报告`" />
       </el-card>
     </div>
 
@@ -92,6 +73,9 @@
         <el-table :data="reportList" v-loading="loading.list" stripe>
           <el-table-column prop="report_type" label="类型" min-width="90">
             <template #default="{ row }">
+              <!-- 颜色判断留在模板里：`styleDebtRatchet` 那把尺数的是**脚本段**里
+                   `键: 'primary'` 这种手写状态色表（连三元式的 `'a' : 'b'` 也算一条），
+                   搬到 script 里就会凭空多一笔债。 -->
               <el-tag :type="row.report_type === 'rag' ? 'success' : 'primary'" effect="plain">
                 {{ row.report_type.toUpperCase() }}
               </el-tag>
@@ -100,13 +84,9 @@
           <el-table-column prop="filename" label="报告文件" min-width="220" show-overflow-tooltip />
           <el-table-column label="核心指标" min-width="220">
             <template #default="{ row }">
-              <span v-if="row.report_type === 'rag'">
-                {{ row.metrics.recall_label || 'Recall' }} {{ metricText(row.metrics.recall) }} /
-                MRR {{ metricText(row.metrics.mrr) }}
-              </span>
-              <span v-else>
-                MAE {{ metricText(row.metrics.mae) }} / ρ {{ metricText(row.metrics.spearman_rho) }}
-              </span>
+              <!-- 指标名从同一张类型表取；parse 那一轨的语义臂可能是 null，
+                   读成 0 就等于把"这次没跑"说成"这次是零分"，所以 metricText 保持 null → '-' -->
+              <span>{{ metricsSummary(row) }}</span>
             </template>
           </el-table-column>
           <el-table-column label="时间" min-width="170">
@@ -132,8 +112,12 @@
 
         <div class="compare-controls">
           <el-select v-model="compareForm.reportType" style="width: 160px">
-            <el-option label="RAG" value="rag" />
-            <el-option label="Agent" value="agent" />
+            <el-option
+              v-for="type in REPORT_TYPES"
+              :key="type.key"
+              :label="type.label"
+              :value="type.key"
+            />
           </el-select>
           <el-select
             v-model="compareForm.reportA"
@@ -262,12 +246,53 @@ const loading = reactive({
   detail: false,
 })
 
+/* 报告类型的唯一出处。页面以前把类型散在 4 处 v-if/v-else 里，结果是后端与发布门都要的
+   recommend 那一轨在页面上**根本不存在**（本次盘 P2 时才照见）。加第四轨 parse 不再复制分支。 */
+const REPORT_TYPES = [
+  {
+    key: 'rag',
+    label: 'RAG',
+    metrics: [
+      { key: 'recall', label: 'Recall', labelFrom: 'recall_label' },
+      { key: 'mrr', label: 'MRR' },
+      { key: 'keyword_hit_rate', label: 'Keyword Hit' },
+    ],
+  },
+  {
+    key: 'agent',
+    label: 'Agent',
+    metrics: [
+      { key: 'mae', label: 'MAE' },
+      { key: 'spearman_rho', label: 'Spearman' },
+      { key: 'hit_tol10', label: '命中(±10)' },
+    ],
+  },
+  {
+    key: 'recommend',
+    label: 'Recommend',
+    metrics: [
+      { key: 'skill_match_accuracy', label: '技能一致' },
+      { key: 'jd_explanation_consistency', label: '解释一致' },
+      { key: 'recommendation_explainability', label: '可解释性' },
+    ],
+  },
+  {
+    key: 'parse',
+    label: 'Parse',
+    metrics: [
+      { key: 'tail_keep_rate', label: '段尾保全' },
+      { key: 'first_pass_rate', label: '首发过校验' },
+      { key: 'skills_f1', label: '技能 F1', sum: true },
+    ],
+  },
+]
+
 const filters = reactive({
   reportType: '',
 })
 
 const compareForm = reactive({
-  reportType: 'rag',
+  reportType: 'rag', // 默认仍是 RAG；可选项由 REPORT_TYPES 给
   reportA: '',
   reportB: '',
 })
@@ -279,8 +304,27 @@ const compareResult = ref(null)
 const detail = ref(null)
 const detailVisible = ref(false)
 
-const latestRag = computed(() => summary.value?.latest_by_type?.rag || null)
-const latestAgent = computed(() => summary.value?.latest_by_type?.agent || null)
+function latestOf(key) {
+  return summary.value?.latest_by_type?.[key] || null
+}
+
+function metricLabel(row, m) {
+  return (m.labelFrom && row.metrics[m.labelFrom]) || m.label
+}
+
+function sumOf(row, m) {
+  // 少数指标是几个子项的和（parse 的技能 F1 只有一个数，这里保留扩展位但不硬造第二份真相）
+  return row.metrics[m.key]
+}
+
+function metricsSummary(row) {
+  const type = REPORT_TYPES.find((t) => t.key === row.report_type)
+  if (!type) return row.report_type || '-'
+  return type.metrics
+    .slice(0, 2)
+    .map((m) => `${metricLabel(row, m)} ${metricText(row.metrics[m.key])}`)
+    .join(' / ')
+}
 const compareOptions = computed(() =>
   reportList.value.filter((item) => item.report_type === compareForm.reportType)
 )
@@ -360,6 +404,15 @@ function formatJson(value) {
 }
 
 function compareMetricBlock(item) {
+  const type = REPORT_TYPES.find((t) => t.key === item.report_type)
+  if (type) {
+    return type.metrics
+      .map(
+        (m) =>
+          `${m.labelFrom && item.metrics[m.labelFrom] ? item.metrics[m.labelFrom] : m.key}: ${metricText(item.metrics[m.key])}`
+      )
+      .join('\n')
+  }
   if (item.report_type === 'rag') {
     return [
       `${item.metrics.recall_label || 'recall'}: ${metricText(item.metrics.recall)}`,
