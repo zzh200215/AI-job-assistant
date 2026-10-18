@@ -18,6 +18,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.agents.answer_evaluation_agent import AnswerEvaluationAgent, FinalReportAgent
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.interview_session import InterviewSession
 from app.orchestration.context import AgentContext
@@ -31,6 +32,7 @@ from app.services.interview_evaluation_service import (
     session_write_lock,
     submit_turn_evaluation,
 )
+from app.services.interviewer_decision import decide_next
 from app.utils.time_helper import utc_now
 
 # 标签 → 题型键，`QUESTION_TYPE_LABELS` 的逆。两边同一出处，所以出题侧写的标签和读题侧回推的
@@ -144,6 +146,10 @@ class InterviewEngine:
         return None
 
     def next_question(self) -> dict[str, Any]:
+        followup = self._maybe_followup()
+        if followup is not None:
+            return followup
+
         self.current_index += 1
         self._load_session()
 
@@ -169,6 +175,75 @@ class InterviewEngine:
                 "timeout_seconds": timeout_for_type(self.db, resolve_question_type(question)),
                 "question_id": question.get("id", self.current_index),
                 "turn_id": f"q-{self.current_index + 1}",
+            },
+            "timestamp": utc_now().isoformat(),
+        }
+        self.save_message(message)
+        return self._message_to_payload(message)
+
+    def _decision_state(self, questions: list[dict[str, Any]], evaluations: list[dict[str, Any]]) -> dict[str, Any]:
+        """决策器的输入一律由引擎拼好传进去——决策器自己不取库（那会变成第二条会话链）。
+
+        候选池取的是**还没出过的题**（`current_index + 1` 往后），不是整份列表：否则 advance 会
+        把已经答过的题再问一遍。
+        """
+        return {
+            "round_index": len(evaluations),
+            "scores": [int(item.get("overall_score") or 0) for item in evaluations],
+            "evidence": [str(item.get("evidence") or "") for item in evaluations],
+            "asked_followup": bool(evaluations[-1].get("follow_up")),
+            "weaknesses": (self.session.memory_snapshot or {}).get("weaknesses") or [],
+            "candidate_pool": questions[self.current_index + 1 :],
+        }
+
+    def _maybe_followup(self) -> dict[str, Any] | None:
+        """答了、分低、有内容、且这题还没追问过 ⇒ 出一条单点追问；其余一律返回 None 走原来那条链。
+
+        追问**不推进 `current_index`**：它不是新的一题。所以 `round` 报的是被追问那一题的轮次，
+        `total` 仍是题目总数——前端的进度条分母就是 total，这里动一下就会画歪。
+        """
+        if not settings.INTERVIEW_USE_DECIDER:
+            return None
+
+        self._load_session()
+        questions = self.session.questions or []
+        evaluations = self._rebuild_evaluations()
+        if not evaluations:
+            return None
+
+        last = evaluations[-1]
+        if last.get("follow_up"):
+            return None
+        # 超时那一题在 `_rebuild_evaluations()` 里是 overall_score=0 且 timed_out=True。决策器只看
+        # 分数就会判深挖，于是面试官去追问一段从来没出现过的回答——那是幻觉，不是追问。
+        if last.get("timed_out") or not str(last.get("user_answer") or "").strip():
+            return None
+
+        decision = decide_next(self._decision_state(questions, evaluations))
+        if decision.get("action") != "deepen":
+            return None
+
+        question = decision["question"]
+        round_num = len(evaluations)
+        # metadata 一律**内联**在消息字面量里，不拆成变量：那条静态守卫（P1.2 落的花括号配对）是按
+        # `"type": "question"` 之后紧跟的 `"metadata": {` 取字典体的，拆出去它就看不到这枚章。
+        message = {
+            "role": "ai",
+            "type": "question",
+            "content": question.get("question") or question.get("q") or "",
+            "metadata": {
+                "round": round_num,
+                "total": len(questions),
+                "category": question.get("category") or "general",
+                "timeout_seconds": timeout_for_type(self.db, resolve_question_type(question)),
+                "question_id": question.get("id", round_num),
+                "turn_id": f"q-{round_num}-followup",
+                "is_follow_up": True,
+                "decision": {
+                    "action": decision["action"],
+                    "source": decision.get("source", "heuristic"),
+                    "degraded": bool(decision.get("degraded")),
+                },
             },
             "timestamp": utc_now().isoformat(),
         }
