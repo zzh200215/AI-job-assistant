@@ -91,11 +91,12 @@ def test_heuristic_does_not_loop_on_a_weak_already_followed_up_question() -> Non
 
 
 def test_mid_grade_boundary_is_explicit() -> None:
-    """阈值本身要能被读出来，且在边界上判得确定：70 这一档不许"四舍五入"。"""
+    """阈值本身要能被读出来，且在边界上判得确定。原稿写的是"**评分 <70** 且未追问→deepen"，
+    所以 70 这一档是**推进**而不是深挖——边界归哪一侧必须钉住，不然实现会两边漂。"""
     threshold = _module().DEEPEN_SCORE_CEILING
     assert threshold == 70, f"追问阈值必须与兜底链那格一致（<70 才深挖），读到的是 {threshold}"
-    assert _module().decide_heuristic(_state(scores=[threshold]))["action"] == "deepen"
-    assert _module().decide_heuristic(_state(scores=[threshold + 1]))["action"] == "advance"
+    assert _module().decide_heuristic(_state(scores=[threshold - 1]))["action"] == "deepen"
+    assert _module().decide_heuristic(_state(scores=[threshold]))["action"] == "advance"
 
 
 # ---------------------------------------------------------------------------
@@ -144,10 +145,23 @@ def test_empty_pool_falls_back_to_starter() -> None:
     decided = _module().decide_next(_state(scores=[80, 82], pool=[]))
     assert decided["source"] == "starter", decided
     assert decided["action"] == "advance", decided
+    assert _question_text(decided), f"starter 那一档给了个空题面：{decided}"
+
+
+def _question_text(decided: dict) -> str:
+    """把"下一题的题面"取出来。决策器返回的 question 是**一整个题目 dict**（引擎要按 dict 用），
+    所以 `assert decided.get("question")` 是**空断言**——只要那个 dict 非空就永远为真，
+    里面题面是空串也照过。这一条是变异验证逮出来的（把 starter 题面改成空串，14 条全绿），
+    所以判据必须落到题面字符串上。"""
+    question = decided.get("question")
+    if isinstance(question, dict):
+        return str(question.get("question") or question.get("q") or "").strip()
+    return str(question or "").strip()
 
 
 def test_decide_never_returns_no_question() -> None:
-    """任何输入组合都不许让下一题消失（这是 finish 以外的路径）。"""
+    """任何输入组合都不许让下一题消失（这是 finish 以外的路径）。判据是**题面非空**，
+    不是"有个 question 键"。"""
     for state in (
         _state(scores=[]),
         _state(scores=[0]),
@@ -155,7 +169,7 @@ def test_decide_never_returns_no_question() -> None:
         _state(scores=[33, 21], weaknesses=["分布式事务"]),
     ):
         decided = _module().decide_next(state)
-        assert decided.get("question"), f"决策器让下一题变成空：{state['scores']} → {decided}"
+        assert _question_text(decided), f"决策器让下一题的题面变成空：{state['scores']} → {decided}"
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +239,7 @@ def test_deepen_may_generate_but_always_returns_a_question() -> None:
         chat=boom,
     )
     assert decided["action"] == "deepen", decided
-    assert decided.get("question"), decided
+    assert _question_text(decided), f"生成失败又没回落出题面：{decided}"
     assert decided["source"] in {"heuristic", "starter"}, decided
 
 
