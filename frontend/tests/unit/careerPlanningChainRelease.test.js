@@ -157,4 +157,41 @@ describe('CareerPlanning 的两条链：提前返回要解 loading，作废要�
     await settle(byResume(9), pathsPayload(9))
     expect(renderedDirections()).toEqual([])
   })
+
+  it('把上一场面试证据标在方向缺口上', async () => {
+    const wrapper = await mountPlanning()
+    await settle(ofType('/resume/list')[0], { items: RESUMES })
+    await settle(ofType('/jd/list')[0], { items: [] })
+    await settle(byResume(7), {
+      career_paths: [
+        {
+          direction_key: 'k7',
+          label: '方向-7',
+          coverage: 0.5,
+          gap_skills: [
+            {
+              skill: 'Kafka',
+              required_count: 2,
+              nice_count: 0,
+              interview: {
+                sessions: 2,
+                avg_score: 55,
+                evidence: [{ question: 'Kafka 消费语义' }],
+              },
+            },
+            { skill: 'MySQL', required_count: 1, nice_count: 0 },
+          ],
+        },
+      ],
+      summary: '',
+      corpus: { visible_jds: 10, directions_found: 1 },
+      interview_profile: { has_data: true, weakness_count: 1, matched_gap_count: 1 },
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('上次面试 2 场考到')
+    expect(text).toContain('均分 55')
+    expect(text).toContain('Kafka 消费语义')
+    expect(text).toContain('已在 1 个缺口上标出证据')
+  })
 })

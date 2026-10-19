@@ -10,7 +10,7 @@ import { useLatestCall } from '@/composables/useLatestCall'
    - 作废（换了/没了简历）时把仍在途的那一发判为过期——以前只是清值，于是清完还会被旧响应填回来。
    令牌只有一个领取点（`run` 里面），三个入口（加载 / 作废 / 重试）都从它过：D30 量过两个函数共用
    一个实例的症状是"两条都不写"，而同一函数内多处领取不触发那条不变量。 */
-const EMPTY_META = { summary: '', corpus: {}, message: '' }
+const EMPTY_META = { summary: '', corpus: {}, message: '', interview_profile: {} }
 
 export function useCareerDirections({ getResumeId }) {
   const careerPaths = ref([])
@@ -41,6 +41,7 @@ export function useCareerDirections({ getResumeId }) {
         summary: data?.summary || '',
         corpus: data?.corpus || {},
         message: data?.message || '',
+        interview_profile: data?.interview_profile || {},
       }
     } catch (e) {
       if (!isCurrent()) return

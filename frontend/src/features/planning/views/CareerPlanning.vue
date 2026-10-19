@@ -274,6 +274,9 @@
                   <ul class="direction-gaps">
                     <li v-for="gap in gapFacts(item)" :key="gap.skill">
                       {{ gap.skill }} — {{ gap.detail }}
+                      <span v-if="gap.interview" class="gap-interview">{{
+                        interviewGapText(gap.interview)
+                      }}</span>
                     </li>
                   </ul>
                 </li>
@@ -285,6 +288,13 @@
           </div>
           <p v-if="careerPathMeta.summary" class="direction-summary">
             {{ careerPathMeta.summary }}
+          </p>
+          <p
+            v-if="careerPathMeta.interview_profile?.has_data"
+            class="direction-summary interview-note"
+          >
+            上次面试留下 {{ careerPathMeta.interview_profile.weakness_count }} 个技能弱点，已在
+            {{ careerPathMeta.interview_profile.matched_gap_count }} 个缺口上标出证据。
           </p>
         </el-card>
       </el-col>
@@ -664,6 +674,9 @@
                   <span>→</span>
                   <span>{{ gap.target_level || '目标水平未知' }}</span>
                 </div>
+                <p v-if="gap.interview" class="gap-interview">
+                  {{ interviewGapText(gap.interview) }}
+                </p>
               </article>
             </div>
           </el-card>
@@ -757,8 +770,10 @@ import {
   RADAR_CENTER_POINT as centerPoint,
   RADAR_RADIUS as radarRadius,
   complexityTag,
+  attachInterviewToSkillGaps,
   coveragePct,
   gapFacts,
+  interviewGapText,
   jdOptionLabel,
   joinedText,
   makeRadarPolygon,
@@ -926,9 +941,11 @@ const projectRecommendations = computed(() => {
 const skillGaps = computed(() => {
   const items = careerResult.value?.skill_gaps || []
   if (!Array.isArray(items)) return []
-  return items
+  const normalized = items
     .map((item) => (typeof item === 'string' ? { skill: item } : item))
     .filter((item) => item && item.skill)
+  // 完整规划那份 skill_gaps 没有 canonical 字段，只能按归一化拼写匹配；匹配不上就不硬贴。
+  return attachInterviewToSkillGaps(normalized, careerPathMeta.value.interview_profile)
 })
 const skillGapCount = computed(() => skillGaps.value.length)
 const localizedShortTermGoals = computed(() =>
@@ -1937,6 +1954,18 @@ function buildGoalJDText() {
   margin: 14px 0 0;
   font-size: 13px;
   color: var(--app-text);
+}
+
+.gap-interview {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+
+.interview-note {
+  margin-top: 8px;
+  color: var(--app-muted);
 }
 
 .next-block + .next-block {

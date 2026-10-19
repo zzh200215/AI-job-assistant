@@ -7,6 +7,7 @@
 模型只在这些方向里排序和写理由，理由不是真实推理时回落到规则句。
 """
 
+import logging
 import traceback
 
 from fastapi import APIRouter, Depends, Query
@@ -17,10 +18,12 @@ from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.history import Resume
 from app.models.user import User
-from app.services.career_evidence import derive_directions
+from app.services.career_evidence import attach_interview_evidence, derive_directions
+from app.services.interview_profile_service import get_profile, public_profile
 from app.utils.response import ERR_COMMON, ERR_PARAM, fail, ok
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/recommend", summary="职业方向推荐")
@@ -49,6 +52,13 @@ def recommend_career_paths(
 
     try:
         directions, corpus = derive_directions(db, resume_data, current_user, limit=limit)
+        # 画像读取失败不挡方向推荐：它只是在已有缺口上加一行证据。
+        try:
+            interview_profile = public_profile(get_profile(db, current_user.id))
+        except Exception:
+            logger.exception("Failed to load interview profile for career path user_id=%s", current_user.id)
+            interview_profile = {}
+        matched_gap_count = attach_interview_evidence(directions, interview_profile)
         result = CareerPathAgent().recommend(resume_data, directions)
         by_key = {direction.key: direction for direction in directions}
 
@@ -75,6 +85,15 @@ def recommend_career_paths(
                 "reason_source": result.get("reason_source", "rules") if paths else "rules",
                 "rejected": result.get("rejected", []),
                 "corpus": corpus,
+                "interview_profile": {
+                    "has_data": bool(interview_profile.get("has_data")),
+                    "last_session": interview_profile.get("last_session"),
+                    "weakness_count": len(interview_profile.get("skill_weaknesses") or []),
+                    "matched_gap_count": matched_gap_count,
+                    # 完整规划那条链（CareerAgent 的 skill_gaps）也读这一份；它有技能名但没有
+                    # canonical 字段，前端只能按归一化拼写匹配。
+                    "skill_weaknesses": interview_profile.get("skill_weaknesses") or [],
+                },
             },
             message=f"推荐 {len(paths)} 个岗位方向" if paths else "岗位库里没有可统计的岗位，先导入或搜索岗位再试",
         )

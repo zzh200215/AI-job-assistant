@@ -101,7 +101,9 @@ describe('D53 搬家：输出与搬家前逐条相同', () => {
       { gap_skills: [{ skill: 'Rust' }] },
       { gap_skills: [{ skill: 'A', required_count: 1, nice_count: 1 }, { skill: 'B' }] },
     ]) {
-      expect(gapFacts(item)).toEqual(oldGapFacts(item))
+      // 回流② intentionally adds `interview`; the move proof still compares the original two fields.
+      const legacy = ({ skill, detail }) => ({ skill, detail })
+      expect(gapFacts(item).map(legacy)).toEqual(oldGapFacts(item))
     }
   })
 
@@ -157,10 +159,10 @@ describe('钉死每条规则', () => {
 
   it('技能缺口事实串：必备与加分并列，都没有就是"仅个别岗位提及"', () => {
     expect(gapFacts({ gap_skills: [{ skill: 'Go', required_count: 3, nice_count: 2 }] })).toEqual([
-      { skill: 'Go', detail: '3 条岗位必备，2 条列为加分' },
+      { skill: 'Go', detail: '3 条岗位必备，2 条列为加分', interview: null },
     ])
     expect(gapFacts({ gap_skills: [{ skill: 'Rust' }] })).toEqual([
-      { skill: 'Rust', detail: '仅个别岗位提及' },
+      { skill: 'Rust', detail: '仅个别岗位提及', interview: null },
     ])
     expect(gapFacts({})).toEqual([])
   })

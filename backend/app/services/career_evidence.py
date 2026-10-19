@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from app.models.history import JobDescription
 from app.models.user import User
 from app.services.salary_evidence import MIN_RELIABLE_SAMPLE, SalarySample, parse_salary_range, summarize
-from app.services.skill_gap import aggregate_skill_gaps, build_skill_gap
+from app.services.skill_gap import aggregate_skill_gaps, build_skill_gap, canonical_skill
 from app.utils.job_access import accessible_job_query
 
 # Words that only ever modify a role, so "高级前端工程师" and "前端工程师" group
@@ -180,3 +180,34 @@ def derive_directions(
         "min_samples_per_direction": min_samples,
     }
     return directions[:limit], corpus
+
+
+def attach_interview_evidence(directions: list[CareerDirection], profile: dict[str, Any] | None) -> int:
+    """把候选人**自己面试里考低分**的技能贴到同名的方向缺口上。
+
+    两边用 `canonical_skill` 对齐；只匹配已经存在的缺口，绝不因为"看起来像"就新增一个。
+    返回被标注的缺口数，供接口如实说明"有几处缺口引用了面试证据"。
+    """
+    by_skill: dict[str, dict[str, Any]] = {}
+    for row in (profile or {}).get("skill_weaknesses") or []:
+        if not isinstance(row, dict):
+            continue
+        canonical = row.get("canonical") or canonical_skill(row.get("skill"))
+        if canonical:
+            by_skill[canonical] = row
+
+    matched = 0
+    for direction in directions:
+        for gap in direction.gap_skills:
+            canonical = canonical_skill(gap.get("skill"))
+            row = by_skill.get(canonical) if canonical else None
+            if not row:
+                continue
+            gap["interview"] = {
+                "avg_score": row.get("avg_score"),
+                "sessions": row.get("sessions"),
+                "samples": row.get("samples"),
+                "evidence": list(row.get("evidence") or [])[:1],
+            }
+            matched += 1
+    return matched

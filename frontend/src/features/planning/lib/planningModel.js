@@ -32,7 +32,50 @@ export function gapFacts(item) {
     const parts = []
     if (row.required_count) parts.push(`${row.required_count} 条岗位必备`)
     if (row.nice_count) parts.push(`${row.nice_count} 条列为加分`)
-    return { skill: row.skill, detail: parts.join('，') || '仅个别岗位提及' }
+    return {
+      skill: row.skill,
+      detail: parts.join('，') || '仅个别岗位提及',
+      // 回流②：后端只给"同名缺口"贴证据；这里原样带出去，不在前端另造一条。
+      interview: row.interview || null,
+    }
+  })
+}
+
+/** 面试证据的一句话摘要：场次、均分、最近一问。没有证据就返回空串。 */
+export function interviewGapText(evidence) {
+  if (!evidence) return ''
+  const parts = []
+  if (evidence.sessions) parts.push(`上次面试 ${evidence.sessions} 场考到`)
+  if (evidence.avg_score !== undefined && evidence.avg_score !== null) {
+    parts.push(`均分 ${evidence.avg_score}`)
+  }
+  const question = evidence.evidence?.[0]?.question
+  if (question) parts.push(`最近一问：${question}`)
+  return parts.join('，')
+}
+
+/** 技能名的归一化拼写，只用于把"完整规划"里没有 canonical 的技能名对到画像上。 */
+export function skillMatchKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[\s_./\\|-]+/g, '')
+}
+
+export function interviewForSkill(skill, profile) {
+  const key = skillMatchKey(skill)
+  if (!key) return null
+  return (
+    (profile?.skill_weaknesses || []).find(
+      (row) => skillMatchKey(row.canonical || row.skill) === key
+    ) || null
+  )
+}
+
+/** 给 CareerAgent 产出的 skill_gaps 贴上一场面试证据；匹配不上就保持 null。 */
+export function attachInterviewToSkillGaps(items, profile) {
+  return (items || []).map((item) => {
+    if (!item || !item.skill) return item
+    return { ...item, interview: interviewForSkill(item.skill, profile) }
   })
 }
 

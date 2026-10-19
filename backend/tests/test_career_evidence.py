@@ -7,6 +7,8 @@ library, and the model is confined to ranking directions that already exist.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -17,8 +19,9 @@ from app.api.career_path import router as career_router
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.models.history import JobDescription, Resume
+from app.models.interview_session import InterviewSession
 from app.models.user import User
-from app.services.career_evidence import derive_directions, direction_key
+from app.services.career_evidence import attach_interview_evidence, derive_directions, direction_key
 
 RESUME_PARSED = {
     "name": "张三",
@@ -80,6 +83,37 @@ def _resume_row(db, owner):
         file_type="pdf",
         file_size=1024,
         parsed_json=dict(RESUME_PARSED),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def _completed_interview(db, owner, *, skill="Kafka", score=55):
+    row = InterviewSession(
+        user_id=owner.id,
+        tenant_id=1,
+        interview_type="tech",
+        status="completed",
+        evaluation_status="completed",
+        completed_at=datetime(2026, 10, 1),
+        evaluation={
+            "overall_score": 62,
+            "dimension_scores": {"completeness": 80, "accuracy": 75, "depth": 58, "expression": 60},
+            "question_evaluations": [
+                {
+                    "question": f"{skill} 的消费语义怎么保证不丢消息？",
+                    "overall_score": score,
+                    "feedback": "只说了 at-least-once",
+                    "improvement": "补幂等",
+                }
+            ],
+            "answered_questions": 1,
+            "strengths": [],
+            "weaknesses": ["成果未量化"],
+            "interview_memory": {"jd_required_skills": [skill]},
+        },
     )
     db.add(row)
     db.commit()
@@ -386,3 +420,74 @@ def test_endpoint_still_rejects_another_users_resume(client, db_session, other_u
     body = client.post("/career-path/recommend", params={"resume_id": resume.id}).json()
 
     assert body["code"] != 0
+
+
+# ---------------------------------------------------------------- interview evidence
+
+
+def test_interview_evidence_attaches_only_to_the_same_canonical_gap():
+    direction = _direction("后端工程师")  # gap_skills 里只有 mysql
+
+    matched = attach_interview_evidence(
+        [direction],
+        {
+            "skill_weaknesses": [
+                {
+                    "skill": "MySQL",
+                    "canonical": "mysql",
+                    "avg_score": 55,
+                    "sessions": 2,
+                    "samples": 2,
+                    "evidence": [{"question": "MySQL 索引怎么设计？"}],
+                }
+            ]
+        },
+    )
+
+    assert matched == 1
+    assert direction.gap_skills[0]["interview"]["avg_score"] == 55
+    assert direction.gap_skills[0]["interview"]["evidence"][0]["question"] == "MySQL 索引怎么设计？"
+
+
+def test_interview_evidence_uses_the_shared_alias_table():
+    from app.services.career_evidence import CareerDirection
+
+    direction = CareerDirection(key="k", label="k", gap_skills=[{"skill": "Kubernetes", "required_count": 1}])
+
+    matched = attach_interview_evidence(
+        [direction],
+        {"skill_weaknesses": [{"skill": "K8s", "canonical": "kubernetes", "avg_score": 50, "sessions": 1}]},
+    )
+
+    assert matched == 1
+    assert direction.gap_skills[0]["interview"]["avg_score"] == 50
+
+
+def test_interview_evidence_never_invents_a_gap():
+    direction = _direction("后端工程师")
+
+    matched = attach_interview_evidence(
+        [direction],
+        {"skill_weaknesses": [{"skill": "Go", "canonical": "go", "avg_score": 40, "sessions": 1}]},
+    )
+
+    assert matched == 0
+    assert "interview" not in direction.gap_skills[0]
+
+
+def test_endpoint_annotates_gaps_with_the_candidates_own_interview_evidence(client, db_session, user, monkeypatch):
+    _job(db_session, user, "后端开发工程师", required=["Kafka", "MySQL"], salary="20-30K")
+    resume = _resume_row(db_session, user)
+    _completed_interview(db_session, user, skill="Kafka", score=55)
+    monkeypatch.setattr(agent_mod, "chat_json", lambda prompt: {})
+
+    data = client.post("/career-path/recommend", params={"resume_id": resume.id}).json()["data"]
+
+    path = data["career_paths"][0]
+    gaps = {row["skill"]: row for row in path["gap_skills"]}
+    assert gaps["kafka"]["interview"]["avg_score"] == 55
+    assert "interview" not in gaps["mysql"]
+    assert data["interview_profile"]["has_data"] is True
+    assert data["interview_profile"]["weakness_count"] == 1
+    assert data["interview_profile"]["matched_gap_count"] == 1
+    assert data["interview_profile"]["skill_weaknesses"][0]["canonical"] == "kafka"
