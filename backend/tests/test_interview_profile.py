@@ -23,6 +23,7 @@ from app.services.interview_profile_service import (
     WEAK_SKILL_THRESHOLD,
     build_profile,
     build_session_summary,
+    compact_profile,
     get_profile,
     merge_profile,
     public_profile,
@@ -302,6 +303,94 @@ def test_route_returns_the_current_users_profile(db_session, normal_user, make_i
     assert body["data"]["has_data"] is True
     assert body["data"]["skill_weaknesses"][0]["canonical"] == "kafka"
     assert "sessions" not in body["data"]
+
+
+def test_compact_profile_keeps_only_the_focus_fields():
+    compact = compact_profile(
+        {
+            "skill_weaknesses": [
+                {
+                    "skill": "Kafka",
+                    "canonical": "kafka",
+                    "avg_score": 55,
+                    "sessions": 2,
+                    "samples": 3,
+                    "evidence": [{"question": "不该进快照"}],
+                }
+            ],
+            "dimension_weaknesses": [{"dimension": "depth", "label": "深度", "avg_score": 58, "sessions": 2}],
+            "weakness_texts": ["成果未量化", "结构混乱"],
+            "last_session": {"session_id": 7},
+            "sessions": [{"session_id": 7}],
+        }
+    )
+
+    assert compact["skill_weaknesses"] == [{"skill": "Kafka", "canonical": "kafka", "avg_score": 55, "sessions": 2}]
+    assert compact["dimension_weaknesses"] == [{"dimension": "depth", "label": "深度", "avg_score": 58}]
+    assert compact["weakness_texts"] == ["成果未量化", "结构混乱"]
+    assert compact["last_session"] == {"session_id": 7}
+    assert "sessions" not in compact
+
+
+def test_create_session_snapshot_carries_prior_profile(db_session, normal_user, make_interview_session):
+    """回流③的接线：建会话那一刻把上一场画像写进快照，而不是等决策器自己查库。"""
+    from fastapi import BackgroundTasks
+
+    from app.api.interview_rest import create_session
+    from app.models.history import JobDescription, Resume
+    from app.schemas.interview_session import InterviewSessionCreate
+
+    make_interview_session(
+        user_id=normal_user.id,
+        status="completed",
+        evaluation=_report(),
+        evaluation_status="completed",
+        completed_at=datetime(2026, 10, 2),
+    )
+    resume = Resume(
+        user_id=normal_user.id,
+        tenant_id=1,
+        name="画像验证简历",
+        file_name="profile.pdf",
+        file_path="uploads/profile.pdf",
+        file_type="pdf",
+        file_size=1,
+        parsed_json={"skills": ["Python"]},
+        is_deleted=0,
+    )
+    jd = JobDescription(
+        user_id=normal_user.id,
+        tenant_id=1,
+        title="后端工程师",
+        company="示例公司",
+        raw_text="后端工程师",
+        is_active=1,
+        parsed_json={"title": "后端工程师", "required_skills": ["Kafka", "Redis"]},
+    )
+    db_session.add_all([resume, jd])
+    db_session.commit()
+    db_session.refresh(resume)
+    db_session.refresh(jd)
+
+    body = create_session(
+        InterviewSessionCreate(resume_id=resume.id, jd_id=jd.id, interview_type="tech"),
+        BackgroundTasks(),
+        db=db_session,
+        current_user=normal_user,
+    )
+
+    assert body["code"] == 0
+    created = (
+        db_session.query(InterviewSession)
+        .filter(InterviewSession.user_id == normal_user.id)
+        .order_by(InterviewSession.id.desc())
+        .first()
+    )
+    assert created is not None
+    profile = created.memory_snapshot["interview_profile"]
+    assert profile["skill_weaknesses"][0]["canonical"] == "kafka"
+    assert profile["last_session"]["session_id"] is not None
+    assert "sessions" not in profile
 
 
 def test_build_profile_orders_sessions_by_completion(db_session, normal_user, make_interview_session):

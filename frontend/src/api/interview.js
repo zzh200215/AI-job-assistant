@@ -58,6 +58,30 @@ export const getInterviewPrep = (jdId) => request.get(`/interview/preparation/${
 /** @returns {Promise<InterviewPerformance>} */
 export const getPerformanceTrend = () => request.get('/interview/performance')
 
+/**
+ * `GET /interview/profile` 的载荷：跨会话画像，按已完成面试的报告派生。
+ * `skill_weaknesses` 是"上一场考到且得分低"的技能，不是"候选人没写过"。
+ * @typedef {Object} InterviewProfileWeakness
+ * @property {string} [skill]
+ * @property {string} [canonical]
+ * @property {number} [avg_score]
+ * @property {number} [sessions]
+ */
+
+/**
+ * @typedef {Object} InterviewProfile
+ * @property {boolean} [has_data]
+ * @property {number} [total_sessions]
+ * @property {{ dimension?: string, label?: string, avg_score?: number }[]} [dimension_weaknesses]
+ * @property {InterviewProfileWeakness[]} [skill_weaknesses]
+ * @property {string[]} [weakness_texts]
+ * @property {{ session_id?: number, completed_at?: string, overall_score?: number } | null} [last_session]
+ */
+
+// 获取跨会话面试画像
+/** @returns {Promise<InterviewProfile>} */
+export const getInterviewProfile = () => request.get('/interview/profile')
+
 // === WebSocket 连接 ===
 
 let ws = null

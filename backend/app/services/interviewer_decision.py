@@ -42,6 +42,8 @@ FALLBACK_QUESTION = "请讲讲你最近做过的一个项目里，最难的一�
 DECIDE_PROMPT_HEADER = (
     '你是面试官。只输出 JSON：{"action": "deepen|advance", "question": "一句单点追问"}。'
     "deepen 时 question 必填、只问一个点；advance 时 question 留空。"
+    "prior_profile 是跨会话的旧弱点（不是本场评分证据），只用于决定先深挖哪个岗位必考项；"
+    "不要把旧弱点说成本场表现，也不要据此编造候选人这次说过的话。"
 )
 
 
@@ -123,6 +125,7 @@ def update_profile(state: dict[str, Any]) -> dict[str, Any]:
             "evidence": evidence_chain[-1] if evidence_chain else "",
             "covered_categories": covered,
             "followup_depth": 1 if state.get("asked_followup") else 0,
+            "prior_profile": state.get("interview_profile") or {},
         },
     }
 

@@ -243,5 +243,23 @@ def test_deepen_may_generate_but_always_returns_a_question() -> None:
     assert decided["source"] in {"heuristic", "starter"}, decided
 
 
+def test_prior_profile_reaches_the_decision_prompt_and_is_marked_as_old() -> None:
+    """回流③：旧画像要进决策 prompt，但必须明确标成"不是本场证据"。"""
+    state = _state(scores=[52], evidence=["这题没答到点上"], weaknesses=["Kafka"])
+    state["interview_profile"] = {"skill_weaknesses": [{"skill": "容量规划", "avg_score": 55}]}
+    seen: list[str] = []
+
+    def chat(prompt: str) -> dict:
+        seen.append(prompt)
+        return {"action": "advance"}
+
+    _module().decide_next(state, chat=chat)
+
+    assert seen, "启发式判了 deepen，LLM 那一发必须被调用"
+    assert "prior_profile" in seen[0]
+    assert "容量规划" in seen[0]
+    assert "不要把旧弱点说成本场表现" in seen[0]
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-q"]))

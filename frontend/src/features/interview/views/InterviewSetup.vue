@@ -228,6 +228,48 @@
         </AppPanel>
 
         <AppPanel>
+          <template #title>下一场考察重点</template>
+          <template #actions>
+            <span class="panel-sub">来自上一场的弱点</span>
+          </template>
+          <div v-if="profile?.has_data" class="profile-focus">
+            <div class="brief-block">
+              <div class="brief-title">上场技能弱点</div>
+              <div v-if="profileSkills.length" class="chip-row">
+                <span
+                  v-for="item in profileSkills"
+                  :key="item.canonical || item.skill"
+                  class="plain-chip"
+                >
+                  {{ item.skill
+                  }}<template v-if="item.avg_score != null"> · {{ item.avg_score }}</template>
+                </span>
+              </div>
+              <p v-else>上一场没有留下可复用的技能弱点。</p>
+            </div>
+            <div v-if="profileNotes.length" class="brief-block">
+              <div class="brief-title">报告原话</div>
+              <p>{{ profileNotes.join('；') }}</p>
+            </div>
+            <p class="profile-note">
+              本场会优先深挖与当前岗位必考项重合的弱点；旧弱点只决定先后，不会当成本场表现。
+            </p>
+          </div>
+          <AppLoadError
+            v-else-if="profileError"
+            title="上一场画像加载失败"
+            :message="profileError"
+            @retry="fetchProfile"
+          />
+          <el-empty
+            v-else-if="!loading.profile"
+            description="完成一场面试后，这里会出现下一场的考察重点"
+            :image-size="70"
+          />
+          <el-empty v-else description="正在读取上一场画像" :image-size="70" />
+        </AppPanel>
+
+        <AppPanel>
           <template #title>最近面试记录</template>
           <template #actions>
             <span class="panel-sub">可以直接回看报告或继续未完成场次</span>
@@ -266,11 +308,12 @@
 
 <script setup>
 import { userErrorCopy } from '@/utils/requestTracing'
+import AppLoadError from '@/components/ui/AppLoadError.vue'
 import AppPanel from '@/components/ui/AppPanel.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
-import { getInterviewConfigTypes, getInterviewList } from '@/api/interview'
+import { getInterviewConfigTypes, getInterviewList, getInterviewProfile } from '@/api/interview'
 import { getJDList } from '@/api/jd'
 import { getResumeList } from '@/api/resume'
 import { INTERVIEW_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
@@ -300,11 +343,14 @@ const loading = reactive({
   jd: false,
   start: false,
   history: false,
+  profile: false,
 })
 
 const resumeList = ref([])
 const jdList = ref([])
 const historyList = ref([])
+const profile = ref(null)
+const profileError = ref('')
 
 const rules = {
   resume_id: [{ required: true, message: '请选择简历', trigger: 'change' }],
@@ -445,6 +491,9 @@ const stagePlan = computed(() => [
   { index: '04', title: '结果复盘', desc: '结束后生成是否建议推进、短板风险和训练建议。' },
 ])
 
+const profileSkills = computed(() => (profile.value?.skill_weaknesses || []).slice(0, 4))
+const profileNotes = computed(() => (profile.value?.weakness_texts || []).slice(0, 2))
+
 const stats = computed(() => {
   const total = historyList.value.length
   const completed = historyList.value.filter((item) => item.status === 'completed').length
@@ -520,6 +569,20 @@ async function fetchHistory() {
   }
 }
 
+async function fetchProfile() {
+  loading.profile = true
+  profileError.value = ''
+  try {
+    profile.value = await getInterviewProfile()
+  } catch (error) {
+    // 画像是锦上添花，读不到也不能把设置页的主表单一起拖红；但失败要单独说，不能伪装成空态。
+    profile.value = null
+    profileError.value = userErrorCopy(error, '上一场画像加载失败')
+  } finally {
+    loading.profile = false
+  }
+}
+
 async function startInterview() {
   if (!formRef.value) return
   try {
@@ -549,7 +612,7 @@ function openSession(item) {
 }
 
 onMounted(async () => {
-  await Promise.all([fetchResumes(), fetchJDs()])
+  await Promise.all([fetchResumes(), fetchJDs(), fetchProfile()])
   fetchHistory()
   loadTypeConfigs()
   if (route.query.jd_id) {
@@ -678,6 +741,13 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--app-muted);
   font-weight: 400;
+}
+
+.profile-note {
+  margin: 10px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .setup-form :deep(.el-select) {

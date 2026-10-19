@@ -35,6 +35,11 @@ vi.mock('@/api/interview', () => ({
   ]),
   // 返回空 items → 页面保留内置的五档配置，标签就该来自 defaultTypeConfigs
   getInterviewConfigTypes: vi.fn(async () => ({ items: [] })),
+  getInterviewProfile: vi.fn(async () => ({
+    has_data: false,
+    skill_weaknesses: [],
+    weakness_texts: [],
+  })),
   startInterview: vi.fn(async () => ({ id: 1 })),
 }))
 

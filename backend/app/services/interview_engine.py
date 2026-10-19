@@ -223,9 +223,21 @@ class InterviewEngine:
         """
         snapshot = self.session.memory_snapshot or {}
         required = [str(item) for item in (snapshot.get("jd_required_skills") or []) if item]
+        prior_profile = snapshot.get("interview_profile") if isinstance(snapshot.get("interview_profile"), dict) else {}
+        # 上一场画像里的技能弱点排到前面：只影响**本场必考项**的先后，不把别岗位的技能塞进来。
+        priority_skills = {
+            str(row.get("skill") or "").strip()
+            for row in (prior_profile.get("skill_weaknesses") or [])
+            if isinstance(row, dict) and str(row.get("skill") or "").strip()
+        }
+        order = {skill: index for index, skill in enumerate(required)}
+        ordered_required = sorted(
+            required,
+            key=lambda skill: (0 if skill in priority_skills else 1, order.get(skill, len(order))),
+        )
         # 只留**还没在任何题面里出现过**的必考项：已经考过的再问一遍不叫命中，叫重复。
         asked_text = " ".join(str(msg.get("content") or "") for msg in (self.session.messages or []))
-        remaining = [skill for skill in required if skill not in asked_text]
+        remaining = [skill for skill in ordered_required if skill not in asked_text]
         return {
             "round_index": len(evaluations),
             "scores": [int(item.get("overall_score") or 0) for item in evaluations],
@@ -233,7 +245,8 @@ class InterviewEngine:
             # 在这里 `str()` 会先把字典拍成 repr，追问就会把内部结构念给候选人。
             "evidence": [item.get("evidence") for item in evaluations],
             "asked_followup": bool(evaluations[-1].get("follow_up")) if evaluations else False,
-            "weaknesses": remaining or required or snapshot.get("weaknesses") or [],
+            "weaknesses": remaining or ordered_required or snapshot.get("weaknesses") or [],
+            "interview_profile": prior_profile,
             "candidate_pool": questions[self.current_index + 1 :],
         }
 

@@ -438,9 +438,7 @@ def test_start_does_not_wipe_the_skill_pool(engine) -> None:
 
     engine.start()
 
-    assert engine.session.memory_snapshot.get("jd_required_skills") == ["向量检索"], (
-        engine.session.memory_snapshot
-    )
+    assert engine.session.memory_snapshot.get("jd_required_skills") == ["向量检索"], engine.session.memory_snapshot
 
 
 def test_stale_evaluation_cannot_loop_the_same_followup(engine, monkeypatch) -> None:
@@ -489,3 +487,31 @@ def test_followup_does_not_echo_raw_evidence_dict(engine, monkeypatch) -> None:
     assert "source" not in followup["content"], followup["content"]
     assert "{" not in followup["content"], followup["content"]
     assert "召回率" in followup["content"], followup["content"]
+
+
+def test_prior_profile_weaknesses_lead_the_focus_pool(engine) -> None:
+    """回流③：上一场画像里的技能弱点排到本场必考项前面，决策 LLM 也看得到这份旧画像。"""
+    engine.current_index = -1
+    engine.session.memory_snapshot = {
+        "jd_required_skills": ["Kafka", "Redis", "容量规划"],
+        "interview_profile": {"skill_weaknesses": [{"skill": "容量规划", "avg_score": 55}]},
+    }
+
+    state = engine._decision_state(engine.session.questions, [])
+
+    assert state["weaknesses"] == ["容量规划", "Kafka", "Redis"]
+    assert state["interview_profile"]["skill_weaknesses"][0]["skill"] == "容量规划"
+
+
+def test_profile_weaknesses_outside_the_jd_do_not_enter_the_focus_pool(engine) -> None:
+    """别岗位的技能只能出现在 prompt 的旧画像里，不许被当成这场的追问焦点。"""
+    engine.current_index = -1
+    engine.session.memory_snapshot = {
+        "jd_required_skills": ["Kafka", "Redis"],
+        "interview_profile": {"skill_weaknesses": [{"skill": "Kubernetes", "avg_score": 50}]},
+    }
+
+    state = engine._decision_state(engine.session.questions, [])
+
+    assert state["weaknesses"] == ["Kafka", "Redis"]
+    assert state["interview_profile"]["skill_weaknesses"][0]["skill"] == "Kubernetes"

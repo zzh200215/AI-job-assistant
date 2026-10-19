@@ -29,7 +29,7 @@ from app.services.interview_config_service import (
 )
 from app.services.interview_engine import InterviewEngine
 from app.services.interview_evaluation_service import build_conversation, evaluation_payloads
-from app.services.interview_profile_service import get_profile, public_profile
+from app.services.interview_profile_service import compact_profile, get_profile, public_profile
 from app.services.llm_service import chat_json
 from app.services.rag_service import search_knowledge
 from app.services.skill_gap import jd_required_names
@@ -68,6 +68,12 @@ def create_session(
     jd_json = jd.parsed_json or {}
     jd_title = jd_json.get("title") or jd.title or ""
     required_skills = _extract_skills(jd)
+    # 上一场留下的弱点池：只决定"先深挖哪个必考项"，不阻塞本场创建。
+    try:
+        prior_profile = compact_profile(get_profile(db, current_user.id))
+    except Exception:
+        logger.exception("Failed to load interview profile when creating session user_id=%s", current_user.id)
+        prior_profile = compact_profile({})
 
     type_hints = {
         "tech": ["interview_q", "skill_model"],
@@ -101,6 +107,8 @@ def create_session(
         memory_snapshot={
             "question_generation": {"status": "pending"},
             "jd_required_skills": list(required_skills or []),
+            # 跨会话画像的紧凑版：决策器把这里面的弱点排到必考项前面。
+            "interview_profile": prior_profile,
         },
         total_questions=len(ordered_questions),
         answered_count=0,

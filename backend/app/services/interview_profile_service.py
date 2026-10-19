@@ -373,6 +373,25 @@ def get_profile(db: Session, user_id: int) -> dict[str, Any]:
     return build_profile(db, user_id)
 
 
+def compact_profile(profile: dict[str, Any] | None) -> dict[str, Any]:
+    """新会话快照只带"下一场要优先关注什么"，不搬证据卡与逐场明细。"""
+    source = profile or {}
+    return {
+        "skill_weaknesses": [
+            {key: row.get(key) for key in ("skill", "canonical", "avg_score", "sessions")}
+            for row in (source.get("skill_weaknesses") or [])
+            if isinstance(row, dict)
+        ][:MAX_ITEMS],
+        "dimension_weaknesses": [
+            {key: row.get(key) for key in ("dimension", "label", "avg_score")}
+            for row in (source.get("dimension_weaknesses") or [])
+            if isinstance(row, dict)
+        ][:4],
+        "weakness_texts": [str(item).strip() for item in (source.get("weakness_texts") or []) if str(item).strip()][:4],
+        "last_session": source.get("last_session"),
+    }
+
+
 def public_profile(profile: dict[str, Any]) -> dict[str, Any]:
     """路由载荷：内部 `sessions` 明细不外发，避免把整份报告搬进列表页。"""
     return {
