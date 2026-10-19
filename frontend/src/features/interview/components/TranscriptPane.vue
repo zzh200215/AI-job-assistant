@@ -69,7 +69,7 @@
 
     <div v-if="status === 'connecting'" class="state-hint">正在接入面试房间...</div>
     <div v-else-if="status === 'evaluating'" class="state-hint">
-      面试官正在记录你的回答并决定下一问...
+      {{ thinking ? '面试官正在思考下一问...' : '面试官正在记录你的回答并决定下一问...' }}
     </div>
   </AppPanel>
 </template>
@@ -91,6 +91,9 @@ const props = defineProps({
     default: () => [],
   },
   status: { type: String, default: 'idle' },
+  // 等待超过 400ms 才为真（store 里那条延迟）：正常的"评完就出下一题"不闪这句话，
+  // 只有现场组织追问那种真等（最多 6 秒）才把提示换成"思考下一问"。
+  thinking: { type: Boolean, default: false },
 })
 
 /* 滚动跟着这块 DOM 走：页面此前用 chatRef + scrollToBottom 从三个动作后面各推一次，

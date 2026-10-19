@@ -34,7 +34,11 @@
           :structure="answerStructure"
         />
 
-        <TranscriptPane :messages="store.messages" :status="store.status" />
+        <TranscriptPane
+          :messages="store.messages"
+          :status="store.status"
+          :thinking="store.interviewerThinking"
+        />
 
         <div v-if="!store.isCompleted" class="panel answer-card">
           <div class="panel-body">

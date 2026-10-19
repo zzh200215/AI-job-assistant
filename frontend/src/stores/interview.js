@@ -36,12 +36,34 @@ export const useInterviewStore = defineStore('interview', () => {
   const lastScore = ref(null)
   const timeElapsed = ref(0)
   const isFollowUp = ref(false)
+  // 面试官正在组织下一题（尤其是现场生成追问时最多有 6 秒）。不足 THINKING_DELAY_MS 的等待
+  // 不显示——否则每次都闪一下“思考中”，看着比不显示还糟。
+  const interviewerThinking = ref(false)
   const roundBudget = ref(FALLBACK_ROUND_SECONDS)
   const roundRemaining = ref(FALLBACK_ROUND_SECONDS)
 
   let sessionTimer = null
   let roundTimer = null
   let evaluationTimer = null
+  let thinkingTimer = null
+
+  const THINKING_DELAY_MS = 400
+
+  function armThinking() {
+    clearThinking()
+    thinkingTimer = setTimeout(() => {
+      thinkingTimer = null
+      interviewerThinking.value = true
+    }, THINKING_DELAY_MS)
+  }
+
+  function clearThinking() {
+    if (thinkingTimer) {
+      clearTimeout(thinkingTimer)
+      thinkingTimer = null
+    }
+    interviewerThinking.value = false
+  }
 
   const currentQuestion = computed(() => {
     for (let i = messages.value.length - 1; i >= 0; i -= 1) {
@@ -100,6 +122,7 @@ export const useInterviewStore = defineStore('interview', () => {
     lastScore.value = null
     timeElapsed.value = 0
     isFollowUp.value = false
+    clearThinking()
     roundBudget.value = FALLBACK_ROUND_SECONDS
     roundRemaining.value = FALLBACK_ROUND_SECONDS
     stopSessionTimer()
@@ -210,6 +233,7 @@ export const useInterviewStore = defineStore('interview', () => {
     const meta = data.metadata || {}
 
     if (type === 'question') {
+      clearThinking()
       messages.value.push({
         role: 'ai',
         type: 'question',
@@ -269,6 +293,7 @@ export const useInterviewStore = defineStore('interview', () => {
     }
 
     if (type === 'end') {
+      clearThinking()
       messages.value.push({
         role: 'system',
         type: 'end',
@@ -284,6 +309,7 @@ export const useInterviewStore = defineStore('interview', () => {
     }
 
     if (type === 'error') {
+      clearThinking()
       errorMsg.value = content
       status.value = 'error'
       stopRoundTimer()
@@ -300,6 +326,7 @@ export const useInterviewStore = defineStore('interview', () => {
       timestamp: new Date().toISOString(),
     })
     sendAnswer(text)
+    armThinking()
     status.value = 'evaluating'
     stopRoundTimer()
   }
@@ -324,6 +351,7 @@ export const useInterviewStore = defineStore('interview', () => {
 
   function disconnect() {
     disconnectInterviewWS()
+    clearThinking()
     stopRoundTimer()
     stopSessionTimer()
     stopEvaluationPolling()
@@ -423,6 +451,7 @@ export const useInterviewStore = defineStore('interview', () => {
     lastScore,
     timeElapsed,
     isFollowUp,
+    interviewerThinking,
     roundRemaining,
     currentQuestion,
     isCompleted,
