@@ -355,7 +355,14 @@ class InterviewEngine:
         self.session.evaluation_status = "idle"
         self.db.commit()
 
-        if evaluation.get("follow_up") and evaluation.get("overall_score", 0) < 70:
+        # 追问只能有一条产线：开关打开时由决策器独占（原稿 P3 的"追问升级"就是把 I3 的模板追问
+        # 换成基于回答内容的针对性追问），关掉开关才回到这套模板。两套并存会让同一题被追两次——
+        # 2026-10-18 验证重连链时实测到过（先模板一条、next_question 再决策一条）。
+        if (
+            not settings.INTERVIEW_USE_DECIDER
+            and evaluation.get("follow_up")
+            and evaluation.get("overall_score", 0) < 70
+        ):
             follow_up_q = question.get(
                 "follow_up_question",
                 f"刚才的回答可以再深入一些吗？围绕“{question_text}”，请补一个更具体的例子或取舍说明。",

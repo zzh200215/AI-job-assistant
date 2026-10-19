@@ -22,6 +22,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.config import settings
+from app.models.interview_evaluation import InterviewTurnEvaluation
 from app.models.interview_session import InterviewSession
 from app.services.interview_engine import InterviewEngine
 
@@ -165,3 +166,124 @@ def test_flag_off_reproduces_todays_sequence_exactly(engine, monkeypatch) -> Non
     assert payloads[2]["type"] == "finished" or "完成" in texts[2], texts
     assert all(not p["metadata"].get("is_follow_up") for p in payloads[:2]), "开关关着还出追问"
     assert engine.current_index == 3, engine.current_index
+
+
+def test_followup_round_satisfies_the_answer_mapping_equation(engine, monkeypatch) -> None:
+    """追问消息的 `round` 必须等于 `current_index + 1`。
+
+    这条等式不是审美：`handle_answer` 判"这条答案是追问的回答"用的就是它
+    （`interview_engine.py:266-270`）——`is_follow_up = 最新消息带追问标记 且 round == current_index + 1`。
+    等式一旦不成立，那条答案会被当成**主题那一题**的答案、拿主题的 `turn_id` 去写评分行，
+    于是主题的评分被覆盖。这条钉等式本身，下一条钉它的后果。
+    """
+    _stub(
+        engine,
+        monkeypatch,
+        _evaluations({"overall_score": 40, "evidence": ["没有结论"], "user_answer": "还行吧", "follow_up": False}),
+    )
+    payload = engine.next_question()
+    assert payload["metadata"].get("is_follow_up") is True, payload["metadata"]
+    assert payload["metadata"]["round"] == engine.current_index + 1, payload["metadata"]
+
+
+def test_answering_a_followup_writes_its_own_turn(engine, monkeypatch) -> None:
+    """评分链按 turn 关联：追问的答案必须落在 `q-N-followup` 那一行上，不许借用主题的 turn_id。
+
+    这一条是上一那条等式的**后果验证**——等式成立但 turn_id 拼错，同样是覆盖主题评分。
+    """
+    _stub(
+        engine,
+        monkeypatch,
+        _evaluations({"overall_score": 40, "evidence": ["没有结论"], "user_answer": "还行吧", "follow_up": False}),
+    )
+    payload = engine.next_question()
+    followup_turn = payload["metadata"]["turn_id"]
+    assert followup_turn == "q-1-followup", payload["metadata"]
+
+    engine.handle_answer("补充：我把召回率从 62% 提到 88%，方式是重排 + 去噪")
+
+    answers = [msg for msg in engine.session.messages if msg.get("type") == "answer"]
+    metadata = answers[-1]["metadata"]
+    assert metadata["is_follow_up"] is True, metadata
+    assert metadata["turn_id"] == followup_turn, metadata
+    assert metadata["turn_id"] != "q-1", "追问的答案被记成主题那一轮的 turn_id ⇒ 主题评分会被覆盖"
+
+    rows = engine.db.query(InterviewTurnEvaluation).filter_by(session_id=engine.session_id).all()
+    rows = [row for row in rows if row.question_index == engine.current_index]
+    turns = {(row.turn_id, bool(row.is_follow_up)) for row in rows}
+    assert (followup_turn, True) in turns, f"评分行里没有独立的追问那一行：{turns}"
+
+
+def _stub_from_messages(engine, monkeypatch, *, score: int = 40) -> None:
+    """按**已保存的答案消息**重建评估。真实实现也是从消息/评分表重建的；这样在"答完追问"之后，
+    状态会如实变成 `follow_up=True`——用一份静态的评估列表去测重连，测的就不是真实状态。"""
+
+    def rebuild() -> list[dict]:
+        rows = []
+        for msg in engine.session.messages:
+            if msg.get("type") != "answer":
+                continue
+            meta = msg.get("metadata") or {}
+            rows.append(
+                {
+                    "question_index": len(rows),
+                    "question": msg.get("content", ""),
+                    "category": meta.get("category", "tech"),
+                    "user_answer": msg.get("content", ""),
+                    "completeness": 60,
+                    "accuracy": 60,
+                    "depth": 60,
+                    "expression": 60,
+                    "overall_score": score,
+                    "feedback": "反馈",
+                    "improvement": "改进",
+                    "follow_up": bool(meta.get("is_follow_up")),
+                    "evidence": ["没有结论"],
+                    "turn_id": meta.get("turn_id"),
+                }
+            )
+        return rows
+
+    monkeypatch.setattr(engine, "_rebuild_evaluations", rebuild)
+
+
+def test_reconnect_and_answer_chain_on_a_followup(engine, monkeypatch) -> None:
+    """重连那条链上的三条语义，一次量完：
+
+    ① 追问已发出、还没答时断线 ⇒ 重连**把同一条追问再推一次**（不能丢）；
+    ② 追问答过之后 ⇒ 状态必须记成"这题已追过"，`next_question` 不许再追同一题；
+    ③ 追问不占题号 ⇒ 推进时出的是下一道主题（round 2）。
+
+    这条链原来会出两套追问（handle_answer 里的 I3 模板追问 + 决策器追问），2026-10-18 实测到
+    同一轮被追两次；现在开关打开时由决策器独占，模板那套只在开关关掉时启用。
+    """
+    engine.current_index = -1  # 全新会话，第一题还没发
+    _stub_from_messages(engine, monkeypatch, score=40)
+
+    q1 = engine.next_question()
+    assert "最有成就感的项目" in q1["content"], q1
+
+    emitted = engine.handle_answer("我做过一个检索增强的项目")  # 评分 40 ⇒ 决策器追一句
+    assert emitted["metadata"].get("is_follow_up") is True, emitted["metadata"]
+    followup_turn = emitted["metadata"]["turn_id"]
+
+    midway = InterviewEngine(engine.session_id)
+    midway.db = engine.db
+    midway.session = engine.db.get(InterviewSession, engine.session_id)
+    re_pushed = midway.resume()
+    assert re_pushed is not None, "追问还没答，重连把它丢了"
+    assert re_pushed["metadata"].get("turn_id") == followup_turn, re_pushed["metadata"]
+
+    midway.handle_answer("补充：召回率从 62% 提到 88%，做法是重排 + 去噪")
+
+    after = InterviewEngine(engine.session_id)
+    after.db = engine.db
+    after.session = engine.db.get(InterviewSession, engine.session_id)
+    resumed = after.resume()
+    trail = [
+        (m.get("type"), (m.get("metadata") or {}).get("round"), (m.get("metadata") or {}).get("turn_id"))
+        for m in after.session.messages
+    ]
+    assert resumed is not None, f"追问答完之后重连应该接着推下一道主题；消息轨迹={trail}"
+    assert resumed["metadata"].get("is_follow_up") is not True, f"重连后又追同一题：{resumed['metadata']}"
+    assert "RAG 的工作原理" in resumed["content"], resumed["content"]

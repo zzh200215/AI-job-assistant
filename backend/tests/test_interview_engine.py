@@ -451,11 +451,39 @@ class TestFollowUp:
 
             payload = engine.handle_answer("简单回答")
 
-            # 应返回 follow-up 问题
-            if payload.get("metadata", {}).get("is_follow_up"):
-                assert payload["type"] == "question"
-                assert payload["metadata"]["is_follow_up"] is True
-                assert payload["metadata"]["evaluation"]["score"] == 40
+            # 应返回 follow-up 问题。P3.1 起追问由决策器产出（原稿那句"追问升级"），
+            # metadata 形状随之改变：不再带 evaluation.score，改带 decision。
+            assert payload.get("metadata", {}).get("is_follow_up") is True, payload
+            assert payload["type"] == "question"
+            assert payload["metadata"]["decision"]["action"] == "deepen"
+            assert payload["metadata"]["decision"]["source"] == "heuristic"
+
+    def test_template_followup_when_decider_off(self, engine, monkeypatch):
+        """关掉开关 ⇒ 回到 I3 那套模板追问（带 evaluation.score）。
+
+        这是"关一个开关就回到今天那条链"在追问这一处的证据：决策器接管后模板追问不再并存，
+        但代码没有删，只是让位。
+        """
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "INTERVIEW_USE_DECIDER", False)
+        engine.start()
+
+        with patch.object(engine, "_evaluate_answer") as mock_eval:
+            mock_eval.return_value = {
+                "completeness": 40,
+                "accuracy": 40,
+                "depth": 30,
+                "expression": 50,
+                "overall_score": 40,
+                "feedback": "回答不够完整",
+                "improvement": "需要更详细",
+                "follow_up": True,
+            }
+            payload = engine.handle_answer("简单回答")
+
+        assert payload["metadata"]["is_follow_up"] is True, payload
+        assert payload["metadata"]["evaluation"]["score"] == 40
 
     def test_high_score_no_follow_up(self, engine):
         """高分答案不应触发 follow-up。"""
