@@ -81,6 +81,8 @@ class Settings(BaseSettings):
     # 这条今天的链，逐字相同。它存在的理由不是兼容，是**回滚半径**：决策器接管的是候选人正在等的
     # 下一题，出意料行为时关一个开关就能回到今天，而不是回滚代码。
     INTERVIEW_USE_DECIDER: bool = True
+    # 决策器那一档的 LLM 硬截止时间（秒）。超了就落回启发式那句——候选人不能为一句追问等两分钟。
+    INTERVIEW_DECISION_TIMEOUT_SECONDS: float = 6.0
     # 逐题评分是投给**本地线程池**的：进程一死，那一行就留在 pending/running，没人来捡。
     # 这个阈值就是"认定提交它的进程已经不在了"要等多久。下界有数：单题最坏 = LLM_TIMEOUT(120s)
     # × 3 次尝试 + 线性退避(1.5s + 3.0s) = 364.5s ≈ 6.1 分钟（`utils/retry.py:49` 的

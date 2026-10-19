@@ -287,3 +287,94 @@ def test_reconnect_and_answer_chain_on_a_followup(engine, monkeypatch) -> None:
     assert resumed is not None, f"追问答完之后重连应该接着推下一道主题；消息轨迹={trail}"
     assert resumed["metadata"].get("is_follow_up") is not True, f"重连后又追同一题：{resumed['metadata']}"
     assert "RAG 的工作原理" in resumed["content"], resumed["content"]
+
+
+def test_llm_composed_followup_is_used(engine, monkeypatch) -> None:
+    """LLM 愿意组织追问时，用它的题面，并如实标 `source=llm`。
+
+    这一条是"追问升级"的落点：启发式那句是模板，LLM 那句才是针对回答内容的。
+    """
+    engine.current_index = -1
+    _stub_from_messages(engine, monkeypatch, score=40)
+    monkeypatch.setattr(
+        engine,
+        "_decision_chat",
+        lambda: (lambda prompt: {"action": "deepen", "question": "你提到的召回率提升，具体是怎么测的？"}),
+    )
+
+    engine.next_question()
+    emitted = engine.handle_answer("我做过一个检索增强的项目")
+
+    assert emitted["metadata"]["decision"]["source"] == "llm", emitted["metadata"]
+    assert "召回率" in emitted["content"], emitted["content"]
+
+
+def test_llm_failure_degrades_and_still_asks(engine, monkeypatch) -> None:
+    """LLM 炸了 ⇒ 降级成启发式那句，题面不许空，且 `degraded=true` 供对内可查。
+
+    产品口径：降级对候选人静默（屏幕上不出现"AI 不可用"），这个标志只给内用。
+    """
+
+    def boom(prompt: str) -> dict:
+        raise RuntimeError("provider down")
+
+    engine.current_index = -1
+    _stub_from_messages(engine, monkeypatch, score=40)
+    monkeypatch.setattr(engine, "_decision_chat", lambda: boom)
+
+    engine.next_question()
+    emitted = engine.handle_answer("我做过一个检索增强的项目")
+
+    assert emitted["metadata"]["decision"]["degraded"] is True, emitted["metadata"]
+    assert emitted["metadata"]["decision"]["source"] == "heuristic", emitted["metadata"]
+    assert emitted["content"].strip(), "降级之后连题面都没了"
+
+
+def test_advance_never_calls_the_llm(engine, monkeypatch) -> None:
+    """推进那一档零 LLM 调用——混合动态那条"至少 75% 题目零额外等待"的前提。"""
+    calls: list[str] = []
+
+    def spy(prompt: str) -> dict:
+        calls.append(prompt)
+        return {"action": "deepen", "question": "不该用到这句"}
+
+    engine.current_index = -1
+    _stub_from_messages(engine, monkeypatch, score=90)
+    monkeypatch.setattr(engine, "_decision_chat", lambda: spy)
+
+    engine.next_question()
+    emitted = engine.handle_answer("答得很完整，有数据有取舍")
+
+    assert calls == [], f"高分推进这一档发了 {len(calls)} 次 LLM 调用"
+    assert emitted["metadata"].get("is_follow_up") is not True, emitted["metadata"]
+
+
+def test_llm_composition_has_a_hard_deadline(
+    engine,
+    monkeypatch,
+) -> None:
+    """LLM 迟迟不回 ⇒ 到点就走降级，候选人不能为一句追问等两分钟。
+
+    这条把预算调到 0.1 秒、让假 chat 睡 0.5 秒：不设硬截止的话这一发会把测试拖到 0.5 秒以上，
+    而设了就该在 0.4 秒以内带着"启发式那句"回来。
+    """
+    import time
+
+    monkeypatch.setattr(settings, "INTERVIEW_DECISION_TIMEOUT_SECONDS", 0.1)
+
+    def slow(prompt: str) -> dict:
+        time.sleep(0.5)
+        return {"action": "deepen", "question": "慢到的题面"}
+
+    engine.current_index = -1
+    _stub_from_messages(engine, monkeypatch, score=40)
+    monkeypatch.setattr(engine, "_decision_chat", lambda: engine._bounded_chat(slow))
+
+    engine.next_question()
+    started = time.monotonic()
+    emitted = engine.handle_answer("我做过一个检索增强的项目")
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 0.4, f"没被硬截止拦住，等了 {elapsed:.2f}s"
+    assert emitted["metadata"]["decision"]["degraded"] is True, emitted["metadata"]
+    assert emitted["content"].strip(), emitted["content"]

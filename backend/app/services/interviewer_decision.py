@@ -39,7 +39,10 @@ EDGES: dict[str, tuple[str, ...]] = {
 # 题源空到连 starter 都没有时用的兜底问句。它必须存在：返回空题等于让决策器把面试提前结束。
 FALLBACK_QUESTION = "请讲讲你最近做过的一个项目里，最难的一个决定，以及当时为什么这么定。"
 
-DECIDE_PROMPT_HEADER = '你是面试官，只输出 JSON：{"action": "deepen|advance"}'
+DECIDE_PROMPT_HEADER = (
+    '你是面试官。只输出 JSON：{"action": "deepen|advance", "question": "一句单点追问"}。'
+    "deepen 时 question 必填、只问一个点；advance 时 question 留空。"
+)
 
 
 class InterviewerDecisionGraph:
@@ -122,14 +125,27 @@ def _decide_node(state: dict[str, Any]) -> dict[str, Any]:
     return decide_heuristic(state)
 
 
-def compose_question(state: dict[str, Any], decision: dict[str, Any]) -> dict[str, Any]:
+def compose_question(
+    state: dict[str, Any], decision: dict[str, Any], llm_question: str | None = None
+) -> dict[str, Any]:
     """按决策产出下一题。返回体里一定带 question——这是"下一题不许变空"那条护栏的落点。
 
     题源空到只能吃 starter 时，顶层 `source` 要说实话（报成 heuristic 就等于把"引擎原来那份
     题目列表在顶上"这件事藏起来了，而 P3.2 的对比评测要按这个数算"动态到底接管了多少题"）。
+
+    `llm_question` 是 LLM 现场组织的那句。它非空就用它——启发式那句是模板，LLM 那句才谈得上
+    "针对回答内容"；为空（LLM 没回/回得不合格/超时）就落回模板句。
     """
     if decision.get("action") == "deepen":
-        return {"action": "deepen", "source": decision.get("source", "heuristic"), "question": _followup(state)}
+        question = _followup(state)
+        if llm_question and llm_question.strip():
+            question = {
+                "question": llm_question.strip(),
+                "category": "项目经验",
+                "id": f"followup-{state.get('round_index', 0)}",
+                "source": "llm",
+            }
+        return {"action": "deepen", "source": decision.get("source", "heuristic"), "question": question}
     question = _next_from_pool(state)
     source = "starter" if question.get("source") == "starter" else decision.get("source", "heuristic")
     return {"action": "advance", "source": source, "question": question, "transition": ""}
@@ -150,7 +166,10 @@ def decide_next(state: dict[str, Any], *, chat: Callable[[str], dict[str, Any]] 
             raw = chat(_decision_prompt(state, decision))
             action = (raw or {}).get("action")
             if action in {"deepen", "advance"}:
-                return compose_question(state, {"action": action, "source": "llm"})
+                llm_question = raw.get("question") if action == "deepen" else None
+                return compose_question(state, {"action": action, "source": "llm"}, llm_question=llm_question)
+            # 回了但不是一个合法动作（mock 的常量、模型跑题）⇒ 这一发也算降级，不能装作没事。
+            decision = {**decision, "degraded": True}
         except Exception:  # noqa: BLE001 - 决策失败不许打断会话
             decision = {**decision, "degraded": True}
 

@@ -12,6 +12,8 @@ created -> ongoing -> completed
 """
 
 import time
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from datetime import datetime, timezone
 from typing import Any
 
@@ -181,6 +183,32 @@ class InterviewEngine:
         self.save_message(message)
         return self._message_to_payload(message)
 
+    @staticmethod
+    def _bounded_chat(chat):
+        """给决策那一档的 LLM 调用加硬截止时间：慢就算了，候选人不能为一句追问等两分钟。
+
+        截止用 `future.result(timeout=...)` 判；底层请求可能还在跑，这里只是不再等它（线程池
+        不等待关闭）。代价是极少数慢请求会白花一次 token，换来的是面试节奏不被拖住。
+        """
+
+        def call(prompt: str):
+            pool = ThreadPoolExecutor(max_workers=1)
+            future = pool.submit(chat, prompt)
+            try:
+                return future.result(timeout=settings.INTERVIEW_DECISION_TIMEOUT_SECONDS)
+            except FuturesTimeout as exc:
+                raise TimeoutError("决策 LLM 超时") from exc
+            finally:
+                pool.shutdown(wait=False)
+
+        return call
+
+    def _decision_chat(self):
+        """决策那一档的 LLM 入口。测试里替换这一个方法就能完全断开真 provider。"""
+        from app.services.llm_service import chat_json
+
+        return self._bounded_chat(chat_json)
+
     def _decision_state(self, questions: list[dict[str, Any]], evaluations: list[dict[str, Any]]) -> dict[str, Any]:
         """决策器的输入一律由引擎拼好传进去——决策器自己不取库（那会变成第二条会话链）。
 
@@ -219,7 +247,7 @@ class InterviewEngine:
         if last.get("timed_out") or not str(last.get("user_answer") or "").strip():
             return None
 
-        decision = decide_next(self._decision_state(questions, evaluations))
+        decision = decide_next(self._decision_state(questions, evaluations), chat=self._decision_chat())
         if decision.get("action") != "deepen":
             return None
 
