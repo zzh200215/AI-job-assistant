@@ -23,6 +23,7 @@ import argparse
 import json
 import pathlib
 import sys
+import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
@@ -114,15 +115,21 @@ def run_arm(cases: dict, tier_name: str, dynamic: bool) -> dict:
     engine.session = session
     engine._evaluate_answer = _scripted_evaluator(int(tier["score"]))
 
-    decision_calls = {"n": 0}
+    decision_calls = {"n": 0, "ms": 0.0, "max_ms": 0.0}
     real_decision_chat = engine._decision_chat
 
     def counted_chat():
         inner = real_decision_chat()
 
         def call(prompt: str):
-            decision_calls["n"] += 1
-            return inner(prompt)
+            started = time.monotonic()
+            try:
+                return inner(prompt)
+            finally:
+                elapsed = (time.monotonic() - started) * 1000
+                decision_calls["n"] += 1
+                decision_calls["ms"] += elapsed
+                decision_calls["max_ms"] = max(decision_calls["max_ms"], elapsed)
 
         return call
 
@@ -150,6 +157,15 @@ def run_arm(cases: dict, tier_name: str, dynamic: bool) -> dict:
         "questions_emitted": len(emitted),
         "followups": len(followups),
         "decision_llm_calls": decision_calls["n"],
+        "decision_ms_total": round(decision_calls["ms"], 1),
+        "decision_ms_avg": round(decision_calls["ms"] / decision_calls["n"], 1) if decision_calls["n"] else None,
+        "decision_ms_max": round(decision_calls["max_ms"], 1) if decision_calls["n"] else None,
+        "decision_composed": sum(
+            1 for item in followups if ((item.get("metadata") or {}).get("decision") or {}).get("source") == "llm"
+        ),
+        "decision_degraded": sum(
+            1 for item in followups if bool(((item.get("metadata") or {}).get("decision") or {}).get("degraded"))
+        ),
         "covered_skills": covered,
         "coverage_rate": round(len(covered) / len(skills), 4) if skills else 0.0,
         "zero_wait_rate": round(len(pool_questions) / len(emitted), 4) if emitted else 0.0,
@@ -159,6 +175,7 @@ def run_arm(cases: dict, tier_name: str, dynamic: bool) -> dict:
                 "round": (item.get("metadata") or {}).get("round"),
                 "is_follow_up": bool((item.get("metadata") or {}).get("is_follow_up")),
                 "content": item.get("content"),
+                "decision": (item.get("metadata") or {}).get("decision"),
             }
             for item in emitted
         ],
@@ -240,7 +257,8 @@ def main() -> int:
             f"  {tier_name:5s} static={pair['static']['coverage_rate']:.2f}/{pair['static']['questions_emitted']}问 "
             f"dynamic={pair['dynamic']['coverage_rate']:.2f}/{pair['dynamic']['questions_emitted']}问 "
             f"增益={gains[tier_name]:+.1f}pp 零等待={pair['dynamic']['zero_wait_rate']:.0%} "
-            f"决策调用={pair['dynamic']['decision_llm_calls']}"
+            f"决策调用={pair['dynamic']['decision_llm_calls']} "
+            f"真组织={pair['dynamic']['decision_composed']} 降级={pair['dynamic']['decision_degraded']}"
         )
     if failures:
         for item in failures:
