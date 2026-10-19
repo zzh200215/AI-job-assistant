@@ -179,3 +179,23 @@ def test_pii_gate_flags_a_real_looking_identity() -> None:
     hits = _pii_hits("sample", dirty)
     assert len(hits) == 3, f"PII 门漏掉了东西，只报出 {hits}"
     assert not _pii_hits("clean", "姓名：周思远\n电话：13800138001  邮箱：resume01@example.com\n"), "假身份被判成违规"
+
+
+def test_interview_dynamic_cases_shape() -> None:
+    """P3.2 对比用例的形状：三档齐全、必考技能非空、题面里**不许**预置必考技能名。
+
+    最后一条是这套对比的测量前提：静态臂的覆盖必须是 0，增益才说明"追问把必考项带进来了"；
+    题面里如果本来就念了 JD 词表，静态臂的覆盖会跟着上去，那个 +100pp 就成了假的。
+    """
+    import json
+
+    path = BACKEND / "tests/eval/interview_dynamic_cases.json"
+    cases = json.loads(path.read_text(encoding="utf-8"))
+    skills = cases["jd"]["required_skills"]
+    assert len(skills) >= 3, f"必考技能太少，覆盖率的粒度不够：{skills}"
+    assert {"good", "mid", "weak"} <= set(cases["candidates"]), "三档考生不全"
+    assert all(item.get("question") and item.get("ref_answer") for item in cases["questions"]), "题面或参考答案缺项"
+    leaked = [
+        f"{item['question']} ⇒ {skill}" for item in cases["questions"] for skill in skills if skill in item["question"]
+    ]
+    assert not leaked, f"题面里预置了必考技能名，静态臂的覆盖会假高：{leaked[:3]}"
