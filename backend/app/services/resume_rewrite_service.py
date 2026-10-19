@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.models.history import JobDescription, Resume, ResumeVersion
 from app.prompts.rendering import render_prompt
 from app.prompts.resume_rewrite import RESUME_REWRITE_PROMPT
+from app.services.interview_profile_service import get_profile
 from app.services.llm_service import chat_json, set_llm_trace_context
 from app.services.match_score_service import canonical_match_score, resume_version_of
 from app.services.resume_blocks import apply_block_edits, build_resume_blocks
@@ -40,6 +41,40 @@ def _length_ceiling(original: str) -> int:
 
 def _prompt_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, str]]:
     return [{"block_id": b["block_id"], "label": b["label"], "text": b["text"]} for b in blocks]
+
+
+def _interview_weakness_hint(db: Session, user_id: int | None) -> str:
+    """把上一场面试的表达类弱点带进改写 prompt，只给"先改什么"，不给新事实。
+
+    画像读取失败不能挡住改写：这是锦上添花的一路，模型掉了不该让候选人连建议都拿不到。
+    """
+    if user_id is None:
+        return "无；按通用简历质量改写。"
+    try:
+        profile = get_profile(db, user_id)
+    except Exception:
+        logger.exception("Failed to load interview profile for rewrite user_id=%s", user_id)
+        return "无；按通用简历质量改写。"
+
+    texts = [str(item).strip() for item in (profile.get("weakness_texts") or []) if str(item).strip()]
+    dimensions = [
+        row
+        for row in (profile.get("dimension_weaknesses") or [])
+        if row.get("dimension") in {"expression", "depth"} and row.get("avg_score") is not None
+    ]
+    lines: list[str] = []
+    if texts:
+        lines.append("上次面试报告里的原话：" + "；".join(texts[:3]))
+    if dimensions:
+        lines.append(
+            "维度均分："
+            + "；".join(
+                f"{row.get('label') or row.get('dimension')} {float(row['avg_score']):g}/100" for row in dimensions
+            )
+        )
+    if not lines:
+        return "无；按通用简历质量改写。"
+    return "只把这些当作改写关注点，不要据此新增经历、数字或技术栈。" + " ".join(lines)
 
 
 def validate_rewrite_suggestions(
@@ -143,11 +178,12 @@ def build_rewrite_suggestions(
         if jd
         else "未指定目标岗位，按通用简历质量改写。"
     )
+    weakness_hint = _interview_weakness_hint(db, user_id)
 
     set_llm_trace_context(
         {
             "source": "resume_rewrite_service.build_rewrite_suggestions",
-            "prompt_version": "resume-rewrite-v1",
+            "prompt_version": "resume-rewrite-v2",
             "resume_id": resume_id,
             "jd_id": jd_id,
             "user_id": user_id,
@@ -157,6 +193,7 @@ def build_rewrite_suggestions(
         RESUME_REWRITE_PROMPT,
         blocks_json=json.dumps(_prompt_blocks(blocks), ensure_ascii=False, indent=2),
         jd_text=jd_text,
+        weakness_hint=weakness_hint,
         max_suggestions=MAX_SUGGESTIONS,
     )
     # 这一发是同步等 LLM 的，所以关掉思考链：D189 量到同一份 prompt 开着思考链时 91.77s / 95.33s

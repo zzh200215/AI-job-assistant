@@ -9,6 +9,7 @@ sentence in someone's resume.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 import pytest
 from fastapi import FastAPI
@@ -20,6 +21,7 @@ from app.api.resume import router as resume_router
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.models.history import JobDescription, Resume, ResumeVersion
+from app.models.interview_session import InterviewSession
 from app.models.user import User
 from app.services import resume_rewrite_service as svc
 from app.services import rewrite_job_service as job_service
@@ -192,6 +194,36 @@ def _job_row(db, user):
     return row
 
 
+def _completed_interview(db, user, *, weaknesses, expression=60, depth=58):
+    row = InterviewSession(
+        user_id=user.id,
+        tenant_id=1,
+        interview_type="tech",
+        status="completed",
+        evaluation_status="completed",
+        completed_at=datetime(2026, 10, 1),
+        evaluation={
+            "overall_score": 62,
+            "dimension_scores": {"completeness": 80, "accuracy": 75, "depth": depth, "expression": expression},
+            "question_evaluations": [
+                {
+                    "question": "讲一次你主导的项目。",
+                    "overall_score": 60,
+                    "feedback": "缺少指标",
+                    "improvement": "补数据",
+                }
+            ],
+            "answered_questions": 1,
+            "strengths": ["表达清楚"],
+            "weaknesses": weaknesses,
+        },
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
 def test_an_unparseable_resume_never_costs_an_llm_call(db_session, actor, monkeypatch):
     user, _ = actor
     resume = _resume_row(db_session, user, parsed={"name": "张三"})
@@ -270,6 +302,68 @@ def test_cross_user_resume_and_missing_job_are_refused(db_session, actor, monkey
     # A job owned by someone else is not a valid rewrite target either.
     with pytest.raises(ValueError):
         svc.build_rewrite_suggestions(db_session, resume.id, jd_id=job.id, user_id=user.id)
+
+
+def test_previous_interview_weaknesses_reach_the_rewrite_prompt(db_session, actor, monkeypatch):
+    """回流①：上一场的表达弱点要进 prompt，而且只像数据那样进。"""
+    user, _ = actor
+    resume = _resume_row(db_session, user)
+    _completed_interview(db_session, user, weaknesses=["成果未量化"])
+    prompts = []
+    monkeypatch.setattr(svc, "chat_json", lambda prompt, **kw: prompts.append(prompt) or {"suggestions": []})
+
+    svc.build_rewrite_suggestions(db_session, resume.id, user_id=user.id)
+
+    prompt = prompts[0]
+    assert "成果未量化" in prompt
+    assert "深度 58/100" in prompt
+    assert "表达力 60/100" in prompt
+    assert '<interview_profile data-role="untrusted">' in prompt
+
+
+def test_interview_weaknesses_are_scoped_to_the_resume_owner(db_session, actor, monkeypatch):
+    user, other = actor
+    resume = _resume_row(db_session, user)
+    _completed_interview(db_session, user, weaknesses=["我的表达问题"])
+    _completed_interview(db_session, other, weaknesses=["别人的秘密"])
+    prompts = []
+    monkeypatch.setattr(svc, "chat_json", lambda prompt, **kw: prompts.append(prompt) or {"suggestions": []})
+
+    svc.build_rewrite_suggestions(db_session, resume.id, user_id=user.id)
+
+    assert "我的表达问题" in prompts[0]
+    assert "别人的秘密" not in prompts[0]
+
+
+def test_no_interview_history_keeps_a_plain_hint(db_session, actor, monkeypatch):
+    user, _ = actor
+    resume = _resume_row(db_session, user)
+    prompts = []
+    monkeypatch.setattr(svc, "chat_json", lambda prompt, **kw: prompts.append(prompt) or {"suggestions": []})
+
+    svc.build_rewrite_suggestions(db_session, resume.id, user_id=user.id)
+
+    assert "无；按通用简历质量改写。" in prompts[0]
+    assert '<interview_profile data-role="untrusted">' in prompts[0]
+
+
+def test_a_profile_lookup_failure_does_not_block_rewrite(db_session, actor, monkeypatch):
+    """画像只是锦上添花：查询炸了也要把改写建议这条主路走完。"""
+    user, _ = actor
+    resume = _resume_row(db_session, user)
+    prompts = []
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("profile db down")
+
+    monkeypatch.setattr(svc, "get_profile", boom)
+    monkeypatch.setattr(svc.logger, "exception", lambda *args, **kwargs: None)
+    monkeypatch.setattr(svc, "chat_json", lambda prompt, **kw: prompts.append(prompt) or {"suggestions": []})
+
+    result = svc.build_rewrite_suggestions(db_session, resume.id, user_id=user.id)
+
+    assert result["suggestions"] == []
+    assert "无；按通用简历质量改写。" in prompts[0]
 
 
 # ---------------------------------------------------------------- wiring

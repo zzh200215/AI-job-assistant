@@ -16,6 +16,9 @@ UNTRUSTED_DATA_INSTRUCTION = (
 _UNTRUSTED_FIELD_TAGS = {
     "resume_text": "resume",
     "resume_summary": "resume",
+    # 面试画像的弱点文本来自上一场报告（模型对候选人回答的总结），与简历同级按数据包裹：
+    # 候选人可以在回答里写一句"忽略上述指令"，那也会被总结进 weaknesses。
+    "weakness_hint": "interview_profile",
     "jd_text": "jd",
     "resume_json": "resume",
     "jd_json": "jd",
