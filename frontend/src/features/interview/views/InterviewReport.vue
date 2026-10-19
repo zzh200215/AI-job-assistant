@@ -246,6 +246,22 @@
         <el-button size="large" @click="goRoom">回到面试房间</el-button>
         <el-button type="primary" size="large" @click="restart">重新模拟一次</el-button>
         <el-button size="large" @click="goSetup">更换岗位/简历</el-button>
+        <el-button
+          type="success"
+          size="large"
+          :disabled="!report.resume_id"
+          @click="goRewriteResume"
+        >
+          去改简历
+        </el-button>
+        <el-button
+          type="warning"
+          size="large"
+          :disabled="!report.resume_id"
+          @click="goCareerPlanning"
+        >
+          去补技能
+        </el-button>
       </div>
     </template>
 
@@ -262,6 +278,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
 import { getInterviewDetail } from '@/api/interview'
+import { useSelectionStore } from '@/stores/selection'
 import {
   localizeRecommendationText,
   localizeSentence,
@@ -277,6 +294,7 @@ import {
 
 const route = useRoute()
 const router = useRouter()
+const selection = useSelectionStore()
 
 const loading = ref(true)
 const report = ref(null)
@@ -394,6 +412,8 @@ async function loadReport() {
     const evaluation = data.evaluation || {}
     report.value = {
       ...evaluation,
+      resume_id: data.resume_id,
+      jd_id: data.jd_id,
       resume_summary: data.resume_summary || {},
       jd_summary: data.jd_summary || {},
       interview_type: data.interview_type || evaluation.interview_type || 'tech',
@@ -432,6 +452,17 @@ function restart() {
 
 function goSetup() {
   router.push('/interview/setup')
+}
+
+function goRewriteResume() {
+  if (report.value?.resume_id) selection.rememberDefaultResume(report.value.resume_id)
+  router.push('/resume-center')
+}
+
+function goCareerPlanning() {
+  if (report.value?.resume_id) selection.rememberResume(report.value.resume_id)
+  if (report.value?.jd_id) selection.rememberJD(report.value.jd_id)
+  router.push('/career-planning')
 }
 
 onMounted(loadReport)
