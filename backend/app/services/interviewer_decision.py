@@ -88,11 +88,30 @@ def reachable_from(graph: InterviewerDecisionGraph, start: str) -> set[str]:
     return seen
 
 
+def _evidence_text(value: Any) -> str:
+    """把证据值收敛成一句人话。
+
+    评分记录里的 `evidence` 是结构化字典（`source / question_excerpt / answer_excerpt / dimensions`）。
+    直接 `str()` 进去会把 `{'source': ...}` 原样念给候选人——P3.2 跑者实测到过，追问里出现了
+    `你刚才提到「{'source': 'synchronous_evaluation'...` 这种泄露内部结构的话。只取人话那一项。
+    """
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list | tuple):
+        return " ".join(part for part in (_evidence_text(item) for item in value) if part).strip()
+    if isinstance(value, dict):
+        for key in ("answer_excerpt", "question_excerpt", "summary", "quote", "text"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return ""
+
+
 def update_profile(state: dict[str, Any]) -> dict[str, Any]:
     """把这一轮的得分与证据并进候选人画像：强弱项、已覆盖考点、追问深度。"""
     scores = list(state.get("scores") or [])
     weaknesses = list(state.get("weaknesses") or [])
-    evidence_chain = [item for item in (state.get("evidence") or []) if item]
+    evidence_chain = [text for text in (_evidence_text(item) for item in (state.get("evidence") or [])) if text]
     covered = sorted({str(item.get("category")) for item in _pool(state) if item.get("category")})
     last_score = scores[-1] if scores else 100
     return {
@@ -200,14 +219,21 @@ def _next_from_pool(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _followup(state: dict[str, Any]) -> dict[str, Any]:
-    """针对上一题回答里的模糊点拼一句单点追问（模板追问的升级形状）。"""
+    """针对上一题回答里的模糊点拼一句单点追问（模板追问的升级形状）。
+
+    必考项优先：只要还有"岗位必考、还没考到"的技能，追问就把话题拉回它——不然追来追去都在
+    候选人已经讲过的内容里打转，覆盖不到岗位真正要考的点（P3.2 跑者第一版就量到覆盖 0）。
+    证据是锦上添花，用来让追问贴着候选人刚说的话。
+    """
     profile = update_profile(state)["profile"]
     focus = profile["weaknesses"][0] if profile["weaknesses"] else ""
     evidence = (profile["evidence"] or "").strip()
-    if evidence:
-        text = f"你刚才提到「{evidence[:40]}」，这一块的成果当时是怎么量化的？"
+    if focus and evidence:
+        text = f"你刚才提到「{evidence[:30]}」，回到{focus}这块：具体是怎么做的、结果怎么量化？"
     elif focus:
         text = f"这块我想再深入一点：你在{focus}上具体做过什么？"
+    elif evidence:
+        text = f"你刚才提到「{evidence[:40]}」，这一块的成果当时是怎么量化的？"
     else:
         text = "刚才的回答可以再具体一些：你本人负责的是哪一段？"
     return {

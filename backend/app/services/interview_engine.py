@@ -117,7 +117,13 @@ class InterviewEngine:
         self.session.timeout_count = 0
         self.session.messages = self.session.messages or []
         self.session.evaluation_status = "idle"
-        self.session.memory_snapshot = {}
+        # 重置每轮记忆，但保留建会话时的**输入**（JD 必考技能池）：start 是第三个会把快照整份
+        # 抹掉的地方（另两个是 build_memory_snapshot 与个性化那条路），抹掉之后追问的弱点分支
+        # 会静默失效——P3.2 跑者第一版就量到覆盖率为 0。
+        previous_snapshot = self.session.memory_snapshot or {}
+        self.session.memory_snapshot = {
+            key: previous_snapshot[key] for key in ("jd_required_skills",) if key in previous_snapshot
+        }
         self.db.commit()
 
         self.current_index = -1
@@ -215,16 +221,19 @@ class InterviewEngine:
         候选池取的是**还没出过的题**（`current_index + 1` 往后），不是整份列表：否则 advance 会
         把已经答过的题再问一遍。
         """
+        snapshot = self.session.memory_snapshot or {}
+        required = [str(item) for item in (snapshot.get("jd_required_skills") or []) if item]
+        # 只留**还没在任何题面里出现过**的必考项：已经考过的再问一遍不叫命中，叫重复。
+        asked_text = " ".join(str(msg.get("content") or "") for msg in (self.session.messages or []))
+        remaining = [skill for skill in required if skill not in asked_text]
         return {
             "round_index": len(evaluations),
             "scores": [int(item.get("overall_score") or 0) for item in evaluations],
-            "evidence": [str(item.get("evidence") or "") for item in evaluations],
+            # 证据保持原样传（可能是结构化字典）：收敛成人话是决策器 `_evidence_text` 的职责，
+            # 在这里 `str()` 会先把字典拍成 repr，追问就会把内部结构念给候选人。
+            "evidence": [item.get("evidence") for item in evaluations],
             "asked_followup": bool(evaluations[-1].get("follow_up")) if evaluations else False,
-            # 弱点池：建会话时落的 JD 必考技能（还没考到的那些）。`weaknesses` 是给兼容留的旧键，
-            # 今天没有任何写入端——别只读它，否则追问的弱点分支是死代码。
-            "weaknesses": (self.session.memory_snapshot or {}).get("jd_required_skills")
-            or (self.session.memory_snapshot or {}).get("weaknesses")
-            or [],
+            "weaknesses": remaining or required or snapshot.get("weaknesses") or [],
             "candidate_pool": questions[self.current_index + 1 :],
         }
 
@@ -246,6 +255,18 @@ class InterviewEngine:
         last = evaluations[-1]
         if last.get("follow_up"):
             return None
+        # 轮次取**引擎指针**，不取 `len(evaluations)`：评分行可能落后（调用失败/没落库），
+        # 用评估条数当轮次会把追问贴到上一轮，而"这题已追过"的判定也会跟着失效——同一题会被
+        # 一遍遍追问（P3.2 跑者实测到同一轮连发 8 条）。正常路径两者相等，行为不变。
+        round_num = self.current_index + 1
+        # 评分行可能没跟上（调用失败/没落库），所以"这题已经追过"还要从**消息记录**里数一遍：
+        # 只信评估行的话，同一题会被一遍遍追问——P3.2 跑者实测到同一轮连发 8 条。
+        already_followed = any(
+            (msg.get("metadata") or {}).get("is_follow_up") and (msg.get("metadata") or {}).get("round") == round_num
+            for msg in (self.session.messages or [])
+        )
+        if already_followed:
+            return None
         # 超时那一题在 `_rebuild_evaluations()` 里是 overall_score=0 且 timed_out=True。决策器只看
         # 分数就会判深挖，于是面试官去追问一段从来没出现过的回答——那是幻觉，不是追问。
         if last.get("timed_out") or not str(last.get("user_answer") or "").strip():
@@ -256,7 +277,6 @@ class InterviewEngine:
             return None
 
         question = decision["question"]
-        round_num = len(evaluations)
         # metadata 一律**内联**在消息字面量里，不拆成变量：那条静态守卫（P1.2 落的花括号配对）是按
         # `"type": "question"` 之后紧跟的 `"metadata": {` 取字典体的，拆出去它就看不到这枚章。
         message = {

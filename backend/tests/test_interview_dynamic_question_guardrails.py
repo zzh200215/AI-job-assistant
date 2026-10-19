@@ -210,7 +210,6 @@ def test_answering_a_followup_writes_its_own_turn(engine, monkeypatch) -> None:
     assert metadata["turn_id"] != "q-1", "追问的答案被记成主题那一轮的 turn_id ⇒ 主题评分会被覆盖"
 
     rows = engine.db.query(InterviewTurnEvaluation).filter_by(session_id=engine.session_id).all()
-    rows = [row for row in rows if row.question_index == engine.current_index]
     turns = {(row.turn_id, bool(row.is_follow_up)) for row in rows}
     assert (followup_turn, True) in turns, f"评分行里没有独立的追问那一行：{turns}"
 
@@ -426,3 +425,67 @@ def test_followup_names_a_required_skill_when_evidence_is_empty(engine, monkeypa
     followup = engine.next_question()
 
     assert "分布式事务" in followup["content"], followup["content"]
+
+
+def test_start_does_not_wipe_the_skill_pool(engine) -> None:
+    """`start()` 会重置每轮记忆，但建会话时的输入（必考技能池）必须留下。
+
+    这一处是"快照被整份抹掉"的第三个现场：`start()` 原本直接写 `{}`，于是开局就把池子清了，
+    追问的弱点分支静默失效（P3.2 跑者第一版覆盖率为 0 的根因）。
+    """
+    engine.session.memory_snapshot = {"jd_required_skills": ["向量检索"]}
+    engine.db.commit()
+
+    engine.start()
+
+    assert engine.session.memory_snapshot.get("jd_required_skills") == ["向量检索"], (
+        engine.session.memory_snapshot
+    )
+
+
+def test_stale_evaluation_cannot_loop_the_same_followup(engine, monkeypatch) -> None:
+    """评分行没跟上时，同一题不许被无限追问。
+
+    P3.2 跑者实测到过：评估只写到 q-2 就停了（后面的评分调用失败/没落库），于是
+    `_rebuild_evaluations()` 的最后一题永远是"没追问过"，`_maybe_followup` 就一遍遍追同一轮——
+    消息轨迹里同一 round 连发 8 条追问。兜底不能只靠评分行，必须也数**消息里的追问记录**。
+    """
+    engine.current_index = 0  # 第 1 题已发出
+    engine.next_question()  # 还没有任何评估 ⇒ 正常出第 2 题
+    _stub(
+        engine,
+        monkeypatch,
+        _evaluations({"overall_score": 40, "evidence": [], "user_answer": "还行", "follow_up": False}),
+    )
+
+    first_deep = engine.handle_answer("答得一般")
+    assert first_deep["metadata"].get("is_follow_up") is True, first_deep["metadata"]
+
+    # 评分行仍是那份旧状态（stale），但这一轮已经追过一次了。
+    again = engine.next_question()
+    assert again["metadata"].get("is_follow_up") is not True, "评分行没更新时同一题被追了第二遍"
+
+
+def test_followup_does_not_echo_raw_evidence_dict(engine, monkeypatch) -> None:
+    """证据是结构化字典（source / question_excerpt / answer_excerpt / dimensions），
+    追问必须取**人话那一项**，不许把 dict 的 repr 直接念给候选人。"""
+    engine.current_index = 0  # 第 1 题已发出
+    engine.next_question()  # 还没有任何评估 ⇒ 正常出第 2 题
+    _stub(
+        engine,
+        monkeypatch,
+        _evaluations(
+            {
+                "overall_score": 40,
+                "evidence": {"source": "x", "answer_excerpt": "我把召回率提到 88%", "dimensions": {}},
+                "user_answer": "答了",
+                "follow_up": False,
+            }
+        ),
+    )
+
+    followup = engine.handle_answer("答了")
+
+    assert "source" not in followup["content"], followup["content"]
+    assert "{" not in followup["content"], followup["content"]
+    assert "召回率" in followup["content"], followup["content"]
