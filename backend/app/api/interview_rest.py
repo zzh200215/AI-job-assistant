@@ -95,7 +95,12 @@ def create_session(
         messages=[],
         evaluation={},
         evaluation_status="idle",
-        memory_snapshot={"question_generation": {"status": "pending"}},
+        # JD 必考技能池落进快照：决策器追问时要按"岗位必考、还没考到"的项去深挖。
+        # 不落盘的话引擎那一侧永远读到空（历史上就没人写过这个键）。
+        memory_snapshot={
+            "question_generation": {"status": "pending"},
+            "jd_required_skills": list(required_skills or []),
+        },
         total_questions=len(ordered_questions),
         answered_count=0,
         timeout_count=0,

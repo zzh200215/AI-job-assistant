@@ -219,8 +219,12 @@ class InterviewEngine:
             "round_index": len(evaluations),
             "scores": [int(item.get("overall_score") or 0) for item in evaluations],
             "evidence": [str(item.get("evidence") or "") for item in evaluations],
-            "asked_followup": bool(evaluations[-1].get("follow_up")),
-            "weaknesses": (self.session.memory_snapshot or {}).get("weaknesses") or [],
+            "asked_followup": bool(evaluations[-1].get("follow_up")) if evaluations else False,
+            # 弱点池：建会话时落的 JD 必考技能（还没考到的那些）。`weaknesses` 是给兼容留的旧键，
+            # 今天没有任何写入端——别只读它，否则追问的弱点分支是死代码。
+            "weaknesses": (self.session.memory_snapshot or {}).get("jd_required_skills")
+            or (self.session.memory_snapshot or {}).get("weaknesses")
+            or [],
             "candidate_pool": questions[self.current_index + 1 :],
         }
 

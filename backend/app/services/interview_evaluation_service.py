@@ -445,7 +445,7 @@ def build_memory_snapshot(db: Session, session_id: int) -> dict[str, Any]:
         f"已完成 {len(completed)} 题评分，覆盖 {', '.join(categories) if categories else '待评分'}。"
         f"高分证据 {len(strengths)} 条，待补强证据 {len(risks)} 条，后台待处理 {pending_count} 题。"
     )
-    return {
+    snapshot = {
         "version": 1,
         "generated_at": utc_now().isoformat(),
         "completed_turns": len(completed),
@@ -455,6 +455,13 @@ def build_memory_snapshot(db: Session, session_id: int) -> dict[str, Any]:
         "risks": risks,
         "summary": summary,
     }
+    # 建会话那一刻写进快照的东西（比如 JD 必考技能池）不能被每轮的快照整份覆盖掉：
+    # 决策器的"弱点池"就寄存在那里，覆盖一次就永远空了——而空掉的那一侧不报任何错。
+    session = db.get(InterviewSession, session_id)
+    previous = (session.memory_snapshot or {}) if session else {}
+    for key, value in previous.items():
+        snapshot.setdefault(key, value)
+    return snapshot
 
 
 def _evaluation_status(db: Session, session_id: int, session_status: str) -> str:

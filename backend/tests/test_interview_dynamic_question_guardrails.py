@@ -25,6 +25,7 @@ from app.core.config import settings
 from app.models.interview_evaluation import InterviewTurnEvaluation
 from app.models.interview_session import InterviewSession
 from app.services.interview_engine import InterviewEngine
+from app.services.interview_evaluation_service import build_memory_snapshot
 
 
 def _question(index: int, text: str, category: str = "tech") -> dict:
@@ -378,3 +379,50 @@ def test_llm_composition_has_a_hard_deadline(
     assert elapsed < 0.4, f"没被硬截止拦住，等了 {elapsed:.2f}s"
     assert emitted["metadata"]["decision"]["degraded"] is True, emitted["metadata"]
     assert emitted["content"].strip(), emitted["content"]
+
+
+# ---------------------------------------------------------------------------
+# P3.2 的前置：JD 必考技能池要活到每一轮
+# ---------------------------------------------------------------------------
+# 文档要的"弱点命中率"没有数据源：建会话时没人写弱点，`build_memory_snapshot()` 每轮又**整份覆盖**
+# 快照。所以决策器读的 `memory_snapshot["weaknesses"]` 今天永远为空——追问的弱点分支是死代码。
+# 口径按他 2026-10-19 点的：用 **JD 必考技能**当弱点池（不是"候选人不会的"，是"岗位必考、还没考到"）。
+
+
+def test_memory_snapshot_keeps_the_skill_pool_between_turns(engine) -> None:
+    """每轮的快照重建不许把建会话时落的必考技能池抹掉。"""
+    engine.session.memory_snapshot = {
+        "question_generation": {"status": "pending"},
+        "jd_required_skills": ["分布式事务", "向量检索"],
+    }
+    engine.db.commit()
+
+    snapshot = build_memory_snapshot(engine.db, engine.session_id)
+
+    assert snapshot["jd_required_skills"] == ["分布式事务", "向量检索"], snapshot
+    assert snapshot["completed_turns"] == 0, snapshot
+
+
+def test_decision_state_carries_the_jd_skill_pool(engine) -> None:
+    """决策器拿到的弱点池 = 快照里的必考技能。"""
+    engine.session.memory_snapshot = {"jd_required_skills": ["向量检索"]}
+    engine.db.commit()
+
+    state = engine._decision_state(engine.session.questions, [])
+
+    assert state["weaknesses"] == ["向量检索"], state
+
+
+def test_followup_names_a_required_skill_when_evidence_is_empty(engine, monkeypatch) -> None:
+    """答得差、又没抓到具体证据 ⇒ 追问要落在某个**必考技能**上，而不是空泛的"再说具体点"。"""
+    engine.session.memory_snapshot = {"jd_required_skills": ["分布式事务"]}
+    engine.db.commit()
+    _stub(
+        engine,
+        monkeypatch,
+        _evaluations({"overall_score": 40, "evidence": [], "user_answer": "还行吧", "follow_up": False}),
+    )
+
+    followup = engine.next_question()
+
+    assert "分布式事务" in followup["content"], followup["content"]
