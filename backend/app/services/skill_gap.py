@@ -74,6 +74,23 @@ def canonical_skill(value: Any) -> str:
     return _SKILL_ALIASES.get(normalized, normalized)
 
 
+def skill_match_terms(value: Any) -> list[str]:
+    """Normalized spellings that refer to the same skill, for matching free text.
+
+    `skill_spellings` only echoes the strings a caller gave it. Here the canonical
+    name and every alias folding into it are included, so a question that says
+    "Kubernetes" is still recognized when the JD wrote "K8s".
+    """
+    canonical = canonical_skill(value)
+    if not canonical:
+        return []
+    terms = {normalize_skill(value), canonical}
+    for alias, target in _SKILL_ALIASES.items():
+        if target == canonical:
+            terms.add(alias)
+    return sorted(term for term in terms if term)
+
+
 def _skill_strings(container: Any, keys: tuple[str, ...]) -> list[str]:
     """Read the first key that has anything, in the order given.
 

@@ -29,6 +29,7 @@ from app.services.interview_config_service import (
 )
 from app.services.interview_engine import InterviewEngine
 from app.services.interview_evaluation_service import build_conversation, evaluation_payloads
+from app.services.interview_profile_service import get_profile, public_profile
 from app.services.llm_service import chat_json
 from app.services.rag_service import search_knowledge
 from app.services.skill_gap import jd_required_names
@@ -776,6 +777,15 @@ def interview_preparation(
             "past_performance": performance,
         }
     )
+
+
+@router.get("/profile", summary="跨会话面试画像")
+def interview_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """把历史已完成面试压成维度/技能弱点，供三路回流与下一场设置读取。"""
+    return ok(public_profile(get_profile(db, current_user.id)))
 
 
 @router.get("/performance", summary="面试表现趋势分析")
