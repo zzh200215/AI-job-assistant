@@ -30,8 +30,13 @@ from app.services.interview_config_service import (
 from app.services.interview_engine import InterviewEngine
 from app.services.interview_evaluation_service import build_conversation, evaluation_payloads
 from app.services.interview_profile_service import compact_profile, get_profile, public_profile
+from app.services.interview_question_source import (
+    fetch_interview_question_context,
+    format_rag_context,
+    normalize_question,
+    search_types_for,
+)
 from app.services.llm_service import chat_json
-from app.services.rag_service import search_knowledge
 from app.services.skill_gap import jd_required_names
 from app.utils.job_access import get_accessible_job
 from app.utils.response import ERR_PARAM, fail, ok
@@ -75,12 +80,7 @@ def create_session(
         logger.exception("Failed to load interview profile when creating session user_id=%s", current_user.id)
         prior_profile = compact_profile({})
 
-    type_hints = {
-        "tech": ["interview_q", "skill_model"],
-        "hr": ["interview_q"],
-        "comprehensive": ["interview_q", "skill_model"],
-    }
-    search_types = type_hints.get(payload.interview_type, ["interview_q", "skill_model"])
+    search_types = search_types_for(payload.interview_type)
 
     # T3-2：平台题库配置优先（自定义静态题覆盖内置 starter 题库）
     bank = get_question_bank(db, payload.interview_type)
@@ -433,37 +433,27 @@ def _normalize_generated_questions(raw: dict[str, Any], fallback: list[dict[str,
     generated: list[dict[str, Any]] = []
     for default_type in ("basic", "tech", "project", "scenario"):
         for item in raw.get(default_type, []) or []:
-            text = (item.get("q") or item.get("question") or "").strip()
-            if not text:
-                continue
-            generated.append(
-                {
-                    "type": default_type,
-                    "category": _map_category(default_type),
-                    "question": text,
-                    "intent": item.get("intent", ""),
-                    "ref_answer": item.get("ref_answer") or item.get("expected_answer") or "",
-                    "source": "personalized",
-                }
+            normalized = normalize_question(
+                item,
+                q_type=default_type,
+                index=len(generated) + 1,
+                source="personalized",
             )
+            if normalized:
+                generated.append(normalized)
 
     for item in raw.get("questions", []) or []:
         if len(generated) >= 10:
             break
-        text = (item.get("q") or item.get("question") or "").strip()
-        if not text:
-            continue
         q_type = item.get("type") or "tech"
-        generated.append(
-            {
-                "type": q_type,
-                "category": _map_category(q_type),
-                "question": text,
-                "intent": item.get("intent", ""),
-                "ref_answer": item.get("ref_answer") or item.get("expected_answer") or "",
-                "source": "personalized",
-            }
+        normalized = normalize_question(
+            item,
+            q_type=q_type,
+            index=len(generated) + 1,
+            source="personalized",
         )
+        if normalized:
+            generated.append(normalized)
 
     merged = (generated + fallback)[:10]
     for index, item in enumerate(merged, start=1):
@@ -483,17 +473,15 @@ def _build_personalized_prompt(
     db: Session | None = None,
     user_id: int | None = None,
 ) -> str:
-    rag_parts: list[str] = []
-    for doc_type in search_types:
-        results = search_knowledge(
-            f"{jd_title} {' '.join(required_skills[:5])}".strip(),
-            doc_type=doc_type,
-            top_k=3,
-            db=db,
+    rag_context = format_rag_context(
+        fetch_interview_question_context(
+            db,
+            title=jd_title,
+            skills=required_skills,
+            search_types=search_types,
             user_id=user_id,
         )
-        for item in results:
-            rag_parts.append(f"《{item.get('doc_title', '')}》{item.get('text', '')[:300]}")
+    )
 
     type_instructions = {
         "tech": "重点考察技术深度、系统设计、编码思路，技术题和项目题占比更高。",
@@ -505,7 +493,7 @@ def _build_personalized_prompt(
     if custom_instruction:
         type_instructions[interview_type] = custom_instruction
     prompt = INTERVIEW_PROMPT.format(
-        rag_context="\n".join(rag_parts),
+        rag_context=rag_context,
         resume_json=json.dumps(resume_json, ensure_ascii=False),
         jd_json=json.dumps(jd_json, ensure_ascii=False),
     )

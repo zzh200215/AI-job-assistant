@@ -12,8 +12,12 @@ from app.orchestration.context import AgentContext
 from app.prompts.interview import INTERVIEW_PROMPT
 from app.prompts.interview import PROMPT_VERSION as _PROMPT_VERSION
 from app.prompts.rendering import render_prompt
+from app.services.interview_question_source import (
+    fetch_interview_question_context,
+    format_rag_context,
+    normalize_question,
+)
 from app.services.llm_service import chat_json
-from app.services.rag_service import search_knowledge
 
 
 class InterviewQuestionAgent(BaseAgent):
@@ -38,20 +42,13 @@ class InterviewQuestionAgent(BaseAgent):
         resume_json = json.dumps(resume.parsed_json or {}, ensure_ascii=False)
         jd_json = json.dumps(jd.parsed_json or {}, ensure_ascii=False)
 
-        # RAG 检索面试题库
+        # 与模拟面试那条入口共用同一个查询词、文档类型与格式化（P4 收尾）。
         parsed_jd = jd.parsed_json or {}
         title = parsed_jd.get("title", "") or jd.title or ""
         skills = parsed_jd.get("required_skills", []) or []
-        query = f"{title} {' '.join(skills[:5])}".strip()
-
-        rag_parts = []
-        for dtype in ["interview_q", "skill_model"]:
-            results = search_knowledge(query, doc_type=dtype, top_k=3, db=db, user_id=context.user_id)
-            if results:
-                rag_parts.append(f"===== {dtype} =====")
-                for r in results:
-                    rag_parts.append(f"【{r.get('doc_title', '')}】{r.get('text', '')[:300]}")
-        rag_context = "\n".join(rag_parts)
+        rag_context = format_rag_context(
+            fetch_interview_question_context(db, title=title, skills=skills, user_id=context.user_id)
+        )
 
         prompt = render_prompt(
             INTERVIEW_PROMPT,
@@ -60,6 +57,20 @@ class InterviewQuestionAgent(BaseAgent):
             jd_json=jd_json,
         )
         result: dict[str, Any] = chat_json(prompt)
+        if isinstance(result, dict):
+            questions = []
+            for q_type in ("basic", "tech", "project", "scenario"):
+                for item in result.get(q_type) or []:
+                    normalized = normalize_question(
+                        item,
+                        q_type=q_type,
+                        index=len(questions) + 1,
+                        source="analysis_agent",
+                    )
+                    if normalized:
+                        questions.append(normalized)
+            # 原始四桶保留给旧读方；`questions` 是与模拟面试同一套 schema 的平铺视图。
+            result = {**result, "questions": questions}
         return result
 
     def _make_summary(self, result: dict[str, Any]) -> str:

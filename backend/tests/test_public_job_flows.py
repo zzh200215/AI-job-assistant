@@ -118,7 +118,7 @@ def test_interview_session_accepts_public_job(flow_client, db_session, monkeypat
     resume = _create_resume(db_session, user_id=user.id)
     public_job = _create_public_job(db_session, title="Interview Job")
 
-    monkeypatch.setattr(interview_api, "search_knowledge", lambda *args, **kwargs: [])
+    monkeypatch.setattr(interview_api, "fetch_interview_question_context", lambda *args, **kwargs: [])
     monkeypatch.setattr(
         interview_api,
         "chat_json",

@@ -105,7 +105,7 @@ def test_fallback_questions_fallback_to_builtin_without_custom():
 
 
 def test_personalized_prompt_injects_platform_template(mocker):
-    mocker.patch("app.api.interview_rest.search_knowledge", return_value=[])
+    mocker.patch("app.api.interview_rest.fetch_interview_question_context", return_value=[])
     prompt = _build_personalized_prompt(
         resume_json={},
         jd_json={},
