@@ -24,7 +24,11 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.interview_session import InterviewSession
 from app.orchestration.context import AgentContext
-from app.services.interview_config_service import QUESTION_TYPE_LABELS, timeout_for_type
+from app.services.interview_config_service import (
+    QUESTION_TYPE_LABELS,
+    TIMEOUT_FLOOR_SECONDS,
+    timeout_for_type,
+)
 from app.services.interview_evaluation_service import (
     build_memory_snapshot,
     complete_turn_evaluation,
@@ -150,7 +154,16 @@ class InterviewEngine:
             # 上层调用 next_question() 推进到下一题。
             if self._question_answered(current_question):
                 return None
-            return self._message_to_payload(current_question)
+            payload = self._message_to_payload(current_question)
+            remaining = self._remaining_question_seconds(current_question)
+            metadata = dict(payload.get("metadata") or {})
+            # 重连不能刷新答题时间：客户端与服务端都只认这条剩余值。已经过期的题不再重发，
+            # 由 WS 层直接走 handle_timeout（否则候选人断开重连就能把整题预算重新拿一遍）。
+            metadata["timeout_seconds"] = remaining
+            if remaining <= 0:
+                metadata["resume_expired"] = True
+            payload["metadata"] = metadata
+            return payload
         return None
 
     def next_question(self) -> dict[str, Any]:
@@ -696,6 +709,22 @@ class InterviewEngine:
             if msg.get("type") == "question":
                 return msg
         return None
+
+    @staticmethod
+    def _question_timeout_seconds(message: dict[str, Any]) -> int:
+        meta = message.get("metadata") or {}
+        raw = meta.get("timeout_seconds")
+        if isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
+            return TIMEOUT_FLOOR_SECONDS
+        return raw
+
+    def _remaining_question_seconds(self, message: dict[str, Any], *, now: float | None = None) -> int:
+        budget = self._question_timeout_seconds(message)
+        started = self._parse_timestamp(message.get("timestamp"))
+        if started is None:
+            return budget
+        elapsed = max(0, int((now if now is not None else time.time()) - started))
+        return max(0, budget - elapsed)
 
     def _question_answered(self, question: dict[str, Any]) -> bool:
         """判断该题消息之后是否已有同 round 的作答（避免断线后重复推送已答题目）。

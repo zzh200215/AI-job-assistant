@@ -227,7 +227,11 @@ async def _handle_ws_loop(
         result: dict | None = None
         if status == "ongoing":
             _, result = await _step(session_id, "resume")
-            if result:
+            if result and (result.get("metadata") or {}).get("resume_expired"):
+                # 断线期间这一题的预算已经走完：不重发题目，直接按超时处理并推进。
+                new_messages, result = await _step(session_id, "handle_timeout")
+                await _emit_snapshot(websocket, new_messages, result)
+            elif result:
                 await websocket.send_json(result)
             else:
                 new_messages, result = await _step(session_id, "next_question")

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -152,6 +153,31 @@ def test_engine_is_released_when_the_client_disconnects(ws_client, normal_user, 
     # 两条语句之间被换下去。D212 之后这条曾单独红过一次（先看见 count==0、再读 db 还在）就是这个缝。
     released = _wait_until(lambda: interview_ws.live_interview_count() == 0 and engine.db is None)
     assert released, "客户端断开后连接仍占着在途名额（旧实现正是这样：_engine_pool 只在结束/异常时清）"
+
+
+def test_reconnect_does_not_repush_a_question_whose_budget_already_elapsed(ws_client, normal_user, db_session):
+    """断线期间超时的题不能靠重连续命：连上来先出超时，再推下一题。"""
+    sid = _make_session(db_session, normal_user)
+    session = db_session.get(InterviewSession, sid)
+    session.messages = [
+        {
+            "role": "ai",
+            "type": "question",
+            "content": "Q1",
+            "metadata": {"round": 1, "total": 3, "category": "tech", "timeout_seconds": 120},
+            "timestamp": (datetime.now(timezone.utc) - timedelta(seconds=300)).isoformat(),
+        }
+    ]
+    db_session.commit()
+
+    with ws_client.websocket_connect(f"/ws/interview/{sid}", subprotocols=["jwt", _token_for(normal_user)]) as ws:
+        first = ws.receive_json()
+        second = ws.receive_json()
+
+    assert first["type"] == "system"
+    assert "已超时" in first["content"]
+    assert second["type"] == "question"
+    assert second["content"] == "Q2"
 
 
 def test_two_connections_to_one_session_do_not_share_one_engine(ws_client, normal_user, db_session, monkeypatch):

@@ -10,6 +10,7 @@
   6. 边界条件 — 空题目列表、全部超时、用户主动结束
 """
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -254,6 +255,64 @@ class TestInterviewEngineInit:
         payload = eng.resume()
         assert payload is not None
         assert payload["content"] == "再深入一点？"  # 追问仍未作答，应推送追问
+
+    def test_resume_sends_remaining_budget_not_the_original_full_budget(self, db_session, make_interview_session):
+        """重连不能刷新答题时间：未答题重发时携带的是剩余秒数，不是原来的整题预算。"""
+        started = datetime.now(timezone.utc) - timedelta(seconds=30)
+        session_id = make_interview_session(
+            status="ongoing",
+            total_questions=3,
+            messages=[
+                {
+                    "role": "ai",
+                    "type": "question",
+                    "content": "第一题",
+                    "metadata": {"round": 1, "total": 3, "category": "tech", "timeout_seconds": 120},
+                    "timestamp": started.isoformat(),
+                },
+            ],
+        )
+        eng = InterviewEngine(session_id)
+        eng.db = db_session
+        eng.session = db_session.get(InterviewSession, session_id)
+
+        payload = eng.resume()
+
+        assert payload is not None
+        assert 89 <= payload["metadata"]["timeout_seconds"] <= 90
+        assert "resume_expired" not in payload["metadata"]
+
+    def test_resume_marks_question_expired_when_budget_already_elapsed(self, db_session, make_interview_session):
+        """断线期间预算已经走完：resume 不再重发题目，而是标记过期交给 WS 层走超时。"""
+        started = datetime.now(timezone.utc) - timedelta(seconds=200)
+        session_id = make_interview_session(
+            status="ongoing",
+            total_questions=3,
+            messages=[
+                {
+                    "role": "ai",
+                    "type": "question",
+                    "content": "第一题",
+                    "metadata": {"round": 1, "total": 3, "category": "tech", "timeout_seconds": 120},
+                    "timestamp": started.isoformat(),
+                },
+            ],
+        )
+        eng = InterviewEngine(session_id)
+        eng.db = db_session
+        eng.session = db_session.get(InterviewSession, session_id)
+
+        payload = eng.resume()
+
+        assert payload is not None
+        assert payload["metadata"]["timeout_seconds"] == 0
+        assert payload["metadata"]["resume_expired"] is True
+
+    def test_remaining_question_seconds_uses_floor_for_legacy_message(self, engine):
+        """老会话落库的题目没有 timeout_seconds：按 45 秒下限算，不回到 30。"""
+        started = datetime.fromisoformat("2026-10-20T00:00:00+00:00")
+        message = {"timestamp": started.isoformat(), "metadata": {"round": 1}}
+        assert engine._remaining_question_seconds(message, now=started.timestamp() + 10) == 35
 
 
 # ==================== Normal Flow Tests ====================
