@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.services.interview_config_service import QUESTION_TYPE_LABELS
 from app.services.rag_service import search_knowledge
 
+CONTEXT_SNIPPET_CHARS = 300
 DEFAULT_SEARCH_TYPES = ("interview_q", "skill_model")
 SEARCH_TYPES_BY_INTERVIEW_TYPE: dict[str, tuple[str, ...]] = {
     "tech": ("interview_q", "skill_model"),
@@ -64,7 +65,7 @@ def format_rag_context(groups: list[dict[str, Any]]) -> str:
             continue
         parts.append(f"===== {group.get('doc_type', '')} =====")
         for item in results:
-            parts.append(f"【{item.get('doc_title', '')}】{item.get('text', '')[:300]}")
+            parts.append(f"【{item.get('doc_title', '')}】{item.get('text', '')[:CONTEXT_SNIPPET_CHARS]}")
     return "\n".join(parts)
 
 
