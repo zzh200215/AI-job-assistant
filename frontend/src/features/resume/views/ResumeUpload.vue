@@ -70,8 +70,25 @@
       </el-upload>
 
       <div v-if="uploading" class="upload-progress">
-        <el-progress :percentage="uploadProgress" :stroke-width="10" :text-inside="true" />
-        <p class="progress-text">{{ uploadStatus }}</p>
+        <el-steps class="upload-steps" :active="uploadStageIndex" finish-status="success" simple>
+          <el-step title="上传" />
+          <el-step title="解析" />
+          <el-step title="诊断" />
+        </el-steps>
+        <el-progress
+          v-if="uploadStage === 'uploading'"
+          :percentage="uploadProgress"
+          :stroke-width="10"
+          :text-inside="true"
+        />
+        <p
+          class="progress-text"
+          :class="{ 'parse-progress': uploadStage === 'parsing' }"
+          role="status"
+        >
+          <el-icon v-if="uploadStage === 'parsing'" class="is-loading"><Loading /></el-icon>
+          {{ uploadStatus }}
+        </p>
       </div>
       <div v-if="uploadError" class="upload-error">
         <el-alert :title="uploadError" type="error" :closable="false" show-icon />
@@ -629,6 +646,14 @@ const uploading = ref(false)
 const uploadProgress = ref(0)
 const uploadStatus = ref('')
 const uploadError = ref('')
+// 上传与解析共用 uploading；这个字段只负责把"现在卡在哪一步"说清楚。
+const uploadStage = ref('idle')
+const uploadStageIndex = computed(() => {
+  if (uploadStage.value === 'parsing') return 1
+  if (uploadStage.value === 'parsed') return 2
+  if (uploadStage.value === 'error') return uploadProgress.value >= 100 ? 1 : 0
+  return 0
+})
 
 // 分享
 const shareUrl = ref('')
@@ -968,8 +993,9 @@ const beforeUpload = (file) => {
 const customUpload = async ({ file }) => {
   uploading.value = true
   uploadProgress.value = 0
-  uploadStatus.value = '正在上传…'
+  uploadStatus.value = '正在上传文件…'
   uploadError.value = ''
+  uploadStage.value = 'uploading'
 
   try {
     const data = await uploadResume(file, (event) => {
@@ -979,17 +1005,24 @@ const customUpload = async ({ file }) => {
       uploadProgress.value = Math.max(0, Math.min(100, Math.round(ratio * 100)))
     })
 
-    uploadStatus.value = '上传完成，正在解析…'
+    uploadStage.value = 'parsing'
+    uploadStatus.value = '上传完成，正在解析简历…'
     uploadProgress.value = 100
 
     const parsed = await parseResume(data.id)
+    uploadStage.value = 'parsed'
     currentParsed.value = parsed.parsed
     showParsed.value = true
-    ElMessage.success('上传并解析成功')
+    ElMessage.success('解析完成，可在卡片上点 AI 诊断')
     showUpload.value = false
     await loadList()
   } catch (e) {
-    uploadError.value = userErrorCopy(e, '上传失败')
+    const failedStage = uploadStage.value
+    uploadStage.value = 'error'
+    uploadError.value = userErrorCopy(
+      e,
+      failedStage === 'parsing' ? '解析失败，请稍后在简历卡片上重试' : '上传失败'
+    )
   } finally {
     uploading.value = false
   }
@@ -1522,6 +1555,16 @@ async function showDiagnosisDialog(r) {
 /* Upload progress */
 .upload-progress {
   margin-top: 16px;
+}
+
+.upload-steps {
+  margin-bottom: 12px;
+}
+
+.parse-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .progress-text {
