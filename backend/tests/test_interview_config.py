@@ -26,6 +26,7 @@ from app.services.interview_config_service import (
     get_question_bank,
     get_scoring_rules,
     list_question_banks,
+    max_questions,
 )
 
 _normal_user = User(id=2, username="candidate", email="c@example.com", role=CANDIDATE_ROLE)
@@ -100,7 +101,7 @@ def test_fallback_questions_use_platform_custom_questions():
 
 def test_fallback_questions_fallback_to_builtin_without_custom():
     questions = _fallback_questions("后端工程师", ["Python"], "tech")
-    assert len(questions) == 10
+    assert len(questions) == max_questions()
     assert questions[0]["source"] == "starter"
 
 

@@ -18,6 +18,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.interview_config import (
     InterviewQuestionBank,
     InterviewScoringRule,
@@ -167,6 +168,22 @@ QUESTION_TIMEOUT_SECONDS: dict[str, int] = {
 # 认不出题型时的**下限**。原来全场都是 30 秒，而 30 就是"系统设计题根本答不完"那条硬伤的根因，
 # 所以认不出时不该继续发 30——发下限 45 秒，与最轻的那一档齐平。
 TIMEOUT_FLOOR_SECONDS = 45
+
+# 一场面试的题量：默认 10，允许 1–20。生成链、引擎上限与设置页展示都读这个函数，
+# 不让任何一侧再抄一个 10。
+MAX_QUESTIONS_DEFAULT = 10
+MAX_QUESTIONS_FLOOR = 1
+MAX_QUESTIONS_CEILING = 20
+
+
+def max_questions() -> int:
+    raw = getattr(settings, "INTERVIEW_MAX_QUESTIONS", MAX_QUESTIONS_DEFAULT)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = MAX_QUESTIONS_DEFAULT
+    return max(MAX_QUESTIONS_FLOOR, min(MAX_QUESTIONS_CEILING, value))
+
 
 # 词表的坑，实现时量出来的，别当透明：这张表按**运行时题型**索引（basic/tech/scenario/project，
 # 就是 starter 模板与 `_map_category` 实际在用的那套），而 `interview_question_bank.type`

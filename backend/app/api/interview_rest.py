@@ -26,6 +26,7 @@ from app.services.interview_config_service import (
     QUESTION_TYPE_LABELS,
     get_question_bank,
     list_question_banks,
+    max_questions,
 )
 from app.services.interview_engine import InterviewEngine
 from app.services.interview_evaluation_service import build_conversation, evaluation_payloads
@@ -90,6 +91,7 @@ def create_session(
         required_skills,
         payload.interview_type,
         custom_questions=custom_questions,
+        limit=max_questions(),
     )
 
     session = InterviewSession(
@@ -307,12 +309,14 @@ def _fallback_questions(
     required_skills: list[str],
     interview_type: str,
     custom_questions: list[dict[str, Any]] | None = None,
+    limit: int | None = None,
 ) -> list[dict[str, Any]]:
     """Return a full question set that can start without a model round trip.
 
     T3-2：custom_questions 来自平台题库配置（InterviewQuestionBank.questions），
-    非空时完全替代内置 starter 题库；否则回落内置模板。
+    非空时完全替代内置 starter 题库；否则回落内置模板。limit 只取平台配置的题量。
     """
+    limit = limit or max_questions()
     if custom_questions:
         normalized: list[dict[str, Any]] = []
         for index, item in enumerate(custom_questions, start=1):
@@ -331,7 +335,7 @@ def _fallback_questions(
                     "source": "platform_config",
                 }
             )
-        return normalized[:10]
+        return normalized[:limit]
 
     role = title or "目标岗位"
     skills = "、".join(required_skills[:3]) or "岗位核心能力"
@@ -414,6 +418,7 @@ def _fallback_questions(
     templates = templates_by_type.get(interview_type, templates_by_type["tech"])
     if interview_type == "comprehensive":
         templates = templates_by_type["tech"][:5] + templates_by_type["hr"][2:7]
+    templates = templates[:limit]
     return [
         {
             "id": index,
@@ -430,6 +435,7 @@ def _fallback_questions(
 
 def _normalize_generated_questions(raw: dict[str, Any], fallback: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Normalize model JSON and retain fallback questions for any missing slots."""
+    limit = max_questions()
     generated: list[dict[str, Any]] = []
     for default_type in ("basic", "tech", "project", "scenario"):
         for item in raw.get(default_type, []) or []:
@@ -443,7 +449,7 @@ def _normalize_generated_questions(raw: dict[str, Any], fallback: list[dict[str,
                 generated.append(normalized)
 
     for item in raw.get("questions", []) or []:
-        if len(generated) >= 10:
+        if len(generated) >= limit:
             break
         q_type = item.get("type") or "tech"
         normalized = normalize_question(
@@ -455,7 +461,7 @@ def _normalize_generated_questions(raw: dict[str, Any], fallback: list[dict[str,
         if normalized:
             generated.append(normalized)
 
-    merged = (generated + fallback)[:10]
+    merged = (generated + fallback)[:limit]
     for index, item in enumerate(merged, start=1):
         item["id"] = index
     return merged
@@ -499,7 +505,7 @@ def _build_personalized_prompt(
     )
     return (
         f"{prompt}\n【特别要求】{type_instructions.get(interview_type, type_instructions['tech'])}"
-        "\n请生成 10 道题，每类至少 2 道，并按真实面试顺序排列。"
+        f"\n请生成 {max_questions()} 道题，每类至少 2 道，并按真实面试顺序排列。"
     )
 
 
@@ -519,7 +525,10 @@ def _personalize_unstarted_questions(
         if not session or session.status == "completed":
             return
 
-        fallback = list(session.questions or _fallback_questions(jd_title, required_skills, interview_type))
+        limit = max_questions()
+        fallback = list(
+            session.questions or _fallback_questions(jd_title, required_skills, interview_type, limit=limit)
+        )[:limit]
         # T3-2：后台个性化同样读平台题库配置（列仍在，不再按它分区）
         bank = get_question_bank(db, interview_type)
         if bank is not None and bank.questions:
@@ -552,7 +561,7 @@ def _personalize_unstarted_questions(
         first_unstarted = max(started_rounds, default=0)
         current_questions = list(session.questions or [])
         current_questions[first_unstarted:] = personalized[first_unstarted:]
-        session.questions = current_questions[:10]
+        session.questions = current_questions[:limit]
         session.total_questions = len(session.questions)
         snapshot = dict(session.memory_snapshot or {})
         snapshot["question_generation"] = {"status": "completed"}
@@ -965,4 +974,4 @@ def list_bank_types(
     2026-10-06 真删企业侧第六增量（D136）：这里原来是「租户自定义 → 平台默认 → 内置」三级，
     租户那一级随 organization 出树；同批删掉的 `PUT /admin/interview-config` 是三张表唯一的
     写入端，所以删完之后这条链在真实数据上恒走内置五档（dev 实测三张表各 0 行）。"""
-    return ok({"items": list_question_banks(db)})
+    return ok({"items": list_question_banks(db), "max_questions": max_questions()})

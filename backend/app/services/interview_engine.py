@@ -27,6 +27,7 @@ from app.orchestration.context import AgentContext
 from app.services.interview_config_service import (
     QUESTION_TYPE_LABELS,
     TIMEOUT_FLOOR_SECONDS,
+    max_questions,
     timeout_for_type,
 )
 from app.services.interview_evaluation_service import (
@@ -78,6 +79,8 @@ class InterviewEngine:
         self.session_id = session_id
         self.db: Session | None = None
         self.session: InterviewSession | None = None
+        # 类常量只是默认值的备份；实例按平台配置取上限，测试仍可覆盖 self.MAX_QUESTIONS。
+        self.MAX_QUESTIONS = max_questions()
 
         self.current_index = -1
         self.question_count = 0
@@ -96,7 +99,7 @@ class InterviewEngine:
 
     def init(self) -> dict[str, Any]:
         self._load_session()
-        self.question_count = len(self.session.questions or [])
+        self.question_count = min(len(self.session.questions or []), self.MAX_QUESTIONS)
         self.current_index = -1
         self.timeout_count = self.session.timeout_count or 0
         self.evaluations = []
@@ -131,6 +134,7 @@ class InterviewEngine:
         self.db.commit()
 
         self.current_index = -1
+        self.question_count = min(len(self.session.questions or []), self.MAX_QUESTIONS)
         self.start_time = time.time()
         self.timeout_count = 0
         self.evaluations = []
@@ -140,7 +144,7 @@ class InterviewEngine:
 
     def resume(self) -> dict[str, Any] | None:
         self._load_session()
-        self.question_count = len(self.session.questions or [])
+        self.question_count = min(len(self.session.questions or []), self.MAX_QUESTIONS)
         self.timeout_count = self.session.timeout_count or 0
         self.evaluations = self._rebuild_evaluations()
         self.current_index = self._infer_current_index()
@@ -188,7 +192,7 @@ class InterviewEngine:
             "content": question_text,
             "metadata": {
                 "round": self.current_index + 1,
-                "total": len(questions),
+                "total": min(len(questions), self.MAX_QUESTIONS),
                 "category": category,
                 # 这一题的作答预算随消息一起下去：前端自己那份 30 是个平行真相，
                 # 它同时是三处倒计时的起点**和**进度条的分母，不跟着走就会显示成 120 秒的场次里
@@ -311,7 +315,7 @@ class InterviewEngine:
             "content": question.get("question") or question.get("q") or "",
             "metadata": {
                 "round": round_num,
-                "total": len(questions),
+                "total": min(len(questions), self.MAX_QUESTIONS),
                 "category": question.get("category") or "general",
                 "timeout_seconds": timeout_for_type(self.db, resolve_question_type(question)),
                 "question_id": question.get("id", round_num),
@@ -451,7 +455,7 @@ class InterviewEngine:
                 "content": follow_up_q,
                 "metadata": {
                     "round": self.current_index + 1,
-                    "total": len(questions),
+                    "total": min(len(questions), self.MAX_QUESTIONS),
                     "category": category,
                     # 追问也是"下一题"，同样得带预算——少盖这一处，重连或追问时前端就掉回兜底值，
                     # 而哪一边都不报错（`test_both_question_emission_sites_stamp_the_field` 守这条）。

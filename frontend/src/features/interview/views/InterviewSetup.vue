@@ -127,7 +127,7 @@
             </div>
             <div class="check-item">
               <span>单题节奏</span>
-              <strong>30 秒限时</strong>
+              <strong>按题型 45–120 秒</strong>
             </div>
           </div>
 
@@ -403,10 +403,15 @@ const defaultTypeConfigs = {
 const typeOptions = ref(defaultTypeOptions)
 /** @type {import('vue').Ref<Record<string, import('../lib/interviewRoomModel').InterviewTypeConfig>>} */
 const typeConfigs = ref(defaultTypeConfigs)
+const maxQuestions = ref(10)
 
 async function loadTypeConfigs() {
   try {
     const data = await getInterviewConfigTypes()
+    const configuredMax = Number(data?.max_questions)
+    if (Number.isInteger(configuredMax) && configuredMax >= 1 && configuredMax <= 20) {
+      maxQuestions.value = configuredMax
+    }
     if (!data?.items?.length) return
     const options = []
     /** @type {Record<string, import('../lib/interviewRoomModel').InterviewTypeConfig>} */
@@ -457,31 +462,54 @@ const selectedResume = computed(() => resumeList.value.find((item) => item.id ==
 const selectedJD = computed(() => jdList.value.find((item) => item.id === form.jd_id))
 
 const questionPlan = computed(() => {
-  const mapping = {
-    tech: { total: '10 题', duration: '12-18 分钟' },
-    hr: { total: '10 题', duration: '10-15 分钟' },
-    comprehensive: { total: '10 题', duration: '15-20 分钟' },
-    stress: { total: '12 题', duration: '15-22 分钟' },
-    group: { total: '8 题', duration: '20-30 分钟' },
+  const perQuestionMinutes = {
+    tech: [1.2, 1.8],
+    hr: [1.0, 1.5],
+    comprehensive: [1.5, 2.0],
+    stress: [1.2, 1.8],
+    group: [2.0, 3.0],
   }
-  return mapping[form.interview_type] || mapping.tech
+  const [low, high] = perQuestionMinutes[form.interview_type] || perQuestionMinutes.tech
+  const total = maxQuestions.value
+  return {
+    total: `${total} 题`,
+    duration: `${Math.round(total * low)}-${Math.round(total * high)} 分钟`,
+  }
 })
+
+function allocateQuestionCounts(total, weights) {
+  const sum = weights.reduce((acc, weight) => acc + weight, 0)
+  const raw = weights.map((weight) => (sum ? (total * weight) / sum : 0))
+  const counts = raw.map(Math.floor)
+  let remainder = total - counts.reduce((acc, count) => acc + count, 0)
+  const order = raw
+    .map((value, index) => ({ fraction: value - Math.floor(value), index }))
+    .sort((a, b) => b.fraction - a.fraction)
+  for (let i = 0; i < remainder && order.length; i += 1) {
+    counts[order[i % order.length].index] += 1
+  }
+  return counts
+}
 
 const questionCategories = computed(() => {
   const base = [
-    { type: 'base', label: '基础能力', icon: QuestionFilled, color: 'blue', count: 3 },
-    { type: 'project', label: '项目经验', icon: Aim, color: 'violet', count: 2 },
-    { type: 'behavior', label: '行为面试', icon: ChatDotRound, color: 'amber', count: 2 },
-    { type: 'tech', label: '技术深度', icon: DataAnalysis, color: 'green', count: 2 },
+    { type: 'base', label: '基础能力', icon: QuestionFilled, color: 'blue', weight: 3 },
+    { type: 'project', label: '项目经验', icon: Aim, color: 'violet', weight: 2 },
+    { type: 'behavior', label: '行为面试', icon: ChatDotRound, color: 'amber', weight: 2 },
+    { type: 'tech', label: '技术深度', icon: DataAnalysis, color: 'green', weight: 2 },
   ]
   if (form.interview_type === 'stress') {
-    base.push({ type: 'stress_q', label: '压力场景', icon: Microphone, color: 'red', count: 3 })
+    base.push({ type: 'stress_q', label: '压力场景', icon: Microphone, color: 'red', weight: 3 })
   }
   if (form.interview_type === 'group') {
-    base.push({ type: 'group_q', label: '小组讨论', icon: Coin, color: 'teal', count: 3 })
+    base.push({ type: 'group_q', label: '小组讨论', icon: Coin, color: 'teal', weight: 3 })
     base.splice(2, 1) // 群面无单独行为面
   }
-  return base
+  const counts = allocateQuestionCounts(
+    maxQuestions.value,
+    base.map((item) => item.weight)
+  )
+  return base.map((item, index) => ({ ...item, count: counts[index] }))
 })
 
 const stagePlan = computed(() => [

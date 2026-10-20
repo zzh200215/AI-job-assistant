@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     INTERVIEW_USE_DECIDER: bool = True
     # 决策器那一档的 LLM 硬截止时间（秒）。超了就落回启发式那句——候选人不能为一句追问等两分钟。
     INTERVIEW_DECISION_TIMEOUT_SECONDS: float = 6.0
+    # 一场面试最多出多少题。生成链、引擎上限与设置页展示都读这一个数；默认 10（历史行为），
+    # 允许 1–20，越界由 `interview_config_service.max_questions()` 夹取。
+    INTERVIEW_MAX_QUESTIONS: int = 10
     # 逐题评分是投给**本地线程池**的：进程一死，那一行就留在 pending/running，没人来捡。
     # 这个阈值就是"认定提交它的进程已经不在了"要等多久。下界有数：单题最坏 = LLM_TIMEOUT(120s)
     # × 3 次尝试 + 线性退避(1.5s + 3.0s) = 364.5s ≈ 6.1 分钟（`utils/retry.py:49` 的
