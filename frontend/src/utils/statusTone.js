@@ -30,6 +30,7 @@ export const INTERVIEW_STATUS_TAGS = {
   idle: 'info',
   created: 'info',
   connecting: 'primary',
+  reconnecting: 'warning',
   ongoing: 'primary',
   evaluating: 'primary',
   completed: 'success',

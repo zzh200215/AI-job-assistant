@@ -41,6 +41,11 @@ export const useInterviewStore = defineStore('interview', () => {
   const interviewerThinking = ref(false)
   const roundBudget = ref(FALLBACK_ROUND_SECONDS)
   const roundRemaining = ref(FALLBACK_ROUND_SECONDS)
+  // 重连是 WS 层的事，但"第几次、几秒后、成没成"必须能被页面读出来。
+  const connectionState = ref('idle')
+  const reconnectAttempt = ref(0)
+  const reconnectMax = ref(0)
+  const reconnectDelaySeconds = ref(0)
 
   let sessionTimer = null
   let roundTimer = null
@@ -195,6 +200,10 @@ export const useInterviewStore = defineStore('interview', () => {
     }
     status.value = 'connecting'
     errorMsg.value = ''
+    connectionState.value = 'idle'
+    reconnectAttempt.value = 0
+    reconnectMax.value = 0
+    reconnectDelaySeconds.value = 0
     startEvaluationPolling(sessionId)
 
     connectInterviewWS(
@@ -223,14 +232,48 @@ export const useInterviewStore = defineStore('interview', () => {
           status.value = 'error'
           stopRoundTimer()
         }
-      }
+      },
+      (info) => handleConnectionStatus(info)
     )
+  }
+
+  function handleConnectionStatus(info) {
+    if (!info) return
+    if (info.state === 'reconnecting') {
+      connectionState.value = 'reconnecting'
+      reconnectAttempt.value = info.attempt || 0
+      reconnectMax.value = info.maxAttempts || 0
+      reconnectDelaySeconds.value = Math.max(0, Math.round((info.delayMs || 0) / 1000))
+      // onerror/onclose 可能刚把状态写成 error；重连已经排队，页面应显示"重连中"而不是"异常"。
+      errorMsg.value = ''
+      status.value = 'reconnecting'
+      stopRoundTimer()
+      return
+    }
+    if (info.state === 'recovered' || info.state === 'connected') {
+      connectionState.value = info.state === 'recovered' ? 'recovered' : 'idle'
+      reconnectAttempt.value = info.attempt || 0
+      reconnectMax.value = info.maxAttempts || 0
+      reconnectDelaySeconds.value = 0
+      errorMsg.value = ''
+      if (info.state === 'recovered') status.value = 'connecting'
+      return
+    }
+    if (info.state === 'failed') {
+      connectionState.value = 'failed'
+      reconnectAttempt.value = info.attempt || 0
+      reconnectMax.value = info.maxAttempts || 0
+      errorMsg.value = '重连失败，请刷新页面重试'
+      status.value = 'error'
+    }
   }
 
   function handleWSMessage(data) {
     const type = data.type
     const content = data.content || ''
     const meta = data.metadata || {}
+    // 重连成功后的第一条服务端消息到了：把"已重新连接"提示收掉，状态回到正常链路。
+    if (connectionState.value === 'recovered') connectionState.value = 'idle'
 
     if (type === 'question') {
       clearThinking()
@@ -355,6 +398,10 @@ export const useInterviewStore = defineStore('interview', () => {
     stopRoundTimer()
     stopSessionTimer()
     stopEvaluationPolling()
+    connectionState.value = 'idle'
+    reconnectAttempt.value = 0
+    reconnectMax.value = 0
+    reconnectDelaySeconds.value = 0
   }
 
   async function pollEvaluations(sessionId) {
@@ -453,6 +500,10 @@ export const useInterviewStore = defineStore('interview', () => {
     isFollowUp,
     interviewerThinking,
     roundRemaining,
+    connectionState,
+    reconnectAttempt,
+    reconnectMax,
+    reconnectDelaySeconds,
     currentQuestion,
     isCompleted,
     progress,

@@ -109,17 +109,21 @@ const wsError = (...args) => {
  * @param {function} onMessage - 消息回调
  * @param {function} onError - 错误回调
  * @param {function} onClose - 关闭回调
+ * @param {function} [onStatus] - 连接状态回调：connected/reconnecting/recovered/failed
  * @returns {WebSocket}
  */
-export function connectInterviewWS(sid, onMessage, onError, onClose) {
+export function connectInterviewWS(sid, onMessage, onError, onClose, onStatus) {
   const token = readToken()
   if (!token) {
     if (onError) onError(new Error('未登录'))
+    if (onStatus) onStatus({ state: 'failed', attempt: 0, maxAttempts: MAX_RECONNECT_ATTEMPTS })
     return null
   }
 
-  // 如果已有连接的 ws，先关闭
-  disconnectInterviewWS()
+  // 如果已有连接的 ws，先关闭。**不能走 disconnectInterviewWS**：那条会把 reconnectAttempts
+  // 清零，而重连正是靠它数到 3 次后停手——清零就等于永远"第 1/3 次"、永远不报 failed。
+  clearReconnect()
+  closeSocket()
 
   // WS 基础地址：优先用环境变量 VITE_WS_BASE，否则按当前页面推断。
   // 推断那支的 8000 不是随手写的：它必须等于 README 里记的后端开发端口
@@ -146,7 +150,16 @@ export function connectInterviewWS(sid, onMessage, onError, onClose) {
 
   ws.onopen = () => {
     wsLog('[Interview WS] 连接已建立')
+    const wasReconnect = reconnectAttempts > 0
+    const attempt = reconnectAttempts
     reconnectAttempts = 0 // 连接成功，重置重连计数
+    if (onStatus) {
+      onStatus({
+        state: wasReconnect ? 'recovered' : 'connected',
+        attempt,
+        maxAttempts: MAX_RECONNECT_ATTEMPTS,
+      })
+    }
     // 启动心跳
     startHeartbeat()
   }
@@ -179,9 +192,15 @@ export function connectInterviewWS(sid, onMessage, onError, onClose) {
     if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
       wsWarn('[Interview WS] 已达最大重连次数，停止重连')
       if (onError) onError(new Error('连接已断开，重连失败，请刷新页面重试'))
+      if (onStatus)
+        onStatus({
+          state: 'failed',
+          attempt: reconnectAttempts,
+          maxAttempts: MAX_RECONNECT_ATTEMPTS,
+        })
       return
     }
-    scheduleReconnect(sid, onMessage, onError, onClose)
+    scheduleReconnect(sid, onMessage, onError, onClose, onStatus)
   }
 
   return ws
@@ -219,17 +238,22 @@ export function endInterview() {
  * 断开连接
  */
 export function disconnectInterviewWS() {
-  stopHeartbeat()
   clearReconnect()
   reconnectAttempts = 0
+  closeSocket()
+}
+
+// === 内部工具 ===
+
+/** 只关连接，不碰重连计数：内部换 socket 与用户主动断开是两件事。 */
+function closeSocket() {
+  stopHeartbeat()
   if (ws) {
     ws.onclose = null // 防止触发重连
     ws.close(1000, '用户断开')
     ws = null
   }
 }
-
-// === 内部工具 ===
 
 function startHeartbeat() {
   stopHeartbeat()
@@ -247,15 +271,23 @@ function stopHeartbeat() {
   }
 }
 
-function scheduleReconnect(sid, onMessage, onError, onClose) {
+function scheduleReconnect(sid, onMessage, onError, onClose, onStatus) {
   clearReconnect()
   reconnectAttempts++
   const delay = 3000 * reconnectAttempts // 指数退避：3s / 6s / 9s
   wsLog(
     `[Interview WS] 第 ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} 次重连将在 ${delay}ms 后开始...`
   )
+  if (onStatus) {
+    onStatus({
+      state: 'reconnecting',
+      attempt: reconnectAttempts,
+      maxAttempts: MAX_RECONNECT_ATTEMPTS,
+      delayMs: delay,
+    })
+  }
   reconnectTimer = setTimeout(() => {
-    connectInterviewWS(sid, onMessage, onError, onClose)
+    connectInterviewWS(sid, onMessage, onError, onClose, onStatus)
   }, delay)
 }
 

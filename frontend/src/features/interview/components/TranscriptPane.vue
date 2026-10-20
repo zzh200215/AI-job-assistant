@@ -68,6 +68,7 @@
     </div>
 
     <div v-if="status === 'connecting'" class="state-hint">正在接入面试房间...</div>
+    <div v-else-if="status === 'reconnecting'" class="state-hint">连接断开，正在自动重连...</div>
     <div v-else-if="status === 'evaluating'" class="state-hint">
       {{ thinking ? '面试官正在思考下一问...' : '面试官正在记录你的回答并决定下一问...' }}
     </div>

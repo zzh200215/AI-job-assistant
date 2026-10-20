@@ -12,6 +12,13 @@
       </div>
     </section>
 
+    <ConnectionBanner
+      :state="store.connectionState"
+      :attempt="store.reconnectAttempt"
+      :max="store.reconnectMax"
+      :delay-seconds="store.reconnectDelaySeconds"
+    />
+
     <section class="room-grid">
       <div class="main-column">
         <StagePane
@@ -135,6 +142,7 @@ import { getInterviewDetail } from '@/api/interview'
 import { useInterviewStore } from '@/stores/interview'
 import { INTERVIEW_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
 import RoomAside from '@/features/interview/components/RoomAside.vue'
+import ConnectionBanner from '@/features/interview/components/ConnectionBanner.vue'
 import QuestionPane from '@/features/interview/components/QuestionPane.vue'
 import StagePane from '@/features/interview/components/StagePane.vue'
 import TranscriptPane from '@/features/interview/components/TranscriptPane.vue'

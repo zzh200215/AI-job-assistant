@@ -148,6 +148,7 @@ export function recentSignalOf(score) {
 const STATUS_LABELS = {
   idle: '未开始',
   connecting: '连接中',
+  reconnecting: '重连中',
   ongoing: '进行中',
   evaluating: '评估中',
   completed: '已完成',
