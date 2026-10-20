@@ -65,6 +65,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   api.getResumeVersions.mockResolvedValue({ versions: [] })
   api.getResumeQuickScore.mockResolvedValue({ completeness_score: 60 })
+  api.diagnoseResume.mockResolvedValue({})
+  api.getRewriteSuggestions.mockResolvedValue({})
+  api.applyResumeRewrites.mockResolvedValue({})
 })
 
 describe('上传 → 解析 → 诊断的进度', () => {
@@ -99,6 +102,16 @@ describe('上传 → 解析 → 诊断的进度', () => {
     expect(wrapper.vm.showParsed).toBe(true)
     expect(wrapper.vm.showUpload).toBe(false)
     expect(wrapper.vm.currentParsed.name).toBe('测试用户')
+
+    const diagnoseButton = Array.from(document.querySelectorAll('button')).find((button) =>
+      button.textContent.includes('开始 AI 诊断')
+    )
+    expect(diagnoseButton).toBeTruthy()
+    diagnoseButton.click()
+    await flushPromises()
+
+    expect(api.diagnoseResume).toHaveBeenCalledWith(99, expect.anything(), expect.anything())
+    expect(wrapper.vm.showDiagnosis).toBe(true)
   })
 
   it('解析炸了说解析失败，不把锅甩给上传', async () => {

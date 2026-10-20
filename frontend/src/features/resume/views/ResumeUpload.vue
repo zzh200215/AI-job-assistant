@@ -139,6 +139,12 @@
           </el-timeline-item>
         </el-timeline>
       </div>
+      <template #footer>
+        <el-button @click="showParsed = false">关闭</el-button>
+        <el-button type="primary" :disabled="!parsedResumeId" @click="diagnoseParsed">
+          开始 AI 诊断
+        </el-button>
+      </template>
     </el-dialog>
 
     <!-- 分享链接弹窗 -->
@@ -637,6 +643,7 @@ const showParsed = ref(false)
 const showShare = ref(false)
 const showDiagnosis = ref(false)
 const currentParsed = ref(null)
+const parsedResumeId = ref(null)
 const listLoading = ref(true)
 const resumes = ref([])
 const listError = ref('')
@@ -996,6 +1003,7 @@ const customUpload = async ({ file }) => {
   uploadStatus.value = '正在上传文件…'
   uploadError.value = ''
   uploadStage.value = 'uploading'
+  parsedResumeId.value = null
 
   try {
     const data = await uploadResume(file, (event) => {
@@ -1012,6 +1020,7 @@ const customUpload = async ({ file }) => {
     const parsed = await parseResume(data.id)
     uploadStage.value = 'parsed'
     currentParsed.value = parsed.parsed
+    parsedResumeId.value = data.id
     showParsed.value = true
     ElMessage.success('解析完成，可在卡片上点 AI 诊断')
     showUpload.value = false
@@ -1040,6 +1049,7 @@ async function parseResumeRow(r) {
     r.parsed = parsed.parsed
     if (!isCurrent()) return
     currentParsed.value = parsed.parsed
+    parsedResumeId.value = r.id
     showParsed.value = true
     ElMessage.success('解析成功')
   } catch {
@@ -1170,6 +1180,13 @@ async function copyShareUrl() {
 }
 
 // ---- AI 诊断 ----
+function diagnoseParsed() {
+  if (!parsedResumeId.value) return
+  const resumeId = parsedResumeId.value
+  showParsed.value = false
+  showDiagnosisDialog({ id: resumeId, parsed: currentParsed.value })
+}
+
 async function showDiagnosisDialog(r) {
   const isCurrent = latestDiagnosisCall()
   showDiagnosis.value = true
