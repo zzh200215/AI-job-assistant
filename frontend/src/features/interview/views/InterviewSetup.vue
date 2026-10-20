@@ -492,7 +492,16 @@ const stagePlan = computed(() => [
 ])
 
 const profileSkills = computed(() => (profile.value?.skill_weaknesses || []).slice(0, 4))
-const profileNotes = computed(() => (profile.value?.weakness_texts || []).slice(0, 2))
+const profileNotes = computed(() =>
+  (profile.value?.weakness_texts || [])
+    .slice(0, 2)
+    .map((text) =>
+      String(text)
+        .trim()
+        .replace(/[。；;，,]+$/, '')
+    )
+    .filter(Boolean)
+)
 
 const stats = computed(() => {
   const total = historyList.value.length

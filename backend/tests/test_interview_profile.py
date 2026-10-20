@@ -269,6 +269,43 @@ def test_get_profile_derives_only_from_completed_sessions(db_session, normal_use
     assert public["skill_weaknesses"][0]["canonical"] == "kafka"
 
 
+def test_get_profile_accepts_legacy_idle_status_with_question_evaluations(
+    db_session, normal_user, make_interview_session
+):
+    """旧结束路径把 evaluation_status 留在 idle，但报告里的逐题评分是齐的。"""
+    make_interview_session(
+        user_id=normal_user.id,
+        status="completed",
+        evaluation=_report(),
+        evaluation_status="idle",
+        completed_at=datetime(2026, 10, 2),
+    )
+
+    public = public_profile(get_profile(db_session, normal_user.id))
+
+    assert public["has_data"] is True
+    assert public["total_sessions"] == 1
+    assert public["skill_weaknesses"][0]["canonical"] == "kafka"
+
+
+def test_get_profile_skips_processing_even_with_question_evaluations(db_session, normal_user, make_interview_session):
+    """processing 是“还在评”，哪怕报告里已有部分逐题评分也不能算进画像。"""
+    report = _report()
+    report["evaluation_status"] = "processing"
+    make_interview_session(
+        user_id=normal_user.id,
+        status="completed",
+        evaluation=report,
+        evaluation_status="processing",
+        completed_at=datetime(2026, 10, 2),
+    )
+
+    public = public_profile(get_profile(db_session, normal_user.id))
+
+    assert public["has_data"] is False
+    assert public["total_sessions"] == 0
+
+
 def test_empty_profile_has_a_stable_shape(db_session, normal_user):
     public = public_profile(build_profile(db_session, normal_user.id))
 

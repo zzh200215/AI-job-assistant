@@ -117,7 +117,9 @@ def build_session_summary(session: InterviewSession) -> dict[str, Any] | None:
     """压一场已完成面试；没有有效作答就返回 None（画像不该被空报告污染）。"""
     if session is None or session.status != "completed":
         return None
-    if (session.evaluation_status or "completed") != "completed":
+    # 旧会话的结束路径没有把 evaluation_status 从 idle 推到 completed，但报告里的逐题评分
+    # 已经齐了；只有 processing 才代表“还在评”，不能拿半份报告算画像。
+    if (session.evaluation_status or "idle") == "processing":
         return None
     report = session.evaluation or {}
     if report.get("evaluation_status") == "processing":

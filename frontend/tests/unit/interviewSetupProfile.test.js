@@ -60,7 +60,7 @@ describe('面试设置页：上一场画像', () => {
         { skill: 'Kafka', canonical: 'kafka', avg_score: 55, sessions: 2 },
         { skill: 'Redis', canonical: 'redis', avg_score: 62, sessions: 1 },
       ],
-      weakness_texts: ['成果未量化', '结构混乱'],
+      weakness_texts: ['成果未量化。', '结构混乱；'],
       last_session: { session_id: 12, overall_score: 64 },
     })
 
@@ -70,7 +70,8 @@ describe('面试设置页：上一场画像', () => {
     expect(panel.exists(), '画像面板没画出来（类名或渲染条件改了）').toBe(true)
     expect(panel.text()).toContain('Kafka')
     expect(panel.text()).toContain('55')
-    expect(panel.text()).toContain('成果未量化')
+    expect(panel.text()).toContain('成果未量化；结构混乱')
+    expect(panel.text()).not.toContain('。；')
     expect(panel.text()).toContain('不会当成本场表现')
   })
 
