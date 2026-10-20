@@ -45,6 +45,12 @@ $OutputEncoding = $utf8NoBom
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $backendRoot = Join-Path $repoRoot "backend"
+# Prefer the repo venv when it exists (local dev); CI has no .venv and keeps using PATH python.
+$python = "python"
+$venvPython = Join-Path $backendRoot ".venv\Scripts\python.exe"
+if (Test-Path -LiteralPath $venvPython) {
+    $python = $venvPython
+}
 $reportsDir = Join-Path $backendRoot "reports"
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $ragTimestamped = Join-Path $reportsDir ("rag_eval_{0}.json" -f $timestamp)
@@ -59,10 +65,10 @@ if (-not (Test-Path -LiteralPath $reportsDir)) {
 Push-Location $backendRoot
 try {
     if ($ImportSeeds) {
-        python scripts\import_knowledge_seeds.py
+        & $python scripts\import_knowledge_seeds.py
     }
 
-    python scripts\eval_rag.py `
+    & $python scripts\eval_rag.py `
         --top-k 5 `
         --output $ragTimestamped `
         --min-recall $MinRagRecall `
@@ -70,7 +76,7 @@ try {
         --min-keyword-hit $MinRagKeywordHit `
         @allowRealArgs
 
-    python scripts\eval_agent.py `
+    & $python scripts\eval_agent.py `
         --output $agentTimestamped `
         --max-mae $MaxAgentMae `
         --min-spearman $MinAgentSpearman `

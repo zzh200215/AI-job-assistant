@@ -52,3 +52,11 @@ def test_ascii_scanner_is_not_vacuous() -> None:
     dirty = ("# comment " + "中" + "\n$env:X = 1\n").encode("utf-8")
     assert _non_ascii_lines("sample.ps1", dirty) == ["sample.ps1:1 有 1 个非 ASCII 字符"]
     assert _non_ascii_lines("clean.ps1", b"# comment\n$env:X = 1\n") == []
+
+
+def test_eval_quality_prefers_repo_venv_when_present() -> None:
+    source = (SCRIPTS / "eval-quality.ps1").read_text(encoding="ascii")
+
+    assert '$venvPython = Join-Path $backendRoot ".venv\\Scripts\\python.exe"' in source
+    assert "& $python scripts\\eval_rag.py" in source
+    assert "& $python scripts\\eval_agent.py" in source
