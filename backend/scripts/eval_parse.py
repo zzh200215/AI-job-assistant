@@ -6,7 +6,9 @@
   截断发生率、丢段分布、**段尾那份最新经历有没有保住**、以及"判卷器本身可用"（gold 喂回
   判卷器必须满分——仪器不自检，数字就没意义）。
 * 语义臂（要 provider，真跑才出门数）：走产品那条路（`guarded_parse`：预算内取文本 →
-  单发解析 → 结构校验 → 一次自纠），量字段级 P/R/F1 与**首发一次通过率**。
+  单发解析 → 结构校验 → 一次自纠），量字段级 P/R/F1 与**首发一次通过率**。真文本臂的
+  skills/经历/项目 gold 在 `tests/eval/human_gold_TO_FILL.json`，只并入 `_状态=done` 的行；
+  工作按公司+职位、项目按项目名做集合比对。
 
 三条纪律是抄既有三轨的，不是新规矩：
 1. mock 下给语义臂设门槛**直接判红**（`eval_rag.py:405-411` 那条），因为 mock 的 `chat_json`
@@ -19,6 +21,7 @@
 跑法：
     python scripts/eval_parse.py                                  # 默认 mock，只跑确定性臂
     python scripts/eval_parse.py --allow-real --min-field-f1 0.8  # 真 provider，出门数（花钱）
+    python scripts/eval_parse.py --sample 4 --allow-real --human-gold tests/eval/human_gold_TO_FILL.json
     python scripts/eval_parse.py --output reports/parse_eval_latest.json
 
 退出码：0 通过 / 3 门槛红 / 2 被 provider 闸拦下或评估身份定不下来。
@@ -48,6 +51,10 @@ from scripts.provider_guard import require_mock  # noqa: E402
 GATED_FIELDS = ("name", "phone", "email")
 REPORT_ONLY_FIELDS = ("current_title", "current_company", "years_exp")
 LIST_FIELDS = ("skills", "required_skills")
+ENTITY_LIST_FIELDS = ("work_experience", "project_experience")
+ALL_LIST_FIELDS = (*LIST_FIELDS, *ENTITY_LIST_FIELDS)
+HUMAN_GOLD_LIST_FIELDS = ("skills", *ENTITY_LIST_FIELDS)
+DEFAULT_HUMAN_GOLD = "tests/eval/human_gold_TO_FILL.json"
 
 PHONE_RE = re.compile(r"1[3-9]\d{9}")
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
@@ -97,6 +104,87 @@ def score_list(field: str, got: Any, want: Any) -> tuple[int, int, int]:
     g = {str(x).strip().lower() for x in (got or []) if str(x).strip()}
     w = {str(x).strip().lower() for x in (want or []) if str(x).strip()}
     return len(g & w), len(g), len(w)
+
+
+def _norm_entity(value: Any) -> str:
+    text = re.sub(r"\s+", "", str(value or "").strip().lower())
+    return re.sub(r"[·•|/\\,，。;；:：()（）\[\]【】\-_]+", "", text)
+
+
+def _work_key(item: Any) -> str:
+    if not isinstance(item, dict):
+        return _norm_entity(item)
+    company = _norm_entity(item.get("company"))
+    title = _norm_entity(item.get("title"))
+    if company or title:
+        return f"{company}|{title}"
+    return _norm_entity(item.get("desc"))[:40]
+
+
+def _project_key(item: Any) -> str:
+    if not isinstance(item, dict):
+        return _norm_entity(item)
+    name = _norm_entity(item.get("name"))
+    if name:
+        return name
+    role = _norm_entity(item.get("role"))
+    desc = _norm_entity(item.get("desc"))
+    return f"{role}|{desc[:40]}" if (role or desc) else ""
+
+
+def score_entities(field: str, got: Any, want: Any) -> tuple[int, int, int]:
+    """工作/项目按实体键做集合比对：工作=公司+职位，项目=项目名（缺失才退回角色/描述）。"""
+    key_fn = _work_key if field == "work_experience" else _project_key
+    g = {key_fn(item) for item in (got or []) if key_fn(item)}
+    w = {key_fn(item) for item in (want or []) if key_fn(item)}
+    return len(g & w), len(g), len(w)
+
+
+def load_human_gold(path: pathlib.Path) -> dict[str, Any]:
+    """读人工 gold；只把 `_状态=done` 且至少有一个列表字段的行视为可用。"""
+    result: dict[str, Any] = {"rows": {}, "total": 0, "done": 0, "path": str(path)}
+    if not path.exists():
+        result["error"] = "missing"
+        return result
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        result["error"] = type(exc).__name__
+        return result
+    rows = data.get("rows") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        result["error"] = "rows_missing"
+        return result
+    result["total"] = len(rows)
+    mapping: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict) or row.get("_状态") != "done":
+            continue
+        row_id = str(row.get("id") or "").strip()
+        if not row_id:
+            continue
+        lists = {field: row.get(field) or [] for field in HUMAN_GOLD_LIST_FIELDS}
+        if not any(lists.values()):
+            continue
+        mapping[row_id] = lists
+    result["rows"] = mapping
+    result["done"] = len(mapping)
+    return result
+
+
+def merge_human_gold(rows: list[dict], human_gold: dict[str, Any]) -> int:
+    """把已标行的列表字段并进对应语料行；不覆盖原有标量 gold。"""
+    mapping = human_gold.get("rows") or {}
+    merged = 0
+    for row in rows:
+        extra = mapping.get(str(row.get("id") or ""))
+        if not extra:
+            continue
+        gold = dict(row.get("gold") or {})
+        gold.update(extra)
+        row["gold"] = gold
+        merged += 1
+    return merged
 
 
 def deterministic_arm(rows: list[dict]) -> dict:
@@ -157,11 +245,13 @@ def instrument_self_check(rows: list[dict]) -> dict:
         for f in GATED_FIELDS:
             if gold.get(f) and not score_scalar(f, gold[f], gold[f]):
                 misses.append(f"{r['id']}.{f}")
-        for f in LIST_FIELDS:
-            if gold.get(f):
-                inter, got_n, want_n = score_list(f, gold[f], gold[f])
-                if not (inter == got_n == want_n):
-                    misses.append(f"{r['id']}.{f}")
+        for f in ALL_LIST_FIELDS:
+            if not gold.get(f):
+                continue
+            scorer = score_entities if f in ENTITY_LIST_FIELDS else score_list
+            inter, got_n, want_n = scorer(f, gold[f], gold[f])
+            if not (inter == got_n == want_n):
+                misses.append(f"{r['id']}.{f}")
     return {"passed": not misses, "misses": misses[:20]}
 
 
@@ -177,7 +267,7 @@ def semantic_arm(rows: list[dict], chat: Any) -> dict:
     hits = {f: 0 for f in GATED_FIELDS}
     wants = {f: 0 for f in GATED_FIELDS}
     base_hits = {f: 0 for f in GATED_FIELDS}
-    list_stats = {f: [0, 0, 0] for f in LIST_FIELDS}
+    list_stats = {f: [0, 0, 0] for f in ALL_LIST_FIELDS}
     report_only = {f: 0 for f in REPORT_ONLY_FIELDS}
     report_only_total = {f: 0 for f in REPORT_ONLY_FIELDS}
     first_pass = 0
@@ -215,9 +305,10 @@ def semantic_arm(rows: list[dict], chat: Any) -> dict:
             row_hit[f] = ok
             if f in baseline and baseline[f] and score_scalar(f, baseline[f], gold[f]):
                 base_hits[f] += 1
-        for f in LIST_FIELDS:
+        for f in ALL_LIST_FIELDS:
             if gold.get(f):
-                inter, got_n, want_n = score_list(f, payload.get(f), gold[f])
+                scorer = score_entities if f in ENTITY_LIST_FIELDS else score_list
+                inter, got_n, want_n = scorer(f, payload.get(f), gold[f])
                 acc = list_stats[f]
                 acc[0] += inter
                 acc[1] += got_n
@@ -250,7 +341,7 @@ def semantic_arm(rows: list[dict], chat: Any) -> dict:
         "errors": errors,
         "first_pass_rate": round(first_pass / scored, 4) if scored else None,
         "scalar": {f: pr(f) for f in GATED_FIELDS},
-        "lists": {f: list_pr(f) for f in LIST_FIELDS if list_stats[f][2]},
+        "lists": {f: list_pr(f) for f in ALL_LIST_FIELDS if list_stats[f][2]},
         "report_only": {
             f: (round(report_only[f] / report_only_total[f], 4) if report_only_total[f] else None)
             for f in REPORT_ONLY_FIELDS
@@ -301,6 +392,9 @@ def check_thresholds(
                 base = st["regex_baseline_recall"]
                 if base is not None and st["recall"] is not None and st["recall"] <= base:
                     bad.append(f"字段 {f} 召回 {st['recall']} 赢不过正则直取的基线 {base}——这道门分不出好坏")
+            for f, st in sem["lists"].items():
+                if st["f1"] is not None and st["f1"] < min_field_f1:
+                    bad.append(f"列表字段 {f} F1 {st['f1']} < 门槛 {min_field_f1}")
     return bad
 
 
@@ -312,7 +406,10 @@ def main() -> int:
     ap.add_argument("--max-errors", type=int, default=0)
     ap.add_argument("--min-tail-keep", type=float, default=None, help="确定性臂：段尾保全率门槛（CI 可门）")
     ap.add_argument("--min-structure-rate", type=float, default=None, help="语义臂：首发通过结构校验的比例")
-    ap.add_argument("--min-field-f1", type=float, default=None, help="语义臂：客观字段召回，且必须赢过正则基线")
+    ap.add_argument(
+        "--min-field-f1", type=float, default=None, help="语义臂：客观字段召回/列表 F1，标量必须赢过正则基线"
+    )
+    ap.add_argument("--human-gold", default=DEFAULT_HUMAN_GOLD, help="真文本臂的人工 gold（只并入 _状态=done 的行）")
     ap.add_argument("--allow-real", action="store_true", help="允许真 provider 跑语义臂（花钱）")
     args = ap.parse_args()
 
@@ -325,6 +422,9 @@ def main() -> int:
     rows = load_eval_set(pathlib.Path(args.eval_set))
     if args.sample:
         rows = rows[: args.sample]
+    human_gold = load_human_gold(pathlib.Path(args.human_gold))
+    merged_human_gold = merge_human_gold(rows, human_gold)
+    human_gold["merged"] = merged_human_gold
     resumes = [r for r in rows if r["kind"] in ("resume", "real")]
     jds = [r for r in rows if r["kind"] == "jd"]
 
@@ -333,6 +433,10 @@ def main() -> int:
     print("=" * 70)
     print(f"parse_eval：{len(rows)} 条（简历+真臂 {len(resumes)}｜JD {len(jds)}）｜provider={settings.LLM_PROVIDER}")
     print(f"判卷器自检：{'通过' if self_check['passed'] else '不通过 ' + str(self_check['misses'][:5])}")
+    human_note = f"{human_gold['done']}/{human_gold['total']} 行已标，{merged_human_gold} 行并入"
+    if human_gold.get("error"):
+        human_note += f"（{human_gold['error']}）"
+    print(f"人工 gold：{human_note}（{args.human_gold}）")
     print(
         f"确定性臂：截断 {det['truncated_count']} 条（率 {det['truncated_rate']}）"
         f"｜段尾保全 {det['tail_kept']}/{det['tail_total']} = {det['tail_keep_rate']}"
@@ -387,6 +491,13 @@ def main() -> int:
                 # 顶层那份是给 CI 日志看的同一份数。
                 "thresholds": thresholds,
                 "budget": PARSE_INPUT_BUDGET,
+                "human_gold": {
+                    "path": args.human_gold,
+                    "total": human_gold["total"],
+                    "done": human_gold["done"],
+                    "merged": merged_human_gold,
+                    "error": human_gold.get("error"),
+                },
             },
             "instrument_self_check": self_check,
             "deterministic": det,
