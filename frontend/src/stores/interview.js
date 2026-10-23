@@ -277,13 +277,28 @@ export const useInterviewStore = defineStore('interview', () => {
 
     if (type === 'question') {
       clearThinking()
-      messages.value.push({
-        role: 'ai',
-        type: 'question',
-        content,
-        metadata: meta,
-        timestamp: new Date().toISOString(),
-      })
+      // 重连时后端 resume() 会把未答的当前题原样重发。实录按 turn 去重：同一 turn 只留一条，
+      // 但 metadata 要换成新的（里面的 timeout_seconds 是剩余预算）。追问的 turn_id 是
+      // `q-N-followup`，与主问题不同，所以不会被并掉。
+      const turnId = meta.turn_id
+      const existing = messages.value.find(
+        (item) =>
+          item?.type === 'question' &&
+          (turnId
+            ? item.metadata?.turn_id === turnId
+            : item.metadata?.round === meta.round && item.content === content)
+      )
+      if (existing) {
+        existing.metadata = meta
+      } else {
+        messages.value.push({
+          role: 'ai',
+          type: 'question',
+          content,
+          metadata: meta,
+          timestamp: new Date().toISOString(),
+        })
+      }
       currentRound.value = meta.round || currentRound.value + 1
       totalQuestions.value = meta.total || totalQuestions.value
       isFollowUp.value = !!meta.is_follow_up

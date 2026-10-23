@@ -37,7 +37,7 @@ describe('面试 store：重连后的单题计时', () => {
     onMessage({
       type: 'question',
       content: '讲讲缓存',
-      metadata: { round: 1, total: 3, timeout_seconds: 120 },
+      metadata: { round: 1, total: 3, timeout_seconds: 120, turn_id: 'q-1' },
     })
     expect(store.roundRemaining).toBe(120)
 
@@ -53,8 +53,11 @@ describe('面试 store：重连后的单题计时', () => {
     onMessage({
       type: 'question',
       content: '讲讲缓存',
-      metadata: { round: 1, total: 3, timeout_seconds: 115 },
+      metadata: { round: 1, total: 3, timeout_seconds: 115, turn_id: 'q-1' },
     })
+    // 真浏览器实测（2026-10-23）：resume 会原样重发当前题，而前端把每条 question
+    // 都 append 进实录 ⇒ 面试官那句话出现两次。同一 turn 只能有一条。
+    expect(store.messages.filter((m) => m.type === 'question')).toHaveLength(1)
     expect(store.status).toBe('ongoing')
     expect(store.roundRemaining).toBe(115)
     expect(store.roundProgress).toBe(100)

@@ -102,6 +102,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 <header>
   <h1>P2 真文本 Gold 标注工作表</h1>
   <p class="note">只填原文里确实有的内容；不确定就留空。技能名、公司名、项目名照原文写，描述摘要点即可，不必逐字抄。</p>
+  <p class="note">本版已按助手代标（2026-10-20，zzh 指示）预填，供你复核与修正；技能/经历/项目都对着左侧原文改。</p>
   <p class="note">填完一份勾选“本份标完”。四份完成后点“导出 human_gold_TO_FILL.json”，用它替换 <code>backend/tests/eval/human_gold_TO_FILL.json</code>。</p>
   <p class="note">本页不调用任何接口，数据只留在本机浏览器；导出的 JSON 才是结果。</p>
   <div class="progress" id="progress" aria-live="polite"></div>
