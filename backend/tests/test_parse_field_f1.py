@@ -127,3 +127,34 @@ def test_min_field_f1_applies_to_list_f1():
     )
 
     assert any("列表字段 work_experience" in item for item in bad)
+
+
+def test_min_field_f1_does_not_gate_scalars_against_the_regex_baseline():
+    """标量不进这道门：正则直取在 name/phone/email 上就是 1.0，LLM 再准也只能打平。
+
+    2026-10-23 他拍的口径：`--min-field-f1` 只门列表 F1。此前实现把“与基线打平”算红，
+    结果是任何门槛值都必然红三条，门根本不可用。
+    """
+    det = {"errors": [], "tail_keep_rate": None}
+    sem = {
+        "errors": [],
+        "first_pass_rate": 1.0,
+        "scalar": {
+            "name": {"want": 4, "hit": 4, "recall": 1.0, "regex_baseline_recall": 1.0},
+            "phone": {"want": 4, "hit": 4, "recall": 1.0, "regex_baseline_recall": 1.0},
+            "email": {"want": 4, "hit": 4, "recall": 1.0, "regex_baseline_recall": 1.0},
+        },
+        "lists": {"skills": {"f1": 0.9, "want": 10}},
+    }
+
+    bad = check_thresholds(
+        det,
+        sem,
+        mock=False,
+        max_errors=0,
+        min_tail_keep=None,
+        min_structure_rate=None,
+        min_field_f1=0.75,
+    )
+
+    assert bad == []
