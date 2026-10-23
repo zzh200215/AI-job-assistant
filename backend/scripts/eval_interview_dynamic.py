@@ -95,7 +95,7 @@ def _scripted_evaluator(score: int):
     return evaluate
 
 
-def run_arm(cases: dict, tier_name: str, dynamic: bool) -> dict:
+def run_arm(cases: dict, tier_name: str, dynamic: bool, pace_seconds: float = 0.0) -> dict:
     skills = list(cases["jd"]["required_skills"])
     questions = [
         {
@@ -122,6 +122,10 @@ def run_arm(cases: dict, tier_name: str, dynamic: bool) -> dict:
         inner = real_decision_chat()
 
         def call(prompt: str):
+            # 连打 12 发会撞 provider 的短时限流；间隔不进入 decision_ms，只把调用摊开。
+            # 默认 0 保持原行为；真 provider 想拿干净单发延迟时再显式传 --pace-seconds。
+            if pace_seconds > 0:
+                time.sleep(pace_seconds)
             started = time.monotonic()
             try:
                 return inner(prompt)
@@ -189,6 +193,12 @@ def main() -> int:
     parser.add_argument("--allow-real", action="store_true")
     parser.add_argument("--min-gap-gain-pp", type=float, default=20.0)
     parser.add_argument("--min-zero-wait", type=float, default=0.75)
+    parser.add_argument(
+        "--pace-seconds",
+        type=float,
+        default=0.0,
+        help="每次决策模型调用前的间隔；真 provider 连打会撞 429，单发延迟不含这段 sleep",
+    )
     args = parser.parse_args()
 
     provider = require_mock("eval_interview_dynamic.py", allow_real=args.allow_real)
@@ -197,8 +207,8 @@ def main() -> int:
     runs = {}
     for tier_name in cases["candidates"]:
         runs[tier_name] = {
-            "static": run_arm(cases, tier_name, dynamic=False),
-            "dynamic": run_arm(cases, tier_name, dynamic=True),
+            "static": run_arm(cases, tier_name, dynamic=False, pace_seconds=args.pace_seconds),
+            "dynamic": run_arm(cases, tier_name, dynamic=True, pace_seconds=args.pace_seconds),
         }
 
     gains = {}
@@ -230,6 +240,7 @@ def main() -> int:
             "provider": provider,
             "model": settings.LLM_MODEL,
             "cases": args.cases,
+            "pace_seconds": args.pace_seconds,
             "gates": {
                 "min_gap_gain_pp": args.min_gap_gain_pp,
                 "min_zero_wait": args.min_zero_wait,
