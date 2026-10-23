@@ -5,6 +5,7 @@ from scripts.eval_parse import (
     load_human_gold,
     merge_human_gold,
     score_entities,
+    score_list,
     semantic_arm,
 )
 
@@ -127,6 +128,20 @@ def test_min_field_f1_applies_to_list_f1():
     )
 
     assert any("列表字段 work_experience" in item for item in bad)
+
+
+def test_skill_set_ignores_internal_whitespace_but_not_punctuation():
+    """`Agent 编排` 与 `Agent编排` 是同一项；`C/C++` 与 `C++` 不是。
+
+    真臂复核对出来的：gold 照原文写 `Agent 编排`，模型写 `Agent编排`，旧打分器
+    只 strip/lower，内部空格把同一项判成两个，系统性压低 F1。
+    """
+    assert score_list("skills", ["Agent编排", "PromptEngineering"], ["Agent 编排", "Prompt Engineering"]) == (
+        2,
+        2,
+        2,
+    )
+    assert score_list("skills", ["C++"], ["C/C++"]) == (0, 1, 1)
 
 
 def test_min_field_f1_does_not_gate_scalars_against_the_regex_baseline():

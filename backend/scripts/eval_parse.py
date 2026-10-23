@@ -100,10 +100,16 @@ def score_scalar(field: str, got: Any, want: Any) -> bool:
     return str(got or "").strip() == str(want or "").strip() and bool(str(want or "").strip())
 
 
+def _norm_skill(value: Any) -> str:
+    # 技能名里的空格是排版差异（`Agent 编排` vs `Agent编排`），集合语义应忽略；
+    # 标点不归一——`C/C++` 与 `C++` 仍是两个不同写法，不能混成一个。
+    return re.sub(r"\s+", "", str(value or "").strip().lower())
+
+
 def score_list(field: str, got: Any, want: Any) -> tuple[int, int, int]:
     """返回 (交集, 模型给出数, gold 数)。技能是集合语义，不做措辞匹配。"""
-    g = {str(x).strip().lower() for x in (got or []) if str(x).strip()}
-    w = {str(x).strip().lower() for x in (want or []) if str(x).strip()}
+    g = {_norm_skill(x) for x in (got or []) if str(x).strip()}
+    w = {_norm_skill(x) for x in (want or []) if str(x).strip()}
     return len(g & w), len(g), len(w)
 
 

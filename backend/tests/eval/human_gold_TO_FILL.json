@@ -4,6 +4,7 @@
   "_现在有没有被读": "已经接了（2026-10-20）：eval_parse.py 的语义臂会读这个文件，只并入 _状态=done 且至少有一个列表字段的行；技能按集合、工作按公司+职位、项目按项目名做 F1。填完导出后重跑，数字会变。",
   "_怎么填": "每行对着 source_file 那份原文填。skills 是技能名列表；work_experience / project_experience 是对象列表，键名与后端 ResumeParsedSchema 一致（company/title/start/end/desc、name/role/start/end/desc/tech）。原文里没有的就留空数组或 null，不要猜。填完把该行的 _状态 从 todo 改成 done。",
   "_填写粒度提醒": "判卷按字段级召回：技能按集合、工作按公司+职位、项目按项目名比对，所以 desc 只摘要点即可，不必逐字抄原文；但技能名、公司名/职位、项目名要照原文写。",
+  "_复核": "2026-10-23 assistant 第二遍对照原文：补 real01 Plan/DeepAgent、real02 RAG优化/高级RAG/Agent编排/评估优化（6 项均在技能段逐字存在）；项目名带括号描述、C/C++ 合写、项目栈库（BGE/CrossEncoder/JWT）是否算技能未动，属标注政策项。",
   "rows": [
     {
       "id": "real01",
@@ -63,8 +64,10 @@
         "LangGraph",
         "CrewAI",
         "MCP",
+        "DeepAgent",
         "AutoGen",
         "ReAct",
+        "Plan",
         "Reflection",
         "Vue3"
       ],
@@ -129,6 +132,8 @@
         "LangGraph",
         "DeepAgents",
         "RAG",
+        "RAG优化",
+        "高级RAG",
         "Query Rewrite",
         "Embedding",
         "Chroma",
@@ -141,7 +146,9 @@
         "重排序",
         "结果去重",
         "答案溯源",
+        "评估优化",
         "Prompt Engineering",
+        "Agent 编排",
         "任务规划",
         "工具调用",
         "多智能体协作",
