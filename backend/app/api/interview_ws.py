@@ -253,13 +253,19 @@ async def _handle_ws_loop(
             msg_type = data.get("type", "")
             content = data.get("content", "")
 
-            if current_task and not current_task.done():
-                current_task.cancel()
-                current_task = None
-
             if msg_type == "ping":
                 await websocket.send_json({"type": "pong", "content": ""})
                 continue
+
+            if msg_type not in ("answer", "skip", "end"):
+                await websocket.send_json({"type": "error", "content": f"未知消息类型: {msg_type}"})
+                continue
+
+            # 只有会推进/结束本题的消息才停表。ping 每 15 秒一次，摆在前面取消就等于
+            # 把 45 秒题的超时任务在第一次心跳时杀掉（2026-10-23 真浏览器活页实测）。
+            if current_task and not current_task.done():
+                current_task.cancel()
+                current_task = None
 
             if msg_type == "answer":
                 new_messages, result = await _step(session_id, "handle_answer", content, defer_evaluation=True)
@@ -285,10 +291,6 @@ async def _handle_ws_loop(
             elif msg_type == "end":
                 new_messages, result = await _step(session_id, "finish")
                 await _emit_snapshot(websocket, new_messages, result)
-
-            else:
-                await websocket.send_json({"type": "error", "content": f"未知消息类型: {msg_type}"})
-                continue
 
             if result.get("type") == "end":
                 await websocket.close(code=1000, reason="interview finished")

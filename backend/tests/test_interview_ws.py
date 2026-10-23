@@ -362,3 +362,33 @@ def test_the_loop_thread_never_opens_a_db_session_while_the_interview_runs(
         assert ws.receive_json()["type"] == "question"
 
         assert engine.db is None, "跑完 skip（两步同一个 worker）之后循环线程又开了 Session"
+
+
+def test_a_heartbeat_ping_does_not_cancel_the_server_side_timeout(ws_client, normal_user, db_session, monkeypatch):
+    """心跳不是答题：ping 不该停掉这一题的超时任务。
+
+    真浏览器活页实测（2026-10-23）：45 秒题在客户端永远不超时。根因是循环顶部那段
+    `if current_task: current_task.cancel()` 排在 ping 分支之前——前端每 15 秒一次心跳，
+    第一次 ping 就把 `asyncio.sleep(45)` 的任务杀了，`handle_timeout` 再也不会发生。
+    这条用 0.2 秒预算把等待压短；修复前 `done` 不会被 set，1 秒后红。
+    """
+    sid = _make_session(db_session, normal_user)
+    done = threading.Event()
+
+    def fake_handle_timeout(self):
+        done.set()
+        return {"type": "question", "content": "Q2", "metadata": {"round": 2, "total": 3, "timeout_seconds": 45}}
+
+    monkeypatch.setattr(InterviewEngine, "handle_timeout", fake_handle_timeout)
+    monkeypatch.setattr(
+        interview_ws,
+        "timeout_for_payload",
+        lambda payload: 0.2 if payload and payload.get("type") == "question" else None,
+    )
+
+    with ws_client.websocket_connect(f"/ws/interview/{sid}", subprotocols=["jwt", _token_for(normal_user)]) as ws:
+        assert ws.receive_json()["type"] == "question"
+        ws.send_json({"type": "ping"})
+        assert ws.receive_json()["type"] == "pong"
+
+        assert done.wait(1.0), "ping 之后服务端超时任务没了：45 秒题永远不会超时"
