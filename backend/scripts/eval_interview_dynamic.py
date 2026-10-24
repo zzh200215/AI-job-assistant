@@ -95,6 +95,14 @@ def _scripted_evaluator(score: int):
     return evaluate
 
 
+def answer_for(tier: dict, question_count: int, round_no: int, is_followup: bool) -> str:
+    """按题号取这一档的答案；旧 cases 只有单份 answer 时整场复用，保持兼容。"""
+    answers = tier.get("answers") or [tier.get("answer", "")] * question_count
+    followups = tier.get("followup_answers") or [tier.get("followup_answer", "")] * question_count
+    index = min(max(round_no - 1, 0), max(len(answers) - 1, 0))
+    return followups[index] if is_followup else answers[index]
+
+
 def run_arm(cases: dict, tier_name: str, dynamic: bool, pace_seconds: float = 0.0) -> dict:
     skills = list(cases["jd"]["required_skills"])
     questions = [
@@ -146,8 +154,8 @@ def run_arm(cases: dict, tier_name: str, dynamic: bool, pace_seconds: float = 0.
         guard += 1
         emitted.append(payload)
         is_followup = bool((payload.get("metadata") or {}).get("is_follow_up"))
-        answer = tier["followup_answer"] if is_followup else tier["answer"]
-        payload = engine.handle_answer(answer)
+        round_no = int((payload.get("metadata") or {}).get("round") or 1)
+        payload = engine.handle_answer(answer_for(tier, len(questions), round_no, is_followup))
 
     texts = [str(item.get("content") or "") for item in emitted]
     covered = sorted({skill for skill in skills if any(skill in text for text in texts)})
