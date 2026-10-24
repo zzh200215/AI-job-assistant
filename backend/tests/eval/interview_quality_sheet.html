@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P3.2 追问质量抽样表</title>
+<style>
+  :root { color-scheme: light; --bg:#f5f7fb; --card:#fff; --ink:#1f2430; --muted:#667085; --line:#d9dee8; --accent:#2f5bd3; --ok:#1f8a5b; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif; }
+  header { padding:22px 24px 8px; }
+  h1 { margin:0 0 6px; font-size:22px; }
+  .note { margin:4px 0; color:var(--muted); font-size:13px; line-height:1.65; }
+  .progress { margin-top:8px; font-weight:650; color:var(--accent); }
+  main { padding:0 24px 16px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  th, td { padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; text-align:left; }
+  th { background:#eef2ff; font-size:13px; white-space:nowrap; }
+  tr:last-child td { border-bottom:0; }
+  td.question { min-width:240px; }
+  td.tier { font-weight:650; white-space:nowrap; }
+  textarea, input { width:100%; font:inherit; color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:8px; padding:7px 8px; }
+  textarea { resize:vertical; min-height:54px; }
+  input[type="number"] { width:64px; }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; padding:0 24px 24px; }
+  button { font:inherit; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:8px 12px; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.danger { color:#b42318; border-color:#fecdca; background:#fffbfa; }
+  pre.preview { margin:0 24px 24px; padding:14px; max-height:40vh; overflow:auto; background:#0f172a; color:#e2e8f0; border-radius:10px; font:12px/1.6 ui-monospace,Consolas,monospace; }
+  @media (max-width: 900px) { th, td { padding:7px; } td.question { min-width:180px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>P3.2 追问质量抽样表</h1>
+  <p class="note">跑完一发呆 provider 后，把动态臂的追问文本粘进“追问”列；没有触发追问的格子留空。评分 1–5：针对性=是否对准回答里的弱点，具体性=是否问出可验证细节，多样性=同一档内是否重复。</p>
+  <p class="note">本页不联网，数据只留在本机浏览器；“导出 JSON”才是结果。</p>
+  <div class="progress" id="progress" aria-live="polite"></div>
+</header>
+<main>
+  <table>
+    <thead><tr><th>档位</th><th>题号</th><th>题型</th><th>题目</th><th>追问（跑完粘贴）</th><th>针对性</th><th>具体性</th><th>多样性</th><th>备注</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</main>
+<div class="actions">
+  <button type="button" class="primary" id="preview-btn">预览 JSON</button>
+  <button type="button" id="export-btn">导出 JSON</button>
+  <button type="button" id="import-btn">导入 JSON</button>
+  <input type="file" id="import-file" accept=".json,application/json" hidden>
+  <button type="button" class="danger" id="reset-btn">清空本机进度</button>
+</div>
+<pre class="preview" id="preview" hidden></pre>
+<script id="seed-data" type="application/json">{"rows": [{"tier": "good", "index": 1, "category": "project", "question": "介绍一个你最有成就感的项目，重点说你本人做了什么"}, {"tier": "good", "index": 2, "category": "tech", "question": "解释 RAG 的检索与生成各自解决什么问题"}, {"tier": "good", "index": 3, "category": "tech", "question": "你如何看待一致性与可用性之间的取舍"}, {"tier": "good", "index": 4, "category": "basic", "question": "讲一次你和产品经理意见不一致时是怎么处理的"}, {"tier": "good", "index": 5, "category": "scenario", "question": "线上出故障时你的第一反应是什么"}, {"tier": "good", "index": 6, "category": "basic", "question": "你怎么安排一周的学习时间"}, {"tier": "mid", "index": 1, "category": "project", "question": "介绍一个你最有成就感的项目，重点说你本人做了什么"}, {"tier": "mid", "index": 2, "category": "tech", "question": "解释 RAG 的检索与生成各自解决什么问题"}, {"tier": "mid", "index": 3, "category": "tech", "question": "你如何看待一致性与可用性之间的取舍"}, {"tier": "mid", "index": 4, "category": "basic", "question": "讲一次你和产品经理意见不一致时是怎么处理的"}, {"tier": "mid", "index": 5, "category": "scenario", "question": "线上出故障时你的第一反应是什么"}, {"tier": "mid", "index": 6, "category": "basic", "question": "你怎么安排一周的学习时间"}, {"tier": "weak", "index": 1, "category": "project", "question": "介绍一个你最有成就感的项目，重点说你本人做了什么"}, {"tier": "weak", "index": 2, "category": "tech", "question": "解释 RAG 的检索与生成各自解决什么问题"}, {"tier": "weak", "index": 3, "category": "tech", "question": "你如何看待一致性与可用性之间的取舍"}, {"tier": "weak", "index": 4, "category": "basic", "question": "讲一次你和产品经理意见不一致时是怎么处理的"}, {"tier": "weak", "index": 5, "category": "scenario", "question": "线上出故障时你的第一反应是什么"}, {"tier": "weak", "index": 6, "category": "basic", "question": "你怎么安排一周的学习时间"}]}</script>
+<script>
+(function () {
+  'use strict';
+  var seed = JSON.parse(document.getElementById('seed-data').textContent);
+  var STORAGE_KEY = 'p3-quality-sample-v1';
+  var FIELDS = ['followup', 'relevance', 'specificity', 'diversity', 'note'];
+  var rows = seed.rows.map(function (row) {
+    var copy = { tier: row.tier, index: row.index, category: row.category, question: row.question };
+    FIELDS.forEach(function (key) { copy[key] = ''; });
+    return copy;
+  });
+
+  var rowsEl = document.getElementById('rows');
+  var progressEl = document.getElementById('progress');
+  var previewEl = document.getElementById('preview');
+
+  function loadSaved() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (!Array.isArray(saved) || saved.length !== rows.length) return false;
+      rows.forEach(function (row, i) {
+        FIELDS.forEach(function (key) { row[key] = saved[i][key] || ''; });
+      });
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+  }
+
+  function progress() {
+    var done = rows.filter(function (row) {
+      return row.followup.trim() && row.relevance && row.specificity && row.diversity;
+    }).length;
+    progressEl.textContent = '已评分 ' + done + ' / ' + rows.length;
+  }
+
+  function render() {
+    rowsEl.innerHTML = '';
+    rows.forEach(function (row, i) {
+      var tr = document.createElement('tr');
+      tr.dataset.tier = row.tier;
+      tr.dataset.index = String(row.index);
+      function cell(text, cls) {
+        var td = document.createElement('td');
+        if (cls) td.className = cls;
+        td.textContent = text;
+        tr.appendChild(td);
+        return td;
+      }
+      cell(row.tier, 'tier');
+      cell(String(row.index));
+      cell(row.category);
+      cell(row.question, 'question');
+      var follow = cell('');
+      var ta = document.createElement('textarea');
+      ta.rows = 2;
+      ta.value = row.followup;
+      ta.setAttribute('data-k', 'followup');
+      ta.addEventListener('input', function () { row.followup = ta.value; save(); progress(); });
+      follow.appendChild(ta);
+      ['relevance', 'specificity', 'diversity'].forEach(function (key) {
+        var td = cell('');
+        var input = document.createElement('input');
+        input.type = 'number';
+        input.min = '1';
+        input.max = '5';
+        input.step = '1';
+        input.value = row[key];
+        input.setAttribute('data-k', key);
+        input.addEventListener('input', function () { row[key] = input.value; save(); progress(); });
+        td.appendChild(input);
+      });
+      var noteTd = cell('');
+      var note = document.createElement('input');
+      note.value = row.note;
+      note.setAttribute('data-k', 'note');
+      note.addEventListener('input', function () { row.note = note.value; save(); });
+      noteTd.appendChild(note);
+      rowsEl.appendChild(tr);
+    });
+    progress();
+  }
+
+  function exportData() {
+    return JSON.stringify({ source: 'interview_dynamic_cases.json', rows: rows }, null, 2);
+  }
+
+  document.getElementById('preview-btn').addEventListener('click', function () {
+    previewEl.textContent = exportData();
+    previewEl.hidden = false;
+  });
+
+  document.getElementById('export-btn').addEventListener('click', function () {
+    var blob = new Blob([exportData()], { type: 'application/json;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = 'interview_quality_sample.json';
+    link.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('import-btn').addEventListener('click', function () {
+    document.getElementById('import-file').click();
+  });
+
+  document.getElementById('import-file').addEventListener('change', function (event) {
+    var file = event.target.files && event.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var data = JSON.parse(reader.result);
+        if (!data || !Array.isArray(data.rows) || data.rows.length !== rows.length) {
+          alert('JSON 的行数与当前题目不一致');
+          return;
+        }
+        rows.forEach(function (row, i) {
+          FIELDS.forEach(function (key) { row[key] = data.rows[i][key] || ''; });
+        });
+        save();
+        render();
+      } catch (e) { alert('JSON 解析失败'); }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  });
+
+  document.getElementById('reset-btn').addEventListener('click', function () {
+    if (!confirm('清空本机保存的评分？')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    rows.forEach(function (row) { FIELDS.forEach(function (key) { row[key] = ''; }); });
+    render();
+  });
+
+  loadSaved();
+  render();
+})();
+</script>
+</body>
+</html>
