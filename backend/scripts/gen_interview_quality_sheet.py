@@ -7,6 +7,11 @@ import argparse
 import json
 from pathlib import Path
 
+try:
+    from scripts.interview_quality import extract_followups
+except ModuleNotFoundError:  # 直接 `python scripts/...` 时脚本目录在 sys.path 上
+    from interview_quality import extract_followups
+
 ROOT = Path(__file__).resolve().parents[1]
 CASES = ROOT / "tests" / "eval" / "interview_dynamic_cases.json"
 OUTPUT = ROOT / "tests" / "eval" / "interview_quality_sheet.html"
@@ -73,8 +78,11 @@ HTML_TEMPLATE = r"""<!doctype html>
   var STORAGE_KEY = 'p3-quality-sample-v1';
   var FIELDS = ['followup', 'relevance', 'specificity', 'diversity', 'note'];
   var rows = seed.rows.map(function (row) {
-    var copy = { tier: row.tier, index: row.index, category: row.category, question: row.question };
-    FIELDS.forEach(function (key) { copy[key] = ''; });
+    var copy = {
+      tier: row.tier, index: row.index, category: row.category, question: row.question,
+      followup: row.followup || ''
+    };
+    ['relevance', 'specificity', 'diversity', 'note'].forEach(function (key) { copy[key] = ''; });
     return copy;
   });
 
@@ -212,7 +220,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 """
 
 
-def build_seed(cases: dict) -> dict:
+def build_seed(cases: dict, followups: dict[tuple[str, int], str] | None = None) -> dict:
     rows = []
     for tier in TIERS:
         for index, question in enumerate(cases["questions"], start=1):
@@ -222,23 +230,35 @@ def build_seed(cases: dict) -> dict:
                     "index": index,
                     "category": question["category"],
                     "question": question["question"],
+                    "followup": (followups or {}).get((tier, index), ""),
                 }
             )
     return {"rows": rows}
 
 
-def render(cases: dict) -> str:
-    payload = json.dumps(build_seed(cases), ensure_ascii=False).replace("</", "<\\/")
+def render(cases: dict, followups: dict[tuple[str, int], str] | None = None) -> str:
+    payload = json.dumps(build_seed(cases, followups), ensure_ascii=False).replace("</", "<\\/")
     return HTML_TEMPLATE.replace("__SEED_DATA__", payload)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate or check the P3.2 quality HTML sheet")
     parser.add_argument("--check", action="store_true", help="Fail when the checked-in sheet is stale")
+    parser.add_argument("--report", default=None, help="从动态评测报告预填追问")
+    parser.add_argument("--output", default=None, help="写出的文件（默认空白模板或 *_filled.html）")
     args = parser.parse_args(argv)
+    if args.check and (args.report or args.output):
+        parser.error("--check 只检查默认的空白模板，不能和 --report/--output 一起用")
 
     cases = json.loads(CASES.read_text(encoding="utf-8"))
-    html = render(cases)
+    if args.report:
+        report = json.loads(Path(args.report).read_text(encoding="utf-8"))
+        followups = extract_followups(report)
+        target = Path(args.output) if args.output else OUTPUT.with_name("interview_quality_sheet_filled.html")
+    else:
+        followups = None
+        target = Path(args.output) if args.output else OUTPUT
+    html = render(cases, followups)
     if args.check:
         if not OUTPUT.exists():
             print(f"[STALE] missing {OUTPUT}")
@@ -248,8 +268,8 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(f"[OK] {OUTPUT.name}: {len(cases['questions']) * len(TIERS)} rows")
         return 0
-    OUTPUT.write_text(html, encoding="utf-8", newline="\n")
-    print(f"[OK] wrote {OUTPUT} ({len(cases['questions']) * len(TIERS)} rows)")
+    target.write_text(html, encoding="utf-8", newline="\n")
+    print(f"[OK] wrote {target} ({len(cases['questions']) * len(TIERS)} rows)")
     return 0
 
 

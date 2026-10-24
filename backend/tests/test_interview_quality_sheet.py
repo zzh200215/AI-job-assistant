@@ -1,7 +1,7 @@
 import json
 import re
 
-from scripts.gen_interview_quality_sheet import CASES, OUTPUT, main
+from scripts.gen_interview_quality_sheet import CASES, OUTPUT, build_seed, main
 
 
 def _seed() -> dict:
@@ -32,3 +32,11 @@ def test_sheet_is_self_contained():
 
 def test_check_mode_is_current():
     assert main(["--check"]) == 0
+
+
+def test_seed_fills_followups_from_a_report():
+    cases = json.loads(CASES.read_text(encoding="utf-8"))
+    seed = build_seed(cases, {("good", 1): "追问A"})
+
+    assert seed["rows"][0]["followup"] == "追问A"
+    assert seed["rows"][1]["followup"] == ""

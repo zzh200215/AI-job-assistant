@@ -51,7 +51,7 @@
   <button type="button" class="danger" id="reset-btn">清空本机进度</button>
 </div>
 <pre class="preview" id="preview" hidden></pre>
-<script id="seed-data" type="application/json">{"rows": [{"tier": "good", "index": 1, "category": "project", "question": "介绍一个你最有成就感的项目，重点说你本人做了什么"}, {"tier": "good", "index": 2, "category": "tech", "question": "解释 RAG 的检索与生成各自解决什么问题"}, {"tier": "good", "index": 3, "category": "tech", "question": "你如何看待一致性与可用性之间的取舍"}, {"tier": "good", "index": 4, "category": "basic", "question": "讲一次你和产品经理意见不一致时是怎么处理的"}, {"tier": "good", "index": 5, "category": "scenario", "question": "线上出故障时你的第一反应是什么"}, {"tier": "good", "index": 6, "category": "basic", "question": "你怎么安排一周的学习时间"}, {"tier": "mid", "index": 1, "category": "project", "question": "介绍一个你最有成就感的项目，重点说你本人做了什么"}, {"tier": "mid", "index": 2, "category": "tech", "question": "解释 RAG 的检索与生成各自解决什么问题"}, {"tier": "mid", "index": 3, "category": "tech", "question": "你如何看待一致性与可用性之间的取舍"}, {"tier": "mid", "index": 4, "category": "basic", "question": "讲一次你和产品经理意见不一致时是怎么处理的"}, {"tier": "mid", "index": 5, "category": "scenario", "question": "线上出故障时你的第一反应是什么"}, {"tier": "mid", "index": 6, "category": "basic", "question": "你怎么安排一周的学习时间"}, {"tier": "weak", "index": 1, "category": "project", "question": "介绍一个你最有成就感的项目，重点说你本人做了什么"}, {"tier": "weak", "index": 2, "category": "tech", "question": "解释 RAG 的检索与生成各自解决什么问题"}, {"tier": "weak", "index": 3, "category": "tech", "question": "你如何看待一致性与可用性之间的取舍"}, {"tier": "weak", "index": 4, "category": "basic", "question": "讲一次你和产品经理意见不一致时是怎么处理的"}, {"tier": "weak", "index": 5, "category": "scenario", "question": "线上出故障时你的第一反应是什么"}, {"tier": "weak", "index": 6, "category": "basic", "question": "你怎么安排一周的学习时间"}]}</script>
+<script id="seed-data" type="application/json">{"rows": [{"tier": "good", "index": 1, "category": "project", "question": "介绍一个你最有成就感的项目，重点说你本人做了什么", "followup": ""}, {"tier": "good", "index": 2, "category": "tech", "question": "解释 RAG 的检索与生成各自解决什么问题", "followup": ""}, {"tier": "good", "index": 3, "category": "tech", "question": "你如何看待一致性与可用性之间的取舍", "followup": ""}, {"tier": "good", "index": 4, "category": "basic", "question": "讲一次你和产品经理意见不一致时是怎么处理的", "followup": ""}, {"tier": "good", "index": 5, "category": "scenario", "question": "线上出故障时你的第一反应是什么", "followup": ""}, {"tier": "good", "index": 6, "category": "basic", "question": "你怎么安排一周的学习时间", "followup": ""}, {"tier": "mid", "index": 1, "category": "project", "question": "介绍一个你最有成就感的项目，重点说你本人做了什么", "followup": ""}, {"tier": "mid", "index": 2, "category": "tech", "question": "解释 RAG 的检索与生成各自解决什么问题", "followup": ""}, {"tier": "mid", "index": 3, "category": "tech", "question": "你如何看待一致性与可用性之间的取舍", "followup": ""}, {"tier": "mid", "index": 4, "category": "basic", "question": "讲一次你和产品经理意见不一致时是怎么处理的", "followup": ""}, {"tier": "mid", "index": 5, "category": "scenario", "question": "线上出故障时你的第一反应是什么", "followup": ""}, {"tier": "mid", "index": 6, "category": "basic", "question": "你怎么安排一周的学习时间", "followup": ""}, {"tier": "weak", "index": 1, "category": "project", "question": "介绍一个你最有成就感的项目，重点说你本人做了什么", "followup": ""}, {"tier": "weak", "index": 2, "category": "tech", "question": "解释 RAG 的检索与生成各自解决什么问题", "followup": ""}, {"tier": "weak", "index": 3, "category": "tech", "question": "你如何看待一致性与可用性之间的取舍", "followup": ""}, {"tier": "weak", "index": 4, "category": "basic", "question": "讲一次你和产品经理意见不一致时是怎么处理的", "followup": ""}, {"tier": "weak", "index": 5, "category": "scenario", "question": "线上出故障时你的第一反应是什么", "followup": ""}, {"tier": "weak", "index": 6, "category": "basic", "question": "你怎么安排一周的学习时间", "followup": ""}]}</script>
 <script>
 (function () {
   'use strict';
@@ -59,8 +59,11 @@
   var STORAGE_KEY = 'p3-quality-sample-v1';
   var FIELDS = ['followup', 'relevance', 'specificity', 'diversity', 'note'];
   var rows = seed.rows.map(function (row) {
-    var copy = { tier: row.tier, index: row.index, category: row.category, question: row.question };
-    FIELDS.forEach(function (key) { copy[key] = ''; });
+    var copy = {
+      tier: row.tier, index: row.index, category: row.category, question: row.question,
+      followup: row.followup || ''
+    };
+    ['relevance', 'specificity', 'diversity', 'note'].forEach(function (key) { copy[key] = ''; });
     return copy;
   });
 

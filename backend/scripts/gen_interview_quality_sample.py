@@ -7,13 +7,18 @@ import argparse
 import json
 from pathlib import Path
 
+try:
+    from scripts.interview_quality import extract_followups
+except ModuleNotFoundError:  # 直接 `python scripts/...` 时脚本目录在 sys.path 上
+    from interview_quality import extract_followups
+
 ROOT = Path(__file__).resolve().parents[1]
 CASES = ROOT / "tests" / "eval" / "interview_dynamic_cases.json"
 OUTPUT = ROOT / "tests" / "eval" / "interview_quality_sample.md"
 TIERS = ("good", "mid", "weak")
 
 
-def render(cases: dict) -> str:
+def render(cases: dict, followups: dict[tuple[str, int], str] | None = None) -> str:
     questions = cases["questions"]
     lines = [
         "# P3.2 追问质量抽样表",
@@ -29,7 +34,10 @@ def render(cases: dict) -> str:
     ]
     for tier in TIERS:
         for index, question in enumerate(questions, start=1):
-            lines.append(f"| {tier} | {index} | {question['category']} | {question['question']} | " " |  |  |  |  |")
+            followup = (followups or {}).get((tier, index), "")
+            lines.append(
+                f"| {tier} | {index} | {question['category']} | {question['question']} | " f"{followup} |  |  |  |  |"
+            )
     lines.append("")
     return "\n".join(lines)
 
@@ -37,10 +45,21 @@ def render(cases: dict) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate or check the P3.2 quality sampling sheet")
     parser.add_argument("--check", action="store_true", help="Fail when the checked-in sheet is stale")
+    parser.add_argument("--report", default=None, help="从动态评测报告预填追问")
+    parser.add_argument("--output", default=None, help="写出的文件（默认空白模板或 *_filled.md）")
     args = parser.parse_args(argv)
+    if args.check and (args.report or args.output):
+        parser.error("--check 只检查默认的空白模板，不能和 --report/--output 一起用")
 
     cases = json.loads(CASES.read_text(encoding="utf-8"))
-    content = render(cases)
+    if args.report:
+        report = json.loads(Path(args.report).read_text(encoding="utf-8"))
+        followups = extract_followups(report)
+        target = Path(args.output) if args.output else OUTPUT.with_name("interview_quality_sample_filled.md")
+    else:
+        followups = None
+        target = Path(args.output) if args.output else OUTPUT
+    content = render(cases, followups)
     if args.check:
         if not OUTPUT.exists():
             print(f"[STALE] missing {OUTPUT}")
@@ -50,8 +69,8 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(f"[OK] {OUTPUT.name}: {len(cases['questions']) * len(TIERS)} rows")
         return 0
-    OUTPUT.write_text(content, encoding="utf-8", newline="\n")
-    print(f"[OK] wrote {OUTPUT} ({len(cases['questions']) * len(TIERS)} rows)")
+    target.write_text(content, encoding="utf-8", newline="\n")
+    print(f"[OK] wrote {target} ({len(cases['questions']) * len(TIERS)} rows)")
     return 0
 
 
