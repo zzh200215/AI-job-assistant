@@ -375,6 +375,43 @@ def get_profile(db: Session, user_id: int) -> dict[str, Any]:
     return build_profile(db, user_id)
 
 
+def tilt_questions_by_profile(
+    questions: list[dict[str, Any]],
+    required_skills: list[str],
+    profile: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """把"问到了上一场弱项"的本场必考项排到开场前面；没命中就原样返回。
+
+    只认本场 JD 必考项：旧画像里别岗位的弱项不参与。题面走共享别名表
+    （K8s / Kubernetes 同一项，短 ASCII 名按词边界，Go 不会在 Google 里命中）。
+    稳定分区：命中组与非命中组各自保持原顺序。
+    """
+    if not questions:
+        return list(questions)
+    required = {canonical_skill(skill) for skill in (required_skills or []) if canonical_skill(skill)}
+    weak: list[str] = []
+    for row in (profile or {}).get("skill_weaknesses") or []:
+        if not isinstance(row, dict):
+            continue
+        canonical = canonical_skill(row.get("canonical")) or canonical_skill(row.get("skill"))
+        if canonical and canonical in required and canonical not in weak:
+            weak.append(canonical)
+    if not weak:
+        return list(questions)
+
+    terms = sorted({term for skill in weak for term in skill_match_terms(skill) if term})
+    if not terms:
+        return list(questions)
+
+    def covered(question: dict[str, Any]) -> bool:
+        return _mentions(str(question.get("question") or question.get("q") or ""), terms)
+
+    front = [question for question in questions if covered(question)]
+    if not front:
+        return list(questions)
+    return front + [question for question in questions if not covered(question)]
+
+
 def compact_profile(profile: dict[str, Any] | None) -> dict[str, Any]:
     """新会话快照只带"下一场要优先关注什么"，不搬证据卡与逐场明细。"""
     source = profile or {}

@@ -30,7 +30,12 @@ from app.services.interview_config_service import (
 )
 from app.services.interview_engine import InterviewEngine
 from app.services.interview_evaluation_service import build_conversation, evaluation_payloads
-from app.services.interview_profile_service import compact_profile, get_profile, public_profile
+from app.services.interview_profile_service import (
+    compact_profile,
+    get_profile,
+    public_profile,
+    tilt_questions_by_profile,
+)
 from app.services.interview_question_source import (
     fetch_interview_question_context,
     format_rag_context,
@@ -93,6 +98,8 @@ def create_session(
         custom_questions=custom_questions,
         limit=max_questions(),
     )
+    # 回流③把"上一场弱项"落成开场顺序：只重排提到本场必考弱项的题，没命中就原序。
+    ordered_questions = tilt_questions_by_profile(ordered_questions, required_skills, prior_profile)
 
     session = InterviewSession(
         user_id=current_user.id,
@@ -561,7 +568,11 @@ def _personalize_unstarted_questions(
         first_unstarted = max(started_rounds, default=0)
         current_questions = list(session.questions or [])
         current_questions[first_unstarted:] = personalized[first_unstarted:]
-        session.questions = current_questions[:limit]
+        combined = current_questions[:limit]
+        # 个性化会换掉题面：按**最终题面**再倾一次，已开始的题保持原位。
+        profile = (session.memory_snapshot or {}).get("interview_profile") or {}
+        tail = tilt_questions_by_profile(combined[first_unstarted:], required_skills, profile)
+        session.questions = combined[:first_unstarted] + tail
         session.total_questions = len(session.questions)
         snapshot = dict(session.memory_snapshot or {})
         snapshot["question_generation"] = {"status": "completed"}

@@ -253,3 +253,76 @@ def test_background_personalization_does_not_override_custom_bank(cfg_session, m
         assert len(updated.questions) == len(CUSTOM_QUESTIONS)
     finally:
         check.close()
+
+
+def test_background_personalization_retilts_only_the_unstarted_tail(cfg_session, mocker):
+    """D280 的第二个落点：个性化换完题面后按**最终题面**再倾，已开始的第一题不动。"""
+    from app.api.interview_rest import _fallback_questions, _personalize_unstarted_questions
+    from app.models.interview_session import InterviewSession
+
+    mocker.patch("app.api.interview_rest.SessionLocal", cfg_session)
+    mocker.patch("app.api.interview_rest.get_question_bank", return_value=None)
+    mocker.patch("app.api.interview_rest._build_personalized_prompt", return_value="prompt")
+    mocker.patch(
+        "app.api.interview_rest.chat_json",
+        return_value={
+            "tech": [
+                {"question": "讲一次你做过的性能优化。", "ref_answer": "指标"},
+                {"question": "Redis 缓存穿透怎么处理？", "ref_answer": "布隆过滤器"},
+                {"question": "Kafka 的消费语义怎么保证不丢消息？", "ref_answer": "幂等 + 去重"},
+            ]
+        },
+    )
+
+    session = cfg_session()
+    fallback = _fallback_questions("后端工程师", ["Kafka", "Redis"], "tech")
+    isess = InterviewSession(
+        user_id=_normal_user.id,
+        resume_id=1,
+        jd_id=1,
+        interview_type="tech",
+        status="created",
+        questions=fallback,
+        messages=[
+            {
+                "role": "ai",
+                "type": "question",
+                "content": fallback[0]["question"],
+                "metadata": {"round": 1},
+            }
+        ],
+        evaluation={},
+        evaluation_status="idle",
+        memory_snapshot={
+            "question_generation": {"status": "pending"},
+            "interview_profile": {"skill_weaknesses": [{"skill": "Kafka", "canonical": "kafka", "avg_score": 55}]},
+        },
+        total_questions=len(fallback),
+        answered_count=0,
+        timeout_count=0,
+    )
+    session.add(isess)
+    session.commit()
+    session.refresh(isess)
+    sid = isess.id
+    session.close()
+
+    _personalize_unstarted_questions(
+        sid,
+        {"skills": ["Python"]},
+        {"required_skills": ["Kafka", "Redis"]},
+        "后端工程师",
+        ["Kafka", "Redis"],
+        "tech",
+        [],
+    )
+
+    check = cfg_session()
+    try:
+        updated = check.get(InterviewSession, sid)
+        assert updated.questions[0]["question"] == fallback[0]["question"], "已开始的第一题不许被重排"
+        assert "Kafka" in updated.questions[1]["question"], [row["question"] for row in updated.questions[:3]]
+        assert "Redis" in updated.questions[2]["question"], [row["question"] for row in updated.questions[:3]]
+        assert updated.memory_snapshot["question_generation"]["status"] == "completed"
+    finally:
+        check.close()

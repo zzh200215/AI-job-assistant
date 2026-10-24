@@ -430,6 +430,70 @@ def test_create_session_snapshot_carries_prior_profile(db_session, normal_user, 
     assert "sessions" not in profile
 
 
+def test_create_session_tilts_the_opening_questions_toward_prior_weakness(
+    db_session, normal_user, make_interview_session
+):
+    """回流③的可见效果：上一场弱项 Kafka 在本场必考项里，就把它那道题排到开场第一。"""
+    from fastapi import BackgroundTasks
+
+    from app.api.interview_rest import create_session
+    from app.models.history import JobDescription, Resume
+    from app.schemas.interview_session import InterviewSessionCreate
+
+    make_interview_session(
+        user_id=normal_user.id,
+        status="completed",
+        evaluation=_report(),
+        evaluation_status="completed",
+        completed_at=datetime(2026, 10, 2),
+    )
+    resume = Resume(
+        user_id=normal_user.id,
+        tenant_id=1,
+        name="倾斜验证简历",
+        file_name="tilt.pdf",
+        file_path="uploads/tilt.pdf",
+        file_type="pdf",
+        file_size=1,
+        parsed_json={"skills": ["Python"]},
+        is_deleted=0,
+    )
+    jd = JobDescription(
+        user_id=normal_user.id,
+        tenant_id=1,
+        title="后端工程师",
+        company="示例公司",
+        raw_text="后端工程师",
+        is_active=1,
+        parsed_json={"title": "后端工程师", "required_skills": ["Redis", "Kafka"]},
+    )
+    db_session.add_all([resume, jd])
+    db_session.commit()
+    db_session.refresh(resume)
+    db_session.refresh(jd)
+
+    body = create_session(
+        InterviewSessionCreate(resume_id=resume.id, jd_id=jd.id, interview_type="tech"),
+        BackgroundTasks(),
+        db=db_session,
+        current_user=normal_user,
+    )
+
+    assert body["code"] == 0
+    created = (
+        db_session.query(InterviewSession)
+        .filter(InterviewSession.user_id == normal_user.id)
+        .order_by(InterviewSession.id.desc())
+        .first()
+    )
+    texts = [row["question"] for row in created.questions]
+    intro = next(index for index, text in enumerate(texts) if "请用 2 分钟" in text)
+    assert intro > 0, texts[:3]
+    assert "Kafka" in texts[0], texts[:3]
+    # 命中弱项的题全部排在开场介绍之前，且各自保持原顺序。
+    assert all("Kafka" in text or "Redis" in text for text in texts[:intro]), texts[:3]
+
+
 def test_build_profile_orders_sessions_by_completion(db_session, normal_user, make_interview_session):
     base = datetime(2026, 10, 1)
     first = make_interview_session(
