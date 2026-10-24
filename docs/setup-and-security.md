@@ -42,7 +42,7 @@ docker compose -f docker-compose.prod.yml --profile tools run --rm migrate
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-See `docs/archive/db-migrations.md` for local Alembic commands and existing database guidance.
+See `backend/migrations/` and `docs/engineering-quality.md` for local Alembic commands and existing database guidance.
 
 ## Production Network Isolation
 

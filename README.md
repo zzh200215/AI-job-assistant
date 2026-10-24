@@ -2,6 +2,8 @@
 
 > 一个以 **求职者职业发展** 为核心的全栈智能平台。平台通过 **Agentic RAG 引擎** 检索岗位 JD、行业知识、面试题库和职业发展资料，再由多个 AI Agent 协作完成简历优化、岗位匹配、模拟面试和职业规划；题库、评分规则与套餐按平台一处配置覆盖内置默认；审计、运行治理与外部能力 API 用于内部可观测。**企业/多租户那一侧已在 2026-10 的产品收缩中出树**（`docs/upgrade-plan.md` D132–D137）：数据库里的 `tenant_id` / `organization_id` 列与模型保留，但不再参与任何可见性判定。
 
+**当前状态（2026-10-24）**：后端 **1527 tests / 0 failed**，前端 **117 文件 / 759 条**，静态守卫 **50 条**；RAG / Agent / 推荐 / 解析四轨进 AI 发布门；简历与面试 P1–P5 已落地，过程账见 [`docs/简历与面试优化.md`](docs/简历与面试优化.md)。
+
 ---
 
 ## 目录
@@ -223,30 +225,40 @@ User Query → Retrieval Planner (LLM 决策 / 启发式回退)
 
 ### 评估框架（Eval Framework）
 
-内置 RAG 检索质量 + Agent 匹配精度的双轨评估：
+内置 **RAG / Agent / 推荐 / 解析 / 面试决策** 五条离线评测轨道。前四轨接入 AI 发布门（`AI_RELEASE_REQUIRED_EVALUATION_TYPES`）；面试决策轨用于动态 vs 静态对比，不设发布门。
 
-| 评估维度 | 数据集 | 脚本 | 指标 |
+| 评估维度 | 数据集 | 脚本 | 指标 / 门槛 |
 | --- | --- | --- | --- |
-| **RAG 检索** | `tests/eval/rag_eval.jsonl`（50 条） | `scripts/eval_rag.py` | 融合路 / 词法路（BM25）各一组：recall@5、MRR、keyword_hit_rate、per_doc_type_recall；另报同语料的随机基线（CI 门词法路） |
-| **Agent 匹配** | `tests/eval/agent_eval.jsonl`（25 对简历×JD） | `scripts/eval_agent.py` | MAE（平均绝对误差）、Spearman ρ（排序一致性）、偏差分布；同场报出**不用模型的基线**（常量/随机），门槛赢不过它就判红 |
+| **RAG 检索** | `tests/eval/rag_eval.jsonl`（50 条） | `scripts/eval_rag.py` | 融合路 / 词法路（BM25）：recall@5、MRR、keyword_hit_rate、per_doc_type_recall；同语料随机基线；CI 门窗法路，mock 下语义门槛直接判红 |
+| **Agent 匹配** | `tests/eval/agent_eval.jsonl`（25 对简历×JD） | `scripts/eval_agent.py` | MAE、Spearman ρ、偏差分布；同场报出**不用模型的基线**（常量/随机），门槛赢不过它就判红 |
+| **岗位推荐** | `tests/eval/recommend_eval.jsonl` | `scripts/eval_recommend.py` | 技能匹配准确率、JD 解释一致性、推荐可解释性、面试分数稳定性、反馈一致率 |
+| **简历 / JD 解析** | `tests/eval/parse_eval.jsonl`（42 条，含 4 条真文本） | `scripts/eval_parse.py` | 确定性臂（截断率 / 段尾保全）、抽取臂（TXT/DOCX/坏 PDF，7/7）、语义臂（结构一次通过率、skills/work/project 列表 F1）；发布门槛 `min_field_f1=0.75`（只门列表字段） |
+| **面试决策** | `tests/eval/interview_dynamic_cases.json` | `scripts/eval_interview_dynamic.py` | 动态 vs 静态：必考技能覆盖率、零额外等待率、追问降级与耗时；脚本评分只验证选题与追问，不代表模型打分质量 |
 
 ```bash
 cd backend
 
-# RAG 质量评估（需 Chroma 与当前 Embedding provider 维度一致）
+# 零花费轨道（mock / 无 provider）
 python scripts/eval_rag.py --top-k 5
-
-# Agent 评估（需 LLM 就绪）
 python scripts/eval_agent.py --sample 5
+python scripts/eval_recommend.py
+python scripts/eval_parse.py --min-tail-keep 1.0 --max-errors 0 --min-extract-match 1.0
+python scripts/eval_interview_dynamic.py
+
+# 解析语义臂（真 provider，花钱；4 条真文本 + 人工 gold）
+python scripts/eval_parse.py --sample 4 --allow-real \
+  --human-gold tests/eval/human_gold_TO_FILL.json --min-field-f1 0.75
 
 # 输出 JSON 报告
-python scripts/eval_rag.py --output reports/rag_eval.json
-python scripts/eval_agent.py --output reports/agent_eval.json
+python scripts/eval_parse.py --output reports/parse_eval_latest.json
 
 # 或直接生成带时间戳的历史报告
 cd ..
 ./scripts/eval-quality.ps1
 ```
+
+> P4 回流测量（弱点提示对改写建议的影响、职业方向是否引用面试证据）是手动测量，不进发布门：
+> `cd backend && python scripts/measure_p4_refeedback.py`（默认 mock，零花费；`--allow-real` 才发 4 次真实调用）。
 
 离线答辩或无 API Key 环境下，可临时覆盖为 mock provider，验证评估链路是否可运行：
 
@@ -260,8 +272,22 @@ $env:LLM_PROVIDER="mock"; $env:EMBEDDING_PROVIDER="mock"; python scripts\eval_ag
 > 现在这条纪律是脚本强制的：`EMBEDDING_PROVIDER=mock` 时给融合路设语义门槛（`--min-recall` / `--min-mrr` / `--min-keyword-hit`）会直接判失败，因为 mock 向量是按文本 hash 生成的伪向量——在同一份语料上"随机抓 5 个切片"就有 recall@5 ≈ 0.48，而旧 CI 的门槛是 0.5。mock 环境下要门语义，门窗法那一路：
 > `python scripts/eval_rag.py --min-lexical-recall 0.7 --min-lexical-keyword-hit 0.7 --max-empty-results 0`（CI 用 `scripts/seed_rag_corpus.py` 先把 `docs/knowledge-seeds` 装进一次性临时库，见 `docs/engineering-quality.md`）。
 
-> **面试价值**：这两个数字直接回答"检索质量怎么样？""匹配打分准不准？"——是简历上"匹配准确率 XX%"的来源。
+> **面试价值**：这些数字直接回答"检索质量怎么样？""匹配打分准不准？""解析抽得全不全？"——是简历上质量指标与 AI 发布门的来源。
 > 生成报告后，可在前端 `评测报表` 页面查看最新结果、历史快照和两次评测的对比差异。
+
+---
+
+### 简历 / 面试专项（P1–P5，2026-10-16 至 10-24）
+
+| 阶段 | 已落地 | 关键读数 / 证据 |
+| --- | --- | --- |
+| **P1 解析地基** | 15000 字符预算 + 结构化截断、两档 Schema、一次自纠、前端截断/降级提示 | 真实文本 13 份 / 70 段、0 份认不出；15 条护栏；真 provider 20/20 首发过校验 |
+| **P2 解析评测** | 42 条语料（含 4 条真文本）、确定性 + 抽取 + 语义三臂、人工 gold、parse 进 AI 发布门 | 抽取臂 7/7；真臂 skills F1 **0.8660** / work **1.0** / project **0.8182**；发布报告 skills **0.76**（边缘，2 real / 2 fallback） |
+| **P3 动态面试** | 三节点决策器、动态追问、45/90/120 秒题型预算、断线重连与 resume | 弱点覆盖 静态 **0 → 动态 0.75–1.00**（脚本评分）；真 provider 七发仍 429（20/84 真组织） |
+| **P4 回流闭环** | 跨会话画像、改写弱点提示、职业规划证据、下一场开场题序倾斜 | 画像只改追问焦点（D278）；开场倾斜建会话/个性化后都生效（D280）；真发 **4/4 fallback**，质量仍待干净窗口 |
+| **P5 体验收尾** | 报告页闭环入口、重连 UI、解析进度三步条、失败文案分阶段 | 45/90/120 秒倒计时、断网 1006→1/3→2/3、TCP 切网/抖动已活页验证 |
+
+> 过程账与逐条判据：`docs/简历与面试优化.md`（P1–P5 独立编号，D240–D280）。真 provider 的干净延迟/质量仍受 429 与配额限制，这里只报已量到的读数。
 
 ---
 
@@ -428,13 +454,15 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 | 前端开发 | `cd frontend && npm run dev` |
 | 前端构建 | `cd frontend && npm run build` |
 | 后端测试 | `cd backend && pytest` |
+| 前端测试 | `cd frontend && npm run test:unit`（vitest）/ `npm test`（静态守卫） |
 | 导入种子知识库 | `cd backend && python scripts/import_knowledge_seeds.py` |
 | 重置知识库 | `cd backend && python reset_kb.py` |
 | 建管理员 | `cd backend && python scripts/create_admin.py` |
 | 导出 schema 基线 | `cd backend && python scripts/export_schema_baseline.py` |
 | 导出交付文档 | `cd backend && python scripts/export_delivery_docs.py` |
 | 备份 / 恢复 | `cd backend && python scripts/backup.py` / `bash scripts/restore.sh` |
-| 评测（RAG / Agent / 推荐） | `cd backend && python scripts/eval_rag.py` / `eval_agent.py` / `eval_recommend.py` |
+| 评测（RAG / Agent / 推荐 / 解析 / 面试决策） | `cd backend && python scripts/eval_rag.py` / `eval_agent.py` / `eval_recommend.py` / `eval_parse.py` / `eval_interview_dynamic.py` |
+| P4 回流测量 | `cd backend && python scripts/measure_p4_refeedback.py`（默认 mock；`--allow-real` 4 发真调用） |
 
 ---
 
@@ -491,24 +519,23 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── api/                 # Axios 封装（含 tenant.js / subscription.js）
+│   │   ├── api/                 # Axios 封装（按领域拆分）
+│   │   ├── features/            # 13 个功能域、44 个页面（admin / analysis / interview / resume / ...）
+│   │   ├── components/          # 通用组件
 │   │   ├── layouts/             # 页面布局
 │   │   ├── router/              # 路由配置与角色守卫
-│   │   ├── stores/              # Pinia 状态管理（含 tenant.js 品牌缓存）
-│   │   ├── styles/              # 全局样式
-│   │   └── views/               # 30+ 页面组件（含 admin/Tenants.vue、admin/Orders.vue）
+│   │   ├── stores/              # Pinia 状态管理
+│   │   └── styles/              # 全局样式与主题令牌
 │   ├── Dockerfile
 │   ├── nginx.conf
 │   └── package.json
 ├── docs/
+│   ├── 简历与面试优化.md        # P1–P5 专项过程账（2026-10-16 起，D240–D280）
+│   ├── upgrade-plan.md          # 历史升级过程账（A–E 阶段，保留过程记录）
 │   ├── knowledge-seeds/         # 内置知识库种子数据（CI 的 RAG 门用它做夹具）
 │   ├── schema-baseline.sql      # 表结构基线（测试与导出脚本的比对目标）
-│   ├── upgrade-plan.md          # 升级过程账（唯一仍在维护的那份）
 │   ├── setup-and-security.md / engineering-quality.md / 面试消息协议.md
-│   ├── api-examples/            # 外部能力 API 示例
-│   └── archive/                 # 2026-08-01 及之前定稿的一次性交付/演示/定价/合同文档（19 份）
-│                                # 含 pilot-plan.md、pilot-report.md、tenant-schema-design.md、
-│                                # schema-baseline.md、api-reference.md、产品白皮书.md、定价表.md、演示脚本.md
+│   └── api-examples/            # 外部能力 API 示例
 ├── monitoring/                  # Prometheus + Grafana 监控配置（可选）
 ├── docker-compose.yml
 └── README.md
@@ -592,7 +619,7 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 - **Webhook**：`resume.parsed` / `match.evaluated` / `interview.completed` 三种事件；HMAC-SHA256 签名、事件 ID 防重放、失败重试 3 次、SSRF 防护。
 - **管理入口**：`/api/v1/admin/external` 下创建/吊销 Key、手动触发结算、账单导出、Webhook 订阅管理。
 
-对接文档见 `docs/archive/api-reference.md`（2026-08-01 定稿，已归档不再维护）；要按当前应用出最新版，跑 `backend/scripts/export_delivery_docs.py`，它会生成到 `docs/generated/`（该目录不入库，见 `.gitignore`）。示例见 `docs/api-examples/`。
+对接文档以 Swagger 与 `docs/api-examples/` 为准；要按当前应用出最新版，跑 `backend/scripts/export_delivery_docs.py`，它会生成到 `docs/generated/`（该目录不入库，见 `.gitignore`）。
 
 ---
 
@@ -610,9 +637,12 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 ## 测试
 
 ```bash
-cd backend
-pytest
+cd backend && pytest
+cd frontend && npm run test:unit   # vitest
+cd frontend && npm test            # 静态守卫（.mjs）
 ```
+
+当前基线（2026-10-24）：后端 **1527 passed / 0 failed**、ruff **472 文件**；前端 **117 文件 / 759 条**、静态守卫 **50 条**。
 
 当前测试文件覆盖（节选）：
 
@@ -626,10 +656,13 @@ pytest
 | `test_orchestration.py` / `test_orchestration_backend.py` | 编排流程与任务后端 |
 | `test_retrieval_planner.py` / `test_query_rewrite.py` / `test_rag_retrieval.py` | Agentic RAG：检索路由 / 查询重写 / 检索 |
 | `test_interview_engine.py` / `test_interview_async_evaluation.py` / `test_interview_question_generation.py` | 面试引擎 / 异步评分 / 出题 |
-| `test_interview_config.py` | 题库 / 评分规则 / 报告模板租户覆盖 |
+| `test_interview_profile.py` / `test_interview_question_tilt.py` / `test_interview_dynamic_question_guardrails.py` | 跨会话画像 / 开场题序倾斜 / 决策器接线与追问 |
+| `test_interview_quality.py` / `test_interview_quality_sample.py` / `test_interview_quality_sheet.py` | P3.2 质量样本与 18 行评分表 |
+| `test_parse_guardrails.py` / `test_parse_field_f1.py` / `test_parse_extraction_eval.py` | 解析预算截断 / 字段 F1 / 抽取层（TXT、DOCX、坏 PDF） |
+| `test_file_extraction_measure.py` / `test_p4_refeedback_measure.py` | 真文件抽取量测 / P4 回流测量仪器 |
+| `test_interview_config.py` | 题库 / 评分规则 / 报告模板的平台配置覆盖 |
 | `test_analysis_history_access.py` | 分析历史权限 |
-| `test_tenant_api.py` / `test_tenant_model.py` / `test_tenant_context.py` | 租户管理 / 模型 / 上下文解析 |
-| `test_tenant_isolation.py` / `test_tenant_jobs_knowledge.py` / `test_analytics_tenant.py` | 租户数据隔离（岗位 / 知识 / 报表） |
+| `test_tenant_model.py` | 保留的租户列 / 模型（企业侧已出树） |
 | `test_subscription_plans.py` | 三档套餐与自定义套餐 |
 | `test_external_api.py` | 外部能力 API 鉴权、配额与计费 |
 | `test_schema_baseline.py` | ORM 与 schema 基线一致性 |
@@ -645,12 +678,9 @@ pytest
 
 - **交付范围与验收建议**：前端 `/delivery-guide`
 - **系统当前运行模式**：前端 `/system-status`
-- **数据源与演示边界**：`docs/archive/数据源与演示边界说明.md`
-- **知识库维护与验证**：`docs/archive/知识库维护与验证说明.md`
-- **完成度判断**：`docs/archive/项目完成度清单.md`
-- **第二个客户 Pilot**：`docs/archive/pilot-plan.md`（实施计划）→ `docs/archive/pilot-report.md`（实施后填写）→ `docs/archive/定价表.md`（定价）
-- **多租户设计**：`docs/archive/tenant-schema-design.md` + `docs/archive/schema-baseline.md`（2026-08-01 的表结构基线；仍在维护、被测试比对的是 `docs/schema-baseline.sql`）
-- **外部能力 API 对接**：`docs/archive/api-reference.md` + `docs/api-examples/`
+- **知识库维护与验证**：`docs/knowledge-seeds/README.md`
+- **多租户列**：保留的模型/列见 `docs/schema-baseline.sql` 与 `backend/app/models/`（企业侧已出树）
+- **外部能力 API 对接**：`docs/api-examples/` + Swagger
 
 ### 创新点总结
 
@@ -663,8 +693,12 @@ pytest
 
 ### 后续加强方向
 
-- 接入真实第三方岗位平台 API（鉴权、分页、频控、回退）
-- 执行备份恢复演练与负载测试
+- **P3.2 干净延迟与真追问质量**：七发真 provider 均撞 429（20/84 真组织），等配额窗口再量。
+- **P4 真 provider 质量**：弱点后的改写质量、职业方向是否引用面试证据；4 发仪器已备好，最近一发 **4/4 fallback_model**，质量仍未量。
+- **物理切网**：Wi-Fi→蜂窝与真实运营商抖动需要第二台设备；TCP 层切网/抖动已验。
+- **长简历与有效 PDF 夹具**：本机仍缺 >15000 字符真样本与可写库生成的 PDF；当前用合成长简历 + 坏 PDF 覆盖截断与报错路径。
+- **外部岗位渠道**：BOSS 直聘风控墙（纯 HTTP 与真浏览器都被验证页拦住），保留演示与本地回退。
+- 执行备份恢复演练与负载测试。
 
 ---
 
@@ -678,3 +712,5 @@ pytest
 6. **外部能力 API**：X-API-Key 鉴权 + 用量计费 + 签名 Webhook，开放 AI 能力给第三方集成方
 7. **治理与运维**：审计、运行告警、AI 发布门禁与提示溯源已落地；外部告警通知与备份恢复演练仍待生产环境验证（企业/多租户一侧已出树）
 8. **体验闭环**：简历、分析、面试、投递、Offer、职业规划与周报均提供状态、依据和下一步操作；智能任务与 RAG 检索可回看执行痕迹
+9. **解析质量可度量**：15000 预算截断 + 结构化校验 + 文件抽取层 + 三臂评测（确定性 / 抽取 / 语义），parse 已进 AI 发布门
+10. **面试反馈闭环**：三节点决策器 → 动态追问 → 跨会话画像 → 改写弱点提示 / 职业规划证据 / 下一场开场题序

@@ -5,7 +5,7 @@
 > 面向：产品负责人 + 后端/AI 工程
 > 前提决策：产品收缩为**单一求职者（求职）侧**，停止对企业/多租户/招聘侧投入
 > 证据来源：对 `backend/app` 与 `frontend/src` 的代码审计，关键结论（`strategies.py:90,116`、`base_agent.py:59`、`task_center_service.py:73`、`llm_service.py:1043-1171`、`system.py:510-513`、`registry.py:138-141`）已逐条人工复核
-> 配套：`docs/engineering-quality.md`（仍在维护）、`docs/archive/db-migrations.md`、`docs/archive/tenant-schema-design.md`（后两份属 2026-08-01 前定稿那一簇，D128 起住在 `docs/archive/`）
+> 配套：`docs/engineering-quality.md`（仍在维护）；历史归档文档已于 2026-10-24 移出仓库。
 
 ---
 
