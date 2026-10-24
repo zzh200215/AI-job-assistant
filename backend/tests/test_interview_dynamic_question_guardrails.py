@@ -515,3 +515,65 @@ def test_profile_weaknesses_outside_the_jd_do_not_enter_the_focus_pool(engine) -
 
     assert state["weaknesses"] == ["Kafka", "Redis"]
     assert state["interview_profile"]["skill_weaknesses"][0]["skill"] == "Kubernetes"
+
+
+def _prior_profile_engine(db_session, make_interview_session, profile: dict | None) -> InterviewEngine:
+    questions = [
+        _question(0, "请介绍一个你最有成就感的项目", "project"),
+        _question(1, "解释 RAG 的工作原理以及它的局限性"),
+        _question(2, "如何处理 LLM 输出中的幻觉问题"),
+    ]
+    snapshot = {"jd_required_skills": ["Kafka", "Redis", "容量规划"]}
+    if profile is not None:
+        snapshot["interview_profile"] = profile
+    session_id = make_interview_session(status="ongoing", questions=questions, memory_snapshot=snapshot)
+    eng = InterviewEngine(session_id)
+    eng.db = db_session
+    eng.session = db_session.get(InterviewSession, session_id)
+    eng.current_index = 0
+    return eng
+
+
+def test_prior_profile_cannot_reorder_the_main_question_sequence(
+    db_session, make_interview_session, monkeypatch
+) -> None:
+    """运行中的 advance 仍是 `questions[current_index + 1]`：开场倾斜在建会话时做（D280），
+    引擎运行时不重排。达标（advance）时有没有画像都出同一题；这不是 provider 能改变的。
+    """
+    without = _prior_profile_engine(db_session, make_interview_session, None)
+    with_profile = _prior_profile_engine(
+        db_session,
+        make_interview_session,
+        {"skill_weaknesses": [{"skill": "容量规划", "avg_score": 55}]},
+    )
+    for eng in (without, with_profile):
+        monkeypatch.setattr(eng, "_decision_chat", lambda: (lambda prompt: None))
+        _stub(eng, monkeypatch, _evaluations({"overall_score": 80}))
+
+    first = without.next_question()
+    second = with_profile.next_question()
+
+    assert second["content"] == first["content"] == "解释 RAG 的工作原理以及它的局限性"
+    assert "is_follow_up" not in second["metadata"]
+
+
+def test_prior_profile_redirects_only_the_followup_focus(db_session, make_interview_session, monkeypatch) -> None:
+    """同一份画像在低分那一档才生效：追问焦点从 JD 首项换成上一场弱点。"""
+    without = _prior_profile_engine(db_session, make_interview_session, None)
+    with_profile = _prior_profile_engine(
+        db_session,
+        make_interview_session,
+        {"skill_weaknesses": [{"skill": "容量规划", "avg_score": 55}]},
+    )
+    for eng in (without, with_profile):
+        monkeypatch.setattr(eng, "_decision_chat", lambda: (lambda prompt: None))
+        _stub(eng, monkeypatch, _evaluations({"overall_score": 50}))
+
+    first = without.next_question()
+    second = with_profile.next_question()
+
+    assert first["metadata"]["is_follow_up"] is True
+    assert second["metadata"]["is_follow_up"] is True
+    assert "Kafka" in first["content"]
+    assert "容量规划" in second["content"]
+    assert without.current_index == with_profile.current_index == 0, "追问不推进指针"
