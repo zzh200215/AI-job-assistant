@@ -398,6 +398,36 @@ def test_the_lines_before_the_first_section_head_survive_every_drop():
     assert "其他" in out.dropped_sections
 
 
+def test_a_section_head_after_a_field_separator_on_the_same_line_is_recognized():
+    """真实两栏/紧凑排版会把多个段名挤在同一行（"教育背景：…；专业技能：…；其他：…"）。
+
+    旧规则只认行首别名，这一行里只有 `教育背景` 有归属，后面的 `专业技能`/`其他`
+    会被并进教育段，跟着教育段一起按优先级处理——低优先级的"其他"反而没有独立身份。
+    """
+    from app.utils.text_budget import fit_structured_text
+
+    raw = (
+        "基本信息\n姓名：测试用户\n"
+        + "教育背景：硕士 计算机科学与技术；专业技能：Python、FastAPI、RAG；其他：兴趣与开源贡献\n"
+        + "MISC_MARKER\n"
+        + "填充内容。" * 1200
+    )
+    out = fit_structured_text(raw, 6000)
+
+    assert "其他" in out.dropped_sections, f"同行段名没被当成独立段落，丢段表是 {out.dropped_sections}"
+    assert "MISC_MARKER" not in out.text, "低优先级的其他段没被整段丢掉"
+
+
+def test_a_section_word_in_prose_is_not_a_section_head():
+    """反向：正文里的"项目经历/技能"不是段落边界；有分隔符但段名后没有冒号也不认。"""
+    from app.utils.text_budget import fit_structured_text
+
+    blob = "我负责项目经历梳理；技能方面也做过一些。" * 1200
+    out = fit_structured_text(blob, 6000)
+
+    assert out.dropped_sections == [], f"正文里的段名词被误认成段名：{out.dropped_sections}"
+
+
 # ---------- 文档第 4 条：JD 同套夹具对齐 ----------
 
 

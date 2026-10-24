@@ -12,7 +12,8 @@
   排序依据取自现成的下游依赖：`required_skills` 是 B2 那条 skill_gap 的权威来源、也是模拟面试出题的输入。
 
 识别的边界条件（也是这个模块唯一可能出错的地方）：段名必须落在**一行的开头**（允许前导空白与 `【`、`#`、`|`
-这类装饰），否则正文里出现"负责过项目经历梳理"这种句子会被当成段落边界，把好端端的正文切掉半截。
+这类装饰），**或者**在同一行里跟在强字段分隔符（`|｜;；·•※】]` 或 2+ 空格）后且段名后带冒号；否则正文里
+出现"负责过项目经历梳理"这种句子会被当成段落边界，把好端端的正文切掉半截。
 """
 
 from __future__ import annotations
@@ -105,6 +106,7 @@ class SectionMap:
 
     priority: tuple[str, ...]
     pattern: re.Pattern
+    mid_pattern: re.Pattern
     alias_to_section: dict[str, str]
     rank: dict[str, int]
 
@@ -115,12 +117,20 @@ def build_section_map(priority: tuple[str, ...], aliases: dict[str, tuple[str, .
         for alias in aliases.get(section, ()):
             flat[alias.lower()] = section
     ordered = sorted(flat, key=len, reverse=True)
-    pattern = re.compile(
-        "(?m)^" + _LEAD + "(" + "|".join(re.escape(a) for a in ordered) + ")" + _TRAIL,
+    alternatives = "|".join(re.escape(a) for a in ordered)
+    pattern = re.compile("(?m)^" + _LEAD + "(" + alternatives + ")" + _TRAIL, re.IGNORECASE)
+    # 同一行里被字段分隔符隔开的段名（"教育背景：…；专业技能：…"）。只认强分隔符 + 段名后冒号，
+    # 不在 `。，、` 或普通文字后认——否则正文里的"负责项目经历"会被切成段落边界。
+    mid_pattern = re.compile(
+        r"(?:[|｜;；·•※】\]]|[ \t\u3000]{2,})[ \t\u3000]*(" + alternatives + r")[ \t\u3000]*[：:]",
         re.IGNORECASE,
     )
     return SectionMap(
-        priority=priority, pattern=pattern, alias_to_section=flat, rank={n: i for i, n in enumerate(priority)}
+        priority=priority,
+        pattern=pattern,
+        mid_pattern=mid_pattern,
+        alias_to_section=flat,
+        rank={n: i for i, n in enumerate(priority)},
     )
 
 
@@ -138,12 +148,17 @@ class BudgetResult:
 
 def _spans(text: str, sections: SectionMap) -> list[tuple[str | None, int, int]]:
     """切成 (段名, start, end)。段名是 None 的那一段是第一个段名之前的引子，永远保留。"""
-    hits: list[tuple[int, str]] = []
+    # 行首命中的 span 从行首（含装饰）开始，保证装饰不会被留在上一段；同行命中从段名开始，
+    # 分隔符留在上一段。两者按"段名起点"去重，行首优先——否则行首前导空格会被两条规则各命中一次。
+    by_alias_start: dict[int, tuple[int, str]] = {}
     for m in sections.pattern.finditer(text):
         # 边界取**整个匹配的行首**（m.start()），不是别名的起点（m.start(1)）：
         # 段名前挂着装饰时，用后者会把那个装饰留在上一段的尾巴上——
         # 裁剪结果末尾多出一个孤立符号，而上一段明明是被整段丢掉的。这条是护栏抓出来的。
-        hits.append((m.start(), sections.alias_to_section[m.group(1).lower()]))
+        by_alias_start[m.start(1)] = (m.start(), sections.alias_to_section[m.group(1).lower()])
+    for m in sections.mid_pattern.finditer(text):
+        by_alias_start.setdefault(m.start(1), (m.start(1), sections.alias_to_section[m.group(1).lower()]))
+    hits = sorted(by_alias_start.values())
 
     if not hits:
         return [(None, 0, len(text))]
