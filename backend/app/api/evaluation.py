@@ -157,6 +157,8 @@ def _normalize_report(path: Path, payload: dict[str, Any]) -> dict[str, Any] | N
         skills = lists.get("skills") if isinstance(lists.get("skills"), dict) else {}
         return {
             **base,
+            # parse 报告没有顶层 total；发布门按样本数判 >0，取确定性臂或语义臂的计数。
+            "total": int(det.get("samples") or sem.get("scored") or 0),
             "metrics": {
                 "truncated_rate": det.get("truncated_rate"),
                 "tail_keep_rate": det.get("tail_keep_rate"),

@@ -183,7 +183,7 @@ class Settings(BaseSettings):
     OPERATIONS_ALERT_DB_TIMEOUT_SAMPLES: int = 1
 
     # AI release governance. Every configured report type must have current, thresholded evidence.
-    AI_RELEASE_REQUIRED_EVALUATION_TYPES: str = "rag,agent,recommend"
+    AI_RELEASE_REQUIRED_EVALUATION_TYPES: str = "rag,agent,recommend,parse"
     AI_RELEASE_MAX_EVALUATION_AGE_DAYS: int = 30
 
     EMBEDDING_PROVIDER: str = "mock"

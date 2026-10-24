@@ -67,6 +67,23 @@ def _write_passing_reports(tmp_path) -> list[str]:
                 "thresholds": {"min_skill_match_accuracy": 0.8, "min_explanation_consistency": 0.8},
             },
         },
+        "parse_release.json": {
+            "report_type": "parse",
+            "deterministic": {"samples": 8, "truncated_rate": 0.0, "tail_keep_rate": 1.0, "errors": []},
+            "semantic": {
+                "scored": 8,
+                "first_pass_rate": 1.0,
+                "errors": [],
+                "scalar": {},
+                "lists": {
+                    "skills": {"f1": 0.86},
+                    "work_experience": {"f1": 0.9},
+                    "project_experience": {"f1": 0.82},
+                },
+            },
+            "instrument_self_check": {"passed": True},
+            "run_meta": {"generated_at": generated_at, "thresholds": {"max_errors": 0, "min_field_f1": 0.75}},
+        },
     }
     for name, payload in reports.items():
         _write_report(tmp_path / name, payload)
@@ -112,7 +129,7 @@ def test_ai_release_gate_approval_recheck_and_costs(db_session, monkeypatch, tmp
         release = created.json()["data"]
         assert release["status"] == "ready"
         assert release["gate_result"]["passed"] is True
-        assert len(release["evaluation_reports"]) == 3
+        assert len(release["evaluation_reports"]) == 4
 
         approved = client.post(f"/system/ai-releases/{release['id']}/approve", headers=_headers(admin))
         assert approved.status_code == 200
@@ -161,3 +178,34 @@ def test_ai_release_blocks_report_without_explicit_thresholds(db_session, monkey
     data = response.json()["data"]
     assert data["status"] == "blocked"
     assert any("未声明发布阈值" in item for item in data["gate_result"]["failures"])
+
+
+def test_ai_release_blocks_parse_report_below_the_list_gate(db_session, monkeypatch, tmp_path):
+    monkeypatch.setattr(evaluation, "REPORTS_DIR", tmp_path)
+    report_ids = _write_passing_reports(tmp_path)
+    parse_path = tmp_path / "parse_release.json"
+    parse_report = json.loads(parse_path.read_text(encoding="utf-8"))
+    parse_report["semantic"]["lists"]["project_experience"]["f1"] = 0.74
+    _write_report(parse_path, parse_report)
+
+    app = FastAPI()
+    app.include_router(system_router, prefix="/system")
+
+    def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    admin = _user(db_session, username="parse_admin", role="admin")
+    payload = {
+        "release_key": "parse-blocked",
+        "prompt_versions": ["parse-v1"],
+        "evaluation_report_ids": report_ids,
+    }
+
+    with TestClient(app) as client:
+        response = client.post("/system/ai-releases", json=payload, headers=_headers(admin))
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["status"] == "blocked"
+    assert any("min_field_f1" in item for item in data["gate_result"]["failures"])
