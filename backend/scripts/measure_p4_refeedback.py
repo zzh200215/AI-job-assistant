@@ -29,6 +29,7 @@ import os
 import pathlib
 import re
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -320,19 +321,23 @@ def run_measurement(db, case: dict[str, Any], *, real: bool) -> dict[str, Any]:
     trace_since = _trace_mark() if real else None
     rewrite = measure_rewrite(db, case, user, resume, job, real)
     career = measure_career(db, case, user, resume, real)
+    traces = _trace_rows(trace_since, (REWRITE_SOURCE, CAREER_SOURCE)) if real else []
     return {
         "report_type": "p4_refeedback",
         "run_meta": {
             "provider": settings.LLM_PROVIDER,
             "model": settings.LLM_MODEL,
+            "fallback_model": settings.LLM_FALLBACK_MODEL,
             "mode": "real" if real else "mock",
             "generated_at": _now(),
             "fixture": str(FIXTURE.relative_to(ROOT)),
             "llm_calls": rewrite["llm_calls"] + career["llm_calls"],
+            # trace.model 记的是**配置的主模型**；实际由哪条链路应答看 response_source。
+            "response_sources": dict(Counter(row["response_source"] for row in traces)),
         },
         "rewrite": rewrite,
         "career": career,
-        "traces": _trace_rows(trace_since, (REWRITE_SOURCE, CAREER_SOURCE)) if real else [],
+        "traces": traces,
         "notes": [
             "rewrite 的两个数字（quantified / touches_weakness）是代理指标，不是质量分。",
             "career 量的是 /career-path/recommend 的 CareerPathAgent；orchestration 的 CareerAgent prompt 没有面试画像，不在本测量里。",
@@ -346,10 +351,14 @@ def _write_review(path: pathlib.Path, report: dict[str, Any]) -> None:
     meta = report["run_meta"]
     rewrite = report["rewrite"]
     career = report["career"]
+    sources = meta.get("response_sources") or {}
+    source_line = "；".join(f"{key} {value}" for key, value in sorted(sources.items())) or "（mock，无 provider 调用）"
     lines = [
         "# P4 回流测量复核表",
         "",
-        f"- 模式：**{meta['mode']}**（provider={meta['provider']} / model={meta['model']}）",
+        f"- 模式：**{meta['mode']}**（配置 provider={meta['provider']} / model={meta['model']}"
+        f" / fallback={meta.get('fallback_model') or '无'}）",
+        f"- 有效来源：{source_line}（`trace.model` 是配置主模型，不代表实际链路）",
         f"- 生成：{meta['generated_at']}｜LLM 调用：{meta['llm_calls']}",
         "- 评分：0=不可采纳/引入新事实；1=只改表达；2=针对弱点且不新增事实；3=针对弱点且把已有事实写得更可验证。",
         "",

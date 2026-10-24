@@ -99,4 +99,5 @@ def test_review_sheet_has_both_arms(tmp_path, db_session):
 
     assert "带弱点" in text and "对照" in text
     assert "带证据" in text and "贴上的缺口" in text
+    assert "有效来源" in text
     assert "0–3 分" in text
