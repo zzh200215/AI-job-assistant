@@ -1,0 +1,29 @@
+{
+  "_说明": "P2 抽取层回归夹具。eval_parse.py 的 extraction 臂读这份清单，且不碰 provider；另外它还会自动把语料里带 source_file 的真文本行读成文件再比一遍（真文本 4 份，见 parse_eval.jsonl 头部）。",
+  "_判据": "text 条目：parse_resume 的产物与 expect_text 归一化后必须逐字相同；error 条目：必须抛 ValueError 且消息含 error_contains（判的是用户看到的那句话，不是底层异常类名）。",
+  "_generate": "docx 条目在临时目录里用 python-docx 把源 txt 的每一行写成一个段落再交给 parse_resume。这是**合成往返**，验的是解析器接线与段落边界，不是真实 Word 版式；真实版式的证据是 reports/file_extraction_measure.json（DOCX 4/4 逐字相同，不进 git）。",
+  "cases": [
+    {
+      "id": "txt_zh",
+      "file": "sample_resume_zh.txt",
+      "file_type": "txt",
+      "expect": "text",
+      "expect_text": "sample_resume_zh.txt"
+    },
+    {
+      "id": "docx_zh_roundtrip",
+      "file": "sample_resume_zh.txt",
+      "file_type": "docx",
+      "generate": "docx",
+      "expect": "text",
+      "expect_text": "sample_resume_zh.txt"
+    },
+    {
+      "id": "broken_pdf",
+      "file": "broken.pdf",
+      "file_type": "pdf",
+      "expect": "error",
+      "error_contains": "PDF 文件格式异常或已损坏"
+    }
+  ]
+}

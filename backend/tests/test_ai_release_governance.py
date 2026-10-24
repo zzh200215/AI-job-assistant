@@ -209,3 +209,35 @@ def test_ai_release_blocks_parse_report_below_the_list_gate(db_session, monkeypa
     data = response.json()["data"]
     assert data["status"] == "blocked"
     assert any("min_field_f1" in item for item in data["gate_result"]["failures"])
+
+
+def test_ai_release_blocks_parse_report_below_the_extraction_gate(db_session, monkeypatch, tmp_path):
+    monkeypatch.setattr(evaluation, "REPORTS_DIR", tmp_path)
+    report_ids = _write_passing_reports(tmp_path)
+    parse_path = tmp_path / "parse_release.json"
+    parse_report = json.loads(parse_path.read_text(encoding="utf-8"))
+    parse_report["extraction"] = {"cases": 7, "match_rate": 0.8571, "errors": ["docx_zh_roundtrip: 不一致"]}
+    parse_report["run_meta"]["thresholds"]["min_extract_match"] = 1.0
+    _write_report(parse_path, parse_report)
+
+    app = FastAPI()
+    app.include_router(system_router, prefix="/system")
+
+    def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    admin = _user(db_session, username="extract_admin", role="admin")
+    payload = {
+        "release_key": "extract-blocked",
+        "prompt_versions": ["parse-v1"],
+        "evaluation_report_ids": report_ids,
+    }
+
+    with TestClient(app) as client:
+        response = client.post("/system/ai-releases", json=payload, headers=_headers(admin))
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["status"] == "blocked"
+    assert any("min_extract_match" in item for item in data["gate_result"]["failures"])

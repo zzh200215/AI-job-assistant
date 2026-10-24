@@ -151,6 +151,7 @@ def _normalize_report(path: Path, payload: dict[str, Any]) -> dict[str, Any] | N
         # 这里摊平给页面用；两臂各自缺不缺数原样带下去，语义臂在 mock 下是 None——
         # 页面把它显示成"未跑"而不是 0，是这一支唯一的诚实要求。
         det = payload.get("deterministic") if isinstance(payload.get("deterministic"), dict) else {}
+        ext = payload.get("extraction") if isinstance(payload.get("extraction"), dict) else {}
         sem = payload.get("semantic") if isinstance(payload.get("semantic"), dict) else {}
         scalar = sem.get("scalar") if isinstance(sem.get("scalar"), dict) else {}
         lists = sem.get("lists") if isinstance(sem.get("lists"), dict) else {}
@@ -162,6 +163,7 @@ def _normalize_report(path: Path, payload: dict[str, Any]) -> dict[str, Any] | N
             "metrics": {
                 "truncated_rate": det.get("truncated_rate"),
                 "tail_keep_rate": det.get("tail_keep_rate"),
+                "extract_match_rate": ext.get("match_rate"),
                 "first_pass_rate": sem.get("first_pass_rate"),
                 "name_recall": (scalar.get("name") or {}).get("recall")
                 if isinstance(scalar.get("name"), dict)
@@ -177,6 +179,7 @@ def _normalize_report(path: Path, payload: dict[str, Any]) -> dict[str, Any] | N
             "instrument_self_check": payload.get("instrument_self_check") or {},
             "dropped_sections": det.get("dropped_sections") or {},
             "deterministic_errors": det.get("errors") or [],
+            "extraction_errors": ext.get("errors") or [],
             "semantic_errors": sem.get("errors") or [],
             "semantic_ran": bool(sem),
             "details_count": len(sem.get("per_sample") or []),

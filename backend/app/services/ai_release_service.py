@@ -101,6 +101,7 @@ def _check_report(summary: dict[str, Any], raw: dict[str, Any], now: datetime) -
         comparisons = {key: "min" for key in actuals}
     elif report_type == "parse":
         deterministic = raw.get("deterministic") if isinstance(raw.get("deterministic"), dict) else {}
+        extraction = raw.get("extraction") if isinstance(raw.get("extraction"), dict) else {}
         semantic = raw.get("semantic") if isinstance(raw.get("semantic"), dict) else {}
         lists = semantic.get("lists") if isinstance(semantic.get("lists"), dict) else {}
         f1_values = [
@@ -112,12 +113,14 @@ def _check_report(summary: dict[str, Any], raw: dict[str, Any], now: datetime) -
             "min_structure_rate": semantic.get("first_pass_rate"),
             # 发布门取**最弱列表字段**的 F1；某一字段缺失时不能拿别的字段顶上。
             "min_field_f1": min(f1_values) if f1_values else None,
+            "min_extract_match": extraction.get("match_rate"),
         }
         comparisons = {
             "max_errors": "max",
             "min_tail_keep": "min",
             "min_structure_rate": "min",
             "min_field_f1": "min",
+            "min_extract_match": "min",
         }
     else:
         return ["不支持的评测报告类型"]

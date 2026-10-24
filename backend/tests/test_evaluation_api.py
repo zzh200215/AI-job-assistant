@@ -273,6 +273,7 @@ def test_parse_report_is_readable_and_keeps_the_two_arms_apart(evaluation_client
                 "thresholds": {"max_errors": 0, "min_field_f1": 0.8},
             },
             "instrument_self_check": {"passed": True, "misses": []},
+            "extraction": {"cases": 7, "matched": 7, "match_rate": 1.0, "errors": [], "details": []},
             "deterministic": {
                 "samples": 42,
                 "truncated_count": 2,
@@ -321,6 +322,7 @@ def test_parse_report_is_readable_and_keeps_the_two_arms_apart(evaluation_client
     assert detail["instrument_self_check"]["passed"] is True
     assert detail["dropped_sections"] == {"其他": 4}
     assert detail["metrics"]["skills_f1"] == 0.7467
+    assert detail["metrics"]["extract_match_rate"] == 1.0, "抽取臂的读数要能到页面这一层"
     assert detail_body["data"]["raw"]["semantic"]["llm_calls"] == 45, "原始报告要能整份取到，页面只摊平指标不够排查"
 
     compare = evaluation_client.get(

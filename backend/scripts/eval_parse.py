@@ -1,10 +1,13 @@
 """P2 `parse_eval`：简历/JD 解析质量的第四轨评测（`简历与面试优化.md` §4 P2）。
 
-**两臂**，因为他 2026-10-16 拍的是"链路进 CI、质量手动"：
+**三臂**，因为他 2026-10-16 拍的是"链路进 CI、质量手动"：
 
 * 确定性臂（不碰 provider，CI 可门）：拿语料原文过一遍 P1.1 的截断器，量
   截断发生率、丢段分布、**段尾那份最新经历有没有保住**、以及"判卷器本身可用"（gold 喂回
   判卷器必须满分——仪器不自检，数字就没意义）。
+* 抽取臂（不碰 provider，CI 可门，2026-10-24 补）：`raw_text` 必须是文件里拆出来的那份。
+  一路是清单夹具（TXT、临时生成的 DOCX 往返、坏 PDF 的**用户可见报错**），另一路是语料里
+  带 `source_file` 的真文本行（4 份），抽取产物与 `raw_text` 归一化后必须逐字相同。
 * 语义臂（要 provider，真跑才出门数）：走产品那条路（`guarded_parse`：预算内取文本 →
   单发解析 → 结构校验 → 一次自纠），量字段级 P/R/F1 与**首发一次通过率**。真文本臂的
   skills/经历/项目 gold 在 `tests/eval/human_gold_TO_FILL.json`，只并入 `_状态=done` 的行；
@@ -19,7 +22,7 @@
    从画像渲染而来，画像在前、文本在后；真文本臂的标签是**正则从原文**取的，正则不属于被测系统。
 
 跑法：
-    python scripts/eval_parse.py                                  # 默认 mock，只跑确定性臂
+    python scripts/eval_parse.py                                  # 默认 mock，只跑确定性与抽取臂
     python scripts/eval_parse.py --allow-real --min-field-f1 0.75  # 真 provider，出门数（花钱）
     python scripts/eval_parse.py --sample 4 --allow-real --human-gold tests/eval/human_gold_TO_FILL.json --min-field-f1 0.75
     python scripts/eval_parse.py --output reports/parse_eval_latest.json
@@ -34,6 +37,7 @@ import json
 import pathlib
 import re
 import sys
+import tempfile
 from typing import Any
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -44,6 +48,7 @@ from app.prompts.resume_parse import RESUME_PARSE_PROMPT  # noqa: E402
 from app.schemas.jd import JDParsedSchema  # noqa: E402
 from app.schemas.resume import ResumeParsedSchema  # noqa: E402
 from app.services.parse_guard import PARSE_INPUT_BUDGET, validation_errors  # noqa: E402
+from app.utils.file_parser import parse_resume  # noqa: E402
 from app.utils.text_budget import fit_structured_text  # noqa: E402
 from scripts.provider_guard import require_mock  # noqa: E402
 
@@ -56,6 +61,7 @@ ENTITY_LIST_FIELDS = ("work_experience", "project_experience")
 ALL_LIST_FIELDS = (*LIST_FIELDS, *ENTITY_LIST_FIELDS)
 HUMAN_GOLD_LIST_FIELDS = ("skills", *ENTITY_LIST_FIELDS)
 DEFAULT_HUMAN_GOLD = "tests/eval/human_gold_TO_FILL.json"
+DEFAULT_EXTRACTION_MANIFEST = "tests/eval/resume_files/manifest.json"
 
 PHONE_RE = re.compile(r"1[3-9]\d{9}")
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
@@ -192,6 +198,173 @@ def merge_human_gold(rows: list[dict], human_gold: dict[str, Any]) -> int:
         row["gold"] = gold
         merged += 1
     return merged
+
+
+def _norm_extracted(text: Any) -> str:
+    return re.sub(r"\s+", "", str(text or ""))
+
+
+def _extraction_detail(case: dict, case_id: str, source: str, tmp_dir: str, base_dir: pathlib.Path) -> dict:
+    detail = {
+        "id": case_id,
+        "source": source,
+        "file": str(case.get("file") or ""),
+        "file_type": str(case.get("file_type") or ""),
+        "expect": str(case.get("expect") or "text"),
+        "ok": False,
+        "chars": 0,
+        "exact": False,
+        "normalized": False,
+        "error": "",
+    }
+    source_path = base_dir / str(case.get("file") or "")
+    if not case.get("file") or not source_path.exists():
+        detail["error"] = "源文件不存在"
+        return detail
+
+    path = source_path
+    if case.get("generate") == "docx":
+        from docx import Document
+
+        path = pathlib.Path(tmp_dir) / f"{case_id}.docx"
+        document = Document()
+        for line in source_path.read_text(encoding="utf-8").splitlines():
+            document.add_paragraph(line)
+        document.save(str(path))
+
+    try:
+        text = parse_resume(str(path), str(case.get("file_type") or ""))
+    except Exception as exc:  # 期望抛错的条目，异常本身就是读数
+        if detail["expect"] == "error":
+            marker = str(case.get("error_contains") or "")
+            matched = isinstance(exc, ValueError) and bool(marker) and marker in str(exc)
+            detail.update({"ok": matched, "normalized": matched, "error": f"{type(exc).__name__}: {str(exc)[:120]}"})
+            if not matched:
+                detail["error"] += f"｜未命中期望文案 {marker!r}"
+            return detail
+        detail["error"] = f"{type(exc).__name__}: {str(exc)[:120]}"
+        return detail
+
+    if detail["expect"] == "error":
+        detail["error"] = "期望解析抛错，实际成功返回"
+        return detail
+
+    expect_text = base_dir / str(case.get("expect_text") or "")
+    if not expect_text.exists():
+        detail["error"] = "expect_text 不存在"
+        return detail
+    expected = expect_text.read_text(encoding="utf-8")
+    detail.update(
+        {
+            "chars": len(text),
+            "exact": text.strip() == expected.strip(),
+            "normalized": _norm_extracted(text) == _norm_extracted(expected),
+        }
+    )
+    detail["ok"] = detail["normalized"]
+    if not detail["ok"]:
+        detail["error"] = (
+            f"抽取文本与期望不一致（{len(_norm_extracted(text))} vs {len(_norm_extracted(expected))} 字符）"
+        )
+    return detail
+
+
+def extraction_arm(rows: list[dict], manifest_path: pathlib.Path, eval_set_path: pathlib.Path) -> dict:
+    """不碰 provider 的抽取臂：`raw_text` 必须就是文件抽取出来的那份文本。
+
+    两路输入：① 清单里的夹具（TXT / 运行时生成的 DOCX / 坏 PDF 的报错文案）；
+    ② 语料里带 `source_file` 的真文本行——这一路钉的是"eval 的输入不是人抄的，是文件拆出来的"。
+    """
+    details: list[dict] = []
+    errors: list[str] = []
+
+    if not manifest_path.exists():
+        errors.append(f"清单不存在：{manifest_path}")
+    else:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        cases = manifest.get("cases") or []
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            for case in cases:
+                if not isinstance(case, dict):
+                    continue
+                case_id = str(case.get("id") or f"case{len(details) + 1}")
+                detail = _extraction_detail(case, case_id, "fixture", tmp_dir, manifest_path.parent)
+                details.append(detail)
+                if not detail["ok"]:
+                    errors.append(f"{case_id}: {detail['error'] or '抽取结果不一致'}")
+
+    for row in rows:
+        source_file = str(row.get("source_file") or "").strip()
+        if not source_file or not isinstance(row.get("raw_text"), str):
+            continue
+        candidates = (
+            eval_set_path.parent / "real_resumes" / source_file,
+            eval_set_path.parent / source_file,
+        )
+        source_path = next((path for path in candidates if path.exists()), None)
+        case_id = f"real:{row.get('id')}"
+        if source_path is None:
+            errors.append(f"{case_id}: 源文件不存在 {source_file}")
+            details.append(
+                {
+                    "id": case_id,
+                    "source": "real",
+                    "file": source_file,
+                    "file_type": pathlib.Path(source_file).suffix.lstrip("."),
+                    "expect": "text",
+                    "ok": False,
+                    "chars": 0,
+                    "exact": False,
+                    "normalized": False,
+                    "error": "源文件不存在",
+                }
+            )
+            continue
+        # 真文本行的期望不是另一份文件，而是语料自己的 raw_text：两臂本来就吃它。
+        file_type = source_path.suffix.lstrip(".").lower()
+        detail = {
+            "id": case_id,
+            "source": "real",
+            "file": source_file,
+            "file_type": file_type,
+            "expect": "text",
+            "ok": False,
+            "chars": 0,
+            "exact": False,
+            "normalized": False,
+            "error": "",
+        }
+        try:
+            text = parse_resume(str(source_path), file_type)
+        except Exception as exc:
+            detail["error"] = f"{type(exc).__name__}: {str(exc)[:120]}"
+        else:
+            raw = str(row.get("raw_text") or "")
+            detail.update(
+                {
+                    "chars": len(text),
+                    "exact": text.strip() == raw.strip(),
+                    "normalized": _norm_extracted(text) == _norm_extracted(raw),
+                }
+            )
+            detail["ok"] = detail["normalized"]
+            if not detail["ok"]:
+                detail["error"] = (
+                    f"抽取文本与语料 raw_text 不一致（{len(_norm_extracted(text))} vs {len(_norm_extracted(raw))} 字符）"
+                )
+        details.append(detail)
+        if not detail["ok"]:
+            errors.append(f"{case_id}: {detail['error'] or '抽取结果不一致'}")
+
+    matched = sum(1 for detail in details if detail["ok"])
+    return {
+        "manifest": str(manifest_path),
+        "cases": len(details),
+        "matched": matched,
+        "match_rate": round(matched / len(details), 4) if details else None,
+        "errors": errors,
+        "details": details,
+    }
 
 
 def deterministic_arm(rows: list[dict]) -> dict:
@@ -371,6 +544,8 @@ def check_thresholds(
     min_tail_keep: float | None,
     min_structure_rate: float | None,
     min_field_f1: float | None,
+    extraction: dict | None = None,
+    min_extract_match: float | None = None,
 ) -> list[str]:
     bad: list[str] = []
     if len(det["errors"]) > max_errors:
@@ -380,6 +555,14 @@ def check_thresholds(
             bad.append("--min-tail-keep 设了但语料里没有可判的段尾样本")
         elif det["tail_keep_rate"] < min_tail_keep:
             bad.append(f"段尾保全率 {det['tail_keep_rate']} < 门槛 {min_tail_keep}")
+    if extraction is not None:
+        if len(extraction.get("errors") or []) > max_errors:
+            bad.append(f"抽取臂不符 {len(extraction['errors'])} > {max_errors}：{extraction['errors'][:3]}")
+        if min_extract_match is not None:
+            if extraction.get("match_rate") is None:
+                bad.append("--min-extract-match 设了但抽取臂没有可判样本")
+            elif extraction["match_rate"] < min_extract_match:
+                bad.append(f"抽取一致率 {extraction['match_rate']} < 门槛 {min_extract_match}")
     if mock and (min_field_f1 is not None):
         bad.append("mock 环境下给语义臂设字段门槛是假门：mock 的 chat_json 对任何输入回同一份常量")
     if sem is not None:
@@ -411,6 +594,17 @@ def main() -> int:
         "--min-field-f1", type=float, default=None, help="语义臂：列表字段 F1 门槛（标量只报数，不参与比较）"
     )
     ap.add_argument("--human-gold", default=DEFAULT_HUMAN_GOLD, help="真文本臂的人工 gold（只并入 _状态=done 的行）")
+    ap.add_argument(
+        "--extraction-manifest",
+        default=DEFAULT_EXTRACTION_MANIFEST,
+        help="抽取臂夹具清单（TXT/DOCX 往返/坏 PDF 报错）",
+    )
+    ap.add_argument(
+        "--min-extract-match",
+        type=float,
+        default=1.0,
+        help="抽取臂一致率门槛。默认 1.0 是接线不变量，不是质量门槛：夹具是确定的，文件读出来必须就是 eval 的输入",
+    )
     ap.add_argument("--allow-real", action="store_true", help="允许真 provider 跑语义臂（花钱）")
     args = ap.parse_args()
 
@@ -431,6 +625,7 @@ def main() -> int:
 
     self_check = instrument_self_check(rows)
     det = deterministic_arm(rows)
+    ext = extraction_arm(rows, pathlib.Path(args.extraction_manifest), pathlib.Path(args.eval_set))
     print("=" * 70)
     print(f"parse_eval：{len(rows)} 条（简历+真臂 {len(resumes)}｜JD {len(jds)}）｜provider={settings.LLM_PROVIDER}")
     print(f"判卷器自检：{'通过' if self_check['passed'] else '不通过 ' + str(self_check['misses'][:5])}")
@@ -443,6 +638,9 @@ def main() -> int:
         f"｜段尾保全 {det['tail_kept']}/{det['tail_total']} = {det['tail_keep_rate']}"
         f"｜丢段分布 {det['dropped_sections']}"
     )
+    print(f"抽取臂：{ext['matched']}/{ext['cases']} 一致 = {ext['match_rate']}（{args.extraction_manifest}）")
+    for line in ext["errors"][:5]:
+        print("  -", line)
     if not self_check["passed"]:
         print("[FAIL] 判卷器自检没过，语义臂的数字不作数——先修打分函数")
         return 3
@@ -469,6 +667,8 @@ def main() -> int:
         min_tail_keep=args.min_tail_keep,
         min_structure_rate=args.min_structure_rate,
         min_field_f1=args.min_field_f1,
+        extraction=ext,
+        min_extract_match=args.min_extract_match,
     )
 
     if args.output:
@@ -479,6 +679,7 @@ def main() -> int:
             "min_tail_keep": args.min_tail_keep,
             "min_structure_rate": args.min_structure_rate,
             "min_field_f1": args.min_field_f1,
+            "min_extract_match": args.min_extract_match,
         }
         report = {
             "report_type": "parse",
@@ -502,6 +703,7 @@ def main() -> int:
             },
             "instrument_self_check": self_check,
             "deterministic": det,
+            "extraction": ext,
             "semantic": sem,
             "thresholds": thresholds,
             "failures": bad,

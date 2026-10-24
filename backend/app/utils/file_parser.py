@@ -146,7 +146,9 @@ def _parse_pdf(path: str) -> str:
         err = str(exc).lower()
         if "encrypted" in err or "password" in err:
             raise ValueError("该 PDF 文件已加密，请先解密后重新上传") from exc
-        if "not a pdf" in err or "corrupt" in err or "cannot read" in err:
+        # pdfplumber 对坏文件的两个真实说法：`No /Root object! - Is this really a PDF?`（缺 trailer）
+        # 与 `not a PDF` / `corrupt` / `cannot read`。前两种以前漏判，用户拿到的是带底层异常名的原文。
+        if any(marker in err for marker in ("not a pdf", "corrupt", "cannot read", "root object", "really a pdf")):
             raise ValueError("PDF 文件格式异常或已损坏，请检查后重新上传") from exc
         raise ValueError(f"PDF 解析失败: {exc}") from exc
 
