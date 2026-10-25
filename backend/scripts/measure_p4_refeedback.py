@@ -29,6 +29,7 @@ import os
 import pathlib
 import re
 import sys
+import time
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
@@ -67,6 +68,7 @@ from app.models.user import User  # noqa: E402
 from app.services import resume_rewrite_service  # noqa: E402
 from app.services.career_evidence import attach_interview_evidence, derive_directions  # noqa: E402
 from app.services.interview_profile_service import get_profile, public_profile  # noqa: E402
+from app.services.llm_service import get_llm_provenance  # noqa: E402
 from scripts.provider_guard import require_mock  # noqa: E402
 
 FIXTURE = ROOT / "tests/eval/p4_refeedback_cases.json"
@@ -250,7 +252,9 @@ def _trace_rows(since: int, sources: tuple[str, ...]) -> list[dict[str, Any]]:
         session.close()
 
 
-def measure_rewrite(db, case: dict[str, Any], user: User, resume: Resume, job: JobDescription, real: bool) -> dict:
+def measure_rewrite(
+    db, case: dict[str, Any], user: User, resume: Resume, job: JobDescription, real: bool, pace_seconds: float = 0.0
+) -> dict:
     service = resume_rewrite_service
     original = service.chat_json
     prompts: list[dict[str, str]] = []
@@ -265,19 +269,27 @@ def measure_rewrite(db, case: dict[str, Any], user: User, resume: Resume, job: J
     service.chat_json = recorded
     try:
         with_profile = service.build_rewrite_suggestions(db, resume.id, jd_id=job.id, user_id=user.id)
+        with_profile_source = "mock" if not real else str(get_llm_provenance().get("source") or "unknown")
+        if pace_seconds:
+            time.sleep(pace_seconds)
         arm["name"] = "control"
         control = service.build_rewrite_suggestions(db, resume.id, jd_id=job.id, user_id=None)
+        control_source = "mock" if not real else str(get_llm_provenance().get("source") or "unknown")
     finally:
         service.chat_json = original
         service.set_llm_trace_context({})
 
     weakness_texts = [str(item).strip() for item in (case["interview"].get("weaknesses") or []) if str(item).strip()]
     prompt_by_arm = {row["arm"]: row["prompt"] for row in prompts}
+    with_profile_summary = _summarize_rewrite(with_profile, prompt_by_arm.get("with_profile", ""), weakness_texts)
+    with_profile_summary["llm_source"] = with_profile_source
+    control_summary = _summarize_rewrite(control, prompt_by_arm.get("control", ""), weakness_texts)
+    control_summary["llm_source"] = control_source
     return {
         "llm_calls": calls["n"],
         "weakness_texts": weakness_texts,
-        "with_profile": _summarize_rewrite(with_profile, prompt_by_arm.get("with_profile", ""), weakness_texts),
-        "control": _summarize_rewrite(control, prompt_by_arm.get("control", ""), weakness_texts),
+        "with_profile": with_profile_summary,
+        "control": control_summary,
     }
 
 
@@ -295,13 +307,15 @@ def _career_recorder(prompts: list[str], original, directions: list[Any], real: 
     return recorded
 
 
-def measure_career(db, case: dict[str, Any], user: User, resume: Resume, real: bool) -> dict:
+def measure_career(db, case: dict[str, Any], user: User, resume: Resume, real: bool, pace_seconds: float = 0.0) -> dict:
     directions, corpus = derive_directions(db, case["resume"], user, limit=8)
     profile = public_profile(get_profile(db, user.id))
     arms: dict[str, Any] = {}
     calls = {"n": 0}
 
     for name, use_evidence in (("with_evidence", True), ("control", False)):
+        if name == "control" and pace_seconds:
+            time.sleep(pace_seconds)
         arm_directions = copy.deepcopy(directions)
         matched = attach_interview_evidence(arm_directions, profile if use_evidence else {})
         prompts: list[str] = []
@@ -309,19 +323,24 @@ def measure_career(db, case: dict[str, Any], user: User, resume: Resume, real: b
         career_path_agent.chat_json = _career_recorder(prompts, original, arm_directions, real, calls)
         try:
             result = career_path_agent.CareerPathAgent().recommend(case["resume"], arm_directions)
+            source = "mock" if not real else str(get_llm_provenance().get("source") or "unknown")
         finally:
             career_path_agent.chat_json = original
         arms[name] = _summarize_career(result, prompts[0] if prompts else "", matched, arm_directions)
+        arms[name]["llm_source"] = source
 
     return {"direction_count": len(directions), "corpus": corpus, "llm_calls": calls["n"], **arms}
 
 
-def run_measurement(db, case: dict[str, Any], *, real: bool) -> dict[str, Any]:
+def run_measurement(
+    db, case: dict[str, Any], *, real: bool, arm: str = "all", pace_seconds: float = 0.0
+) -> dict[str, Any]:
     user, resume, job = _seed(db, case)
     trace_since = _trace_mark() if real else None
-    rewrite = measure_rewrite(db, case, user, resume, job, real)
-    career = measure_career(db, case, user, resume, real)
-    traces = _trace_rows(trace_since, (REWRITE_SOURCE, CAREER_SOURCE)) if real else []
+    rewrite = measure_rewrite(db, case, user, resume, job, real, pace_seconds) if arm in ("all", "rewrite") else None
+    career = measure_career(db, case, user, resume, real, pace_seconds) if arm in ("all", "career") else None
+    sources = {"all": (REWRITE_SOURCE, CAREER_SOURCE), "rewrite": (REWRITE_SOURCE,), "career": (CAREER_SOURCE,)}[arm]
+    traces = _trace_rows(trace_since, sources) if real else []
     return {
         "report_type": "p4_refeedback",
         "run_meta": {
@@ -329,9 +348,11 @@ def run_measurement(db, case: dict[str, Any], *, real: bool) -> dict[str, Any]:
             "model": settings.LLM_MODEL,
             "fallback_model": settings.LLM_FALLBACK_MODEL,
             "mode": "real" if real else "mock",
+            "arm": arm,
+            "pace_seconds": pace_seconds,
             "generated_at": _now(),
             "fixture": str(FIXTURE.relative_to(ROOT)),
-            "llm_calls": rewrite["llm_calls"] + career["llm_calls"],
+            "llm_calls": (rewrite or {}).get("llm_calls", 0) + (career or {}).get("llm_calls", 0),
             # trace.model 记的是**配置的主模型**；实际由哪条链路应答看 response_source。
             "response_sources": dict(Counter(row["response_source"] for row in traces)),
         },
@@ -349,8 +370,8 @@ def run_measurement(db, case: dict[str, Any], *, real: bool) -> dict[str, Any]:
 
 def _write_review(path: pathlib.Path, report: dict[str, Any]) -> None:
     meta = report["run_meta"]
-    rewrite = report["rewrite"]
-    career = report["career"]
+    rewrite = report.get("rewrite")
+    career = report.get("career")
     sources = meta.get("response_sources") or {}
     source_line = "；".join(f"{key} {value}" for key, value in sorted(sources.items())) or "（mock，无 provider 调用）"
     lines = [
@@ -359,56 +380,96 @@ def _write_review(path: pathlib.Path, report: dict[str, Any]) -> None:
         f"- 模式：**{meta['mode']}**（配置 provider={meta['provider']} / model={meta['model']}"
         f" / fallback={meta.get('fallback_model') or '无'}）",
         f"- 有效来源：{source_line}（`trace.model` 是配置主模型，不代表实际链路）",
-        f"- 生成：{meta['generated_at']}｜LLM 调用：{meta['llm_calls']}",
+        f"- 生成：{meta['generated_at']}｜LLM 调用：{meta['llm_calls']}"
+        f"｜臂间隔：{meta.get('pace_seconds') or 0:g}s",
         "- 评分：0=不可采纳/引入新事实；1=只改表达；2=针对弱点且不新增事实；3=针对弱点且把已有事实写得更可验证。",
         "",
-        "## 回流① 改写：带弱点提示 vs 对照",
-        "",
-        f"- 注入的弱点：{'；'.join(rewrite['weakness_texts']) or '（无）'}",
-        "",
-        "| 臂 | prompt 有弱点 | 建议 | 被拒 | 代理：带数字 | 代理：碰弱点 |",
-        "|---|---|---|---|---|---|",
     ]
-    for key, label in (("with_profile", "带弱点"), ("control", "对照")):
-        row = rewrite[key]
-        lines.append(
-            f"| {label} | {row['prompt_has_weakness']} | {row['suggestions']} | {row['rejected']} "
-            f"| {row['quantified']} | {row['touches_weakness']} |"
-        )
-    lines += ["", "### 带弱点这一臂的建议", ""]
-    for item in rewrite["with_profile"]["items"]:
+    if rewrite is not None:
         lines += [
-            f"- `{item.get('block_id')}`：{item.get('original')} → **{item.get('proposed_text')}**",
-            f"  - 理由：{item.get('reason')}",
+            "## 回流① 改写：带弱点提示 vs 对照",
+            "",
+            f"- 注入的弱点：{'；'.join(rewrite['weakness_texts']) or '（无）'}",
+            "",
+            "| 臂 | prompt 有弱点 | 建议 | 被拒 | 代理：带数字 | 代理：碰弱点 | 有效来源 |",
+            "|---|---|---|---|---|---|---|",
         ]
-    lines += ["", "### 对照臂的建议", ""]
-    for item in rewrite["control"]["items"]:
-        lines += [
-            f"- `{item.get('block_id')}`：{item.get('original')} → **{item.get('proposed_text')}**",
-            f"  - 理由：{item.get('reason')}",
-        ]
+        for key, label in (("with_profile", "带弱点"), ("control", "对照")):
+            row = rewrite[key]
+            lines.append(
+                f"| {label} | {row['prompt_has_weakness']} | {row['suggestions']} | {row['rejected']} "
+                f"| {row['quantified']} | {row['touches_weakness']} | {row.get('llm_source') or ''} |"
+            )
+        lines += ["", "### 带弱点这一臂的建议", ""]
+        for item in rewrite["with_profile"]["items"]:
+            lines += [
+                f"- `{item.get('block_id')}`：{item.get('original')} → **{item.get('proposed_text')}**",
+                f"  - 理由：{item.get('reason')}",
+            ]
+        lines += ["", "### 带弱点这一臂被拒的", ""]
+        if rewrite["with_profile"]["rejected_items"]:
+            for item in rewrite["with_profile"]["rejected_items"]:
+                lines.append(f"- `{item.get('block_id')}`：{item.get('reason')}")
+        else:
+            lines.append("- （无）")
+        lines += ["", "### 对照臂的建议", ""]
+        for item in rewrite["control"]["items"]:
+            lines += [
+                f"- `{item.get('block_id')}`：{item.get('original')} → **{item.get('proposed_text')}**",
+                f"  - 理由：{item.get('reason')}",
+            ]
+        lines += ["", "### 对照臂被拒的", ""]
+        if rewrite["control"]["rejected_items"]:
+            for item in rewrite["control"]["rejected_items"]:
+                lines.append(f"- `{item.get('block_id')}`：{item.get('reason')}")
+        else:
+            lines.append("- （无）")
 
-    lines += [
-        "",
-        "## 回流② 职业方向：带面试证据 vs 对照（CareerPathAgent）",
-        "",
-        f"- 贴上的证据：{json.dumps(career['with_evidence']['gap_evidence'], ensure_ascii=False)}",
-        "",
-        "| 臂 | 贴上的缺口 | prompt 有证据 | 方向数 | reason_source | 理由点名 Kafka | 理由提面试 |",
-        "|---|---|---|---|---|---|---|",
-    ]
-    for key, label in (("with_evidence", "带证据"), ("control", "对照")):
-        row = career[key]
-        lines.append(
-            f"| {label} | {row['matched_gap_count']} | {row['prompt_has_evidence']} | {row['paths']} "
-            f"| {row['reason_source']} | {row['cites_skill']} | {row['cites_interview']} |"
-        )
-    lines += ["", "### 带证据这一臂的理由", ""]
-    for item in career["with_evidence"]["items"]:
-        lines.append(f"- `{item.get('direction_key')}`：{item.get('reason')}（{item.get('reason_source')}）")
-    lines += ["", "### 对照臂的理由", ""]
-    for item in career["control"]["items"]:
-        lines.append(f"- `{item.get('direction_key')}`：{item.get('reason')}（{item.get('reason_source')}）")
+    scores = report.get("scores") or {}
+    if scores and rewrite is not None:
+        lines += [
+            "",
+            "## 回流① 初步评分（assistant-preliminary，非发布门）",
+            "",
+            f"- 评分人：{scores.get('annotator') or 'assistant-preliminary'}；待 zzh 复核/改分",
+            "- 规则：0=不可采纳/引入新事实；1=只改表达；2=针对弱点且不新增事实；3=针对弱点且把已有事实写得更可验证。",
+            "",
+            "| 臂 | block_id | 分 | 依据 |",
+            "|---|---|---|---|",
+        ]
+        for arm_key, label in (("with_profile", "带弱点"), ("control", "对照")):
+            for row in scores.get(arm_key) or []:
+                lines.append(f"| {label} | `{row.get('block_id')}` | {row.get('score')} | {row.get('note') or ''} |")
+        totals = scores.get("totals") or {}
+        if totals:
+            lines += [
+                "",
+                f"- 合计：带弱点 **{totals.get('with_profile')}** / 对照 **{totals.get('control')}**（单条 0–3）。",
+            ]
+
+    if career is not None:
+        lines += [
+            "",
+            "## 回流② 职业方向：带面试证据 vs 对照（CareerPathAgent）",
+            "",
+            f"- 贴上的证据：{json.dumps(career['with_evidence']['gap_evidence'], ensure_ascii=False)}",
+            "",
+            "| 臂 | 贴上的缺口 | prompt 有证据 | 方向数 | reason_source | 理由点名 Kafka | 理由提面试 | 有效来源 |",
+            "|---|---|---|---|---|---|---|---|",
+        ]
+        for key, label in (("with_evidence", "带证据"), ("control", "对照")):
+            row = career[key]
+            lines.append(
+                f"| {label} | {row['matched_gap_count']} | {row['prompt_has_evidence']} | {row['paths']} "
+                f"| {row['reason_source']} | {row['cites_skill']} | {row['cites_interview']} "
+                f"| {row.get('llm_source') or ''} |"
+            )
+        lines += ["", "### 带证据这一臂的理由", ""]
+        for item in career["with_evidence"]["items"]:
+            lines.append(f"- `{item.get('direction_key')}`：{item.get('reason')}（{item.get('reason_source')}）")
+        lines += ["", "### 对照臂的理由", ""]
+        for item in career["control"]["items"]:
+            lines.append(f"- `{item.get('direction_key')}`：{item.get('reason')}（{item.get('reason_source')}）")
     lines += ["", "> 代理指标只提示方向；采纳哪一条由人按上面的 0–3 分判。", ""]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
@@ -416,7 +477,9 @@ def _write_review(path: pathlib.Path, report: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="P4 回流测量（默认 mock，零花费）")
-    parser.add_argument("--allow-real", action="store_true", help="调用真 provider（4 发，花钱）")
+    parser.add_argument("--allow-real", action="store_true", help="调用真 provider（按 --arm 4/2 发，花钱）")
+    parser.add_argument("--arm", choices=("all", "rewrite", "career"), default="all", help="只跑某一臂")
+    parser.add_argument("--pace-seconds", type=float, default=0.0, help="两臂之间的间隔（秒）")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--review", default=str(DEFAULT_REVIEW))
     args = parser.parse_args(argv)
@@ -429,7 +492,7 @@ def main(argv: list[str] | None = None) -> int:
     case = json.loads(FIXTURE.read_text(encoding="utf-8"))
     db = SessionLocal()
     try:
-        report = run_measurement(db, case, real=args.allow_real)
+        report = run_measurement(db, case, real=args.allow_real, arm=args.arm, pace_seconds=args.pace_seconds)
     finally:
         db.close()
 
@@ -438,15 +501,19 @@ def main(argv: list[str] | None = None) -> int:
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
     _write_review(pathlib.Path(args.review), report)
 
-    rewrite = report["rewrite"]
-    career = report["career"]
-    print(
-        f"p4_refeedback {report['run_meta']['mode']}｜"
-        f"rewrite 提示 {rewrite['with_profile']['prompt_has_weakness']} vs {rewrite['control']['prompt_has_weakness']}"
-        f"｜建议 {rewrite['with_profile']['suggestions']} vs {rewrite['control']['suggestions']}"
-        f"｜career 贴缺口 {career['with_evidence']['matched_gap_count']} vs {career['control']['matched_gap_count']}"
-        f"｜证据进 prompt {career['with_evidence']['prompt_has_evidence']} vs {career['control']['prompt_has_evidence']}"
-    )
+    print(f"p4_refeedback {report['run_meta']['mode']}｜arm={args.arm}")
+    if report["rewrite"] is not None:
+        rewrite = report["rewrite"]
+        print(
+            f"  rewrite 提示 {rewrite['with_profile']['prompt_has_weakness']} vs {rewrite['control']['prompt_has_weakness']}"
+            f"｜建议 {rewrite['with_profile']['suggestions']} vs {rewrite['control']['suggestions']}"
+        )
+    if report["career"] is not None:
+        career = report["career"]
+        print(
+            f"  career 贴缺口 {career['with_evidence']['matched_gap_count']} vs {career['control']['matched_gap_count']}"
+            f"｜证据进 prompt {career['with_evidence']['prompt_has_evidence']} vs {career['control']['prompt_has_evidence']}"
+        )
     print(f"report {output}")
     print(f"review {args.review}")
     if report["run_meta"]["mode"] != "real":

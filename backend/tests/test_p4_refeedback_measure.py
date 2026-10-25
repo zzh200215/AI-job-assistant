@@ -32,6 +32,8 @@ def test_mock_measurement_shows_the_two_arms_differ_only_by_the_profile(db_sessi
     report = measure.run_measurement(db_session, _case(), real=False)
 
     assert report["run_meta"]["mode"] == "mock"
+    assert report["run_meta"]["arm"] == "all"
+    assert report["run_meta"]["pace_seconds"] == 0.0
     assert report["run_meta"]["llm_calls"] == 4
 
     rewrite = report["rewrite"]
@@ -41,6 +43,8 @@ def test_mock_measurement_shows_the_two_arms_differ_only_by_the_profile(db_sessi
     # 边界标签两臂都在（模板固定包着 hint）；control 的边界里是"无；按通用…"这句。
     assert rewrite["control"]["prompt_has_untrusted_boundary"] is True
     assert rewrite["with_profile"]["suggestions"] == 1
+    assert rewrite["with_profile"]["llm_source"] == "mock"
+    assert rewrite["control"]["llm_source"] == "mock"
 
     career = report["career"]
     assert career["with_evidence"]["matched_gap_count"] >= 1
@@ -48,6 +52,7 @@ def test_mock_measurement_shows_the_two_arms_differ_only_by_the_profile(db_sessi
     assert career["with_evidence"]["prompt_has_evidence"] is True
     assert career["control"]["prompt_has_evidence"] is False
     assert career["with_evidence"]["paths"] == career["control"]["paths"] == 1
+    assert career["with_evidence"]["llm_source"] == "mock"
 
 
 def test_rewrite_proxies_count_digits_and_weakness_words():
@@ -90,8 +95,29 @@ def test_career_proxies_count_evidence_mentions():
     assert summary["matched_gap_count"] == 1
 
 
+def test_rewrite_only_skips_the_career_arm(tmp_path, db_session):
+    report = measure.run_measurement(db_session, _case(), real=False, arm="rewrite")
+
+    assert report["rewrite"] is not None
+    assert report["career"] is None
+    assert report["run_meta"]["arm"] == "rewrite"
+    assert report["run_meta"]["llm_calls"] == 2
+
+    target = tmp_path / "review.md"
+    measure._write_review(target, report)
+    text = target.read_text(encoding="utf-8")
+    assert "回流①" in text
+    assert "回流②" not in text
+
+
 def test_review_sheet_has_both_arms(tmp_path, db_session):
     report = measure.run_measurement(db_session, _case(), real=False)
+    report["scores"] = {
+        "annotator": "assistant-preliminary",
+        "with_profile": [{"block_id": "self_evaluation", "score": 2, "note": "复核用"}],
+        "control": [{"block_id": "self_evaluation", "score": 1, "note": "复核用"}],
+        "totals": {"with_profile": 2, "control": 1},
+    }
 
     target = tmp_path / "review.md"
     measure._write_review(target, report)
@@ -100,4 +126,6 @@ def test_review_sheet_has_both_arms(tmp_path, db_session):
     assert "带弱点" in text and "对照" in text
     assert "带证据" in text and "贴上的缺口" in text
     assert "有效来源" in text
+    assert "初步评分" in text and "assistant-preliminary" in text
+    assert "| 带弱点 | `self_evaluation` | 2 |" in text
     assert "0–3 分" in text

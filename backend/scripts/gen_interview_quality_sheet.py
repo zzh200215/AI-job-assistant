@@ -52,7 +52,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 <body>
 <header>
   <h1>P3.2 追问质量抽样表</h1>
-  <p class="note">跑完一发呆 provider 后，把动态臂的追问文本粘进“追问”列；没有触发追问的格子留空。评分 1–5：针对性=是否对准回答里的弱点，具体性=是否问出可验证细节，多样性=同一档内是否重复。</p>
+  <p class="note">跑完一发呆 provider 后，把动态臂的追问文本粘进“追问”列；没有触发追问的格子留空。评分 1–5：针对性=是否对准回答里的弱点，具体性=是否问出可验证细节，多样性=同一档内是否重复。追问后标（LLM）=模型现场组织，标（模板/降级）=启发式或降级句。</p>
   <p class="note">本页不联网，数据只留在本机浏览器；“导出 JSON”才是结果。</p>
   <div class="progress" id="progress" aria-live="polite"></div>
 </header>
@@ -253,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     cases = json.loads(CASES.read_text(encoding="utf-8"))
     if args.report:
         report = json.loads(Path(args.report).read_text(encoding="utf-8"))
-        followups = extract_followups(report)
+        followups = extract_followups(report, with_source=True)
         target = Path(args.output) if args.output else OUTPUT.with_name("interview_quality_sheet_filled.html")
     else:
         followups = None

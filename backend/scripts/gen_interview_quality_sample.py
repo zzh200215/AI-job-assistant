@@ -29,6 +29,8 @@ def render(cases: dict, followups: dict[tuple[str, int], str] | None = None) -> 
         "评分 1–5：**针对性** = 是否对准回答里的弱点；**具体性** = 是否问出可验证的细节；"
         "**多样性** = 同一档内是否在重复同一句。三列都按单条追问打，不做跨档比较。",
         "",
+        "追问后标 **（LLM）** = 模型现场组织；标 **（模板/降级）** = 启发式或降级句。质量分只按单条打。",
+        "",
         "| 档位 | 题号 | 题型 | 题目 | 追问（跑完粘贴） | 针对性 | 具体性 | 多样性 | 备注 |",
         "|---|---|---|---|---|---|---|---|---|",
     ]
@@ -54,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
     cases = json.loads(CASES.read_text(encoding="utf-8"))
     if args.report:
         report = json.loads(Path(args.report).read_text(encoding="utf-8"))
-        followups = extract_followups(report)
+        followups = extract_followups(report, with_source=True)
         target = Path(args.output) if args.output else OUTPUT.with_name("interview_quality_sample_filled.md")
     else:
         followups = None
