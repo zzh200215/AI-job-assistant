@@ -232,7 +232,7 @@ User Query → Retrieval Planner (LLM 决策 / 启发式回退)
 | **RAG 检索** | `tests/eval/rag_eval.jsonl`（50 条） | `scripts/eval_rag.py` | 融合路 / 词法路（BM25）：recall@5、MRR、keyword_hit_rate、per_doc_type_recall；同语料随机基线；CI 门窗法路，mock 下语义门槛直接判红 |
 | **Agent 匹配** | `tests/eval/agent_eval.jsonl`（25 对简历×JD） | `scripts/eval_agent.py` | MAE、Spearman ρ、偏差分布；同场报出**不用模型的基线**（常量/随机），门槛赢不过它就判红 |
 | **岗位推荐** | `tests/eval/recommend_eval.jsonl` | `scripts/eval_recommend.py` | 技能匹配准确率、JD 解释一致性、推荐可解释性、面试分数稳定性、反馈一致率 |
-| **简历 / JD 解析** | `tests/eval/parse_eval.jsonl`（42 条，含 4 条真文本） | `scripts/eval_parse.py` | 确定性臂（截断率 / 段尾保全）、抽取臂（TXT/DOCX/坏 PDF，7/7）、语义臂（结构一次通过率、skills/work/project 列表 F1）；发布门槛 `min_field_f1=0.75`（只门列表字段） |
+| **简历 / JD 解析** | `tests/eval/parse_eval.jsonl`（42 条，含 4 条真文本） | `scripts/eval_parse.py` | 确定性臂（截断率 / 段尾保全）、抽取臂（TXT/DOCX/合法 PDF/坏 PDF，8/8）、语义臂（结构一次通过率、skills/work/project 列表 F1）；发布门槛 `min_field_f1=0.75`（只门列表字段） |
 | **面试决策** | `tests/eval/interview_dynamic_cases.json` | `scripts/eval_interview_dynamic.py` | 动态 vs 静态：必考技能覆盖率、零额外等待率、追问降级与耗时；脚本评分只验证选题与追问，不代表模型打分质量 |
 
 ```bash
@@ -282,9 +282,9 @@ $env:LLM_PROVIDER="mock"; $env:EMBEDDING_PROVIDER="mock"; python scripts\eval_ag
 | 阶段 | 已落地 | 关键读数 / 证据 |
 | --- | --- | --- |
 | **P1 解析地基** | 15000 字符预算 + 结构化截断、两档 Schema、一次自纠、前端截断/降级提示 | 真实文本 13 份 / 70 段、0 份认不出；15 条护栏；真 provider 20/20 首发过校验 |
-| **P2 解析评测** | 42 条语料（含 4 条真文本）、确定性 + 抽取 + 语义三臂、人工 gold、parse 进 AI 发布门 | 抽取臂 7/7；真臂 skills F1 **0.8660** / work **1.0** / project **0.8182**；发布报告 skills **0.76**（边缘，2 real / 2 fallback） |
-| **P3 动态面试** | 三节点决策器、动态追问、45/90/120 秒题型预算、断线重连与 resume | 弱点覆盖 静态 **0 → 动态 0.75–1.00**（脚本评分）；真 provider 七发仍 429（20/84 真组织） |
-| **P4 回流闭环** | 跨会话画像、改写弱点提示、职业规划证据、下一场开场题序倾斜 | 画像只改追问焦点（D278）；开场倾斜建会话/个性化后都生效（D280）；真发 **4/4 fallback**，质量仍待干净窗口 |
+| **P2 解析评测** | 42 条语料（含 4 条真文本）、确定性 + 抽取 + 语义三臂、人工 gold、parse 进 AI 发布门 | 抽取臂 **8/8**；真臂 skills F1 **0.8660** / work **1.0** / project **0.8182**；发布报告 skills **0.76**（边缘，2 real / 2 fallback） |
+| **P3 动态面试** | 三节点决策器、动态追问、45/90/120 秒题型预算、断线重连与 resume | 弱点覆盖 静态 **0 → 动态 0.75–1.00**（脚本评分）；真 provider 八发仍 429（**23/96** 真组织） |
+| **P4 回流闭环** | 跨会话画像、改写弱点提示、职业规划证据、下一场开场题序倾斜 | 画像只改追问焦点（D278）；开场倾斜建会话/个性化后都生效（D280）；两次真发：4/4 fallback → **2 real / 2 fallback**，career 首次主模型理由但证据未进理由，质量仍待干净窗口 |
 | **P5 体验收尾** | 报告页闭环入口、重连 UI、解析进度三步条、失败文案分阶段 | 45/90/120 秒倒计时、断网 1006→1/3→2/3、TCP 切网/抖动已活页验证 |
 
 > 过程账与逐条判据：`docs/简历与面试优化.md`（P1–P5 独立编号，D240–D280）。真 provider 的干净延迟/质量仍受 429 与配额限制，这里只报已量到的读数。
@@ -658,7 +658,7 @@ cd frontend && npm test            # 静态守卫（.mjs）
 | `test_interview_engine.py` / `test_interview_async_evaluation.py` / `test_interview_question_generation.py` | 面试引擎 / 异步评分 / 出题 |
 | `test_interview_profile.py` / `test_interview_question_tilt.py` / `test_interview_dynamic_question_guardrails.py` | 跨会话画像 / 开场题序倾斜 / 决策器接线与追问 |
 | `test_interview_quality.py` / `test_interview_quality_sample.py` / `test_interview_quality_sheet.py` | P3.2 质量样本与 18 行评分表 |
-| `test_parse_guardrails.py` / `test_parse_field_f1.py` / `test_parse_extraction_eval.py` | 解析预算截断 / 字段 F1 / 抽取层（TXT、DOCX、坏 PDF） |
+| `test_parse_guardrails.py` / `test_parse_field_f1.py` / `test_parse_extraction_eval.py` | 解析预算截断 / 字段 F1 / 抽取层（TXT、DOCX、合法 PDF、坏 PDF） |
 | `test_file_extraction_measure.py` / `test_p4_refeedback_measure.py` | 真文件抽取量测 / P4 回流测量仪器 |
 | `test_interview_config.py` | 题库 / 评分规则 / 报告模板的平台配置覆盖 |
 | `test_analysis_history_access.py` | 分析历史权限 |

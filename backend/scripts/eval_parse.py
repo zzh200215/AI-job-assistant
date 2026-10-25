@@ -204,6 +204,49 @@ def _norm_extracted(text: Any) -> str:
     return re.sub(r"\s+", "", str(text or ""))
 
 
+def _write_minimal_pdf(text: str, target: pathlib.Path) -> None:
+    """写一个只含一页 ASCII 文本的合法 PDF，给抽取臂覆盖 pdfplumber 的成功路径。
+
+    真实中文版式的证据在 `reports/file_extraction_measure.json`（10/11）；这里只验
+    "PDF 能打开、文本能回来"这条接线，所以不引入 PDF 写库。
+    """
+    if any(ord(char) > 127 for char in text):
+        raise ValueError("minimal PDF fixture is ASCII-only")
+    lines = text.splitlines() or [""]
+    content = ["BT", "/F1 12 Tf", "72 720 Td"]
+    for index, line in enumerate(lines):
+        if index:
+            content.append("0 -18 Td")
+        escaped = line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+        content.append(f"({escaped}) Tj")
+    content.append("ET")
+    stream = "\n".join(content).encode("ascii")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+        b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+    ]
+    output = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, body in enumerate(objects, start=1):
+        offsets.append(len(output))
+        output.extend(f"{index} 0 obj\n".encode("ascii"))
+        output.extend(body)
+        output.extend(b"\nendobj\n")
+    xref_offset = len(output)
+    output.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    output.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        output.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    output.extend(
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode("ascii")
+    )
+    target.write_bytes(bytes(output))
+
+
 def _extraction_detail(case: dict, case_id: str, source: str, tmp_dir: str, base_dir: pathlib.Path) -> dict:
     detail = {
         "id": case_id,
@@ -223,7 +266,10 @@ def _extraction_detail(case: dict, case_id: str, source: str, tmp_dir: str, base
         return detail
 
     path = source_path
-    if case.get("generate") == "docx":
+    if case.get("generate") == "pdf":
+        path = pathlib.Path(tmp_dir) / f"{case_id}.pdf"
+        _write_minimal_pdf(source_path.read_text(encoding="utf-8"), path)
+    elif case.get("generate") == "docx":
         from docx import Document
 
         path = pathlib.Path(tmp_dir) / f"{case_id}.docx"

@@ -1,0 +1,10 @@
+Wang Jun
+Backend Engineer
+Skills
+Python, FastAPI, MySQL, Redis
+Experience
+2022-07 - now, Yunshan Tech, Backend Engineer
+Projects
+Recruiting dashboard: FastAPI + MySQL
+Education
+2018-09 - 2022-06, Linjiang University, Computer Science
