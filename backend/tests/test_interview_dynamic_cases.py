@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from scripts.eval_interview_dynamic import answer_for
+from scripts.eval_interview_dynamic import answer_for, probe_state, summarize_probe
 
 CASES = Path(__file__).parent / "eval" / "interview_dynamic_cases.json"
 
@@ -34,3 +34,26 @@ def test_answer_for_picks_the_round_and_falls_back_to_a_single_answer():
     legacy = {"answer": "legacy", "followup_answer": "legacy-followup"}
     assert answer_for(legacy, 3, 2, False) == "legacy"
     assert answer_for(legacy, 3, 2, True) == "legacy-followup"
+
+
+def test_probe_state_and_summary_keep_only_real_latency():
+    cases = json.loads(CASES.read_text(encoding="utf-8"))
+    state = probe_state(cases)
+
+    assert state["scores"] == [50]
+    assert state["weaknesses"][0] in cases["jd"]["required_skills"]
+    summary = summarize_probe(
+        [
+            {"ms": 100.0, "source": "real", "degraded": False, "cache_hit": False, "error": ""},
+            {"ms": 300.0, "source": "fallback_model", "degraded": True, "cache_hit": False, "error": ""},
+            {"ms": 200.0, "source": "real", "degraded": False, "cache_hit": False, "error": ""},
+            {"ms": 0.0, "source": "real", "degraded": False, "cache_hit": True, "error": ""},
+        ]
+    )
+    assert summary["calls"] == 4
+    assert summary["real"] == 2
+    assert summary["cache_hits"] == 1
+    assert summary["fallback_or_error"] == 1
+    assert summary["real_ms_avg"] == 150.0
+    assert summary["real_ms_max"] == 200.0
+    assert summary["all_ms_avg"] == 150.0

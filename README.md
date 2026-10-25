@@ -2,7 +2,7 @@
 
 > 一个以 **求职者职业发展** 为核心的全栈智能平台。平台通过 **Agentic RAG 引擎** 检索岗位 JD、行业知识、面试题库和职业发展资料，再由多个 AI Agent 协作完成简历优化、岗位匹配、模拟面试和职业规划；题库、评分规则与套餐按平台一处配置覆盖内置默认；审计、运行治理与外部能力 API 用于内部可观测。**企业/多租户那一侧已在 2026-10 的产品收缩中出树**（`docs/upgrade-plan.md` D132–D137）：数据库里的 `tenant_id` / `organization_id` 列与模型保留，但不再参与任何可见性判定。
 
-**当前状态（2026-10-25）**：后端 **1529 tests / 0 failed**，前端 **117 文件 / 759 条**，静态守卫 **50 条**；RAG / Agent / 推荐 / 解析四轨进 AI 发布门；简历与面试 P1–P5 已落地，过程账见 [`docs/简历与面试优化.md`](docs/简历与面试优化.md)。
+**当前状态（2026-10-25）**：后端 **1531 tests / 0 failed**，前端 **117 文件 / 759 条**，静态守卫 **50 条**；RAG / Agent / 推荐 / 解析四轨进 AI 发布门；简历与面试 P1–P5 已落地，过程账见 [`docs/简历与面试优化.md`](docs/简历与面试优化.md)。
 
 ---
 
@@ -244,10 +244,14 @@ python scripts/eval_agent.py --sample 5
 python scripts/eval_recommend.py
 python scripts/eval_parse.py --min-tail-keep 1.0 --max-errors 0 --min-extract-match 1.0
 python scripts/eval_interview_dynamic.py
+python scripts/eval_interview_dynamic.py --probe 3   # 决策 prompt 的干净单发延迟探针
 
 # 解析语义臂（真 provider，花钱；4 条真文本 + 人工 gold）
 python scripts/eval_parse.py --sample 4 --allow-real \
   --human-gold tests/eval/human_gold_TO_FILL.json --min-field-f1 0.75
+
+# 面试决策延迟探针（真 provider，3 发，花钱）
+python scripts/eval_interview_dynamic.py --probe 3 --allow-real --pace-seconds 8
 
 # 输出 JSON 报告
 python scripts/eval_parse.py --output reports/parse_eval_latest.json
@@ -283,7 +287,7 @@ $env:LLM_PROVIDER="mock"; $env:EMBEDDING_PROVIDER="mock"; python scripts\eval_ag
 | --- | --- | --- |
 | **P1 解析地基** | 15000 字符预算 + 结构化截断、两档 Schema、一次自纠、前端截断/降级提示 | 真实文本 13 份 / 70 段、0 份认不出；15 条护栏；真 provider 20/20 首发过校验 |
 | **P2 解析评测** | 42 条语料（含 4 条真文本）、确定性 + 抽取 + 语义三臂、人工 gold、parse 进 AI 发布门 | 抽取臂 **8/8**；真臂 skills F1 **0.8660** / work **1.0** / project **0.8182**；发布报告 skills **0.76**（边缘，2 real / 2 fallback） |
-| **P3 动态面试** | 三节点决策器、动态追问、45/90/120 秒题型预算、断线重连与 resume | 弱点覆盖 静态 **0 → 动态 0.75–1.00**（脚本评分）；真 provider 八发仍 429（**23/96** 真组织） |
+| **P3 动态面试** | 三节点决策器、动态追问、45/90/120 秒题型预算、断线重连与 resume | 弱点覆盖 静态 **0 → 动态 0.75–1.00**（脚本评分）；真 provider 八发仍 429（**23/96** 真组织）；延迟探针 **8/8 real、均值 5.54s / max 10.5s（3/8 > 6s cap）**；**关思考链已上产品路径**：完整评测 **9/12 真组织**（mid 3/6、weak 6/6），weak max **2.95s**，6s cap 保持 |
 | **P4 回流闭环** | 跨会话画像、改写弱点提示、职业规划证据、下一场开场题序倾斜 | 画像只改追问焦点（D278）；开场倾斜建会话/个性化后都生效（D280）；真发 4/4 fallback → 2 real/2 fallback → **rewrite 定向 2/2 real**；代理指标无差异、初步 assistant 评分 4/2（待复核）；career 证据未进理由 |
 | **P5 体验收尾** | 报告页闭环入口、重连 UI、解析进度三步条、失败文案分阶段 | 45/90/120 秒倒计时、断网 1006→1/3→2/3、TCP 切网/抖动已活页验证 |
 
@@ -642,7 +646,7 @@ cd frontend && npm run test:unit   # vitest
 cd frontend && npm test            # 静态守卫（.mjs）
 ```
 
-当前基线（2026-10-25）：后端 **1529 passed / 0 failed**、ruff **472 文件**；前端 **117 文件 / 759 条**、静态守卫 **50 条**。
+当前基线（2026-10-25）：后端 **1531 passed / 0 failed**、ruff **472 文件**；前端 **117 文件 / 759 条**、静态守卫 **50 条**。
 
 当前测试文件覆盖（节选）：
 
@@ -693,7 +697,7 @@ cd frontend && npm test            # 静态守卫（.mjs）
 
 ### 后续加强方向
 
-- **P3.2 干净延迟与真追问质量**：七发真 provider 均撞 429（20/84 真组织），等配额窗口再量。
+- **P3.2 已工程收口**：no-thinking 上产品路径后完整评测 **9/12 真组织**（weak max 2.95s），6s cap 不动；429 仍在 mid 侧（外部配额）。质量 9 条为 assistant-preliminary，待复核。
 - **P4 真 provider 质量**：弱点后的改写质量、职业方向是否引用面试证据；4 发仪器已备好，最近一发 **4/4 fallback_model**，质量仍未量。
 - **物理切网**：Wi-Fi→蜂窝与真实运营商抖动需要第二台设备；TCP 层切网/抖动已验。
 - **长简历与有效 PDF 夹具**：本机仍缺 >15000 字符真样本与可写库生成的 PDF；当前用合成长简历 + 坏 PDF 覆盖截断与报错路径。

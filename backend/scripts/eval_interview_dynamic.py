@@ -24,6 +24,7 @@ import json
 import pathlib
 import sys
 import time
+from collections import Counter
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
@@ -37,7 +38,8 @@ from app.core.config import settings  # noqa: E402
 from app.core.database import Base  # noqa: E402
 from app.models.interview_session import InterviewSession  # noqa: E402
 from app.services.interview_engine import InterviewEngine  # noqa: E402
-from app.services.interviewer_decision import DEEPEN_SCORE_CEILING  # noqa: E402
+from app.services.interviewer_decision import DEEPEN_SCORE_CEILING, decide_next  # noqa: E402
+from app.services.llm_service import chat_json, get_llm_provenance  # noqa: E402
 from scripts.provider_guard import require_mock  # noqa: E402
 
 CASES = pathlib.Path("tests/eval/interview_dynamic_cases.json")
@@ -194,11 +196,127 @@ def run_arm(cases: dict, tier_name: str, dynamic: bool, pace_seconds: float = 0.
     }
 
 
+def probe_state(cases: dict, variant: int = 0) -> dict:
+    """给延迟探针一份贴近中档的真实决策状态：低分、有证据、还有没考到的必考项。
+
+    每次变一个分数/证据/焦点，避免同一 prompt 命中 `chat_json` 的进程内缓存——
+    缓存命中是 0ms，混进延迟会把均值算成假的（第一次探针就踩到了）。
+    """
+    skills = [str(item) for item in (cases.get("jd", {}).get("required_skills") or []) if str(item).strip()]
+    questions = cases.get("questions") or []
+    scores = (50, 55, 60, 52, 58, 63, 48, 65)
+    evidences = (
+        "调参和接接口",
+        "只说了 at-least-once",
+        "先看日志再回滚",
+        "缓存穿透加个布隆过滤器",
+        "分页优化调了索引",
+        "事务边界放在服务层",
+        "告警先看错误率",
+        "容量按峰值两倍留",
+    )
+    score = scores[variant % len(scores)]
+    evidence = evidences[variant % len(evidences)]
+    weakness = skills[variant % len(skills)] if skills else "向量检索"
+    return {
+        "round_index": 0,
+        "scores": [score],
+        "evidence": [{"answer_excerpt": evidence, "question_excerpt": "介绍一个项目"}],
+        "asked_followup": False,
+        "weaknesses": [weakness],
+        "interview_profile": {},
+        "candidate_pool": questions[1:2],
+    }
+
+
+def summarize_probe(records: list[dict]) -> dict:
+    cache_hits = [row for row in records if row.get("cache_hit")]
+    real = [
+        row
+        for row in records
+        if row.get("source") == "real" and not row.get("degraded") and not row.get("error") and not row.get("cache_hit")
+    ]
+
+    def average(values: list[float]) -> float | None:
+        return round(sum(values) / len(values), 1) if values else None
+
+    def maximum(values: list[float]) -> float | None:
+        return round(max(values), 1) if values else None
+
+    all_ms = [float(row.get("ms") or 0) for row in records]
+    real_ms = [float(row.get("ms") or 0) for row in real]
+    return {
+        "calls": len(records),
+        "real": len(real),
+        "cache_hits": len(cache_hits),
+        "fallback_or_error": len(records) - len(real) - len(cache_hits),
+        "sources": dict(Counter(str(row.get("source") or "unknown") for row in records)),
+        "real_ms_avg": average(real_ms),
+        "real_ms_max": maximum(real_ms),
+        "all_ms_avg": average(all_ms),
+        "all_ms_max": maximum(all_ms),
+    }
+
+
+def run_probe(cases: dict, count: int, pace_seconds: float, start: int = 0, no_thinking: bool = False) -> list[dict]:
+    """直接量决策 prompt 的原始模型单发延迟（没有引擎的 6 秒硬截止）。
+
+    `no_thinking=True` 只用于实验：决策 prompt 也关掉思考链，比较能不能把 6 秒 cap
+    下的降级压下去；产品路径是否跟着改要另拍。
+    """
+
+    def probe_chat(prompt: str):
+        return chat_json(prompt, disable_thinking=True) if no_thinking else chat_json(prompt)
+
+    records: list[dict] = []
+    for index in range(count):
+        variant = start + index
+        state = probe_state(cases, variant)
+        if pace_seconds > 0:
+            time.sleep(pace_seconds)
+        started = time.monotonic()
+        source = None
+        degraded = False
+        cache_hit = False
+        action = None
+        error = ""
+        try:
+            decision = decide_next(state, chat=probe_chat)
+            provenance = get_llm_provenance()
+            source = provenance.get("source")
+            degraded = bool(provenance.get("degraded"))
+            cache_hit = bool(provenance.get("cache_hit"))
+            action = decision.get("action")
+        except Exception as exc:  # 探针把异常当读数，不让一发失败吞掉整批
+            error = f"{type(exc).__name__}: {str(exc)[:120]}"
+        records.append(
+            {
+                "index": index + 1,
+                "variant": variant,
+                "ms": round((time.monotonic() - started) * 1000, 1),
+                "source": source,
+                "degraded": degraded,
+                "cache_hit": cache_hit,
+                "action": action,
+                "error": error,
+            }
+        )
+    return records
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cases", default=str(CASES))
     parser.add_argument("--output", default=None)
     parser.add_argument("--allow-real", action="store_true")
+    parser.add_argument(
+        "--probe",
+        type=int,
+        default=0,
+        help="只做 N 次独立决策调用，量干净单发延迟（不跑三档、不设门）",
+    )
+    parser.add_argument("--probe-start", type=int, default=0, help="延迟探针从第几个状态变体开始")
+    parser.add_argument("--probe-no-thinking", action="store_true", help="探针关闭思考链（实验，不改产品路径）")
     parser.add_argument("--min-gap-gain-pp", type=float, default=20.0)
     parser.add_argument("--min-zero-wait", type=float, default=0.75)
     parser.add_argument(
@@ -211,6 +329,30 @@ def main() -> int:
 
     provider = require_mock("eval_interview_dynamic.py", allow_real=args.allow_real)
     cases = json.loads(pathlib.Path(args.cases).read_text(encoding="utf-8"))
+
+    if args.probe:
+        records = run_probe(cases, args.probe, args.pace_seconds, args.probe_start, args.probe_no_thinking)
+        summary = summarize_probe(records)
+        probe_report = {
+            "report_type": "interview_decision_probe",
+            "run_meta": {
+                "provider": provider,
+                "model": settings.LLM_MODEL,
+                "probe": args.probe,
+                "probe_start": args.probe_start,
+                "pace_seconds": args.pace_seconds,
+                "no_thinking": args.probe_no_thinking,
+            },
+            "records": records,
+            "summary": summary,
+        }
+        if args.output:
+            target = pathlib.Path(args.output)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(probe_report, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"[写入] {target}")
+        print(json.dumps(summary, ensure_ascii=False))
+        return 0
 
     runs = {}
     for tier_name in cases["candidates"]:

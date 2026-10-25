@@ -230,7 +230,9 @@ class InterviewEngine:
         """决策那一档的 LLM 入口。测试里替换这一个方法就能完全断开真 provider。"""
         from app.services.llm_service import chat_json
 
-        return self._bounded_chat(chat_json)
+        # 决策有 6 秒硬截止；关掉思考链（D195 在改写链上量到思考链会吃满预算）。
+        # 2026-10-25 探针：同 prompt 关思考链把两对单发从 8.3s/5.3s 压到 3.95s/1.88s。
+        return self._bounded_chat(lambda prompt: chat_json(prompt, disable_thinking=True))
 
     def _decision_state(self, questions: list[dict[str, Any]], evaluations: list[dict[str, Any]]) -> dict[str, Any]:
         """决策器的输入一律由引擎拼好传进去——决策器自己不取库（那会变成第二条会话链）。

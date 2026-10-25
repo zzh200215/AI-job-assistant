@@ -489,6 +489,23 @@ def test_followup_does_not_echo_raw_evidence_dict(engine, monkeypatch) -> None:
     assert "召回率" in followup["content"], followup["content"]
 
 
+def test_decision_chat_disables_thinking_to_fit_the_six_second_cap(engine, monkeypatch) -> None:
+    """决策调用必须关思考链：6 秒硬截止下，思考链会把单发拖到 cap 之外。"""
+    from app.services import llm_service
+
+    calls = []
+    monkeypatch.setattr(
+        llm_service,
+        "chat_json",
+        lambda prompt, **kwargs: calls.append({"prompt": prompt, **kwargs}) or {"action": "advance"},
+    )
+
+    engine._decision_chat()("测试 prompt")
+
+    assert len(calls) == 1
+    assert calls[0]["disable_thinking"] is True
+
+
 def test_prior_profile_weaknesses_lead_the_focus_pool(engine) -> None:
     """回流③：上一场画像里的技能弱点排到本场必考项前面，决策 LLM 也看得到这份旧画像。"""
     engine.current_index = -1
