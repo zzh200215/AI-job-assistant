@@ -85,7 +85,7 @@ def _job(db, user):
 
 
 def _good_suggestion(
-    block_id="self_evaluation", original="三年后端开发经验", proposed="三年后端开发经验，专注订单链路"
+    block_id="self_evaluation", original="三年后端开发经验", proposed="三年后端开发经验，负责订单服务"
 ):
     return {"block_id": block_id, "original": original, "proposed_text": proposed, "reason": "把已有事实写清楚"}
 

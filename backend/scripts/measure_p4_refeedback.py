@@ -80,7 +80,7 @@ MOCK_REWRITE = {
         {
             "block_id": "self_evaluation",
             "original": "三年后端开发经验",
-            "proposed_text": "三年后端开发经验，主导订单链路优化",
+            "proposed_text": "三年后端开发经验，负责订单服务",
             "reason": "把已有经历写得更具体",
         }
     ]

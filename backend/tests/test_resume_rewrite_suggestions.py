@@ -147,6 +147,134 @@ def test_a_bare_array_is_accepted_so_no_suggestion_is_lost_to_shape():
     assert rejected == []
 
 
+# ---------------------------------------------------------------- 事实门（D284）
+#
+# 复核（2026-10-28）证实：弱点提示没有阻止模型补写原文没有的结果/细节。这一层把
+# "结构改写夹带新事实"拦在导入侧，理由是词面可追溯——实词要能在简历里找到，结果词
+# 要在该块原文里出现过。判据直接用那次真 provider 的 6 条建议当夹具。
+
+P4_PARSED = {
+    "name": "王军",
+    "skills": ["Python", "FastAPI", "MySQL", "Redis"],
+    "self_evaluation": "三年后端开发经验",
+    "work_experience": [
+        {
+            "company": "云杉科技",
+            "title": "后端开发工程师",
+            "start": "2022-07",
+            "end": "至今",
+            "desc": "负责订单服务的接口设计与性能优化",
+        }
+    ],
+    "project_experience": [
+        {
+            "name": "招聘数据看板",
+            "role": "后端",
+            "start": "2023-03",
+            "end": "2023-09",
+            "desc": "负责检索接口与分页优化",
+            "tech": ["FastAPI", "MySQL"],
+        }
+    ],
+}
+
+
+def _fact_item(block_id, original, proposed):
+    return {"block_id": block_id, "original": original, "proposed_text": proposed, "reason": ""}
+
+
+def test_fact_gate_keeps_only_the_traceable_suggestion(db_session):
+    blocks = build_resume_blocks(P4_PARSED)
+    payload = {
+        "suggestions": [
+            _fact_item(
+                "self_evaluation",
+                "三年后端开发经验",
+                "具备三年后端开发经验，熟悉接口设计与性能优化。",
+            ),
+            _fact_item(
+                "work[0].desc",
+                "负责订单服务的接口设计与性能优化",
+                "负责订单服务的接口设计，并针对高频查询进行性能优化，提升系统响应速度。",
+            ),
+            _fact_item(
+                "proj[0].desc",
+                "负责检索接口与分页优化",
+                "负责检索接口的开发与分页逻辑优化，提高数据加载效率。",
+            ),
+        ]
+    }
+
+    accepted, rejected = svc.validate_rewrite_suggestions(blocks, payload, check_facts=True)
+
+    assert [item["block_id"] for item in accepted] == ["self_evaluation"]
+    assert {row["block_id"]: row["reason"] for row in rejected} == {
+        "work[0].desc": "new_result:提升",
+        "proj[0].desc": "new_result:提高",
+    }
+
+
+def test_fact_gate_rejects_new_capabilities_in_the_control_arm(db_session):
+    blocks = build_resume_blocks(P4_PARSED)
+    payload = {
+        "suggestions": [
+            _fact_item(
+                "self_evaluation",
+                "三年后端开发经验",
+                "具备三年后端开发经验，熟悉接口设计与性能优化，能独立完成模块开发与维护。",
+            ),
+            _fact_item(
+                "work[0].desc",
+                "负责订单服务的接口设计与性能优化",
+                "负责订单服务的接口设计与性能优化，通过优化数据库查询和缓存策略，提升了接口响应速度。",
+            ),
+            _fact_item(
+                "proj[0].desc",
+                "负责检索接口与分页优化",
+                "负责检索接口与分页优化，通过调整查询逻辑和分页参数，提升了检索效率。",
+            ),
+        ]
+    }
+
+    accepted, rejected = svc.validate_rewrite_suggestions(blocks, payload, check_facts=True)
+
+    assert accepted == []
+    assert {row["block_id"]: row["reason"] for row in rejected} == {
+        "self_evaluation": "new_fact:独立",
+        "work[0].desc": "new_result:提升",
+        "proj[0].desc": "new_result:提升",
+    }
+
+
+def test_the_service_enables_the_fact_gate(db_session, actor, monkeypatch):
+    """判据要证明接线：`build_rewrite_suggestions` 必须带 `check_facts=True` 调用。"""
+    user, _ = actor
+    resume = _resume_row(db_session, user, parsed=dict(P4_PARSED))
+    monkeypatch.setattr(
+        svc,
+        "chat_json",
+        lambda prompt, **kw: {
+            "suggestions": [
+                _fact_item(
+                    "self_evaluation",
+                    "三年后端开发经验",
+                    "具备三年后端开发经验，熟悉接口设计与性能优化。",
+                ),
+                _fact_item(
+                    "work[0].desc",
+                    "负责订单服务的接口设计与性能优化",
+                    "负责订单服务的接口设计，并针对高频查询进行性能优化，提升系统响应速度。",
+                ),
+            ]
+        },
+    )
+
+    result = svc.build_rewrite_suggestions(db_session, resume.id, user_id=user.id)
+
+    assert [item["block_id"] for item in result["suggestions"]] == ["self_evaluation"]
+    assert result["rejected"] == [{"block_id": "work[0].desc", "reason": "new_result:提升"}]
+
+
 # ---------------------------------------------------------------- the service
 
 
@@ -244,7 +372,7 @@ def test_suggestions_never_touch_the_stored_resume(db_session, actor, monkeypatc
     monkeypatch.setattr(
         svc,
         "chat_json",
-        lambda prompt, **kw: {"suggestions": [_suggestion(proposed="三年后端开发经验，专注高并发订单链路")]},
+        lambda prompt, **kw: {"suggestions": [_suggestion(proposed="三年后端开发经验，负责订单服务")]},
     )
 
     result = svc.build_rewrite_suggestions(db_session, resume.id, user_id=user.id)
@@ -388,7 +516,7 @@ def test_the_job_round_trip_reports_rejected_anchors_to_the_client(db_session, a
         "chat_json",
         lambda prompt, **kw: {
             "suggestions": [
-                _suggestion(proposed="三年后端开发经验，主导过订单链路重构"),
+                _suggestion(proposed="三年后端开发经验，负责订单服务"),
                 _suggestion(block_id="work[3].desc", original="不存在"),
             ]
         },

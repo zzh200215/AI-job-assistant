@@ -17,6 +17,7 @@ import json
 import logging
 from typing import Any
 
+import jieba
 from sqlalchemy.orm import Session
 
 from app.models.history import JobDescription, Resume, ResumeVersion
@@ -31,6 +32,64 @@ from app.utils.service_access import get_accessible_job_for_user, get_owned_resu
 logger = logging.getLogger(__name__)
 
 MAX_SUGGESTIONS = 8
+
+# 事实验证器（D284）：改写只能把候选人写过的事实写清楚。
+# ① 实词必须能在简历文本里找到（jieba 分词后逐词查）——"高频查询""缓存策略""数据库查询"
+#    这类原文没有的细节会被拦下；功能词/自评连接词走白名单，避免整句误杀。
+# ② 结果词必须在该块原文里出现过——"性能优化"被改写成"提升了响应速度"时，词面检查过不了
+#    "提升"，而块内又没有这个词，同样拦下。
+# 局限：这是词面追溯，不是语义验证；同义改写（"开发"→"搭建"）会被保守拒绝。
+_FACT_STOPWORDS = frozenset(
+    {
+        "具备",
+        "熟悉",
+        "擅长",
+        "通过",
+        "能够",
+        "可以",
+        "进行",
+        "负责",
+        "有效",
+        "相关",
+        "方面",
+        "以及",
+        "并且",
+        "同时",
+        "使用",
+        "利用",
+        "完成",
+        "主要",
+        "工作",
+        "内容",
+        "其中",
+        "对于",
+        "关于",
+        "根据",
+        "按照",
+        "非常",
+        "我们",
+        "自己",
+        "一个",
+    }
+)
+_RESULT_WORDS = ("提升", "提高", "降低", "减少", "缩短", "增长", "节省", "加快")
+
+
+def _facts_text(blocks: list[dict[str, Any]]) -> str:
+    return "\n".join(str(block.get("text") or "") for block in blocks)
+
+
+def _new_fact_reason(block_text: str, proposed: str, facts_lower: str) -> str | None:
+    for word in _RESULT_WORDS:
+        if word in proposed and word not in block_text:
+            return f"new_result:{word}"
+    for word in jieba.cut(proposed):
+        word = word.strip()
+        if len(word) <= 1 or word in _FACT_STOPWORDS:
+            continue
+        if word.lower() not in facts_lower:
+            return f"new_fact:{word}"
+    return None
 
 
 def _length_ceiling(original: str) -> int:
@@ -78,7 +137,11 @@ def _interview_weakness_hint(db: Session, user_id: int | None) -> str:
 
 
 def validate_rewrite_suggestions(
-    blocks: list[dict[str, Any]], payload: Any, limit: int = MAX_SUGGESTIONS
+    blocks: list[dict[str, Any]],
+    payload: Any,
+    limit: int = MAX_SUGGESTIONS,
+    *,
+    check_facts: bool = False,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Split a model response into usable suggestions and refusals.
 
@@ -92,6 +155,7 @@ def validate_rewrite_suggestions(
     accepted: list[dict[str, Any]] = []
     rejected: list[dict[str, Any]] = []
     seen: set[str] = set()
+    facts_lower = _facts_text(blocks).lower() if check_facts else None
 
     for item in raw:
         if not isinstance(item, dict):
@@ -123,6 +187,11 @@ def validate_rewrite_suggestions(
         if len(proposed.strip()) > _length_ceiling(block["text"]):
             rejected.append({"block_id": block_id, "reason": "proposal_too_long"})
             continue
+        if facts_lower is not None:
+            fact_reason = _new_fact_reason(block["text"], proposed.strip(), facts_lower)
+            if fact_reason:
+                rejected.append({"block_id": block_id, "reason": fact_reason})
+                continue
 
         seen.add(block_id)
         accepted.append(
@@ -201,7 +270,7 @@ def build_rewrite_suggestions(
     # 10.68s 出 3 条通过校验的建议。其它调用方不开这一位。
     result = chat_json(prompt, disable_thinking=True)
 
-    suggestions, rejected = validate_rewrite_suggestions(blocks, result)
+    suggestions, rejected = validate_rewrite_suggestions(blocks, result, check_facts=True)
     return {
         "resume_id": resume_id,
         "jd_id": jd_id,
