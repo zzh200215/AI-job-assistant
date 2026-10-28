@@ -944,7 +944,8 @@ const skillGaps = computed(() => {
   const normalized = items
     .map((item) => (typeof item === 'string' ? { skill: item } : item))
     .filter((item) => item && item.skill)
-  // 完整规划那份 skill_gaps 没有 canonical 字段，只能按归一化拼写匹配；匹配不上就不硬贴。
+  // 新规划由后端补了 canonical（K8s → kubernetes，与画像同一把尺）；老记录没这个字段，
+  // 才退回归一化拼写匹配。匹配不上就不硬贴。
   return attachInterviewToSkillGaps(normalized, careerPathMeta.value.interview_profile)
 })
 const skillGapCount = computed(() => skillGaps.value.length)

@@ -342,6 +342,20 @@ def test_real_model_reasons_are_kept(db_session, user, monkeypatch):
     assert result["summary"] == "先投覆盖度高的"
 
 
+def test_prompt_requires_citing_interview_evidence(monkeypatch):
+    direction = _direction("后端工程师")
+    direction.gap_skills[0]["interview"] = {"evidence": ["只说了 at-least-once"]}
+    prompts = []
+    monkeypatch.setattr(agent_mod, "chat_json", lambda prompt: prompts.append(prompt) or {})
+    monkeypatch.setattr(agent_mod, "get_llm_provenance", lambda: {"source": "mock"})
+
+    agent_mod.CareerPathAgent().recommend(RESUME_PARSED, [direction])
+
+    assert prompts, "没有调用模型"
+    assert "上次面试" in prompts[0]
+    assert "只说了 at-least-once" in prompts[0]
+
+
 def test_no_directions_costs_no_model_call(monkeypatch):
     calls = []
     monkeypatch.setattr(agent_mod, "chat_json", lambda prompt: calls.append(prompt) or {})

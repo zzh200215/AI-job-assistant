@@ -65,4 +65,27 @@ describe('职业方向缺口里的面试证据', () => {
     expect(rows[0].interview.sessions).toBe(2)
     expect(rows[1].interview).toBeNull()
   })
+
+  it('缺口带 canonical 时按它匹配，别名不再漏（K8s vs Kubernetes）', () => {
+    const profile = {
+      skill_weaknesses: [
+        {
+          skill: 'Kubernetes',
+          canonical: 'kubernetes',
+          sessions: 1,
+          avg_score: 50,
+          evidence: [{ question: 'K8s 的调度' }],
+        },
+      ],
+    }
+
+    const [aliased, legacy] = attachInterviewToSkillGaps(
+      [{ skill: 'K8s', canonical: 'kubernetes' }, { skill: 'K8s' }],
+      profile
+    )
+
+    expect(aliased.interview.sessions).toBe(1)
+    // 老记录没有 canonical，退回拼写比较：k8s 与 kubernetes 不同，不硬贴。
+    expect(legacy.interview).toBeNull()
+  })
 })

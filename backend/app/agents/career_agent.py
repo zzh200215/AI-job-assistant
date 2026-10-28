@@ -17,6 +17,25 @@ from app.prompts.career_agent import PROMPT_VERSION as _PROMPT_VERSION
 from app.prompts.rendering import render_prompt
 from app.services.llm_service import chat_json
 from app.services.rag_service import search_knowledge
+from app.services.skill_gap import canonical_skill
+
+
+def annotate_skill_gaps(result: dict[str, Any]) -> None:
+    """给模型产出的 skill_gaps 补上全站统一的 canonical 身份。
+
+    模型写的是自由文本（K8s / Kubernetes / k8s），画像里的技能弱点按 canonical
+    存；少了这一层，前端只能按拼写比，别名缺口就贴不上面试证据。
+    """
+    gaps = result.get("skill_gaps")
+    if not isinstance(gaps, list):
+        return
+    for gap in gaps:
+        if not isinstance(gap, dict):
+            continue
+        skill = gap.get("skill")
+        canonical = canonical_skill(skill) if isinstance(skill, str) else ""
+        if canonical:
+            gap["canonical"] = canonical
 
 
 class CareerAgent(BaseAgent):
@@ -57,6 +76,7 @@ class CareerAgent(BaseAgent):
             industry_context=industry_context,
         )
         result: dict[str, Any] = chat_json(prompt)
+        annotate_skill_gaps(result)
         result["_rag_references"] = rag_parts  # 附上引用
         return result
 

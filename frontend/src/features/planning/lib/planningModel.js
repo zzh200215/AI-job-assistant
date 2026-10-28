@@ -54,7 +54,7 @@ export function interviewGapText(evidence) {
   return parts.join('，')
 }
 
-/** 技能名的归一化拼写，只用于把"完整规划"里没有 canonical 的技能名对到画像上。 */
+/** 技能名的归一化拼写：只在两边都没有 canonical 时兜底（历史规划记录）。 */
 export function skillMatchKey(value) {
   return String(value || '')
     .toLowerCase()
@@ -71,11 +71,12 @@ export function interviewForSkill(skill, profile) {
   )
 }
 
-/** 给 CareerAgent 产出的 skill_gaps 贴上一场面试证据；匹配不上就保持 null。 */
+/** 给 CareerAgent 产出的 skill_gaps 贴上一场面试证据；匹配不上就保持 null。
+    新规划带后端补的 canonical（K8s → kubernetes），老记录没有就退回拼写比较。 */
 export function attachInterviewToSkillGaps(items, profile) {
   return (items || []).map((item) => {
     if (!item || !item.skill) return item
-    return { ...item, interview: interviewForSkill(item.skill, profile) }
+    return { ...item, interview: interviewForSkill(item.canonical || item.skill, profile) }
   })
 }
 

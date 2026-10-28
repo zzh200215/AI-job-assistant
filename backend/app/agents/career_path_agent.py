@@ -38,7 +38,9 @@ degraded 与 degrade_reasons（样本是否太薄）。
 3. 理由只能引用清单里给出的技能名与事实，不得引入候选人简历或清单之外的信息；
 4. degraded 为 true 的方向必须把样本不足写进理由里，且不要排在前面；
 5. category 只能是"高度匹配"或"可转型"；
-6. 若某方向没有可依据的信息，宁可少给几个方向，不要凑数。
+6. 若某方向没有可依据的信息，宁可少给几个方向，不要凑数；
+7. 若某缺口的 gap_skills[].interview 有证据，理由里必须点名"上次面试"和该技能；
+   没有这个字段就不要提面试，也不要编造证据。
 
 输出 JSON：
 {{
@@ -157,7 +159,7 @@ class CareerPathAgent:
         set_llm_trace_context(
             {
                 "source": "career_path_agent.recommend",
-                "prompt_version": "career-path-evidence-v1",
+                "prompt_version": "career-path-evidence-v2",
                 "direction_count": len(directions),
             }
         )
