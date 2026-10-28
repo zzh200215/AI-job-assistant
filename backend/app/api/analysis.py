@@ -18,7 +18,7 @@ from app.services.analysis_service import run_smart_analysis
 from app.services.match_explainer_service import MatchExplainer
 from app.services.rag_confidence_service import confidence_from_flat_results
 from app.services.rag_service import get_knowledge_references
-from app.services.skill_gap import build_skill_gap, jd_skill_union, resume_skill_names
+from app.services.skill_gap import build_skill_gap, canonicalize_skill_rows, jd_skill_union, resume_skill_names
 from app.utils.http_errors import api_error
 from app.utils.job_access import get_accessible_job
 from app.utils.response import ERR_AI, ERR_COMMON, ERR_DB, ERR_PARAM, fail, ok
@@ -139,6 +139,10 @@ def _load_task_outputs(db: Session, user_id: int, record_id: int):
 
     rag_confidence = _rag_confidence_from_retrievals(db, task.id)
     final_report = _deep_parse_json(task.final_report)
+    # 历史记录落库时还没有 canonical（D281 之前）；读出来补上，前端才能按同一把尺
+    # 把面试证据贴到别名缺口上。只改这份响应对象，库里的 json 不动。
+    if isinstance(career_planning, dict):
+        canonicalize_skill_rows(career_planning.get("skill_gaps"))
     return final_report, career_planning, rag_confidence
 
 

@@ -141,6 +141,24 @@ def jd_nice_to_have_names(parsed: Any) -> list[str]:
     return _skill_strings(parsed, ("nice_to_have",))
 
 
+def canonicalize_skill_rows(rows: Any) -> None:
+    """给模型产出的技能行补上 canonical，展示文本（`skill`）不动。
+
+    模型的自由文本（K8s / Kubernetes / k8s）与画像、缺口用的 canonical 不是一套拼写；
+    少了这一层，前端只能按拼写比，别名缺口就贴不上面试证据。就地修改，便于同时用在
+    落库前（CareerAgent）与读取老记录时（分析详情接口）。
+    """
+    if not isinstance(rows, list):
+        return
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        skill = row.get("skill")
+        canonical = canonical_skill(skill) if isinstance(skill, str) else ""
+        if canonical:
+            row["canonical"] = canonical
+
+
 def skill_spellings(names: list[str]) -> dict[str, list[str]]:
     """canonical name -> the exact strings that produced it, in input order.
 
