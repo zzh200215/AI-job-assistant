@@ -33,6 +33,7 @@ from app.services.interview_evaluation_service import build_conversation, evalua
 from app.services.interview_profile_service import (
     compact_profile,
     get_profile,
+    jd_focus,
     public_profile,
     tilt_questions_by_profile,
 )
@@ -797,11 +798,20 @@ def interview_preparation(
 
 @router.get("/profile", summary="跨会话面试画像")
 def interview_profile(
+    jd_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """把历史已完成面试压成维度/技能弱点，供三路回流与下一场设置读取。"""
-    return ok(public_profile(get_profile(db, current_user.id)))
+    """把历史已完成面试压成维度/技能弱点，供三路回流与下一场设置读取。
+
+    带 `jd_id` 时额外给 `jd_focus`：本场必考项与上场弱点的逐项交集——设置页据此
+    显示"本场重点考察 X"，而不是一句泛泛的"会优先深挖"。
+    """
+    profile = get_profile(db, current_user.id)
+    payload = public_profile(profile)
+    if jd_id is not None:
+        payload["jd_focus"] = jd_focus(db, current_user, jd_id, profile)
+    return ok(payload)
 
 
 @router.get("/performance", summary="面试表现趋势分析")

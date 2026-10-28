@@ -243,6 +243,7 @@
                 >
                   {{ item.skill
                   }}<template v-if="item.avg_score != null"> · {{ item.avg_score }}</template>
+                  <template v-if="isJdFocus(item)"> · 本场重点</template>
                 </span>
               </div>
               <p v-else>上一场没有留下可复用的技能弱点。</p>
@@ -251,7 +252,13 @@
               <div class="brief-title">报告原话</div>
               <p>{{ profileNotes.join('；') }}</p>
             </div>
-            <p class="profile-note">
+            <p v-if="profile?.jd_focus?.overlap?.length" class="profile-note">
+              与当前岗位必考项重合的弱点已标「本场重点」，开场会优先排到前面；旧弱点不会当成本场表现。
+            </p>
+            <p v-else-if="profile?.jd_focus" class="profile-note">
+              当前岗位必考项与上场弱点没有重合，本场按常规顺序出题；旧弱点不会当成本场表现。
+            </p>
+            <p v-else class="profile-note">
               本场会优先深挖与当前岗位必考项重合的弱点；旧弱点只决定先后，不会当成本场表现。
             </p>
           </div>
@@ -310,7 +317,7 @@
 import { userErrorCopy } from '@/utils/requestTracing'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import AppPanel from '@/components/ui/AppPanel.vue'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
 import { getInterviewConfigTypes, getInterviewList, getInterviewProfile } from '@/api/interview'
@@ -520,6 +527,13 @@ const stagePlan = computed(() => [
 ])
 
 const profileSkills = computed(() => (profile.value?.skill_weaknesses || []).slice(0, 4))
+const jdFocusCanonicals = computed(
+  () =>
+    new Set((profile.value?.jd_focus?.overlap || []).map((item) => item.canonical || item.skill))
+)
+function isJdFocus(item) {
+  return jdFocusCanonicals.value.has(item.canonical || item.skill)
+}
 const profileNotes = computed(() =>
   (profile.value?.weakness_texts || [])
     .slice(0, 2)
@@ -610,7 +624,7 @@ async function fetchProfile() {
   loading.profile = true
   profileError.value = ''
   try {
-    profile.value = await getInterviewProfile()
+    profile.value = await getInterviewProfile(form.jd_id || undefined)
   } catch (error) {
     // 画像是锦上添花，读不到也不能把设置页的主表单一起拖红；但失败要单独说，不能伪装成空态。
     profile.value = null
@@ -619,6 +633,14 @@ async function fetchProfile() {
     loading.profile = false
   }
 }
+
+// 岗位换了就重新取"本场重点"：交集由后端按 canonical 算，前端不造第二把别名尺。
+watch(
+  () => form.jd_id,
+  () => {
+    fetchProfile()
+  }
+)
 
 async function startInterview() {
   if (!formRef.value) return

@@ -23,7 +23,9 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models.interview_session import InterviewSession
-from app.services.skill_gap import canonical_skill, normalize_skill, skill_match_terms
+from app.models.user import User
+from app.services.skill_gap import canonical_skill, jd_required_names, normalize_skill, skill_match_terms
+from app.utils.job_access import get_accessible_job
 from app.utils.time_helper import utc_now
 
 PROFILE_VERSION = 1
@@ -373,6 +375,41 @@ def build_profile(db: Session, user_id: int) -> dict[str, Any]:
 
 def get_profile(db: Session, user_id: int) -> dict[str, Any]:
     return build_profile(db, user_id)
+
+
+def jd_focus(db: Session, user: User, jd_id: int | None, profile: dict[str, Any]) -> dict[str, Any]:
+    """本场 JD 必考项与上一场技能弱点的**逐项交集**（设置页"重点考察 X"的数据源）。
+
+    与建会话时的倾斜同一把尺：`canonical_skill` 对齐 K8s / Kubernetes；别岗位旧弱点
+    不参与。岗位不可见时返回空交集，不猜。
+    """
+    job = get_accessible_job(db, jd_id, user) if jd_id is not None else None
+    if job is None:
+        return {"jd_id": jd_id, "title": "", "required_count": 0, "overlap": []}
+
+    required = jd_required_names(job.parsed_json or {}) or [str(item) for item in (job.skill_tags or [])]
+    required_canonical = {canonical_skill(skill) for skill in required if canonical_skill(skill)}
+    overlap = []
+    for row in (profile or {}).get("skill_weaknesses") or []:
+        if not isinstance(row, dict):
+            continue
+        canonical = row.get("canonical") or canonical_skill(row.get("skill"))
+        if not canonical or canonical not in required_canonical:
+            continue
+        overlap.append(
+            {
+                "skill": row.get("skill") or canonical,
+                "canonical": canonical,
+                "avg_score": row.get("avg_score"),
+                "sessions": row.get("sessions"),
+            }
+        )
+    return {
+        "jd_id": job.id,
+        "title": job.title or "",
+        "required_count": len(required_canonical),
+        "overlap": overlap,
+    }
 
 
 def tilt_questions_by_profile(

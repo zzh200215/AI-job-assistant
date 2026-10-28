@@ -76,11 +76,13 @@ export const getPerformanceTrend = () => request.get('/interview/performance')
  * @property {InterviewProfileWeakness[]} [skill_weaknesses]
  * @property {string[]} [weakness_texts]
  * @property {{ session_id?: number, completed_at?: string, overall_score?: number } | null} [last_session]
+ * @property {{ jd_id?: number, title?: string, required_count?: number, overlap?: InterviewProfileWeakness[] }} [jd_focus]
  */
 
-// 获取跨会话面试画像
+// 获取跨会话面试画像；带 jdId 时后端额外给"本场重点"交集（jd_focus）
 /** @returns {Promise<InterviewProfile>} */
-export const getInterviewProfile = () => request.get('/interview/profile')
+export const getInterviewProfile = (jdId) =>
+  request.get('/interview/profile', { params: jdId ? { jd_id: jdId } : {} })
 
 // === WebSocket 连接 ===
 

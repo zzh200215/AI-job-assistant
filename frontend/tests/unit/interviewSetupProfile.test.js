@@ -98,4 +98,48 @@ describe('面试设置页：上一场画像', () => {
     expect(wrapper.text()).toContain('上一场画像加载失败')
     expect(wrapper.text()).not.toContain('完成一场面试后，这里会出现下一场的考察重点')
   })
+
+  it('带岗位进入时用 jd_id 重取画像，把重合弱点标成本场重点', async () => {
+    await router.push('/?jd_id=7')
+    getInterviewProfile.mockResolvedValue({
+      has_data: true,
+      skill_weaknesses: [
+        { skill: 'Kafka', canonical: 'kafka', avg_score: 55, sessions: 1 },
+        { skill: 'Redis', canonical: 'redis', avg_score: 62, sessions: 1 },
+      ],
+      weakness_texts: [],
+      jd_focus: {
+        jd_id: 7,
+        title: '后端工程师',
+        required_count: 2,
+        overlap: [{ skill: 'Kafka', canonical: 'kafka', avg_score: 55, sessions: 1 }],
+      },
+    })
+
+    const wrapper = await mounted()
+    const panel = wrapper.find('.profile-focus')
+
+    expect(getInterviewProfile).toHaveBeenCalledWith(7)
+    expect(panel.text()).toContain('Kafka')
+    expect(panel.text()).toContain('本场重点')
+    expect(panel.text()).toContain('开场会优先排到前面')
+    // 只有交集里的那一条带标记，别把整份弱点都算成"本场重点"。
+    const marked = panel.findAll('.plain-chip').filter((chip) => chip.text().includes('本场重点'))
+    expect(marked).toHaveLength(1)
+    expect(marked[0].text()).toContain('Kafka')
+  })
+
+  it('岗位必考项与弱点没有重合时说明按常规顺序出题', async () => {
+    getInterviewProfile.mockResolvedValue({
+      has_data: true,
+      skill_weaknesses: [{ skill: 'Kafka', canonical: 'kafka', avg_score: 55, sessions: 1 }],
+      weakness_texts: [],
+      jd_focus: { jd_id: 8, title: '产品经理', required_count: 3, overlap: [] },
+    })
+
+    const wrapper = await mounted()
+
+    expect(wrapper.find('.profile-focus').text()).toContain('没有重合')
+    expect(wrapper.find('.profile-focus').text()).toContain('不会当成本场表现')
+  })
 })

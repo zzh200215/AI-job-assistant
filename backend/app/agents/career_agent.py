@@ -8,6 +8,7 @@
 """
 
 import json
+import logging
 from typing import Any
 
 from app.agents.base_agent import BaseAgent
@@ -15,9 +16,29 @@ from app.orchestration.context import AgentContext
 from app.prompts.career_agent import CAREER_AGENT_PROMPT
 from app.prompts.career_agent import PROMPT_VERSION as _PROMPT_VERSION
 from app.prompts.rendering import render_prompt
+from app.services.interview_profile_service import compact_profile, get_profile
 from app.services.llm_service import chat_json
 from app.services.rag_service import search_knowledge
 from app.services.skill_gap import canonicalize_skill_rows
+
+logger = logging.getLogger(__name__)
+
+NO_PROFILE_HINT = "无；按通用职业规划输出，不要提面试。"
+
+
+def _interview_profile_json(context: AgentContext) -> str:
+    """把上一场画像压成一段 JSON 进 prompt；读不到就明说"无"，不挡住规划。"""
+    db, user_id = context.db, context.user_id
+    if db is None or not user_id:
+        return NO_PROFILE_HINT
+    try:
+        profile = compact_profile(get_profile(db, user_id))
+    except Exception:
+        logger.exception("Failed to load interview profile for career plan user_id=%s", user_id)
+        return NO_PROFILE_HINT
+    if not profile.get("skill_weaknesses") and not profile.get("weakness_texts"):
+        return NO_PROFILE_HINT
+    return json.dumps(profile, ensure_ascii=False)
 
 
 def annotate_skill_gaps(result: dict[str, Any]) -> None:
@@ -61,6 +82,7 @@ class CareerAgent(BaseAgent):
             job_report=json.dumps(job_report, ensure_ascii=False),
             match_report=json.dumps(match_report, ensure_ascii=False),
             industry_context=industry_context,
+            interview_profile_json=_interview_profile_json(context),
         )
         result: dict[str, Any] = chat_json(prompt)
         annotate_skill_gaps(result)

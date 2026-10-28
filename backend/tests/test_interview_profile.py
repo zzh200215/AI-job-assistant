@@ -515,3 +515,82 @@ def test_build_profile_orders_sessions_by_completion(db_session, normal_user, ma
 
     assert profile["last_session"]["session_id"] == second
     assert profile["session_ids"] == [first, second]
+
+
+# ---------------------------------------------------------------- 本场重点（jd_focus）
+
+
+def _job(db, user, *, title="后端开发工程师", required=("Kafka", "Python"), tenant_id=1):
+    from app.models.history import JobDescription
+
+    row = JobDescription(
+        user_id=user.id,
+        tenant_id=tenant_id,
+        title=title,
+        company="示例",
+        raw_text="",
+        parsed_json={"title": title, "required_skills": list(required)},
+        source="manual",
+        is_active=1,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def test_jd_focus_lists_only_the_weaknesses_the_job_requires(db_session, normal_user, make_interview_session):
+    make_interview_session(
+        user_id=normal_user.id,
+        status="completed",
+        evaluation=_report(),
+        evaluation_status="completed",
+        completed_at=datetime(2026, 10, 2),
+    )
+    jd = _job(db_session, normal_user, required=["Kafka", "Python"])
+
+    body = interview_profile(jd_id=jd.id, db=db_session, current_user=normal_user)
+
+    focus = body["data"]["jd_focus"]
+    assert focus["jd_id"] == jd.id
+    assert focus["required_count"] == 2
+    assert [row["canonical"] for row in focus["overlap"]] == ["kafka"]
+    assert focus["overlap"][0]["avg_score"] == 55
+
+
+def test_jd_focus_uses_the_shared_alias_table(db_session, normal_user, make_interview_session):
+    make_interview_session(
+        user_id=normal_user.id,
+        status="completed",
+        evaluation=_report(
+            required=["Kubernetes"],
+            questions=[
+                {"question": "Kubernetes 的调度怎么做？", "overall_score": 50, "feedback": "只说了概念"},
+            ],
+        ),
+        evaluation_status="completed",
+        completed_at=datetime(2026, 10, 2),
+    )
+    jd = _job(db_session, normal_user, required=["K8s", "Go"])
+
+    focus = interview_profile(jd_id=jd.id, db=db_session, current_user=normal_user)["data"]["jd_focus"]
+
+    assert [row["canonical"] for row in focus["overlap"]] == ["kubernetes"]
+    assert focus["overlap"][0]["skill"] == "Kubernetes"
+
+
+def test_profile_without_jd_keeps_the_old_shape(db_session, normal_user):
+    body = interview_profile(db=db_session, current_user=normal_user)
+
+    assert body["code"] == 0
+    assert "jd_focus" not in body["data"]
+
+
+def test_jd_focus_is_empty_for_a_job_the_user_cannot_see(db_session, normal_user):
+    foreign = _job(db_session, normal_user, required=["Kafka"], tenant_id=1)
+    foreign.user_id = normal_user.id + 1000
+    db_session.commit()
+
+    focus = interview_profile(jd_id=foreign.id, db=db_session, current_user=normal_user)["data"]["jd_focus"]
+
+    assert focus == {"jd_id": foreign.id, "title": "", "required_count": 0, "overlap": []}
