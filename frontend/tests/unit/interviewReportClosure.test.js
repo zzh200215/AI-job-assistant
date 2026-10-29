@@ -6,6 +6,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import InterviewReport from '@/features/interview/views/InterviewReport.vue'
 import { useSelectionStore } from '@/stores/selection'
 import { installElement } from '@/plugins/element'
+import { readReturnTo } from '@/utils/navigationReturn'
 
 /* P5(b)：报告页要把 P4 的三条回流接成用户能点的下一步。
    “去改简历”要顺手把这份简历设成简历中心的默认版本；“去补技能”要把简历/岗位
@@ -76,6 +77,7 @@ function button(wrapper, text) {
 describe('面试报告页的回流入口', () => {
   beforeEach(() => {
     localStorage.clear()
+    sessionStorage.clear()
     localStorage.setItem('token', 'smoke-test-token')
     localStorage.setItem('user', JSON.stringify({ id: 1, username: 'smoke', role: 'candidate' }))
   })
@@ -90,6 +92,7 @@ describe('面试报告页的回流入口', () => {
 
     expect(router.currentRoute.value.path).toBe('/resume-center')
     expect(useSelectionStore(pinia).defaultResumeId()).toBe(7)
+    expect(readReturnTo()).toEqual({ path: '/interview/report/12', label: '面试报告' })
   })
 
   it('去补技能：把简历与岗位一起写进跨页槽再跳职业规划', async () => {
@@ -104,5 +107,6 @@ describe('面试报告页的回流入口', () => {
     const selection = useSelectionStore(pinia)
     expect(selection.resumeId()).toBe(7)
     expect(selection.jdId()).toBe(9)
+    expect(readReturnTo()).toEqual({ path: '/interview/report/12', label: '面试报告' })
   })
 })

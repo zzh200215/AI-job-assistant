@@ -1067,6 +1067,7 @@ describe('style debt ratchet', () => {
       'src/App.vue',
       'src/components/ui/AppLoadError.vue',
       'src/components/ui/AppPanel.vue',
+      'src/components/ui/ReturnToBanner.vue',
     ]
     const scanned = viewSources.map(({ rel }) => rel)
     const missing = vueFiles('src')

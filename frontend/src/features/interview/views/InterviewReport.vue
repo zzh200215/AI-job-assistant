@@ -279,6 +279,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
 import { getInterviewDetail } from '@/api/interview'
 import { useSelectionStore } from '@/stores/selection'
+import { rememberReportReturn } from '@/utils/navigationReturn'
 import {
   localizeRecommendationText,
   localizeSentence,
@@ -456,12 +457,14 @@ function goSetup() {
 
 function goRewriteResume() {
   if (report.value?.resume_id) selection.rememberDefaultResume(report.value.resume_id)
+  rememberReportReturn(route.params.sessionId)
   router.push('/resume-center')
 }
 
 function goCareerPlanning() {
   if (report.value?.resume_id) selection.rememberResume(report.value.resume_id)
   if (report.value?.jd_id) selection.rememberJD(report.value.jd_id)
+  rememberReportReturn(route.params.sessionId)
   router.push('/career-planning')
 }
 

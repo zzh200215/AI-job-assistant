@@ -1,5 +1,6 @@
 <template>
   <div class="page-shell career-planning-page">
+    <ReturnToBanner />
     <section class="career-hero">
       <div class="hero-copy">
         <div class="hero-kicker">Career Planning</div>
@@ -763,6 +764,7 @@ import { useCareerDirections } from '@/features/planning/composables/useCareerDi
 import { useCareerPlanningRun } from '@/features/planning/composables/useCareerPlanningRun'
 import { usePlanningOptions } from '@/features/planning/composables/usePlanningOptions'
 import { useSalaryMarket } from '@/features/planning/composables/useSalaryMarket'
+import ReturnToBanner from '@/components/ui/ReturnToBanner.vue'
 import { normalizeLocalizedTextList } from '@/utils/analysisLocalization'
 import { isTopTier } from '@/utils/scoreTone'
 import { SCORE_UNREADABLE_TEXT, readScore, scoreGap, scorePairReadable } from '@/utils/aiScore'

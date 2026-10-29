@@ -1,5 +1,6 @@
 <template>
   <div class="page-shell resume-center">
+    <ReturnToBanner />
     <div class="page-header">
       <div>
         <h2>简历中心</h2>
@@ -596,6 +597,7 @@ import { userErrorCopy } from '@/utils/requestTracing'
 import { computed, reactive, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { createAgentTaskPoller } from '@/utils/agentTaskPolling'
+import ReturnToBanner from '@/components/ui/ReturnToBanner.vue'
 import {
   UploadFilled,
   MoreFilled,
