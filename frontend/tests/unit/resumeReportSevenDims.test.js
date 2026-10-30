@@ -155,7 +155,7 @@ describe('七维评分概览上屏', () => {
     await openDiagnosis(payload)
 
     const missing = dimItems()[2]
-    expect(missing.querySelector('.dim-none').textContent).toBe('本次分析未给出该维度评分')
+    expect(missing.querySelector('.dim-none').textContent).toBe('本次分析未给出该项评分')
     expect(missing.querySelector('.el-progress')).toBeNull()
     expect(missing.querySelector('strong').textContent).toBe('— / 20')
   })
@@ -163,7 +163,7 @@ describe('七维评分概览上屏', () => {
   it('评级与总分同屏，未知时不画 0', async () => {
     await openDiagnosis(diagnosis())
 
-    expect(document.querySelector('.diag-score-label').textContent.trim()).toBe('D 级 · 七维合计')
+    expect(document.querySelector('.diag-score-label').textContent.trim()).toBe('D 级 · 七项合计')
     expect(document.querySelector('.gauge-text').textContent.trim()).toBe('62')
   })
 
@@ -176,7 +176,7 @@ describe('七维评分概览上屏', () => {
     await openDiagnosis(payload)
 
     expect(document.querySelector('.gauge-text').textContent.trim()).toBe('未评分')
-    expect(document.querySelector('.diag-score-label').textContent.trim()).toBe('七维合计')
+    expect(document.querySelector('.diag-score-label').textContent.trim()).toBe('七项合计')
   })
 
   it('首屏结论段那行念出方向、目标等级与日期', async () => {
@@ -230,7 +230,7 @@ describe('七维评分概览上屏', () => {
     const body = document.querySelector('.diag-details').textContent
     expect(body).toContain('本次分析未给出竞争分析')
     expect(body).toContain('本次分析未给出升档项')
-    expect(body).toContain('本次分析没有逐维写出待优化点')
+    expect(body).toContain('本次分析没有逐项写出待优化点')
   })
 
   it('完整度那一屏仍写着它是系统检查，不与七维混读', async () => {
@@ -242,7 +242,7 @@ describe('七维评分概览上屏', () => {
     const titles = [...document.querySelectorAll('.el-collapse-item__header')].map(
       (el) => el.textContent
     )
-    expect(titles.join(' ')).toContain('简历模块完整度（系统检查，非 AI）')
+    expect(titles.join(' ')).toContain('简历内容完整度（系统检查，非 AI）')
     expect(document.querySelector('.diag-details').textContent).toContain('缺少教育背景')
   })
 })

@@ -163,11 +163,11 @@ def _scorecard(report: PortfolioReport) -> str:
     )
     scale = (
         f'<p class="concl" id="grade-scale">评级档位：{_e(report.grade_scale)}。'
-        "这一档说的是<b>这一组项目叠在一起</b>；这里的档位区间按组合口径切，"
+        "这一档说的是<b>这一组项目叠在一起</b>；这里的档位区间按组合评分单独计算，"
         "同名的那一档与单项目报告里的不是同一个分数带。</p>"
     )
     return (
-        "<h3>1.1 组合六维评分卡</h3>"
+        "<h3>1.1 组合六项评分卡</h3>"
         + _scroll(
             _table(
                 ["维度", "得分", "满分", "落档", "主要扣分理由"], rows, "tbl scorecard", min_px=rubric.SCORECARD_MIN_PX
@@ -550,7 +550,7 @@ def render_portfolio_report_html(report: PortfolioReport) -> str:
         + "　·　本文档基于候选人提交的简历文本整理，项目名 / 公司名 / 真实人名按脱敏规则处理；带"
         + '<span class="todo">【待补】</span>'
         + "的地方需由使用者按文中的路径跑一遍、填上真实数据后再使用。<br>"
-        + "这一份用的是<b>组合那把六维尺</b>（含位次区间）。"
+        + "这一份用的是<b>组合那把六项尺</b>（含位次区间）。"
         + _e(THREE_RUBRICS_NOTE)
         + "</footer>"
         + '<button class="totop" id="totop" type="button" aria-label="回顶部">↑</button>'

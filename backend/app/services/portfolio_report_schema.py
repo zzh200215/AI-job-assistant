@@ -33,7 +33,7 @@ MIN_PROJECTS = 2
 EXCLUDED_NOTE = "这一份组合分析不给总分与等级：下面几条里有一条踩中了，几个项目叠在一起的意义本身就不作数了。"
 
 # 出局那份不许续跑第四节，接口层给的那一句（与 EXCLUDED_NOTE 是同一件事的两个场合）。
-EXCLUDED_NO_QUESTIONS_MESSAGE = "这一份命中了一条一票否决，按口径不出跨项目的题：先把那一条解开，这一节才有价值。"
+EXCLUDED_NO_QUESTIONS_MESSAGE = "这一份命中了一条一票否决，按规则不出跨项目的题：先把那一条解开，这一节才有价值。"
 
 QUESTIONS_DEFERRED_NOTE = (
     "这一节先不出题。这一组项目踩中了一条一票否决——面试官把几个项目放在一起看时，"

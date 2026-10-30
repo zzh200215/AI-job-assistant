@@ -214,13 +214,13 @@ describe('后端真输出的单项目分析', () => {
 
   it('项目存在 projects 键上时，这一页也说得出有几个项目', async () => {
     const wrapper = await mountFormOnly({ projects: [{ name: '甲项目', desc: '做过的事' }] })
-    expect(wrapper.text()).not.toContain('这份简历里没解析出项目经历')
+    expect(wrapper.text()).not.toContain('这份简历里没有识别到项目经历')
     wrapper.unmount()
   })
 
-  it('真的没有项目时，说的是没解析出项目经历，而不是把下拉空着让人猜', async () => {
+  it('真的没有项目时，说的是没有识别到项目经历，而不是把下拉空着让人猜', async () => {
     const wrapper = await mountFormOnly({})
-    expect(wrapper.text()).toContain('这份简历里没解析出项目经历')
+    expect(wrapper.text()).toContain('这份简历里没有识别到项目经历')
     wrapper.unmount()
   })
 
@@ -229,7 +229,7 @@ describe('后端真输出的单项目分析', () => {
     // 静态那条钉子（noteAbsentPhrase.test.mjs）只能证明"这行字在文件里"；
     // 模板忘了插值时它照样绿，而读者拿到的是少一句话的交付物。这一条按渲染出来的文字比。
     const text = wrapper.find('#p-profile').text()
-    expect(text).toContain('这里有三种评分口径')
+    expect(text).toContain('这里有三种评分')
     expect(text).toContain('三种分数不能直接比较')
     wrapper.unmount()
   })

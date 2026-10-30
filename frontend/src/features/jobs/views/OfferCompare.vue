@@ -675,7 +675,7 @@ async function generateAdvice() {
       `【推荐】`,
       `加权评分最高：${best.company} (${weightedScore(best)}分)`,
       '',
-      `【各维度最佳】`,
+      `【各项最佳】`,
       ...dimBest.map((d) => `- ${d.dim}：${d.company} (${d.score}分)`),
       '',
       '【决策参考】',

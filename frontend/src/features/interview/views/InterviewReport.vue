@@ -41,7 +41,7 @@
           <strong>{{ timeoutCount }}</strong>
         </div>
         <div class="stat-card">
-          <span class="stat-label">最强维度</span>
+          <span class="stat-label">最强项</span>
           <strong>{{ strongestDimension.label }}</strong>
         </div>
       </section>
@@ -180,7 +180,7 @@
 
                   <div v-if="item.evidence" class="timeline-answer evidence-block">
                     <div class="field-label">评分证据</div>
-                    <p>{{ item.evidence.answer_excerpt || '已保留本题回答和评分维度。' }}</p>
+                    <p>{{ item.evidence.answer_excerpt || '已保留本题回答和评分要点。' }}</p>
                   </div>
                 </div>
               </div>
@@ -235,7 +235,7 @@
             </template>
             <ul class="plain-list">
               <li>如果只看一项，先补 {{ weakestDimension.label }}。</li>
-              <li>当前最稳定的能力维度是 {{ strongestDimension.label }}。</li>
+              <li>当前最稳定的能力项是 {{ strongestDimension.label }}。</li>
               <li>{{ localizedHiringRecommendation || '系统当前未给出明确推进建议。' }}</li>
             </ul>
           </AppPanel>

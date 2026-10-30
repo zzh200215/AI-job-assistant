@@ -30,7 +30,7 @@ QUESTIONS_DEFERRED_NOTE = (
 )
 
 # 命中红线那份，接口层拒绝续跑第四节时给的那一句（同一件事的另一种场合，措辞只有一处权威）。
-EXCLUDED_NO_QUESTIONS_MESSAGE = "这一份命中了一条一票否决，按口径不出二十道题：先解开那条红线，这一节才有价值。"
+EXCLUDED_NO_QUESTIONS_MESSAGE = "这一份命中了一条一票否决，按规则不出二十道题：先解开那条红线，这一节才有价值。"
 
 # 1.2 的三栏标题词表。
 _SECTION_MARKERS: tuple[tuple[str, tuple[str, ...]], ...] = (

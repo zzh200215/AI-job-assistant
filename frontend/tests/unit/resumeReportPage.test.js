@@ -438,7 +438,7 @@ describe('评分概览那一屏', () => {
     expect(wrapper.findAllComponents(ElProgress)).toHaveLength(6)
     const rowText = wrapper.findAll('.rr-dim-row')[3].text()
     expect(rowText).toContain('未评分')
-    expect(rowText).toContain('本次分析未给出该维度评分')
+    expect(rowText).toContain('本次分析未给出该项评分')
     expect(rowText).not.toContain('0 / 15')
     expect(wrapper.find('.rr-total-row').text()).toContain('未评分')
     wrapper.unmount()

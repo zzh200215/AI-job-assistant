@@ -108,7 +108,7 @@ def _header(report: ProjectReport) -> str:
     persuasion = (report.contribution or {}).get("persuasion")
     line = f'<div class="ttl">{TITLE}｜{_e(report.excerpt.get("name") or "")}</div>'
     if persuasion is not None:
-        line += f'<div class="sub">这份简历的项目说服力（六维分 × 位次系数 ÷ 10）：{persuasion}</div>'
+        line += f'<div class="sub">这份简历的项目说服力（六项评分 × 位次系数 ÷ 10）：{persuasion}</div>'
     return f'<header class="top">{line}<div class="pills">{_pills(report)}</div></header>'
 
 
@@ -157,7 +157,7 @@ def _scorecard(report: ProjectReport) -> str:
     )
     scale = f'<p class="concl" id="grade-scale">评级档位：{_e(report.grade_scale)}。这一档说的是这一个项目，不是这份简历。</p>'
     return (
-        "<h3>1.1 六维评分卡</h3>"
+        "<h3>1.1 六项评分卡</h3>"
         + _table(["维度", "得分", "满分", "落档", "主要扣分理由"], rows, "tbl scorecard")
         + scale
     )
@@ -211,7 +211,7 @@ def _highlights(report: ProjectReport) -> str:
         _row([_cell(f"<b>{_e(item['metric'])}</b>"), _cell(_todo(item["value"])), _cell(_inline(item["basis"]))])
         for item in report.highlights
     ]
-    table = _table(["指标", "数值", "口径"], rows)
+    table = _table(["指标", "数值", "说明"], rows)
     if not table:
         return '<h3>1.3 亮点指标（已脱敏）</h3><p class="muted">这一份项目原文里没有可摘出来的量化亮点。</p>'
     return "<h3>1.3 亮点指标（已脱敏）</h3>" + table
@@ -572,7 +572,7 @@ def render_project_report_html(report: ProjectReport) -> str:
         + "　·　本文档基于候选人提交的简历文本整理，项目名 / 公司名 / 真实人名按脱敏规则处理；带"
         + '<span class="todo">【待补】</span>'
         + "的地方需由使用者按文中的路径跑一遍、填上真实数据后再使用。<br>"
-        + "这一份用的是<b>项目那把六维尺</b>（含位次）。"
+        + "这一份用的是<b>项目那把六项尺</b>（含位次）。"
         + _e(THREE_RUBRICS_NOTE)
         + "</footer>"
         + '<button class="totop" id="totop" type="button" aria-label="回顶部">↑</button>'

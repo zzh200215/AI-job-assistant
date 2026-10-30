@@ -373,9 +373,9 @@
                 }}</strong>
               </div>
               <div class="rag-metric">
-                <span>专业能力模型</span>
+                <span>专业能力参考</span>
                 <strong class="data-value">{{
-                  analysisConfidence.signals?.has_skill_model ? '是' : '否'
+                  analysisConfidence.signals?.has_skill_model ? '已匹配' : '未匹配'
                 }}</strong>
               </div>
             </div>
@@ -575,7 +575,7 @@ const analysisFlowHint = computed(() => {
   }
   if (taskOutcome.value === 'failed') return '分析失败，请检查输入或稍后重试'
   if (taskOutcome.value === 'cancelled') return '任务已取消'
-  if (taskOutcome.value === 'timeout') return '轮询超时，请稍后查看历史记录'
+  if (taskOutcome.value === 'timeout') return '分析时间有点久，请稍后到历史记录查看结果'
   return '尚未启动分析任务'
 })
 
@@ -594,8 +594,7 @@ const terminalHint = computed(() => {
     return '任务部分完成，但没有生成完整分析结果。可以稍后去历史记录查看，或直接重试。'
   if (taskOutcome.value === 'failed') return '任务执行失败，当前没有可展示的分析结果。'
   if (taskOutcome.value === 'cancelled') return '任务已取消，当前没有可展示的分析结果。'
-  if (taskOutcome.value === 'timeout')
-    return '前端轮询已超时，后台任务可能仍在继续。你可以稍后去历史记录查看结果。'
+  if (taskOutcome.value === 'timeout') return '分析仍在进行中，你可以稍后到历史记录查看结果。'
   return '当前没有可展示的分析结果。'
 })
 

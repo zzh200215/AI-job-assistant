@@ -340,8 +340,8 @@ def test_夹具通道只放行示例值不放行别的():
 def test_用的还是那把组合尺不是单项目那把():
     report = _report()
     document = render_portfolio_report_html(report)
-    assert "组合那把六维尺" in document
-    assert "组合六维评分卡" in document
+    assert "组合那把六项尺" in document
+    assert "组合六项评分卡" in document
     assert "第 1~3 位" in document
 
 
@@ -349,7 +349,7 @@ def test_反推的三份数据形状都在页面上():
     report = _report()
     document = render_portfolio_report_html(report)
     for needle in (
-        "1.1 组合六维评分卡",
+        "1.1 组合六项评分卡",
         "1.2 项目横向对比",
         "1.3 组合能力覆盖矩阵",
         "1.4 整体风险提示",

@@ -245,7 +245,7 @@ describe('后端真输出的组合分析', () => {
     const wrapper = await mountFromBackendBytes()
     // 静态那条钉子只能证明"这行字在文件里"；模板忘了插值时它照样绿，
     // 而读者拿到的是少一句话的交付物——这条按**渲染出来的文字**比。
-    expect(wrapper.find('#c-profile').text()).toContain('这里有三种评分口径')
+    expect(wrapper.find('#c-profile').text()).toContain('这里有三种评分')
     expect(wrapper.find('#c-profile').text()).toContain('三种分数不能直接比较')
   })
 })

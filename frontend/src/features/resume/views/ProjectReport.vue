@@ -6,8 +6,8 @@
         <div class="page-header-sub">
           {{
             report
-              ? `${reportName} · 六维评分卡、四张图、使用建议、面试准备`
-              : '分析单个项目：六个维度、项目排名和关键风险，与整份简历的七维报告分开看'
+              ? `${reportName} · 六项评分卡、四张图、使用建议、面试准备`
+              : '分析单个项目：六个评分项、项目排名和关键风险，与整份简历的七项报告分开看'
           }}
         </div>
       </div>
@@ -84,7 +84,7 @@
           >这一份项目分析没能生成，可以再点一次</span
         >
         <span v-else-if="!projects.length && form.resumeId" class="pr-loading"
-          >这份简历里没解析出项目经历</span
+          >这份简历里没有识别到项目经历</span
         >
       </div>
     </section>
@@ -121,11 +121,11 @@
           <span class="pr-pill"><b>评分</b>{{ scoreText }}</span>
         </div>
 
-        <h3>1.1 六维评分卡</h3>
+        <h3>1.1 六项评分卡</h3>
         <table class="pr-table scorecard">
           <thead>
             <tr>
-              <th>维度</th>
+              <th>评分项</th>
               <th class="n">得分</th>
               <th class="n">满分</th>
               <th>落档</th>
@@ -144,7 +144,7 @@
               <td>{{ bandOf(row) }}</td>
               <td>
                 <ProjectTodoText v-if="row.note" :text="row.note" />
-                <span v-else class="pr-muted">本次分析没有为这一维写出待优化点</span>
+                <span v-else class="pr-muted">本次分析没有为这一项写出待优化点</span>
               </td>
             </tr>
             <tr class="total">
@@ -180,7 +180,7 @@
             <tr>
               <th>指标</th>
               <th>数值</th>
-              <th>口径</th>
+              <th>说明</th>
             </tr>
           </thead>
           <tbody>
@@ -582,7 +582,7 @@ import ProjectTodoText from '../components/ProjectTodoText.vue'
    所以每一份都得自报自己这把尺与另外两把不是一把。跨树那条钉子见
    frontend/tests/noteAbsentPhrase.test.mjs。 */
 const THREE_RUBRICS_NOTE =
-  '这里有三种评分口径：整份简历七维、单个项目六维、多个项目组合六维。三种分数不能直接比较。'
+  '这里有三种评分：整份简历七项、单个项目六项、多个项目组合六项。三种分数不能直接比较。'
 
 /* 锚点与后端 `project_report_html_lint.SECTIONS` 同一张表：两份交付物必须指向同一批 id。 */
 const SECTIONS = [
@@ -828,7 +828,7 @@ async function loadProjects() {
       ? wanted
       : (projects.value[0]?.index ?? null)
   } catch {
-    pageError.value = '这一份简历的项目读不出来，回简历中心确认它已经解析过再试'
+    pageError.value = '这一份简历的项目读不出来，回简历中心确认已有可用的项目经历再试'
   }
 }
 

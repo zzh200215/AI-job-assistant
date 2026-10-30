@@ -184,7 +184,7 @@ async function tableRows() {
    必须按 pane 作用域查——技能标签页也有一个同名 h4，全局 `find` 会拿到技能那一列。 */
 function explainMissingTags() {
   const pane = [...document.querySelectorAll('.el-tab-pane')].find((p) =>
-    p.textContent.includes('六维评分详情')
+    p.textContent.includes('六项评分详情')
   )
   const col = [...pane.querySelectorAll('.el-col')].find(
     (c) => c.querySelector('h4')?.textContent.trim() === '缺失技能'

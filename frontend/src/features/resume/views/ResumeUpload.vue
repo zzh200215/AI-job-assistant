@@ -203,7 +203,7 @@
               <span class="gauge-text">{{ currentDiagnosis.total_score ?? '未评分' }}</span>
             </div>
             <div class="diag-score-label">
-              {{ currentDiagnosis.grade ? `${currentDiagnosis.grade} 级 · 七维合计` : '七维合计' }}
+              {{ currentDiagnosis.grade ? `${currentDiagnosis.grade} 级 · 七项合计` : '七项合计' }}
             </div>
           </div>
           <div class="diag-dims">
@@ -220,7 +220,7 @@
                 :color="scoreToneColor(dimRate(dim))"
                 :stroke-width="6"
               />
-              <p v-else class="dim-none">本次分析未给出该维度评分</p>
+              <p v-else class="dim-none">本次分析未给出该项评分</p>
             </div>
           </div>
         </div>
@@ -242,7 +242,7 @@
 
         <!-- 诊断详情 -->
         <el-collapse v-model="diagActivePanels" class="diag-details">
-          <el-collapse-item title="七维待优化点" name="notes">
+          <el-collapse-item title="七项待优化点" name="notes">
             <div v-if="dimensionNotes.length">
               <p v-for="dim in dimensionNotes" :key="dim.key" class="diag-issue">
                 <el-icon><WarningFilled /></el-icon>
@@ -250,7 +250,7 @@
                 >：{{ dim.note }}
               </p>
             </div>
-            <el-empty v-else :image-size="60" description="本次分析没有逐维写出待优化点" />
+            <el-empty v-else :image-size="60" description="本次分析没有逐项写出待优化点" />
           </el-collapse-item>
           <el-collapse-item title="距上一档还差什么" name="next">
             <div v-if="currentDiagnosis.to_next_grade?.length">
@@ -312,7 +312,7 @@
             </div>
             <el-empty v-else :image-size="60" description="本次分析未给出竞争分析" />
           </el-collapse-item>
-          <el-collapse-item title="简历模块完整度（系统检查，非 AI）" name="completeness">
+          <el-collapse-item title="简历内容完整度（系统检查，非 AI）" name="completeness">
             <div v-if="currentDiagnosis.completeness_issues?.length">
               <p
                 v-for="(item, i) in currentDiagnosis.completeness_issues"
@@ -322,7 +322,7 @@
                 <el-icon><WarningFilled /></el-icon> {{ item }}
               </p>
             </div>
-            <el-empty v-else :image-size="60" description="未检出缺失模块" />
+            <el-empty v-else :image-size="60" description="未检出缺失内容" />
           </el-collapse-item>
           <el-collapse-item name="rewrite">
             <template #title>
@@ -422,7 +422,7 @@
               </div>
 
               <p v-if="diagnosisStale" class="diag-note">
-                简历内容已更新，上方的维度评分仍是改写前的结果；关闭后重新打开诊断即可刷新。
+                简历内容已更新，上方的各项评分仍是改写前的结果；关闭后重新打开诊断即可刷新。
               </p>
             </template>
           </el-collapse-item>

@@ -102,7 +102,7 @@ const visible = defineModel({ type: Boolean })
 
       <div v-if="job.sourceUrl" class="drawer-section">
         <h4>来源链接</h4>
-        <el-link :href="job.sourceUrl" target="_blank" type="primary"> 打开原始职位链接 </el-link>
+        <el-link :href="job.sourceUrl" target="_blank" type="primary"> 打开职位原文链接 </el-link>
       </div>
     </template>
   </el-drawer>

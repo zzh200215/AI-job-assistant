@@ -51,7 +51,7 @@
       <p v-if="pageError" class="pf-error">{{ pageError }}</p>
     </div>
 
-    <nav v-if="visibleSections.length" class="pf-nav" aria-label="四大节点导航">
+    <nav v-if="visibleSections.length" class="pf-nav" aria-label="四部分导航">
       <a
         v-for="item in visibleSections"
         :key="item.anchor"
@@ -82,12 +82,12 @@
           </ul>
         </div>
 
-        <h3>1.1 组合六维评分卡</h3>
+        <h3>1.1 组合六项评分卡</h3>
         <div class="pf-scroll">
           <table class="pf-tbl" :style="{ minWidth: `${SCORECARD_MIN_PX}px` }">
             <thead>
               <tr>
-                <th>维度</th>
+                <th>评分项</th>
                 <th class="n">得分</th>
                 <th class="n">满分</th>
                 <th>落档</th>
@@ -124,7 +124,7 @@
         <p class="pf-concl">
           {{
             report.grade_scale
-          }}。这一档说的是<b>这一组项目叠在一起</b>；这里的档位区间按组合口径切，
+          }}。这一档说的是<b>这一组项目叠在一起</b>；这里的档位区间按组合评分单独计算，
           同名的那一档与单项目报告里的不是同一个分数带。{{ THREE_RUBRICS_NOTE }}
         </p>
 
@@ -158,7 +158,7 @@
           <table class="pf-tbl pf-matrix" :style="wideStyle(true)">
             <thead>
               <tr>
-                <th>能力维度</th>
+                <th>能力项</th>
                 <th v-for="p in report.projects" :key="p.project_index">
                   {{ labelOf(p) }}
                 </th>
@@ -465,11 +465,11 @@ const SECTIONS = [
 ]
 
 /* 「这一栏空着」那句话与两份渲染器同一句权威（`report_html_lint.NOTE_ABSENT`）。 */
-const NOTE_ABSENT = '本次分析没有为这一维写出待优化点'
+const NOTE_ABSENT = '本次分析没有为这一项写出待优化点'
 
 /* 这句与两份下载 HTML、单项目那一页同一句权威（`report_html_lint.THREE_RUBRICS_NOTE`）。 */
 const THREE_RUBRICS_NOTE =
-  '这里有三种评分口径：整份简历七维、单个项目六维、多个项目组合六维。三种分数不能直接比较。'
+  '这里有三种评分：整份简历七项、单个项目六项、多个项目组合六项。三种分数不能直接比较。'
 
 /* 格子符号与后端 `portfolio_report_rubric.COVERAGE_MARKS` 同一张表。 */
 const MARKS = { 重点覆盖: '●', 部分覆盖: '○', 未覆盖: '' }
@@ -697,7 +697,7 @@ async function loadProjects() {
       .map((row, index) => ({ index, name: row.name || `项目经历 ${index + 1}` }))
     form.indices = projects.value.map((row) => row.index)
   } catch {
-    pageError.value = '这一份简历的项目读不出来，回简历中心确认它已经解析过再试'
+    pageError.value = '这一份简历的项目读不出来，回简历中心确认已有可用的项目经历再试'
   }
 }
 

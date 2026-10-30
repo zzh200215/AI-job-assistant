@@ -38,7 +38,7 @@
       </div>
     </div>
 
-    <h4 class="mt">六维评分详情</h4>
+    <h4 class="mt">六项评分详情</h4>
     <div v-for="dim in explainResult.dimensions" :key="dim.name" class="dim-block">
       <div class="dim-header">
         <span class="dim-name">{{ dim.name }}</span>

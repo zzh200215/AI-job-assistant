@@ -26,7 +26,7 @@
         <el-select v-model="selectedId" class="version-select" @change="onVersionChange">
           <el-option label="原始简历" value="original">
             <span>原始简历</span>
-            <small>解析内容</small>
+            <small>识别内容</small>
           </el-option>
           <el-option
             v-for="version in persistedVersions"
@@ -637,10 +637,7 @@ function normalizeSuggestions(changeLog) {
     return Object.entries(changeLog).map(([key, value], index) => ({
       id: key,
       title: key,
-      detail:
-        typeof value === 'string'
-          ? value
-          : value?.reason || value?.description || JSON.stringify(value),
+      detail: typeof value === 'string' ? value : value?.reason || value?.description || '暂无说明',
       index,
     }))
   }

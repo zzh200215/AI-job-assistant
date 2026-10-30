@@ -5,7 +5,7 @@
         <h2>简历评估报告</h2>
         <div class="page-header-sub">
           {{
-            report ? headerName : '六个模块：小结、评分概览、竞争分析、修改建议、面试预演、投递策略'
+            report ? headerName : '六个部分：小结、评分概览、竞争分析、修改建议、面试预演、投递策略'
           }}
         </div>
       </div>
@@ -73,7 +73,7 @@
     </section>
 
     <template v-if="report">
-      <nav class="rr-nav" aria-label="报告模块快速导航">
+      <nav class="rr-nav" aria-label="报告内容导航">
         <a
           v-for="m in MODULES"
           :key="m.anchor"
@@ -109,13 +109,13 @@
       <!-- 模块二：一、评分概览 -->
       <section id="m-score" class="rr-card">
         <h3 class="rr-h3">
-          一、评分概览（七维 100 分）
-          <span class="rr-hint">每维满分不同，下面的进度条画的是「拿到该维满分的几成」</span>
+          一、评分概览（七项 100 分）
+          <span class="rr-hint">每项满分不同，下面的进度条画的是「拿到该项满分的几成」</span>
         </h3>
         <table class="rr-table">
           <thead>
             <tr>
-              <th>维度</th>
+              <th>评分项</th>
               <th class="rr-th-num">得分 / 满分</th>
               <th>待优化点</th>
             </tr>
@@ -135,10 +135,10 @@
                   :stroke-width="6"
                   :show-text="false"
                 />
-                <p v-else class="rr-dim-none">本次分析未给出该维度评分</p>
+                <p v-else class="rr-dim-none">本次分析未给出该项评分</p>
               </td>
               <td class="rr-dim-note">
-                <span v-if="!dim.note" class="rr-muted">本次分析没有为这一维写出待优化点</span>
+                <span v-if="!dim.note" class="rr-muted">本次分析没有为这一项写出待优化点</span>
                 <template v-else>
                   <el-tag
                     v-if="!scoreToneAtLeast(dimRate(dim), 'good')"
@@ -146,7 +146,7 @@
                     type="warning"
                     effect="plain"
                   >
-                    这维拖后腿
+                    这项拖后腿
                   </el-tag>
                   {{ dim.note }}
                 </template>
@@ -514,7 +514,7 @@ const fillins = computed(() => {
 
 const headerName = computed(() => {
   const name = report.value?.verdict?.candidate_name
-  return name ? `${name} · 六模块评估报告` : '六模块评估报告'
+  return name ? `${name} · 六部分评估报告` : '六部分评估报告'
 })
 
 const candidateName = computed(

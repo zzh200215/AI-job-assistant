@@ -288,7 +288,7 @@ def _fallback_evaluation() -> dict[str, Any]:
         "depth": 50,
         "expression": 60,
         "overall_score": 58,
-        "feedback": "自动评分暂不可用，已保留本题回答和基础复盘口径。",
+        "feedback": "自动评分暂不可用，已保留本题回答和基础复盘说明。",
         "improvement": "请覆盖问题核心点，并补充具体案例、数据或技术取舍。",
     }
 

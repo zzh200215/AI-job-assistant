@@ -50,10 +50,10 @@
     <!-- 无市场数据：说清楚是"没数据"，不是"薪资为 0" -->
     <div v-if="overview && !overview.has_data" class="panel">
       <div class="panel-body">
-        <strong>没有找到 {{ searchPosition }} 的可解析薪资数据</strong>
+        <strong>没有找到 {{ searchPosition }} 的薪资数据</strong>
         <p class="no-data-hint">
-          {{ overview.message || '该筛选条件下没有可解析的薪资范围。' }}
-          共匹配 {{ overview.total_jds }} 条岗位，其中 {{ overview.parsed_count }} 条带可解析薪资。
+          {{ overview.message || '该筛选条件下没有可用的薪资范围。' }}
+          共匹配 {{ overview.total_jds }} 条岗位，其中 {{ overview.parsed_count }} 条有薪资信息。
         </p>
       </div>
     </div>
