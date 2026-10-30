@@ -103,8 +103,8 @@ def _build_feedback_action_items(
             {
                 "type": "ranking_quality",
                 "severity": "high",
-                "title": "整体点踩偏高，建议回看推荐排序权重",
-                "detail": f"当前点踩占比 {dislike_rate:.0%}，需要优先检查技能匹配、地点和薪资权重。",
+                "title": "最近不感兴趣的岗位偏多",
+                "detail": f"当前点踩占比 {dislike_rate:.0%}。可以回看推荐里的技能、地点和薪资筛选，看看哪里需要调整。",
             }
         )
 
@@ -113,8 +113,8 @@ def _build_feedback_action_items(
             {
                 "type": "score_calibration",
                 "severity": "high",
-                "title": "存在高分点踩，建议校准匹配分阈值",
-                "detail": f"发现 {len(high_score_dislikes)} 条 80 分及以上仍被点踩的反馈，说明评分与用户偏好存在偏差。",
+                "title": "有些高分岗位你并不感兴趣",
+                "detail": f"发现 {len(high_score_dislikes)} 条 80 分及以上但仍被标记不感兴趣的岗位，说明匹配分和你的偏好还有偏差。",
             }
         )
 
@@ -123,8 +123,8 @@ def _build_feedback_action_items(
             {
                 "type": "recall_gap",
                 "severity": "medium",
-                "title": "存在低分点赞，建议补充召回特征",
-                "detail": f"发现 {len(low_score_likes)} 条 60 分以下仍被点赞的反馈，说明部分岗位被低估。",
+                "title": "有些低分岗位你反而感兴趣",
+                "detail": f"发现 {len(low_score_likes)} 条 60 分以下但仍被点赞的岗位，说明部分岗位被低估。",
             }
         )
 
@@ -134,8 +134,8 @@ def _build_feedback_action_items(
             {
                 "type": "industry_bias",
                 "severity": "medium",
-                "title": "行业偏好出现明显分化",
-                "detail": f"{worst['industry']} 的点踩率较高，可检查行业词权重、工作年限和岗位标签映射。",
+                "title": "你对不同行业的兴趣差别较大",
+                "detail": f"{worst['industry']} 的点踩率较高，可以看看这个行业的岗位是否符合你的方向。",
             }
         )
 
@@ -144,8 +144,8 @@ def _build_feedback_action_items(
             {
                 "type": "stable",
                 "severity": "low",
-                "title": "当前反馈较稳定",
-                "detail": "暂无明显异常，可继续积累反馈样本后再调整推荐规则。",
+                "title": "当前反馈比较稳定",
+                "detail": "暂时没有明显异常，继续点赞或点踩会让推荐更懂你。",
             }
         )
 

@@ -211,7 +211,7 @@ def test_thin_or_salary_free_directions_are_flagged(db_session, user):
     by_key = {d.key: d for d in directions}
 
     assert by_key["唯一岗"].degraded is True
-    assert any("样本" in reason for reason in by_key["唯一岗"].degrade_reasons)
+    assert any("岗位" in reason for reason in by_key["唯一岗"].degrade_reasons)
     assert by_key["唯一岗"].salary["has_data"] is False
     assert by_key["双岗工程师"].degraded is True, "two postings is still not a market"
     assert by_key["双岗工程师"].sample_count == 2
@@ -294,10 +294,10 @@ def test_rule_reason_states_the_evidence_and_the_weakness():
     thin = _direction("数据工程师")
     thin.coverage = None
     thin.degraded = True
-    thin.degrade_reasons = ["仅 1 条岗位样本"]
+    thin.degrade_reasons = ["只收集到 1 个岗位"]
 
     assert "未列出可核对的硬性要求" in agent_mod.rule_reason(thin)
-    assert "仅 1 条岗位样本" in agent_mod.rule_reason(thin)
+    assert "只收集到 1 个岗位" in agent_mod.rule_reason(thin)
     assert "约 80%" in agent_mod.rule_reason(_direction("后端工程师"))
 
 

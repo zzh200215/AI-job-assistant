@@ -151,11 +151,11 @@ def derive_directions(
         salary = _salary_for(group)
         reasons: list[str] = []
         if len(group) < min_samples:
-            reasons.append(f"仅 {len(group)} 条岗位样本")
+            reasons.append(f"只收集到 {len(group)} 个岗位")
         if not salary["has_data"]:
-            reasons.append("样本岗位均未填写可解析薪资")
+            reasons.append("这些岗位都没有公开薪资区间")
         elif salary["sample_size"] < MIN_RELIABLE_SAMPLE:
-            reasons.append(f"薪资仅 {salary['sample_size']} 条可解析样本")
+            reasons.append(f"只有 {salary['sample_size']} 个岗位有薪资信息")
 
         directions.append(
             CareerDirection(
