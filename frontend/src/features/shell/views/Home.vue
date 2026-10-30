@@ -13,26 +13,28 @@
           }}
         </p>
       </div>
-      <div class="welcome-actions">
-        <el-button type="primary" @click="go('/smart-analysis')">
-          <el-icon><MagicStick /></el-icon> 开始求职分析
-        </el-button>
-        <el-button @click="go('/jobs/pipeline/kanban')">
-          <el-icon><Grid /></el-icon> 打开投递看板
-        </el-button>
-      </div>
-      <div class="signal-stats" aria-label="求职关键指标">
-        <div>
-          <strong>{{ overviewLoaded ? dashSummary.active_applications || 0 : '--' }}</strong>
-          <span>活跃投递</span>
+      <div class="welcome-side">
+        <div class="welcome-actions">
+          <el-button type="primary" @click="go('/smart-analysis')">
+            <el-icon><MagicStick /></el-icon> 开始求职分析
+          </el-button>
+          <el-button @click="go('/jobs/pipeline/kanban')">
+            <el-icon><Grid /></el-icon> 打开投递看板
+          </el-button>
         </div>
-        <div>
-          <strong>{{ overviewLoaded ? overview.weekly_new || 0 : '--' }}</strong>
-          <span>本周新增</span>
-        </div>
-        <div>
-          <strong>{{ interviewRate }}</strong>
-          <span>面试转化</span>
+        <div class="signal-stats" aria-label="求职关键指标">
+          <div>
+            <strong>{{ overviewLoaded ? dashSummary.active_applications || 0 : '--' }}</strong>
+            <span>活跃投递</span>
+          </div>
+          <div>
+            <strong>{{ overviewLoaded ? overview.weekly_new || 0 : '--' }}</strong>
+            <span>本周新增</span>
+          </div>
+          <div>
+            <strong>{{ interviewRate }}</strong>
+            <span>面试转化</span>
+          </div>
         </div>
       </div>
     </section>
@@ -481,6 +483,16 @@ onMounted(loadDashboard)
   max-width: 560px;
 }
 
+.welcome-side {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-end;
+  margin-left: auto;
+}
+
 .signal-kicker {
   display: inline-flex;
   align-items: center;
@@ -525,11 +537,10 @@ onMounted(loadDashboard)
 }
 
 .welcome-actions {
-  position: relative;
-  z-index: 1;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
-  align-self: flex-end;
+  justify-content: flex-end;
 }
 
 .welcome-actions .el-button {
@@ -554,15 +565,12 @@ onMounted(loadDashboard)
 }
 
 .signal-stats {
-  position: absolute;
-  right: 32px;
-  bottom: 0;
   display: grid;
   grid-template-columns: repeat(3, minmax(96px, 1fr));
+  width: 100%;
   overflow: hidden;
   border: 1px solid #303242;
-  border-bottom: 0;
-  border-radius: 10px 10px 0 0;
+  border-radius: 10px;
   background: rgba(11, 12, 18, 0.6);
 }
 
@@ -1185,6 +1193,21 @@ onMounted(loadDashboard)
 
 /* ===== Responsive ===== */
 @media (max-width: 1024px) {
+  .welcome-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .welcome-side {
+    width: 100%;
+    margin-left: 0;
+    align-items: stretch;
+  }
+
+  .welcome-actions {
+    justify-content: flex-start;
+  }
+
   .top-row {
     grid-template-columns: 1fr;
   }
@@ -1206,23 +1229,16 @@ onMounted(loadDashboard)
   .welcome-bar {
     min-height: 0;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 14px;
-    padding: 24px 20px 104px;
+    padding: 24px 20px;
   }
 
   .welcome-bar h1 {
     font-size: 27px;
   }
 
-  .welcome-actions {
-    align-self: flex-start;
-    flex-wrap: wrap;
-  }
-
   .signal-stats {
-    right: 20px;
-    left: 20px;
     grid-template-columns: repeat(3, 1fr);
   }
 
