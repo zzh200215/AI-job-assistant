@@ -43,9 +43,9 @@ describe('scoreTone', () => {
   })
 
   it('hands colors to CSS: no hex literal leaves this module', () => {
-    expect(scoreToneColor(72)).toBe('var(--app-score-good)')
-    expect(scoreToneColor(40)).toBe('var(--app-score-risk)')
-    expect(scoreToneColor(null)).toBe('var(--app-score-unknown)')
+    expect(scoreToneColor(72)).toBe('var(--app-score-good-fill)')
+    expect(scoreToneColor(40)).toBe('var(--app-score-risk-fill)')
+    expect(scoreToneColor(null)).toBe('var(--app-score-unknown-fill)')
     expect(scoreToneClass(72)).toBe('score-tone score-tone--good')
     expect(scoreToneClass(72, MATCH_SCORE_BANDS, 'dim-score')).toBe('dim-score dim-score--good')
     expect(scoreToneFillClass(88)).toBe('score-fill--high')
@@ -54,30 +54,31 @@ describe('scoreTone', () => {
     }
   })
 
-  it('lifts only the two tones that fail as text on a dark surface', () => {
-    // 五个 tone 各有一条，且只有实测不过线的那两档被抬：good 3.06 → 5.08、risk 4.15 → 5.48；
-    // high / warn / unknown 在深色面板上本体就有 5.20 / 5.86 / 5.07，不许顺手也混白。
+  it('keeps text and fill on separate tone tokens so each theme can pick its own direction', () => {
+    // 浅色压深、深色抬白，两套配方都住在 main.css 的 `--app-score-*-text` / `-fill` 里。
+    // JS 只发 token 名：换主题时内联 style 与 class 不会分叉。
     const byValue = [
-      [90, 'var(--app-score-high)'],
-      [72, 'color-mix(in srgb, var(--app-score-good), white 25%)'],
-      [55, 'var(--app-score-warn)'],
-      [30, 'color-mix(in srgb, var(--app-score-risk), white 20%)'],
-      [null, 'var(--app-score-unknown)'],
+      [90, 'var(--app-score-high-text)'],
+      [72, 'var(--app-score-good-text)'],
+      [55, 'var(--app-score-warn-text)'],
+      [30, 'var(--app-score-risk-text)'],
+      [null, 'var(--app-score-unknown-text)'],
     ]
     for (const [value, want] of byValue) {
       expect(scoreToneTextColor(value), `tone of ${value}`).toBe(want)
       expect(scoreToneColor(value)).toContain('var(--app-score-')
+      expect(scoreToneColor(value)).toContain('-fill)')
     }
-    // 反证：文字档不许退化成 tone 本体（那正是 3.06 那一档），也不许多出第二份色值。
+    // 文字档与色块档必须是两个 token：它们的明暗方向相反。
     expect(scoreToneTextColor(72)).not.toBe(scoreToneColor(72))
     expect(scoreToneTextColor(30)).not.toBe(scoreToneColor(30))
-    expect(scoreToneTextColor(90)).toBe(scoreToneColor(90))
+    expect(scoreToneTextColor(90)).not.toBe(scoreToneColor(90))
     for (const [, out] of byValue) {
       expect(out).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
     }
     // 文字档跟着**自己的分界**：52 在匹配分里是 warn、在面试分里是 risk（55 那道界），
     // 两条不能因为共用一张表就被抹平成同一档。
-    expect(interviewScoreTextColor(52)).toBe('color-mix(in srgb, var(--app-score-risk), white 20%)')
-    expect(scoreToneTextColor(52)).toBe('var(--app-score-warn)')
+    expect(interviewScoreTextColor(52)).toBe('var(--app-score-risk-text)')
+    expect(scoreToneTextColor(52)).toBe('var(--app-score-warn-text)')
   })
 })

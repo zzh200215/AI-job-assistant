@@ -753,6 +753,7 @@ onMounted(async () => {
 
 .journey-step.complete .journey-index {
   background: var(--app-success);
+  color: var(--app-surface-contrast);
 }
 
 .journey-index {
@@ -761,8 +762,8 @@ onMounted(async () => {
   height: 30px;
   place-items: center;
   border-radius: 50%;
-  background: #e6eaf2;
-  color: #fff;
+  background: var(--app-surface-muted);
+  color: var(--app-muted);
   font-family: var(--app-font-mono);
   font-size: 11px;
   font-weight: 600;
@@ -771,6 +772,7 @@ onMounted(async () => {
 
 .journey-step.active .journey-index {
   background: var(--app-primary);
+  color: var(--el-color-white);
 }
 
 .journey-step strong,
@@ -867,7 +869,7 @@ onMounted(async () => {
 }
 
 .type-title span {
-  color: var(--app-warning);
+  color: color-mix(in srgb, var(--app-warning), black 30%);
   font-size: 13px;
 }
 
@@ -893,12 +895,12 @@ onMounted(async () => {
 
 .focus-chip {
   background: var(--app-bg);
-  color: var(--app-warning);
+  color: color-mix(in srgb, var(--app-warning), black 30%);
 }
 
 .plain-chip {
   background: var(--app-bg);
-  color: var(--app-success);
+  color: color-mix(in srgb, var(--app-success), black 35%);
 }
 
 /* ---- Checklist ---- */

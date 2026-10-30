@@ -20,9 +20,7 @@ async function renderWorkspace(path) {
     global: { plugins: [installElement, createPinia(), router] },
   })
   /* 路由组件是懒加载的，页面自身还要在 `onMounted` 里发请求，所以"挂载完了"不是一瞬间的事。
-     原来这里只等一个 `setTimeout(0)`：`/jobs/search` 在全量并行跑里红过两次（单跑 13 条全绿），
-     满载时这个 0ms 定时器先于那些微任务/网络桩触发。按 D68 的口径处理——**抬高等待上限、
-     不放宽断言**：最多等 2s，等到了仍然按下面那些原条件判。 */
+     这里最多等 2s，等到了仍然按下面那些原条件判。 */
   const deadline = Date.now() + 2000
   while (Date.now() < deadline) {
     const main = wrapper.find('.main-shell')
@@ -32,8 +30,6 @@ async function renderWorkspace(path) {
   return wrapper
 }
 
-// Routes picked because they own the largest scoped-style blocks in src/features,
-// i.e. the ones the global theme compatibility layer currently depends on.
 const WORKSPACE_ROUTES = [
   ['/home', '首页'],
   ['/jobs/search', '岗位搜索'],
@@ -42,25 +38,46 @@ const WORKSPACE_ROUTES = [
   ['/jobs/pipeline/kanban', '投递看板'],
   ['/jobs/recommend', '岗位推荐'],
   ['/resume-center', '简历中心'],
-  ['/knowledge', '知识库'],
   ['/interview/setup', 'AI 模拟面试'],
   ['/profile', '个人中心'],
   ['/tasks', '任务中心'],
   ['/history', '历史记录'],
-  // Admin-owned page, but the test router carries no guard so it mounts for any
-  // role; it is here because A2 changed its template and script.
-  ['/prompt-traces', 'Prompt 追踪'],
 ]
 
-describe('workspace routes render inside the themed shell', () => {
+/* 管理后台仍走深色作用域；候选端在浅色外壳里。两条腿都要在真实路由上验，
+   否则"切主题"只会在登录页那四条公共路由上成立。 */
+const ADMIN_ROUTES = [
+  ['/prompt-traces', 'Prompt 追踪'],
+  ['/knowledge', '知识库'],
+]
+
+describe('workspace routes render inside the shell', () => {
   for (const [path, title] of WORKSPACE_ROUTES) {
-    it(`${path} mounts with a themed page surface`, async () => {
+    it(`${path} mounts in the light shell`, async () => {
       const wrapper = await renderWorkspace(path)
       try {
-        expect(wrapper.find('.workspace-theme').exists()).toBe(true)
+        expect(wrapper.find('.layout-shell').classes(), `${path} 不该再套深色作用域`).not.toContain(
+          'workspace-theme'
+        )
         expect(wrapper.find('.main-shell').exists()).toBe(true)
-        expect(wrapper.find('.topbar').text()).toContain(title)
-        // A mounted view always contributes at least one element under main.
+        expect(wrapper.find('.topbar').exists()).toBe(true)
+        // 页面标题只由页面自己那一个 H1 承担，顶栏不再重复一份。
+        expect(wrapper.find('.topbar').text(), `${path} 顶栏还在重复页面标题`).not.toContain(title)
+        expect(wrapper.find('.main-shell').element.children.length).toBeGreaterThan(0)
+      } finally {
+        wrapper.unmount()
+      }
+    })
+  }
+
+  for (const [path, title] of ADMIN_ROUTES) {
+    it(`${path} keeps the dark admin scope`, async () => {
+      const wrapper = await renderWorkspace(path)
+      try {
+        expect(wrapper.find('.layout-shell').classes(), `${path} 丢了深色作用域`).toContain(
+          'workspace-theme'
+        )
+        expect(wrapper.find('.topbar').text()).not.toContain(title)
         expect(wrapper.find('.main-shell').element.children.length).toBeGreaterThan(0)
       } finally {
         wrapper.unmount()

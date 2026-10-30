@@ -36,21 +36,20 @@ export function scoreToneClass(value, bands = MATCH_SCORE_BANDS, prefix = 'score
   return `${prefix} ${prefix}--${scoreTone(value, bands)}`
 }
 
-/** 给 SVG / el-progress 这类"必须传颜色值"的地方用；仍是同一个变量，不是第二份色值。 */
+/** 给 SVG / el-progress 这类"必须传颜色值"的地方用；仍是同一个变量，不是第二份色值。
+ *  走 fill 那一档：浅色是压深的色块、深色是 bright 值，两边都过图形 3:1。 */
 export function scoreToneColor(value, bands = MATCH_SCORE_BANDS) {
-  return `var(--app-score-${scoreTone(value, bands)})`
+  return `var(--app-score-${scoreTone(value, bands)}-fill)`
 }
 
-/* 分数当**文字**用时不能直接吃 tone 本体：good（蓝）压在深色面板上实测 3.06、risk（红）4.15，
-   两档都够不到正文的 4.5。抬的幅度用的是这一族已经量过的那批数（蓝混白 25% → 5.08、
-   红混白 20% → 5.48），其余三档本体在深色面上已经过线（high 5.20 / warn 5.86 / unknown 5.07）。
-   填色与描边不走这里——那是非文字，门槛是 3:1。 */
+/* 分数当**文字**用时不能直接吃 tone 本体。浅色主题读压深的一档、深色主题读抬白的一档，
+   配方都写在 `--app-score-*-text` 里——内联 style 与 class 两条通道只有这一个出处。 */
 const TEXT_TONE = {
-  high: 'var(--app-score-high)',
-  good: 'color-mix(in srgb, var(--app-score-good), white 25%)',
-  warn: 'var(--app-score-warn)',
-  risk: 'color-mix(in srgb, var(--app-score-risk), white 20%)',
-  unknown: 'var(--app-score-unknown)',
+  high: 'var(--app-score-high-text)',
+  good: 'var(--app-score-good-text)',
+  warn: 'var(--app-score-warn-text)',
+  risk: 'var(--app-score-risk-text)',
+  unknown: 'var(--app-score-unknown-text)',
 }
 
 export function scoreToneTextColor(value, bands = MATCH_SCORE_BANDS) {

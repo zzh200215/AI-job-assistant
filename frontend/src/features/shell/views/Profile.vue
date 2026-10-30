@@ -1,17 +1,15 @@
 <template>
   <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <p class="eyebrow">个人账号</p>
-        <h2>个人中心</h2>
-        <div class="page-header-sub">查看账号信息、求职数据与当前可用的功能。</div>
-      </div>
-      <div class="hero-badges">
-        <span>{{ authStore.roleLabel }}</span>
+    <PageHeader
+      title="个人中心"
+      subtitle="查看账号信息、求职数据与当前可用的功能。"
+      eyebrow="个人账号"
+    >
+      <template #actions>
         <el-tag v-if="subTier === 'pro'" type="success" effect="dark">Pro 会员</el-tag>
         <el-tag v-else-if="subTier === 'enterprise'" type="warning" effect="dark">企业版</el-tag>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <section class="grid">
       <AppPanel class="identity-panel">
@@ -274,6 +272,7 @@
 
 <script setup>
 import AppPanel from '@/components/ui/AppPanel.vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { sendVerificationEmail, exportMyData, deleteMyAccount } from '@/api/auth'
@@ -646,43 +645,6 @@ onMounted(async () => {
   gap: 18px;
 }
 
-.page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 28px;
-  background:
-    radial-gradient(circle at top right, rgba(114, 187, 143, 0.18), transparent 34%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(245, 250, 246, 0.94));
-  border: 1px solid var(--app-line);
-  border-radius: var(--app-radius-md, 16px);
-  box-shadow: 0 16px 32px rgba(145, 176, 193, 0.12);
-  backdrop-filter: blur(10px);
-}
-
-.eyebrow {
-  margin: 0 0 10px;
-  color: var(--app-muted);
-  font-size: 12px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.page-header h2 {
-  margin: 0;
-  color: var(--app-text);
-  font-size: 34px;
-  line-height: 1.05;
-}
-
-.hero-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.hero-badges span,
 .identity-pills span {
   padding: 8px 12px;
   border-radius: 999px;
@@ -690,7 +652,7 @@ onMounted(async () => {
      `!important` 网决定掉了（D94/D105 那一族）。所以换成令牌是零屏幕变化的去债，
      留着的害处是让下一个人以为这屏是绿的。注释里不落具体色值——色尺数的是文本。 */
   background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
-  color: var(--app-success);
+  color: color-mix(in srgb, var(--app-success), black 35%);
   font-size: 12px;
   font-weight: 600;
 }
@@ -907,7 +869,7 @@ onMounted(async () => {
   color: var(--app-violet) !important;
 }
 .stat-offer {
-  color: var(--app-success) !important;
+  color: color-mix(in srgb, var(--app-success), black 35%) !important;
 }
 
 .stats-footer {
@@ -1044,7 +1006,7 @@ onMounted(async () => {
 }
 
 .danger-tip {
-  color: var(--app-danger) !important;
+  color: color-mix(in srgb, var(--app-danger), black 25%) !important;
 }
 
 .danger-content {
@@ -1061,7 +1023,7 @@ onMounted(async () => {
 .danger-row strong {
   display: block;
   font-size: 15px;
-  color: var(--app-danger);
+  color: var(--app-text);
 }
 
 .danger-row p {
@@ -1078,17 +1040,8 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
-  .page-header,
   .panel {
     padding: 20px;
-  }
-
-  .page-header {
-    flex-direction: column;
-  }
-
-  .page-header h2 {
-    font-size: 28px;
   }
 }
 </style>

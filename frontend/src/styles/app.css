@@ -1,0 +1,165 @@
+/* ============================================================
+   Career Signal — light application foundation
+   Shell, page rhythm and shared primitives for the candidate app.
+   ============================================================ */
+
+.app-page {
+  width: 100%;
+  max-width: var(--app-shell-width);
+  margin: 0 auto;
+  padding: 32px var(--app-shell-gutter) 56px;
+}
+
+.app-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.app-card {
+  background: var(--app-surface-strong);
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-md);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.app-card-pad {
+  padding: 20px;
+}
+
+.app-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.app-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.app-section-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0;
+  color: var(--app-text);
+}
+
+.app-section-head p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--app-muted);
+}
+
+.app-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border: 0;
+  background: none;
+  color: var(--app-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.app-link:hover {
+  color: var(--app-primary);
+}
+
+.app-divider {
+  height: 1px;
+  background: var(--app-line);
+  border: 0;
+  margin: 0;
+}
+
+.app-meta {
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.app-label {
+  display: block;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.app-value {
+  display: block;
+  margin-top: 4px;
+  color: var(--app-text);
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.app-skeleton {
+  border-radius: var(--app-radius-xs);
+  background: linear-gradient(
+    90deg,
+    var(--app-surface-muted) 25%,
+    color-mix(in srgb, var(--app-surface-muted), var(--app-text) 4%) 37%,
+    var(--app-surface-muted) 63%
+  );
+  background-size: 400% 100%;
+  animation: app-shimmer 1.4s ease infinite;
+}
+
+@keyframes app-shimmer {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0 50%;
+  }
+}
+
+.app-loading-block {
+  display: grid;
+  gap: 10px;
+}
+
+.app-loading-row {
+  height: 14px;
+}
+
+.app-inline-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--app-danger), white 70%);
+  border-radius: var(--app-radius-sm);
+  background: color-mix(in srgb, var(--app-danger), white 95%);
+  color: var(--app-text);
+  font-size: 13px;
+}
+
+@media (max-width: 1024px) {
+  .app-page {
+    padding: 24px 24px 40px;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-page {
+    padding: 20px 16px 32px;
+  }
+
+  .app-stack {
+    gap: 20px;
+  }
+
+  .app-card-pad {
+    padding: 16px;
+  }
+}

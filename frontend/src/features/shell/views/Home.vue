@@ -1,326 +1,200 @@
 <template>
-  <div class="dashboard-page">
-    <!-- 顶部欢迎栏 -->
-    <section class="welcome-bar">
-      <div class="welcome-left">
-        <div class="signal-kicker"><span class="signal-dot" /> CAREER SIGNAL / 求职工作台</div>
-        <h1><span>今天，</span><em>推进一份机会</em></h1>
-        <p class="welcome-sub">
-          {{ greeting }}，{{ username }}。{{
-            overviewLoaded
-              ? `当前有 ${dashSummary.active_applications || 0} 个活跃投递`
-              : '加载中...'
-          }}
-        </p>
+  <div class="app-page home-page">
+    <section class="home-hero">
+      <div class="home-hero-copy">
+        <p class="home-eyebrow">{{ todayLabel }}</p>
+        <h1 class="home-title">{{ greeting }}，{{ username }}</h1>
+        <p class="home-sub">{{ heroSubtitle }}</p>
       </div>
-      <div class="welcome-side">
-        <div class="welcome-actions">
-          <el-button type="primary" @click="go('/smart-analysis')">
-            <el-icon><MagicStick /></el-icon> 开始求职分析
-          </el-button>
-          <el-button @click="go('/jobs/pipeline/kanban')">
-            <el-icon><Grid /></el-icon> 打开投递看板
-          </el-button>
-        </div>
-        <div class="signal-stats" aria-label="求职关键指标">
-          <div>
-            <strong>{{ overviewLoaded ? dashSummary.active_applications || 0 : '--' }}</strong>
-            <span>活跃投递</span>
-          </div>
-          <div>
-            <strong>{{ overviewLoaded ? overview.weekly_new || 0 : '--' }}</strong>
-            <span>本周新增</span>
-          </div>
-          <div>
-            <strong>{{ interviewRate }}</strong>
-            <span>面试转化</span>
-          </div>
-        </div>
+
+      <div class="home-next" :class="{ 'is-muted': nextAction.tone === 'muted' }">
+        <span class="home-next-label">{{ nextAction.label }}</span>
+        <strong class="home-next-title">{{ nextAction.title }}</strong>
+        <p class="home-next-desc">{{ nextAction.description }}</p>
+        <el-button
+          v-if="nextAction.action"
+          type="primary"
+          class="home-next-btn"
+          @click="handleNextAction"
+        >
+          {{ nextAction.action }}
+          <el-icon class="el-icon--right"><ArrowRight /></el-icon>
+        </el-button>
       </div>
     </section>
 
-    <el-alert
-      v-if="overviewError"
-      class="dashboard-error"
-      type="warning"
-      :closable="false"
-      show-icon
-      title="求职概览加载失败"
-      description="其他工作台功能仍可使用。请检查网络连接后重新加载概览数据。"
-    >
-      <template #default>
-        <el-button size="small" type="primary" plain @click="loadDashboard">重新加载</el-button>
-      </template>
-    </el-alert>
+    <section class="home-section">
+      <div class="app-section-head">
+        <div>
+          <h2>核心入口</h2>
+          <p>从简历开始，沿着分析、匹配、投递一路推进。</p>
+        </div>
+      </div>
 
-    <!-- 核心功能入口 -->
-    <section class="core-entrance-row">
-      <div class="core-card core-resume" @click="go('/resume-center')">
-        <div class="core-icon">
-          <el-icon :size="32"><Document /></el-icon>
-        </div>
-        <div class="core-info">
-          <h3>简历中心</h3>
-          <p>上传简历，先做一次诊断</p>
-          <span class="core-meta">{{
-            overviewLoaded ? (dashSummary.total_resumes || '--') + ' 份简历' : '加载中...'
-          }}</span>
-        </div>
-        <el-icon class="core-arrow"><ArrowRight /></el-icon>
-      </div>
-      <div class="core-card core-job" @click="go('/jobs/recommend')">
-        <div class="core-icon">
-          <el-icon :size="32"><Search /></el-icon>
-        </div>
-        <div class="core-info">
-          <h3>岗位推荐</h3>
-          <p>按你的经历匹配适合的岗位</p>
-          <span class="core-meta">{{
-            overviewLoaded ? (dashSummary.bookmarked_jobs || '--') + ' 个收藏岗位' : '加载中...'
-          }}</span>
-        </div>
-        <el-icon class="core-arrow"><ArrowRight /></el-icon>
-      </div>
-      <div class="core-card core-interview" @click="go('/interview/setup')">
-        <div class="core-icon">
-          <el-icon :size="32"><Microphone /></el-icon>
-        </div>
-        <div class="core-info">
-          <h3>AI 模拟面试</h3>
-          <p>按目标岗位练一遍，知道差在哪</p>
-          <span class="core-meta">{{
-            overviewLoaded ? (dashSummary.total_interviews || '--') + ' 次面试' : '加载中...'
-          }}</span>
-        </div>
-        <el-icon class="core-arrow"><ArrowRight /></el-icon>
+      <div class="home-entrances">
+        <button class="entrance-card" type="button" @click="go('/resume-center')">
+          <span class="entrance-icon"
+            ><el-icon><Document /></el-icon
+          ></span>
+          <span class="entrance-body">
+            <strong>简历中心</strong>
+            <span>上传、诊断与优化简历</span>
+            <em>{{ overviewLoaded ? `${summary.total_resumes || 0} 份简历` : '读取中…' }}</em>
+          </span>
+          <el-icon class="entrance-arrow"><ArrowRight /></el-icon>
+        </button>
+
+        <button class="entrance-card" type="button" @click="go('/smart-analysis')">
+          <span class="entrance-icon"
+            ><el-icon><MagicStick /></el-icon
+          ></span>
+          <span class="entrance-body">
+            <strong>求职分析</strong>
+            <span>看清简历与目标岗位的差距</span>
+            <em>{{ hasResume ? '基于你的简历分析' : '先上传一份简历' }}</em>
+          </span>
+          <el-icon class="entrance-arrow"><ArrowRight /></el-icon>
+        </button>
+
+        <button class="entrance-card" type="button" @click="go('/jobs/recommend')">
+          <span class="entrance-icon"
+            ><el-icon><DataAnalysis /></el-icon
+          ></span>
+          <span class="entrance-body">
+            <strong>岗位推荐</strong>
+            <span>按你的经历匹配机会</span>
+            <em>{{ overviewLoaded ? `${summary.bookmarked_jobs || 0} 个收藏岗位` : '读取中…' }}</em>
+          </span>
+          <el-icon class="entrance-arrow"><ArrowRight /></el-icon>
+        </button>
       </div>
     </section>
 
-    <!-- 今日待办 + 下一步建议 -->
-    <section class="top-row">
-      <AppPanel class="today-panel" icon-color="var(--app-primary)">
+    <div class="home-columns">
+      <AppPanel class="home-panel">
         <template #icon><Bell /></template>
-        <template #title>今日待办</template>
+        <template #title>今日任务</template>
         <template #actions>
-          <el-badge v-if="tasks.high_priority > 0" :value="tasks.high_priority" type="danger" />
+          <span v-if="openTaskCount" class="home-panel-note">{{ openTaskCount }} 项待办</span>
         </template>
-        <div v-if="tasksLoading" class="loading-state">
-          <el-icon class="is-loading"><Loading /></el-icon> 加载中...
+
+        <div v-if="tasksLoading && !taskItems.length" class="app-loading-block">
+          <div class="app-skeleton app-loading-row" style="width: 70%" />
+          <div class="app-skeleton app-loading-row" style="width: 55%" />
+          <div class="app-skeleton app-loading-row" style="width: 62%" />
         </div>
-        <div v-else-if="tasksError" class="error-state">
-          <p>今日待办加载失败</p>
-          <el-button size="small" type="primary" plain @click="loadDashboard">重新加载</el-button>
+
+        <div v-else-if="tasksError" class="app-inline-error">
+          <span>今日任务加载失败</span>
+          <el-button size="small" text type="primary" @click="loadDashboard">重新加载</el-button>
         </div>
-        <div v-else-if="!tasks.tasks?.length" class="empty-state">
-          <p>今日暂无待办</p>
-          <span>建议浏览推荐岗位或跟进已有投递</span>
-          <div class="empty-actions">
-            <el-button size="small" type="primary" @click="go('/jobs/recommend')">
-              查看推荐岗位
-            </el-button>
-            <el-button size="small" @click="go('/jobs/pipeline/kanban')"> 查看投递看板 </el-button>
-          </div>
-        </div>
+
+        <EmptyState
+          v-else-if="!taskItems.length"
+          compact
+          :icon="CircleCheck"
+          title="今天没有待办"
+          description="可以从推荐岗位里挑一个，开始今天的推进。"
+        >
+          <template #action>
+            <el-button size="small" @click="go('/jobs/recommend')">查看岗位推荐</el-button>
+          </template>
+        </EmptyState>
+
         <div v-else class="task-list">
-          <div
-            v-for="task in tasks.tasks"
+          <button
+            v-for="task in taskItems"
             :key="task.title"
-            class="task-item"
-            :class="'priority-' + task.priority"
-            @click="go(task.link)"
+            type="button"
+            class="task-row"
+            @click="go(task.link || '/home')"
           >
-            <div class="task-dot" :class="'dot-' + task.priority" />
-            <div class="task-info">
+            <span class="task-dot" :class="`dot-${task.priority || 'low'}`" aria-hidden="true" />
+            <span class="task-copy">
               <strong>{{ task.title }}</strong>
-              <span>{{ task.subtitle }}</span>
-            </div>
+              <span v-if="task.subtitle">{{ task.subtitle }}</span>
+            </span>
             <el-icon class="task-arrow"><ArrowRight /></el-icon>
-          </div>
+          </button>
         </div>
       </AppPanel>
 
-      <AppPanel class="actions-panel" icon-color="var(--app-violet)">
-        <template #icon><MagicStick /></template>
-        <template #title>下一步建议</template>
-        <template #actions>
-          <el-tag size="small" type="info">智能推荐</el-tag>
-        </template>
-        <div v-if="actionsLoading" class="loading-state">
-          <el-icon class="is-loading"><Loading /></el-icon> 分析中...
-        </div>
-        <div v-else-if="actionsError" class="error-state">
-          <p>当前没有明确的下一步动作，说明近期节奏正常。</p>
-          <el-button size="small" type="primary" plain @click="loadDashboard">重新加载</el-button>
-        </div>
-        <div v-else class="suggestion-list">
-          <div
-            v-for="(sug, idx) in nextActions"
-            :key="idx"
-            class="suggestion-item"
-            @click="go(sug.link)"
-          >
-            <div class="sug-index">{{ idx + 1 }}</div>
-            <div class="sug-body">
-              <strong>{{ sug.title }}</strong>
-              <p>{{ sug.description }}</p>
-            </div>
-            <el-icon class="sug-arrow"><ArrowRight /></el-icon>
-          </div>
-        </div>
-      </AppPanel>
-    </section>
-
-    <!-- 求职漏斗 + 关键指标 -->
-    <section class="middle-row">
-      <AppPanel class="funnel-panel" icon-color="var(--app-primary)">
+      <AppPanel class="home-panel">
         <template #icon><TrendCharts /></template>
         <template #title>求职漏斗</template>
-        <div v-if="overviewLoaded" class="funnel-bar">
-          <div
-            v-for="stage in funnelStages"
-            :key="stage.key"
-            class="funnel-step"
-            :class="{ 'has-count': stage.count > 0 }"
-          >
-            <div class="funnel-bar-fill" :style="{ height: funnelBarHeight(stage.count) }" />
-            <div class="funnel-count">{{ stage.count }}</div>
-            <div class="funnel-label">{{ stage.label }}</div>
-          </div>
+        <template #actions>
+          <button type="button" class="app-link" @click="go('/jobs/pipeline/kanban')">
+            投递看板
+            <el-icon><ArrowRight /></el-icon>
+          </button>
+        </template>
+
+        <div v-if="!overviewLoaded && !overviewError" class="app-loading-block">
+          <div class="app-skeleton" style="height: 10px" />
+          <div class="app-skeleton app-loading-row" style="width: 40%; margin-top: 12px" />
         </div>
-        <div v-else class="loading-state">
-          <el-icon class="is-loading"><Loading /></el-icon>
+
+        <div v-else-if="overviewError" class="app-inline-error">
+          <span>求职进度加载失败</span>
+          <el-button size="small" text type="primary" @click="loadDashboard">重新加载</el-button>
+        </div>
+
+        <EmptyState
+          v-else-if="!funnelTotal"
+          compact
+          :icon="DataAnalysis"
+          title="还没有投递记录"
+          description="先挑一个岗位加入投递看板，漏斗会从第一条记录开始。"
+        >
+          <template #action>
+            <el-button size="small" @click="go('/jobs/recommend')">去挑岗位</el-button>
+          </template>
+        </EmptyState>
+
+        <div v-else class="funnel">
+          <div class="funnel-bar" aria-hidden="true">
+            <span
+              v-for="stage in funnelStages"
+              :key="stage.key"
+              class="funnel-seg"
+              :class="`funnel-seg--${stage.key}`"
+              :style="{ width: funnelWidth(stage.count) }"
+            />
+          </div>
+          <div class="funnel-legend">
+            <div v-for="stage in funnelStages" :key="stage.key" class="funnel-item">
+              <strong>{{ stage.count }}</strong>
+              <span>{{ stage.label }}</span>
+            </div>
+          </div>
+          <p class="funnel-note">
+            共 {{ funnelTotal }} 个投递 ·
+            {{ interviewRate === '--' ? '还没有面试记录' : `面试转化 ${interviewRate}` }}
+          </p>
         </div>
       </AppPanel>
-
-      <div class="metrics-grid">
-        <div class="metric-card">
-          <div class="metric-icon blue">
-            <el-icon><Document /></el-icon>
-          </div>
-          <div class="metric-body">
-            <span class="metric-label">本周投递</span>
-            <strong class="data-value">{{ overviewLoaded ? overview.weekly_new : '-' }}</strong>
-          </div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-icon amber">
-            <el-icon><ChatDotRound /></el-icon>
-          </div>
-          <div class="metric-body">
-            <span class="metric-label">面试率</span>
-            <strong class="data-value">{{ interviewRate }}</strong>
-          </div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-icon violet">
-            <el-icon><Histogram /></el-icon>
-          </div>
-          <div class="metric-body">
-            <span class="metric-label">平均匹配</span>
-            <strong class="data-value">{{
-              overviewLoaded ? (dashSummary.avg_match_score ?? '--') : '-'
-            }}</strong>
-          </div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-icon green">
-            <el-icon><Trophy /></el-icon>
-          </div>
-          <div class="metric-body">
-            <span class="metric-label">Offer 数</span>
-            <strong class="data-value">{{
-              overviewLoaded ? dashSummary.pending_offers || 0 : '-'
-            }}</strong>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 投递趋势 + 快捷入口 -->
-    <section class="bottom-row">
-      <AppPanel class="trend-panel" icon-color="var(--app-success)">
-        <template #icon><TrendCharts /></template>
-        <template #title>7日投递趋势</template>
-        <div v-if="overviewLoaded" class="trend-chart">
-          <div v-for="(day, idx) in overview.trend" :key="idx" class="trend-bar-col">
-            <div class="trend-bar" :style="{ height: trendHeight(day.count) }" />
-            <span class="trend-count">{{ day.count }}</span>
-            <span class="trend-date">{{ day.date.slice(5) }}</span>
-          </div>
-        </div>
-        <div v-else class="loading-state">
-          <el-icon class="is-loading"><Loading /></el-icon>
-        </div>
-      </AppPanel>
-
-      <div class="quick-entry-panel">
-        <h3>快捷入口</h3>
-        <div class="quick-grid">
-          <button class="quick-btn" @click="go('/jobs/pipeline/kanban')">
-            <div class="quick-icon blue">
-              <el-icon><Grid /></el-icon>
-            </div>
-            <span>投递看板</span>
-          </button>
-          <button class="quick-btn" @click="go('/jobs/recommend')">
-            <div class="quick-icon amber">
-              <el-icon><Search /></el-icon>
-            </div>
-            <span>岗位推荐</span>
-          </button>
-          <button class="quick-btn" @click="go('/resume-center')">
-            <div class="quick-icon violet">
-              <el-icon><Document /></el-icon>
-            </div>
-            <span>简历中心</span>
-          </button>
-          <button class="quick-btn" @click="go('/interview/setup')">
-            <div class="quick-icon green">
-              <el-icon><Microphone /></el-icon>
-            </div>
-            <span>模拟面试</span>
-          </button>
-          <button class="quick-btn" @click="go('/targets')">
-            <div class="quick-icon teal">
-              <el-icon><Aim /></el-icon>
-            </div>
-            <span>求职目标</span>
-          </button>
-          <button class="quick-btn" @click="go('/salary')">
-            <div class="quick-icon red">
-              <el-icon><Coin /></el-icon>
-            </div>
-            <span>薪资洞察</span>
-          </button>
-        </div>
-      </div>
-    </section>
+    </div>
   </div>
 </template>
 
 <script setup>
-import AppPanel from '@/components/ui/AppPanel.vue'
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ArrowRight,
-  Aim,
   Bell,
-  ChatDotRound,
-  Coin,
+  CircleCheck,
+  DataAnalysis,
   Document,
-  Grid,
-  Histogram,
-  Loading,
   MagicStick,
-  Microphone,
-  Search,
-  Trophy,
   TrendCharts,
 } from '@element-plus/icons-vue'
 
+import AppPanel from '@/components/ui/AppPanel.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 import { useAuthStore } from '@/stores/auth'
-import { getDashboardOverview, getTodayTasks, getNextActions } from '@/api/dashboard'
+import { getDashboardOverview, getTodayTasks } from '@/api/dashboard'
+import { monthDay } from '@/utils/format/date'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -337,7 +211,8 @@ const greeting = computed(() => {
   return '晚上好'
 })
 
-// ---- 数据 ----
+const todayLabel = computed(() => monthDay(new Date().toISOString()))
+
 /** @type {import('vue').Ref<import('@/api/dashboard').DashboardOverview>} */
 const overview = ref({})
 const overviewLoaded = ref(false)
@@ -345,27 +220,21 @@ const overviewError = ref(false)
 const tasks = ref({ tasks: [], high_priority: 0 })
 const tasksLoading = ref(true)
 const tasksError = ref(false)
-const nextActions = ref([])
-const actionsLoading = ref(true)
-const actionsError = ref(false)
 
-// 后端关键指标统一放在 data.summary 下（total_resumes/active_applications 等），
-// 模板统一经 dashSummary 读取，避免读顶层字段永远 0/--。
-const dashSummary = computed(() => overview.value.summary || overview.value)
+const summary = computed(() => overview.value.summary || overview.value)
+const taskItems = computed(() => tasks.value.tasks || [])
+const openTaskCount = computed(() => tasks.value.high_priority || taskItems.value.length)
+const hasResume = computed(() => (summary.value.total_resumes || 0) > 0)
 
 const interviewRate = computed(() => {
-  if (!overviewLoaded.value) return '-'
-  const summary = overview.value.summary || overview.value
-  const total = summary.total_applications || 0
-  const interviews = overview.value.stage_counts?.interview || 0
-  const offers = overview.value.stage_counts?.offer || 0
+  const total = summary.value.total_applications || 0
+  const interview = overview.value.stage_counts?.interview || 0
+  const offer = overview.value.stage_counts?.offer || 0
   const accepted = overview.value.stage_counts?.accepted || 0
-  const hit = interviews + offers + accepted
-  return total > 0 ? Math.round((hit / total) * 100) + '%' : '--'
+  return total > 0 ? `${Math.round(((interview + offer + accepted) / total) * 100)}%` : '--'
 })
 
 const funnelStages = computed(() => {
-  if (!overviewLoaded.value) return []
   const f = overview.value.funnel || {}
   return [
     { key: 'todo', label: '待投递', count: f.todo || 0 },
@@ -376,435 +245,389 @@ const funnelStages = computed(() => {
   ]
 })
 
-const maxFunnel = computed(() => {
-  return Math.max(1, ...funnelStages.value.map((s) => s.count))
-})
+const funnelTotal = computed(() => funnelStages.value.reduce((sum, stage) => sum + stage.count, 0))
 
-const maxTrend = computed(() => {
-  if (!overviewLoaded.value) return 1
-  return Math.max(1, ...(overview.value.trend || []).map((d) => d.count))
-})
-
-function funnelBarHeight(count) {
-  return Math.max(4, (count / maxFunnel.value) * 100) + '%'
+function funnelWidth(count) {
+  if (!funnelTotal.value) return '0%'
+  return `${Math.max(count ? 4 : 0, (count / funnelTotal.value) * 100)}%`
 }
 
-function trendHeight(count) {
-  return Math.max(4, (count / maxTrend.value) * 100) + '%'
+const heroSubtitle = computed(() => {
+  if (!overviewLoaded.value) return '正在读取你的求职进度…'
+  if (!hasResume.value) return '先上传一份简历，后面的诊断和匹配都会用到它。'
+  if (!(summary.value.bookmarked_jobs || 0)) return '简历已就位，接下来挑一个目标岗位。'
+  return `本周新增 ${overview.value.weekly_new || 0} 个投递 · ${summary.value.active_applications || 0} 个进行中 · ${overview.value.stage_counts?.interview || 0} 个面试`
+})
+
+const nextAction = computed(() => {
+  if (overviewError.value) {
+    return {
+      label: '建议下一步',
+      title: '进度暂时读不到',
+      description: '其他功能仍可使用，稍后重新加载即可。',
+      action: '重新加载',
+      link: '/home',
+      tone: 'muted',
+    }
+  }
+  if (!overviewLoaded.value) {
+    return {
+      label: '建议下一步',
+      title: '正在读取你的求职进度',
+      description: '稍等片刻，我们会按当前进度给出下一步。',
+      action: '',
+      link: '/home',
+      tone: 'muted',
+    }
+  }
+
+  const resumes = summary.value.total_resumes || 0
+  const saved = summary.value.bookmarked_jobs || 0
+  const applications = summary.value.total_applications || 0
+  const active = summary.value.active_applications || 0
+  const interviews = overview.value.stage_counts?.interview || 0
+  const offers = summary.value.pending_offers || 0
+
+  if (resumes === 0) {
+    return {
+      label: '第一步',
+      title: '上传第一份简历',
+      description: '有了简历，才能做诊断和岗位匹配。',
+      action: '上传简历',
+      link: '/resume-center',
+    }
+  }
+  if (saved === 0) {
+    return {
+      label: '建议下一步',
+      title: '先确定目标岗位',
+      description: '从推荐里挑一个想投的岗位，保存下来。',
+      action: '查看岗位推荐',
+      link: '/jobs/recommend',
+    }
+  }
+  if (applications === 0) {
+    return {
+      label: '建议下一步',
+      title: '把目标岗位加入投递',
+      description: '在投递看板里建一条记录，开始跟进。',
+      action: '打开投递看板',
+      link: '/jobs/pipeline/kanban',
+    }
+  }
+  if (interviews > 0 && offers === 0) {
+    return {
+      label: '建议下一步',
+      title: '准备下一场面试',
+      description: `有 ${interviews} 个岗位进入面试，练一遍再上场。`,
+      action: '开始模拟面试',
+      link: '/interview/setup',
+    }
+  }
+  if (active > 0) {
+    return {
+      label: '建议下一步',
+      title: '跟进进行中的投递',
+      description: `还有 ${active} 个投递没有结果，看看该跟进哪一个。`,
+      action: '查看投递看板',
+      link: '/jobs/pipeline/kanban',
+    }
+  }
+  return {
+    label: '建议下一步',
+    title: '继续拓展机会',
+    description: '当前投递都有进展，可以再看看新的匹配岗位。',
+    action: '查看岗位推荐',
+    link: '/jobs/recommend',
+  }
+})
+
+function handleNextAction() {
+  if (overviewError.value) {
+    loadDashboard()
+    return
+  }
+  go(nextAction.value.link)
 }
 
 async function loadDashboard() {
   overviewError.value = false
   tasksError.value = false
-  actionsError.value = false
   tasksLoading.value = true
-  actionsLoading.value = true
-  try {
-    const [ov, tk, actions] = await Promise.allSettled([
-      getDashboardOverview(),
-      getTodayTasks(),
-      getNextActions(),
-    ])
-    if (ov.status === 'fulfilled') {
-      overview.value = ov.value
-      overviewLoaded.value = true
-    } else {
-      overviewError.value = true
-    }
-    if (tk.status === 'fulfilled') {
-      tasks.value = tk.value
-    } else {
-      tasksError.value = true
-    }
-    if (actions.status === 'fulfilled') {
-      nextActions.value = actions.value?.suggestions || []
-    } else {
-      actionsError.value = true
-    }
-  } finally {
-    tasksLoading.value = false
-    actionsLoading.value = false
+  const [ov, tk] = await Promise.allSettled([getDashboardOverview(), getTodayTasks()])
+  if (ov.status === 'fulfilled') {
+    overview.value = ov.value
+    overviewLoaded.value = true
+  } else {
+    overviewError.value = true
   }
+  if (tk.status === 'fulfilled') {
+    tasks.value = tk.value
+  } else {
+    tasksError.value = true
+  }
+  tasksLoading.value = false
 }
 
 onMounted(loadDashboard)
 </script>
 
 <style scoped>
-.dashboard-page {
-  width: 100%;
+.home-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  min-height: calc(100vh - 76px);
-  margin: -20px -24px -24px;
-  padding: 32px;
-  background:
-    radial-gradient(circle at 88% 4%, rgba(124, 58, 237, 0.2), transparent 30%),
-    radial-gradient(circle at 5% 100%, rgba(34, 184, 232, 0.1), transparent 32%), #0d0e14;
-  color: #f4f5f8;
-}
-
-/* ===== Welcome Bar ===== */
-.welcome-bar {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 24px;
-  min-height: 196px;
-  padding: 30px 32px;
-  overflow: hidden;
-  border: 1px solid #2b2d3a;
-  border-radius: 12px;
-  background: linear-gradient(110deg, #151620 0%, #171825 60%, #211842 100%);
-  color: #f8f8fb;
 }
 
-.welcome-bar::after {
-  position: absolute;
-  right: -68px;
-  bottom: -90px;
-  z-index: -1;
-  width: 290px;
-  height: 290px;
-  border: 1px solid rgba(110, 231, 255, 0.19);
-  border-radius: 50%;
-  box-shadow:
-    0 0 0 42px rgba(124, 58, 237, 0.07),
-    0 0 0 86px rgba(34, 184, 232, 0.04);
-  content: '';
+/* ===== Hero ===== */
+.home-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 28px;
+  padding: 28px;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-lg);
+  background: var(--app-surface-strong);
+  box-shadow: var(--app-shadow-soft);
 }
 
-.welcome-left {
-  position: relative;
-  z-index: 1;
-  max-width: 560px;
-}
-
-.welcome-side {
-  position: relative;
-  z-index: 1;
+.home-hero-copy {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  align-items: flex-end;
-  margin-left: auto;
-}
-
-.signal-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 11px;
-  color: #a7a9ba;
-  font-family: var(--app-font-mono);
-  font-size: 11px;
-  font-weight: 500;
-}
-
-.signal-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 12px rgba(34, 197, 94, 0.8);
-}
-
-.welcome-bar h1 {
-  margin: 0;
-  font-size: 35px;
-  line-height: 1.16;
-  font-weight: 800;
-  letter-spacing: 0;
-}
-
-.welcome-bar h1 span {
-  color: #f3f4f6;
-}
-
-.welcome-bar h1 em {
-  margin-left: 8px;
-  color: #22b8e8;
-  font-style: normal;
-}
-
-.welcome-sub {
-  margin: 10px 0 0;
-  color: #a7a9ba;
-  font-size: 14px;
-}
-
-.welcome-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: flex-end;
-}
-
-.welcome-actions .el-button {
-  min-height: 40px;
-  border-radius: 8px;
-  font-size: 13px;
-}
-
-.welcome-actions :deep(.el-button--primary) {
-  background: #7c3aed;
-  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.28);
-}
-
-.welcome-actions .el-button--default {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: #3a3c4b;
-  color: #e8e9f0;
-}
-
-.welcome-actions .el-button--default:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.signal-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(96px, 1fr));
-  width: 100%;
-  overflow: hidden;
-  border: 1px solid #303242;
-  border-radius: 10px;
-  background: rgba(11, 12, 18, 0.6);
-}
-
-.signal-stats div {
-  display: grid;
-  gap: 3px;
-  padding: 12px 17px;
-  border-right: 1px solid #303242;
-}
-
-.signal-stats div:last-child {
-  border-right: 0;
-}
-
-.signal-stats strong {
-  color: #f8f8fb;
-  font-family: var(--app-font-mono);
-  font-size: 19px;
-  line-height: 1;
-}
-
-.signal-stats span {
-  color: #8d90a1;
-  font-size: 11px;
-}
-
-/* ===== Core Entrance Row ===== */
-.core-entrance-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-
-.core-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 20px 24px;
-  border-radius: 10px;
-  border: 1px solid #2a2c38;
-  background: #171922;
-  box-shadow: none;
-  cursor: pointer;
-  transition:
-    transform 0.2s ease,
-    border-color 0.2s ease,
-    background-color 0.2s ease;
-}
-
-.core-card:hover {
-  transform: translateY(-2px);
-  border-color: #575a70;
-  background: #1c1e29;
-}
-
-.core-resume:hover {
-  border-color: var(--app-violet);
-}
-.core-job:hover {
-  border-color: var(--app-warning);
-}
-.core-interview:hover {
-  border-color: var(--app-success);
-}
-
-.core-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-}
-
-/* 图标座统一成"深色底上的色偏 + tone 字色"，与 Profile 的成就徽章同一配方（B）。
-   原来这三族是 pastel 方块：amber 2.44、green 2.76，连图形 3:1 都不过。
-   两个代价写明白：① 色相收敛（amber 与 gold 同走 warning、green 与 success 同走 success、
-   teal 走最接近的 cyan），彩虹感确实降了；② 这里改的是**本文件的规则**，没有去动
-   `--app-primary-light` / `--app-violet-light` 那两个令牌本身。收完这一族之后（同一条配方
-   一路用到 Interview / TaskCenter / Users / PromptTrace / BoardPane / ListPane / OfferCompare），
-   全仓只剩**两处**还引它们：`InterviewSetup.vue:721` 的选中态（浅底 = "已选中"那层 affordance，
-   刻意留着）与 `InterviewReport.vue:751`（那一页的面板整体是另一条浅色面，等 §10.33 一起判）。 */
-.core-resume .core-icon {
-  background: color-mix(in srgb, var(--app-violet), var(--app-bg) 86%);
-  color: color-mix(in srgb, var(--app-violet), white 34%);
-}
-.core-job .core-icon {
-  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 86%);
-  color: var(--app-warning);
-}
-.core-interview .core-icon {
-  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
-  color: var(--app-success);
-}
-
-.core-info {
-  flex: 1;
   min-width: 0;
 }
 
-.core-info h3 {
+.home-eyebrow {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: #f1f2f6;
-}
-
-.core-info p {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: #989baa;
-}
-
-.core-meta {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-  color: #7f8293;
-  opacity: 0.8;
-}
-
-.core-arrow {
   color: var(--app-muted);
-  flex-shrink: 0;
-  font-size: 16px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
-/* ===== Responsive for core entrance ===== */
-@media (max-width: 768px) {
-  .core-entrance-row {
-    grid-template-columns: 1fr;
-  }
+.home-title {
+  margin: 8px 0 0;
+  color: var(--app-text);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
 }
 
-/* ===== Panels ===== */
-/* panel, panel-header, panel-body, panel-title-row defined in panels.css */
-
-.panel + .panel {
-  margin-top: 16px;
-}
-
-.loading-state,
-.empty-state,
-.error-state {
-  text-align: center;
-  padding: 20px 0;
+.home-sub {
+  margin: 10px 0 0;
   color: var(--app-muted);
   font-size: 14px;
+  line-height: 1.6;
 }
 
-.dashboard-error {
-  margin: 0;
-}
-
-.error-state p {
-  margin: 0 0 10px;
-}
-
-.empty-state span {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-}
-
-.empty-actions {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-/* ===== Top Row ===== */
-.top-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-/* Task list */
-.task-list {
+.home-next {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  justify-content: center;
+  padding: 20px;
+  border: 1px solid var(--app-line);
+  border-left: 3px solid var(--app-primary);
+  border-radius: var(--app-radius-md);
+  background: color-mix(in srgb, var(--app-primary), var(--app-surface-strong) 96%);
 }
 
-.task-item {
+.home-next.is-muted {
+  border-left-color: var(--app-line-strong);
+  background: var(--app-surface-muted);
+}
+
+.home-next-label {
+  color: var(--app-primary-dark);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.home-next.is-muted .home-next-label {
+  color: var(--app-muted);
+}
+
+.home-next-title {
+  color: var(--app-text);
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.home-next-desc {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.home-next-btn {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* ===== Entrances ===== */
+.home-entrances {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.entrance-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface-strong);
+  box-shadow: var(--app-shadow-soft);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.entrance-card:hover {
+  border-color: var(--app-line-strong);
+  box-shadow: var(--app-shadow);
+}
+
+.entrance-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--app-radius-sm);
+  background: var(--app-primary-light);
+  color: var(--app-primary-dark);
+  font-size: 17px;
+}
+
+.entrance-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.entrance-body strong {
+  color: var(--app-text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.entrance-body span {
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.entrance-body em {
+  margin-top: 4px;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.entrance-arrow {
+  margin-top: 8px;
+  color: var(--app-muted);
+  flex-shrink: 0;
+}
+
+/* ===== Columns ===== */
+.home-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.home-panel {
+  min-width: 0;
+}
+
+.home-panel-note {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+/* ===== Tasks ===== */
+.task-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.task-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
-  border-radius: 10px;
+  width: 100%;
+  padding: 12px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--app-line);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
   cursor: pointer;
-  transition: background 0.15s;
 }
 
-.task-item:hover {
-  background: var(--el-fill-color-light);
+.task-row:last-child {
+  border-bottom: 0;
+}
+
+.task-row:hover {
+  background: var(--app-surface-muted);
 }
 
 .task-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
   flex-shrink: 0;
+  border-radius: 50%;
 }
 
 .dot-high {
-  background: var(--app-danger);
+  background: color-mix(in srgb, var(--app-danger), black 10%);
 }
+
 .dot-medium {
-  background: var(--app-warning);
+  background: color-mix(in srgb, var(--app-warning), black 30%);
 }
+
 .dot-low {
-  background: var(--app-success);
+  background: color-mix(in srgb, var(--app-success), black 25%);
 }
 
-.task-info {
-  flex: 1;
+.task-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
+  flex: 1;
 }
 
-.task-info strong {
-  display: block;
+.task-copy strong {
+  overflow: hidden;
+  color: var(--app-text);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.task-info span {
-  display: block;
-  font-size: 12px;
+.task-copy span {
+  overflow: hidden;
   color: var(--app-muted);
-  margin-top: 2px;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .task-arrow {
@@ -812,463 +635,114 @@ onMounted(loadDashboard)
   flex-shrink: 0;
 }
 
-/* AI Suggestions */
-.suggestion-list {
+/* ===== Funnel ===== */
+.funnel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
 }
 
-.suggestion-item {
+.funnel-bar {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.15s;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--app-surface-muted);
 }
 
-/* 底与它的 hover 都在下面 `.dashboard-page .suggestion-item` 那两条里（页根就是这个类，
-   所以那两条特异度恒高一级）。原来这一族的两条浅色底**一条都轮不上屏**——实测卡片计算值
-   一直是那条深色覆盖给的底色。删掉的是画不到的声明，屏幕逐字不变；留着只会让下一个人以为
-   首页的建议条是淡紫的。 */
-
-.sug-index {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--app-violet);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.sug-body {
-  flex: 1;
+.funnel-seg {
+  height: 100%;
   min-width: 0;
 }
 
-.sug-body strong {
-  display: block;
-  font-size: 14px;
-  font-weight: 600;
+.funnel-seg + .funnel-seg {
+  border-left: 2px solid var(--app-surface-strong);
 }
 
-.sug-body p {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--app-muted);
-  line-height: 1.5;
+.funnel-seg--todo {
+  background: var(--app-muted);
 }
 
-.sug-arrow {
-  color: var(--app-muted);
-  margin-top: 4px;
-  flex-shrink: 0;
+.funnel-seg--applied {
+  background: var(--app-primary);
 }
 
-/* ===== Middle Row ===== */
-.middle-row {
+.funnel-seg--written_test {
+  background: var(--app-violet);
+}
+
+.funnel-seg--interview {
+  background: color-mix(in srgb, var(--app-warning), black 25%);
+}
+
+.funnel-seg--offer {
+  background: color-mix(in srgb, var(--app-success), black 25%);
+}
+
+.funnel-legend {
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 16px;
-}
-
-/* Funnel */
-.funnel-bar {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  height: 180px;
-  padding: 0 10px;
-}
-
-.funnel-step {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  position: relative;
-  height: 100%;
-}
-
-.funnel-bar-fill {
-  width: 100%;
-  border-radius: 8px 8px 0 0;
-  background: linear-gradient(180deg, var(--app-primary) 0%, #7db0ee 100%);
-  transition: height 0.4s ease;
-  opacity: 0.3;
-}
-
-.funnel-step.has-count .funnel-bar-fill {
-  opacity: 1;
-}
-
-.funnel-count {
-  position: absolute;
-  top: -24px;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--app-text);
-  font-family: var(--app-font-mono);
-}
-
-.funnel-label {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--app-muted);
-  white-space: nowrap;
-}
-
-/* Metrics */
-.metrics-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.metric-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 18px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--app-line);
-  background: var(--app-surface-strong);
-}
-
-.metric-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.metric-icon.blue {
-  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
-  color: color-mix(in srgb, var(--app-primary), white 25%);
-}
-.metric-icon.amber {
-  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 86%);
-  color: var(--app-warning);
-}
-.metric-icon.violet {
-  background: color-mix(in srgb, var(--app-violet), var(--app-bg) 86%);
-  color: color-mix(in srgb, var(--app-violet), white 34%);
-}
-.metric-icon.green {
-  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
-  color: var(--app-success);
-}
-
-.metric-label {
-  display: block;
-  font-size: 12px;
-  color: #86899a;
-}
-
-.metric-body strong {
-  display: block;
-  margin-top: 4px;
-  font-size: 22px;
-  line-height: 1.1;
-}
-
-/* ===== Bottom Row ===== */
-.bottom-row {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 16px;
-}
-
-/* Trend */
-.trend-chart {
-  display: flex;
-  align-items: flex-end;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
-  height: 140px;
-  padding: 0 6px;
 }
 
-.trend-bar-col {
-  flex: 1;
+.funnel-item {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  height: 100%;
-  position: relative;
+  gap: 2px;
+  min-width: 0;
 }
 
-.trend-bar {
-  width: 100%;
-  max-width: 36px;
-  border-radius: 6px 6px 0 0;
-  background: linear-gradient(180deg, var(--app-success) 0%, #6ee7a0 100%);
-  transition: height 0.4s ease;
-}
-
-.trend-count {
-  position: absolute;
-  top: -20px;
-  font-size: 12px;
-  font-weight: 600;
+.funnel-item strong {
   color: var(--app-text);
+  font-size: 18px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 
-.trend-date {
-  margin-top: 6px;
-  font-size: 11px;
+.funnel-item span {
   color: var(--app-muted);
+  font-size: 12px;
 }
 
-/* Quick entry */
-.quick-entry-panel {
-  background: var(--app-surface-strong);
-  border-radius: 16px;
-  border: 1px solid var(--app-line);
-  box-shadow: var(--app-shadow-soft);
-  padding: 20px;
-}
-
-.quick-entry-panel h3 {
-  margin: 0 0 16px;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.quick-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-
-.quick-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 8px;
-  border-radius: 12px;
-  border: 1px solid var(--app-line);
-  background: var(--app-surface-strong);
-  cursor: pointer;
-  transition:
-    box-shadow 0.15s ease,
-    transform 0.15s ease,
-    border-color 0.15s ease;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--app-text);
-}
-
-.quick-btn:hover {
-  box-shadow: var(--app-shadow);
-  transform: translateY(-1px);
-  /* 这里原来挂的是 `--app-primary-light`（一道接近白的描边）。它**一条都没上过屏**：
-     页根带 `.dashboard-page`，下面 `.dashboard-page .quick-btn:hover` 特异度更高一档，
-     自己写了 hover 的边框色。删掉的是画不到的声明，屏幕逐字不变。 */
-}
-
-.quick-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.quick-icon.blue {
-  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
-  color: color-mix(in srgb, var(--app-primary), white 25%);
-}
-.quick-icon.amber {
-  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 86%);
-  color: var(--app-warning);
-}
-.quick-icon.violet {
-  background: color-mix(in srgb, var(--app-violet), var(--app-bg) 86%);
-  color: color-mix(in srgb, var(--app-violet), white 34%);
-}
-.quick-icon.green {
-  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
-  color: var(--app-success);
-}
-.quick-icon.teal {
-  background: color-mix(in srgb, var(--app-cyan), var(--app-bg) 86%);
-  color: var(--app-cyan);
-}
-.quick-icon.red {
-  background: color-mix(in srgb, var(--app-danger), var(--app-bg) 86%);
-  color: color-mix(in srgb, var(--app-danger), white 20%);
-}
-
-/* ===== Signal Deck Skin ===== */
-.dashboard-page .panel,
-.quick-entry-panel,
-.metric-card {
-  border-color: #2a2c38;
-  background: #171922;
-  box-shadow: none;
-}
-
-/* `.dashboard-page .panel-header` 与它的 h3 两条已搬进 styles/panels.css：
-   这些节点即将进入 components/ui/AppPanel.vue，scoped 规则匹配不到子组件内部的节点。 */
-.quick-entry-panel h3,
-.dashboard-page .task-info strong,
-.dashboard-page .sug-body strong {
-  color: #f1f2f6;
-}
-
-.dashboard-page .panel-tip,
-.dashboard-page .task-info span,
-.dashboard-page .sug-body p,
-.dashboard-page .metric-label,
-.dashboard-page .funnel-label,
-.dashboard-page .trend-date,
-.dashboard-page .loading-state,
-.dashboard-page .empty-state,
-.dashboard-page .error-state {
-  color: #8f92a3;
-}
-
-.dashboard-page .metric-body strong,
-.dashboard-page .funnel-count,
-.dashboard-page .trend-count {
-  color: #f5f6fa;
-}
-
-.dashboard-page .task-item:hover {
-  background: #20222f;
-}
-
-.dashboard-page .suggestion-item {
-  border: 1px solid #2e3040;
-  background: #1d1d2b;
-}
-
-.dashboard-page .suggestion-item:hover {
-  background: #242237;
-}
-
-.dashboard-page .sug-index {
-  background: #6d3ce8;
-}
-
-.dashboard-page .funnel-bar-fill {
-  background: linear-gradient(180deg, #22b8e8 0%, #2563eb 100%);
-}
-
-.dashboard-page .trend-bar {
-  background: linear-gradient(180deg, #31d39b 0%, #0f9f78 100%);
-}
-
-.dashboard-page .quick-btn {
-  border-color: #2d2f3d;
-  background: #1b1d28;
-  color: #e7e8ee;
-}
-
-.dashboard-page .quick-btn:hover {
-  border-color: #5b4f95;
-  background: #222432;
-  box-shadow: none;
-}
-
-.dashboard-page :deep(.el-tag) {
-  border-color: #3a3d4d;
-  background: #222430;
-  color: #c3c5d1;
+.funnel-note {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 12px;
 }
 
 /* ===== Responsive ===== */
 @media (max-width: 1024px) {
-  .welcome-bar {
-    flex-direction: column;
-    align-items: stretch;
+  .home-hero {
+    grid-template-columns: 1fr;
+    gap: 20px;
   }
 
-  .welcome-side {
-    width: 100%;
-    margin-left: 0;
-    align-items: stretch;
-  }
-
-  .welcome-actions {
-    justify-content: flex-start;
-  }
-
-  .top-row {
+  .home-entrances {
     grid-template-columns: 1fr;
   }
-  .middle-row {
-    grid-template-columns: 1fr;
-  }
-  .bottom-row {
+
+  .home-columns {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 768px) {
-  .dashboard-page {
-    min-height: 0;
-    margin: -12px -16px -16px;
-    padding: 20px 16px;
+  .home-page {
+    gap: 20px;
   }
 
-  .welcome-bar {
-    min-height: 0;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 14px;
-    padding: 24px 20px;
+  .home-hero {
+    padding: 20px;
   }
 
-  .welcome-bar h1 {
-    font-size: 27px;
+  .home-title {
+    font-size: 24px;
   }
 
-  .signal-stats {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  .signal-stats div {
-    min-width: 0;
-    padding: 11px 8px;
-    text-align: center;
-  }
-
-  .signal-stats strong {
-    font-size: 16px;
-  }
-
-  .metrics-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-  .quick-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 560px) {
-  .metrics-grid {
-    grid-template-columns: 1fr;
-  }
-  .quick-grid {
-    grid-template-columns: 1fr;
-  }
-  .funnel-bar {
-    gap: 6px;
+  .funnel-legend {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 12px;
   }
 }
 </style>

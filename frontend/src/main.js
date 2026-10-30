@@ -7,6 +7,7 @@ import { installElement } from './plugins/element'
 import './plugins/element.css'
 import './styles/main.css'
 import './styles/panels.css'
+import './styles/app.css'
 
 const app = createApp(App)
 

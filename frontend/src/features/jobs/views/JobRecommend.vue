@@ -1,34 +1,42 @@
 <template>
   <div class="page-shell job-recommend-page">
-    <!-- 每日推荐头部 -->
-    <div class="panel daily-feed-header">
-      <div class="panel-body feed-header-body">
-        <div class="feed-header-left">
-          <div class="feed-header-icon">
-            <el-icon :size="28"><DataAnalysis /></el-icon>
-          </div>
-          <div>
-            <h3>每日岗位推荐</h3>
-            <p class="feed-header-sub">
-              {{ todayText }} · 基于简历智能匹配
-              <span v-if="recommendations.length"
-                >，已推荐 <strong>{{ recommendations.length }}</strong> 个岗位</span
-              >
-            </p>
-          </div>
-        </div>
-        <div class="feed-header-right">
-          <el-button @click="loadRecommendations" :loading="loading.recommend" size="small">
-            <el-icon><Refresh /></el-icon> 刷新
+    <PageHeader title="岗位推荐" :subtitle="headerSubtitle" eyebrow="岗位">
+      <template #actions>
+        <el-button size="small" @click="loadRecommendations" :loading="loading.recommend">
+          <el-icon><Refresh /></el-icon> 刷新
+        </el-button>
+        <el-button
+          v-if="selectedResumeId"
+          type="primary"
+          size="small"
+          @click="$router.push('/jobs/pipeline/kanban')"
+        >
+          <el-icon><Grid /></el-icon> 查看投递看板
+        </el-button>
+        <el-button v-else type="primary" size="small" @click="$router.push('/resume-center')">
+          上传简历
+        </el-button>
+        <el-dropdown trigger="click" @command="onToolbarCommand">
+          <el-button size="small">
+            <el-icon><MoreFilled /></el-icon> 更多
           </el-button>
-          <el-button type="primary" @click="$router.push('/jobs/pipeline/kanban')" size="small">
-            <el-icon><Grid /></el-icon> 查看投递看板
-          </el-button>
-        </div>
-      </div>
-    </div>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="evaluation">推荐评测</el-dropdown-item>
+              <el-dropdown-item command="seed">生成演示岗位</el-dropdown-item>
+              <el-dropdown-item command="import">导入岗位</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </template>
+    </PageHeader>
+    <input ref="importInput" type="file" accept=".csv,.json" hidden @change="onImportFile" />
 
-    <section v-if="selectedResumeId" class="recommendation-brief" aria-label="本轮推荐摘要">
+    <section
+      v-if="selectedResumeId && recommendations.length"
+      class="recommendation-brief"
+      aria-label="本轮推荐摘要"
+    >
       <div class="brief-current">
         <span class="brief-label">本轮匹配</span>
         <strong>{{ selectedResumeLabel }}</strong>
@@ -63,17 +71,17 @@
       </div>
     </section>
 
-    <!-- 顶部：选择简历 + 操作 -->
+    <!-- 顶部：选择简历 -->
     <div class="panel">
       <div class="panel-body">
         <div class="top-row">
           <div class="resume-selector">
-            <span class="label">选择简历：</span>
+            <span class="label">匹配简历</span>
             <el-select
               v-model="selectedResumeId"
               placement="bottom-start"
               :fallback-placements="['bottom-start']"
-              placeholder="请选择一份简历"
+              placeholder="选择一份简历"
               style="width: 280px"
               filterable
               :loading="loading.resumes"
@@ -82,28 +90,15 @@
               <el-option
                 v-for="r in resumeList"
                 :key="r.id"
-                :label="r.name || r.file_name"
+                :label="readableResumeName(r)"
                 :value="r.id"
               >
-                <span>{{ r.name || r.file_name }}</span>
+                <span>{{ readableResumeName(r) }}</span>
                 <span class="opt-meta">{{ r.parsed?.current_title || '' }}</span>
               </el-option>
             </el-select>
           </div>
-
-          <div class="top-actions">
-            <el-button @click="$router.push('/jobs/recommend/evaluation')">
-              <el-icon><TrendCharts /></el-icon> 推荐评测
-            </el-button>
-            <el-button type="primary" @click="seedData" :loading="loading.seed">
-              <el-icon><DataAnalysis /></el-icon> 生成模拟岗位
-            </el-button>
-            <el-upload :show-file-list="false" :before-upload="handleImport" accept=".csv,.json">
-              <el-button>
-                <el-icon><Upload /></el-icon> 导入岗位
-              </el-button>
-            </el-upload>
-          </div>
+          <span v-if="selectedResumeId" class="toolbar-note"> 推荐会随简历版本和筛选条件更新 </span>
         </div>
 
         <!-- D226：入库搬进后台作业之后，这一行是进度唯一的去处。它得自己说完
@@ -129,12 +124,19 @@
         </div>
 
         <!-- 空状态引导 -->
-        <el-empty v-if="!selectedResumeId && !loading.resumes" :image-size="120" class="empty-hint">
-          <template #description>
-            <span>请先选择一份简历，系统将自动为你匹配推荐岗位</span>
+        <EmptyState
+          v-if="!selectedResumeId && !loading.resumes"
+          compact
+          :icon="Document"
+          title="还没有可匹配的简历"
+          description="上传一份简历后，系统会自动匹配推荐岗位。"
+        >
+          <template #action>
+            <el-button text type="primary" @click="$router.push('/resume-center')">
+              去简历中心
+            </el-button>
           </template>
-          <el-button type="primary" @click="$router.push('/resume-center')"> 去上传简历 </el-button>
-        </el-empty>
+        </EmptyState>
       </div>
     </div>
 
@@ -146,7 +148,7 @@
       @retry="loadFeedbackStats"
     />
 
-    <div class="panel" v-if="feedbackStats">
+    <div class="panel" v-if="feedbackStats && feedbackStats.total">
       <div class="panel-body">
         <div class="stats-row">
           <div class="stats-item">
@@ -548,19 +550,24 @@
       @retry="loadRecommendations"
     />
 
-    <el-empty v-else-if="!loading.recommend && selectedResumeId" :image-size="120">
-      <template #description>
-        <span v-if="appliedFilters"
-          >没有找到符合条件的岗位，试试调整筛选条件；标记过不感兴趣的岗位也会在这里被排除</span
-        >
-        <span v-else
-          >暂无匹配的岗位推荐，请完善简历信息或导入更多岗位数据；已隐藏的岗位可在下方找回</span
-        >
+    <EmptyState
+      v-else-if="!loading.recommend && selectedResumeId"
+      :icon="Document"
+      title="暂时没有匹配的岗位"
+      :description="
+        appliedFilters
+          ? '没有找到符合条件的岗位，试试调整筛选条件。'
+          : '可以先完善简历，或调整筛选条件后再看。'
+      "
+    >
+      <template #action>
+        <el-button v-if="appliedFilters" @click="resetFilters">清除筛选</el-button>
+        <button v-else type="button" class="app-link" @click="$router.push('/resume-center')">
+          去完善简历
+        </button>
+        <el-button text @click="openSuppressedDialog">查看已忽略的岗位</el-button>
       </template>
-      <el-button v-if="appliedFilters" @click="resetFilters">清除筛选</el-button>
-      <el-button v-else type="primary" @click="seedData">生成模拟岗位</el-button>
-      <el-button @click="openSuppressedDialog">查看已忽略的岗位</el-button>
-    </el-empty>
+    </EmptyState>
 
     <!-- 已忽略岗位：隐藏必须可逆，否则一次误点就永久减少推荐 -->
     <el-dialog v-model="suppressed.dialog" title="已忽略的岗位" width="640px">
@@ -628,29 +635,32 @@ import {
 } from '@/api/jobs'
 import { ElMessage } from '@/plugins/element-services'
 import {
-  DataAnalysis,
-  Upload,
   Location,
   Money,
   Timer,
-  TrendCharts,
   Grid,
   Microphone,
   Star,
   Refresh,
   CircleClose,
   Loading,
+  Document,
+  MoreFilled,
 } from '@element-plus/icons-vue'
 import { OfficeBuilding } from '@element-plus/icons-vue'
 import { createJobPipelineEntry } from '@/api/targets'
 import { isTopTier, scoreToneFillClass } from '@/utils/scoreTone'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
-import { isoMonthDay } from '@/utils/format/date'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
+import { isoMonthDay, monthDay } from '@/utils/format/date'
 import { useLatestCall } from '@/composables/useLatestCall'
 import { createAgentTaskPoller } from '@/utils/agentTaskPolling'
+import { useSelectionStore } from '@/stores/selection'
 
 const router = useRouter()
 const route = useRoute()
+const selection = useSelectionStore()
 const selectedResumeId = ref(null)
 const resumeList = ref([])
 const recommendations = ref([])
@@ -701,7 +711,7 @@ const hasAnomalySignals = computed(() => {
 })
 const selectedResumeLabel = computed(() => {
   const resume = resumeList.value.find((item) => item.id === selectedResumeId.value)
-  return resume?.name || resume?.file_name || '已选简历'
+  return resume ? readableResumeName(resume) : '已选简历'
 })
 const priorityJobCount = computed(
   () => recommendations.value.filter((job) => isTopTier(job.match_score) && !job._applied).length
@@ -718,14 +728,66 @@ const todayText = computed(() => {
   return `${y}.${m}.${day} ${weekdays[d.getDay()]}`
 })
 
+const headerSubtitle = computed(() =>
+  recommendations.value.length
+    ? `${todayText.value} · 已推荐 ${recommendations.value.length} 个岗位`
+    : `${todayText.value} · 基于简历智能匹配`
+)
+
+/* 存储名可能是 UUID（历史数据或自动化上传留下的）。优先用原文件名，UUID 才退回可读称呼。 */
+function readableResumeName(r) {
+  const raw = r?.name || r?.file_name || ''
+  const base = raw.replace(/\.[^.]+$/, '')
+  if (base && !/^[0-9a-f-]{16,}$/i.test(base)) return base
+  if (r?.parsed?.name) return `${r.parsed.name}的简历`
+  if (r?.parsed?.current_title) return `${r.parsed.current_title}简历`
+  return r?.create_time ? `我的简历 · ${monthDay(r.create_time)}` : '我的简历'
+}
+
+const importInput = ref(null)
+
+function onToolbarCommand(cmd) {
+  if (cmd === 'evaluation') {
+    router.push('/jobs/recommend/evaluation')
+    return
+  }
+  if (cmd === 'seed') {
+    seedData()
+    return
+  }
+  if (cmd === 'import') importInput.value?.click()
+}
+
+function onImportFile(event) {
+  const file = event.target.files?.[0]
+  if (file) handleImport(file)
+  event.target.value = ''
+}
+
 // === 生命周期 ===
 onMounted(async () => {
   await fetchResumes()
   loadFeedbackStats()
+
   if (route.query.resume_id) {
     const rid = Number(route.query.resume_id)
     if (!isNaN(rid)) {
       selectedResumeId.value = rid
+      loadRecommendations()
+      return
+    }
+  }
+
+  if (!selectedResumeId.value && resumeList.value.length) {
+    const stored = selection.defaultResumeId()
+    const pick =
+      resumeList.value.find((item) => item.id === stored) ||
+      [...resumeList.value].sort(
+        (a, b) => new Date(b.create_time || 0).getTime() - new Date(a.create_time || 0).getTime()
+      )[0]
+    if (pick) {
+      selectedResumeId.value = pick.id
+      selection.rememberResume(pick.id)
       loadRecommendations()
     }
   }
@@ -1180,58 +1242,7 @@ function segmentStyle(value, total) {
   gap: 18px;
 }
 
-/* 每日推荐头部 */
-.daily-feed-header {
-  background: var(--app-surface-strong);
-  border-color: var(--app-line);
-  border-top: 3px solid var(--app-primary);
-  border-radius: var(--app-radius-sm, 8px);
-}
-
-.feed-header-body {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.feed-header-left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.feed-header-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 6px;
-  /* 与 Home 的图标座、Profile 的成就徽章同一配方（B）：深色底上的色偏，不是 pastel 方块 */
-  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
-  color: color-mix(in srgb, var(--app-primary), white 25%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.feed-header-body h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--app-text);
-}
-
-.feed-header-sub {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--app-muted);
-}
-
-.feed-header-right {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
+/* 每日推荐头部已并入 PageHeader；下面的推荐摘要仍是页面内的第二层信息。 */
 
 @media (max-width: 960px) {
   .recommendation-brief {
@@ -1488,9 +1499,9 @@ function segmentStyle(value, total) {
   font-size: 12px;
   margin-left: 12px;
 }
-.top-actions {
-  display: flex;
-  gap: 8px;
+.toolbar-note {
+  color: var(--app-muted);
+  font-size: 12px;
 }
 /* D226：导入作业的进度行。放在操作行下面而不是弹层里——它要能一直待在那儿，
    人在往下翻推荐时也知道上面那一发还没跑完。 */
@@ -1512,10 +1523,6 @@ function segmentStyle(value, total) {
   font-size: 12px;
   color: var(--app-muted);
 }
-.empty-hint {
-  padding: 24px 0 8px;
-}
-
 /* 筛选栏 */
 .filter-row {
   display: flex;

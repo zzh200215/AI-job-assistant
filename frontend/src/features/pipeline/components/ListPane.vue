@@ -246,22 +246,22 @@ const emit = defineEmits(['command', 'batch-move', 'clear-selection', 'selection
 
 /* 与主题层 `.score-tone--*` 同一条口径：这一族也是文字色，good / risk 两档各抬一档混白。 */
 .score-level--high {
-  color: var(--app-score-high);
+  color: var(--app-score-high-text);
 }
 
 .score-level--good {
-  color: color-mix(in srgb, var(--app-score-good), white 25%);
+  color: var(--app-score-good-text);
 }
 
 .score-level--warn {
-  color: var(--app-score-warn);
+  color: var(--app-score-warn-text);
 }
 
 .score-level--risk {
-  color: color-mix(in srgb, var(--app-score-risk), white 20%);
+  color: var(--app-score-risk-text);
 }
 
 .score-level--unknown {
-  color: var(--app-score-unknown);
+  color: var(--app-score-unknown-text);
 }
 </style>

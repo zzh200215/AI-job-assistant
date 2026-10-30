@@ -1,88 +1,14 @@
 <template>
-  <div class="page-shell">
-    <!-- Hero -->
-    <section class="analysis-hero">
-      <div class="hero-title-area">
-        <div class="hero-title-main">
-          <div class="hero-badge">
-            <span class="badge-dot" />
-            求职分析
-          </div>
-          <h2>求职分析</h2>
-          <div class="page-header-sub">
-            把简历和目标岗位放在一起看：先找出差距，再给出下一步动作。
-          </div>
-          <div class="hero-tags">
-            <span>简历诊断</span>
-            <span>岗位匹配</span>
-            <span>参考依据</span>
-          </div>
-        </div>
-        <!-- Decorative pipeline node -->
-        <div class="hero-node" aria-hidden="true">
-          <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-            <circle
-              cx="40"
-              cy="40"
-              r="38"
-              stroke="var(--app-primary)"
-              stroke-width="1"
-              opacity="0.15"
-            />
-            <circle
-              cx="40"
-              cy="40"
-              r="28"
-              stroke="var(--app-primary)"
-              stroke-width="1"
-              opacity="0.2"
-            />
-            <circle cx="40" cy="40" r="8" fill="var(--app-primary)" opacity="0.3" />
-            <path
-              d="M4 40 Q 20 16 40 12 Q 60 8 76 40"
-              stroke="var(--app-primary)"
-              stroke-width="1"
-              opacity="0.12"
-              fill="none"
-              stroke-dasharray="3 3"
-            />
-            <path
-              d="M4 40 Q 20 64 40 68 Q 60 72 76 40"
-              stroke="var(--app-primary)"
-              stroke-width="1"
-              opacity="0.12"
-              fill="none"
-              stroke-dasharray="3 3"
-            />
-          </svg>
-        </div>
-      </div>
-
-      <div class="hero-metrics">
-        <div class="hm-item" :class="{ ready: !!resumeInfo }">
-          <span class="hm-label">简历状态</span>
-          <strong class="data-value">{{ resumeInfo ? '已上传' : '待上传' }}</strong>
-          <small>{{ resumeInfo?.file_name || '等待上传简历' }}</small>
-        </div>
-        <div class="hm-item" :class="{ ready: !!(jdInfo || jdForm.title || jdForm.raw_text) }">
-          <span class="hm-label">目标岗位</span>
-          <strong class="data-value">{{
-            jdInfo || jdForm.title || jdForm.raw_text ? '已就绪' : '待填写'
-          }}</strong>
-          <small>{{ jdInfo?.title || jdForm.title || '等待填写目标岗位' }}</small>
-        </div>
-        <div class="hm-item" :class="{ ready: loading || !!result }">
-          <span class="hm-label">分析进度</span>
-          <strong class="data-value">{{ analysisFlowLabel }}</strong>
-          <small>{{ analysisFlowHint }}</small>
-        </div>
-        <div class="hm-item" :class="{ ready: !!result }">
-          <span class="hm-label">结果总览</span>
-          <strong class="data-value">{{ result ? result.match_score : '--' }}</strong>
-          <small>{{ analysisConfidence?.label || '等待生成匹配报告' }}</small>
-        </div>
-      </div>
-    </section>
+  <div class="page-shell smart-analysis-page">
+    <PageHeader
+      title="求职分析"
+      subtitle="把简历和目标岗位放在一起看：先找出差距，再给出下一步动作。"
+      eyebrow="分析"
+    >
+      <template #actions>
+        <el-button text @click="router.push('/history')">分析历史</el-button>
+      </template>
+    </PageHeader>
 
     <!-- Input Card -->
     <section class="panel">
@@ -91,7 +17,7 @@
           <el-icon><MagicStick /></el-icon>
           <span>生成求职分析</span>
         </div>
-        <el-tag size="small">简历 + 岗位 + 行业资料</el-tag>
+        <el-tag size="small">简历 · 岗位 · 行业资料</el-tag>
       </div>
 
       <div class="panel-body">
@@ -108,6 +34,7 @@
               accept=".pdf,.docx,.doc"
               :disabled="loading"
               class="resume-upload"
+              :class="{ 'has-file': !!resumeInfo }"
             >
               <div v-if="!resumeInfo" class="upload-blank">
                 <el-icon class="upload-icon"><UploadFilled /></el-icon>
@@ -117,7 +44,7 @@
               <div v-else class="upload-ready">
                 <el-icon class="done-icon"><SuccessFilled /></el-icon>
                 <div class="upload-ready-copy">
-                  <strong>{{ resumeInfo.file_name }}</strong>
+                  <strong>{{ readableResumeName(resumeInfo) }}</strong>
                   <span>已上传，可直接分析</span>
                 </div>
                 <el-button text type="danger" size="small" @click.stop="clearResume"
@@ -160,7 +87,7 @@
             <span>匹配度、差距、职业方向、面试题与参考依据</span>
           </div>
           <el-button
-            type="primary"
+            :type="result ? 'default' : 'primary'"
             size="large"
             :loading="loading"
             :disabled="!canAnalyze"
@@ -478,7 +405,8 @@ import {
   Search,
 } from '@element-plus/icons-vue'
 import { useSelectionStore } from '@/stores/selection'
-import { uploadResume, parseResume } from '@/api/resume'
+import { uploadResume, parseResume, getResume, getResumeList } from '@/api/resume'
+import PageHeader from '@/components/ui/PageHeader.vue'
 import { createJD, parseJD } from '@/api/jd'
 import { runFullAnalysis, getAnalysis } from '@/api/analysis'
 import { generateOptimized } from '@/api/resume'
@@ -495,6 +423,7 @@ import ReportSummaryPane from '@/features/analysis/components/ReportSummaryPane.
 import ResumeOptimizePane from '@/features/analysis/components/ResumeOptimizePane.vue'
 import SkillsPane from '@/features/analysis/components/SkillsPane.vue'
 import { scoreToneColor } from '@/utils/scoreTone'
+import { monthDay } from '@/utils/format/date'
 import {
   localizeRecommendationText,
   localizeSentence,
@@ -567,16 +496,6 @@ const analysisFlowLabel = computed(() => {
   if (taskOutcome.value === 'cancelled') return '已取消'
   if (taskOutcome.value === 'timeout') return '已超时'
   return '待开始'
-})
-
-const analysisFlowHint = computed(() => {
-  if (loading.value || agentSteps.value.length) {
-    return `${completedStepCount.value} / ${agentSteps.value.length || 0} 步`
-  }
-  if (taskOutcome.value === 'failed') return '分析失败，请检查输入或稍后重试'
-  if (taskOutcome.value === 'cancelled') return '任务已取消'
-  if (taskOutcome.value === 'timeout') return '分析时间有点久，请稍后到历史记录查看结果'
-  return '尚未启动分析任务'
 })
 
 const taskOutcomeTag = computed(
@@ -680,6 +599,49 @@ const clearJD = () => {
   jdForm.company = ''
   jdForm.raw_text = ''
   clearExplain()
+}
+
+/* 存储名可能是 UUID（历史数据或自动化上传留下的）。优先用原文件名，UUID 才退回可读称呼。 */
+function readableResumeName(r) {
+  const raw = r?.name || r?.file_name || ''
+  const base = raw.replace(/\.[^.]+$/, '')
+  if (base && !/^[0-9a-f-]{16,}$/i.test(base)) return base
+  if (r?.parsed?.name) return `${r.parsed.name}的简历`
+  if (r?.parsed?.current_title) return `${r.parsed.current_title}简历`
+  return r?.create_time ? `我的简历 · ${monthDay(r.create_time)}` : '我的简历'
+}
+
+/* 直接进这一页时也要有简历：先读默认版本，没有再取最近的一份——与简历中心同一顺序。
+   从 `selection` 接过来的 id 只有"已选简历"这个占位名，顺手补一次真实名称。 */
+async function ensureResumeSelection() {
+  if (resumeInfo.value?.id) {
+    if (resumeInfo.value.file_name === '已选简历' || !resumeInfo.value.file_name) {
+      try {
+        const resume = await getResume(resumeInfo.value.id)
+        resumeInfo.value = { id: resume.id, file_name: readableResumeName(resume) }
+      } catch {
+        // 记录可能已被删除；保留占位名，页面仍可重新上传
+      }
+    }
+    return
+  }
+  const stored = selection.defaultResumeId()
+  if (stored) {
+    try {
+      const resume = await getResume(stored)
+      resumeInfo.value = { id: resume.id, file_name: readableResumeName(resume) }
+      return
+    } catch {
+      // 默认版本可能已被删除，继续走"最近一份"
+    }
+  }
+  try {
+    const data = await getResumeList({ page: 1, page_size: 1 })
+    const recent = data?.items?.[0]
+    if (recent) resumeInfo.value = { id: recent.id, file_name: readableResumeName(recent) }
+  } catch {
+    // 读不到就保持"待上传"，页面仍可用
+  }
 }
 
 // ---- Analysis ----
@@ -808,6 +770,8 @@ onMounted(() => {
       selection.rememberJD(ctx.jdId)
     }
   }
+
+  ensureResumeSelection()
 })
 </script>
 
@@ -816,127 +780,7 @@ onMounted(() => {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-/* ===== Hero ===== */
-.analysis-hero {
-  padding: 24px;
-  border-radius: var(--app-radius-sm, 12px);
-  border: 1px solid var(--app-line);
-  background: var(--app-surface-strong);
-  box-shadow: var(--app-shadow);
-}
-
-.hero-title-area {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--app-radius-xs, 8px);
-  /* 与 B 那 21 个色块座同配方：浅蓝底在深色壳里是"贴纸"，且 11px 字压上去只有 4.48 */
-  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
-  color: color-mix(in srgb, var(--app-primary), white 25%);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--app-primary);
-}
-
-.hero-title-main h2 {
-  margin: 6px 0 0;
-  font-size: 30px;
-  font-weight: 800;
-  line-height: 1.1;
-}
-
-.hero-title-main .page-header-sub {
-  margin: 10px 0 0;
-  max-width: 540px;
-  color: var(--app-muted);
-  line-height: 1.7;
-  font-size: 14px;
-}
-
-.hero-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 12px;
-}
-
-.hero-tags span {
-  padding: 5px 10px;
-  border-radius: var(--app-radius-xs, 8px);
-  border: 1px solid var(--app-line);
-  font-size: 11px;
-  color: var(--app-muted);
-}
-
-.hero-node {
-  flex-shrink: 0;
-  opacity: 0.6;
-  display: none;
-}
-
-@media (min-width: 1024px) {
-  .hero-node {
-    display: block;
-  }
-}
-
-/* Hero metrics */
-.hero-metrics {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.hm-item {
-  padding: 14px 16px;
-  border-radius: var(--app-radius-sm, 12px);
-  border: 1px solid var(--app-line);
-  background: var(--app-surface-strong);
-  transition: background 0.2s ease;
-}
-
-.hm-item.ready {
-  background: var(--el-fill-color-light);
-}
-
-.hm-label {
-  display: block;
-  font-size: 11px;
-  color: var(--app-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.hm-item strong {
-  display: block;
-  margin-top: 8px;
-  font-size: 20px;
-  line-height: 1.1;
-}
-
-.hm-item small {
-  display: block;
-  margin-top: 4px;
-  color: var(--app-muted);
-  font-size: 12px;
+  gap: 20px;
 }
 
 /* ===== Panel overrides ===== */
@@ -972,6 +816,14 @@ onMounted(() => {
   transition:
     border-color 0.2s ease,
     background 0.2s ease;
+}
+
+/* 已选简历时不再是一块 220px 的空白拖拽区：收紧成一张"已就绪"卡。 */
+.resume-upload.has-file :deep(.el-upload-dragger) {
+  min-height: 140px;
+  padding: 16px;
+  border-style: solid;
+  background: var(--app-surface-muted);
 }
 
 .resume-upload :deep(.el-upload-dragger:hover) {
@@ -1012,7 +864,7 @@ onMounted(() => {
 }
 
 .upload-ready {
-  min-height: 220px;
+  min-height: 140px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1405,9 +1257,6 @@ onMounted(() => {
 
 /* ===== Responsive ===== */
 @media (max-width: 1024px) {
-  .hero-metrics {
-    grid-template-columns: 1fr 1fr;
-  }
   .input-split {
     grid-template-columns: 1fr;
   }
@@ -1417,12 +1266,6 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .analysis-hero {
-    padding: 18px;
-  }
-  .hero-metrics {
-    grid-template-columns: 1fr;
-  }
   .score-center {
     flex-direction: column;
     text-align: center;
@@ -1442,12 +1285,6 @@ onMounted(() => {
 @media (max-width: 560px) {
   .panel-body {
     padding: 16px;
-  }
-  .hero-metrics {
-    grid-template-columns: 1fr;
-  }
-  .hero-title-main h2 {
-    font-size: 26px;
   }
 }
 </style>

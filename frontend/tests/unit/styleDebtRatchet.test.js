@@ -7,7 +7,6 @@ import {
   CONFIDENCE_LEVELS,
   FOLLOW_UP_LEVELS,
   FUNNEL_ACCENTS,
-  LAYOUT_CHIP_COLORS,
   PRIORITY_LEVELS,
   SEVERITY_LEVELS,
   STAGE_ACCENTS,
@@ -28,7 +27,6 @@ const BUDGET = {
        `score-tone` 那几族实测全部留在表里，`el-` 那类库里选择器一律不动）。
        下面这四个数就是量完剩下的"页面自己还在用"的那些。 */
     'src/features/interview/views/InterviewRoom.vue': 43,
-    'src/features/shell/views/Home.vue': 62,
     'src/features/jobs/views/JobSearch.vue': 26,
     'src/features/jobs/components/JobCompareDialog.vue': 1,
     'src/features/jobs/components/JobDetailDrawer.vue': 1,
@@ -52,8 +50,7 @@ const BUDGET = {
     'src/features/jobs/components/RecommendPane.vue': 7,
     /* P1-①（2026-10-07）：`.layout-shell` 那条浅色底换成 `var(--app-bg)`，34 → 33。同一刀把
        主题作用域加到 `documentElement` 上，因为 EP 的浮层是 teleport 到 `body` 子树的。 */
-    'src/layouts/DefaultLayout.vue': 33,
-    'src/features/shell/views/Profile.vue': 13,
+    'src/features/shell/views/Profile.vue': 9,
     'src/features/planning/views/CareerPlanning.vue': 27,
     'src/features/analysis/views/SmartAnalysis.vue': 4,
     /* D51 搬出「职业规划」面板时样式按 D44 的口径**复制**（父页面那 1092 行一行没删，因为静态切分
@@ -71,7 +68,6 @@ const BUDGET = {
        （22 → 8），D146 又把被覆写压住的深色渐变基座并进单层（8 → 0）。它从"硬编码色最多的
        页面之一"变成这一族的第一个清零样本。 */
     'src/features/resume/views/ResumeCompare.vue': 19,
-    'src/features/auth/views/Login.vue': 16,
     /* 13 → 5：STAR 那五枚座（`.star-tag` + `.star-s/t/a/r`）与 `.interview-score` 收了 8 个
        手挑 pastel；剩下 5 个是 `.daily-*` 与 `.weak-card`，属另一族。 */
     'src/features/interview/views/Interview.vue': 5,
@@ -110,7 +106,7 @@ const BUDGET = {
     'src/features/interview/components/RoomAside.vue': 2,
     'src/features/interview/components/StagePane.vue': 1,
     'src/features/auth/views/ResetPassword.vue': 12,
-    'src/features/interview/views/InterviewSetup.vue': 6,
+    'src/features/interview/views/InterviewSetup.vue': 4,
     'src/features/eval/views/RecommendationEval.vue': 11,
     'src/features/analysis/views/ExplainMatch.vue': 9,
     'src/features/auth/views/NotFound.vue': 5,
@@ -120,7 +116,6 @@ const BUDGET = {
     'src/features/billing/views/Subscription.vue': 2,
     'src/features/knowledge/views/KnowledgeBase.vue': 4,
     'src/features/shell/views/WeeklyReport.vue': 4,
-    'src/features/resume/views/ResumeUpload.vue': 3,
     'src/features/shell/views/TaskCenter.vue': 3,
     'src/features/shell/views/About.vue': 2,
     'src/features/analysis/views/AgentAnalysis.vue': 2,
@@ -155,8 +150,6 @@ const BUDGET = {
      - ExplainMatch 2 处：D16 查到这个视图**没有路由可达**（`explain-match` 是 redirect），
        改了没人看见，等 §7 阶段 3 决定删不删。 */
   templateColorLiterals: {
-    'src/features/auth/views/Login.vue': 12,
-    'src/layouts/DefaultLayout.vue': 1,
     'src/features/analysis/views/ExplainMatch.vue': 2,
   },
   /* 手写的 `class="panel-header"` 标记数——AppPanel（components/ui/AppPanel.vue）的迁移台账。
@@ -226,7 +219,7 @@ const BUDGET = {
     'src/features/resume/views/ResumeCompare.vue': 3,
     'src/features/shell/views/History.vue': 2,
     'src/features/interview/views/InterviewRoom.vue': 2,
-    'src/features/resume/views/ResumeUpload.vue': 2,
+    'src/features/resume/views/ResumeUpload.vue': 1,
     'src/features/interview/views/Interview.vue': 1,
     'src/features/shell/views/Profile.vue': 1,
     /* D109：订阅页那条 token 是 `ElMessageBox.confirm(..., { type: 'info' })` 的对话框图标色——
@@ -256,7 +249,7 @@ const BUDGET = {
   /* 视图侧的色值预算有三条（style/script/template），但把 `#fff` 从视图**上提到 src/styles/ 的
      某个 .css** 就能全部绕过——而视图预算按文件路径记账，上提还会让它看起来"还了债"。
      这条按整个样式层记一笔总量，与视图侧同尺子（`#hex` + `rgba(`）。 */
-  themeColorLiterals: 124,
+  themeColorLiterals: 122,
   /* D76 用浏览器探针把三条"视图自己重写 .page-shell"判死并删掉（KnowledgeBase /
      DeliveryGuide / SystemStatus，各自 matched=0、删→比 46 条计算属性+rect=0 差异、塞回=0 差异），
      22 → 19。这一维以前只有上限、没有"还完必须调小"，所以那 3 的下降本来会静悄悄。 */
@@ -1067,6 +1060,8 @@ describe('style debt ratchet', () => {
       'src/App.vue',
       'src/components/ui/AppLoadError.vue',
       'src/components/ui/AppPanel.vue',
+      'src/components/ui/EmptyState.vue',
+      'src/components/ui/PageHeader.vue',
       'src/components/ui/ReturnToBanner.vue',
     ]
     const scanned = viewSources.map(({ rel }) => rel)
@@ -1264,8 +1259,8 @@ describe('style debt ratchet', () => {
         {
           ...sources,
           'src/features/shell/views/Home.vue': sources['src/features/shell/views/Home.vue'].replace(
-            '.metric-icon.amber {',
-            '.metric-icon.amber { background: #fef5e7;'
+            '.entrance-icon {',
+            '.entrance-icon { background: #fef5e7;'
           ),
         },
         themeCss
@@ -1324,6 +1319,11 @@ describe('style debt ratchet', () => {
       // 原来第二条是 InterviewReport 的序号座，随 §10.33 走 ① 一起撤了——豁免表少一条会红，
       // 这条腿的设计就是"撤了不删表它不响"。
       'src/features/interview/views/InterviewSetup.vue': 1,
+      /* 浅色外壳：导航选中态与头像底。这两处现在压的是白面，不再是"浅底压主题浅字"——
+         外壳已从深色指令面翻成浅色，豁免理由从"刻意留"变成"方向本来就对"。 */
+      'src/layouts/DefaultLayout.vue': 2,
+      /* 首页入口卡的图标座：浅蓝底压深蓝图标，白面上方向正确。 */
+      'src/features/shell/views/Home.vue': 1,
     }
     const counts = viewSources
       .map(({ rel, source }) => [rel, (source.match(USE) || []).length])
@@ -1386,19 +1386,19 @@ describe('style debt ratchet', () => {
 
   /* 分数当文字读的 tone 有**三个表示法**：JS 的 `scoreToneTextColor()`（内联 style）、主题层的
      `.score-tone--*`（`scoreToneClass()` 拼出来的类名）、ListPane 自己的 `.score-level--*`。
-     三处各改各的就会分叉——D144 只抬了 JS 那一支，D147 补 CSS 两支时才发现它们一直停在 3.39 /
-     4.15 那一档。所以这条不判"够不够"（那要浏览器），它判**三处是否同值**。 */
-  it('keeps the three text-tone representations on the same lift', () => {
-    const EXPECT = { high: null, good: 25, warn: null, risk: 20, unknown: null }
-    const liftOf = (decl) => {
-      const m = /white (\d+)%/.exec(decl || '')
-      return m ? Number(m[1]) : null
+     浅色主题读“压深”的一档、深色主题读“抬白”的一档，但三条表示法必须指向**同一组 token**，
+     否则换主题时会分叉成两套数。 */
+  it('keeps the three text-tone representations on the same token', () => {
+    const TONES = ['high', 'good', 'warn', 'risk', 'unknown']
+    const tokenOf = (decl) => {
+      const m = /var\(--app-score-([a-z]+)-text\)/.exec(decl || '')
+      return m ? m[1] : null
     }
     const cssMap = (text, prefix) => {
       const out = {}
-      for (const tone of Object.keys(EXPECT)) {
+      for (const tone of TONES) {
         const m = new RegExp(`\\.${prefix}--${tone}\\s*\\{([^}]*)\\}`).exec(text)
-        out[tone] = liftOf(m ? m[1] : '')
+        out[tone] = tokenOf(m ? m[1] : '')
       }
       return out
     }
@@ -1410,24 +1410,35 @@ describe('style debt ratchet', () => {
       ['risk', 30],
       ['unknown', null],
     ]) {
-      jsMap[tone] = liftOf(scoreToneTextColor(value))
+      jsMap[tone] = tokenOf(scoreToneTextColor(value))
     }
     const theme = cssMap(themeCss, 'score-tone')
     const listPane = cssMap(styleOf('src/features/pipeline/components/ListPane.vue'), 'score-level')
 
     const bad = []
-    for (const tone of Object.keys(EXPECT)) {
+    for (const tone of TONES) {
       const trio = [jsMap[tone], theme[tone], listPane[tone]]
-      if (trio.some((v) => v !== EXPECT[tone]))
+      if (trio.some((v) => v !== tone))
         bad.push(
-          `${tone}：期望 ${EXPECT[tone]}，实得 js=${trio[0]} / .score-tone=${trio[1]} / .score-level=${trio[2]}`
+          `${tone}：期望 ${tone}，实得 js=${trio[0]} / .score-tone=${trio[1]} / .score-level=${trio[2]}`
         )
     }
-    expect(bad, `文字档三处不同值：${bad.join('；')}`).toEqual([])
+    expect(bad, `文字档三处不同 token：${bad.join('；')}`).toEqual([])
 
-    // 反证：把主题层那一档改回 tone 本体（就是 D147 之前的状态），判据必须报。
+    /* 深色作用域必须自己给出抬白配方：浅色那一套 black mix 压在墨面上读不清。
+       这五条是"方向相反、出处相同"的证据，不是装饰。 */
+    const dark = /\.workspace-theme\s*\{([\s\S]*?)\n\}/.exec(themeCss)?.[1] || ''
+    const darkLift = (tone) => {
+      const m = new RegExp(`--app-score-${tone}-text:\\s*([^;]+);`).exec(dark)
+      return m ? m[1].trim() : null
+    }
+    expect(darkLift('good'), '深色 good 档必须抬白 25%').toContain('white 25%')
+    expect(darkLift('risk'), '深色 risk 档必须抬白 20%').toContain('white 20%')
+    expect(darkLift('high')).toBe('var(--app-score-high)')
+
+    // 反证：把主题层那一档改回 tone 本体，判据必须报。
     const regressed = themeCss.replace(
-      '.score-tone--good {\n  color: color-mix(in srgb, var(--app-score-good), white 25%);',
+      '.score-tone--good {\n  color: var(--app-score-good-text);',
       '.score-tone--good {\n  color: var(--app-score-good);'
     )
     expect(regressed, '植入没落进 main.css，这条反证是空转的').not.toBe(themeCss)
@@ -1447,6 +1458,10 @@ describe('style debt ratchet', () => {
       // 题库类型选中态：浅底是"已选中"那层 affordance（与浅色令牌豁免表同一条理由），
       // 字压在那层浅底上，所以往深走才对。
       'src/features/interview/views/InterviewSetup.vue': 1,
+      // 浅色外壳的导航选中态与头像字母：两处都压在白面 / 浅蓝底上，往深走是正确方向。
+      'src/layouts/DefaultLayout.vue': 2,
+      // 首页下一步标签与入口图标：同样压在白面 / 浅蓝底上。
+      'src/features/shell/views/Home.vue': 2,
     }
     const counts = viewSources
       .map(({ rel, style }) => [rel, (style.match(DARK_TEXT) || []).length])
@@ -1541,13 +1556,13 @@ describe('style debt ratchet', () => {
     {
       /* 2026-10-07：这一族原先是**死接线** —— 模板挂 `badge-${level}`，而三条规则根本不存在，
          所以置信度方块一直透明底白字。补上规则之后必须有这条双向守卫：域里少一档、或文件里
-         多出一个不在域内的 `badge-*`，都会红（`.badge-dot` 那颗 6px 圆点是布局类，列在 siblings）。
-         域与后端出处见 constants/states.js 的 CONFIDENCE_LEVELS（rag_confidence_service.py:54-62）。 */
+         多出一个不在域内的 `badge-*`，都会红。hero 那颗 `.badge-dot` 随浅色改版出树，
+         siblings 因此为空；再长出一颗布局类时先在这里点名。 */
       prefix: 'badge',
       values: CONFIDENCE_LEVELS,
       file: 'src/features/analysis/views/SmartAnalysis.vue',
       unstyled: [],
-      siblings: ['dot'],
+      siblings: [],
     },
     {
       prefix: 'severity',
@@ -1613,21 +1628,6 @@ describe('style debt ratchet', () => {
       prefix: 'dot',
       values: WEIGHT_DOT_COLORS,
       file: 'src/features/jobs/views/OfferCompare.vue',
-      unstyled: [],
-      siblings: [],
-    },
-    {
-      /* D160 那次"硬深色岛"普查撞出来的**第五站**：应用外壳自己也在发 `dot-*`
-         （`DefaultLayout.vue:76` 的演示模式灯 `runtime.demoMode ? 'dot-amber' : 'dot-green'`、
-         `:97` 的通知徽标 `class="badge-dot dot-blue"`），而 (前缀, 文件) 这张表里一直没有它——
-         这正是 D78 那一幕的形状："同一族多一个拼类名的站点，没人登记，规则与值域就各走各的"。
-         这一站还有一件前四站都没有的事：它的**宿主不跟主题走**（`.aside-chip #1a1c26`、
-         `.badge` / `.user-chip #1c1e28` 是写死的深色），所以摘掉 `.workspace-theme` 之后这两枚点
-         的相邻面对比一字不变（2026-10-08 实测 5.58 / 7.18）。它是 main.css:3 那句
-         "dark command surfaces + light reading flows" 里"深色指令面"那一半，不是漏网的浅色面。 */
-      prefix: 'dot',
-      values: LAYOUT_CHIP_COLORS,
-      file: 'src/layouts/DefaultLayout.vue',
       unstyled: [],
       siblings: [],
     },
@@ -1798,32 +1798,6 @@ describe('style debt ratchet', () => {
       '往权重表插一档颜色，解析必须看见'
     ).toContain('magenta')
 
-    /* 第五站的域由**模板自己**定：`:76` 那个三元产出 amber / green，`:97` 那颗徽标静态挂 blue。
-       所以这里不抄一份常量表，直接从源码解析出集合再与 `LAYOUT_CHIP_COLORS` 对拉——
-       有人给演示灯加第三档而没配规则，或者撤掉一档没删域里的值，都会在这里红。 */
-    const layout = readFileSync('src/layouts/DefaultLayout.vue', 'utf8')
-    /* 模板里发这一族有**两种写法**，都得算进去：`:76` 是三元里的引号字面量（`'dot-amber'`），
-       `:97` 是静态挂上的 `class="badge-dot dot-blue"`。只认前一种会得到两个值、少一根 `dot-blue`
-       ——那正是"站点表登记了、域却少一档"的形态，所以这里两种一起扫。 */
-    const chipColorsIn = (text) =>
-      [
-        ...new Set([
-          ...[...text.matchAll(/['"`](dot-[a-z]+)['"`]/g)].map((m) => m[1].slice(4)),
-          ...[...text.matchAll(/class="[^"]*\bdot-([a-z]+)\b/g)].map((m) => m[1]),
-        ]),
-      ].sort()
-    const parsedChips = chipColorsIn(layout)
-    expect(parsedChips, 'DefaultLayout 模板里发出去的 dot- 颜色与 LAYOUT_CHIP_COLORS 分叉').toEqual(
-      [...LAYOUT_CHIP_COLORS].sort()
-    )
-    /* 反证：把演示灯那一支换成一个域里没有的颜色，解析必须看见（看不见这条腿就是空转）。 */
-    const planted = layout.replace(
-      "runtime.demoMode ? 'dot-amber' : 'dot-green'",
-      "runtime.demoMode ? 'dot-chartreuse' : 'dot-green'"
-    )
-    expect(planted, '植入没落进副本（模板写法变了，这条反证要跟着改）').not.toBe(layout)
-    expect(chipColorsIn(planted), '改一支颜色，解析集合要跟着变').toContain('chartreuse')
-
     /* 前缀共用语义不共用：`dot-` 载着五个互不相干的域（优先级 / 状态 / accent / 权重色 /
        外壳那两颗点），所以"某一站缺一条规则"必须能被单独发现——这里数的是站点的文件数，不是前缀数。
        第五站是 D160 普查撞出来的：它一直在发 `dot-*`，而这张表里没有它。 */
@@ -1835,7 +1809,6 @@ describe('style debt ratchet', () => {
         'src/features/shell/views/TaskCenter.vue',
         'src/features/pipeline/components/BoardPane.vue',
         'src/features/jobs/views/OfferCompare.vue',
-        'src/layouts/DefaultLayout.vue',
       ]
     )
   })
@@ -1893,30 +1866,7 @@ describe('style debt ratchet', () => {
         'dot-teal': 5.03,
       },
     },
-    /* ―― D160：应用外壳那两颗点（第五站的两枚座）。这一站有两件前四站都没有的性质，
-       所以单独记、不并到别的站里：
-       ① 它的**宿主是字面量深色面**——`.aside-chip #1a1c26`、`.badge #1c1e28`（`DefaultLayout.vue:513/611`），
-          不是 `--app-*` 令牌。后果是"摘掉 `.workspace-theme` 之后读数一字不变"：2026-10-09 把六座一遍量齐
-          （aside-chip 上 绿 5.58 / 琥珀 6.42 / 青 7.34，badge 上 绿 5.46 / 琥珀 6.28 / 青 7.18），
-          **深色与浅色两遍每个数都相同**；其中绿 5.58 与青 7.18 是 10-08 那次先量到的，两遍一字不差。
-          这正是 `main.css:3` 那句 "dark command surfaces + light reading flows" 里"深色指令面"那一半，
-          所以 §10.37 里"字与底方向相反"那个矛盾**对这两枚点不存在**，只对会翻色的三站存在。
-       ② `.dot-blue` 在这里是 `#22b8e8`（青），而看板列头那枚 `.dot-blue` 是 `var(--app-primary)`（3.39）——
-          **同一个类名在两个文件里是两种颜色**，所以图形门只能按 (文件, 座) 记，按类名记会串色。 ―― */
-    {
-      label: '外壳那颗演示模式灯',
-      file: 'src/layouts/DefaultLayout.vue',
-      host: 'aside-chip',
-      seats: ['dot-green', 'dot-amber'],
-      measured: { 'dot-green': 5.58, 'dot-amber': 6.42 },
-    },
-    {
-      label: '外壳那颗通知徽标点',
-      file: 'src/layouts/DefaultLayout.vue',
-      host: 'badge',
-      seats: ['dot-blue'],
-      measured: { 'dot-blue': 7.18 },
-    },
+    /* 应用外壳的浅色版本不再挂演示/通知点：这两枚座随深色指令面一起出树。 */
   ]
 
   /* :root 打底、`.workspace-theme` 覆盖——深色工作台是候选人唯一够得到的那一套，门就按它算。
@@ -2133,6 +2083,11 @@ describe('style debt ratchet', () => {
     r: Math.round(c.r + (255 - c.r) * (pct / 100)),
     g: Math.round(c.g + (255 - c.g) * (pct / 100)),
     b: Math.round(c.b + (255 - c.b) * (pct / 100)),
+  })
+  const mixBlack = (c, pct) => ({
+    r: Math.round(c.r * (1 - pct / 100)),
+    g: Math.round(c.g * (1 - pct / 100)),
+    b: Math.round(c.b * (1 - pct / 100)),
   })
   const elRootTokens = Object.fromEntries(
     [...blockBody(EP_BASE, ':root').matchAll(/(--el-[a-z0-9-]+):\s*([^;]+);/g)].map((m) => [
@@ -2596,50 +2551,38 @@ describe('style debt ratchet', () => {
     ).toBeGreaterThan(TEXT_FLOOR)
   })
 
-  it('names the one place that takes over every el-tag on a page wholesale', () => {
+  it('keeps page-wide el-tag takeovers out of the light shell', () => {
     /* 前面两条门都只算"通道 + 座自己那个类名"，看不见**第四种入口**：组件用
        `:deep(.el-tag)` 不给某个类名上色，而是给整页所有标签上色——座清单里一颗都不会出现，
-       通道门也照不到它（它盖在通道之上）。实测这一处就把 D155 的 light 墨字整条吞了。
-       三条判据：① 这样的接管点全仓只有一处（第二处先来这条门登记）；② 它那对 前景/底 过 4.5；
-       ③ 静态推算与 `/home` 上那颗真标签的实测（8.97，2026-10-08）对得上。 */
-    const owners = []
-    for (const { rel, style } of viewSources) {
-      for (const m of stripComments(style || '').matchAll(RULE_BLOCK)) {
-        if (!/:deep\(\.el-tag\)/.test(m[1])) continue
-        const decl = (prop) => {
-          const hit = new RegExp(`(?:^|;)\\s*${prop}:\\s*([^;]+);`).exec(m[2])
-          return hit ? hit[1].trim() : null
+       通道门也照不到它（它盖在通道之上）。浅色改版把首页那处整页接管撤掉了：`:root` 的
+       light 通道已经给出墨字，接管不再承重。这条留成"零容忍 + 会响的反证"：
+       谁再加第二处，这里先红，而不是等它在某个主题下吞掉通道色。 */
+    const findTakeovers = (sources) => {
+      const owners = []
+      for (const { rel, style } of sources) {
+        for (const m of stripComments(style || '').matchAll(RULE_BLOCK)) {
+          if (!/:deep\(\.el-tag\)/.test(m[1])) continue
+          owners.push({ key: `${rel} ${m[1].trim()}` })
         }
-        owners.push({
-          key: `${rel} ${m[1].trim()}`,
-          color: decl('color'),
-          bg: decl('background') || decl('background-color'),
-          border: decl('border-color'),
-        })
       }
+      return owners
     }
+    expect(findTakeovers(viewSources), '`<style>` 里整页接管 el-tag 的选择器清单').toEqual([])
+
+    /* 反证：把一处接管塞进副本，扫描器必须看见——否则"零处"只是解析器瞎了。 */
+    const home = viewSources.find((v) => v.rel === 'src/features/shell/views/Home.vue')
+    expect(home, '视图清单里找不到 Home，反证是空转的').toBeTruthy()
     expect(
-      owners.map((o) => o.key),
-      '`<style>` 里整页接管 el-tag 的选择器清单'
-    ).toEqual(['src/features/shell/views/Home.vue .dashboard-page :deep(.el-tag)'])
-    const o = owners[0]
-    expect(o.color, '接管点没声明字色，这条门失去对象').not.toBeNull()
-    expect(o.bg, '接管点没声明底色，这条门失去对象').not.toBeNull()
-    const t = tagTokens()
-    const fg = resolveColor(o.color, t)
-    const surface = resolveColor(o.bg, t)
-    expect(fg, `读不出这条字色：${o.color}`).not.toBeNull()
-    expect(surface, `读不出这条底色：${o.bg}`).not.toBeNull()
-    const ratio = contrast(fg, surface)
-    expect(ratio, `${o.key} 的 前景/底 要过 ${TEXT_FLOOR}:1`).toBeGreaterThanOrEqual(TEXT_FLOOR)
-    expect(ratio, '静态推算与 /home 那颗真标签的实测 8.97 分叉').toBeCloseTo(8.97, 2)
-    /* 反证：如果这页不接管、字色落回通道给的 tone 本体（`--el-color-info` #697386），
-       压在这颗深色胶囊上只有 3.23 ⇒ 这条 `:deep` 覆写是承重的，不是"多余的一行"。 */
-    const toneBody = resolveColor('var(--el-color-info)', t)
-    expect(
-      contrast(toneBody, surface),
-      'tone 本体压在这颗接管后的底上必须低于门槛，否则这条覆写不承重'
-    ).toBeLessThan(TEXT_FLOOR)
+      findTakeovers([
+        {
+          rel: home.rel,
+          style:
+            home.style +
+            '\n.home-page :deep(.el-tag) { color: var(--app-text); background: var(--app-surface-strong); }',
+        },
+      ]).length,
+      '植入一处整页接管，扫描器必须报它'
+    ).toBe(1)
   })
 
   /* ―― D159：浅色作用域（只有 `:root`，没有 `.workspace-theme` 那一层覆写）――――――――
@@ -2681,7 +2624,16 @@ describe('style debt ratchet', () => {
         )
       if (!lift) continue
       for (const s of m[1].matchAll(/\.el-tag--plain\.el-tag--([a-z]+)/g))
-        if (s[1] === lift[1]) map[s[1]] = Number(lift[2])
+        if (s[1] === lift[1]) map[s[1]] = { mix: 'white', pct: Number(lift[2]) }
+    }
+    for (const m of unscopedRules()) {
+      const darken =
+        /--el-tag-text-color:\s*color-mix\(in srgb,\s*var\(--el-color-([a-z]+)\),\s*black (\d+)%\)/.exec(
+          m[2]
+        )
+      if (!darken) continue
+      for (const s of m[1].matchAll(/\.el-tag--plain\.el-tag--([a-z]+)/g))
+        if (s[1] === darken[1]) map[s[1]] = { mix: 'black', pct: Number(darken[2]) }
     }
     return map
   }
@@ -2702,9 +2654,10 @@ describe('style debt ratchet', () => {
       )
       bg = resolveColor(`var(--el-color-${type}-light-9)`, t)
     } else {
-      const lifts = lightPlainLifts()
+      const rules = lightPlainLifts()
       const base = resolveColor(`var(--el-color-${type})`, t)
-      fg = lifts[type] === undefined ? base : mixWhite(base, lifts[type])
+      const rule = rules[type]
+      fg = !rule ? base : rule.mix === 'white' ? mixWhite(base, rule.pct) : mixBlack(base, rule.pct)
       bg = resolveColor('var(--el-fill-color-blank)', t)
     }
     return fg && bg ? contrast(fg, bg) : null
@@ -2717,23 +2670,23 @@ describe('style debt ratchet', () => {
     'dark/warning': 7.13,
     'dark/danger': 4.76,
     'dark/info': 4.78,
-    'plain/primary': 5.17,
-    'plain/success': 3.04,
-    'plain/warning': 2.64,
-    'plain/danger': 3.96,
-    'plain/info': 4.78,
+    'plain/primary': 6.1,
+    'plain/success': 7.06,
+    'plain/warning': 5.0,
+    'plain/danger': 6.35,
+    'plain/info': 6.15,
     'light/primary': 4.67,
     'light/success': 17.45,
     'light/warning': 17.56,
     'light/danger': 16.99,
     'light/info': 17.14,
   }
-  /* 浅色作用域不达标的那三对：plain 那一族的全部覆写都写着 `.workspace-theme`，
-     所以这三档在浅色下退回"tone 本体压白底"。**今天它们没有屏幕对象**（见下面普查那条腿），
-     所以这张表钉的是形状、不是"有人正读不清"；方向为什么不照抄深色那支，由第三条腿给数。 */
-  const LIGHT_TAG_WAIVED = { 'plain/success': 3.04, 'plain/warning': 2.64, 'plain/danger': 3.96 }
+  /* 浅色作用域的 plain 那一族在 2026-10-30 的浅色改版里补上了自己的覆写：
+     白底上往黑里压（success 40% / warning 30% / danger 25% / info 15% / primary 10%），
+     五档全部过线，因此豁免表清空。方向与深色作用域相反，理由与实测都写在这条腿里。 */
+  const LIGHT_TAG_WAIVED = {}
 
-  it('measures the same three el-tag channels in the light scope and names the three plain pairs that fail there', () => {
+  it('keeps the light-scope plain tags readable by darkening, not lifting', () => {
     const rows = []
     for (const effect of ['dark', 'plain', 'light'])
       for (const type of TAG_TYPES)
@@ -2766,27 +2719,22 @@ describe('style debt ratchet', () => {
       .filter((r) => Math.abs(r.ratio - r.darkScope) > 0.02)
       .map((r) => `${r.key}: 浅色 ${r.ratio} vs 深色 ${r.darkScope}`)
     expect(moved, '这两条通道的数不该随主题变').toEqual([])
-    /* 第三条腿：为什么这里不自作主张照抄深色的修法——**"抬白"在浅色作用域是反方向的**：
-       那一族的底就是白，再往白里抬只会更糊（现量 danger 3.96 → 3.00、warning 2.64 → 2.16、
-       success 3.04 → 2.44）。浅色那一侧的候选配方是往黑里压，压 35% 三档全过（7.75 / 5.62 / 6.33）。
-       两件事一起判，才知道"照抄"与"另配"都不是空话。 */
+    /* 第三条腿：plain 这一族走的是"往黑里压"，不是照抄深色的"抬白"：
+       抬白在浅色下只会更糊，压暗那一档必须过线。三个最紧的 tone 逐个判。 */
     const t = rootOnlyTokens()
     const white = resolveColor('var(--el-fill-color-blank)', t)
-    for (const [key, want] of Object.entries(LIGHT_TAG_WAIVED)) {
-      const type = key.split('/')[1]
+    const rules = lightPlainLifts()
+    for (const type of ['success', 'warning', 'danger']) {
       const tone = resolveColor(`var(--el-color-${type})`, t)
+      const rule = rules[type]
+      expect(rule?.mix, `${type} 的 plain 覆写不见了（浅色又会退回 tone 本体压白底）`).toBe('black')
       expect(
         contrast(mixWhite(tone, 20), white),
-        `${key} 用深色那一族的抬白配方在浅色下要**更差**（这就是方向反了）`
-      ).toBeLessThan(want)
-      const darker = {
-        r: Math.round(tone.r * 0.65),
-        g: Math.round(tone.g * 0.65),
-        b: Math.round(tone.b * 0.65),
-      }
+        `${type} 用深色那一族的抬白配方在浅色下要**更差**（这就是方向反了）`
+      ).toBeLessThan(contrast(tone, white))
       expect(
-        contrast(darker, white),
-        `${key} 压暗 35% 要过线（这是浅色那一侧的候选配方，等他拍）`
+        contrast(mixBlack(tone, rule.pct), white),
+        `${type} 压暗 ${rule.pct}% 要过线`
       ).toBeGreaterThanOrEqual(TEXT_FLOOR)
     }
   })

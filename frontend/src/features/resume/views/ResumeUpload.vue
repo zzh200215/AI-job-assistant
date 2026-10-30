@@ -1,55 +1,17 @@
 <template>
   <div class="page-shell resume-center">
     <ReturnToBanner />
-    <div class="page-header">
-      <div>
-        <h2>简历中心</h2>
-        <div class="page-header-sub">管理、诊断和优化你的简历，准备下一次投递。</div>
-      </div>
-      <div class="header-actions">
-        <el-button type="primary" @click="showUpload = true">
+    <PageHeader
+      title="简历中心"
+      subtitle="管理、诊断和优化你的简历，准备下一次投递。"
+      eyebrow="求职资料"
+    >
+      <template #actions>
+        <el-button :type="resumes.length ? 'default' : 'primary'" @click="showUpload = true">
           <el-icon><UploadFilled /></el-icon> 上传简历
         </el-button>
-      </div>
-    </div>
-
-    <section v-if="!listLoading && resumes.length" class="resume-workflow" aria-label="简历工作流">
-      <div class="workflow-summary">
-        <span class="workflow-eyebrow">当前投递版本</span>
-        <strong>{{ activeResume?.name || activeResume?.file_name || '选择一份简历开始' }}</strong>
-        <span class="workflow-caption">
-          {{
-            activeResume ? `更新于 ${monthDay(activeResume.create_time)}` : '上传后可进行诊断与匹配'
-          }}
-        </span>
-      </div>
-      <div class="workflow-steps">
-        <div class="workflow-step is-current">
-          <span class="workflow-index">01</span>
-          <div>
-            <b>确认版本</b><small>{{ resumes.length }} 份简历</small>
-          </div>
-        </div>
-        <div class="workflow-step" :class="{ 'is-ready': scoredResumeCount > 0 }">
-          <span class="workflow-index">02</span>
-          <div>
-            <b>检查可投递性</b
-            ><small>{{
-              scoredResumeCount ? `${scoredResumeCount} 份已完成度检查` : '待检查'
-            }}</small>
-          </div>
-        </div>
-        <div class="workflow-step" :class="{ 'is-ready': activeResume }">
-          <span class="workflow-index">03</span>
-          <div>
-            <b>匹配目标岗位</b><small>{{ activeResume ? '进入深度分析' : '先选择简历' }}</small>
-          </div>
-        </div>
-      </div>
-      <el-button type="primary" class="workflow-action" @click="goAnalysis(activeResume)">
-        开始匹配
-      </el-button>
-    </section>
+      </template>
+    </PageHeader>
 
     <!-- 上传对话框 -->
     <el-dialog v-model="showUpload" title="上传简历" width="560px" :close-on-click-modal="false">
@@ -460,155 +422,163 @@
     </el-dialog>
 
     <!-- 简历列表 -->
-    <div v-if="listLoading" class="loading-state">
-      <el-icon class="is-loading"><Loading /></el-icon> 加载中...
-    </div>
-    <div v-else-if="listError" class="load-error">
-      <div>
-        <strong>简历列表加载失败</strong>
-        <span>{{ listError }}</span>
+    <div v-if="listLoading" class="resume-grid">
+      <div v-for="i in 3" :key="i" class="resume-card resume-skeleton" aria-hidden="true">
+        <div class="app-skeleton" style="height: 18px; width: 52%" />
+        <div class="app-skeleton" style="height: 12px; width: 70%; margin-top: 10px" />
+        <div class="app-skeleton" style="height: 34px; width: 100%; margin-top: 24px" />
+        <div class="app-skeleton" style="height: 30px; width: 100%; margin-top: 24px" />
       </div>
-      <el-button @click="loadList">重新加载</el-button>
     </div>
-    <div v-else-if="!resumes.length" class="empty-state">
-      <el-empty :image-size="120" description="还没有简历，上传一份开始吧">
-        <el-button type="primary" @click="showUpload = true">上传简历</el-button>
-      </el-empty>
+
+    <div v-else-if="listError" class="app-inline-error">
+      <span>{{ listError }}</span>
+      <el-button size="small" text type="primary" @click="loadList">重新加载</el-button>
     </div>
+
+    <EmptyState
+      v-else-if="!resumes.length"
+      :icon="Document"
+      title="还没有简历"
+      description="上传一份简历，我们会先做解析和内容完整度检查。"
+    >
+      <template #action>
+        <button type="button" class="app-link" @click="showUpload = true">上传一份简历</button>
+      </template>
+    </EmptyState>
+
     <div v-else class="resume-grid">
-      <div
+      <article
         v-for="r in resumes"
         :key="r.id"
         class="resume-card"
-        :class="{ 'is-default': r.id === defaultResumeId }"
+        :class="{ 'is-default': isDefaultResume(r) }"
       >
-        <div class="card-top">
-          <div class="card-title-row">
-            <span class="record-mark">{{ r.id === defaultResumeId ? '投递中' : '备选版本' }}</span>
-            <h3>{{ r.name || r.file_name || '未命名简历' }}</h3>
-            <el-dropdown trigger="click" @command="(cmd) => handleCmd(cmd, r)">
-              <el-icon class="more-btn"><MoreFilled /></el-icon>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="parse">{{
-                    r.parsed?.name ? '重新解析' : '解析'
-                  }}</el-dropdown-item>
-                  <el-dropdown-item command="optimize">AI优化</el-dropdown-item>
-                  <el-dropdown-item command="diagnose">AI诊断</el-dropdown-item>
-                  <el-dropdown-item command="report">评估报告</el-dropdown-item>
-                  <el-dropdown-item command="project">项目分析</el-dropdown-item>
-                  <el-dropdown-item command="portfolio">组合分析</el-dropdown-item>
-                  <el-dropdown-item command="compare">版本对比</el-dropdown-item>
-                  <el-dropdown-item command="analyze">深度分析</el-dropdown-item>
-                  <el-dropdown-item v-if="r.id !== defaultResumeId" command="setDefault"
-                    >设为默认</el-dropdown-item
-                  >
-                  <el-dropdown-item command="share" divided>分享链接</el-dropdown-item>
-                  <el-dropdown-item command="desensitize">{{
-                    r._desensitized ? '取消脱敏' : '脱敏设置'
-                  }}</el-dropdown-item>
-                  <el-dropdown-item command="exportDocx">导出 Word</el-dropdown-item>
-                  <el-dropdown-item command="exportPdf">导出 PDF</el-dropdown-item>
-                  <el-dropdown-item
-                    command="delete"
-                    divided
-                    style="color: color-mix(in srgb, var(--app-danger), white 20%)"
-                    >删除</el-dropdown-item
-                  >
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+        <header class="resume-card-head">
+          <div class="resume-title-row">
+            <h2 class="resume-title" :title="displayFileName(r)">{{ resumeTitle(r) }}</h2>
+            <el-tag v-if="isDefaultResume(r)" size="small" type="primary" effect="light"
+              >默认</el-tag
+            >
+            <el-tag v-if="r._desensitized" size="small" type="info" effect="plain">已脱敏</el-tag>
           </div>
-          <div v-if="r.id === defaultResumeId" class="default-tag">
-            <el-tag type="success" size="small" effect="dark">默认简历</el-tag>
-          </div>
-        </div>
+          <el-dropdown trigger="click" @command="(cmd) => handleCmd(cmd, r)">
+            <button class="more-button" type="button" aria-label="更多操作">
+              <el-icon><MoreFilled /></el-icon>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="parse">{{
+                  r.parsed?.name ? '重新解析' : '解析简历'
+                }}</el-dropdown-item>
+                <el-dropdown-item command="optimize">AI 优化</el-dropdown-item>
+                <el-dropdown-item command="diagnose">AI 诊断</el-dropdown-item>
+                <el-dropdown-item command="report" divided>评估报告</el-dropdown-item>
+                <el-dropdown-item command="project">项目分析</el-dropdown-item>
+                <el-dropdown-item command="portfolio">组合分析</el-dropdown-item>
+                <el-dropdown-item command="compare">版本对比</el-dropdown-item>
+                <el-dropdown-item v-if="!isDefaultResume(r)" command="setDefault" divided
+                  >设为默认</el-dropdown-item
+                >
+                <el-dropdown-item command="share" :divided="isDefaultResume(r)"
+                  >分享链接</el-dropdown-item
+                >
+                <el-dropdown-item command="desensitize">{{
+                  r._desensitized ? '取消脱敏' : '脱敏设置'
+                }}</el-dropdown-item>
+                <el-dropdown-item command="exportDocx">导出 Word</el-dropdown-item>
+                <el-dropdown-item command="exportPdf">导出 PDF</el-dropdown-item>
+                <el-dropdown-item
+                  command="delete"
+                  divided
+                  style="color: color-mix(in srgb, var(--app-danger), black 20%)"
+                  >删除</el-dropdown-item
+                >
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </header>
+
+        <p class="resume-sub">
+          <span>{{ r.parsed?.current_title || '尚未解析' }}</span>
+          <span v-if="r.years_exp">{{ r.years_exp }} 年经验</span>
+          <span>{{ monthDay(r.create_time) }} 更新</span>
+        </p>
 
         <!-- 解析质量：判据只读后端 `_meta`（`app/services/parse_guard.py` 是唯一的盖章处），
              前端不再自己推"这份是不是被截断了"——那会变成第二份真相。 -->
         <el-alert
           v-if="parseDegraded(r)"
+          class="resume-alert"
           type="warning"
           title="解析不完整，建议检查原文格式"
           :closable="false"
           show-icon
         />
 
-        <div class="card-meta">
-          <span v-if="r.parsed?.current_title"
-            ><el-icon><Briefcase /></el-icon> {{ r.parsed.current_title }}</span
-          >
-          <span v-if="r.years_exp"
-            ><el-icon><Timer /></el-icon> {{ r.years_exp }}年经验</span
-          >
-          <span
-            ><el-icon><Document /></el-icon> {{ r.file_type?.toUpperCase() }}</span
-          >
-          <span>{{ formatSize(r.file_size) }}</span>
-          <span v-if="parseDropped(r).length"
-            >有 {{ parseDropped(r).length }} 段内容未纳入解析（{{
-              parseDropped(r).join('、')
-            }}），建议检查原文格式</span
-          >
-        </div>
-
-        <!-- 简历标签 -->
-        <div class="card-badges" v-if="r._versionCount !== undefined || r._diagnosisScore">
-          <el-tag v-if="r._versionCount > 0" size="small" type="info" effect="plain">
-            版本历史 ({{ r._versionCount }})
-          </el-tag>
-          <el-tag
-            v-if="r._diagnosisScore"
-            size="small"
-            :type="diagnosisTagType(r._diagnosisScore)"
-            effect="plain"
-          >
-            诊断 {{ r._diagnosisScore }}分
-          </el-tag>
-          <el-tag v-if="r._desensitized" size="small" type="danger" effect="plain">已脱敏</el-tag>
-        </div>
-
-        <div v-if="r.parsed?.skills?.length" class="card-skills">
-          <el-tag v-for="sk in r.parsed.skills.slice(0, 6)" :key="sk" size="small" type="info">{{
-            sk
-          }}</el-tag>
-          <span v-if="r.parsed.skills.length > 6" class="more-skills"
-            >+{{ r.parsed.skills.length - 6 }}</span
-          >
-        </div>
-
-        <!-- ATS 评分 -->
-        <div v-if="r._completeness" class="card-score">
-          <div class="score-bar">
-            <div
-              class="score-fill"
-              :style="{ width: r._completeness.completeness_score + '%' }"
-              :class="scoreToneFillClass(r._completeness.completeness_score)"
-            />
+        <div class="resume-stats">
+          <div class="resume-stat">
+            <span class="resume-stat-label">完整度</span>
+            <template v-if="r._completeness">
+              <strong
+                class="resume-stat-value"
+                :class="scoreToneClass(r._completeness.completeness_score)"
+                >{{ r._completeness.completeness_score }}</strong
+              >
+              <div class="resume-score-bar">
+                <span
+                  class="resume-score-fill"
+                  :class="scoreToneFillClass(r._completeness.completeness_score)"
+                  :style="{ width: r._completeness.completeness_score + '%' }"
+                />
+              </div>
+            </template>
+            <button
+              v-else
+              type="button"
+              class="app-link"
+              :disabled="r._scoring"
+              @click="quickScore(r)"
+            >
+              {{ r._scoring ? '读取中…' : '查看' }}
+            </button>
           </div>
-          <div class="score-label">
-            <span>完整度</span>
-            <strong :class="scoreToneClass(r._completeness.completeness_score)">{{
-              r._completeness.completeness_score
+
+          <div v-if="r._diagnosisScore" class="resume-stat">
+            <span class="resume-stat-label">诊断</span>
+            <strong class="resume-stat-value" :class="scoreToneClass(r._diagnosisScore)">{{
+              r._diagnosisScore
             }}</strong>
           </div>
-        </div>
-        <div v-else class="card-score">
-          <el-button text size="small" @click="quickScore(r)" :loading="r._scoring">
-            查看完整度
-          </el-button>
-        </div>
 
-        <div class="card-footer">
-          <span class="card-date">版本记录 {{ monthDay(r.create_time) }}</span>
-          <div class="card-actions">
-            <el-button size="small" type="primary" @click="goAnalysis(r)">
-              {{ r.id === defaultResumeId ? '匹配岗位' : '去分析' }}
-            </el-button>
-            <el-button size="small" @click="handleCmd('diagnose', r)">AI诊断</el-button>
+          <div v-if="r._versionCount" class="resume-stat">
+            <span class="resume-stat-label">版本</span>
+            <strong class="resume-stat-value">{{ r._versionCount }}</strong>
           </div>
         </div>
-      </div>
+
+        <div v-if="r.parsed?.skills?.length" class="resume-skills">
+          <span v-for="sk in r.parsed.skills.slice(0, 4)" :key="sk" class="resume-skill">{{
+            sk
+          }}</span>
+          <span v-if="r.parsed.skills.length > 4" class="resume-skill-more"
+            >+{{ r.parsed.skills.length - 4 }}</span
+          >
+        </div>
+
+        <p v-if="parseDropped(r).length" class="resume-warning">
+          有 {{ parseDropped(r).length }} 段内容未纳入解析（{{
+            parseDropped(r).join('、')
+          }}），建议检查原文格式
+        </p>
+
+        <footer class="resume-card-foot">
+          <span class="resume-file">
+            {{ r.file_type?.toUpperCase() }} · {{ formatSize(r.file_size) }}
+          </span>
+          <el-button size="small" type="primary" @click="goAnalysis(r)">去分析</el-button>
+        </footer>
+      </article>
     </div>
   </div>
 </template>
@@ -622,8 +592,6 @@ import ReturnToBanner from '@/components/ui/ReturnToBanner.vue'
 import {
   UploadFilled,
   MoreFilled,
-  Briefcase,
-  Timer,
   Document,
   Loading,
   WarningFilled,
@@ -631,6 +599,8 @@ import {
 } from '@element-plus/icons-vue'
 import { useLatestCall } from '@/composables/useLatestCall'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
 import {
   uploadResume,
   parseResume,
@@ -649,10 +619,9 @@ import {
 } from '@/api/resume'
 import { getJDList } from '@/api/jd'
 import {
-  scoreToneAtLeast,
   scoreToneClass,
   scoreToneColor,
-  // 分数当文字读的那一处走抬过一档的文字版（蓝档压深面 3.06 → 5.08）
+  // 分数当文字读的那一处走文字档 token
   scoreToneTextColor,
   scoreToneFillClass,
 } from '@/utils/scoreTone'
@@ -878,14 +847,39 @@ async function revertRewrite() {
 const desensitized = ref(false)
 
 /* 默认版本走 `utils/lastSelection`：与 lastResumeId 同一套按登录用户分槽的机制（D102）。
-   原先它写在全局键上，换账号后上一个人的默认版本会嫁到下一个人头上。 */
+   顺序是"默认 → 最近 → 提示"：存过的默认还在就用它；否则自动选最近更新的一份并记住，
+   不让候选人每次进来都先做一次选择。 */
+function isDefaultResume(r) {
+  return r.id === defaultResumeId.value
+}
 
-const activeResume = computed(
-  () => resumes.value.find((item) => item.id === defaultResumeId.value) || resumes.value[0] || null
-)
-const scoredResumeCount = computed(
-  () => resumes.value.filter((item) => item._completeness?.completeness_score !== undefined).length
-)
+function ensureDefaultResume(items) {
+  if (!items.length) return
+  if (items.some((item) => item.id === defaultResumeId.value)) return
+  const recent = [...items].sort(
+    (a, b) => new Date(b.create_time || 0).getTime() - new Date(a.create_time || 0).getTime()
+  )[0]
+  if (!recent) return
+  defaultResumeId.value = recent.id
+  selection.rememberDefaultResume(recent.id)
+}
+
+const HEX_FILE = /^[0-9a-f-]{16,}$/i
+
+function displayFileName(r) {
+  return r.name || r.file_name || ''
+}
+
+/* 存储名可能是 UUID（历史数据或自动化上传留下的），直接上屏就是一行机器串。
+   优先用原文件名（去掉扩展名）；UUID 才退回解析出来的姓名/职位，最后才用日期兜底。 */
+function resumeTitle(r) {
+  const raw = displayFileName(r)
+  const base = raw.replace(/\.[^.]+$/, '')
+  if (base && !HEX_FILE.test(base)) return base
+  if (r.parsed?.name) return `${r.parsed.name}的简历`
+  if (r.parsed?.current_title) return `${r.parsed.current_title}简历`
+  return `我的简历 · ${monthDay(r.create_time)}`
+}
 
 onMounted(() => {
   defaultResumeId.value = selection.defaultResumeId()
@@ -925,7 +919,6 @@ function formatSize(n) {
 
 // 诊断分标签只有两档：至少到 good 档才算 success，其余 warning。
 // 分界交给 scoreTone 的 85/70/50，不再在本页抄一份 70。
-const diagnosisTagType = (v) => (scoreToneAtLeast(v, 'good') ? 'success' : 'warning')
 
 /* 解析质量两条提示的取数处。两个判据都只读后端 `_meta`，那两个标记由
    `app/services/parse_guard.py` 独家盖——前端不重推"这份是不是被截断了"。 */
@@ -955,6 +948,7 @@ async function loadList() {
       r._diagnosisScore = null
     })
     resumes.value = items
+    ensureDefaultResume(items)
 
     // auto load quick scores & version counts
     items.forEach((r) => {
@@ -1109,7 +1103,6 @@ const ROW_COMMANDS = {
   project: openProjectRow,
   portfolio: openPortfolioRow,
   compare: openCompareRow,
-  analyze: goAnalysis,
   setDefault: setDefaultResumeRow,
   share: showShareDialog,
   desensitize: toggleDesensitizeRow,
@@ -1134,7 +1127,7 @@ async function handleCmd(cmd, r) {
 
 function goAnalysis(r) {
   selection.rememberResume(r.id)
-  router.push('/analysis')
+  router.push('/smart-analysis')
 }
 
 function jdLabel(jd) {
@@ -1287,316 +1280,200 @@ async function showDiagnosisDialog(r) {
   color: var(--app-text);
 }
 
-.load-error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 22px;
-  border: 1px solid #f2c5bf;
-  border-radius: 8px;
-  background: var(--app-accent-soft);
-}
-.load-error strong,
-.load-error span {
-  display: block;
-}
-.load-error strong {
-  color: var(--app-danger);
-  font-size: 15px;
-}
-.load-error span {
-  margin-top: 4px;
-  color: var(--app-muted);
-  font-size: 13px;
-}
-
 /* Grid layout */
 .resume-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
 }
 
-.resume-workflow {
-  display: grid;
-  grid-template-columns: minmax(210px, 0.9fr) minmax(0, 1.8fr) auto;
-  align-items: center;
-  gap: 22px;
-  margin-bottom: 18px;
-  padding: 18px 20px;
-  background: var(--app-surface-strong);
-  border: 1px solid var(--app-line);
-  border-left: 4px solid var(--app-primary);
-  border-radius: var(--app-radius-sm, 8px);
-  box-shadow: var(--app-shadow-soft);
-}
-
-.workflow-summary {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.workflow-eyebrow,
-.workflow-caption,
-.workflow-step small {
-  color: var(--app-muted);
-  font-size: 12px;
-}
-
-.workflow-eyebrow {
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
-.workflow-summary strong {
-  overflow: hidden;
-  color: var(--app-text);
-  font-size: 16px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workflow-steps {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.workflow-step {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-  padding-left: 10px;
-  border-left: 1px solid var(--app-line);
-}
-
-.workflow-step:first-child {
-  border-left: 0;
-}
-
-.workflow-index {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  flex: 0 0 26px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--app-bg);
-  color: var(--app-muted);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.workflow-step.is-current .workflow-index,
-.workflow-step.is-ready .workflow-index {
-  background: var(--app-primary);
-  color: #fff;
-}
-
-.workflow-step div {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.workflow-step b {
-  overflow: hidden;
-  color: var(--app-text);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.workflow-action {
-  min-width: 104px;
-}
-
 .resume-card {
-  background: var(--app-surface-strong);
-  border-radius: var(--app-radius-md, 16px);
-  border: 1px solid var(--app-line);
-  box-shadow: var(--app-shadow-soft);
+  display: flex;
+  flex-direction: column;
   padding: 18px;
+  background: var(--app-surface-strong);
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-md);
+  box-shadow: var(--app-shadow-soft);
   transition:
-    box-shadow 0.2s,
-    border-color 0.2s;
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .resume-card:hover {
-  box-shadow: var(--app-shadow-hover);
+  border-color: var(--app-line-strong);
+  box-shadow: var(--app-shadow);
 }
 
 .resume-card.is-default {
-  border-color: var(--app-primary);
-  box-shadow: 0 8px 20px rgba(20, 86, 68, 0.1);
+  border-color: color-mix(in srgb, var(--app-primary), white 55%);
 }
 
-.card-top {
+.resume-card-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 8px;
+  gap: 12px;
 }
 
-.card-title-row {
+.resume-title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 1;
+  flex-wrap: wrap;
+  gap: 6px;
   min-width: 0;
 }
 
-.record-mark {
-  flex: 0 0 auto;
-  padding: 3px 6px;
-  border-radius: 3px;
-  background: var(--app-bg);
+.resume-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 15px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more-button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--app-radius-xs);
+  background: transparent;
+  color: var(--app-muted);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.more-button:hover {
+  background: var(--app-surface-muted);
+  color: var(--app-text);
+}
+
+.resume-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 4px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.resume-sub span + span::before {
+  content: '·';
+  margin: 0 10px;
+  color: var(--app-line-strong);
+}
+
+.resume-alert {
+  margin-top: 12px;
+}
+
+.resume-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--app-line);
+  border-bottom: 1px solid var(--app-line);
+}
+
+.resume-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 70px;
+}
+
+.resume-stat-label {
   color: var(--app-muted);
   font-size: 11px;
+}
+
+.resume-stat-value {
+  color: var(--app-text);
+  font-size: 18px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
 
-.is-default .record-mark {
-  background: var(--app-primary-soft);
-  color: color-mix(in srgb, var(--app-primary), white 25%);
-}
-
-.card-title-row h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  white-space: nowrap;
+.resume-score-bar {
+  width: 100%;
+  min-width: 88px;
+  height: 4px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  border-radius: 999px;
+  background: var(--app-surface-muted);
 }
 
-.more-btn {
-  cursor: pointer;
-  color: var(--app-muted);
-  font-size: 16px;
-  flex-shrink: 0;
-}
-
-.default-tag {
-  margin-left: auto;
-  flex-shrink: 0;
-}
-
-.card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--app-muted);
-  margin-bottom: 8px;
-}
-
-.card-meta span {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.card-badges {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-}
-
-.card-skills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.more-skills {
-  font-size: 12px;
-  color: var(--app-muted);
-  line-height: 24px;
-}
-
-/* ATS score */
-.card-score {
-  margin-bottom: 12px;
-}
-
-.score-bar {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--el-fill-color);
-  overflow: hidden;
-  margin-bottom: 6px;
-}
-
-.score-fill {
+.resume-score-fill {
+  display: block;
   height: 100%;
-  border-radius: 3px;
-  transition: width 0.5s;
+  border-radius: 999px;
 }
 
-.score-label {
+.resume-stat .app-link {
+  padding: 2px 0;
+  font-size: 13px;
+}
+
+.resume-skills {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-}
-
-.score-label span {
-  color: var(--app-muted);
-}
-.score-label strong {
-  font-size: 16px;
-}
-/* Footer */
-.card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid var(--app-line);
-  padding-top: 12px;
-}
-
-.card-date {
-  font-size: 12px;
-  color: var(--app-muted);
-}
-
-.card-actions {
-  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
+  margin-top: 12px;
 }
 
-@media (max-width: 960px) {
-  .resume-workflow {
-    grid-template-columns: 1fr auto;
-  }
-
-  .workflow-steps {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
+.resume-skill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--app-surface-muted);
+  color: var(--app-muted);
+  font-size: 11px;
 }
 
-@media (max-width: 640px) {
-  .resume-workflow,
-  .workflow-steps {
+.resume-skill-more {
+  padding: 2px 4px;
+  color: var(--app-muted);
+  font-size: 11px;
+}
+
+.resume-warning {
+  margin: 10px 0 0;
+  color: color-mix(in srgb, var(--app-warning), black 25%);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.resume-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.resume-file {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.resume-skeleton {
+  min-height: 200px;
+}
+
+@media (max-width: 680px) {
+  .resume-grid {
     grid-template-columns: 1fr;
-  }
-
-  .workflow-action {
-    width: 100%;
-  }
-
-  .workflow-step,
-  .workflow-step:first-child {
-    padding: 9px 0 0;
-    border-top: 1px solid var(--app-line);
-    border-left: 0;
   }
 }
 
@@ -1854,15 +1731,6 @@ async function showDiagnosisDialog(r) {
 }
 
 @media (max-width: 768px) {
-  .load-error {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .page-header {
-    flex-direction: column;
-    gap: 12px;
-  }
   .resume-grid {
     grid-template-columns: 1fr;
   }

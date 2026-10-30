@@ -6,7 +6,9 @@
 /* ---- Page shell ---- */
 .page-shell {
   width: 100%;
-  padding: 24px;
+  max-width: var(--app-shell-width, 1360px);
+  margin: 0 auto;
+  padding: 32px var(--app-shell-gutter, 32px) 56px;
   min-height: 100%;
 }
 
@@ -155,9 +157,15 @@
   }
 }
 
+@media (max-width: 1024px) {
+  .page-shell {
+    padding: 24px 24px 40px;
+  }
+}
+
 @media (max-width: 768px) {
   .page-shell {
-    padding: 16px;
+    padding: 20px 16px 32px;
   }
 
   .page-header {

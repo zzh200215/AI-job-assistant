@@ -1,7 +1,6 @@
 <template>
   <div class="login-page">
     <div class="login-shell">
-      <!-- Brand Panel -->
       <section class="brand-pane" aria-label="产品信息">
         <div class="brand-head">
           <span class="brand-mark">
@@ -11,6 +10,7 @@
               viewBox="0 0 32 32"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
             >
               <rect
                 x="1"
@@ -24,7 +24,7 @@
               <path d="M9 22V12l7-5 7 5v10H9z" fill="currentColor" opacity="0.88" />
               <path
                 d="M13 22v-4a3 3 0 0 1 6 0v4"
-                stroke="#fff"
+                stroke="var(--el-color-white)"
                 stroke-width="1.5"
                 stroke-linecap="round"
               />
@@ -34,70 +34,40 @@
         </div>
 
         <div class="brand-body">
+          <p class="brand-kicker">AI 求职助手</p>
           <h1>把求职，走成一条清晰的路径</h1>
           <p class="brand-desc">
-            从简历诊断、岗位匹配到模拟面试，<br />
-            一步一步推进，不用在多个工具之间来回切换。
+            从简历诊断、岗位匹配到模拟面试，一步一步推进，不用在多个工具之间来回切换。
           </p>
 
-          <div class="cap-grid">
-            <div class="cap-item">
-              <span class="cap-tag mono">01</span>
-              <span class="cap-label">简历诊断与优化</span>
-              <span class="cap-desc">先看清优势与短板，再动手改</span>
-            </div>
-            <div class="cap-item">
-              <span class="cap-tag mono">02</span>
-              <span class="cap-label">岗位匹配与投递</span>
-              <span class="cap-desc">按你的经历找机会，持续跟进</span>
-            </div>
-            <div class="cap-item">
-              <span class="cap-tag mono">03</span>
-              <span class="cap-label">模拟面试与规划</span>
-              <span class="cap-desc">按目标岗位练一遍，知道差在哪</span>
-            </div>
-          </div>
-
-          <p class="role-note">登录后，从你的简历开始</p>
+          <ol class="cap-list">
+            <li>
+              <span class="cap-index">01</span>
+              <div>
+                <strong>简历诊断与优化</strong>
+                <p>先看清优势与短板，再动手改</p>
+              </div>
+            </li>
+            <li>
+              <span class="cap-index">02</span>
+              <div>
+                <strong>岗位匹配与投递</strong>
+                <p>按你的经历找机会，持续跟进</p>
+              </div>
+            </li>
+            <li>
+              <span class="cap-index">03</span>
+              <div>
+                <strong>模拟面试与规划</strong>
+                <p>按目标岗位练一遍，知道差在哪</p>
+              </div>
+            </li>
+          </ol>
         </div>
 
-        <!-- Decorative pipeline lines -->
-        <div class="pipeline-deco" aria-hidden="true">
-          <svg
-            width="320"
-            height="320"
-            viewBox="0 0 320 320"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <circle cx="160" cy="160" r="140" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
-            <circle cx="160" cy="160" r="100" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
-            <circle cx="160" cy="160" r="60" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
-            <path
-              d="M30 160 Q 80 80 160 60 Q 240 40 290 160"
-              stroke="rgba(255,255,255,0.08)"
-              stroke-width="1"
-              fill="none"
-              stroke-dasharray="4 4"
-            />
-            <path
-              d="M30 160 Q 80 240 160 260 Q 240 280 290 160"
-              stroke="rgba(255,255,255,0.08)"
-              stroke-width="1"
-              fill="none"
-              stroke-dasharray="4 4"
-            />
-            <circle cx="80" cy="80" r="3" fill="rgba(255,255,255,0.15)" />
-            <circle cx="240" cy="80" r="3" fill="rgba(255,255,255,0.15)" />
-            <circle cx="80" cy="240" r="3" fill="rgba(255,255,255,0.15)" />
-            <circle cx="240" cy="240" r="3" fill="rgba(255,255,255,0.15)" />
-            <circle cx="160" cy="60" r="4" fill="rgba(255,255,255,0.2)" />
-            <circle cx="160" cy="260" r="4" fill="rgba(255,255,255,0.2)" />
-          </svg>
-        </div>
+        <p class="brand-foot">登录后，从你的简历开始</p>
       </section>
 
-      <!-- Form Panel -->
       <section class="form-pane" aria-label="登录表单">
         <div class="login-form">
           <div class="form-head">
@@ -238,145 +208,132 @@ const handleLogin = async () => {
 
 <style scoped>
 .login-page {
-  min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  min-height: 100vh;
+  padding: 32px;
   background: var(--app-bg);
 }
 
 .login-shell {
-  width: min(100%, 960px);
-  min-height: 600px;
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  border-radius: 20px;
+  grid-template-columns: 1.05fr 0.95fr;
+  width: min(100%, 960px);
+  min-height: 620px;
   overflow: hidden;
-  background: var(--app-surface-strong);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.08);
   border: 1px solid var(--app-line);
+  border-radius: 16px;
+  background: var(--app-surface-strong);
+  box-shadow: var(--app-shadow-lg);
 }
 
 /* ===== Brand Panel ===== */
 .brand-pane {
-  position: relative;
-  overflow: hidden;
-  /* 白色标签随企业侧一起出树：`--app-login-bg` 全仓 0 处声明、src 里 0 次 setProperty，
-     所以这层 var() 间接恒等于下面那个渐变，直接写死。 */
-  background: linear-gradient(145deg, #0f1729 0%, #162544 100%) center / cover no-repeat;
-  color: #f0f4ff;
-  padding: 44px 40px;
   display: flex;
   flex-direction: column;
-  isolation: isolate;
+  padding: 40px;
+  border-right: 1px solid var(--app-line);
+  background: var(--app-surface-muted);
 }
 
-.brand-pane::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(135deg, rgba(25, 107, 219, 0.25) 0%, transparent 50%),
-    linear-gradient(225deg, rgba(109, 79, 199, 0.15) 0%, transparent 50%);
-  z-index: -1;
-}
-
-.pipeline-deco {
-  position: absolute;
-  right: -60px;
-  bottom: -40px;
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-/* Brand head */
 .brand-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 32px;
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--app-radius-sm);
+  background: var(--app-primary);
+  color: var(--el-color-white);
 }
 
 .brand-name {
-  font-size: 16px;
+  color: var(--app-text);
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 }
 
-/* Brand body */
 .brand-body {
   flex: 1;
+  padding-top: 48px;
+}
+
+.brand-kicker {
+  margin: 0 0 10px;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .brand-body h1 {
+  max-width: 400px;
   margin: 0;
-  font-size: 36px;
-  line-height: 1.1;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  color: var(--app-text);
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
 .brand-desc {
+  max-width: 380px;
   margin: 14px 0 0;
-  max-width: 400px;
-  color: rgba(240, 244, 255, 0.65);
-  line-height: 1.7;
+  color: var(--app-muted);
   font-size: 14px;
+  line-height: 1.7;
 }
 
-/* Capability grid */
-.cap-grid {
+.cap-list {
   display: grid;
   gap: 10px;
-  margin-top: 32px;
+  margin: 32px 0 0;
+  padding: 0;
+  list-style: none;
 }
 
-.cap-item {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 6px 14px;
-  align-items: center;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+.cap-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface-strong);
 }
 
-.cap-tag {
-  grid-row: 1 / 3;
+.cap-index {
+  padding-top: 1px;
+  color: var(--app-muted);
+  font-family: var(--app-font-mono);
   font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(240, 244, 255, 0.5);
-  letter-spacing: 0.02em;
+  font-weight: 500;
 }
 
-.cap-label {
-  font-size: 14px;
+.cap-list strong {
+  display: block;
+  color: var(--app-text);
+  font-size: 13px;
   font-weight: 600;
-  color: #f0f4ff;
 }
 
-.cap-desc {
+.cap-list p {
+  margin: 2px 0 0;
+  color: var(--app-muted);
   font-size: 12px;
-  color: rgba(240, 244, 255, 0.5);
+  line-height: 1.5;
 }
 
-.role-note {
-  margin: 24px 0 0;
-  color: rgba(240, 244, 255, 0.4);
+.brand-foot {
+  margin: 32px 0 0;
+  color: var(--app-muted);
   font-size: 12px;
 }
 
@@ -394,14 +351,15 @@ const handleLogin = async () => {
 }
 
 .form-head {
-  margin-bottom: 28px;
+  margin-bottom: 26px;
 }
 
 .form-head h2 {
   margin: 0;
-  font-size: 26px;
-  font-weight: 700;
   color: var(--app-text);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .form-head p {
@@ -411,10 +369,9 @@ const handleLogin = async () => {
 }
 
 .login-error {
-  margin: -10px 0 18px;
+  margin: -8px 0 18px;
 }
 
-/* Fields */
 .field {
   margin-bottom: 16px;
 }
@@ -427,7 +384,6 @@ const handleLogin = async () => {
   font-weight: 600;
 }
 
-/* Options */
 .form-options {
   display: flex;
   align-items: center;
@@ -446,27 +402,25 @@ const handleLogin = async () => {
 
 .forgot-link {
   color: var(--app-primary);
-  text-decoration: none;
   font-size: 13px;
   font-weight: 500;
+  text-decoration: none;
 }
 
 .forgot-link:hover {
   color: var(--app-primary-dark);
 }
 
-/* Submit */
 .submit-btn {
   width: 100%;
-  min-height: 46px;
+  min-height: 44px;
 }
 
-/* Signup link */
 .signup-link {
   margin: 22px 0 0;
-  text-align: center;
   color: var(--app-muted);
   font-size: 13px;
+  text-align: center;
 }
 
 /* ===== Responsive ===== */
@@ -481,19 +435,26 @@ const handleLogin = async () => {
   }
 
   .brand-pane {
-    padding: 28px 24px 24px;
+    padding: 28px 24px;
+    border-right: none;
+    border-bottom: 1px solid var(--app-line);
+  }
+
+  .brand-body {
+    padding-top: 28px;
   }
 
   .brand-body h1 {
-    font-size: 28px;
+    font-size: 26px;
+    text-wrap: balance;
   }
 
-  .pipeline-deco {
+  .cap-list {
+    margin-top: 22px;
+  }
+
+  .brand-foot {
     display: none;
-  }
-
-  .cap-grid {
-    grid-template-columns: 1fr;
   }
 
   .form-pane {

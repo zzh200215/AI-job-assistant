@@ -1,15 +1,15 @@
 <template>
-  <el-container class="layout-shell workspace-theme">
-    <!-- Sidebar -->
-    <el-aside width="220px" class="aside-shell">
+  <el-container class="layout-shell" :class="{ 'workspace-theme': isAdminRoute }">
+    <el-aside width="232px" class="aside-shell">
       <div class="brand" @click="router.push(authStore.homeRoute)">
         <div class="brand-mark">
           <svg
-            width="22"
-            height="22"
+            width="20"
+            height="20"
             viewBox="0 0 32 32"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
           >
             <rect
               x="1"
@@ -23,7 +23,7 @@
             <path d="M9 22V12l7-5 7 5v10H9z" fill="currentColor" opacity="0.88" />
             <path
               d="M13 22v-4a3 3 0 0 1 6 0v4"
-              stroke="#fff"
+              stroke="var(--el-color-white)"
               stroke-width="1.5"
               stroke-linecap="round"
             />
@@ -31,17 +31,12 @@
         </div>
         <div class="brand-copy">
           <strong>Career Signal</strong>
-          <small>{{ authStore.roleLabel }}</small>
+          <small>{{ isAdminRoute ? '管理后台' : '求职工作台' }}</small>
         </div>
       </div>
 
-      <nav class="nav-section">
-        <el-menu
-          :default-active="route.path"
-          router
-          class="nav-menu"
-          background-color="transparent"
-        >
+      <nav ref="navSection" class="nav-section" aria-label="主导航">
+        <el-menu :default-active="route.path" router class="nav-menu">
           <el-menu-item
             v-for="item in candidateNav"
             :key="item.path"
@@ -52,7 +47,6 @@
             <span>{{ item.label }}</span>
           </el-menu-item>
 
-          <!-- 管理员可见：内部工具 -->
           <el-sub-menu v-if="adminNav.length" index="admin-tools" class="nav-submenu">
             <template #title>
               <el-icon><Tools /></el-icon>
@@ -70,46 +64,28 @@
           </el-sub-menu>
         </el-menu>
       </nav>
-
-      <div class="aside-footer">
-        <div class="aside-chip">
-          <span class="aside-chip-dot" :class="runtime.demoMode ? 'dot-amber' : 'dot-green'" />
-          <div class="aside-chip-copy">
-            <strong>{{ currentNav?.label || '工作台' }}</strong>
-            <span>{{ runtime.demoMode ? '演示模式' : authStore.roleLabel }}</span>
-          </div>
-        </div>
-      </div>
     </el-aside>
 
-    <!-- Main content area -->
     <el-container class="content-shell">
-      <!-- Topbar -->
       <el-header class="topbar">
         <div class="topbar-main">
           <div class="topbar-left">
-            <div class="topbar-kicker">{{ currentNav?.tag || '工作台' }}</div>
-            <h1 class="page-title">{{ route.meta?.title || currentNav?.label || '' }}</h1>
+            <span class="topbar-product">Career Signal</span>
+            <span class="topbar-sep" aria-hidden="true" />
+            <span class="topbar-context">{{ isAdminRoute ? '运营工作台' : '求职工作台' }}</span>
           </div>
           <div class="topbar-right">
-            <div class="topbar-badges">
-              <span class="badge">
-                <span class="badge-dot dot-blue" />
-                {{ authStore.roleLabel }}
-              </span>
-              <span class="badge badge-outline">求职助手</span>
-            </div>
-            <el-dropdown v-if="authStore.isLoggedIn" @command="handleCommand">
-              <span class="user-chip">
-                <span class="user-avatar">{{
-                  (authStore.user?.username || 'U')[0].toUpperCase()
-                }}</span>
+            <el-dropdown v-if="authStore.isLoggedIn" trigger="click" @command="handleCommand">
+              <button class="user-chip" type="button">
+                <span class="user-avatar">{{ userInitial }}</span>
                 <span class="user-name">{{ authStore.user?.username || '用户' }}</span>
-                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-              </span>
+                <el-icon class="user-arrow"><ArrowDown /></el-icon>
+              </button>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                  <el-dropdown-item command="tasks">任务记录</el-dropdown-item>
+                  <el-dropdown-item command="history">分析历史</el-dropdown-item>
                   <el-dropdown-item command="subscription">订阅方案</el-dropdown-item>
                   <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
                 </el-dropdown-menu>
@@ -131,7 +107,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowDown,
@@ -150,216 +126,127 @@ import {
 } from '@element-plus/icons-vue'
 
 import { ElMessage } from '@/plugins/element-services'
-import { getSystemStatus } from '@/api/system'
 import { USER_ROLES } from '@/constants/roles'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const runtime = reactive({ demoMode: false })
 
-// C 端核心导航 — 8 个一级入口
 const candidateNavItems = [
-  {
-    path: '/home',
-    icon: HomeFilled,
-    label: '首页',
-    tag: '概览',
-    desc: '求职助手首页。',
-    matches: ['/home'],
-  },
+  { path: '/home', icon: HomeFilled, label: '首页', matches: ['/home'] },
   {
     path: '/resume-center',
     icon: Document,
     label: '简历中心',
-    tag: '简历',
-    desc: '多简历管理、AI优化与诊断。',
     matches: ['/resume-center', '/resume/compare'],
   },
   {
     path: '/smart-analysis',
     icon: MagicStick,
     label: '求职分析',
-    tag: '分析',
-    desc: '看清简历与目标岗位的差距。',
     matches: ['/smart-analysis', '/analysis'],
   },
   {
     path: '/jobs/recommend',
     icon: DataAnalysis,
     label: '岗位推荐',
-    tag: '岗位',
-    desc: '每日推荐与智能匹配。',
     matches: ['/jobs/recommend', '/jobs/search'],
   },
   {
     path: '/interview/setup',
     icon: Microphone,
     label: 'AI 模拟面试',
-    tag: '面试',
-    desc: '模拟面试与能力评估。',
     matches: ['/interview', '/interview/setup', '/interview/room', '/interview/report'],
   },
   {
     path: '/jobs/pipeline/kanban',
     icon: Grid,
     label: '投递看板',
-    tag: '投递',
-    desc: '投递进展追踪。',
     matches: ['/jobs/pipeline/kanban'],
   },
   {
     path: '/career-planning',
     icon: TrendCharts,
     label: '职业规划',
-    tag: '规划',
-    desc: '成长路线与能力差距。',
     matches: ['/career-planning'],
   },
   {
     path: '/profile',
     icon: List,
     label: '个人中心',
-    tag: '账号',
-    desc: '账号信息、数据与邀请。',
     matches: ['/profile', '/subscription'],
   },
 ]
 
-// 管理员工具导航
 const adminNavItems = [
-  {
-    path: '/admin',
-    icon: Trophy,
-    label: '管理后台',
-    tag: 'Admin',
-    desc: '运营数据总览。',
-    matches: ['/admin'],
-  },
-  {
-    path: '/admin/users',
-    icon: List,
-    label: '用户管理',
-    tag: 'Users',
-    desc: '用户列表与状态。',
-    matches: ['/admin/users'],
-  },
-  {
-    path: '/admin/orders',
-    icon: Coin,
-    label: '订单管理',
-    tag: 'Orders',
-    desc: '订阅订单与支付。',
-    matches: ['/admin/orders'],
-  },
-  {
-    path: '/prompt-traces',
-    icon: DataAnalysis,
-    label: 'Prompt 追踪',
-    tag: 'LLMOps',
-    desc: '版本对比与结果回放。',
-    matches: ['/prompt-traces'],
-  },
-  {
-    path: '/eval-reports',
-    icon: DataAnalysis,
-    label: '评测报表',
-    tag: 'Eval',
-    desc: '离线评测与历史快照。',
-    matches: ['/eval-reports'],
-  },
-  {
-    path: '/system-status',
-    icon: Trophy,
-    label: '系统状态',
-    tag: 'Status',
-    desc: '运行模式与能力开关。',
-    matches: ['/system-status'],
-  },
-  {
-    path: '/delivery-guide',
-    icon: List,
-    label: '交付说明',
-    tag: 'Delivery',
-    desc: '交付范围与验收建议。',
-    matches: ['/delivery-guide'],
-  },
-  {
-    path: '/about',
-    icon: Trophy,
-    label: '关于系统',
-    tag: 'About',
-    desc: '系统边界与产品定位。',
-    matches: ['/about'],
-  },
-  {
-    path: '/knowledge',
-    icon: Clock,
-    label: '知识库',
-    tag: 'Knowledge',
-    desc: '文档管理与RAG调试。',
-    matches: ['/knowledge'],
-  },
-  {
-    path: '/agent',
-    icon: MagicStick,
-    label: 'Agent 分析',
-    tag: 'Agent',
-    desc: '单Agent分析。',
-    matches: ['/agent'],
-  },
-  {
-    path: '/multi-agent',
-    icon: DataAnalysis,
-    label: '多智能体',
-    tag: 'Multi',
-    desc: '多智能体协作。',
-    matches: ['/multi-agent'],
-  },
+  { path: '/admin', icon: Trophy, label: '管理后台', matches: ['/admin'] },
+  { path: '/admin/users', icon: List, label: '用户管理', matches: ['/admin/users'] },
+  { path: '/admin/orders', icon: Coin, label: '订单管理', matches: ['/admin/orders'] },
+  { path: '/prompt-traces', icon: DataAnalysis, label: 'Prompt 追踪', matches: ['/prompt-traces'] },
+  { path: '/eval-reports', icon: DataAnalysis, label: '评测报表', matches: ['/eval-reports'] },
+  { path: '/system-status', icon: Trophy, label: '系统状态', matches: ['/system-status'] },
+  { path: '/delivery-guide', icon: List, label: '交付说明', matches: ['/delivery-guide'] },
+  { path: '/about', icon: Trophy, label: '关于系统', matches: ['/about'] },
+  { path: '/knowledge', icon: Clock, label: '知识库', matches: ['/knowledge'] },
+  { path: '/agent', icon: MagicStick, label: 'Agent 分析', matches: ['/agent'] },
+  { path: '/multi-agent', icon: DataAnalysis, label: '多智能体', matches: ['/multi-agent'] },
   {
     path: '/jobs/recommend/evaluation',
     icon: TrendCharts,
     label: '推荐评测',
-    tag: 'Eval',
-    desc: '推荐效果评测。',
     matches: ['/jobs/recommend/evaluation'],
   },
   {
     path: '/jobs/recommend/config',
     icon: Coin,
     label: '推荐配置',
-    tag: 'Config',
-    desc: '推荐权重配置。',
     matches: ['/jobs/recommend/config'],
   },
 ]
 
-// 根据角色过滤
-const isAdmin = computed(() => authStore.role === USER_ROLES.admin)
-const candidateNav = computed(() =>
-  isAdmin.value
-    ? candidateNavItems // admin 也能看到 C 端导航
-    : candidateNavItems
+const isAdminRole = computed(() => authStore.role === USER_ROLES.admin)
+const candidateNav = computed(() => candidateNavItems)
+const adminNav = computed(() => (isAdminRole.value ? adminNavItems : []))
+
+const isAdminRoute = computed(() =>
+  adminNavItems.some((item) => route.path === item.path || route.path.startsWith(`${item.path}/`))
 )
-const adminNav = computed(() => (isAdmin.value ? adminNavItems : []))
 
-const currentNav = computed(() => {
-  if (route.path === '/profile')
-    return { label: '个人中心', tag: '账号', desc: '账号信息与求职数据。' }
-  if (route.path === '/subscription')
-    return { label: '订阅方案', tag: '订阅', desc: '套餐与权益对比。' }
+const userInitial = computed(() =>
+  (authStore.user?.nickname || authStore.user?.username || 'U').slice(0, 1).toUpperCase()
+)
 
-  const all = [...candidateNavItems, ...adminNavItems]
-  const active = all.find((item) =>
-    item.matches.some((prefix) => route.path === prefix || route.path.startsWith(`${prefix}/`))
-  )
-  return active || all[0] || null
-})
+const navSection = ref(null)
+
+/* 窄屏导航是横向滚动条：进入某一页时把当前项滚到可见区域，
+   否则从侧栏折叠过来的第一屏看不到高亮项。 */
+watch(
+  () => route.path,
+  async () => {
+    await nextTick()
+    // Element Plus 在下一拍才给菜单项挂 is-active，延后一拍再量。
+    setTimeout(() => {
+      const scroller = navSection.value
+      if (!scroller || scroller.scrollWidth <= scroller.clientWidth) return
+      const active = scroller.querySelector('.el-menu-item.is-active')
+      if (active) scroller.scrollTo({ left: Math.max(0, active.offsetLeft - 16), behavior: 'auto' })
+    }, 80)
+  },
+  { immediate: true }
+)
 
 function handleCommand(cmd) {
   if (cmd === 'profile') {
     router.push('/profile')
+    return
+  }
+  if (cmd === 'tasks') {
+    router.push('/tasks')
+    return
+  }
+  if (cmd === 'history') {
+    router.push('/history')
     return
   }
   if (cmd === 'subscription') {
@@ -372,17 +259,14 @@ function handleCommand(cmd) {
   router.push('/login')
 }
 
-/* 主题作用域同时挂到 documentElement：EP 的下拉/气泡/对话框是 teleport 到 body 子树的，
-   作用域只盖住这个布局元素时，它们解析到的是 :root 那一档浅色令牌，实测浮层是白底。 */
-onMounted(async () => {
-  document.documentElement.classList.add('workspace-theme')
-  try {
-    const data = await getSystemStatus({ notifyError: false })
-    runtime.demoMode = !!data?.demo_mode
-  } catch {
-    runtime.demoMode = false
-  }
-})
+/* 管理后台仍用深色作用域：EP 的浮层 teleport 到 body，所以根节点要跟着切。 */
+watch(
+  isAdminRoute,
+  (dark) => {
+    document.documentElement.classList.toggle('workspace-theme', dark)
+  },
+  { immediate: true }
+)
 
 onBeforeUnmount(() => {
   document.documentElement.classList.remove('workspace-theme')
@@ -390,7 +274,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* ===== Shell ===== */
 .layout-shell {
   min-height: 100vh;
   background: var(--app-bg);
@@ -400,162 +283,101 @@ onBeforeUnmount(() => {
 .aside-shell {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 16px 12px;
-  background: #101117;
-  border-right: 1px solid #252733;
+  padding: 20px 14px;
+  background: var(--app-surface-strong);
+  border-right: 1px solid var(--app-line);
 }
 
-/* Brand */
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 12px 20px;
+  padding: 4px 8px 20px;
   cursor: pointer;
-  transition: opacity 0.18s ease;
-  border-bottom: 1px solid #252733;
-  margin-bottom: 8px;
-}
-
-.brand:hover {
-  opacity: 0.8;
 }
 
 .brand-mark {
-  width: 36px;
-  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  color: #f6f4ff;
-  background: #6d3ce8;
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
+  border-radius: var(--app-radius-sm);
+  background: var(--app-primary);
+  color: var(--el-color-white);
 }
 
 .brand-copy strong {
   display: block;
-  font-size: 15px;
+  color: var(--app-text);
+  font-size: 14px;
   font-weight: 700;
-  color: #f2f3f8;
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
 }
 
 .brand-copy small {
   display: block;
   margin-top: 2px;
+  color: var(--app-muted);
   font-size: 11px;
-  color: #86899a;
 }
 
-/* Navigation */
 .nav-section {
   flex: 1;
+  min-height: 0;
 }
 
-.nav-menu,
-.nav-menu :deep(.el-menu) {
+.nav-menu {
   border-right: none;
+  background: transparent;
 }
 
-.nav-menu :deep(.el-menu-item) {
-  height: 42px;
+.nav-menu :deep(.el-menu-item),
+.nav-menu :deep(.el-sub-menu__title) {
+  height: 38px;
   margin-bottom: 2px;
-  border-radius: 7px;
-  font-size: 14px;
-  color: #a7a9b5 !important;
-  transition: background 0.15s ease;
+  padding: 0 10px;
+  border-radius: var(--app-radius-sm);
+  color: var(--app-muted);
+  font-size: 13px;
+  font-weight: 500;
 }
 
-.nav-menu :deep(.el-menu-item:hover) {
-  background: #1b1d27 !important;
-  color: #f3f4f8 !important;
+.nav-menu :deep(.el-menu-item:hover),
+.nav-menu :deep(.el-sub-menu__title:hover) {
+  background: var(--app-surface-muted);
+  color: var(--app-text);
 }
 
 .nav-menu :deep(.el-menu-item.is-active) {
-  background: #271947 !important;
-  color: #bda4ff !important;
+  background: var(--app-primary-light);
+  color: var(--app-primary-dark);
   font-weight: 600;
-}
-
-.nav-menu :deep(.el-sub-menu__title) {
-  height: 42px;
-  border-radius: 7px;
-  color: #a7a9b5 !important;
-}
-
-.nav-menu :deep(.el-sub-menu__title:hover) {
-  background: #1b1d27 !important;
-  color: #f3f4f8 !important;
 }
 
 .nav-menu :deep(.el-menu--inline) {
-  background: transparent !important;
+  background: transparent;
 }
 
-.nav-menu :deep(.el-menu-item .el-icon) {
-  margin-right: 8px;
+.nav-menu :deep(.el-menu-item .el-icon),
+.nav-menu :deep(.el-sub-menu__title .el-icon) {
+  margin-right: 9px;
+  font-size: 16px;
 }
 
-/* Aside footer */
-.aside-footer {
-  padding-top: 8px;
-  border-top: 1px solid #252733;
-}
-
-.aside-chip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 7px;
-  background: #1a1c26;
-}
-
-.aside-chip-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.dot-green {
-  background: var(--app-success);
-}
-.dot-amber {
-  background: var(--app-warning);
-}
-
-.aside-chip-copy strong,
-.aside-chip-copy span {
-  display: block;
-  line-height: 1.3;
-}
-
-.aside-chip-copy strong {
-  font-size: 13px;
-  font-weight: 600;
-  color: #e9eaf0;
-}
-
-.aside-chip-copy span {
-  font-size: 11px;
-  color: #858899;
-}
-
-/* ===== Content area ===== */
+/* ===== Content ===== */
 .content-shell {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
-/* ===== Topbar ===== */
 .topbar {
-  height: auto;
+  height: 60px;
   padding: 0;
-  background: #101117;
-  border-bottom: 1px solid #252733;
+  background: var(--app-surface-strong);
+  border-bottom: 1px solid var(--app-line);
 }
 
 .topbar-main {
@@ -563,115 +385,98 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 24px;
+  height: 100%;
+  padding: 0 var(--app-shell-gutter);
 }
 
 .topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
 }
 
-.topbar-kicker {
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #858899;
-  margin-bottom: 2px;
+.topbar-product {
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 600;
 }
 
-.page-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: #f2f3f8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.topbar-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--app-line);
+}
+
+.topbar-context {
+  color: var(--app-muted);
+  font-size: 12px;
 }
 
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-shrink: 0;
 }
 
-.topbar-badges {
-  display: flex;
-  gap: 6px;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 500;
-  background: #1c1e28;
-  color: #aeb0bd;
-}
-
-.badge-outline {
-  background: #171923;
-  border: 1px solid #343643;
-}
-
-.badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.dot-blue {
-  background: #22b8e8;
-}
-
-/* User chip */
 .user-chip {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px 6px 6px;
-  border-radius: 7px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--app-text);
   cursor: pointer;
-  background: #1c1e28;
-  transition: background 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .user-chip:hover {
-  background: #272a36;
+  border-color: var(--app-line);
+  background: var(--app-surface-muted);
 }
 
 .user-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #6d3ce8;
-  color: #fff;
-  font-size: 13px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--app-primary-light);
+  color: var(--app-primary-dark);
+  font-size: 12px;
   font-weight: 700;
 }
 
 .user-name {
+  max-width: 120px;
+  overflow: hidden;
+  color: var(--app-text);
   font-size: 13px;
   font-weight: 500;
-  color: #e8e9ef;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* ===== Main content ===== */
+.user-arrow {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
 .main-shell {
-  padding: 20px 24px 24px;
-  background: transparent;
+  padding: 0;
+  background: var(--app-bg);
 }
 
 /* ===== Route transition ===== */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.18s ease;
+  transition: opacity 0.16s ease;
 }
 
 .fade-enter-from,
@@ -687,60 +492,62 @@ onBeforeUnmount(() => {
 
   .aside-shell {
     width: 100% !important;
+    padding: 10px 16px 0;
     border-right: none;
     border-bottom: 1px solid var(--app-line);
-    flex-direction: row;
-    flex-wrap: wrap;
-    padding: 12px 16px;
-    gap: 0;
   }
 
-  .aside-shell .brand {
-    border-bottom: none;
-    padding: 4px 0;
-    margin-bottom: 0;
-    flex-shrink: 0;
+  .brand {
+    padding: 2px 0 8px;
   }
 
-  .aside-shell .nav-section {
-    flex: 1;
-    min-width: 0;
+  .nav-section {
+    display: block;
     overflow-x: auto;
-    margin-left: 12px;
   }
 
-  .aside-shell .aside-footer {
-    display: none;
+  .nav-menu {
+    display: flex;
+    padding-bottom: 8px;
   }
 
   .nav-menu :deep(.el-menu-item) {
-    height: 36px;
+    height: 34px;
+    margin: 0 4px 0 0;
+    padding: 0 10px;
+    flex-shrink: 0;
     white-space: nowrap;
+  }
+
+  .nav-menu :deep(.el-sub-menu) {
+    display: none;
+  }
+
+  .topbar-main {
+    padding: 0 16px;
+  }
+
+  .main-shell {
+    padding: 0;
   }
 }
 
 @media (max-width: 768px) {
-  .topbar-main {
-    padding: 12px 16px;
-    flex-direction: column;
-    align-items: flex-start;
+  .topbar {
+    height: 54px;
   }
 
-  .topbar-right {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .main-shell {
-    padding: 12px 16px;
-  }
-
-  .page-title {
-    font-size: 18px;
-  }
-
-  .topbar-badges .badge:nth-child(2) {
+  .topbar-context,
+  .topbar-sep {
     display: none;
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .topbar-product {
+    font-size: 13px;
   }
 }
 </style>

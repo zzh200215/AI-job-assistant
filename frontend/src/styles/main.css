@@ -7,16 +7,17 @@
    之后串行发出，并把首屏文字一起阻塞住。别把它挪回来。 */
 
 :root {
-  /* ---- Semantic surfaces ---- */
-  --app-bg: #f4f6fa;
-  --app-surface: rgba(255, 255, 255, 0.98);
+  /* ---- Semantic surfaces ----
+     浅色主界面是默认主题；深色 `.workspace-theme` 只留给管理后台。 */
+  --app-bg: #f6f7f9;
+  --app-surface: var(--app-surface-strong);
   --app-surface-strong: #ffffff;
-  --app-surface-muted: #eef1f6;
+  --app-surface-muted: #f2f4f7;
   --app-surface-contrast: #101117;
-  --app-text: #1c2230;
-  --app-muted: #697386;
-  --app-line: #e0e5ed;
-  --app-line-strong: #cbd3df;
+  --app-text: #101828;
+  --app-muted: #667085;
+  --app-line: #e4e7ec;
+  --app-line-strong: #d0d5dd;
 
   --workspace-ink: #101117;
   --workspace-panel: #171922;
@@ -28,34 +29,44 @@
   /* ---- Signals ---- */
   --app-primary: #2563eb;
   --app-primary-dark: #1d4ed8;
-  --app-primary-light: #e8efff;
-  --app-accent: #d9534f;
-  --app-accent-soft: #fff0ef;
+  --app-primary-light: #eef2ff;
+  --app-accent: #b42318;
+  --app-accent-soft: #fef3f2;
   --app-success: #16a879;
   --app-warning: #d99013;
   --app-violet: #7147d9;
-  --app-violet-light: #f0ebff;
+  --app-violet-light: #f4f3ff;
   --app-cyan: #22b8e8;
   --app-danger: #d9534f;
 
   /* 分数语义档的唯一色源：页面只出 tone，不再各自挑 hex。
      档位与后端 MatchExplainer._recommendation 对齐（85/70/50），
-     免得同一张卡片一边写"可以投递"、一边把分数标成警告色。 */
+     免得同一张卡片一边写"可以投递"、一边把分数标成警告色。
+     浅色主题下"背景/图形"与"文字"是两套数：同一个 bright tone 压在白面上只有
+     2.6–3.0，当文字与当色块都不够；这里用 black mix 派生深一档，深色作用域再把它们
+     换回原来的 bright 值。两边都从同一个 tone 出发，没有第二份色板。 */
   --app-score-high: var(--app-success);
   --app-score-good: var(--app-primary);
   --app-score-warn: var(--app-warning);
   --app-score-risk: var(--app-danger);
   --app-score-unknown: var(--app-muted);
-  /* 徽章那一族的底。原先每档是 135deg + 24% 白的双段渐变，同一块底上亮度跨得开：
-     实测蓝档白字 3.38、墨字 3.65，两种前景在这一档都够不到 4.5 —— 渐变不是可以被
-     文字色绕过去的装饰，它本身就是那个不达标的面。拍平成单色后，前景按档选，
-     判据在下面 .score-fill--* 那五条规则里。 */
-  --app-score-high-fill: var(--app-score-high);
-  --app-score-good-fill: var(--app-score-good);
-  --app-score-warn-fill: var(--app-score-warn);
-  --app-score-risk-fill: var(--app-score-risk);
-  /* 没跑过评分的简历也会走到这一档：条形不能空着，也不能显示成红色差评。 */
-  --app-score-unknown-fill: var(--app-score-unknown);
+  --app-score-high-fill: color-mix(in srgb, var(--app-score-high), black 35%);
+  --app-score-good-fill: color-mix(in srgb, var(--app-score-good), black 20%);
+  --app-score-warn-fill: color-mix(in srgb, var(--app-score-warn), black 30%);
+  --app-score-risk-fill: color-mix(in srgb, var(--app-score-risk), black 30%);
+  --app-score-unknown-fill: color-mix(in srgb, var(--app-score-unknown), black 18%);
+  --app-score-high-text: color-mix(in srgb, var(--app-score-high), black 35%);
+  --app-score-good-text: var(--app-score-good);
+  --app-score-warn-text: color-mix(in srgb, var(--app-score-warn), black 30%);
+  --app-score-risk-text: color-mix(in srgb, var(--app-score-risk), black 30%);
+  --app-score-unknown-text: var(--app-score-unknown);
+  /* 色块上的前景：浅色的 fill 是压深那一套，五档统一白字；
+     深色作用域换回 bright 底，再逐档挑墨字/白字。 */
+  --app-score-on-high: var(--el-color-white);
+  --app-score-on-good: var(--el-color-white);
+  --app-score-on-warn: var(--el-color-white);
+  --app-score-on-risk: var(--el-color-white);
+  --app-score-on-unknown: var(--el-color-white);
   /* 浅底 + 描边：面试房间的回答分数胶囊用。旧稿是 8 个手挑 hex，这里由同一份 tone 派生，
      色差实测都在 ±5/255 以内，所以换过来的只是出处，不是观感。 */
   --app-score-high-soft: color-mix(in srgb, var(--app-score-high), white 92%);
@@ -69,18 +80,22 @@
   --app-score-risk-soft-line: color-mix(in srgb, var(--app-score-risk), white 78%);
   --app-score-unknown-soft-line: color-mix(in srgb, var(--app-score-unknown), white 78%);
 
-  --app-shadow: 0 10px 28px rgba(26, 35, 52, 0.08);
-  --app-shadow-soft: 0 2px 8px rgba(26, 35, 52, 0.045);
-  --app-shadow-lg: 0 18px 40px rgba(26, 35, 52, 0.14);
+  --app-shadow: 0 1px 3px rgba(16, 24, 40, 0.06), 0 8px 24px rgba(16, 24, 40, 0.06);
+  --app-shadow-soft: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --app-shadow-lg: 0 16px 40px rgba(16, 24, 40, 0.12);
 
-  --app-radius-lg: 10px;
-  --app-radius-md: 8px;
-  --app-radius-sm: 6px;
-  --app-radius-xs: 4px;
+  --app-radius-lg: 12px;
+  --app-radius-md: 10px;
+  --app-radius-sm: 8px;
+  --app-radius-xs: 6px;
 
   --app-font:
-    'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system, sans-serif;
+    'Inter', 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system,
+    sans-serif;
   --app-font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+
+  --app-shell-width: 1360px;
+  --app-shell-gutter: 32px;
 
   /* ---- Element Plus override ---- */
   --el-color-primary: #2563eb;
@@ -94,20 +109,21 @@
   --el-color-warning: #d99013;
   --el-color-danger: #d9534f;
   --el-color-info: #697386;
-  --el-text-color-primary: #1c2230;
-  --el-text-color-regular: #465266;
-  --el-text-color-secondary: #697386;
-  --el-border-color: #dfe5ee;
-  --el-border-color-light: #e9edf3;
-  --el-border-color-lighter: #f0f2f6;
-  --el-fill-color-light: #f5f7fa;
+  --el-text-color-primary: #101828;
+  --el-text-color-regular: #344054;
+  --el-text-color-secondary: #667085;
+  --el-text-color-placeholder: var(--app-muted);
+  --el-border-color: #e4e7ec;
+  --el-border-color-light: #e9edf2;
+  --el-border-color-lighter: #f0f2f5;
+  --el-fill-color-light: #f5f6f8;
   --el-fill-color-blank: #ffffff;
   --el-bg-color: #ffffff;
-  --el-bg-color-page: #f4f6fa;
-  --el-mask-color: rgba(16, 17, 23, 0.48);
+  --el-bg-color-page: #f6f7f9;
+  --el-mask-color: rgba(16, 24, 40, 0.48);
   --el-border-radius-base: 8px;
   --el-border-radius-round: 999px;
-  --el-box-shadow-light: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --el-box-shadow-light: 0 4px 12px rgba(16, 24, 40, 0.08);
 }
 
 /* ---- Base ---- */
@@ -225,17 +241,42 @@ code,
 .el-button--primary {
   border-color: transparent;
   background: var(--app-primary);
-  box-shadow: 0 4px 10px rgba(25, 107, 219, 0.2);
 }
 
 .el-button--primary:hover,
 .el-button--primary:focus-visible {
   background: var(--app-primary-dark);
-  box-shadow: 0 6px 14px rgba(25, 107, 219, 0.3);
 }
 
 .el-button--primary:active {
   background: #0e4092;
+}
+
+/* 浅色面上 danger 本体当文字只有 3.66–3.96：文字版按钮往黑里压一档。 */
+.el-button.is-text.el-button--danger,
+.el-button.is-link.el-button--danger {
+  color: color-mix(in srgb, var(--el-color-danger), black 25%);
+}
+
+.el-button--danger.is-plain {
+  --el-button-text-color: color-mix(in srgb, var(--el-color-danger), black 25%);
+  --el-button-border-color: color-mix(in srgb, var(--el-color-danger), white 55%);
+}
+
+/* 输入框追加按钮落在灰底上：EP 的 secondary 灰字只有 4.42，压深一档。 */
+.el-input-group__append .el-button.el-button {
+  --el-button-text-color: var(--el-text-color-regular);
+  color: var(--el-text-color-regular);
+}
+
+/* 禁用的主按钮不要用"浅蓝底 + 白字"（2.12）：那是读不清的另一半。
+   改成中性底 + muted 字，状态仍然明确。 */
+.el-button--primary.is-disabled,
+.el-button--primary.is-disabled:hover,
+.el-button--primary.is-disabled:focus {
+  background: var(--app-surface-muted);
+  border-color: var(--app-line);
+  color: var(--app-muted);
 }
 
 .el-button--large {
@@ -317,11 +358,66 @@ code,
   --el-tag-text-color: var(--app-surface-contrast);
 }
 
+/* 浅色面上 plain 那一族的底是透明（白面），tone 本体压上去只有 2.6–4.0。
+   与文字版按钮同一配方：往黑里压。深色作用域下面各有自己的覆写（danger/info/primary
+   抬白、success/warning 保持 bright），特异性更高，不会被这里带走。 */
+.el-tag--plain.el-tag--success {
+  --el-tag-text-color: color-mix(in srgb, var(--el-color-success), black 40%);
+}
+
+.el-tag--plain.el-tag--warning {
+  --el-tag-text-color: color-mix(in srgb, var(--el-color-warning), black 30%);
+}
+
+.el-tag--plain.el-tag--danger {
+  --el-tag-text-color: color-mix(in srgb, var(--el-color-danger), black 25%);
+}
+
+.el-tag--plain.el-tag--info {
+  --el-tag-text-color: color-mix(in srgb, var(--el-color-info), black 15%);
+}
+
+.el-tag--plain.el-tag--primary {
+  --el-tag-text-color: color-mix(in srgb, var(--el-color-primary), black 10%);
+}
+
+.workspace-theme .el-tag--plain.el-tag--success {
+  --el-tag-text-color: var(--el-color-success);
+}
+
+.workspace-theme .el-tag--plain.el-tag--warning {
+  --el-tag-text-color: var(--el-color-warning);
+}
+
 .el-dialog,
 .el-message,
 .el-popover,
 .el-dropdown-menu {
   border-radius: var(--app-radius-lg) !important;
+}
+
+/* 浅色消息条的底是 EP 的浅 tint，tone 本体压上去只有 2.5–3.7：
+   与文字版按钮同一方向，往黑里压一档。 */
+.el-message--success {
+  --el-message-text-color: color-mix(in srgb, var(--el-color-success), black 40%);
+}
+
+.el-message--warning {
+  --el-message-text-color: color-mix(in srgb, var(--el-color-warning), black 30%);
+}
+
+.el-message--danger {
+  --el-message-text-color: color-mix(in srgb, var(--el-color-danger), black 25%);
+}
+
+/* EP 的 error 通道用的是 `--el-color-error`（默认的浅红），不是 danger；
+   浅红底上只有 2.61，按同一配方压深。 */
+.el-message--error {
+  --el-message-text-color: color-mix(in srgb, var(--el-color-danger), black 25%);
+}
+
+.el-message--error .el-message__content {
+  color: color-mix(in srgb, var(--el-color-danger), black 25%);
 }
 
 .el-dropdown-menu {
@@ -501,6 +597,23 @@ code,
   --el-border-color-light: #2c2f3d;
   --el-border-color-lighter: #252833;
   --el-mask-color: rgba(0, 0, 0, 0.62);
+  /* 深色作用域把分数底座换回 bright 值：浅色那一套 black mix 压在这块墨面上读不清。
+     文字档则沿用这一族原来的"抬白"配方——方向与浅色相反，不是抄错。 */
+  --app-score-high-fill: var(--app-score-high);
+  --app-score-good-fill: var(--app-score-good);
+  --app-score-warn-fill: var(--app-score-warn);
+  --app-score-risk-fill: var(--app-score-risk);
+  --app-score-unknown-fill: var(--app-score-unknown);
+  --app-score-high-text: var(--app-score-high);
+  --app-score-good-text: color-mix(in srgb, var(--app-score-good), white 25%);
+  --app-score-warn-text: var(--app-score-warn);
+  --app-score-risk-text: color-mix(in srgb, var(--app-score-risk), white 20%);
+  --app-score-unknown-text: var(--app-score-unknown);
+  --app-score-on-high: var(--app-surface-contrast);
+  --app-score-on-good: var(--el-color-white);
+  --app-score-on-warn: var(--app-surface-contrast);
+  --app-score-on-risk: var(--app-surface-contrast);
+  --app-score-on-unknown: var(--app-surface-contrast);
   /* 分数胶囊的底/描边。:root 那两份是 tone 混 92% 白的**浅底**，而唯一消费者
      TranscriptPane 的 .score-chip--* 只在深色工作台里出现（房间挂在 DefaultLayout 下），
      于是深色屏上画着一块 92% 白的胶囊。这一族在作用域内换成深色底上的色偏：
@@ -767,60 +880,57 @@ code,
 }
 
 /* ── 分数语义档：唯一一份色源，视图只挂 tone class，不再各自挑 hex ── */
-/* 这一族是**文字色**（`color:`），不是底：`scoreToneClass()` 拼出来的类名走的就是这五条。
-   所以 good / risk 两档按 D144 那条口径抬过一档——蓝档本体压在深色卡片上是实测 3.39、
-   红档 4.15，都不过正文的 4.5；抬完与 `scoreToneTextColor()` 给的是同一档混白比例。
-   其余三档本体在深面已有 5.2 / 5.86 / 6.0 上下，不动。 */
+/* 文字档统一读 `--app-score-*-text`：浅色是压深的一档、深色是抬白的一档，
+   两套配方都从同一个 tone 出发。JS 的 `scoreToneTextColor()` 也走这五个变量，
+   所以内联 style 与 class 两条通道不会在换主题时分叉。 */
 .score-tone {
-  color: var(--app-score-unknown);
+  color: var(--app-score-unknown-text);
 }
 
 .score-tone--high {
-  color: var(--app-score-high);
+  color: var(--app-score-high-text);
 }
 
 .score-tone--good {
-  color: color-mix(in srgb, var(--app-score-good), white 25%);
+  color: var(--app-score-good-text);
 }
 
 .score-tone--warn {
-  color: var(--app-score-warn);
+  color: var(--app-score-warn-text);
 }
 
 .score-tone--risk {
-  color: color-mix(in srgb, var(--app-score-risk), white 20%);
+  color: var(--app-score-risk-text);
 }
 
 .score-tone--unknown {
-  color: var(--app-score-unknown);
+  color: var(--app-score-unknown-text);
 }
 
-/* 底上的前景按档选，判据是实测对比度：蓝档墨字只有 3.65:1，其余四档白字落在
-   2.07–3.96:1，所以只有 good 留白字，其他四档换 ink（--app-surface-contrast 在
-   两个主题下都是那个深色值，不会被 .workspace-theme 换掉）。 */
+/* 底上的前景按档选：前景也走 token，两个主题各给一套，类名不用分叉。 */
 .score-fill--high {
   background: var(--app-score-high-fill);
-  color: var(--app-surface-contrast);
+  color: var(--app-score-on-high);
 }
 
 .score-fill--good {
   background: var(--app-score-good-fill);
-  color: var(--el-color-white);
+  color: var(--app-score-on-good);
 }
 
 .score-fill--warn {
   background: var(--app-score-warn-fill);
-  color: var(--app-surface-contrast);
+  color: var(--app-score-on-warn);
 }
 
 .score-fill--risk {
   background: var(--app-score-risk-fill);
-  color: var(--app-surface-contrast);
+  color: var(--app-score-on-risk);
 }
 
 .score-fill--unknown {
   background: var(--app-score-unknown-fill);
-  color: var(--app-surface-contrast);
+  color: var(--app-score-on-unknown);
 }
 
 @media (prefers-reduced-motion: reduce) {

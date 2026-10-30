@@ -82,11 +82,11 @@ describe('推荐加载失败不能被说成没有推荐', () => {
     wrapper.unmount()
   })
 
-  it('真的没有推荐时，仍然显示原来的空态文案（失败与空是两回事）', async () => {
+  it('真的没有推荐时，仍然显示空态文案（失败与空是两回事）', async () => {
     api.getJobRecommendations.mockResolvedValue({ total: 0, recommendations: [] })
     const wrapper = await renderRecommend()
     const text = document.body.textContent
-    expect(text).toContain('暂无匹配的岗位推荐')
+    expect(text).toContain('暂时没有匹配的岗位')
     expect(text).not.toContain('加载失败')
     wrapper.unmount()
   })
