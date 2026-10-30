@@ -121,7 +121,7 @@
               <!-- 拉不到简历不等于没有简历：这里不说出来，用户会以为自己没上传过 -->
               <AppLoadError
                 v-if="resumesError"
-                title="简历列表拉取失败"
+                title="简历列表加载失败"
                 :message="resumesError"
                 @retry="loadResumes"
               />
@@ -129,7 +129,7 @@
                    页面接着对一个已经选了简历的人说"先选择一份简历" -->
               <AppLoadError
                 v-else-if="resumeDetailError"
-                title="简历详情拉取失败"
+                title="简历详情加载失败"
                 :message="resumeDetailError"
                 @retry="loadResumeDetail(selectedResumeId)"
               />

@@ -188,7 +188,7 @@ describe('批量导入作业在视图层的那一跳', () => {
         done: 50,
         created: 38,
         skipped: 12,
-        problems: [{ row: 3, reason: '缺 title 或 JD 文本' }],
+        problems: [{ row: 3, reason: '缺少岗位名称或岗位描述' }],
       })
     )
 
@@ -196,7 +196,7 @@ describe('批量导入作业在视图层的那一跳', () => {
     await wrapper.vm.handleImport({ name: 'jd.csv' })
     await flushPromises()
 
-    expect(screen()).toContain('跳过原因：第 3 行：缺 title 或 JD 文本 等共 12 条')
+    expect(screen()).toContain('跳过原因：第 3 行：缺少岗位名称或岗位描述 等共 12 条')
     wrapper.unmount()
   })
 

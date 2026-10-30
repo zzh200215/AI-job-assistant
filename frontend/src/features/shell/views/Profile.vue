@@ -226,7 +226,7 @@
         <div class="setting-row">
           <div class="setting-info">
             <strong>数据导出</strong>
-            <span>导出您的所有数据（简历、投递记录、面试记录等）</span>
+            <span>导出你的所有数据（简历、投递记录、面试记录等）</span>
           </div>
           <div class="setting-action">
             <el-button size="small" @click="exportData" :loading="exporting">导出数据</el-button>
@@ -610,7 +610,7 @@ function savePrivacy() {
 async function deleteAccount() {
   try {
     await ElMessageBox.confirm(
-      '此操作将永久删除您的账号和所有数据，不可恢复！确定继续？',
+      '此操作将永久删除你的账号和所有数据，不可恢复！确定继续？',
       '注销账号',
       { confirmButtonText: '确定注销', cancelButtonText: '取消', type: 'error' }
     )

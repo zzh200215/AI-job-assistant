@@ -5,7 +5,7 @@
         <WarningFilled />
       </el-icon>
       <h1 class="code">404</h1>
-      <p class="desc">抱歉，您访问的页面不存在</p>
+      <p class="desc">抱歉，你访问的页面不存在</p>
       <el-button type="primary" size="large" @click="$router.push('/home')">
         <el-icon><HomeFilled /></el-icon>
         返回首页

@@ -82,14 +82,14 @@ beforeEach(() => {
   })
 })
 
-describe('推荐拉取失败不能被说成"没有贴合的推荐"', () => {
+describe('推荐加载失败不能被说成"没有贴合的推荐"', () => {
   it('GET 失败时给出失败与重试，不给出那条怪简历的空态文案', async () => {
     api.jobs.getJobRecommendations.mockRejectedValue(failWith('推荐服务暂时不可用（500）'))
     const wrapper = await renderSearch()
     await openRecommendTab(wrapper)
     const text = document.body.textContent
 
-    expect(text).toContain('推荐结果拉取失败')
+    expect(text).toContain('推荐结果加载失败')
     expect(text).toContain('推荐服务暂时不可用（500）')
     expect(text).not.toContain('还没有足够贴合的推荐结果')
 
@@ -112,21 +112,21 @@ describe('推荐拉取失败不能被说成"没有贴合的推荐"', () => {
     const text = document.body.textContent
 
     expect(text).toContain('还没有足够贴合的推荐结果')
-    expect(text).not.toContain('推荐结果拉取失败')
+    expect(text).not.toContain('推荐结果加载失败')
     wrapper.unmount()
   })
 })
 
-describe('简历详情拉取失败不能变成"你没选简历"', () => {
+describe('简历详情加载失败不能变成"你没选简历"', () => {
   it('列表成功、只有详情失败时，页面说出来而不静默丢掉摘要', async () => {
     api.resume.getResume.mockRejectedValue(failWith('详情读取超时'))
     const wrapper = await renderSearch()
     const text = document.body.textContent
 
-    expect(text).toContain('简历详情拉取失败')
+    expect(text).toContain('简历详情加载失败')
     expect(text).toContain('详情读取超时')
-    // 列表是好的：不能把两件事混成一条"简历列表拉取失败"
-    expect(text).not.toContain('简历列表拉取失败')
+    // 列表是好的：不能把两件事混成一条"简历列表加载失败"
+    expect(text).not.toContain('简历列表加载失败')
     wrapper.unmount()
   })
 
@@ -134,8 +134,8 @@ describe('简历详情拉取失败不能变成"你没选简历"', () => {
     const wrapper = await renderSearch()
     const text = document.body.textContent
 
-    expect(text).not.toContain('简历详情拉取失败')
-    expect(text).not.toContain('简历列表拉取失败')
+    expect(text).not.toContain('简历详情加载失败')
+    expect(text).not.toContain('简历列表加载失败')
     wrapper.unmount()
   })
 })

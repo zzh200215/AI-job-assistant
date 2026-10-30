@@ -197,8 +197,17 @@ const FILTER_GROUPS = {
   failed: ['failed', 'partial'],
 }
 
+const INTENT_LABELS = {
+  full_analysis: '简历与岗位分析',
+  resume_match_only: '简历匹配分析',
+  optimize_only: '简历优化',
+  interview_only: '面试题生成',
+}
+
 function taskName(task) {
-  return task.name || TASK_TYPE_LABELS[task.task_type] || '求职分析任务'
+  return (
+    task.name || TASK_TYPE_LABELS[task.task_type] || INTENT_LABELS[task.intent] || '求职分析任务'
+  )
 }
 
 function normalizeTask(task) {

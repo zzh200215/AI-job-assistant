@@ -53,7 +53,8 @@
         <p v-if="optionsError" class="form-hint">{{ optionsError }}</p>
         <template v-else-if="optionsLoaded">
           <p v-if="!resumeOptions.length" class="form-hint">
-            还没有简历，可以先去<router-link to="/resume-center">简历中心</router-link>上传一份。
+            还没有可分析的简历，可以先去<router-link to="/resume-center">简历中心</router-link
+            >上传并完成解析。
           </p>
           <p v-else-if="!jdOptions.length" class="form-hint">
             还没有目标岗位，可以先去<router-link to="/smart-analysis">求职分析</router-link
@@ -458,7 +459,9 @@ async function loadOptions() {
       getResumeList({ page: 1, page_size: 50 }),
       getJDList({ page: 1, page_size: 100 }),
     ])
-    resumeOptions.value = resumeData?.items || []
+    resumeOptions.value = (resumeData?.items || []).filter(
+      (item) => item.parsed && Object.keys(item.parsed).length
+    )
     jdOptions.value = jdData?.items || []
   } catch (error) {
     optionsError.value = '暂时读不到简历或岗位列表，请刷新页面重试。'
@@ -474,7 +477,11 @@ async function recoverSelections() {
   if (form.resume_id && !resumeOptions.value.some((item) => item.id === form.resume_id)) {
     try {
       const data = await getResume(form.resume_id)
-      if (data?.id === form.resume_id) resumeOptions.value.unshift(data)
+      if (data?.id === form.resume_id && data.parsed && Object.keys(data.parsed).length) {
+        resumeOptions.value.unshift(data)
+      } else if (form.resume_id === data?.id) {
+        form.resume_id = null
+      }
     } catch (error) {
       console.warn('恢复已选简历失败', error)
     }

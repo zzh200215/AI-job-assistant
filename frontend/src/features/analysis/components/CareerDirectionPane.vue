@@ -1,11 +1,11 @@
 <template>
   <div v-if="loading" class="inline-loading">
     <el-icon class="is-loading" size="22"><Loading /></el-icon>
-    <p>正在分析适合您的岗位方向...</p>
+    <p>正在分析适合你的岗位方向...</p>
   </div>
   <template v-else-if="paths.length > 0">
     <el-alert
-      :title="summary || `根据您的技能和经验，推荐以下 ${paths.length} 个岗位方向`"
+      :title="summary || `根据你的技能和经验，推荐以下 ${paths.length} 个岗位方向`"
       type="success"
       :closable="false"
       show-icon

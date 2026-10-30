@@ -214,13 +214,13 @@
     <!-- 证据面板拉不到时必须说"拉不到"，不能靠面板消失来表达 -->
     <AppLoadError
       v-if="careerPathError"
-      title="职业方向拉取失败"
+      title="职业方向加载失败"
       :message="careerPathError"
       @retry="loadCareerPaths"
     />
     <AppLoadError
       v-if="salaryMarketError"
-      title="薪资行情拉取失败"
+      title="薪资行情加载失败"
       :message="salaryMarketError"
       @retry="loadSalaryMarket"
     />

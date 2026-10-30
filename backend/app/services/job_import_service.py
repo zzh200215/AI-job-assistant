@@ -65,7 +65,7 @@ def parse_rows(file_name: str, content: bytes) -> list[dict]:
         items = data if isinstance(data, list) else data.get("jobs", data.get("items", []))
         for index, item in enumerate(items, start=1):
             if not isinstance(item, dict):
-                rows.append({"row": index, "title": "", "raw_text": "", "malformed": "不是对象"})
+                rows.append({"row": index, "title": "", "raw_text": "", "malformed": "这一行格式不正确"})
                 continue
             rows.append(
                 {
@@ -200,7 +200,7 @@ def run_job_on(db, job_id: int, rows: list[dict]) -> bool:
                 canceled = True
                 break
             reason = item.get("malformed") or (
-                "" if (item.get("title") and item.get("raw_text")) else "缺 title 或 JD 文本"
+                "" if (item.get("title") and item.get("raw_text")) else "缺少岗位名称或岗位描述"
             )
             done += 1
             if reason:

@@ -158,7 +158,7 @@
           </el-select>
           <AppLoadError
             v-if="versionError"
-            title="简历版本拉取失败"
+            title="简历版本加载失败"
             :message="versionError"
             @retry="loadResumeVersions"
           />

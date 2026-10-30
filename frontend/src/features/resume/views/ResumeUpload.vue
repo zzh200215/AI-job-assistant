@@ -149,7 +149,7 @@
     <!-- 分享链接弹窗 -->
     <el-dialog v-model="showShare" title="分享简历" width="480px">
       <div class="share-body">
-        <p>将以下链接发送给 HR，对方即可查看您的简历详情。</p>
+        <p>将以下链接发送给 HR，对方即可查看你的简历详情。</p>
         <el-input ref="shareUrlRef" v-model="shareUrl" readonly :rows="3">
           <template #append>
             <el-button @click="copyShareUrl">复制链接</el-button>

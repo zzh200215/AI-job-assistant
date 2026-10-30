@@ -98,7 +98,7 @@
           </el-select>
           <AppLoadError
             v-if="jobsError"
-            title="岗位列表拉取失败"
+            title="岗位列表加载失败"
             :message="jobsError"
             @retry="loadJobs"
           />

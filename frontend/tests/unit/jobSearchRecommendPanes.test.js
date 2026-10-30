@@ -270,7 +270,7 @@ describe('推荐面板的跨边界', () => {
     wrapper.unmount()
   })
 
-  it('推荐拉取失败 ≠ 没有贴合的推荐：两块屏幕不混', async () => {
+  it('推荐加载失败 ≠ 没有贴合的推荐：两块屏幕不混', async () => {
     const wrapper = await renderSearch()
     await gotoRecommend(wrapper, [])
     expect(recommendPane(wrapper).find('.el-empty').text()).toContain('还没有足够贴合的推荐结果')
@@ -280,7 +280,7 @@ describe('推荐面板的跨边界', () => {
     await flushPromises()
 
     const text = recommendPane(wrapper).text()
-    expect(text).toContain('推荐结果拉取失败')
+    expect(text).toContain('推荐结果加载失败')
     expect(text).not.toContain('还没有足够贴合的推荐结果')
     wrapper.unmount()
   })

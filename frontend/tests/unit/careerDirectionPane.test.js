@@ -12,7 +12,7 @@ import { installElement } from '@/plugins/element'
    - 分数圆块的颜色走**动态类名** `score-fill--<tone>`（阈值 85/70/50 住在 utils/scoreTone），
      卡片左边的粗条走 `'cp-' + (category === '高度匹配' ? 'high' : 'trans')`；
      这两处静态切分会整条切错（D44），所以样式是复制过来的。
-   - 顶部提示是 `summary || '根据您的技能和经验，推荐以下 N 个岗位方向'`：链上没给 summary 才现编。 */
+   - 顶部提示是 `summary || '根据你的技能和经验，推荐以下 N 个岗位方向'`：链上没给 summary 才现编。 */
 
 const PATH = {
   title: '平台后端',

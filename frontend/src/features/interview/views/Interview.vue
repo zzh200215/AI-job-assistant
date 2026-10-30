@@ -24,7 +24,7 @@
       </div>
       <AppLoadError
         v-else-if="upcomingError"
-        title="近期面试拉取失败"
+        title="近期面试加载失败"
         :message="upcomingError"
         retry-label=""
       />
@@ -230,7 +230,7 @@
       </div>
       <AppLoadError
         v-else-if="sessionsError"
-        title="面试记录拉取失败"
+        title="面试记录加载失败"
         :message="sessionsError"
         retry-label=""
       />

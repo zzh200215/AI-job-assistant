@@ -34,7 +34,7 @@
 
   <AppLoadError
     v-else-if="error"
-    title="推荐结果拉取失败"
+    title="推荐结果加载失败"
     :message="error"
     @retry="$emit('refresh')"
   />

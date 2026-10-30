@@ -131,7 +131,7 @@
         <!-- 空状态引导 -->
         <el-empty v-if="!selectedResumeId && !loading.resumes" :image-size="120" class="empty-hint">
           <template #description>
-            <span>请先选择一份简历，系统将自动为您匹配推荐岗位</span>
+            <span>请先选择一份简历，系统将自动为你匹配推荐岗位</span>
           </template>
           <el-button type="primary" @click="$router.push('/resume-center')"> 去上传简历 </el-button>
         </el-empty>
@@ -374,13 +374,13 @@
     <!-- 推荐结果 -->
     <div v-if="loading.recommend" class="loading-state">
       <el-icon class="is-loading" size="28"><Loading /></el-icon>
-      <p>正在分析您的简历，智能匹配岗位...</p>
+      <p>正在分析你的简历，智能匹配岗位...</p>
     </div>
 
     <template v-else-if="hasResults">
       <div class="result-summary">
         <span class="summary-text">
-          为您推荐 <strong>{{ recommendations.length }}</strong> 个岗位
+          为你推荐 <strong>{{ recommendations.length }}</strong> 个岗位
           <span v-if="appliedFilters" class="summary-filters">（已应用筛选条件）</span>
         </span>
         <el-button size="small" text @click="openSuppressedDialog">已忽略的岗位</el-button>
