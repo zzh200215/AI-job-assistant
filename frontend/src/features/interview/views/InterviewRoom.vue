@@ -2,7 +2,7 @@
   <div class="page-shell interview-room-page">
     <section class="room-hero">
       <div>
-        <p class="eyebrow">Interview Workspace</p>
+        <p class="eyebrow">模拟面试</p>
         <h1>{{ sessionTitle }}</h1>
         <p>{{ sessionSubtitle }}</p>
       </div>
@@ -269,7 +269,7 @@ onMounted(async () => {
 
   const sessionId = Number(route.params.sessionId)
   if (!sessionId) {
-    ElMessage.error('无效的面试会话 ID')
+    ElMessage.error('这场面试已失效，请重新开始一场')
     router.push('/interview/setup')
     return
   }

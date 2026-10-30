@@ -87,7 +87,7 @@ NOTE_ABSENT = "本次分析没有为这一维写出待优化点"
 # 所以每一份交付物都要自报"我与另外两把不是一把"。这句话有四个消费者
 # （两份下载 HTML + 应用内两页 Vue），权威只留这一处——跨树那条钉子见
 # frontend/tests/noteAbsentPhrase.test.mjs 最后一条。写成一行是为了那条钉子能用同一条正则读到它。
-THREE_RUBRICS_NOTE = "树里有三把尺：整份简历那份七维、单个项目那份六维（含位次）、几个项目叠一起那份组合六维（含位次区间）。三把尺的分数不能直接比。"
+THREE_RUBRICS_NOTE = "这里有三种评分口径：整份简历七维、单个项目六维、多个项目组合六维。三种分数不能直接比较。"
 
 
 def is_anchored_note(text: str) -> bool:

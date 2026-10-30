@@ -26,8 +26,6 @@
             <span>{{ authStore.user?.email || '--' }}</span>
             <div class="identity-pills">
               <span>{{ authStore.roleLabel }}</span>
-              <span v-if="authStore.user?.is_admin">Admin</span>
-              <span v-else>Standard</span>
             </div>
           </div>
         </div>
@@ -539,7 +537,7 @@ function onTaskChange() {
   localStorage.setItem(LS_TASKS_KEY, JSON.stringify(dailyTasks.value))
   const done = dailyTasks.value.filter((t) => t.done).length
   if (done === dailyTasks.value.length) {
-    ElMessage.success('🎉 今日任务全部完成！')
+    ElMessage.success('今日任务全部完成！')
   }
 }
 const status = reactive({

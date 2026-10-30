@@ -312,7 +312,7 @@ describe('对照组：单次触发必须照常写入（修令牌不能把所有�
   it('切到岗位仓库标签页时列表照常渲染', async () => {
     const wrapper = await renderSearch()
     await settle(lastOf('getJobList'), { items: [job(1, '仓库岗位', '公司甲')] })
-    await findTab(wrapper, '岗位仓库').trigger('click')
+    await findTab(wrapper, '已保存岗位').trigger('click')
     await flushPromises()
     await flushPromises()
 

@@ -96,7 +96,7 @@ const visible = defineModel({ type: Boolean })
       </div>
 
       <div class="drawer-section">
-        <h4>完整 JD</h4>
+        <h4>岗位描述</h4>
         <pre class="drawer-content">{{ job.rawText || job.summary || '暂无完整内容' }}</pre>
       </div>
 

@@ -8,11 +8,11 @@
         :closable="false"
         show-icon
       >
-        <template #title>逐题评分仍在后台完成，报告会自动刷新。</template>
+        <template #title>逐题评分还在生成中，报告会自动刷新。</template>
       </el-alert>
       <section class="report-hero">
         <div>
-          <p class="eyebrow">Interview Debrief</p>
+          <p class="eyebrow">面试复盘</p>
           <h1>{{ report.jd_summary?.title || 'AI 模拟面试复盘' }}</h1>
           <p>{{ report.resume_summary?.name || '候选人' }} · {{ typeLabel }}</p>
         </div>

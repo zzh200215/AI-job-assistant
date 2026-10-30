@@ -53,7 +53,7 @@ export function usePlanningOptions() {
         jdOptions.value.unshift({ id: jd.id, title: jd.title, company: jd.company })
       }
     } catch (error) {
-      console.warn('按 id 取回选中的 JD 失败，已清空选择', error)
+      console.warn('按 id 取回选中的岗位失败，已清空选择', error)
       if (selectedJDId.value === id) selectedJDId.value = null
     }
   }

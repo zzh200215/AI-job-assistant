@@ -229,8 +229,8 @@ describe('后端真输出的单项目分析', () => {
     // 静态那条钉子（noteAbsentPhrase.test.mjs）只能证明"这行字在文件里"；
     // 模板忘了插值时它照样绿，而读者拿到的是少一句话的交付物。这一条按渲染出来的文字比。
     const text = wrapper.find('#p-profile').text()
-    expect(text).toContain('树里有三把尺')
-    expect(text).toContain('三把尺的分数不能直接比')
+    expect(text).toContain('这里有三种评分口径')
+    expect(text).toContain('三种分数不能直接比较')
     wrapper.unmount()
   })
 })

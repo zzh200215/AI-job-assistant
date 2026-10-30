@@ -604,8 +604,8 @@ describe('竞争分析、面试预演与投递策略', () => {
     expect(text).toContain('共 2 题')
     expect(text).toContain('项目深挖 1')
     expect(text).toContain('需补强 1')
-    expect(text).toContain('⚠️ 需补强（缺：P90 的统计口径、样本量）')
-    expect(text).toContain('✅ 可答')
+    expect(text).toContain('需补强（缺：P90 的统计口径、样本量）')
+    expect(text).toContain('可答')
     wrapper.unmount()
   })
 

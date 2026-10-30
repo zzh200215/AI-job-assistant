@@ -88,7 +88,7 @@
       <el-header class="topbar">
         <div class="topbar-main">
           <div class="topbar-left">
-            <div class="topbar-kicker">{{ currentNav?.tag || 'Workspace' }}</div>
+            <div class="topbar-kicker">{{ currentNav?.tag || '工作台' }}</div>
             <h1 class="page-title">{{ route.meta?.title || currentNav?.label || '' }}</h1>
           </div>
           <div class="topbar-right">
@@ -165,7 +165,7 @@ const candidateNavItems = [
     path: '/home',
     icon: HomeFilled,
     label: '首页',
-    tag: 'Home',
+    tag: '概览',
     desc: '求职助手首页。',
     matches: ['/home'],
   },
@@ -173,7 +173,7 @@ const candidateNavItems = [
     path: '/resume-center',
     icon: Document,
     label: '简历中心',
-    tag: 'Resume',
+    tag: '简历',
     desc: '多简历管理、AI优化与诊断。',
     matches: ['/resume-center', '/resume/compare'],
   },
@@ -181,7 +181,7 @@ const candidateNavItems = [
     path: '/smart-analysis',
     icon: MagicStick,
     label: '求职分析',
-    tag: 'Analysis',
+    tag: '分析',
     desc: '看清简历与目标岗位的差距。',
     matches: ['/smart-analysis', '/analysis'],
   },
@@ -189,7 +189,7 @@ const candidateNavItems = [
     path: '/jobs/recommend',
     icon: DataAnalysis,
     label: '岗位推荐',
-    tag: 'Recommend',
+    tag: '岗位',
     desc: '每日推荐与智能匹配。',
     matches: ['/jobs/recommend', '/jobs/search'],
   },
@@ -197,7 +197,7 @@ const candidateNavItems = [
     path: '/interview/setup',
     icon: Microphone,
     label: 'AI 模拟面试',
-    tag: 'Interview',
+    tag: '面试',
     desc: '模拟面试与能力评估。',
     matches: ['/interview', '/interview/setup', '/interview/room', '/interview/report'],
   },
@@ -205,7 +205,7 @@ const candidateNavItems = [
     path: '/jobs/pipeline/kanban',
     icon: Grid,
     label: '投递看板',
-    tag: 'Kanban',
+    tag: '投递',
     desc: '投递进展追踪。',
     matches: ['/jobs/pipeline/kanban'],
   },
@@ -213,7 +213,7 @@ const candidateNavItems = [
     path: '/career-planning',
     icon: TrendCharts,
     label: '职业规划',
-    tag: 'Career',
+    tag: '规划',
     desc: '成长路线与能力差距。',
     matches: ['/career-planning'],
   },
@@ -221,7 +221,7 @@ const candidateNavItems = [
     path: '/profile',
     icon: List,
     label: '个人中心',
-    tag: 'Profile',
+    tag: '账号',
     desc: '账号信息、数据与邀请。',
     matches: ['/profile', '/subscription'],
   },
@@ -346,9 +346,9 @@ const adminNav = computed(() => (isAdmin.value ? adminNavItems : []))
 
 const currentNav = computed(() => {
   if (route.path === '/profile')
-    return { label: '个人中心', tag: 'Profile', desc: '账号信息与求职数据。' }
+    return { label: '个人中心', tag: '账号', desc: '账号信息与求职数据。' }
   if (route.path === '/subscription')
-    return { label: '订阅方案', tag: 'Pricing', desc: '套餐与权益对比。' }
+    return { label: '订阅方案', tag: '订阅', desc: '套餐与权益对比。' }
 
   const all = [...candidateNavItems, ...adminNavItems]
   const active = all.find((item) =>

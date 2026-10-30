@@ -100,7 +100,7 @@ const stageToRate = (from, to) => boardStageToRate(props.counts, from, to)
   <div v-if="versionPerformance.length" class="version-performance">
     <div class="version-performance-title">
       <div>
-        <span class="section-kicker">Resume attribution</span>
+        <span class="section-kicker">简历贡献</span>
         <h3>简历版本表现</h3>
       </div>
       <span>按已投递记录计算</span>

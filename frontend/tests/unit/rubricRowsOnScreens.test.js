@@ -149,14 +149,14 @@ describe('历史记录详情：弹窗里那两列吃的是同一份收口', () =
 
     const dialog = document.querySelector('.el-dialog')
     expect(dialog, '详情弹窗没渲染出来（showDetail 或弹窗结构改了）').toBeTruthy()
-    expect(listItems('✅ 优势', dialog)).toEqual([
+    expect(listItems('优势', dialog)).toEqual([
       '项目主导',
       'Go 并发：命中必需项（JD 第 2 条）',
       '只有补语没有标签',
     ])
     /* 这一列的 markup 里 el-tag 与补语之间只有 4px 的 margin，没有空格；而"风险"那几条
        `<li class="risk">` 本来就并排画在同一列里（不是单独一列），所以第三条是它。 */
-    expect(listItems('⚠️ 差距 / 风险', dialog)).toEqual([
+    expect(listItems('差距 / 风险', dialog)).toEqual([
       'Rust：补一个副作用示例高',
       '没有标签的一条中',
       '经验年限偏低',

@@ -7,7 +7,7 @@
           {{
             report
               ? `${reportName} · 六维评分卡、四张图、使用建议、面试准备`
-              : '量的是一个项目：六维 + 位次 + 六条一票否决，与整份简历那份七维报告不是一把尺'
+              : '分析单个项目：六个维度、项目排名和关键风险，与整份简历的七维报告分开看'
           }}
         </div>
       </div>
@@ -24,8 +24,8 @@
     <section v-if="!report" class="pr-card">
       <h3 class="pr-h3">开始一次项目分析</h3>
       <p class="pr-lead">
-        先挑简历，再挑这份简历里的第几个项目。前三节（项目档案、项目图解、使用建议）一次跑完；
-        面试准备那二十道题不在这次里——它要单独花一发模型调用，页面出来后再点按钮生成。
+        先选简历，再选这份简历里的一个项目。项目档案、项目图解和使用建议会一次生成； 面试准备的 20
+        道题需要单独生成，页面出来后再点按钮即可。
       </p>
       <div class="pr-form">
         <label class="pr-field">
@@ -162,10 +162,10 @@
           评级档位：{{ report.grade_scale }}。这一档说的是这一个项目。{{ THREE_RUBRICS_NOTE }}
         </p>
 
-        <h3>1.2 简历原始档案</h3>
+        <h3>1.2 简历原文</h3>
         <p class="pr-note">
           以下逐字摘录自简历中该项目条目，未作改写、未作润色；仅公司名 / 客户名 /
-          真实人名按脱敏规则处理。
+          真实姓名已做隐藏处理。
         </p>
         <div class="pr-paper">
           <div v-for="section in report.excerpt?.sections || []" :key="section.label">
@@ -508,8 +508,8 @@
       <section v-if="report.questions_state === 'not_generated'" class="pr-card">
         <h2 class="pr-ct">四、面试准备（二十题）</h2>
         <p class="pr-lead">
-          这一节不在刚才那一次里：它要单独花一发模型调用（二十道题的口述稿与两轮追问，是这条链上最长的一发）。
-          前三节看着没问题了再点，点完这一页会自己刷新。
+          面试准备会单独生成，包含 20 道题的回答稿和两轮追问。
+          前面三节看着没问题了再点，生成完成后这一页会自动刷新。
         </p>
         <el-button
           type="primary"
@@ -551,9 +551,7 @@
             <ul v-if="item.missing?.length" class="pr-ul">
               <li v-for="(m, i) in item.missing" :key="i"><ProjectTodoText :text="m" /></li>
             </ul>
-            <span class="pr-st" :class="statusClass(item.status)">{{
-              statusMark(item.status)
-            }}</span>
+            <span class="pr-st" :class="statusClass(item.status)">{{ item.status }}</span>
           </div>
           <p class="pr-concl">题型分布：{{ kindText }}</p>
         </template>
@@ -584,7 +582,7 @@ import ProjectTodoText from '../components/ProjectTodoText.vue'
    所以每一份都得自报自己这把尺与另外两把不是一把。跨树那条钉子见
    frontend/tests/noteAbsentPhrase.test.mjs。 */
 const THREE_RUBRICS_NOTE =
-  '树里有三把尺：整份简历那份七维、单个项目那份六维（含位次）、几个项目叠一起那份组合六维（含位次区间）。三把尺的分数不能直接比。'
+  '这里有三种评分口径：整份简历七维、单个项目六维、多个项目组合六维。三种分数不能直接比较。'
 
 /* 锚点与后端 `project_report_html_lint.SECTIONS` 同一张表：两份交付物必须指向同一批 id。 */
 const SECTIONS = [
@@ -709,9 +707,9 @@ const practiceNote = computed(() =>
 const citationRows = computed(() => {
   const c = report.value?.advice?.citation || {}
   return [
-    ['✅ 可借鉴', c.borrow],
-    ['⚠️ 需改造', c.adapt],
-    ['🔴 一抄就穿', c.breaks],
+    ['可借鉴', c.borrow],
+    ['需改造', c.adapt],
+    ['一抄就穿', c.breaks],
   ]
 })
 
@@ -734,7 +732,7 @@ const canStart = computed(
 )
 
 function resumeLabel(r) {
-  return r.name || r.file_name || `简历 #${r.id}`
+  return r.name || r.file_name || '未命名简历'
 }
 
 function isLow(row) {
@@ -750,10 +748,6 @@ function bandOf(row) {
   if (ratio >= 0.9) return '优'
   if (ratio >= 0.75) return '良'
   return ratio >= 0.6 ? '中' : '弱'
-}
-
-function statusMark(status) {
-  return { 可答: '✅ 可答', 需补强: '⚠️ 需补强', 高危: '🔴 高危' }[status] || status
 }
 
 function statusClass(status) {

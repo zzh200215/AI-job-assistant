@@ -276,17 +276,19 @@
           >查询市场薪资</el-button
         >
       </template>
-      <div v-if="!salaryData" class="empty-inline">点击"查询市场薪资"查看该岗位的薪资分位数据</div>
+      <div v-if="!salaryData" class="empty-inline">点击"查询市场薪资"查看该岗位的市场薪资区间</div>
       <div v-else>
         <div class="salary-stats">
           <div class="stat-card">
-            <span class="stat-label">P25</span><strong>{{ formatK(salaryData.p25) }}</strong>
+            <span class="stat-label">低位（P25）</span
+            ><strong>{{ formatK(salaryData.p25) }}</strong>
           </div>
           <div class="stat-card">
             <span class="stat-label">中位数</span><strong>{{ formatK(salaryData.median) }}</strong>
           </div>
           <div class="stat-card">
-            <span class="stat-label">P75</span><strong>{{ formatK(salaryData.p75) }}</strong>
+            <span class="stat-label">高位（P75）</span
+            ><strong>{{ formatK(salaryData.p75) }}</strong>
           </div>
           <div class="stat-card">
             <span class="stat-label">平均</span><strong>{{ formatK(salaryData.avg) }}</strong>
@@ -337,16 +339,16 @@
     <el-dialog v-model="showNegotiation" title="谈薪资话术" width="600px">
       <div class="negotiation-body">
         <div class="negotiation-section">
-          <h4>📌 核心原则</h4>
+          <h4>核心原则</h4>
           <ul>
             <li><b>不要先出价：</b>让 HR 先透露预算范围，你再评估</li>
-            <li><b>准备数据支撑：</b>用市场薪资数据（P25/P50/P75）作为谈判依据</li>
-            <li><b>谈总包而非月薪：</b>综合底薪+年终+股票+签字费+Gap year</li>
+            <li><b>准备数据支撑：</b>用市场薪资的低位、中位和高位作为谈判依据</li>
+            <li><b>谈总包而非月薪：</b>综合底薪+年终+股票+签字费+空窗期</li>
             <li><b>保持礼貌和专业：</b>谈判不是对抗，而是寻求双赢</li>
           </ul>
         </div>
         <div class="negotiation-section">
-          <h4>🗣️ 常用话术</h4>
+          <h4>常用话术</h4>
           <div class="script-card">
             <div class="script-label">探预算</div>
             <p>
@@ -376,7 +378,7 @@
           </div>
         </div>
         <div class="negotiation-section">
-          <h4>⚠️ 注意事项</h4>
+          <h4>注意事项</h4>
           <ul>
             <li>不要撒谎：不要编造不存在的 Offer</li>
             <li>不要过度谈判：2-3 轮为佳，不要超过 4 轮</li>

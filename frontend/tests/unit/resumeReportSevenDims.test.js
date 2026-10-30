@@ -233,7 +233,7 @@ describe('七维评分概览上屏', () => {
     expect(body).toContain('本次分析没有逐维写出待优化点')
   })
 
-  it('完整度那一屏仍写着它是规则检查，不与七维混读', async () => {
+  it('完整度那一屏仍写着它是系统检查，不与七维混读', async () => {
     const payload = diagnosis()
     payload.completeness_issues = ['缺少教育背景']
 
@@ -242,7 +242,7 @@ describe('七维评分概览上屏', () => {
     const titles = [...document.querySelectorAll('.el-collapse-item__header')].map(
       (el) => el.textContent
     )
-    expect(titles.join(' ')).toContain('模块完整度（规则检查，非 AI）')
+    expect(titles.join(' ')).toContain('简历模块完整度（系统检查，非 AI）')
     expect(document.querySelector('.diag-details').textContent).toContain('缺少教育背景')
   })
 })

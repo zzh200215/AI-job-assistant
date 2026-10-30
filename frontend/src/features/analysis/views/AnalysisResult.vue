@@ -2,12 +2,11 @@
   <div class="page-shell analysis-result-page">
     <section class="result-hero">
       <div class="hero-copy">
-        <span class="hero-kicker">Analysis Workspace</span>
+        <span class="hero-kicker">求职分析</span>
         <h2>求职分析结果</h2>
         <div class="page-header-sub">先看结论，再看依据，最后决定下一步动作。</div>
       </div>
       <div class="hero-actions">
-        <el-button @click="fillLast">填充最近 ID</el-button>
         <el-button type="primary" :loading="loading" @click="onAnalyze">
           <el-icon><Promotion /></el-icon>
           {{ loading ? '分析中' : '重新发起分析' }}
@@ -18,21 +17,49 @@
     <div class="panel">
       <div class="panel-body">
         <el-form :inline="true" :model="form" class="control-form">
-          <el-form-item label="简历 ID">
-            <el-input-number v-model="form.resume_id" :min="1" placeholder="简历 ID" />
+          <el-form-item label="简历">
+            <el-select
+              v-model="form.resume_id"
+              filterable
+              placeholder="选择简历"
+              :loading="optionsLoading"
+              class="control-select"
+            >
+              <el-option
+                v-for="item in resumeOptions"
+                :key="item.id"
+                :label="resumeLabel(item)"
+                :value="item.id"
+              />
+            </el-select>
           </el-form-item>
-          <el-form-item label="JD ID">
-            <el-input-number v-model="form.jd_id" :min="1" placeholder="JD ID" />
+          <el-form-item label="目标岗位">
+            <el-select
+              v-model="form.jd_id"
+              filterable
+              placeholder="选择目标岗位"
+              :loading="optionsLoading"
+              class="control-select"
+            >
+              <el-option
+                v-for="item in jdOptions"
+                :key="item.id"
+                :label="jdLabel(item)"
+                :value="item.id"
+              />
+            </el-select>
           </el-form-item>
         </el-form>
-
-        <el-alert
-          v-if="lastIdsTip"
-          type="info"
-          :closable="false"
-          show-icon
-          :title="`检测到最近使用：简历 ID=${lastIdsTip.rid}，JD ID=${lastIdsTip.jid}`"
-        />
+        <p v-if="optionsError" class="form-hint">{{ optionsError }}</p>
+        <template v-else-if="optionsLoaded">
+          <p v-if="!resumeOptions.length" class="form-hint">
+            还没有简历，可以先去<router-link to="/resume-center">简历中心</router-link>上传一份。
+          </p>
+          <p v-else-if="!jdOptions.length" class="form-hint">
+            还没有目标岗位，可以先去<router-link to="/smart-analysis">求职分析</router-link
+            >创建一个。
+          </p>
+        </template>
       </div>
     </div>
 
@@ -86,7 +113,7 @@
           >
             <div class="step-title">{{ stepLabel(s.step_name) }}</div>
             <div class="step-status">
-              {{ statusText(s.status) }} {{ s.duration_ms ? `(${s.duration_ms}ms)` : '' }}
+              {{ statusText(s.status) }}
             </div>
             <el-tag v-if="s.error_msg" size="small" type="danger">{{ s.error_msg }}</el-tag>
           </el-timeline-item>
@@ -157,9 +184,6 @@
 
         <AppPanel class="summary-card">
           <template #title>这份结果告诉你什么</template>
-          <template #badge>
-            <el-tag type="info" effect="plain">记录 {{ result.record_id || result.id }}</el-tag>
-          </template>
           <div class="metric-grid">
             <div class="metric-item">
               <span>技能</span>
@@ -356,7 +380,8 @@ import {
 } from '@element-plus/icons-vue'
 import { getAnalysis, regenOptimize, regenInterview } from '@/api/analysis'
 import { startAgentAnalysis } from '@/api/agent'
-import { generateOptimized } from '@/api/resume'
+import { generateOptimized, getResume, getResumeList } from '@/api/resume'
+import { getJD, getJDList } from '@/api/jd'
 import { EditPen } from '@element-plus/icons-vue'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
 import {
@@ -382,14 +407,21 @@ const regenOptimizeLoading = ref(false)
 const regenIntervLoading = ref(false)
 const tab = ref('match')
 const result = ref(null)
-const lastIdsTip = ref(null)
 const agentSteps = ref([])
 const genOptimizing = ref(false)
+const optionsLoading = ref(false)
+const optionsLoaded = ref(false)
+const optionsError = ref('')
+const resumeOptions = ref([])
+const jdOptions = ref([])
 const { pollTask: pollAgentTask } = useAgentTaskPolling()
 
 const form = reactive({ resume_id: null, jd_id: null })
 
-onMounted(fillLast)
+onMounted(async () => {
+  fillLast()
+  await loadOptions()
+})
 watch(
   () => route.params.id,
   (id) => {
@@ -408,7 +440,53 @@ function fillLast() {
   const jid = selection.jdId()
   if (rid) form.resume_id = rid
   if (jid) form.jd_id = jid
-  if (rid || jid) lastIdsTip.value = { rid, jid }
+}
+
+function resumeLabel(item) {
+  return item?.name || item?.file_name || '未命名简历'
+}
+
+function jdLabel(item) {
+  return [item?.title, item?.company].filter(Boolean).join(' · ') || '未命名岗位'
+}
+
+async function loadOptions() {
+  optionsLoading.value = true
+  optionsError.value = ''
+  try {
+    const [resumeData, jdData] = await Promise.all([
+      getResumeList({ page: 1, page_size: 50 }),
+      getJDList({ page: 1, page_size: 100 }),
+    ])
+    resumeOptions.value = resumeData?.items || []
+    jdOptions.value = jdData?.items || []
+  } catch (error) {
+    optionsError.value = '暂时读不到简历或岗位列表，请刷新页面重试。'
+    console.warn('读取简历/岗位选项失败', error)
+  } finally {
+    optionsLoading.value = false
+    optionsLoaded.value = true
+  }
+  await recoverSelections()
+}
+
+async function recoverSelections() {
+  if (form.resume_id && !resumeOptions.value.some((item) => item.id === form.resume_id)) {
+    try {
+      const data = await getResume(form.resume_id)
+      if (data?.id === form.resume_id) resumeOptions.value.unshift(data)
+    } catch (error) {
+      console.warn('恢复已选简历失败', error)
+    }
+  }
+  if (form.jd_id && !jdOptions.value.some((item) => item.id === form.jd_id)) {
+    try {
+      const data = await getJD(form.jd_id)
+      if (data?.id === form.jd_id) jdOptions.value.unshift(data)
+    } catch (error) {
+      console.warn('恢复已选岗位失败', error)
+    }
+  }
 }
 
 async function loadAnalysisById(recordId) {
@@ -494,16 +572,16 @@ const refTypeTag = (t) =>
   })[t] || ''
 
 const STEP_LABELS = {
-  intent_recognition: '意图识别',
-  resume_parse: '简历解析',
-  jd_parse: 'JD 解析',
-  task_planning: '任务规划',
-  knowledge_retrieval: '参考依据',
+  intent_recognition: '理解需求',
+  resume_parse: '读取简历',
+  jd_parse: '读取岗位',
+  task_planning: '安排分析步骤',
+  knowledge_retrieval: '查找参考资料',
   matching_analysis: '匹配分析',
-  resume_optimization: '简历优化',
-  interview_question_generation: '面试题生成',
-  self_check: '自检校验',
-  final_report: '汇总报告',
+  resume_optimization: '生成优化建议',
+  interview_question_generation: '准备面试题',
+  self_check: '检查结果',
+  final_report: '汇总结果',
 }
 
 function stepLabel(name) {
@@ -532,7 +610,7 @@ function statusText(status) {
 
 const onAnalyze = async () => {
   if (!form.resume_id || !form.jd_id) {
-    ElMessage.warning('请先填写简历 ID 和 JD ID')
+    ElMessage.warning('请先选择简历和目标岗位')
     return
   }
   loading.value = true
@@ -597,12 +675,12 @@ const onRegenOptimize = async () => {
 const onGenerateOptimized = async () => {
   const resumeId = form.resume_id
   if (!resumeId) {
-    ElMessage.warning('请先填写简历 ID')
+    ElMessage.warning('请先选择简历')
     return
   }
   genOptimizing.value = true
   try {
-    await generateOptimized(resumeId, form.jd_id)
+    await generateOptimized(resumeId, form.jd_id || null)
     ElMessage.success('优化版简历生成成功')
     router.push(`/resume/compare/${resumeId}`)
   } finally {
@@ -626,7 +704,7 @@ const onRegenInterview = async () => {
 const goInterview = () => {
   const recordId = result.value?.record_id || result.value?.id
   if (!recordId) {
-    ElMessage.warning('当前结果缺少记录 ID，无法打开面试题')
+    ElMessage.warning('当前结果缺少记录编号，无法打开面试题')
     return
   }
   router.push({ name: 'interview', query: { record_id: String(recordId) } })
@@ -675,6 +753,20 @@ const goJobMarket = () => router.push('/jobs/search')
 
 .control-form :deep(.el-form-item) {
   margin-bottom: 0;
+}
+
+.control-select {
+  width: 240px;
+}
+
+.form-hint {
+  margin: 10px 0 0;
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.form-hint a {
+  color: var(--app-primary);
 }
 
 .progress-grid {

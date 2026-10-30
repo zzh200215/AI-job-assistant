@@ -3,7 +3,7 @@
     <el-card>
       <template #header>
         <span
-          ><el-icon><Document /></el-icon> 输入岗位 JD</span
+          ><el-icon><Document /></el-icon> 输入岗位要求</span
         >
       </template>
 
@@ -16,17 +16,17 @@
             <el-input v-model="form.company" placeholder="可选，如：示例科技" />
           </el-form-item>
         </div>
-        <el-form-item label="JD 文本" class="wide-field">
+        <el-form-item label="岗位描述" class="wide-field">
           <el-input
             v-model="form.raw_text"
             type="textarea"
             :rows="10"
-            placeholder="粘贴岗位 JD 完整内容…"
+            placeholder="粘贴岗位描述完整内容…"
           />
         </el-form-item>
         <el-form-item class="wide-field">
           <el-button type="primary" :loading="loading" @click="onSubmit">
-            <el-icon><Promotion /></el-icon> {{ loading ? '创建并解析中…' : '创建并解析' }}
+            <el-icon><Promotion /></el-icon> {{ loading ? '保存并解析中…' : '保存并解析' }}
           </el-button>
           <el-button @click="onClear">清空</el-button>
         </el-form-item>
@@ -36,9 +36,9 @@
     <!-- 解析结果 -->
     <el-card v-if="parsed" class="mt">
       <template #header>
-        <span>解析结果（JD ID = {{ createdId }}）</span>
+        <span>解析结果</span>
         <el-button type="primary" size="small" class="fr" @click="goAnalysis">
-          <el-icon><DataAnalysis /></el-icon> 去分析
+          <el-icon><DataAnalysis /></el-icon> 去求职分析
         </el-button>
       </template>
 
@@ -109,7 +109,7 @@ const onSubmit = async () => {
     return
   }
   if (!form.raw_text || !form.raw_text.trim()) {
-    ElMessage.warning('JD 内容不能为空')
+    ElMessage.warning('岗位描述不能为空')
     return
   }
 
@@ -126,7 +126,7 @@ const onSubmit = async () => {
     createdId.value = jd.id
     parsed.value = res.parsed
     selection.rememberJD(jd.id)
-    ElMessage.success('创建并解析成功')
+    ElMessage.success('已保存并解析')
   } catch {
     // request.js 已显示错误信息
   } finally {

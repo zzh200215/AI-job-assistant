@@ -89,12 +89,12 @@ describe('搜索链：结果写入', () => {
     expect(market.externalJobs.value).toEqual([])
     expect(market.searchError.value).toBe('外部渠道今日限流')
     expect(market.resultMode.value).toBe('local_fallback')
-    expect(market.searchStateText.value).toBe('本地职位库')
-    expect(market.sourceBannerTitle.value).toBe('当前展示本地职位库')
+    expect(market.searchStateText.value).toBe('已保存岗位')
+    expect(market.sourceBannerTitle.value).toBe('当前展示已保存岗位')
     expect(market.sourceBannerClass.value).toBe('is-local')
   })
 
-  it('演示兜底要说成演示，且它压过 result_mode 的口径', async () => {
+  it('示例兜底要说成示例，且它压过 result_mode 的口径', async () => {
     api.searchExternalJobs.mockResolvedValue({
       jobs: [raw()],
       result_mode: 'external',
@@ -104,7 +104,7 @@ describe('搜索链：结果写入', () => {
     await market.runSearch()
 
     expect(market.isDemo.value).toBe(true)
-    expect(market.searchStateText.value).toBe('演示数据')
+    expect(market.searchStateText.value).toBe('示例数据')
     expect(market.sourceBannerClass.value).toBe('is-demo')
   })
 
@@ -204,7 +204,7 @@ describe('搜索链：表单口径', () => {
   it('未搜索时说的是"未搜索"，而不是把默认关键词当成结果', () => {
     expect(market.searching.value).toBe(false)
     expect(market.searchStateText.value).toBe('未搜索')
-    expect(market.sourceBannerTitle.value).toBe('优先展示真实岗位结果')
+    expect(market.sourceBannerTitle.value).toBe('优先展示最新岗位')
     expect(market.sourceBannerClass.value).toBe('is-live')
     expect(market.filteredExternalJobs.value).toEqual([])
   })

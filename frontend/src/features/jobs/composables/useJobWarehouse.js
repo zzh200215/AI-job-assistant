@@ -48,7 +48,7 @@ export function useJobWarehouse({ city }) {
     } catch (e) {
       if (!isCurrent()) return
       localJobs.value = []
-      localError.value = userErrorCopy(e, '本地岗位仓库加载失败，请稍后重试')
+      localError.value = userErrorCopy(e, '已保存岗位加载失败，请稍后重试')
     } finally {
       if (isCurrent()) localLoading.value = false
     }

@@ -151,7 +151,7 @@
   <AppLoadError v-if="error" title="跟进记录拉取失败" :message="error" @retry="$emit('refresh')" />
   <el-empty
     v-else-if="!entries.length"
-    description="先从实时搜索、岗位仓库或智能推荐里把岗位加入流程，页面会自动保存你的跟进记录。"
+    description="先从搜索岗位、已保存岗位或智能推荐里把岗位加入流程，页面会自动保存你的跟进记录。"
   />
 </template>
 

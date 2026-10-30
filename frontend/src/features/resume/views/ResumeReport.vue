@@ -366,8 +366,8 @@
               </template>
               <p :class="['rr-status', q.status === '需补强' ? 'rr-status-warn' : '']">
                 状态：<template v-if="q.status === '需补强'"
-                  >⚠️ 需补强（缺：{{ q.missing.join('、') || '未点名' }}）</template
-                ><template v-else>✅ 可答</template>
+                  >需补强（缺：{{ q.missing.join('、') || '未点名' }}）</template
+                ><template v-else>可答</template>
               </p>
             </div>
             <p v-if="!interviewQuestions.length" class="rr-muted">这次没有给出可用的题目</p>
@@ -754,7 +754,7 @@ async function loadOptions() {
 }
 
 function resumeLabel(r) {
-  return r.name || r.file_name || `简历 #${r.id}`
+  return r.name || r.file_name || '未命名简历'
 }
 
 function startReport() {

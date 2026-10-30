@@ -5,7 +5,7 @@
       clearable
       size="small"
       class="warehouse-search"
-      placeholder="按职位名、公司、城市筛选本地 JD"
+      placeholder="按职位名、公司、城市筛选本地岗位"
       @update:model-value="(value) => $emit('update:filters', patch('keyword', value))"
     />
     <el-select
@@ -19,9 +19,9 @@
     >
       <el-option label="全部来源" value="" />
       <el-option label="导入" value="imported" />
-      <el-option label="爬取" value="crawled" />
-      <el-option label="API" value="api" />
-      <el-option label="手工创建" value="manual" />
+      <el-option label="网络" value="crawled" />
+      <el-option label="平台" value="api" />
+      <el-option label="手动添加" value="manual" />
     </el-select>
     <el-select
       :model-value="filters.industry"
@@ -42,7 +42,7 @@
 
   <div v-if="loading" class="state-box">
     <el-icon class="is-loading"><Loading /></el-icon>
-    <span>正在加载本地岗位仓库...</span>
+    <span>正在加载已保存岗位...</span>
   </div>
 
   <div v-else-if="jobs.length" class="warehouse-list">
@@ -77,12 +77,12 @@
   <!-- 失败态与"仓库是空的"是两回事 -->
   <AppLoadError
     v-else-if="error"
-    title="本地岗位仓库加载失败"
+    title="已保存岗位加载失败"
     :message="error"
     @retry="$emit('refresh')"
   />
 
-  <el-empty v-else description="岗位仓库还是空的，可以先搜索外部岗位或导入演示数据。" />
+  <el-empty v-else description="还没有保存的岗位，可以先搜索岗位或导入示例数据。" />
 </template>
 
 <script setup>

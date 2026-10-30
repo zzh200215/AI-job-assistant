@@ -46,13 +46,13 @@ describe('职业规划面板的四种数据形状', () => {
     expect(wrapper.find('li').exists()).toBe(false)
   })
 
-  it('技能缺口是字符串列表 → 走 📌 那一支，一个折叠面板都不生成', () => {
+  it('技能缺口是字符串列表 → 走简单列表那一支，一个折叠面板都不生成', () => {
     const wrapper = render({
       careerData: { skill_gaps: ['Rust', 'K8s'] },
       hasStructuredSkillGaps: false,
     })
     expect(wrapper.find('.gap-title').exists()).toBe(false)
-    expect(texts(wrapper, '.career-section li')).toEqual(['📌 Rust', '📌 K8s'])
+    expect(texts(wrapper, '.career-section li')).toEqual(['Rust', 'K8s'])
   })
 
   it('成长路线图：阶段、里程碑图标与项目技术栈都来自 prop', () => {
@@ -79,7 +79,7 @@ describe('职业规划面板的四种数据形状', () => {
       ],
     })
     expect(texts(wrapper, '.phase-name')).toEqual(['打基础'])
-    expect(texts(wrapper, '.ms-icon')).toEqual(['🎓', '📍'])
+    expect(wrapper.findAll('.ms-icon svg')).toHaveLength(2)
     expect(wrapper.find('.roadmap-dir').text()).toContain('平台工程师')
     expect(texts(wrapper, '.project-desc')).toEqual(['一个网关'])
   })
@@ -120,13 +120,13 @@ describe('职业规划面板的四种数据形状', () => {
       visualPhases: [{ id: 1, title: '打基础', color: '#22b8e8' }],
     })
     expect(texts(wrapper, '.panel-title-row h3')).toEqual([
-      '📊 技能雷达',
-      '⚠️ 技能提升建议（1 项）',
-      '🛤️ 成长路线图（9个月）',
-      '🔨 推荐项目实践',
-      '📈 行业洞察',
-      '📋 阶段计划',
-      '🎓 推荐证书',
+      '技能雷达',
+      '技能提升建议（1 项）',
+      '成长路线图（9个月）',
+      '推荐项目实践',
+      '行业洞察',
+      '阶段计划',
+      '推荐证书',
     ])
     // 一行式 span 已经不存在了：整页 `.panel-header` 里不该再有裸 span 当标题
     expect(wrapper.findAll('.panel-header > span')).toHaveLength(0)
@@ -220,7 +220,7 @@ describe('技能雷达的宽度来自 aiScore，不再由模板自己做减法',
       expect(wrapper.find('.radar-chart').exists()).toBe(false)
       expect(wrapper.findAll('.radar-row')).toHaveLength(0)
       // 面板整体不出现，标题也不出现——没数据就不该有个空标题占位
-      expect(texts(wrapper, '.panel-title-row h3')).not.toContain('📊 技能雷达')
+      expect(texts(wrapper, '.panel-title-row h3')).not.toContain('技能雷达')
     }
   })
 

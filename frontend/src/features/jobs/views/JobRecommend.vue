@@ -100,7 +100,7 @@
             </el-button>
             <el-upload :show-file-list="false" :before-upload="handleImport" accept=".csv,.json">
               <el-button>
-                <el-icon><Upload /></el-icon> 导入 JD
+                <el-icon><Upload /></el-icon> 导入岗位
               </el-button>
             </el-upload>
           </div>
@@ -199,7 +199,7 @@
           </div>
 
           <div class="insight-block">
-            <div class="insight-title">调优建议</div>
+            <div class="insight-title">推荐偏好</div>
             <div v-if="feedbackStats.tuning_signals?.action_items?.length" class="action-list">
               <div
                 v-for="item in feedbackStats.tuning_signals.action_items"
@@ -211,7 +211,7 @@
                 <div class="action-detail">{{ item.detail }}</div>
               </div>
             </div>
-            <el-empty v-else :image-size="72" description="反馈样本较少，暂时没有调优建议" />
+            <el-empty v-else :image-size="72" description="反馈还不多，暂时没有可总结的偏好" />
           </div>
         </div>
 
@@ -265,7 +265,7 @@
 
         <div v-if="hasAnomalySignals" class="insight-grid secondary-grid">
           <div class="insight-block">
-            <div class="insight-title">高分却被点踩</div>
+            <div class="insight-title">高分但你不感兴趣</div>
             <div
               v-if="feedbackStats.tuning_signals?.high_score_dislikes?.length"
               class="signal-list"
@@ -281,11 +281,11 @@
                 <div class="signal-sub">{{ item.resume_title }} · {{ item.match_score }} 分</div>
               </div>
             </div>
-            <el-empty v-else :image-size="72" description="暂无高分点踩样本" />
+            <el-empty v-else :image-size="72" description="暂无高分但你不感兴趣的岗位" />
           </div>
 
           <div class="insight-block">
-            <div class="insight-title">低分却被点赞</div>
+            <div class="insight-title">低分但你感兴趣</div>
             <div v-if="feedbackStats.tuning_signals?.low_score_likes?.length" class="signal-list">
               <div
                 v-for="item in feedbackStats.tuning_signals.low_score_likes"
@@ -298,7 +298,7 @@
                 <div class="signal-sub">{{ item.resume_title }} · {{ item.match_score }} 分</div>
               </div>
             </div>
-            <el-empty v-else :image-size="72" description="暂无低分点赞样本" />
+            <el-empty v-else :image-size="72" description="暂无低分但你感兴趣的岗位" />
           </div>
         </div>
       </div>
@@ -1149,13 +1149,13 @@ function recommendTagType(type) {
 function sourceText(value) {
   const sourceMap = {
     imported: '导入',
-    api: '接口',
-    manual: '手工',
-    crawled: '抓取',
+    api: '平台',
+    manual: '手动',
+    crawled: '网络',
     local: '本地',
     recommend: '推荐',
     boss: 'BOSS',
-    _mock: '演示',
+    _mock: '示例',
   }
   return sourceMap[value] || value || '未知'
 }

@@ -44,7 +44,7 @@
     <p class="generate-desc">基于以上优化建议，AI 可自动生成一份完整的优化版简历</p>
     <el-button type="primary" size="large" :loading="busy" @click="emit('generate')">
       <el-icon><EditPen /></el-icon>
-      {{ busy ? '生成中…' : '🚀 生成优化版简历' }}
+      {{ busy ? '生成中…' : '生成优化版简历' }}
     </el-button>
   </div>
 </template>

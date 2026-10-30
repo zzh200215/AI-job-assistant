@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>薪资洞察</h2>
-        <div class="page-header-sub">基于岗位库数据分析薪资分布，辅助Offer决策</div>
+        <div class="page-header-sub">根据已收集岗位的薪资数据，看清行情，辅助 Offer 决策。</div>
       </div>
     </div>
 
@@ -64,7 +64,7 @@
         <div class="market-position">
           <span class="market-label">当前市场定位</span>
           <strong>{{ searchPosition }}{{ searchCity ? ` · ${searchCity}` : '' }}</strong>
-          <p>用市场分位区间校准期望薪资，并为谈薪准备可解释的参考数据。</p>
+          <p>用市场薪资的低位、中位和高位校准期望薪资，并为谈薪准备可解释的参考数据。</p>
         </div>
         <div class="market-range">
           <span class="market-label">合理区间</span>
@@ -83,12 +83,12 @@
         type="warning"
         :closable="false"
         show-icon
-        :title="`仅 ${overview.sample_size} 条可解析岗位，下面的分位数不足以代表市场`"
+        :title="`目前只收集到 ${overview.sample_size} 个岗位的薪资信息，下面的区间还不足以代表市场`"
       />
 
       <div class="stats-row">
         <div class="stat-card">
-          <span class="stat-label">样本数</span>
+          <span class="stat-label">岗位数</span>
           <strong class="data-value">{{ overview.sample_size || 0 }}</strong>
         </div>
         <div class="stat-card">
@@ -96,11 +96,11 @@
           <strong class="data-value">{{ formatK(stats.p50) }}</strong>
         </div>
         <div class="stat-card">
-          <span class="stat-label">P25</span>
+          <span class="stat-label">低位（P25）</span>
           <strong class="data-value">{{ formatK(stats.p25) }}</strong>
         </div>
         <div class="stat-card">
-          <span class="stat-label">P75</span>
+          <span class="stat-label">高位（P75）</span>
           <strong class="data-value">{{ formatK(stats.p75) }}</strong>
         </div>
         <div class="stat-card">
@@ -126,14 +126,14 @@
         <template #title>城市薪资对比</template>
         <el-table :data="cityRows" stripe>
           <el-table-column prop="city" label="城市" width="120" />
-          <el-table-column prop="count" label="样本数" width="100" />
+          <el-table-column prop="count" label="岗位数" width="100" />
           <el-table-column prop="p50" label="中位数(K)" width="120">
             <template #default="{ row }">{{ formatK(row.p50) }}</template>
           </el-table-column>
-          <el-table-column prop="p25" label="P25(K)" width="100">
+          <el-table-column prop="p25" label="低位(K)" width="100">
             <template #default="{ row }">{{ formatK(row.p25) }}</template>
           </el-table-column>
-          <el-table-column prop="p75" label="P75(K)" width="100">
+          <el-table-column prop="p75" label="高位(K)" width="100">
             <template #default="{ row }">{{ formatK(row.p75) }}</template>
           </el-table-column>
         </el-table>
@@ -145,7 +145,7 @@
          可见反馈，不动数据分支、不动空态文案。 -->
     <div v-else-if="loading" class="loading-state">
       <el-icon class="is-loading"><Loading /></el-icon>
-      <span>正在取该岗位的薪资样本…</span>
+      <span>正在查询该岗位的薪资…</span>
     </div>
 
     <!-- 空状态 -->
@@ -154,7 +154,7 @@
         <div class="empty-copy">
           <el-icon :size="42" color="var(--app-primary)"><Coin /></el-icon>
           <h3>先定位你的市场薪资区间</h3>
-          <p>输入岗位和城市后，将看到样本数量、薪资分布、分位区间与城市对比。</p>
+          <p>输入岗位和城市后，将看到岗位数量、薪资分布、薪资区间与城市对比。</p>
         </div>
         <div class="insight-checklist">
           <div>
@@ -163,7 +163,7 @@
           </div>
           <div>
             <span class="check-icon violet">02</span>
-            <p><strong>看 P25 - P75</strong><small>为谈薪预留合理区间</small></p>
+            <p><strong>看低位到高位</strong><small>为谈薪预留合理区间</small></p>
           </div>
           <div>
             <span class="check-icon amber">03</span>
@@ -298,7 +298,7 @@ async function doSearch() {
     if (!isCurrent()) return
     // 旧注释写"保留上一次查询结果"，但上面已经把 overview 清空了；GET 失败也不弹提示，
     // 所以真实表现是一片空白 + 没有人告诉你为什么。现在显式失败。
-    searchError.value = userErrorCopy(e, '暂时无法读取该岗位的薪资样本')
+    searchError.value = userErrorCopy(e, '暂时无法读取该岗位的薪资信息')
   } finally {
     if (isCurrent()) loading.value = false
   }

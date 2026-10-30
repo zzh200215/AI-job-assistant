@@ -204,7 +204,7 @@ describe('搜索面板的跨边界', () => {
     wrapper.unmount()
   })
 
-  it('演示数据时不亮"最新结果"，但要说清为什么只剩演示数据', async () => {
+  it('示例数据时不亮"最新结果"，但要说清为什么只剩示例数据', async () => {
     // D229 改过这一条的期望值，改的是契约不是断言写法。原断言 `toEqual(['当前为演示数据'])`
     // 把"原因"和"最新结果"一起禁止了，而它真正该禁止的只有后者——结果是演示态永远不说为什么。
     // 后端那半边同时改掉了 `None if is_demo`（见 backend/tests/test_external_search_fallback_reason.py）。
@@ -220,11 +220,11 @@ describe('搜索面板的跨边界', () => {
       .findAll('.toolbar-actions .el-tag')
       .map((t) => t.text())
     expect(tags).toEqual([
-      '当前为演示数据',
+      '当前为示例数据',
       '外部岗位渠道这次没有返回数据（可能被限流或需要身份验证）',
     ])
     expect(tags, '演示态不许声称这是最新结果').not.toContain('最新结果')
-    expect(searchPane(wrapper).find('.result-source-note').text()).toContain('当前展示演示岗位数据')
+    expect(searchPane(wrapper).find('.result-source-note').text()).toContain('当前展示示例岗位')
     wrapper.unmount()
   })
 

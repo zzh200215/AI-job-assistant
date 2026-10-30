@@ -17,7 +17,7 @@
           </el-button>
           <el-button size="large" @click="seedDemoData" :loading="seeding">
             <el-icon><Promotion /></el-icon>
-            补充演示岗位池
+            导入示例岗位
           </el-button>
         </div>
         <div class="source-banner" :class="sourceBannerClass">
@@ -33,9 +33,9 @@
           <small>{{ searchStateText }}</small>
         </div>
         <div class="metric-card accent-blue">
-          <span class="metric-label">岗位仓库</span>
+          <span class="metric-label">已保存岗位</span>
           <strong>{{ localJobs.length }}</strong>
-          <small>已落库可复用 JD</small>
+          <small>已保存可复用岗位</small>
         </div>
         <div class="metric-card accent-green">
           <span class="metric-label">智能推荐</span>
@@ -114,7 +114,7 @@
                 <el-option
                   v-for="resume in resumeList"
                   :key="resume.id"
-                  :label="resume.file_name || resume.name || `简历 #${resume.id}`"
+                  :label="resume.file_name || resume.name || '未命名简历'"
                   :value="resume.id"
                 />
               </el-select>
@@ -241,7 +241,7 @@
             <div class="panel-header">
               <div>
                 <h2>市场视图</h2>
-                <p>外部搜索、本地岗位池、智能推荐共用一套行动入口。</p>
+                <p>搜索、已保存岗位和推荐结果共用一套操作入口。</p>
               </div>
               <el-button text @click="refreshActiveTab">
                 <el-icon><RefreshRight /></el-icon>
@@ -251,7 +251,7 @@
           </template>
 
           <el-tabs v-model="activeTab" class="market-tabs">
-            <el-tab-pane label="实时搜索" name="search">
+            <el-tab-pane label="搜索岗位" name="search">
               <SearchPane
                 :jobs="filteredExternalJobs"
                 :searching="searching"
@@ -279,7 +279,7 @@
               />
             </el-tab-pane>
 
-            <el-tab-pane label="岗位仓库" name="warehouse">
+            <el-tab-pane label="已保存岗位" name="warehouse">
               <WarehousePane
                 :jobs="filteredLocalJobs"
                 :loading="localLoading"
@@ -377,7 +377,7 @@
               </div>
               <div class="insight-item">
                 <strong>{{ marketInsights.highSalaryCount }}</strong>
-                <small>高薪样本数</small>
+                <small>高薪岗位数</small>
               </div>
             </div>
           </div>
@@ -451,7 +451,7 @@
                 <span>{{ job.priorityLabel }} · {{ job.company }}</span>
               </button>
             </div>
-            <el-empty v-else :image-size="70" description="当前视图还没有足够样本" />
+            <el-empty v-else :image-size="70" description="当前视图还没有足够岗位" />
           </div>
 
           <div class="board-block">
@@ -466,7 +466,7 @@
                 <el-icon><ArrowRight /></el-icon>
               </button>
               <button type="button" class="cta-item" @click="activeTab = 'warehouse'">
-                <span>查看已经落库的本地 JD</span>
+                <span>查看已经保存的本地岗位</span>
                 <el-icon><ArrowRight /></el-icon>
               </button>
             </div>
@@ -658,11 +658,11 @@ const selectedResumeSummary = computed(() => {
 const activeTabLabel = computed(
   () =>
     ({
-      search: '实时搜索',
-      warehouse: '岗位仓库',
+      search: '搜索岗位',
+      warehouse: '已保存岗位',
       recommend: '智能推荐',
       pipeline: '投递流程',
-    })[activeTab.value] || '实时搜索'
+    })[activeTab.value] || '搜索岗位'
 )
 
 const comparedJobs = computed(() => {
@@ -833,13 +833,13 @@ async function seedDemoData() {
   seeding.value = true
   try {
     const data = await seedDemoJobs()
-    ElMessage.success(data?.message || '演示岗位已补充')
+    ElMessage.success(data?.message || '示例岗位已导入')
     await loadLocalJobs()
     if (selectedResumeId.value) {
       await loadRecommendations()
     }
   } catch {
-    ElMessage.error('补充演示岗位失败')
+    ElMessage.error('导入示例岗位失败')
   } finally {
     seeding.value = false
   }
@@ -942,7 +942,7 @@ async function openJobDetail(job, origin) {
 
 async function explainCurrentJob() {
   if (!selectedResumeId.value || !detailJob.value?.id) {
-    ElMessage.warning('需要已选简历和已落库岗位，才能生成投递解读')
+    ElMessage.warning('需要先选择简历和已保存岗位，才能生成投递解读')
     return
   }
   explainLoading.value = true

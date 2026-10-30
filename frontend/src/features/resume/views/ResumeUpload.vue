@@ -242,7 +242,7 @@
 
         <!-- 诊断详情 -->
         <el-collapse v-model="diagActivePanels" class="diag-details">
-          <el-collapse-item title="📋 七维待优化点" name="notes">
+          <el-collapse-item title="七维待优化点" name="notes">
             <div v-if="dimensionNotes.length">
               <p v-for="dim in dimensionNotes" :key="dim.key" class="diag-issue">
                 <el-icon><WarningFilled /></el-icon>
@@ -252,7 +252,7 @@
             </div>
             <el-empty v-else :image-size="60" description="本次分析没有逐维写出待优化点" />
           </el-collapse-item>
-          <el-collapse-item title="🚀 距上一档还差什么" name="next">
+          <el-collapse-item title="距上一档还差什么" name="next">
             <div v-if="currentDiagnosis.to_next_grade?.length">
               <p
                 v-for="(item, i) in currentDiagnosis.to_next_grade"
@@ -264,7 +264,7 @@
             </div>
             <el-empty v-else :image-size="60" description="本次分析未给出升档项" />
           </el-collapse-item>
-          <el-collapse-item title="🔑 关键词缺失" name="keywords">
+          <el-collapse-item title="关键词缺失" name="keywords">
             <div v-if="currentDiagnosis.missing_keywords?.length">
               <el-tag
                 v-for="kw in currentDiagnosis.missing_keywords"
@@ -277,7 +277,7 @@
             </div>
             <el-empty v-else :image-size="60" description="本次分析未点名缺失关键词" />
           </el-collapse-item>
-          <el-collapse-item title="⚔️ 竞争分析" name="competition">
+          <el-collapse-item title="竞争分析" name="competition">
             <div v-if="hasCompetition">
               <p class="diag-note">
                 竞争力档位：<strong>{{ currentDiagnosis.competition.positioning_badge }}</strong>
@@ -312,7 +312,7 @@
             </div>
             <el-empty v-else :image-size="60" description="本次分析未给出竞争分析" />
           </el-collapse-item>
-          <el-collapse-item title="模块完整度（规则检查，非 AI）" name="completeness">
+          <el-collapse-item title="简历模块完整度（系统检查，非 AI）" name="completeness">
             <div v-if="currentDiagnosis.completeness_issues?.length">
               <p
                 v-for="(item, i) in currentDiagnosis.completeness_issues"
@@ -326,7 +326,7 @@
           </el-collapse-item>
           <el-collapse-item name="rewrite">
             <template #title>
-              <span>✏️ 行级改写（原文 → 改后）</span>
+              <span>行级改写（原文 → 改后）</span>
               <span v-if="rewrite.items.length" class="rw-count"
                 >{{ rewrite.items.length }} 条待处理</span
               >
@@ -391,10 +391,7 @@
               />
 
               <div v-if="rewrite.dropped.length" class="rw-dropped">
-                已自动丢弃 {{ rewrite.dropped.length }} 条不可用建议：
-                <span v-for="(d, i) in rewrite.dropped" :key="i" class="rw-drop-item">
-                  {{ d.block_id || '未知位置' }} — {{ rejectLabel(d.reason) }}
-                </span>
+                有 {{ rewrite.dropped.length }} 条建议无法安全应用，已自动跳过。
               </div>
 
               <div v-if="acceptedRewrites.length || rewrite.result" class="rw-actions">
@@ -434,6 +431,32 @@
       <div v-else class="empty-state">
         <el-empty :image-size="80" description="暂无诊断数据，请先解析简历" />
       </div>
+    </el-dialog>
+
+    <!-- AI 优化弹窗 -->
+    <el-dialog v-model="showOptimize" title="AI 优化简历" width="480px">
+      <p class="optimize-copy">选择目标岗位后，优化会更有针对性；不选则做通用优化。</p>
+      <el-select
+        v-model="optimizeJdId"
+        clearable
+        filterable
+        placeholder="选择目标岗位（可选）"
+        :loading="optimizeJdLoading"
+        class="optimize-select"
+      >
+        <el-option
+          v-for="jd in optimizeJdOptions"
+          :key="jd.id"
+          :label="jdLabel(jd)"
+          :value="jd.id"
+        />
+      </el-select>
+      <template #footer>
+        <el-button @click="showOptimize = false">取消</el-button>
+        <el-button type="primary" :loading="optimizeSubmitting" @click="confirmOptimize">
+          开始优化
+        </el-button>
+      </template>
     </el-dialog>
 
     <!-- 简历列表 -->
@@ -523,9 +546,9 @@
           >
           <span>{{ formatSize(r.file_size) }}</span>
           <span v-if="parseDropped(r).length"
-            >解析丢弃了 {{ parseDropped(r).length }} 个低优先级段落（{{
+            >有 {{ parseDropped(r).length }} 段内容未纳入解析（{{
               parseDropped(r).join('、')
-            }}）</span
+            }}），建议检查原文格式</span
           >
         </div>
 
@@ -624,6 +647,7 @@ import {
   exportResume,
   downloadResumeExport,
 } from '@/api/resume'
+import { getJDList } from '@/api/jd'
 import {
   scoreToneAtLeast,
   scoreToneClass,
@@ -642,6 +666,12 @@ const showUpload = ref(false)
 const showParsed = ref(false)
 const showShare = ref(false)
 const showDiagnosis = ref(false)
+const showOptimize = ref(false)
+const optimizeResumeRow = ref(null)
+const optimizeJdId = ref(null)
+const optimizeJdOptions = ref([])
+const optimizeJdLoading = ref(false)
+const optimizeSubmitting = ref(false)
 const currentParsed = ref(null)
 const parsedResumeId = ref(null)
 const listLoading = ref(true)
@@ -691,26 +721,6 @@ const rewrite = reactive({
   snapshotId: null,
   lastAction: '',
 })
-
-const REJECT_LABELS = {
-  unknown_block: '锚点不存在',
-  original_mismatch: '原文与简历对不上',
-  duplicate_block: '同一处重复建议',
-  empty_proposal: '改后内容为空',
-  unchanged: '与原文相同',
-  proposal_too_long: '改动过长',
-  over_limit: '超出条数上限',
-  malformed_response: '模型返回格式异常',
-  stale_anchor: '简历已更新，该条已失效',
-  missing_block_id: '缺少锚点',
-  empty_or_missing_text: '缺少改后内容',
-  empty_skill_list: '技能被清空',
-  not_an_object: '条目格式异常',
-}
-
-function rejectLabel(reason) {
-  return REJECT_LABELS[reason] || reason || '已拒绝'
-}
 
 function rewriteKindLabel(kind) {
   return (
@@ -1127,21 +1137,42 @@ function goAnalysis(r) {
   router.push('/analysis')
 }
 
-async function optimizeResume(r) {
+function jdLabel(jd) {
+  return [jd?.title, jd?.company].filter(Boolean).join(' · ') || '未命名岗位'
+}
+
+async function loadOptimizeJdOptions() {
+  optimizeJdLoading.value = true
   try {
-    await ElMessageBox.prompt('可选：输入目标岗位ID以生成定制简历', 'AI优化简历', {
-      confirmButtonText: '开始优化',
-      cancelButtonText: '取消',
-      inputPlaceholder: '留空则通用优化',
-    })
-      .then(async ({ value }) => {
-        const jdId = value ? Number(value) : null
-        await generateOptimized(r.id, jdId)
-        ElMessage.success('优化完成')
-      })
-      .catch(() => undefined)
-  } catch {
-    // 用户取消优化弹窗时不执行后续操作。
+    const data = await getJDList({ page: 1, page_size: 100 })
+    optimizeJdOptions.value = data?.items || []
+  } catch (error) {
+    optimizeJdOptions.value = []
+    console.warn('读取岗位列表失败', error)
+  } finally {
+    optimizeJdLoading.value = false
+  }
+}
+
+function optimizeResume(r) {
+  optimizeResumeRow.value = r
+  optimizeJdId.value = null
+  showOptimize.value = true
+  loadOptimizeJdOptions()
+}
+
+async function confirmOptimize() {
+  const row = optimizeResumeRow.value
+  if (!row || optimizeSubmitting.value) return
+  optimizeSubmitting.value = true
+  try {
+    await generateOptimized(row.id, optimizeJdId.value || null)
+    showOptimize.value = false
+    ElMessage.success('优化完成')
+  } catch (error) {
+    console.warn('生成优化版简历失败', error)
+  } finally {
+    optimizeSubmitting.value = false
   }
 }
 
@@ -1605,6 +1636,16 @@ async function showDiagnosisDialog(r) {
   margin-top: 12px;
 }
 
+.optimize-copy {
+  margin: 0 0 12px;
+  color: var(--app-muted);
+  font-size: 14px;
+}
+
+.optimize-select {
+  width: 100%;
+}
+
 /* Diagnosis dialog */
 .diagnosis-body {
   max-height: 60vh;
@@ -1769,9 +1810,6 @@ async function showDiagnosisDialog(r) {
   color: var(--app-muted);
   background: var(--app-surface-muted);
   border-radius: var(--app-radius-sm);
-}
-.rw-drop-item {
-  display: block;
 }
 .rw-actions {
   display: flex;

@@ -2,7 +2,7 @@
   <div v-loading="loading" class="workspace-page">
     <section class="workspace-header">
       <div>
-        <p class="eyebrow">Resume workspace</p>
+        <p class="eyebrow">简历版本对比</p>
         <h1>简历工作台</h1>
         <p class="header-copy">编辑、核对并导出当前投递版本</p>
       </div>
@@ -43,8 +43,8 @@
         </el-tag>
       </div>
       <div class="version-meta">
-        <span v-if="selectedVersion.target_jd_id">已关联目标 JD</span>
-        <span v-else>未关联目标 JD</span>
+        <span v-if="selectedVersion.target_jd_id">已关联目标岗位</span>
+        <span v-else>未关联目标岗位</span>
         <span v-if="selectedVersion.created_at">{{ monthDay(selectedVersion.created_at) }}</span>
       </div>
     </section>
@@ -53,8 +53,8 @@
       <main class="editor-surface">
         <div class="surface-title-row">
           <div>
-            <p class="surface-kicker">Version content</p>
-            <h2>Markdown 编辑</h2>
+            <p class="surface-kicker">版本内容</p>
+            <h2>简历正文编辑</h2>
           </div>
           <el-input
             v-model="labelDraft"
@@ -70,12 +70,12 @@
           :rows="25"
           resize="none"
           spellcheck="false"
-          aria-label="简历 Markdown 内容"
+          aria-label="简历正文内容"
         />
         <div class="editor-footer">
-          <span>{{ contentDraft.length }} 字符</span>
+          <span>{{ contentDraft.length }} 字</span>
           <span v-if="isOriginal">原始简历编辑后会保存为新版本</span>
-          <span v-else>保存后会更新当前版本并清除旧的 ATS 快照</span>
+          <span v-else>保存后会更新当前版本，并重新生成招聘系统预览</span>
         </div>
       </main>
 
@@ -83,8 +83,8 @@
         <section class="rail-panel jd-panel">
           <div class="panel-heading">
             <div>
-              <p class="surface-kicker">Target role</p>
-              <h2>目标 JD</h2>
+              <p class="surface-kicker">岗位要求</p>
+              <h2>目标岗位</h2>
             </div>
             <el-icon><Aim /></el-icon>
           </div>
@@ -109,7 +109,7 @@
             @click="onTailor"
           >
             <el-icon><EditPen /></el-icon>
-            按 JD 生成定制版
+            按岗位生成定制版
           </el-button>
           <el-button
             text
@@ -124,7 +124,7 @@
             推荐：{{ recommendedVersion.label }}，关键词覆盖
             {{ recommendedVersion.keyword_coverage }}%
             <span v-if="recommendedVersion.sample_size"
-              >，已有 {{ recommendedVersion.sample_size }} 次投递样本</span
+              >，已有 {{ recommendedVersion.sample_size }} 次投递记录</span
             >
           </p>
         </section>
@@ -132,8 +132,8 @@
         <section class="rail-panel ats-panel">
           <div class="panel-heading">
             <div>
-              <p class="surface-kicker">Screening preview</p>
-              <h2>ATS 预览</h2>
+              <p class="surface-kicker">筛选预览</p>
+              <h2>招聘系统预览</h2>
             </div>
             <el-button text :loading="atsLoading" @click="onPreviewAts">
               <el-icon><RefreshRight /></el-icon>
@@ -162,7 +162,7 @@
               已覆盖 {{ atsResult.keyword_coverage.matched.length }}/{{
                 atsResult.keyword_coverage.total
               }}
-              个 JD 关键词
+              个岗位关键词
             </p>
           </template>
           <p v-else class="empty-hint">运行预览以检查当前内容的可读性与关键词覆盖。</p>
@@ -174,7 +174,7 @@
       <section class="insight-panel diff-panel">
         <div class="panel-heading">
           <div>
-            <p class="surface-kicker">Change review</p>
+            <p class="surface-kicker">版本对比</p>
             <h2>版本差异</h2>
           </div>
           <el-select
@@ -216,7 +216,7 @@
       <section class="insight-panel suggestion-panel">
         <div class="panel-heading">
           <div>
-            <p class="surface-kicker">AI review</p>
+            <p class="surface-kicker">AI 评估</p>
             <h2>改写建议</h2>
           </div>
           <el-tag size="small" effect="plain">{{ suggestions.length }}</el-tag>
@@ -253,12 +253,12 @@
             </div>
           </article>
         </div>
-        <p v-else class="empty-hint">AI 优化或 JD 定制后，改写说明会显示在这里。</p>
+        <p v-else class="empty-hint">AI 优化或岗位定制后，改写说明会显示在这里。</p>
       </section>
 
       <section class="insight-panel export-panel">
         <div>
-          <p class="surface-kicker">Delivery</p>
+          <p class="surface-kicker">导出</p>
           <h2>导出当前版本</h2>
           <p class="export-copy">导出的内容与当前已保存版本一致。</p>
         </div>
@@ -611,7 +611,7 @@ function versionLabel(version) {
 
 function versionTypeLabel(type) {
   return (
-    { original: '原始简历', optimized: 'AI 优化版', tailored: 'JD 定制版', manual: '手动编辑版' }[
+    { original: '原始简历', optimized: 'AI 优化版', tailored: '岗位定制版', manual: '手动编辑版' }[
       type
     ] || '简历版本'
   )
@@ -622,7 +622,7 @@ function versionTagType(type) {
 }
 
 function jobLabel(job) {
-  return [job.title, job.company].filter(Boolean).join(' · ')
+  return [job.title, job.company].filter(Boolean).join(' · ') || '未命名岗位'
 }
 
 function normalizeSuggestions(changeLog) {

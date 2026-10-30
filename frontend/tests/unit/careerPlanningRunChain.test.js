@@ -98,7 +98,7 @@ describe('运行链的四条终止路径都要把 running 放下来', () => {
     expect(chain.taskStatus.value).toBe('partial')
     expect(chain.taskStatusLabel.value).toBe('部分完成')
     expect(chain.completedSteps.value).toBe(1)
-    expect(chain.currentStepName.value).toBe('自我校验')
+    expect(chain.currentStepName.value).toBe('检查结果')
     /* partial 且有职业规划内容时，标签说的是"已生成"——`careerResult` 那一支排在 partial 之前。
        这条顺序是原页面的判据，搬的时候一个字没改（改它等于改候选人看到的措辞）。 */
     expect(chain.analysisStatusLabel.value).toBe('已生成')

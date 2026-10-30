@@ -9,7 +9,6 @@ import {
   groupTitle,
   hasStructuredCareerGaps,
   mergeMissingSkills,
-  milestoneIcon,
   normalizeConfidence,
   pickMatchedSkills,
   pickMissingSkills,
@@ -256,7 +255,7 @@ describe('钉死每条规则（搬家只改了参数，没改判据）', () => {
     expect(stepLabel('match_analysis')).toBe('匹配分析')
     expect(stepLabel('matching_analysis')).toBe('匹配分析')
     expect(stepLabel('career_planning')).toBe('职业规划')
-    expect(stepLabel('summary_report')).toBe('汇总报告')
+    expect(stepLabel('summary_report')).toBe('汇总结果')
     expect(stepLabel('brand_new_agent')).toBe('brand_new_agent')
     expect(statusText('pending')).toBe('等待中')
     expect(statusText('running')).toBe('执行中')
@@ -298,10 +297,5 @@ describe('钉死每条规则（搬家只改了参数，没改判据）', () => {
     expect(typeLabel('')).toBe('通用')
     expect(typeLabel(undefined)).toBe('通用')
     expect(typeLabel('new_type')).toBe('new_type')
-    expect(milestoneIcon('skill')).toBe('📚')
-    expect(milestoneIcon('cert')).toBe('🎓')
-    expect(milestoneIcon('project')).toBe('🔨')
-    expect(milestoneIcon('job')).toBe('💼')
-    expect(milestoneIcon('')).toBe('📍')
   })
 })

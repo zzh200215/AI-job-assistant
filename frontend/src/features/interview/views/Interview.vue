@@ -90,7 +90,7 @@
           </div>
           <div v-if="showAnswer" class="daily-answer">
             <div class="daily-section star-section">
-              <h5>📋 STAR 法则参考</h5>
+              <h5>STAR 法则参考</h5>
               <div class="star-grid">
                 <div class="star-item">
                   <span class="star-tag">S 情境</span
@@ -111,11 +111,11 @@
               </div>
             </div>
             <div class="daily-section">
-              <h5>💡 参考答案</h5>
+              <h5>参考答案</h5>
               <p>{{ dailyQuestion.suggested_answer || '暂无参考答案' }}</p>
             </div>
             <div class="daily-section">
-              <h5>🎯 考察要点</h5>
+              <h5>考察要点</h5>
               <p>{{ dailyQuestion.focus || dailyQuestion.intent || '综合能力考察' }}</p>
             </div>
           </div>
@@ -274,12 +274,28 @@
       <template #icon><Document /></template>
       <template #title>面试题库</template>
       <template #actions>
-        <el-button size="small" @click="useLast"> 加载最近分析 </el-button>
+        <el-button size="small" @click="useLast">使用最近一次</el-button>
       </template>
       <div v-if="!questionData" class="question-load">
-        <el-input-number v-model="recordId" :min="1" placeholder="分析记录ID" />
-        <el-button @click="loadById" :loading="questionLoading">加载</el-button>
-        <span class="hint">输入分析记录ID查看面试题</span>
+        <el-select
+          v-model="recordId"
+          filterable
+          clearable
+          placeholder="选择一次分析记录"
+          :loading="recordOptionsLoading"
+          class="record-select"
+          @visible-change="onRecordSelectVisible"
+          @change="onRecordChange"
+        >
+          <el-option
+            v-for="item in recordOptions"
+            :key="item.id"
+            :label="recordOptionLabel(item)"
+            :value="item.id"
+          />
+        </el-select>
+        <el-button :loading="questionLoading" @click="loadById">查看面试题</el-button>
+        <span class="hint">选择一次历史分析，查看对应面试题</span>
       </div>
       <div v-else>
         <div v-for="(items, key) in questionGroups" :key="key" class="question-group">
@@ -319,6 +335,7 @@ import {
 import { ElMessage } from '@/plugins/element-services'
 import { getInterviewList, getQuestionBank, endInterviewSession } from '@/api/interview'
 import { getAnalysis } from '@/api/analysis'
+import { listHistory } from '@/api/history'
 import { getJobPipelineList } from '@/api/jobs'
 import { getInterviewGroupTitle, normalizeInterviewQuestions } from '@/utils/interviewQuestions'
 import { useLatestCall } from '@/composables/useLatestCall'
@@ -340,6 +357,37 @@ const sessionsError = ref('')
 const recordId = ref(null)
 const questionData = ref(null)
 const questionLoading = ref(false)
+const recordOptions = ref([])
+const recordOptionsLoading = ref(false)
+
+function recordOptionLabel(item) {
+  const resume = item.resume_name || '未命名简历'
+  const job = item.jd_title || '未命名岗位'
+  const time = item.create_time ? ` · ${monthDayTime(item.create_time)}` : ''
+  return `${resume} · ${job}${time}`
+}
+
+async function loadRecordOptions() {
+  if (recordOptionsLoading.value) return
+  recordOptionsLoading.value = true
+  try {
+    const data = await listHistory({ page: 1, page_size: 20 })
+    recordOptions.value = data?.items || []
+  } catch (error) {
+    recordOptions.value = []
+    console.warn('读取分析记录失败', error)
+  } finally {
+    recordOptionsLoading.value = false
+  }
+}
+
+function onRecordSelectVisible(open) {
+  if (open) loadRecordOptions()
+}
+
+function onRecordChange(value) {
+  if (value) loadById()
+}
 
 const questionGroups = computed(() =>
   normalizeInterviewQuestions(questionData.value?.interview_questions)
@@ -595,7 +643,7 @@ async function endSession(session) {
 
 async function loadById() {
   if (!recordId.value) {
-    ElMessage.warning('请先填写记录 ID')
+    ElMessage.warning('请先选择一次分析记录')
     return
   }
   questionLoading.value = true
@@ -610,10 +658,14 @@ async function loadById() {
   }
 }
 
-function useLast() {
-  const last = selection.recordId()
+async function useLast() {
+  let last = selection.recordId()
   if (!last) {
-    ElMessage.warning('暂无最近分析记录')
+    await loadRecordOptions()
+    last = recordOptions.value[0]?.id
+  }
+  if (!last) {
+    ElMessage.warning('还没有可用的分析记录，先去做一次求职分析')
     return
   }
   recordId.value = last
@@ -730,6 +782,10 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.record-select {
+  width: 320px;
 }
 
 .hint {

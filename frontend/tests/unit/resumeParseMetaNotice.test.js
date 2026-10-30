@@ -98,7 +98,7 @@ describe('解析丢弃段落那一行', () => {
       }),
     ])
 
-    expect(wrapper.text()).toContain('解析丢弃了 2 个低优先级段落')
+    expect(wrapper.text()).toContain('有 2 段内容未纳入解析')
     expect(wrapper.text()).toContain('技能、教育')
   })
 
@@ -138,7 +138,7 @@ describe('解析不完整那条黄条', () => {
       }),
     ])
 
-    expect(wrapper.text()).toContain('解析丢弃了 1 个低优先级段落')
+    expect(wrapper.text()).toContain('有 1 段内容未纳入解析')
     expect(wrapper.text()).not.toContain('解析不完整')
   })
 

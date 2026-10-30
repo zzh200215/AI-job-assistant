@@ -67,7 +67,7 @@
         <div class="task-top">
           <div class="task-dot" :class="'dot-' + task.status" />
           <div class="task-info">
-            <strong>{{ task.name || task.task_type || '分析任务' }}</strong>
+            <strong>{{ taskName(task) }}</strong>
             <span>{{ dateTime(task.create_time) }}</span>
           </div>
           <el-tag :type="statusType(task.status)" size="small">{{
@@ -177,11 +177,25 @@ const summaryCards = computed(() => {
   ]
 })
 
+const TASK_TYPE_LABELS = {
+  analysis: '求职分析',
+  career_planning: '职业规划',
+  resume_optimize: '简历优化',
+  interview_questions: '面试题生成',
+  resume_parse: '简历解析',
+  job_import: '岗位导入',
+  report: '评估报告',
+}
+
+function taskName(task) {
+  return task.name || TASK_TYPE_LABELS[task.task_type] || '求职任务'
+}
+
 function formatDuration(ms) {
   if (!ms) return '-'
-  if (ms < 1000) return ms + 'ms'
-  if (ms < 60000) return (ms / 1000).toFixed(1) + 's'
-  return (ms / 60000).toFixed(1) + 'min'
+  if (ms < 1000) return '不到 1 秒'
+  if (ms < 60000) return Math.round(ms / 1000) + ' 秒'
+  return (ms / 60000).toFixed(1) + ' 分钟'
 }
 
 function statusType(s) {

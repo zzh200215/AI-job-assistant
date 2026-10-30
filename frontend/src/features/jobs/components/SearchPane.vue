@@ -3,14 +3,14 @@
     <div>
       <strong>{{ jobs.length }}</strong>
       <span class="toolbar-sub">个岗位</span>
-      <span v-if="savedCount" class="toolbar-meta">其中 {{ savedCount }} 个已落库</span>
+      <span v-if="savedCount" class="toolbar-meta">其中 {{ savedCount }} 个已保存</span>
     </div>
     <div class="toolbar-actions">
       <el-button size="small" plain :disabled="compareCount < 2" @click="$emit('open-compare')">
         对比 {{ compareCount }} 个岗位
       </el-button>
       <el-tag v-if="resultMode && !isDemo" type="info" effect="plain">{{ stateText }}</el-tag>
-      <el-tag v-if="isDemo" type="warning" effect="plain">当前为演示数据</el-tag>
+      <el-tag v-if="isDemo" type="warning" effect="plain">当前为示例数据</el-tag>
       <!-- D229：这一条原先带 `&& !isDemo`，正好把"演示数据"那一档的原因吃掉——而那是最需要说清
            为什么的一档。警告条说"是什么"，这一条说"为什么"，两句都要。 -->
       <el-tag v-if="searchError" type="danger" effect="plain">{{ searchError }}</el-tag>
@@ -34,7 +34,7 @@
           <div class="job-title-row">
             <h3>{{ job.title }}</h3>
             <span class="source-pill">{{ sourceText(job.source) }}</span>
-            <span v-if="job.local" class="local-pill">已落库</span>
+            <span v-if="job.local" class="local-pill">已保存</span>
           </div>
           <p class="job-company">
             <el-icon><OfficeBuilding /></el-icon>

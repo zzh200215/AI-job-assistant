@@ -80,13 +80,6 @@ export function attachInterviewToSkillGaps(items, profile) {
   })
 }
 
-/** 支撑这条方向的岗位样本：最多列出 4 个 id，多的用"等"收尾。 */
-export function sampleIdText(ids) {
-  const list = ids || []
-  if (!list.length) return ''
-  return list.slice(0, 4).join('、') + (list.length > 4 ? ' 等' : '')
-}
-
 /** 雷达折线：从正上方开始均分角度，分数按 0-100 映射到半径。 */
 export function makeRadarPolygon(scores) {
   const count = scores.length
@@ -132,16 +125,16 @@ export function complexityTag(complexity) {
 export function stepLabel(name) {
   return (
     {
-      intent_recognition: '意图识别',
-      resume_parse: '简历解析',
-      jd_parse: 'JD 解析',
-      task_planning: '任务规划',
-      knowledge_retrieval: '知识检索',
+      intent_recognition: '理解需求',
+      resume_parse: '读取简历',
+      jd_parse: '读取岗位',
+      task_planning: '安排分析步骤',
+      knowledge_retrieval: '查找参考资料',
       matching_analysis: '匹配分析',
-      resume_optimization: '简历优化',
-      interview_question_generation: '面试题生成',
-      self_check: '自我校验',
-      final_report: '汇总报告',
+      resume_optimization: '生成优化建议',
+      interview_question_generation: '准备面试题',
+      self_check: '检查结果',
+      final_report: '汇总结果',
       career_planning: '职业规划',
     }[name] || name
   )

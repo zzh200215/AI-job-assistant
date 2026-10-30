@@ -2,7 +2,7 @@
   <div class="reset-page">
     <section class="reset-card">
       <div class="copy">
-        <p class="eyebrow">Account Recovery</p>
+        <p class="eyebrow">账号找回</p>
         <h1>重置密码</h1>
         <p class="desc">通过“账号 + 注册邮箱”完成本地身份校验，然后设置新密码。</p>
       </div>

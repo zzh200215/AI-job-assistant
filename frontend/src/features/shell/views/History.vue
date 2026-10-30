@@ -60,7 +60,6 @@
       </el-alert>
 
       <el-table v-else :data="list" v-loading="loading" stripe>
-        <el-table-column prop="id" label="ID" width="80" />
         <el-table-column label="简历" min-width="180">
           <template #default="{ row }">
             <div>{{ row.resume_name || '-' }}</div>
@@ -78,7 +77,7 @@
             <el-tag :type="scoreToneTagType(row.match_score)">{{ row.match_score ?? '-' }}</el-tag>
             <!-- 只有被回算过的行才有这一句；没回算过的行观感零变化（D167）。 -->
             <div v-if="row.displayed_before_backfill != null" class="muted">
-              当时显示 {{ row.displayed_before_backfill }}
+              原显示 {{ row.displayed_before_backfill }}
             </div>
           </template>
         </el-table-column>
@@ -117,13 +116,12 @@
       <div v-else-if="detail" v-loading="detailLoading">
         <!-- 概要信息 -->
         <el-descriptions :column="3" border size="small">
-          <el-descriptions-item label="记录 ID">{{ detail.id }}</el-descriptions-item>
           <el-descriptions-item label="匹配度">
             <el-tag :type="scoreToneTagType(detail.match_score)" size="small">{{
               detail.match_score
             }}</el-tag>
             <div v-if="detail.match_report?.displayed_before_backfill != null" class="muted">
-              当时显示 {{ detail.match_report.displayed_before_backfill }}，现按权威算法重算
+              匹配度已按最新规则更新，原显示 {{ detail.match_report.displayed_before_backfill }}
             </div>
           </el-descriptions-item>
           <el-descriptions-item label="分析时间">{{ detail.create_time }}</el-descriptions-item>
@@ -138,7 +136,7 @@
 
         <!-- Tab 切换：匹配度 / 优化建议 / 面试题 -->
         <el-tabs class="mt">
-          <el-tab-pane label="📊 匹配度报告">
+          <el-tab-pane label="匹配度报告">
             <template v-if="detail.match_report">
               <el-alert
                 :title="`综合推荐：${localizedRecommendation || '--'}`"
@@ -163,7 +161,7 @@
               </el-descriptions>
               <el-row :gutter="16" class="mt">
                 <el-col :span="12">
-                  <h4>✅ 优势</h4>
+                  <h4>优势</h4>
                   <ul>
                     <li v-for="(r, i) in localizedStrengths" :key="i">
                       <b v-if="r.label">{{ r.label }}</b>
@@ -173,7 +171,7 @@
                   </ul>
                 </el-col>
                 <el-col :span="12">
-                  <h4>⚠️ 差距 / 风险</h4>
+                  <h4>差距 / 风险</h4>
                   <ul>
                     <li v-for="(r, i) in localizedGaps" :key="i">
                       <b v-if="r.label">{{ r.label }}</b>
@@ -197,7 +195,7 @@
             <el-empty v-else description="暂无匹配度报告" />
           </el-tab-pane>
 
-          <el-tab-pane label="📝 简历优化建议">
+          <el-tab-pane label="简历优化建议">
             <template v-if="detail.optimize_suggestions">
               <el-alert
                 :title="detail.optimize_suggestions.overall || ''"
@@ -217,7 +215,7 @@
                 </el-collapse-item>
               </el-collapse>
               <div class="mt">
-                <span>➕ 补充关键词：</span>
+                <span>建议补充关键词：</span>
                 <el-tag
                   v-for="k in detail.optimize_suggestions.keywords_to_add || []"
                   :key="k"
@@ -228,7 +226,7 @@
                 >
               </div>
               <div class="mt">
-                <span>➖ 删除关键词：</span>
+                <span>建议删除关键词：</span>
                 <el-tag
                   v-for="k in detail.optimize_suggestions.keywords_to_remove || []"
                   :key="k"
@@ -242,7 +240,7 @@
             <el-empty v-else description="暂无优化建议" />
           </el-tab-pane>
 
-          <el-tab-pane label="💬 面试题">
+          <el-tab-pane label="面试题">
             <template v-if="hasInterviewQuestions">
               <div v-for="key in interviewKeys" :key="key">
                 <template v-if="detail.interview_questions[key]?.length">
@@ -256,11 +254,13 @@
                     <div class="q">
                       <b>Q{{ i + 1 }}：</b>{{ q.question || q.q }}
                     </div>
-                    <div class="i">🎯 {{ q.focus || q.intent }}</div>
+                    <div class="i">考察重点：{{ q.focus || q.intent }}</div>
                     <div class="a">
-                      💡 {{ q.suggested_answer || q.expected_answer || q.ref_answer }}
+                      参考回答：{{ q.suggested_answer || q.expected_answer || q.ref_answer }}
                     </div>
-                    <div v-if="q.preparation_tips" class="tip">📝 {{ q.preparation_tips }}</div>
+                    <div v-if="q.preparation_tips" class="tip">
+                      准备建议：{{ q.preparation_tips }}
+                    </div>
                   </el-card>
                 </template>
               </div>
@@ -379,7 +379,7 @@ const openDetail = async (row) => {
 
 const onDelete = async (row) => {
   try {
-    await ElMessageBox.confirm(`确认删除记录 #${row.id} ？删除后可在列表中隐藏。`, '提示', {
+    await ElMessageBox.confirm('确认删除这条分析记录？删除后将不再显示。', '删除确认', {
       type: 'warning',
     })
   } catch {

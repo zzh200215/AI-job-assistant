@@ -117,10 +117,6 @@ export function hasStructuredCareerGaps(result) {
   return gaps.length > 0 && typeof gaps[0] === 'object' && gaps[0] !== null
 }
 
-export function milestoneIcon(type) {
-  return { skill: '📚', cert: '🎓', project: '🔨', job: '💼' }[type] || '📍'
-}
-
 export function complexityType(level) {
   return { 简单: 'success', 中等: 'warning', 困难: 'danger' }[level] || 'info'
 }
@@ -169,35 +165,35 @@ export function mergeMissingSkills(skillMatch) {
 /* 步骤名有两套：编排任务用 Agent 类名，分析记录用 canonical key。两张表都留着，
    canonical 优先——同一含义在两代后端响应里键名不同。 */
 const STEP_LABELS = {
-  IntentAgent: '意图识别',
-  ResumeParseAgent: '简历解析',
-  JDParseAgent: 'JD 解析',
+  IntentAgent: '理解需求',
+  ResumeParseAgent: '读取简历',
+  JDParseAgent: '读取岗位',
   MatchAnalysisAgent: '匹配分析',
-  ResumeOptimizeAgent: '简历优化',
-  InterviewQuestionAgent: '面试题生成',
-  SummaryAgent: '汇总报告',
-  intent_recognition: '意图识别',
-  resume_parse: '简历解析',
-  jd_parse: 'JD 解析',
-  knowledge_retrieval: '参考依据',
+  ResumeOptimizeAgent: '生成优化建议',
+  InterviewQuestionAgent: '准备面试题',
+  SummaryAgent: '汇总结果',
+  intent_recognition: '理解需求',
+  resume_parse: '读取简历',
+  jd_parse: '读取岗位',
+  knowledge_retrieval: '查找参考资料',
   matching_analysis: '匹配分析',
-  resume_optimization: '简历优化',
-  interview_question_generation: '面试题生成',
-  self_check: '自我校验',
-  final_report: '汇总报告',
+  resume_optimization: '生成优化建议',
+  interview_question_generation: '准备面试题',
+  self_check: '检查结果',
+  final_report: '汇总结果',
 }
 
 const CANONICAL_STEP_LABELS = {
-  intent_recognition: '意图识别',
-  resume_parse: '简历解析',
-  jd_parse: 'JD 解析',
-  knowledge_retrieval: '参考依据',
+  intent_recognition: '理解需求',
+  resume_parse: '读取简历',
+  jd_parse: '读取岗位',
+  knowledge_retrieval: '查找参考资料',
   match_analysis: '匹配分析',
-  resume_optimization: '简历优化',
-  interview_questions: '面试题生成',
+  resume_optimization: '生成优化建议',
+  interview_questions: '准备面试题',
   career_planning: '职业规划',
-  self_check: '自我校验',
-  summary_report: '汇总报告',
+  self_check: '检查结果',
+  summary_report: '汇总结果',
 }
 
 export function stepLabel(name) {

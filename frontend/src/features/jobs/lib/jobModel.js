@@ -126,10 +126,10 @@ export function sourceText(value) {
     {
       boss: 'BOSS',
       all: '全平台',
-      crawled: '爬取',
+      crawled: '网络',
       imported: '导入',
-      api: '接口',
-      manual: '手工',
+      api: '平台',
+      manual: '手动',
       local: '本地',
       recommend: '推荐',
     }[value] ||
@@ -326,7 +326,7 @@ export function calculateApplicationPriority(job, city) {
 
   if (job.local) {
     score += 6
-    reasons.push('已落库可直接分析')
+    reasons.push('已保存，可直接分析')
   }
 
   if (typeof job.matchScore === 'number' && job.matchScore > 0) {

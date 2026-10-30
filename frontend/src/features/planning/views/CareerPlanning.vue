@@ -204,7 +204,6 @@
           <div class="timeline-title">{{ stepLabel(step.step_name) }}</div>
           <div class="timeline-meta">
             {{ statusText(step.status) }}
-            <span v-if="step.duration_ms"> · {{ step.duration_ms }}ms</span>
           </div>
           <div v-if="step.error_msg" class="timeline-error">{{ step.error_msg }}</div>
         </el-timeline-item>
@@ -235,7 +234,7 @@
         <el-card v-if="careerPaths.length" class="direction-card" shadow="never">
           <template #header>
             <div class="card-header">
-              <span>推荐职业方向（岗位库实测）</span>
+              <span>推荐职业方向（基于已收集岗位）</span>
               <el-tag size="small" type="info">
                 {{ careerPathMeta.corpus.visible_jds || 0 }} 条可见岗位 ·
                 {{ careerPathMeta.corpus.directions_found || 0 }} 个方向
@@ -258,18 +257,14 @@
               </div>
               <p>{{ item.reason }}</p>
               <ul class="direction-facts">
-                <li>
-                  样本 {{ item.sample_count }} 条岗位<template v-if="item.jd_ids?.length">
-                    （ID {{ sampleIdText(item.jd_ids) }}）</template
-                  >
-                </li>
+                <li>基于 {{ item.sample_count }} 个已收集岗位</li>
                 <li v-if="item.salary?.has_data">
-                  薪资 P25/P50/P75 = {{ item.salary.p25 }}/{{ item.salary.p50 }}/{{
+                  薪资低位 / 中位 / 高位 = {{ item.salary.p25 }}/{{ item.salary.p50 }}/{{
                     item.salary.p75
                   }}
-                  K（{{ item.salary.sample_size }} 条可解析）
+                  K（{{ item.salary.sample_size }} 个岗位有薪资信息）
                 </li>
-                <li v-else>薪资：样本岗位均未填写可解析区间</li>
+                <li v-else>薪资：这些岗位暂时没有公开薪资区间</li>
                 <li v-if="gapFacts(item).length">
                   主要缺口
                   <ul class="direction-gaps">
@@ -283,7 +278,7 @@
                 </li>
               </ul>
               <p v-if="item.degraded" class="direction-warn">
-                样本偏薄：{{ (item.degrade_reasons || []).join('；') }}
+                数据还不够：{{ (item.degrade_reasons || []).join('；') }}
               </p>
             </article>
           </div>
@@ -304,9 +299,9 @@
         <el-card class="salary-card" shadow="never">
           <template #header>
             <div class="card-header">
-              <span>薪资行情（岗位库实测）</span>
+              <span>薪资行情（基于已收集岗位）</span>
               <el-tag v-if="salaryMarket" size="small" type="info">
-                样本 {{ salaryMarket.sample_size }} 条岗位
+                基于 {{ salaryMarket.sample_size }} 个岗位
               </el-tag>
             </div>
           </template>
@@ -321,7 +316,7 @@
               type="warning"
               :closable="false"
               show-icon
-              :title="`仅 ${salaryMarket.sample_size} 条可解析样本，分位数不代表市场`"
+              :title="`目前只收集到 ${salaryMarket.sample_size} 个岗位的薪资信息，暂不足以代表市场`"
             />
             <div class="salary-percentiles">
               <div v-for="band in salaryBands" :key="band.key" class="salary-band">
@@ -330,12 +325,10 @@
               </div>
             </div>
             <small class="salary-note">
-              分位数来自岗位库中已解析出薪资区间的记录，不代表个人 offer 报价。
+              薪资区间来自已收集岗位的公开信息，不代表个人实际报价。
             </small>
           </div>
-          <div v-else class="salary-empty">
-            当前岗位方向在岗位库中暂无足够的薪资样本，因此不提供数字。
-          </div>
+          <div v-else class="salary-empty">这个方向目前收集到的薪资信息还不够，暂不提供数字。</div>
         </el-card>
       </el-col>
     </el-row>
@@ -781,7 +774,6 @@ import {
   makeRadarPolygon,
   priorityTag,
   resumeOptionLabel,
-  sampleIdText,
   statusText,
   stepIcon,
   stepLabel,
@@ -969,10 +961,10 @@ const salaryBands = computed(() => {
   const stats = salaryMarket.value?.statistics
   if (!stats) return []
   return [
-    { key: 'p25', label: '25 分位', value: stats.p25 },
-    { key: 'p50', label: '中位数', value: stats.p50 },
-    { key: 'p75', label: '75 分位', value: stats.p75 },
-    { key: 'p90', label: '90 分位', value: stats.p90 },
+    { key: 'p25', label: '低位（P25）', value: stats.p25 },
+    { key: 'p50', label: '中位', value: stats.p50 },
+    { key: 'p75', label: '高位（P75）', value: stats.p75 },
+    { key: 'p90', label: '头部（P90）', value: stats.p90 },
   ].filter((band) => Number.isFinite(band.value))
 })
 
@@ -1028,7 +1020,7 @@ const strategySummary = computed(() => {
       title: '先建立成交概率，再逐步上探',
       reason: '当前还处于能力过渡期，先保证 offer 概率，再同步做技能补齐和项目积累。',
       actions: [
-        '优先投递与现有经验连续性强的岗位，缩短转化链路。',
+        '优先投递与现有经验连续性强的岗位，提高拿到面试的机会。',
         '每周固定补一个短板项目，把学习成果尽快转成简历素材。',
         '对高门槛岗位先做储备，不要把投递节奏完全压在少数目标公司上。',
       ],
@@ -1037,10 +1029,10 @@ const strategySummary = computed(() => {
 
   return {
     mode: '海投',
-    title: '扩大样本，快速验证市场反馈',
-    reason: '匹配度处于中段，先通过更大样本验证定位，再筛出适合深投的岗位。',
+    title: '扩大投递面，快速验证市场反馈',
+    reason: '匹配度处于中段，先通过更多投递验证定位，再筛出适合深投的岗位。',
     actions: [
-      '按岗位族群批量投递，观察面邀率和岗位反馈。',
+      '按岗位方向批量投递，观察面邀率和岗位反馈。',
       '把简历拆成 2-3 个版本，分别对应后端、AI 工程、平台工程方向。',
       '每拿到一次面试反馈，就回收修正技能缺口和话术重点。',
     ],

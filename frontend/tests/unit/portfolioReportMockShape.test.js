@@ -229,7 +229,7 @@ describe('后端真输出的组合分析', () => {
     expect(wrapper.find('.pf-redline').exists()).toBe(true)
     expect(wrapper.findAll('.pf-qst')).toHaveLength(0)
     expect(wrapper.find('.pf-tbl tr.total td.n b').text()).toBe('不作数')
-    expect(wrapper.text()).toContain('按口径不出跨项目的题')
+    expect(wrapper.text()).toContain('暂不生成跨项目面试题')
   })
 
   it('页面上不出现内部机制字眼与省略写法', async () => {
@@ -245,8 +245,8 @@ describe('后端真输出的组合分析', () => {
     const wrapper = await mountFromBackendBytes()
     // 静态那条钉子只能证明"这行字在文件里"；模板忘了插值时它照样绿，
     // 而读者拿到的是少一句话的交付物——这条按**渲染出来的文字**比。
-    expect(wrapper.find('#c-profile').text()).toContain('树里有三把尺')
-    expect(wrapper.find('#c-profile').text()).toContain('三把尺的分数不能直接比')
+    expect(wrapper.find('#c-profile').text()).toContain('这里有三种评分口径')
+    expect(wrapper.find('#c-profile').text()).toContain('三种分数不能直接比较')
   })
 })
 

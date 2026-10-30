@@ -253,7 +253,7 @@ describe('SmartAnalysis 的展示形状接线', () => {
     const gapList = [...document.querySelectorAll('.career-section li')].map((n) =>
       n.textContent.trim()
     )
-    expect(gapList).toEqual(['📌 Rust', '📌 K8s'])
+    expect(gapList).toEqual(['Rust', 'K8s'])
   })
 
   /* D65 把剩下 5 个标签页搬进 components/，其中「个性化面试题」这一页上头已经有用例在穿

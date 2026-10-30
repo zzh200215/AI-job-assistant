@@ -103,8 +103,8 @@ describe('History 列表对响应形状的假设', () => {
     })
     expect(errors).toEqual([])
     const rows = wrapper.findAll('.el-table__row')
-    expect(rows[0].text(), '回算过的行没有把旧分数画出来').toContain('当时显示 85')
-    expect(rows[1].text()).not.toContain('当时显示')
+    expect(rows[0].text(), '回算过的行没有把旧分数画出来').toContain('原显示 85')
+    expect(rows[1].text()).not.toContain('原显示')
 
     // 反证：键整个缺席时也必须不画（后端对没回算的行给的是 None，但老响应/别的消费者可能没这个键）。
     const { wrapper: bare, errors: bareErrors } = await renderHistory({
@@ -112,7 +112,7 @@ describe('History 列表对响应形状的假设', () => {
       items: [{ id: 1, match_score: 16, resume_name: '简历A', jd_title: '岗位A' }],
     })
     expect(bareErrors).toEqual([])
-    expect(bare.findAll('.el-table__row')[0].text()).not.toContain('当时显示')
+    expect(bare.findAll('.el-table__row')[0].text()).not.toContain('原显示')
   })
 
   it('详情弹窗里那句还说明这个数是按权威算法重算的', async () => {
@@ -141,7 +141,7 @@ describe('History 列表对响应形状的假设', () => {
     expect(api.getHistoryDetail.mock.calls, '点「查看」没有去取详情').toEqual([[1]])
     const dialog = document.querySelector('.el-dialog')
     expect(dialog, '详情弹窗没有渲染').not.toBeNull()
-    expect(dialog.textContent).toContain('当时显示 85，现按权威算法重算')
+    expect(dialog.textContent).toContain('匹配度已按最新规则更新，原显示 85')
     expect(errors).toEqual([])
   })
 })

@@ -224,7 +224,6 @@
                 <strong>{{ stepLabel(s.step_name) }}</strong>
                 <span class="pl-meta">
                   {{ statusText(s.status) }}
-                  <span v-if="s.duration_ms"> · {{ s.duration_ms }}ms</span>
                 </span>
               </div>
               <div v-if="s.status === 'completed' && s.output_data" class="pl-preview">
@@ -405,7 +404,7 @@
             </el-tab-pane>
 
             <!-- 职业方向 -->
-            <el-tab-pane label="🎯 职业方向" name="career-paths">
+            <el-tab-pane label="职业方向" name="career-paths">
               <CareerDirectionPane
                 :loading="careerPathsLoading"
                 :paths="careerPaths"
@@ -428,7 +427,7 @@
             </el-tab-pane>
 
             <!-- 职业规划 -->
-            <el-tab-pane label="🎯 职业规划" name="career">
+            <el-tab-pane label="职业规划" name="career">
               <CareerPlanPane
                 :career-data="careerData"
                 :visual-phases="visualPhases"
@@ -446,7 +445,7 @@
             </el-tab-pane>
 
             <!-- 引用来源 -->
-            <el-tab-pane label="📚 引用来源" name="references">
+            <el-tab-pane label="引用来源" name="references">
               <ReferencesPane
                 v-model:ref-open-docs="refOpenDocs"
                 :loading="referencesLoading"
@@ -797,8 +796,8 @@ onMounted(() => {
   const qJid = route.query.jd_id ? Number(route.query.jd_id) : null
   const rid = qRid || selection.resumeId()
   const jid = qJid || selection.jdId()
-  if (rid && !isNaN(rid)) resumeInfo.value = { id: rid, file_name: `简历 #${rid}` }
-  if (jid && !isNaN(jid)) jdInfo.value = { id: jid, title: `JD #${jid}` }
+  if (rid && !isNaN(rid)) resumeInfo.value = { id: rid, file_name: '已选简历' }
+  if (jid && !isNaN(jid)) jdInfo.value = { id: jid, title: '已选目标岗位' }
 
   const ctx = selection.takePendingAnalysis()
   if (ctx) {
@@ -806,7 +805,7 @@ onMounted(() => {
     if (ctx.company) jdForm.company = ctx.company
     if (ctx.jd_text) jdForm.raw_text = ctx.jd_text
     if (ctx.jdId) {
-      jdInfo.value = { id: Number(ctx.jdId), title: ctx.title || `JD #${ctx.jdId}` }
+      jdInfo.value = { id: Number(ctx.jdId), title: ctx.title || '已选目标岗位' }
       selection.rememberJD(ctx.jdId)
     }
   }

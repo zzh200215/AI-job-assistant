@@ -59,7 +59,7 @@
               >{{ s }}</el-tag
             >
           </div>
-          <div v-if="cp.salary_range" class="cp-salary">💰 {{ cp.salary_range }}</div>
+          <div v-if="cp.salary_range" class="cp-salary">薪资参考：{{ cp.salary_range }}</div>
         </div>
       </div>
     </div>

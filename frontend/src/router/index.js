@@ -307,12 +307,12 @@ export const routes = [
         redirect: { name: 'resume-center' },
         meta: { title: '简历中心', roles: CANDIDATE },
       },
-      { path: 'jd', redirect: { name: 'jd-input' }, meta: { title: '岗位 JD', roles: CANDIDATE } },
+      { path: 'jd', redirect: { name: 'jd-input' }, meta: { title: '目标岗位', roles: CANDIDATE } },
       {
         path: 'jd/input',
         name: 'jd-input',
         component: () => import('@/features/resume/views/JDInput.vue'),
-        meta: { title: '岗位 JD', roles: CANDIDATE },
+        meta: { title: '目标岗位', roles: CANDIDATE },
       },
       {
         path: 'query-rewrite-test',

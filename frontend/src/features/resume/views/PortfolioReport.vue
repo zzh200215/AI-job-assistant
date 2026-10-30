@@ -185,7 +185,7 @@
         </div>
         <p class="pf-note">
           <span class="cov full">●</span> 重点覆盖&nbsp;<span class="cov part">○</span>
-          部分覆盖&nbsp;空白 未覆盖。 「组合覆盖」那一列不是模型写的：由这一行的格子推出来。
+          部分覆盖&nbsp;空白 未覆盖。 「组合覆盖」那一列由上方覆盖情况自动计算，不是 AI 生成。
         </p>
 
         <h3>1.4 整体风险提示</h3>
@@ -209,7 +209,9 @@
         </table>
 
         <h3>1.5 选中项目原文（逐字摘录，未作改写）</h3>
-        <p class="pf-note">上面每一栏的说法都要能回到这几段字里；这一节一个字都不过模型。</p>
+        <p class="pf-note">
+          上面每一栏的说法都要能回到这几段字里；这一节直接引用原文，不经过 AI 改写。
+        </p>
         <div v-for="p in report.projects" :key="p.project_index" class="pf-paper">
           <p class="pf-hd">
             <b>{{ labelOf(p) }}</b
@@ -263,7 +265,7 @@
         </template>
 
         <h3>2.3 技术栈复用与差异</h3>
-        <p class="pf-note">这两栏由技术栈清单求交集算出来，模型只写下面那两段解读。</p>
+        <p class="pf-note">这两栏由技术栈清单自动计算，下面两段解读由 AI 生成。</p>
         <div class="pf-lanes">
           <span class="pf-field-label">共用（出现在两个以上项目里）</span>
           <div v-if="report.diagrams.stack?.shared?.length" class="pf-chips">
@@ -415,18 +417,14 @@
               <li v-for="(line, i) in item.missing" :key="i"><ProjectTodoText :text="line" /></li>
             </ul>
             <p v-if="item.risk_ref" class="pf-how">对应 1.4 第 {{ item.risk_ref }} 条风险。</p>
-            <span class="pf-st" :class="statusClass(item.status)">{{
-              statusMark(item.status)
-            }}</span>
+            <span class="pf-st" :class="statusClass(item.status)">{{ item.status }}</span>
           </div>
           <p class="pf-concl">题型分布：{{ kindText }}。</p>
         </template>
       </section>
 
       <div v-if="report.questions_state === 'not_generated' && !report.excluded" class="pf-card">
-        <p class="pf-lead">
-          第四节那 12 道跨项目的题要点按钮才跑——它要再花一发模型调用，没点就不花这笔钱。
-        </p>
+        <p class="pf-lead">第四节的 12 道跨项目面试题需要单独生成，点按钮后才会开始。</p>
         <div class="pf-actions">
           <el-button type="primary" :loading="questionsJob.loading" @click="startQuestions">
             生成跨项目面试（12 题）
@@ -435,7 +433,7 @@
         <p v-if="questionsError" class="pf-error">{{ questionsError }}</p>
       </div>
       <p v-else-if="report.excluded" class="pf-note">
-        这一份命中了一条一票否决，按口径不出跨项目的题。
+        这一份有一项关键风险，暂不生成跨项目面试题。
       </p>
     </template>
   </div>
@@ -471,7 +469,7 @@ const NOTE_ABSENT = '本次分析没有为这一维写出待优化点'
 
 /* 这句与两份下载 HTML、单项目那一页同一句权威（`report_html_lint.THREE_RUBRICS_NOTE`）。 */
 const THREE_RUBRICS_NOTE =
-  '树里有三把尺：整份简历那份七维、单个项目那份六维（含位次）、几个项目叠一起那份组合六维（含位次区间）。三把尺的分数不能直接比。'
+  '这里有三种评分口径：整份简历七维、单个项目六维、多个项目组合六维。三种分数不能直接比较。'
 
 /* 格子符号与后端 `portfolio_report_rubric.COVERAGE_MARKS` 同一张表。 */
 const MARKS = { 重点覆盖: '●', 部分覆盖: '○', 未覆盖: '' }
@@ -538,9 +536,9 @@ const compareRows = computed(() => report.value?.compare?.rows || [])
 const citationRows = computed(() => {
   const c = report.value?.advice?.citation || {}
   return [
-    ['✅ 可借鉴', c.borrow],
-    ['⚠️ 需改造', c.adapt],
-    ['🔴 一抄就穿', c.breaks],
+    ['可借鉴', c.borrow],
+    ['需改造', c.adapt],
+    ['一抄就穿', c.breaks],
   ]
 })
 
@@ -577,7 +575,7 @@ const canStart = computed(
 )
 
 function resumeLabel(r) {
-  return r.name || r.file_name || `简历 #${r.id}`
+  return r.name || r.file_name || '未命名简历'
 }
 
 function labelOf(p) {
@@ -624,10 +622,6 @@ function cellClass(row, index) {
 function verdictText(row) {
   const v = row.verdict || {}
   return v.word ? `${v.word}（${v.detail}）` : '—'
-}
-
-function statusMark(status) {
-  return { 可答: '✅ 可答', 需补强: '⚠️ 需补强', 高危: '🔴 高危' }[status] || status
 }
 
 function statusClass(status) {

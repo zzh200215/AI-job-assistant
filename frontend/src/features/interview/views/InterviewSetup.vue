@@ -4,7 +4,7 @@
       <div>
         <h2>AI 模拟面试</h2>
         <div class="page-header-sub">
-          围绕目标岗位生成一场更有节奏的模拟面试，先定配置，再进房间，最后看报告。
+          围绕目标岗位生成一场更有节奏的模拟面试，先定设置，再进面试，最后看报告。
         </div>
       </div>
     </div>
@@ -47,7 +47,7 @@
 
     <div class="setup-grid">
       <AppPanel>
-        <template #title>配置本场面试</template>
+        <template #title>设置本场面试</template>
         <template #actions>
           <el-tag type="danger" effect="plain">基础版</el-tag>
         </template>
@@ -82,7 +82,7 @@
               v-model="form.jd_id"
               placement="bottom-start"
               :fallback-placements="['bottom-start']"
-              placeholder="选择目标 JD"
+              placeholder="选择目标岗位"
               filterable
               :loading="loading.jd"
             >
@@ -134,7 +134,7 @@
           <!-- 题库配置 -->
           <div class="question-bank-config">
             <div class="qb-header">
-              <span class="qb-title">题库配置</span>
+              <span class="qb-title">题目设置</span>
               <span class="qb-subtitle"
                 >{{ questionPlan.total }} · 覆盖 {{ questionCategories.length }} 类题型</span
               >
@@ -213,7 +213,7 @@
                 </span>
               </div>
             </template>
-            <el-empty v-else description="选择 JD 后会展示岗位画像" :image-size="70" />
+            <el-empty v-else description="选择岗位后会展示岗位画像" :image-size="70" />
           </div>
 
           <div class="blueprint-list">
@@ -457,7 +457,7 @@ const journeySteps = computed(() => [
     title: '候选人资料',
     detail: form.resume_id ? '简历已选定' : '选择用于本场面试的简历',
   },
-  { index: 2, title: '目标岗位', detail: form.jd_id ? '岗位已选定' : '确定本场面试的 JD' },
+  { index: 2, title: '目标岗位', detail: form.jd_id ? '岗位已选定' : '确定本场面试的岗位' },
   {
     index: 3,
     title: '面试场景',
@@ -656,7 +656,7 @@ async function startInterview() {
     ElMessage.success(`面试已创建，共 ${session.total_questions} 道题，正在进入面试房间`)
     router.push(`/interview/room/${session.id}`)
   } catch (error) {
-    ElMessage.error(userErrorCopy(error, '创建面试失败，请检查简历和岗位配置后重试'))
+    ElMessage.error(userErrorCopy(error, '创建面试失败，请检查简历和岗位设置后重试'))
   } finally {
     loading.start = false
   }

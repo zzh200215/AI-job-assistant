@@ -28,7 +28,7 @@
     </el-row>
 
     <AppPanel v-if="radarRows.length" class="career-section">
-      <template #title>📊 技能雷达</template>
+      <template #title>技能雷达</template>
       <div class="radar-chart">
         <div v-for="dim in radarRows" :key="dim.name" class="radar-row">
           <span class="radar-label">{{ dim.name }}</span>
@@ -51,7 +51,7 @@
     </AppPanel>
 
     <AppPanel v-if="careerData.skill_gaps?.length" class="career-section">
-      <template #title>⚠️ 技能提升建议（{{ careerData.skill_gaps.length }} 项）</template>
+      <template #title>技能提升建议（{{ careerData.skill_gaps.length }} 项）</template>
       <template v-if="hasStructuredSkillGaps">
         <el-collapse>
           <el-collapse-item v-for="(gap, i) in careerData.skill_gaps" :key="i" :name="i">
@@ -83,16 +83,14 @@
       </template>
       <template v-else
         ><ul>
-          <li v-for="(g, i) in careerData.skill_gaps" :key="i">📌 {{ g }}</li>
+          <li v-for="(g, i) in careerData.skill_gaps" :key="i">{{ g }}</li>
         </ul></template
       >
     </AppPanel>
 
     <AppPanel v-if="visualPhases.length" class="career-section">
       <template #title
-        >🛤️ 成长路线图（{{
-          careerData.visual_roadmap?.total_duration_months || '-'
-        }}个月）</template
+        >成长路线图（{{ careerData.visual_roadmap?.total_duration_months || '-' }}个月）</template
       >
       <div class="roadmap">
         <div v-for="phase in visualPhases" :key="phase.id" class="roadmap-phase">
@@ -119,7 +117,7 @@
             </div>
             <div v-if="phase.milestones?.length" class="phase-milestones">
               <div v-for="m in phase.milestones" :key="m.name" class="milestone-item">
-                <span class="ms-icon">{{ milestoneIcon(m.type) }}</span>
+                <el-icon class="ms-icon"><component :is="milestoneIcon(m.type)" /></el-icon>
                 <span>{{ m.name }}</span>
               </div>
             </div>
@@ -137,12 +135,12 @@
         </div>
       </div>
       <div class="roadmap-dir" v-if="careerData.visual_roadmap?.career_direction">
-        🏁 最终方向：<strong>{{ careerData.visual_roadmap.career_direction }}</strong>
+        最终方向：<strong>{{ careerData.visual_roadmap.career_direction }}</strong>
       </div>
     </AppPanel>
 
     <AppPanel v-if="careerData.project_recommendations?.length" class="career-section">
-      <template #title>🔨 推荐项目实践</template>
+      <template #title>推荐项目实践</template>
       <el-row :gutter="16">
         <el-col
           :span="12"
@@ -177,7 +175,7 @@
                 }}</span>
               </div>
               <div v-if="proj.estimated_time" class="proj-time">
-                ⏱ 预估：{{ proj.estimated_time }}
+                预计用时：{{ proj.estimated_time }}
               </div>
             </div>
           </div>
@@ -186,7 +184,7 @@
     </AppPanel>
 
     <AppPanel v-if="careerData.industry_insight" class="career-section">
-      <template #title>📈 行业洞察</template>
+      <template #title>行业洞察</template>
       <el-row :gutter="16">
         <el-col :span="12">
           <h5>当前趋势</h5>
@@ -218,12 +216,12 @@
         >
       </div>
       <div v-if="careerData.industry_insight.salary_range" class="mt salary-ref">
-        💰 薪资参考：<strong>{{ careerData.industry_insight.salary_range }}</strong>
+        薪资参考：<strong>{{ careerData.industry_insight.salary_range }}</strong>
       </div>
     </AppPanel>
 
     <AppPanel class="career-section">
-      <template #title>📋 阶段计划</template>
+      <template #title>阶段计划</template>
       <el-row :gutter="16">
         <el-col :span="8">
           <div class="plan-card plan-short">
@@ -266,7 +264,7 @@
               </li>
             </ul>
             <div v-if="careerData.long_term_plan?.target_companies" class="plan-targets">
-              🏢
+              目标公司：
               <span v-for="c in careerData.long_term_plan.target_companies" :key="c">{{ c }} </span>
             </div>
           </div>
@@ -275,7 +273,7 @@
     </AppPanel>
 
     <AppPanel v-if="careerData.recommended_certifications?.length" class="career-section">
-      <template #title>🎓 推荐证书</template>
+      <template #title>推荐证书</template>
       <el-table :data="careerData.recommended_certifications" size="small">
         <el-table-column prop="name" label="证书" />
         <el-table-column prop="level" label="难度" width="80" />
@@ -298,9 +296,9 @@
 import { computed } from 'vue'
 
 import AppPanel from '@/components/ui/AppPanel.vue'
-import { Folder } from '@element-plus/icons-vue'
+import { Briefcase, Folder, Location, Medal, Reading, Tools } from '@element-plus/icons-vue'
 
-import { complexityType, milestoneIcon } from '@/features/analysis/lib/analysisModel'
+import { complexityType } from '@/features/analysis/lib/analysisModel'
 import { levelTagType } from '@/utils/statusTone'
 import { SCORE_UNREADABLE_TEXT, readScore, scoreGap, scorePairReadable } from '@/utils/aiScore'
 
@@ -312,6 +310,12 @@ import { SCORE_UNREADABLE_TEXT, readScore, scoreGap, scorePairReadable } from '@
    复制的是页面样式里 "Career content / Radar / Plan cards / Roadmap" 那四段。另有一批类
    （gap-title、proj-card、milestone-item、outcome-item、roadmap-dir、salary-ref…）在全仓**没有任何规则**，
    它们只是 markup 里的钩子，所以既不在复制范围里，也不在页面样式里。 */
+const MILESTONE_ICONS = { skill: Reading, cert: Medal, project: Tools, job: Briefcase }
+
+function milestoneIcon(type) {
+  return MILESTONE_ICONS[type] || Location
+}
+
 const props = defineProps({
   careerData: { type: Object, default: null },
   visualPhases: {

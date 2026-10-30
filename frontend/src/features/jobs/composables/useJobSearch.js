@@ -2,7 +2,7 @@ import { computed, ref } from 'vue'
 import { ElMessage } from '@/plugins/element-services'
 import { getCities, searchExternalJobs } from '@/api/jobs'
 import { useLatestCall } from '@/composables/useLatestCall'
-import { normalizeJob, salaryMid, sourceText } from '@/features/jobs/lib/jobModel'
+import { normalizeJob, salaryMid } from '@/features/jobs/lib/jobModel'
 
 /* 实时搜索那条链：表单（关键词 / 城市 / 渠道）、结果列表、结果上的四条口径
    （正在搜 / 没搜过 / 回退本地 / 演示数据），以及"这一屏此刻该说什么"的三段文案。
@@ -18,7 +18,7 @@ export function useJobSearch({ pushRecentSearch }) {
 
   const searching = ref(false)
   const hasSearched = ref(false)
-  const searchHint = ref('正在搜索最新岗位...')
+  const searchHint = ref('正在搜索岗位…')
   const searchError = ref('')
   const isDemo = ref(false)
   const resultMode = ref('')
@@ -63,29 +63,29 @@ export function useJobSearch({ pushRecentSearch }) {
   })
 
   const searchStateText = computed(() => {
-    if (searching.value) return '抓取中'
+    if (searching.value) return '搜索中'
     if (!hasSearched.value) return '未搜索'
-    if (resultMode.value === 'local_fallback') return '本地职位库'
-    if (resultMode.value === 'demo_fallback') return '演示数据'
-    return isDemo.value ? '演示数据' : '最新结果'
+    if (resultMode.value === 'local_fallback') return '已保存岗位'
+    if (resultMode.value === 'demo_fallback') return '示例数据'
+    return isDemo.value ? '示例数据' : '最新结果'
   })
 
   const sourceBannerTitle = computed(() => {
-    if (searching.value) return '正在获取岗位数据'
-    if (!hasSearched.value) return '优先展示真实岗位结果'
-    if (resultMode.value === 'local_fallback') return '当前展示本地职位库'
-    if (resultMode.value === 'demo_fallback' || isDemo.value) return '当前展示演示岗位数据'
-    return '当前展示实时搜索结果'
+    if (searching.value) return '正在搜索岗位'
+    if (!hasSearched.value) return '优先展示最新岗位'
+    if (resultMode.value === 'local_fallback') return '当前展示已保存岗位'
+    if (resultMode.value === 'demo_fallback' || isDemo.value) return '当前展示示例岗位'
+    return '当前展示最新搜索结果'
   })
 
   const sourceBannerDesc = computed(() => {
-    if (searching.value) return '系统会优先抓取外部岗位，失败时再回退到本地或演示数据。'
-    if (!hasSearched.value) return '点击“搜索最新岗位”后，系统会优先使用外部搜索结果。'
+    if (searching.value) return '正在从网络获取岗位，结果返回后会优先展示最新岗位。'
+    if (!hasSearched.value) return '搜索后会优先展示网络上的最新岗位。'
     if (resultMode.value === 'local_fallback')
-      return '外部抓取未返回可用结果，已切换到本地职位库，适合继续做分析和筛选。'
+      return '网络搜索暂时没有返回可用结果，已切换到你保存过的岗位，仍可继续分析和筛选。'
     if (resultMode.value === 'demo_fallback' || isDemo.value)
       return '当前结果主要用于演示流程，建议补充真实搜索或导入岗位后再做判断。'
-    return '这些岗位来自当前搜索渠道，可直接加入流程、对比或带入分析。'
+    return '这些岗位来自本次搜索，可直接加入流程、对比或带入分析。'
   })
 
   const sourceBannerClass = computed(() => {
@@ -123,7 +123,7 @@ export function useJobSearch({ pushRecentSearch }) {
     searchError.value = ''
     isDemo.value = false
     resultMode.value = ''
-    searchHint.value = `正在搜索 ${sourceText(source.value)} 的 ${keyword.value} 岗位...`
+    searchHint.value = `正在搜索「${keyword.value}」相关岗位…`
 
     try {
       const data = await searchExternalJobs({

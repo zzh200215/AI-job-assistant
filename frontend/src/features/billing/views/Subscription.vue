@@ -93,7 +93,7 @@ const featuresDisplay = {
   daily_recommendation_limit: { label: '每日推荐', free: '10次', pro: '200次', enterprise: '不限' },
   can_export_full_report: { label: '完整报告导出', free: false, pro: true, enterprise: true },
   can_use_deep_analysis: { label: 'AI 深度分析', free: false, pro: true, enterprise: true },
-  can_use_ats_check: { label: 'ATS 友好度检测', free: false, pro: true, enterprise: true },
+  can_use_ats_check: { label: '招聘系统友好度检测', free: false, pro: true, enterprise: true },
   can_use_offer_decision: { label: 'Offer 决策助手', free: false, pro: true, enterprise: true },
   can_use_salary_negotiation: { label: '谈薪资建议', free: false, pro: true, enterprise: true },
 }
@@ -142,7 +142,7 @@ function buildFeatureGroups(features) {
         `${features.resume_limit === -1 ? '不限' : features.resume_limit} 份简历`,
         '简历解析与评分',
         'AI 简历优化',
-        'ATS 友好度检测',
+        '招聘系统友好度检测',
       ],
     },
     {

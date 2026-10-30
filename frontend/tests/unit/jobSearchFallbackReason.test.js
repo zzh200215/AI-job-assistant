@@ -34,8 +34,8 @@ function render(over = {}) {
       resultMode: 'demo_fallback',
       isDemo: true,
       searchError: REASON,
-      stateText: '演示数据',
-      bannerTitle: '当前展示演示岗位数据',
+      stateText: '示例数据',
+      bannerTitle: '当前展示示例岗位',
       bannerDesc: '当前结果主要用于演示流程，建议补充真实搜索或导入岗位后再做判断。',
       bannerClass: 'is-demo',
       isShortlisted: () => false,
@@ -49,28 +49,28 @@ function dangerTags(wrapper) {
   return wrapper.findAll('.el-tag--danger').map((t) => t.text())
 }
 
-describe('降级到演示数据时，失败原因仍然要看得见', () => {
+describe('降级到示例数据时，失败原因仍然要看得见', () => {
   it('演示态：警告条与原因标签并存', () => {
     const wrapper = render()
     const text = wrapper.text()
 
-    expect(text).toContain('当前为演示数据')
+    expect(text).toContain('当前为示例数据')
     expect(dangerTags(wrapper), '演示态把原因吃掉了，候选人只剩一句"这是演示数据"').toContain(
       REASON
     )
   })
 
   it('本地库降级态：原因照旧上屏（这条行为本来就有，钉住别改坏）', () => {
-    const wrapper = render({ isDemo: false, resultMode: 'local_fallback', stateText: '本地职位库' })
+    const wrapper = render({ isDemo: false, resultMode: 'local_fallback', stateText: '已保存岗位' })
 
     expect(dangerTags(wrapper)).toContain(REASON)
-    expect(wrapper.text()).not.toContain('当前为演示数据')
+    expect(wrapper.text()).not.toContain('当前为示例数据')
   })
 
   it('没有失败原因时不许凭空造一句', () => {
     const wrapper = render({ searchError: '' })
 
     expect(dangerTags(wrapper)).toEqual([])
-    expect(wrapper.text()).toContain('当前为演示数据')
+    expect(wrapper.text()).toContain('当前为示例数据')
   })
 })

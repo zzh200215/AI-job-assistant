@@ -9,7 +9,6 @@ import {
   makeRadarPolygon,
   priorityTag,
   resumeOptionLabel,
-  sampleIdText,
   statusText,
   stepIcon,
   stepLabel,
@@ -167,14 +166,6 @@ describe('钉死每条规则', () => {
     expect(gapFacts({})).toEqual([])
   })
 
-  it('样本 id：空串、最多四个、超出加"等"', () => {
-    expect(sampleIdText(undefined)).toBe('')
-    expect(sampleIdText([])).toBe('')
-    expect(sampleIdText([1, 2])).toBe('1、2')
-    expect(sampleIdText([1, 2, 3, 4])).toBe('1、2、3、4')
-    expect(sampleIdText([1, 2, 3, 4, 5, 6])).toBe('1、2、3、4 等')
-  })
-
   it('列表拼接只认数组', () => {
     expect(joinedText(['a', 'b'])).toBe('a / b')
     expect(joinedText([])).toBe('')
@@ -198,9 +189,9 @@ describe('钉死每条规则', () => {
   })
 
   it('步骤名、状态文案、状态色与状态图标四件事各自认这套枚举', () => {
-    expect(stepLabel('task_planning')).toBe('任务规划')
+    expect(stepLabel('task_planning')).toBe('安排分析步骤')
     expect(stepLabel('career_planning')).toBe('职业规划')
-    expect(stepLabel('interview_question_generation')).toBe('面试题生成')
+    expect(stepLabel('interview_question_generation')).toBe('准备面试题')
     expect(stepLabel('never_seen')).toBe('never_seen')
     expect(statusText('skipped')).toBe('跳过')
     expect(statusText('weird')).toBe('weird')

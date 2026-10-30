@@ -40,7 +40,7 @@ function oldCalculateApplicationPriority(job) {
 
   if (job.local) {
     score += 6
-    reasons.push('已落库可直接分析')
+    reasons.push('已保存，可直接分析')
   }
 
   if (typeof job.matchScore === 'number' && job.matchScore > 0) {

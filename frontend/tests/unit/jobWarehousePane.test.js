@@ -160,8 +160,8 @@ describe('仓库面板的筛选回路', () => {
     await flushPromises()
 
     expect(pane(wrapper).find('.warehouse-list').exists()).toBe(false)
-    expect(pane(wrapper).text()).toContain('本地岗位仓库加载失败')
-    expect(pane(wrapper).text()).not.toContain('岗位仓库还是空的')
+    expect(pane(wrapper).text()).toContain('已保存岗位加载失败')
+    expect(pane(wrapper).text()).not.toContain('还没有保存的岗位')
     wrapper.unmount()
   })
 })
