@@ -2005,6 +2005,7 @@ def _openai_compatible_chat(
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.2,
+        "max_tokens": max(1, int(settings.LLM_MAX_TOKENS)),
     }
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
@@ -2028,6 +2029,12 @@ def _openai_compatible_chat(
                 raise LLMProviderError(
                     f"LLM 返回空内容 (finish_reason={choice.get('finish_reason')}, "
                     f"reasoning_chars={len(message.get('reasoning_content') or '')})"
+                )
+            if choice.get("finish_reason") == "length":
+                usage = data.get("usage") or {}
+                raise LLMProviderError(
+                    f"LLM 输出被截断 (finish_reason=length, "
+                    f"completion_tokens={usage.get('completion_tokens')}, content_chars={len(content)})"
                 )
             return content
         except requests.Timeout as e:
@@ -2266,6 +2273,7 @@ def _openai_compatible_chat_with_tools(
         "model": settings.LLM_MODEL,
         "messages": messages,
         "temperature": 0.2,
+        "max_tokens": max(1, int(settings.LLM_MAX_TOKENS)),
     }
     if tools:
         payload["tools"] = tools

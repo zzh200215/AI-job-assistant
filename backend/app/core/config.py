@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str | None = None
     LLM_MODEL: str = "gpt-4o-mini"
     LLM_TIMEOUT: int = 120
+    # 显式输出预算。不传时由供应商给默认值；真撞过一次完整规划在默认上限处截断，
+    # 而 deepseek-v4-flash 自己的 max_output_length 是 65536。默认 16k 覆盖规划类长 JSON。
+    LLM_MAX_TOKENS: int = 16384
     LLM_FALLBACK_MODEL: str | None = None
     LLM_ALLOW_MOCK_FALLBACK: bool = False
     LLM_INPUT_COST_PER_1K_CENTS: float = 0.0

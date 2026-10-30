@@ -81,6 +81,7 @@ def provider():
         "LLM_FALLBACK_MODEL": settings.LLM_FALLBACK_MODEL,
         "LLM_ALLOW_MOCK_FALLBACK": settings.LLM_ALLOW_MOCK_FALLBACK,
         "LLM_TIMEOUT": settings.LLM_TIMEOUT,
+        "LLM_MAX_TOKENS": settings.LLM_MAX_TOKENS,
     }
     settings.LLM_PROVIDER = "openai"
     settings.LLM_API_KEY = "sk-local-test-key"
@@ -89,6 +90,7 @@ def provider():
     settings.LLM_FALLBACK_MODEL = ""
     settings.LLM_ALLOW_MOCK_FALLBACK = False
     settings.LLM_TIMEOUT = 3
+    settings.LLM_MAX_TOKENS = 4096
     try:
         yield fake
     finally:
@@ -115,6 +117,7 @@ def test_chat_json_sends_the_openai_contract_and_reports_real_provenance(provide
     assert sent["path"] == "/v1/chat/completions"
     assert sent["auth"] == "Bearer sk-local-test-key"
     assert sent["body"]["model"] == "configured-model"
+    assert sent["body"]["max_tokens"] == 4096
     assert sent["body"]["response_format"] == {"type": "json_object"}
     assert [m["role"] for m in sent["body"]["messages"]] == ["system", "user"]
     assert llm_service.get_llm_provenance()["source"] == "real"
@@ -195,6 +198,7 @@ def test_tool_loop_executes_two_rounds_against_the_wire(provider):
 
     assert result == {"final": True}
     assert len(provider.requests) == 2, "两轮：一轮工具调用 + 一轮最终应答"
+    assert provider.requests[0]["body"]["max_tokens"] == 4096
     second = provider.requests[1]["body"]["messages"]
     assert [m["role"] for m in second] == ["system", "user", "assistant", "tool"]
     assert second[2]["tool_calls"][0]["function"]["name"] == "probe_tool"
@@ -273,6 +277,46 @@ def test_empty_content_lets_the_fallback_model_answer(provider):
     result = llm_service.chat_json("主模型空答，备模型补上")
 
     assert result == {"suggestions": [{"block_id": "skills"}]}
+    assert [r["body"]["model"] for r in provider.requests] == ["configured-model", "backup-model"]
+    assert llm_service.get_llm_provenance()["source"] == "fallback_model"
+
+
+def _truncated_content() -> tuple[int, dict]:
+    """非空、但 finish_reason=length：完整规划在输出上限处被截断的真实形状。"""
+    return (
+        200,
+        {
+            "choices": [
+                {
+                    "message": {"content": '{"current_status": {"level": "中级后端工程师"'},
+                    "finish_reason": "length",
+                }
+            ],
+            "usage": {"prompt_tokens": 1800, "completion_tokens": 8192, "total_tokens": 9992},
+        },
+    )
+
+
+def test_non_empty_truncated_content_is_reported_as_truncated_not_bad_json(provider):
+    provider.responses = [_truncated_content()]
+
+    with pytest.raises(llm_service.LLMProviderError) as info:
+        llm_service.chat_json("完整规划，输出很长")
+
+    message = str(info.value)
+    assert "输出被截断" in message
+    assert "finish_reason=length" in message
+    assert "合法 JSON" not in message, "截断不是模型写坏格式，不能误诊成解析失败"
+    assert len(provider.requests) == 1, "同一型号、同一输出上限再打一次仍会截断"
+
+
+def test_non_empty_truncated_content_lets_fallback_model_answer(provider):
+    provider.responses = [_truncated_content(), _content_response(CHOICE_CONTENT)]
+    settings.LLM_FALLBACK_MODEL = "backup-model"
+
+    result = llm_service.chat_json("主模型截断，备模型补上")
+
+    assert result == CHOICE_CONTENT
     assert [r["body"]["model"] for r in provider.requests] == ["configured-model", "backup-model"]
     assert llm_service.get_llm_provenance()["source"] == "fallback_model"
 
