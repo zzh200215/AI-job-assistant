@@ -3,6 +3,7 @@ import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
 import { usePlanningOptions } from '@/features/planning/composables/usePlanningOptions'
+import { useSelectionStore } from '@/stores/selection'
 
 /* D55 把选项链搬进 composable。这四条规则是这一页"选中的到底是谁"的全部口径，
    之前一条都没有测试：它们坏起来不是报错，而是**悄悄选错东西**——把没解析过的简历摆进列表、
@@ -111,10 +112,13 @@ describe('选项链的四条口径', () => {
     await flushPromises()
     listCalls.at(-2).resolve({ items: [{ id: 10, parsed: { a: 1 } }], total: 1 })
     listCalls.at(-1).resolve({ items: [{ id: 4, title: '算法' }], total: 1 })
+    await flushPromises()
+    // JD 3 不在列表里 → 先按 id 取详情；取不回来（已删/无权限）才置空
+    listCalls.find((c) => c.url === '/jd/3').reject(new Error('JD 不存在或无权限'))
     await p
     // 简历 7 不在新列表里 → 置空 → 又被"没选中过就取第一份"接走成 10
     expect(chain.selectedResumeId.value).toBe(10)
-    // JD 3 也不在新列表里 → 置空，且**没有**自动取第一条的规则（那条只对简历成立）
+    // JD 3 也不在新列表里且取不回 → 置空，且**没有**自动取第一条的规则（那条只对简历成立）
     expect(chain.selectedJDId.value).toBeNull()
     expect(chain.selectedResume.value?.id).toBe(10)
 
@@ -128,6 +132,30 @@ describe('选项链的四条口径', () => {
     // 选中项一旦置空，派生值必须跟着变 null，不能还指着上一次列表里的对象
     expect(chain.selectedResume.value).toBeNull()
     expect(chain.selectedJD.value).toBeNull()
+  })
+
+  it('选中的 JD 不在最新 50 份里时按 id 取回，不静默丢掉', async () => {
+    useSelectionStore().rememberJD(4)
+    const chain = usePlanningOptions()
+    chain.restoreSelections()
+    expect(chain.selectedJDId.value).toBe(4)
+
+    const p = chain.refreshBaseOptions()
+    await flushPromises()
+    listCalls.find((c) => c.url === '/resume/list').resolve({ items: [], total: 0 })
+    listCalls
+      .find((c) => c.url === '/jd/list')
+      .resolve({ items: [{ id: 3, title: '平台后端', company: '示例' }], total: 1 })
+    await flushPromises()
+
+    const detail = listCalls.find((c) => c.url === '/jd/4')
+    expect(detail).toBeTruthy()
+    detail.resolve({ id: 4, title: 'qt工程师', company: '科技' })
+    await p
+
+    expect(chain.selectedJDId.value).toBe(4)
+    expect(chain.jdOptions.value.map((j) => j.id)).toEqual([4, 3])
+    expect(chain.selectedJD.value?.title).toBe('qt工程师')
   })
 
   it('取不到列表时说"取不到"，不说"你没有简历"', async () => {

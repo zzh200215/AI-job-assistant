@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 
-import { getJDList } from '@/api/jd'
+import { getJD, getJDList } from '@/api/jd'
 import { getResumeList } from '@/api/resume'
 import { useSelectionStore } from '@/stores/selection'
 
@@ -39,6 +39,25 @@ export function usePlanningOptions() {
     if (jdId) selectedJDId.value = jdId
   }
 
+  /* 选中的 JD 不在最新 50 份列表里时按 id 取回：P5(b) 的"去补技能"会把旧报告的
+     jd_id 写进跨页槽，而列表只取最新 50 份；直接置空会让目标岗位静默丢掉。
+     取不回来（已删/无权限）才置空，保持"悬空 id 不保留"的原口径。 */
+  async function recoverSelectedJD() {
+    const id = selectedJDId.value
+    if (!id || jdOptions.value.some((item) => item.id === id)) return
+    try {
+      const jd = await getJD(id)
+      if (selectedJDId.value !== id) return
+      if (!jd || jd.id !== id) throw new Error('JD missing')
+      if (!jdOptions.value.some((item) => item.id === id)) {
+        jdOptions.value.unshift({ id: jd.id, title: jd.title, company: jd.company })
+      }
+    } catch (error) {
+      console.warn('按 id 取回选中的 JD 失败，已清空选择', error)
+      if (selectedJDId.value === id) selectedJDId.value = null
+    }
+  }
+
   async function refreshBaseOptions() {
     optionsLoading.value = true
     baseOptionsError.value = false
@@ -58,9 +77,7 @@ export function usePlanningOptions() {
       ) {
         selectedResumeId.value = null
       }
-      if (selectedJDId.value && !jdOptions.value.some((item) => item.id === selectedJDId.value)) {
-        selectedJDId.value = null
-      }
+      await recoverSelectedJD()
 
       if (!selectedResumeId.value && resumeOptions.value.length) {
         selectedResumeId.value = resumeOptions.value[0].id
