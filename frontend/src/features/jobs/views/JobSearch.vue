@@ -214,7 +214,7 @@
               <div>
                 <span class="history-label">AI 改写搜索词</span>
                 <p class="rewrite-note">
-                  结合当前简历和搜索意图，生成更贴近招聘平台检索习惯的词组。
+                  结合当前简历和搜索意图，生成更贴近招聘平台搜索习惯的词组。
                 </p>
               </div>
               <el-button size="small" :loading="rewriteLoading" @click="generateRewriteSuggestions">
@@ -458,7 +458,7 @@
             <span class="board-label">下一步动作</span>
             <div class="cta-list">
               <button type="button" class="cta-item" @click="goToSmartAnalysis">
-                <span>去智能分析页完善投递素材</span>
+                <span>去求职分析页完善投递素材</span>
                 <el-icon><ArrowRight /></el-icon>
               </button>
               <button type="button" class="cta-item" @click="activeTab = 'recommend'">

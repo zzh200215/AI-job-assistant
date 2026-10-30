@@ -53,7 +53,7 @@ const BUDGET = {
     /* P1-①（2026-10-07）：`.layout-shell` 那条浅色底换成 `var(--app-bg)`，34 → 33。同一刀把
        主题作用域加到 `documentElement` 上，因为 EP 的浮层是 teleport 到 `body` 子树的。 */
     'src/layouts/DefaultLayout.vue': 33,
-    'src/features/shell/views/Profile.vue': 16,
+    'src/features/shell/views/Profile.vue': 13,
     'src/features/planning/views/CareerPlanning.vue': 27,
     'src/features/analysis/views/SmartAnalysis.vue': 4,
     /* D51 搬出「职业规划」面板时样式按 D44 的口径**复制**（父页面那 1092 行一行没删，因为静态切分

@@ -2,13 +2,12 @@
   <div class="page-shell">
     <header class="page-header">
       <div>
-        <p class="eyebrow">Account</p>
+        <p class="eyebrow">个人账号</p>
         <h2>个人中心</h2>
-        <div class="page-header-sub">统一查看当前账号身份、系统运行模式和交付能力状态。</div>
+        <div class="page-header-sub">查看账号信息、求职数据与当前可用的功能。</div>
       </div>
       <div class="hero-badges">
         <span>{{ authStore.roleLabel }}</span>
-        <span>{{ status.demo_mode ? 'Demo Mode' : 'Live Mode' }}</span>
         <el-tag v-if="subTier === 'pro'" type="success" effect="dark">Pro 会员</el-tag>
         <el-tag v-else-if="subTier === 'enterprise'" type="warning" effect="dark">企业版</el-tag>
       </div>
@@ -34,72 +33,37 @@
         </div>
         <dl class="info-list">
           <div class="info-row">
-            <dt>用户 ID</dt>
-            <dd>{{ authStore.user?.id ?? '--' }}</dd>
-          </div>
-          <div class="info-row">
             <dt>注册时间</dt>
             <dd>{{ dateTime(authStore.user?.created_at, '--') }}</dd>
           </div>
           <div class="info-row">
-            <dt>默认工作台</dt>
-            <dd>{{ authStore.homeRoute }}</dd>
+            <dt>当前身份</dt>
+            <dd>{{ authStore.roleLabel }}</dd>
           </div>
         </dl>
-      </AppPanel>
-
-      <AppPanel>
-        <template #title>系统模式</template>
-        <template #actions>
-          <span class="panel-tip">运行时状态</span>
-        </template>
-        <div class="status-grid">
-          <div class="status-card" :class="{ alert: status.demo_mode }">
-            <span>当前模式</span>
-            <strong>{{ status.demo_mode ? '演示模式' : '正式模式' }}</strong>
-            <small>{{
-              status.demo_mode ? '仍有 mock 依赖，适合演示和联调。' : '核心依赖已切到真实模式。'
-            }}</small>
-          </div>
-          <div class="status-card">
-            <span>LLM</span>
-            <strong>{{ formatProvider(status.llm_provider) }}</strong>
-            <small>编排引擎：{{ status.orchestration_engine || '--' }}</small>
-          </div>
-          <div class="status-card">
-            <span>Embedding</span>
-            <strong>{{ formatProvider(status.embedding_provider) }}</strong>
-            <small>编排策略：{{ status.orchestration_strategy || '--' }}</small>
-          </div>
-          <div class="status-card">
-            <span>Reranker</span>
-            <strong>{{ formatProvider(status.reranker_provider) }}</strong>
-            <small>运行环境：{{ status.app_env || '--' }}</small>
-          </div>
-        </div>
       </AppPanel>
     </section>
 
     <AppPanel class="capability-panel">
-      <template #title>能力状态</template>
+      <template #title>可用功能</template>
       <template #actions>
-        <span class="panel-tip">按交付闭环检查</span>
+        <span class="panel-tip">当前已开启</span>
       </template>
       <div class="capability-list">
         <div class="capability-item" :class="{ done: status.capabilities?.tool_calling }">
-          <strong>LLM 工具调用</strong>
+          <strong>AI 分析</strong>
           <span>{{ status.capabilities?.tool_calling ? '已开启' : '未开启' }}</span>
         </div>
         <div class="capability-item" :class="{ done: status.capabilities?.ocr_resume_parse }">
-          <strong>OCR 简历识别</strong>
+          <strong>图片简历识别</strong>
           <span>{{ status.capabilities?.ocr_resume_parse ? '已开启' : '未开启' }}</span>
         </div>
         <div class="capability-item" :class="{ done: status.capabilities?.password_reset }">
-          <strong>忘记密码</strong>
+          <strong>密码找回</strong>
           <span>{{ status.capabilities?.password_reset ? '已开启' : '未开启' }}</span>
         </div>
         <div class="capability-item" :class="{ done: status.capabilities?.social_login }">
-          <strong>第三方登录</strong>
+          <strong>快捷登录</strong>
           <span>{{ status.capabilities?.social_login ? '已开启' : '未开启' }}</span>
         </div>
       </div>
@@ -599,10 +563,6 @@ const avatarText = computed(() => {
   return name ? name.slice(0, 1).toUpperCase() : 'U'
 })
 
-function formatProvider(value) {
-  return value ? String(value).toUpperCase() : '--'
-}
-
 async function refreshAll() {
   loading.value = true
   try {
@@ -821,44 +781,6 @@ onMounted(async () => {
   color: var(--app-text);
   font-weight: 600;
   text-align: right;
-}
-
-.status-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.status-card {
-  min-height: 128px;
-  padding: 18px;
-  border-radius: var(--app-radius-md, 16px);
-  background: #f8fbfe;
-  border: 1px solid var(--app-line);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.status-card.alert {
-  background: linear-gradient(135deg, #fff7ed, #fffbf4);
-  border-color: var(--app-line);
-}
-
-.status-card span {
-  color: var(--app-muted);
-  font-size: 13px;
-}
-
-.status-card strong {
-  color: var(--app-text);
-  font-size: 22px;
-  line-height: 1.15;
-}
-
-.status-card small {
-  color: var(--app-muted);
-  line-height: 1.6;
 }
 
 .capability-list {
@@ -1152,8 +1074,7 @@ onMounted(async () => {
 
 @media (max-width: 1080px) {
   .grid,
-  .capability-list,
-  .status-grid {
+  .capability-list {
     grid-template-columns: 1fr;
   }
 }

@@ -3,14 +3,14 @@
     <ReturnToBanner />
     <section class="career-hero">
       <div class="hero-copy">
-        <div class="hero-kicker">Career Planning</div>
-        <h2>职业规划工作台</h2>
+        <div class="hero-kicker">职业规划</div>
+        <h2>职业规划</h2>
         <div class="page-header-sub">
-          用现有简历做职业现状判断，设定目标岗位，再生成能力差距、成长路线图和投递策略。
+          基于你的简历和目标岗位，找到能力差距，生成可执行的成长路线。
         </div>
         <div class="hero-pills">
-          <span>目标岗位建模</span>
-          <span>能力雷达</span>
+          <span>目标岗位</span>
+          <span>能力盘点</span>
           <span>成长路线</span>
           <span>投递策略</span>
         </div>
@@ -25,7 +25,7 @@
         <div class="summary-card tone-green">
           <span>目标岗位</span>
           <strong>{{ targetRole || selectedJDLabel || '待填写' }}</strong>
-          <small>{{ selectedJD ? '使用已有 JD' : '可自动生成目标 JD' }}</small>
+          <small>{{ selectedJD ? '使用已有岗位' : '可自动生成岗位要求' }}</small>
         </div>
         <div class="summary-card tone-amber">
           <span>当前阶段</span>
@@ -43,8 +43,8 @@
     <el-card class="control-card" shadow="never">
       <template #header>
         <div class="card-header">
-          <span>规划输入</span>
-          <el-tag type="info" size="small">复用 CareerAgent + Analysis Flow</el-tag>
+          <span>规划依据</span>
+          <el-tag type="info" size="small">简历 + 目标岗位</el-tag>
         </div>
       </template>
 
@@ -124,14 +124,14 @@
               />
             </el-form-item>
 
-            <el-form-item label="复用已有 JD（可选）">
+            <el-form-item label="复用已有岗位（可选）">
               <el-select
                 v-model="selectedJDId"
                 placement="bottom-start"
                 :fallback-placements="['bottom-start']"
                 clearable
                 filterable
-                placeholder="选中后直接用该 JD 做规划"
+                placeholder="选中后直接用这个岗位做规划"
                 class="full-width"
               >
                 <el-option
@@ -157,7 +157,7 @@
 
       <div class="action-row">
         <div class="action-copy">
-          <strong>系统会先构建目标 JD，再触发完整分析链路</strong>
+          <strong>系统会先生成岗位要求，再开始分析</strong>
           <span>输出职业阶段判断、能力差距、成长路线、项目实践和投递策略。</span>
         </div>
         <div class="action-buttons">
@@ -172,7 +172,7 @@
     <el-card v-if="running && agentSteps.length" class="progress-card" shadow="never">
       <template #header>
         <div class="card-header">
-          <span>Agent 执行进度</span>
+          <span>分析进度</span>
           <el-tag type="warning" size="small"
             >{{ completedSteps }} / {{ agentSteps.length }} 步</el-tag
           >
@@ -350,7 +350,7 @@
           {{
             localizedShortTermGoals[0] ||
             localizedOverallAdvice ||
-            '先完成目标岗位建模，获得可执行的成长路径。'
+            '先填写目标岗位，获得可执行的成长路径。'
           }}
         </p>
       </div>
@@ -1015,7 +1015,7 @@ const strategySummary = computed(() => {
       title: '以重点岗位为主线推进',
       reason: '当前匹配度较高，建议收缩投递面，优先冲击最契合的岗位和团队。',
       actions: [
-        '优先投递与目标岗位高度相符的 10-15 个 JD。',
+        '优先投递与目标岗位高度相符的 10-15 个岗位。',
         '围绕项目亮点和能力缺口定制简历版本。',
         '把面试准备集中在系统设计、项目深度和目标行业理解上。',
       ],
@@ -1100,7 +1100,7 @@ async function onSubmitPlanning() {
     return
   }
   if (!targetRole.value.trim() && !selectedJDId.value) {
-    ElMessage.warning('请填写目标岗位，或直接选择一个现有 JD')
+    ElMessage.warning('请填写目标岗位，或直接选择一个现有岗位')
     return
   }
   const outcome = await startCareerPlanning()
@@ -1119,7 +1119,7 @@ async function createGoalJD() {
   }
   const created = await createJD(payload)
   if (!created?.id) {
-    throw new Error('目标 JD 创建失败')
+    throw new Error('目标岗位创建失败')
   }
   selectedJDId.value = created.id
   adoptJD(created)

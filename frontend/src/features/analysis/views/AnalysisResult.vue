@@ -3,7 +3,7 @@
     <section class="result-hero">
       <div class="hero-copy">
         <span class="hero-kicker">Analysis Workspace</span>
-        <h2>智能分析结果</h2>
+        <h2>求职分析结果</h2>
         <div class="page-header-sub">先看结论，再看依据，最后决定下一步动作。</div>
       </div>
       <div class="hero-actions">
@@ -43,7 +43,7 @@
       :closable="false"
       show-icon
       title="分析结果加载失败"
-      description="请检查网络连接后重试，或返回智能分析页重新发起任务。"
+      description="请检查网络连接后重试，或返回求职分析页重新发起任务。"
     >
       <template #default>
         <el-button size="small" type="primary" plain @click="retryLoadAnalysis">重试加载</el-button>
@@ -323,7 +323,7 @@
                       }}</el-tag>
                     </template>
                     <div v-for="(chunk, ci) in reference.chunks" :key="ci" class="ref-chunk">
-                      <div class="ref-meta">片段 {{ ci + 1 }} · 相似度 {{ chunk.score }}</div>
+                      <div class="ref-meta">参考 {{ ci + 1 }} · 相关度 {{ chunk.score }}</div>
                       <div class="ref-text">
                         {{ chunk.text }}{{ chunk.text?.length >= 200 ? '...' : '' }}
                       </div>
@@ -498,7 +498,7 @@ const STEP_LABELS = {
   resume_parse: '简历解析',
   jd_parse: 'JD 解析',
   task_planning: '任务规划',
-  knowledge_retrieval: '知识检索',
+  knowledge_retrieval: '参考依据',
   matching_analysis: '匹配分析',
   resume_optimization: '简历优化',
   interview_question_generation: '面试题生成',

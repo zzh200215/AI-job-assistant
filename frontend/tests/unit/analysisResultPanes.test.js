@@ -42,7 +42,7 @@ function texts(wrapper, selector) {
 
 describe('匹配度解释面板', () => {
   it('没有结果时是空态，加载中时是转圈，两者都不给半截的评分卡', () => {
-    expect(mountExplain().text()).toContain('完成智能分析后可在这里查看匹配度解释')
+    expect(mountExplain().text()).toContain('完成求职分析后可在这里查看匹配度解释')
     expect(mountExplain({ loading: true }).text()).toContain('正在生成匹配度解释')
     expect(mountExplain({ loading: true }).find('.explain-hero').exists()).toBe(false)
   })
@@ -122,22 +122,22 @@ describe('引用来源面板', () => {
   ]
 
   it('在飞 / 空 / 有内容三种状态各说各的话', () => {
-    expect(mountRefs({ loading: true }).text()).toContain('正在检索引用来源')
-    expect(mountRefs({}).text()).toContain('暂无引用知识')
+    expect(mountRefs({ loading: true }).text()).toContain('正在整理参考依据')
+    expect(mountRefs({}).text()).toContain('暂无参考依据')
     const wrapper = mountRefs({ references: DOCS })
     expect(texts(wrapper, '.ref-doc-title')).toEqual(['简历模板 A', '能力模型 B'])
     expect(wrapper.find('.rag-confidence').exists()).toBe(false)
   })
 
-  it('文档类型走 lib 的表，相似度按分数分档', () => {
+  it('文档类型走 lib 的表，相关度按分数分档', () => {
     const wrapper = mountRefs({
       references: DOCS,
       analysisConfidence: { score: 0.6, level: 'medium' },
     })
     expect(texts(wrapper, '.ref-title .el-tag')).toEqual(['简历模板', '能力模型'])
     const scores = wrapper.findAll('.ref-chunk-header .el-tag').map((t) => t.text())
-    expect(scores).toEqual(['相似度 91.0%', '相似度 42.0%'])
-    expect(wrapper.find('.rag-confidence-title').text()).toContain('本次检索可信度')
+    expect(scores).toEqual(['相关度 91.0%', '相关度 42.0%'])
+    expect(wrapper.find('.rag-confidence-title').text()).toContain('参考依据充分度')
   })
 
   it('展开哪几份文档不自己改状态，而是写回 update:refOpenDocs', async () => {

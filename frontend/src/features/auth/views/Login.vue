@@ -34,32 +34,31 @@
         </div>
 
         <div class="brand-body">
-          <h1>职业情报工作台</h1>
+          <h1>把求职，走成一条清晰的路径</h1>
           <p class="brand-desc">
-            Agentic RAG、多智能体协作、岗位分析与职业规划，<br />
-            统一在一个工作台通过信号驱动决策。
+            从简历诊断、岗位匹配到模拟面试，<br />
+            一步一步推进，不用在多个工具之间来回切换。
           </p>
 
-          <!-- Terminal-style capability list -->
           <div class="cap-grid">
             <div class="cap-item">
-              <span class="cap-tag mono">agent.run</span>
-              <span class="cap-label">Agent 编排</span>
-              <span class="cap-desc">多策略协同分析</span>
+              <span class="cap-tag mono">01</span>
+              <span class="cap-label">简历诊断与优化</span>
+              <span class="cap-desc">先看清优势与短板，再动手改</span>
             </div>
             <div class="cap-item">
-              <span class="cap-tag mono">rag.query</span>
-              <span class="cap-label">RAG 增强</span>
-              <span class="cap-desc">知识检索辅助判断</span>
+              <span class="cap-tag mono">02</span>
+              <span class="cap-label">岗位匹配与投递</span>
+              <span class="cap-desc">按你的经历找机会，持续跟进</span>
             </div>
             <div class="cap-item">
-              <span class="cap-tag mono">pipeline.board</span>
-              <span class="cap-label">投递看板</span>
-              <span class="cap-desc">多份投递进度跟踪</span>
+              <span class="cap-tag mono">03</span>
+              <span class="cap-label">模拟面试与规划</span>
+              <span class="cap-desc">按目标岗位练一遍，知道差在哪</span>
             </div>
           </div>
 
-          <p class="role-note">登录后进入求职工作台</p>
+          <p class="role-note">登录后，从你的简历开始</p>
         </div>
 
         <!-- Decorative pipeline lines -->

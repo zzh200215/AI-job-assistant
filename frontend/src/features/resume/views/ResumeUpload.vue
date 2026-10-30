@@ -4,9 +4,7 @@
     <div class="page-header">
       <div>
         <h2>简历中心</h2>
-        <div class="page-header-sub">
-          管理多份简历、AI 优化诊断、版本对比与分享 — 简历全生命周期管理
-        </div>
+        <div class="page-header-sub">管理、诊断和优化你的简历，准备下一次投递。</div>
       </div>
       <div class="header-actions">
         <el-button type="primary" @click="showUpload = true">

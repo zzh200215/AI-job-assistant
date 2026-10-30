@@ -180,9 +180,9 @@ const candidateNavItems = [
   {
     path: '/smart-analysis',
     icon: MagicStick,
-    label: '智能分析',
+    label: '求职分析',
     tag: 'Analysis',
-    desc: '简历与岗位匹配分析。',
+    desc: '看清简历与目标岗位的差距。',
     matches: ['/smart-analysis', '/analysis'],
   },
   {

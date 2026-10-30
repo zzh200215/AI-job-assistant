@@ -1,7 +1,7 @@
 <template>
   <div v-if="loading" class="inline-loading">
     <el-icon class="is-loading" size="22"><Loading /></el-icon>
-    <p>正在检索引用来源…</p>
+    <p>正在整理参考依据…</p>
   </div>
   <template v-else-if="references.length > 0 || analysisConfidence">
     <div v-if="analysisConfidence" class="rag-confidence">
@@ -11,16 +11,16 @@
         </div>
         <div class="rag-confidence-copy">
           <div class="rag-confidence-title">
-            本次检索可信度
+            参考依据充分度
             <el-tag size="small" :type="confidenceTagType(analysisConfidence.level)">{{
               analysisConfidence.label || '-'
             }}</el-tag>
           </div>
           <div class="rag-confidence-summary">
-            {{ analysisConfidence.summary || '暂无可信度说明' }}
+            {{ analysisConfidence.summary || '暂无说明' }}
           </div>
           <div v-if="referenceQuery" class="rag-confidence-query">
-            检索查询：{{ referenceQuery }}
+            参考方向：{{ referenceQuery }}
           </div>
         </div>
       </div>
@@ -36,7 +36,7 @@
         </div>
       </div>
       <div v-if="analysisConfidence.risks?.length" class="rag-risk-list">
-        <span class="rag-risk-label">风险提示</span>
+        <span class="rag-risk-label">需要注意</span>
         <span v-for="risk in analysisConfidence.risks" :key="risk" class="rag-risk-item">{{
           risk
         }}</span>
@@ -44,7 +44,7 @@
     </div>
     <el-alert
       v-if="references.length > 0"
-      title="本次分析参考了以下知识库文档"
+      title="本次分析参考了以下资料"
       type="info"
       :closable="false"
       show-icon
@@ -67,9 +67,9 @@
         <div class="ref-chunks">
           <div v-for="(chunk, j) in doc.chunks" :key="j" class="ref-chunk-item">
             <div class="ref-chunk-header">
-              <span class="ref-chunk-num">片段 #{{ j + 1 }}</span>
+              <span class="ref-chunk-num">参考 #{{ j + 1 }}</span>
               <el-tag size="small" :type="scoreTagType(chunk.score)" effect="plain"
-                >相似度 {{ (chunk.score * 100).toFixed(1) }}%</el-tag
+                >相关度 {{ (chunk.score * 100).toFixed(1) }}%</el-tag
               >
             </div>
             <el-input
@@ -84,7 +84,7 @@
       </el-collapse-item>
     </el-collapse>
   </template>
-  <el-empty v-else description="暂无引用知识（知识库为空或未检索到相关文档）" />
+  <el-empty v-else description="暂无参考依据（资料库为空或没有找到相关内容）" />
 </template>
 
 <script setup>

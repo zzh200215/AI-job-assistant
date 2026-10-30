@@ -223,7 +223,7 @@ describe('两句表单守卫留在页面，而不是躲进运行链', () => {
     expect(wrapper.text()).toContain('没有职称') // 简历确实被选中了，第一道守卫是过不了的对面
     await planButton(wrapper).trigger('click')
     await flushPromises()
-    expect(ElMessage.warning).toHaveBeenCalledWith('请填写目标岗位，或直接选择一个现有 JD')
+    expect(ElMessage.warning).toHaveBeenCalledWith('请填写目标岗位，或直接选择一个现有岗位')
     expect(ElMessage.warning).not.toHaveBeenCalledWith('请先选择简历')
     expect(runFullAnalysis).not.toHaveBeenCalled()
   })

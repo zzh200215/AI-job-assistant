@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>任务中心</h2>
-        <div class="page-header-sub">查看所有异步分析任务的进度和结果</div>
+        <div class="page-header-sub">查看你发起的分析任务和结果</div>
       </div>
       <el-button :loading="loading" @click="loadTasks">
         <el-icon><Refresh /></el-icon> 刷新
@@ -52,7 +52,7 @@
     <div v-else-if="!tasks.length" class="empty-state">
       <el-empty :image-size="92" description="这里会显示你发起的分析任务" />
       <div class="empty-actions">
-        <el-button type="primary" @click="router.push('/smart-analysis')">开始智能分析</el-button>
+        <el-button type="primary" @click="router.push('/smart-analysis')">开始求职分析</el-button>
         <el-button @click="router.push('/jobs/recommend')">查看岗位推荐</el-button>
       </div>
       <div class="empty-guide">

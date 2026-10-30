@@ -37,7 +37,7 @@ async function renderWorkspace(path) {
 const WORKSPACE_ROUTES = [
   ['/home', '首页'],
   ['/jobs/search', '岗位搜索'],
-  ['/smart-analysis', '智能分析'],
+  ['/smart-analysis', '求职分析'],
   ['/career-planning', '职业规划'],
   ['/jobs/pipeline/kanban', '投递看板'],
   ['/jobs/recommend', '岗位推荐'],

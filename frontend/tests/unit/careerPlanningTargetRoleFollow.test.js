@@ -194,7 +194,7 @@ describe('职业规划：目标岗位跟随当前简历（§10.11 ①）', () =>
 
     await wrapper.findAll('.action-buttons button').at(-1).trigger('click')
     await flushPromises()
-    expect(ElMessage.warning).not.toHaveBeenCalledWith('请填写目标岗位，或直接选择一个现有 JD')
+    expect(ElMessage.warning).not.toHaveBeenCalledWith('请填写目标岗位，或直接选择一个现有岗位')
     expect(ElMessage.warning).not.toHaveBeenCalledWith('请先选择简历')
     wrapper.unmount()
   })
@@ -205,7 +205,7 @@ describe('职业规划：目标岗位跟随当前简历（§10.11 ①）', () =>
     // 而"没有职称的简历"仍是被选中状态：第二道守卫要拦住，这是 §10.11 ① 的原意
     await wrapper.findAll('.action-buttons button').at(-1).trigger('click')
     await flushPromises()
-    expect(ElMessage.warning).toHaveBeenCalledWith('请填写目标岗位，或直接选择一个现有 JD')
+    expect(ElMessage.warning).toHaveBeenCalledWith('请填写目标岗位，或直接选择一个现有岗位')
     wrapper.unmount()
   })
 })

@@ -3,7 +3,7 @@
     <!-- 顶部欢迎栏 -->
     <section class="welcome-bar">
       <div class="welcome-left">
-        <div class="signal-kicker"><span class="signal-dot" /> CAREER SIGNAL / LIVE WORKSPACE</div>
+        <div class="signal-kicker"><span class="signal-dot" /> CAREER SIGNAL / 求职工作台</div>
         <h1><span>今天，</span><em>推进一份机会</em></h1>
         <p class="welcome-sub">
           {{ greeting }}，{{ username }}。{{
@@ -14,11 +14,11 @@
         </p>
       </div>
       <div class="welcome-actions">
-        <el-button type="primary" @click="go('/jobs/pipeline/kanban')">
-          <el-icon><Grid /></el-icon> 打开投递看板
+        <el-button type="primary" @click="go('/smart-analysis')">
+          <el-icon><MagicStick /></el-icon> 开始求职分析
         </el-button>
-        <el-button @click="go('/smart-analysis')">
-          <el-icon><MagicStick /></el-icon> 开始智能分析
+        <el-button @click="go('/jobs/pipeline/kanban')">
+          <el-icon><Grid /></el-icon> 打开投递看板
         </el-button>
       </div>
       <div class="signal-stats" aria-label="求职关键指标">
@@ -59,7 +59,7 @@
         </div>
         <div class="core-info">
           <h3>简历中心</h3>
-          <p>管理、优化、诊断多份简历</p>
+          <p>上传简历，先做一次诊断</p>
           <span class="core-meta">{{
             overviewLoaded ? (dashSummary.total_resumes || '--') + ' 份简历' : '加载中...'
           }}</span>
@@ -72,7 +72,7 @@
         </div>
         <div class="core-info">
           <h3>岗位推荐</h3>
-          <p>智能匹配每日高匹配岗位</p>
+          <p>按你的经历匹配适合的岗位</p>
           <span class="core-meta">{{
             overviewLoaded ? (dashSummary.bookmarked_jobs || '--') + ' 个收藏岗位' : '加载中...'
           }}</span>
@@ -85,7 +85,7 @@
         </div>
         <div class="core-info">
           <h3>AI 模拟面试</h3>
-          <p>针对性面试训练、能力评估</p>
+          <p>按目标岗位练一遍，知道差在哪</p>
           <span class="core-meta">{{
             overviewLoaded ? (dashSummary.total_interviews || '--') + ' 次面试' : '加载中...'
           }}</span>

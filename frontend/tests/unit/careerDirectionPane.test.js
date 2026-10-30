@@ -49,7 +49,7 @@ describe('职业方向面板', () => {
 
   it('没有方向说的是「先去跑一次分析」，而不是空白', () => {
     render()
-    expect(document.querySelector('.el-empty').textContent).toContain('请先完成一键智能分析')
+    expect(document.querySelector('.el-empty').textContent).toContain('请先完成一次求职分析')
     expect(document.querySelector('.el-alert')).toBeNull()
     expect(cards().length).toBe(0)
   })

@@ -14,7 +14,7 @@
         <p>
           {{
             leadingOffer
-              ? `按当前权重计算为 ${weightedScore(leadingOffer)} 分，仅作为比较起点。`
+              ? `按你当前看重的因素，综合得分 ${weightedScore(leadingOffer)}，仅作为比较起点。`
               : '选择 Offer 后可开始对比。'
           }}
         </p>
@@ -39,7 +39,7 @@
         <p>
           {{
             selectedOffers.length >= 2
-              ? '先确认个人权重，再生成对比建议。'
+              ? '先确认你最看重的因素，再生成对比建议。'
               : '至少选择两个 Offer，系统才会生成有意义的取舍建议。'
           }}
         </p>
@@ -114,9 +114,9 @@
     <!-- 权重配置 -->
     <AppPanel v-if="selectedOffers.length >= 2" icon-color="var(--app-warning)">
       <template #icon><Setting /></template>
-      <template #title>评分权重配置</template>
+      <template #title>你最看重的因素</template>
       <template #actions>
-        <el-button size="small" text @click="resetWeights">重置默认</el-button>
+        <el-button size="small" text @click="resetWeights">恢复默认</el-button>
       </template>
       <div class="weight-grid">
         <div v-for="w in weightKeys" :key="w.key" class="weight-item">
@@ -150,7 +150,7 @@
         <table class="compare-table">
           <thead>
             <tr>
-              <th class="dim-col">维度</th>
+              <th class="dim-col">对比项</th>
               <th v-for="o in selectedOffers" :key="o.id">
                 {{ o.company || '未知' }}
                 <div class="offer-sub" v-if="o.offer_details?.total_package">

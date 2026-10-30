@@ -64,7 +64,7 @@
       </div>
     </div>
   </template>
-  <el-empty v-else description="暂无职业方向推荐（请先完成一键智能分析）" />
+  <el-empty v-else description="暂无职业方向推荐（请先完成一次求职分析）" />
 </template>
 
 <script setup>

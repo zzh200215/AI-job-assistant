@@ -84,7 +84,7 @@
       </el-col>
     </el-row>
   </template>
-  <el-empty v-else description="完成智能分析后可在这里查看匹配度解释" />
+  <el-empty v-else description="完成求职分析后可在这里查看匹配度解释" />
 </template>
 
 <script setup>

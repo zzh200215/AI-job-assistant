@@ -65,7 +65,7 @@ export const routes = [
         path: 'smart-analysis',
         name: 'smart-analysis',
         component: () => import('@/features/analysis/views/SmartAnalysis.vue'),
-        meta: { title: '智能分析', roles: CANDIDATE },
+        meta: { title: '求职分析', roles: CANDIDATE },
       },
       {
         path: 'jobs/recommend',
@@ -322,7 +322,7 @@ export const routes = [
       {
         path: 'explain-match',
         redirect: { name: 'smart-analysis' },
-        meta: { title: '智能分析', roles: CANDIDATE },
+        meta: { title: '求职分析', roles: CANDIDATE },
       },
     ],
   },

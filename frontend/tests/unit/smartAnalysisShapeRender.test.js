@@ -206,7 +206,7 @@ describe('SmartAnalysis 的展示形状接线', () => {
 
   it('维度对象没带技能列表时，回退到记录顶层的 matched/missing', async () => {
     await runAnalysis()
-    expect(chips()).toEqual(['已匹配 2 项', '待补足 1 项', '置信度 0.8'])
+    expect(chips()).toEqual(['已匹配 2 项', '待补足 1 项', '资料充分度 0.8'])
   })
 
   it('面试题同时认新键与 legacy 键，分组标题从 lib 的表里来', async () => {

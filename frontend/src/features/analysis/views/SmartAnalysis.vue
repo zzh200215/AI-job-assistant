@@ -6,16 +6,16 @@
         <div class="hero-title-main">
           <div class="hero-badge">
             <span class="badge-dot" />
-            Agentic RAG
+            求职分析
           </div>
-          <h2>智能分析</h2>
+          <h2>求职分析</h2>
           <div class="page-header-sub">
-            把简历、岗位 JD、知识召回与分析结论整合成一个更完整的决策工作台。
+            把简历和目标岗位放在一起看：先找出差距，再给出下一步动作。
           </div>
           <div class="hero-tags">
-            <span>多智能体协作</span>
-            <span>匹配分析</span>
-            <span>引用溯源</span>
+            <span>简历诊断</span>
+            <span>岗位匹配</span>
+            <span>参考依据</span>
           </div>
         </div>
         <!-- Decorative pipeline node -->
@@ -62,17 +62,17 @@
         <div class="hm-item" :class="{ ready: !!resumeInfo }">
           <span class="hm-label">简历状态</span>
           <strong class="data-value">{{ resumeInfo ? '已上传' : '待上传' }}</strong>
-          <small>{{ resumeInfo?.file_name || '等待候选人简历' }}</small>
+          <small>{{ resumeInfo?.file_name || '等待上传简历' }}</small>
         </div>
         <div class="hm-item" :class="{ ready: !!(jdInfo || jdForm.title || jdForm.raw_text) }">
-          <span class="hm-label">JD 状态</span>
+          <span class="hm-label">目标岗位</span>
           <strong class="data-value">{{
             jdInfo || jdForm.title || jdForm.raw_text ? '已就绪' : '待填写'
           }}</strong>
-          <small>{{ jdInfo?.title || jdForm.title || '等待目标岗位 JD' }}</small>
+          <small>{{ jdInfo?.title || jdForm.title || '等待填写目标岗位' }}</small>
         </div>
         <div class="hm-item" :class="{ ready: loading || !!result }">
-          <span class="hm-label">分析流程</span>
+          <span class="hm-label">分析进度</span>
           <strong class="data-value">{{ analysisFlowLabel }}</strong>
           <small>{{ analysisFlowHint }}</small>
         </div>
@@ -89,9 +89,9 @@
       <div class="panel-header">
         <div class="panel-title-row">
           <el-icon><MagicStick /></el-icon>
-          <span>一键智能分析</span>
+          <span>生成求职分析</span>
         </div>
-        <el-tag size="small">Agentic RAG + 多智能体协作</el-tag>
+        <el-tag size="small">简历 + 岗位 + 行业资料</el-tag>
       </div>
 
       <div class="panel-body">
@@ -118,7 +118,7 @@
                 <el-icon class="done-icon"><SuccessFilled /></el-icon>
                 <div class="upload-ready-copy">
                   <strong>{{ resumeInfo.file_name }}</strong>
-                  <span>ID: {{ resumeInfo.id }}</span>
+                  <span>已上传，可直接分析</span>
                 </div>
                 <el-button text type="danger" size="small" @click.stop="clearResume"
                   >移除</el-button
@@ -129,7 +129,7 @@
 
           <!-- JD Input -->
           <div class="input-col">
-            <div class="input-col-label">输入岗位 JD</div>
+            <div class="input-col-label">填写目标岗位</div>
             <el-form :model="jdForm" label-position="top" :disabled="loading" class="jd-form">
               <el-form-item label="岗位名称" required>
                 <el-input v-model="jdForm.title" placeholder="如：Python 后端开发工程师" />
@@ -137,17 +137,17 @@
               <el-form-item label="公司（可选）">
                 <el-input v-model="jdForm.company" placeholder="如：示例科技" />
               </el-form-item>
-              <el-form-item label="JD 内容" required>
+              <el-form-item label="岗位描述" required>
                 <el-input
                   v-model="jdForm.raw_text"
                   type="textarea"
                   :rows="4"
-                  placeholder="粘贴岗位 JD 完整内容…"
+                  placeholder="粘贴完整的岗位描述…"
                 />
               </el-form-item>
             </el-form>
             <div v-if="jdInfo" class="jd-ready">
-              <el-tag size="small" type="success">JD 已创建，ID: {{ jdInfo.id }}</el-tag>
+              <el-tag size="small" type="success">岗位已创建，可直接分析</el-tag>
               <el-button text type="danger" size="small" @click="clearJD">移除</el-button>
             </div>
           </div>
@@ -157,7 +157,7 @@
         <div class="action-bar">
           <div class="action-copy">
             <strong>输出包括</strong>
-            <span>匹配度、差距、职业方向、面试题与引用来源</span>
+            <span>匹配度、差距、职业方向、面试题与参考依据</span>
           </div>
           <el-button
             type="primary"
@@ -167,7 +167,7 @@
             @click="onStartAnalysis"
           >
             <el-icon><Promotion /></el-icon>
-            {{ loading ? '智能分析中…' : '一键智能分析' }}
+            {{ loading ? '正在分析…' : '生成求职分析' }}
           </el-button>
         </div>
       </div>
@@ -178,7 +178,7 @@
       <div class="panel-header">
         <div class="panel-title-row">
           <el-icon class="is-loading"><Loading /></el-icon>
-          <span>Agent Pipeline</span>
+          <span>分析进度</span>
         </div>
         <el-tag type="warning" size="small"
           >{{ completedStepCount }} / {{ agentSteps.length }} 步</el-tag
@@ -228,10 +228,7 @@
                 </span>
               </div>
               <div v-if="s.status === 'completed' && s.output_data" class="pl-preview">
-                <span v-if="s.step_name === 'intent_recognition'">
-                  意图: <b>{{ s.output_data.intent || '-' }}</b>
-                </span>
-                <span v-else-if="s.step_name === 'match_analysis'">
+                <span v-if="s.step_name === 'match_analysis'">
                   匹配度: <b>{{ s.output_data.match_score ?? '-' }}</b>
                 </span>
                 <span v-else-if="s.step_name === 'resume_optimization'">
@@ -293,7 +290,7 @@
                 <span class="chip chip-match">已匹配 {{ matchedSkills.length }} 项</span>
                 <span class="chip chip-gap">待补足 {{ missingSkills.length }} 项</span>
                 <span class="chip chip-ref">
-                  置信度 {{ analysisConfidence ? (analysisConfidence.score ?? 0) : '--' }}
+                  资料充分度 {{ analysisConfidence ? (analysisConfidence.score ?? 0) : '--' }}
                 </span>
               </div>
               <div class="next-step-bar">
@@ -347,7 +344,7 @@
               </div>
               <div class="rag-confidence-copy">
                 <div class="rag-confidence-title">
-                  分析可信度
+                  参考依据充分度
                   <el-tag size="small" :type="confidenceTagType(analysisConfidence.level)">
                     {{ analysisConfidence.label || '-' }}
                   </el-tag>
@@ -359,13 +356,13 @@
             </div>
             <div class="rag-confidence-metrics">
               <div class="rag-metric">
-                <span>召回片段</span>
+                <span>参考资料</span>
                 <strong class="data-value">{{
                   analysisConfidence.signals?.total_chunks ?? 0
                 }}</strong>
               </div>
               <div class="rag-metric">
-                <span>覆盖文档</span>
+                <span>覆盖来源</span>
                 <strong class="data-value">{{
                   analysisConfidence.signals?.unique_docs ?? 0
                 }}</strong>
@@ -377,7 +374,7 @@
                 }}</strong>
               </div>
               <div class="rag-metric">
-                <span>命中能力模型</span>
+                <span>专业能力模型</span>
                 <strong class="data-value">{{
                   analysisConfidence.signals?.has_skill_model ? '是' : '否'
                 }}</strong>
@@ -692,7 +689,7 @@ const onStartAnalysis = async () => {
   if (!canAnalyze.value) return
   if (!jdInfo.value) {
     if (!jdForm.title.trim() || !jdForm.raw_text.trim()) {
-      ElMessage.warning('请填写岗位名称和 JD 内容')
+      ElMessage.warning('请填写岗位名称和岗位描述')
       return
     }
     try {
@@ -726,7 +723,7 @@ const onStartAnalysis = async () => {
     })
     const taskId = startRes?.task_id
     if (!taskId) {
-      ElMessage.error('启动智能分析失败')
+      ElMessage.error('启动求职分析失败')
       return
     }
     await pollAgentTask(taskId, {
@@ -746,12 +743,12 @@ const onStartAnalysis = async () => {
         selection.rememberRecord(data.record_id || data.id || recordId)
         await loadExplainMatch(true)
         await loadReferences(true)
-        ElMessage.success(`智能分析完成，匹配度 ${data.match_score}`)
+        ElMessage.success(`求职分析完成，匹配度 ${data.match_score}`)
         reportTab.value = 'skills'
       },
       onFailed(error) {
         taskOutcome.value = 'failed'
-        ElMessage.error(`智能分析失败: ${userErrorCopy(error, '未知错误')}`)
+        ElMessage.error(`求职分析失败: ${userErrorCopy(error, '未知错误')}`)
       },
       onCancelled(error) {
         taskOutcome.value = 'cancelled'
