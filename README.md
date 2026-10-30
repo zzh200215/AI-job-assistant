@@ -697,7 +697,7 @@ cd frontend && npm test            # 静态守卫（.mjs）
 
 ### 后续加强方向
 
-- **P3.2 已工程收口**：no-thinking 上产品路径后完整评测 **9/12 真组织**（weak max 2.95s），6s cap 不动；429 仍在 mid 侧（外部配额）。质量 9 条为 assistant-preliminary，待复核。
+- **P3.2 已工程收口**：no-thinking 上产品路径后完整评测 **9/12 真组织**（weak max 2.95s），6s cap 不动；429 仍在 mid 侧（外部配额）。质量 9 条已于 2026-10-30 按现值确认（原 assistant-preliminary）。
 - **P4 真 provider 质量**：rewrite 定向 2/2 real（复核后 2 / 0；导入侧词面事实验证器把 6 条建议拦到 1 条）；career prompt v2 后 2/2 real、证据进理由（cites_interview 1 vs 0）。两臂均小样本，更多样本仍待做；完整规划的别名匹配已收（新规划落库前补 canonical，历史记录读取时补；存量不回填，半径量出 0 收益）。
 - **物理切网**：Wi-Fi→蜂窝与真实运营商抖动需要第二台设备；TCP 层切网/抖动已验。
 - **长简历与有效 PDF 夹具**：本机仍缺 >15000 字符真样本与可写库生成的 PDF；当前用合成长简历 + 坏 PDF 覆盖截断与报错路径。
