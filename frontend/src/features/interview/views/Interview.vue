@@ -520,7 +520,7 @@ async function loadWeakAreas() {
     )
     const weaknesses = Array.isArray(perf?.weaknesses) ? perf.weaknesses : []
     weakAreas.value = weaknesses
-      .map((w) => ({ name: w.dimension, score: w.avg_score, desc: '该维度需要加强训练' }))
+      .map((w) => ({ name: w.dimension, score: w.avg_score, desc: '该项能力需要加强训练' }))
       .sort((a, b) => a.score - b.score)
   } catch (e) {
     /* 读不到就是读不到，不许演成"你没有薄弱项"（那是 silentEmptyCatches 那一维钉的东西），

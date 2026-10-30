@@ -170,7 +170,7 @@ def _scorecard(report: PortfolioReport) -> str:
         "<h3>1.1 组合六项评分卡</h3>"
         + _scroll(
             _table(
-                ["维度", "得分", "满分", "落档", "主要扣分理由"], rows, "tbl scorecard", min_px=rubric.SCORECARD_MIN_PX
+                ["评分项", "得分", "满分", "落档", "主要扣分理由"], rows, "tbl scorecard", min_px=rubric.SCORECARD_MIN_PX
             )
         )
         + scale
@@ -217,7 +217,7 @@ def _compare_table(report: PortfolioReport) -> str:
 
 def _coverage_rows(report: PortfolioReport, *, as_figure: bool) -> str:
     indices = _ordered_indices(report)
-    headers = ["能力维度"] + [project_label(row) for row in report.projects] + ["组合覆盖"]
+    headers = ["能力项"] + [project_label(row) for row in report.projects] + ["组合覆盖"]
     body = []
     for row in report.capabilities:
         verdict = row.get("verdict") or {}

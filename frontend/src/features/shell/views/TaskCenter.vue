@@ -67,7 +67,7 @@
         <div class="task-top">
           <div class="task-dot" :class="'dot-' + task.status" />
           <div class="task-info">
-            <strong>{{ taskName(task) }}</strong>
+            <strong>{{ task.name }}</strong>
             <span>{{ dateTime(task.create_time) }}</span>
           </div>
           <el-tag :type="statusType(task.status)" size="small">{{
@@ -96,7 +96,12 @@
         </div>
 
         <div v-if="task.error_message" class="task-error">
-          <el-alert :title="task.error_message" type="error" :closable="false" show-icon />
+          <el-alert
+            title="任务没有完成，可以重试或稍后再看"
+            type="error"
+            :closable="false"
+            show-icon
+          />
         </div>
 
         <div class="task-actions">
@@ -187,8 +192,32 @@ const TASK_TYPE_LABELS = {
   report: '评估报告',
 }
 
+const FILTER_GROUPS = {
+  running: ['running', 'pending'],
+  failed: ['failed', 'partial'],
+}
+
 function taskName(task) {
-  return task.name || TASK_TYPE_LABELS[task.task_type] || '求职任务'
+  return task.name || TASK_TYPE_LABELS[task.task_type] || '求职分析任务'
+}
+
+function normalizeTask(task) {
+  const rawProgress = task.progress
+  const progress = rawProgress && typeof rawProgress === 'object' ? rawProgress : null
+  const percent = Number(progress ? progress.progress_percent : rawProgress)
+  const step = progress?.current_step
+  return {
+    ...task,
+    name: taskName(task),
+    progress: Number.isFinite(percent)
+      ? Math.min(100, Math.max(0, Math.round(percent)))
+      : undefined,
+    current_step: step?.label || step?.name || task.current_step || '',
+    duration_ms: progress?.duration_ms ?? task.duration_ms ?? null,
+    error_message: task.error_message || task.error_msg || '',
+    result_url:
+      task.result_url || (task.analysis_record_id ? `/analysis/${task.analysis_record_id}` : ''),
+  }
 }
 
 function formatDuration(ms) {
@@ -218,14 +247,17 @@ async function loadTasks() {
   const isCurrent = latestCall()
   loading.value = true
   try {
-    const params = { limit: 50 }
-    if (statusFilter.value !== 'all') params.status = statusFilter.value
+    const group = FILTER_GROUPS[statusFilter.value]
+    const params = { limit: group ? 100 : 50 }
+    if (statusFilter.value !== 'all' && !group) params.status = statusFilter.value
     const [taskData, summaryData] = await Promise.all([
       getAgentTasks(params),
       getAgentTaskSummary(),
     ])
     if (!isCurrent()) return
-    tasks.value = taskData?.items || taskData || []
+    const items = taskData?.items || taskData || []
+    const visible = group ? items.filter((task) => group.includes(task.status)) : items
+    tasks.value = visible.map(normalizeTask)
     summary.value = summaryData || { counts: {}, total: 0 }
     loadError.value = ''
   } catch (error) {

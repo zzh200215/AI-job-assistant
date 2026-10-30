@@ -201,7 +201,7 @@ def summarize(samples: list[SalarySample], total_jds: int | None = None) -> Sala
             has_data=False,
             total_jds=matched,
             parsed_count=0,
-            message="未找到可解析的薪资数据，请先导入更多包含薪资信息的JD",
+            message="没有找到可用的薪资数据，可以先导入更多包含薪资信息的岗位",
         )
 
     mids = [sample.mid_k for sample in samples]
@@ -230,7 +230,7 @@ def summarize(samples: list[SalarySample], total_jds: int | None = None) -> Sala
         truncated_ids=max(len(ids) - MAX_TRACED_JD_IDS, 0),
     )
     if evidence.low_confidence:
-        evidence.message = f"仅 {len(samples)} 条可解析样本，分位数不足以支撑精确结论"
+        evidence.message = f"目前只有 {len(samples)} 个岗位有薪资信息，还不足以支撑精确结论"
     return evidence
 
 

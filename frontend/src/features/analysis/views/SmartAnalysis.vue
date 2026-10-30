@@ -238,7 +238,7 @@
                 </span>
                 <span v-else-if="s.step_name === 'summary_report'">汇总完成</span>
               </div>
-              <el-tag v-if="s.error_msg" size="small" type="danger">{{ s.error_msg }}</el-tag>
+              <el-tag v-if="s.error_msg" size="small" type="danger">这一步未完成</el-tag>
             </div>
           </div>
         </div>

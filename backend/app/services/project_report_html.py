@@ -158,7 +158,7 @@ def _scorecard(report: ProjectReport) -> str:
     scale = f'<p class="concl" id="grade-scale">评级档位：{_e(report.grade_scale)}。这一档说的是这一个项目，不是这份简历。</p>'
     return (
         "<h3>1.1 六项评分卡</h3>"
-        + _table(["维度", "得分", "满分", "落档", "主要扣分理由"], rows, "tbl scorecard")
+        + _table(["评分项", "得分", "满分", "落档", "主要扣分理由"], rows, "tbl scorecard")
         + scale
     )
 

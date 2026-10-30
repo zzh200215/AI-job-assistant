@@ -100,7 +100,7 @@ def test_no_samples_is_explicitly_no_data():
 
     assert evidence.has_data is False
     assert evidence.p50 is None
-    assert "未找到" in evidence.message
+    assert "没有找到" in evidence.message
     assert evidence.to_dict()["statistics"]["avg_mid"] is None
 
 

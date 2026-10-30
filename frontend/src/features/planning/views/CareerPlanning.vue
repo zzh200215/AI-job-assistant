@@ -205,7 +205,7 @@
           <div class="timeline-meta">
             {{ statusText(step.status) }}
           </div>
-          <div v-if="step.error_msg" class="timeline-error">{{ step.error_msg }}</div>
+          <div v-if="step.error_msg" class="timeline-error">这一步没有完成，请稍后重试</div>
         </el-timeline-item>
       </el-timeline>
     </el-card>

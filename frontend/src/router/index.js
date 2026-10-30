@@ -121,7 +121,7 @@ export const routes = [
         path: 'offer',
         name: 'offer-compare',
         component: () => import('@/features/jobs/views/OfferCompare.vue'),
-        meta: { title: 'Offer决策', roles: CANDIDATE },
+        meta: { title: 'Offer 决策', roles: CANDIDATE },
       },
       {
         path: 'salary',

@@ -293,11 +293,11 @@ def _check_wide_tables(html: str, report: PortfolioReport) -> list[LintIssue]:
     """
     wanted: list[tuple[str, int]] = []
     if report.dimensions:
-        wanted.append(("维度", rubric.SCORECARD_MIN_PX))
+        wanted.append(("评分项", rubric.SCORECARD_MIN_PX))
     if ((report.compare or {}).get("rows") or []) and report.project_count:
         wanted.append(("对比项", rubric.wide_table_min_px(report.project_count)))
     if report.capabilities:
-        wanted.append(("能力维度", rubric.wide_table_min_px(report.project_count, with_tail=True)))
+        wanted.append(("能力项", rubric.wide_table_min_px(report.project_count, with_tail=True)))
     issues: list[LintIssue] = []
     for label, min_px in wanted:
         total = len(re.findall(r'<table class="tbl[^"]*"[^>]*><thead><tr class="hd"><th>' + label + "</th>", html))
@@ -324,7 +324,7 @@ def _check_coverage(html: str, report: PortfolioReport) -> list[LintIssue]:
     这是这一族最硬的一条：组合层最容易自我表扬的一句话就是"三个项目全覆盖"。
     """
     issues: list[LintIssue] = []
-    tables = [table for table in _tables(html) if table and table[0][0] == "能力维度"]
+    tables = [table for table in _tables(html) if table and table[0][0] == "能力项"]
     if not report.capabilities:
         return issues
     if not tables:

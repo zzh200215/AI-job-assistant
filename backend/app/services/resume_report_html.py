@@ -118,7 +118,7 @@ def _score_table(report: Report) -> str:
     return (
         '<section class="card" id="m-score">\n'
         '<h2 class="ct">一、评分概览（七项 100 分）</h2>\n'
-        '<table class="tbl"><thead><tr><th>维度</th><th class="n">得分</th><th class="n">满分</th><th>待优化点</th></tr></thead>'
+        '<table class="tbl"><thead><tr><th>评分项</th><th class="n">得分</th><th class="n">满分</th><th>待优化点</th></tr></thead>'
         f"<tbody>\n{chr(10).join(rows)}\n</tbody></table>\n{conclusion}\n  </section>"
     )
 
@@ -335,7 +335,7 @@ def _boss(report: Report) -> str:
 
 def _nav() -> str:
     links = "".join(f'<a href="#{anchor}">{_e(label)}</a>' for anchor, label in MODULES)
-    return f'<nav class="modnav" aria-label="报告模块快速导航">{links}</nav>'
+    return f'<nav class="modnav" aria-label="报告内容导航">{links}</nav>'
 
 
 def render_report_html(report: Report) -> str:
