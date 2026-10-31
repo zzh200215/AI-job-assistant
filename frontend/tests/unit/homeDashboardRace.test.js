@@ -6,19 +6,25 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import Home from '@/features/shell/views/Home.vue'
 import { installElement } from '@/plugins/element'
 
-/* 工作台有两处「重新加载」（欢迎区的下一步、今日任务），都调同一个 loadDashboard，
-   而它在 `await Promise.allSettled(...)` 之后连着写两块状态——形状上正是这一轮在找的那种。
-   但**点不出第二次**：loadDashboard 进入就把两个错误位一起清掉，而任务块前面还有一个
-   `v-if="tasksLoading"` 的骨架分支，所以那一发在途时屏幕上没有任何「重新加载」按钮剩下来。
-   这不是设计出来的互斥，是错误位与骨架分支的副作用（与 D31 的看板同型），所以这里留一条绊线：
-   将来谁把加载态改成"保留旧数据"或去掉骨架屏，这条就会红——那时需要的是给 loadDashboard 装令牌。 */
+/* 工作台现在一轮读四块：概览、今日任务、投递管道、简历列表（有简历后再补分数和推荐）。
+   这四块都在同一个 loadDashboard 的 `Promise.allSettled` 之后写状态，所以仍然留同一条绊线：
+   点「重新加载」后四个错误位一起清掉、四块进入骨架态，在途期间屏幕上不能再出现第二个入口。 */
 
 const api = vi.hoisted(() => ({
   getDashboardOverview: vi.fn(),
   getTodayTasks: vi.fn(),
 }))
+const targetsApi = vi.hoisted(() => ({ getKanban: vi.fn() }))
+const jobsApi = vi.hoisted(() => ({ getJobRecommendations: vi.fn() }))
+const resumeApi = vi.hoisted(() => ({
+  getResumeList: vi.fn(),
+  getResumeQuickScore: vi.fn(),
+}))
 
 vi.mock('@/api/dashboard', () => api)
+vi.mock('@/api/targets', () => targetsApi)
+vi.mock('@/api/jobs', () => jobsApi)
+vi.mock('@/api/resume', () => resumeApi)
 
 function deferred() {
   let resolve
@@ -32,16 +38,20 @@ function deferred() {
 
 const rounds = []
 
-/** loadDashboard 一轮发两个请求，两个都得落地，Promise.allSettled 才会继续往下写 */
+/** loadDashboard 一轮发四个请求，四个都得落地，Promise.allSettled 才会继续往下写 */
 async function settleRound(index, value) {
   rounds[index].ov.resolve(value.overview)
   rounds[index].tk.resolve(value.tasks)
+  rounds[index].pipe.resolve({ stages: {} })
+  rounds[index].resumes.resolve({ items: [] })
   await flushPromises()
 }
 
 function failRound(index) {
   rounds[index].ov.reject(new Error('概览挂了'))
   rounds[index].tk.reject(new Error('任务挂了'))
+  rounds[index].pipe.reject(new Error('管道挂了'))
+  rounds[index].resumes.reject(new Error('简历挂了'))
 }
 
 let router
@@ -70,11 +80,20 @@ beforeEach(() => {
   vi.clearAllMocks()
   rounds.length = 0
   api.getDashboardOverview.mockImplementation(() => {
-    const round = { ov: deferred(), tk: deferred() }
+    const round = {
+      ov: deferred(),
+      tk: deferred(),
+      pipe: deferred(),
+      resumes: deferred(),
+    }
     rounds.push(round)
     return round.ov.promise
   })
   api.getTodayTasks.mockImplementation(() => rounds[rounds.length - 1].tk.promise)
+  targetsApi.getKanban.mockImplementation(() => rounds[rounds.length - 1].pipe.promise)
+  resumeApi.getResumeList.mockImplementation(() => rounds[rounds.length - 1].resumes.promise)
+  jobsApi.getJobRecommendations.mockResolvedValue({ recommendations: [] })
+  resumeApi.getResumeQuickScore.mockResolvedValue({ completeness_score: null })
 })
 
 describe('工作台：重载入口在途时点不出第二次', () => {

@@ -1063,6 +1063,7 @@ describe('style debt ratchet', () => {
       'src/components/ui/EmptyState.vue',
       'src/components/ui/PageHeader.vue',
       'src/components/ui/ReturnToBanner.vue',
+      'src/components/ui/ScoreRing.vue',
     ]
     const scanned = viewSources.map(({ rel }) => rel)
     const missing = vueFiles('src')
@@ -1259,7 +1260,7 @@ describe('style debt ratchet', () => {
         {
           ...sources,
           'src/features/shell/views/Home.vue': sources['src/features/shell/views/Home.vue'].replace(
-            '.entrance-icon {',
+            '.home-reco-icon {',
             '.entrance-icon { background: #fef5e7;'
           ),
         },
@@ -1461,7 +1462,7 @@ describe('style debt ratchet', () => {
       // 浅色外壳的导航选中态与头像字母：两处都压在白面 / 浅蓝底上，往深走是正确方向。
       'src/layouts/DefaultLayout.vue': 2,
       // 首页下一步标签与入口图标：同样压在白面 / 浅蓝底上。
-      'src/features/shell/views/Home.vue': 2,
+      'src/features/shell/views/Home.vue': 1,
     }
     const counts = viewSources
       .map(({ rel, style }) => [rel, (style.match(DARK_TEXT) || []).length])
