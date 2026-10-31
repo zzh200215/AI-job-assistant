@@ -62,7 +62,7 @@ const BUDGET = {
     'src/features/analysis/components/ReferencesPane.vue': 3,
     /* 19 → 18：`.salary-val` 原来写成 `var(--app-primary-dark, #1c8c5e)`——一个蓝色令牌挂着
        绿色兜底，等于给同一处留了两种语义。§10.34 换成混白那一档，兜底随之消失。 */
-    'src/features/jobs/views/JobRecommend.vue': 18,
+    'src/features/jobs/views/JobRecommend.vue': 11,
     'src/features/auth/views/Register.vue': 26,
     /* InterviewReport 这一维现在是 **0**，条目随之从表里删除：D144 撤掉那批浅色时代覆写
        （22 → 8），D146 又把被覆写压住的深色渐变基座并进单层（8 → 0）。它从"硬编码色最多的

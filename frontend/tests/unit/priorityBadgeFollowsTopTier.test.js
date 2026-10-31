@@ -78,10 +78,10 @@ async function loadCards() {
 }
 
 function metric(tagText) {
-  const cell = [...document.querySelectorAll('.brief-metrics > div')].find((d) =>
+  const cell = [...document.querySelectorAll('.job-overview-stats > div')].find((d) =>
     d.querySelector('span')?.textContent.includes(tagText)
   )
-  return cell?.querySelector('b')?.textContent.trim() ?? null
+  return cell?.querySelector('strong')?.textContent.trim() ?? null
 }
 
 const badges = () =>

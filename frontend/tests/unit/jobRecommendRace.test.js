@@ -105,7 +105,9 @@ function cardBadges() {
 }
 
 function briefNumbers() {
-  return [...document.querySelectorAll('.brief-metrics b')].map((n) => n.textContent.trim())
+  return [...document.querySelectorAll('.job-overview-stats strong')].map((n) =>
+    n.textContent.trim()
+  )
 }
 
 beforeEach(() => {
