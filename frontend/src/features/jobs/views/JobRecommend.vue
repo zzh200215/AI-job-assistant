@@ -1570,8 +1570,8 @@ function segmentStyle(value, total) {
   font-size: 11px;
 }
 
-.job-settings .panel-body,
-.job-overview .panel-body {
+.job-settings :deep(.panel-body),
+.job-overview :deep(.panel-body) {
   padding: 14px 16px;
 }
 
@@ -1725,6 +1725,25 @@ function segmentStyle(value, total) {
 
   .job-rail {
     position: static;
+    order: -1;
+  }
+
+  .job-settings :deep(.panel-body) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 12px;
+  }
+
+  .job-settings-actions,
+  .job-settings .import-status,
+  .job-settings-hint {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .job-settings :deep(.panel-body) {
+    grid-template-columns: 1fr;
   }
 }
 
