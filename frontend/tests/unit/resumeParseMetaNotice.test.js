@@ -156,6 +156,6 @@ describe('解析不完整那条黄条', () => {
 
     expect(wrapper.text()).not.toContain('解析丢弃')
     expect(wrapper.text()).not.toContain('解析不完整')
-    expect(wrapper.findAll('.resume-card').length).toBe(2)
+    expect(wrapper.findAll('.resume-list-item').length).toBe(2)
   })
 })

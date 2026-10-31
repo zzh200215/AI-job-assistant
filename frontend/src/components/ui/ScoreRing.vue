@@ -22,7 +22,7 @@
         :stroke-dashoffset="offset"
       />
     </svg>
-    <b>{{ label }}</b>
+    <b :style="{ fontSize: Math.max(10, Math.round(size / 4.2)) + 'px' }">{{ label }}</b>
   </span>
 </template>
 
@@ -76,7 +76,6 @@ const label = computed(() => (safeScore.value === null ? '—' : String(Math.rou
   place-items: center;
   color: var(--app-text);
   font-family: var(--app-font-mono);
-  font-size: 10px;
   font-weight: 600;
   line-height: 1;
 }
