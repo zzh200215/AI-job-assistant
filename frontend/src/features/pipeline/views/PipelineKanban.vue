@@ -60,7 +60,7 @@
         </div>
       </div>
       <div v-if="counts.offer" class="focus-actions">
-        <el-button size="small" type="primary" @click="router.push('/offer/compare')">
+        <el-button size="small" type="primary" @click="router.push({ name: 'offer-compare' })">
           进入 Offer 决策
         </el-button>
       </div>

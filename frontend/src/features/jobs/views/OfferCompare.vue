@@ -1,11 +1,10 @@
 <template>
   <div class="page-shell offer-compare-page">
-    <div class="page-header">
-      <div>
-        <h2>Offer 决策</h2>
-        <div class="page-header-sub">多维对比、AI 辅助决策、谈薪资话术、入职准备清单</div>
-      </div>
-    </div>
+    <PageHeader
+      title="Offer 决策"
+      eyebrow="求职选择"
+      subtitle="多维对比、谈薪话术与入职清单，帮你把选择做扎实。"
+    />
 
     <section v-if="offers.length" class="offer-decision-strip" aria-label="Offer 决策摘要">
       <div class="offer-lead">
@@ -101,10 +100,17 @@
               ><el-icon><Histogram /></el-icon> 匹配 {{ Math.round(o.match_score) }}分</span
             >
           </div>
-          <el-tag :type="deadlineUrgency(o.offer_deadline)" size="small">{{
-            deadlineLabel(o.offer_deadline)
-          }}</el-tag>
-          <el-button size="small" text @click.stop="showEditOffer(o)"
+          <span class="offer-deadline">
+            <el-tag :type="deadlineUrgency(o.offer_deadline)" size="small">{{
+              deadlineLabel(o.offer_deadline)
+            }}</el-tag>
+          </span>
+          <el-button
+            class="offer-edit"
+            size="small"
+            text
+            aria-label="编辑 Offer 详情"
+            @click.stop="showEditOffer(o)"
             ><el-icon><Edit /></el-icon
           ></el-button>
         </div>
@@ -147,6 +153,7 @@
         </div>
       </template>
       <div class="compare-table-wrap">
+        <p class="compare-scroll-hint">左右滑动查看不同 Offer</p>
         <table class="compare-table">
           <thead>
             <tr>
@@ -246,7 +253,15 @@
                 <strong class="total-score" :class="scoreToneClass(weightedScore(o))">{{
                   weightedScore(o)
                 }}</strong>
-                <div class="score-breakdown" v-if="showBreakdown === o.id" @click.stop>
+                <el-button
+                  text
+                  size="small"
+                  class="breakdown-toggle"
+                  @click.stop="toggleBreakdown(o.id)"
+                >
+                  {{ showBreakdown === o.id ? '收起算分' : '算分明细' }}
+                </el-button>
+                <div v-if="showBreakdown === o.id" class="score-breakdown" @click.stop>
                   <div v-for="w in weightKeys" :key="w.key" class="br-item">
                     <span>{{ w.label }}</span
                     ><span>{{ o._scores[w.key] * weights[w.key] }}%</span>
@@ -258,19 +273,16 @@
         </table>
       </div>
       <div class="compare-actions">
-        <el-button type="primary" size="small" @click="generateAdvice" :loading="adviceLoading">
-          <el-icon><MagicStick /></el-icon> AI 决策建议
+        <el-button size="small" @click="generateAdvice" :loading="adviceLoading">
+          <el-icon><MagicStick /></el-icon> 生成对比建议
         </el-button>
-        <el-button size="small" @click="showAllDetails" v-if="selectedOffers.length > 1"
-          >展开明细</el-button
-        >
       </div>
     </AppPanel>
 
-    <!-- 薪资合理性 -->
+    <!-- 市场薪资参考 -->
     <AppPanel v-if="selectedOffers.length >= 1" icon-color="var(--app-success)">
       <template #icon><Coin /></template>
-      <template #title>薪资合理性评估</template>
+      <template #title>市场薪资参考</template>
       <template #actions>
         <el-button size="small" @click="loadSalaryInsight" :loading="salaryLoading"
           >查询市场薪资</el-button
@@ -300,10 +312,11 @@
       </div>
     </AppPanel>
 
-    <!-- AI 建议 -->
+    <!-- 对比建议 -->
     <AppPanel v-if="adviceText" icon-color="var(--app-violet)">
       <template #icon><MagicStick /></template>
-      <template #title>AI 决策建议</template>
+      <template #title>对比建议</template>
+      <p class="advice-note">按当前权重与各项评分汇总，不读取外部数据。</p>
       <div class="advice-content" v-for="(line, idx) in adviceLines" :key="idx">
         <p v-if="line.startsWith('【')" class="advice-section-title">{{ line }}</p>
         <p v-else>{{ line }}</p>
@@ -405,6 +418,7 @@
 
 <script setup>
 import AppPanel from '@/components/ui/AppPanel.vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -473,8 +487,9 @@ function resetWeights() {
 const selectedOffers = computed(() => offers.value.filter((o) => selectedIds.value.includes(o.id)))
 const adviceLines = computed(() => (adviceText.value || '').split('\n').filter(Boolean))
 const leadingOffer = computed(() => {
-  if (!offers.value.length) return null
-  return [...offers.value].sort((a, b) => weightedScore(b) - weightedScore(a))[0]
+  const pool = selectedOffers.value.length ? selectedOffers.value : offers.value
+  if (!pool.length) return null
+  return [...pool].sort((a, b) => weightedScore(b) - weightedScore(a))[0]
 })
 const leadingOfferLabel = computed(() => {
   if (!leadingOffer.value) return '等待 Offer 数据'
@@ -627,8 +642,8 @@ function saveOfferDetail() {
   }
 }
 
-function showAllDetails() {
-  showBreakdown.value = showBreakdown.value ? null : selectedOffers.value[0]?.id
+function toggleBreakdown(id) {
+  showBreakdown.value = showBreakdown.value === id ? null : id
 }
 
 async function loadSalaryInsight() {
@@ -692,7 +707,7 @@ async function generateAdvice() {
       '',
       '提示：评分仅供参考，最终决策请结合个人实际情况。',
     ].join('\n')
-    ElMessage.success('AI 决策建议已生成')
+    ElMessage.success('对比建议已生成')
   } finally {
     adviceLoading.value = false
   }
@@ -866,6 +881,16 @@ onMounted(() => {
   font-weight: 400;
 }
 
+.compare-scroll-hint {
+  display: none;
+}
+
+.advice-note {
+  margin: 0 0 12px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
 /* Weight config */
 .weight-grid {
   display: flex;
@@ -947,6 +972,13 @@ onMounted(() => {
 }
 .total-score {
   font-size: 20px;
+}
+
+.breakdown-toggle {
+  display: block;
+  margin: 2px auto 0;
+  color: var(--app-muted);
+  font-size: 11px;
 }
 .score-breakdown {
   margin-top: 6px;
@@ -1092,12 +1124,79 @@ onMounted(() => {
     padding: 8px 10px;
     font-size: 13px;
   }
+
+  .compare-scroll-hint {
+    display: block;
+    margin: 0 0 8px;
+    color: var(--app-muted);
+    font-size: 12px;
+  }
+
+  .compare-table {
+    min-width: 620px;
+  }
+
+  .compare-table .dim-col,
+  .compare-table tbody td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--app-surface-strong);
+  }
+
+  .compare-table th.dim-col {
+    background: var(--el-fill-color-lighter);
+  }
+
   .offer-meta {
     flex-direction: column;
     gap: 4px;
   }
+
   .weight-grid {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 720px) {
+  .offer-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'check info edit'
+      'check meta deadline';
+    align-items: start;
+    gap: 6px 10px;
+  }
+
+  .offer-row > .el-checkbox {
+    grid-area: check;
+    align-self: start;
+    margin-top: 2px;
+  }
+
+  .offer-info {
+    grid-area: info;
+    min-width: 0;
+  }
+
+  .offer-info strong {
+    white-space: normal;
+  }
+
+  .offer-meta {
+    grid-area: meta;
+  }
+
+  .offer-deadline {
+    grid-area: deadline;
+    justify-self: end;
+    align-self: start;
+  }
+
+  .offer-edit {
+    grid-area: edit;
+    justify-self: end;
   }
 }
 </style>

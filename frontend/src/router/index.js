@@ -119,6 +119,7 @@ export const routes = [
       },
       {
         path: 'offer',
+        alias: '/offer/compare',
         name: 'offer-compare',
         component: () => import('@/features/jobs/views/OfferCompare.vue'),
         meta: { title: 'Offer 决策', roles: CANDIDATE },
