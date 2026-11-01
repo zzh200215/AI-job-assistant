@@ -25,6 +25,7 @@
  * @property {string} title
  * @property {string} stage
  * @property {string} [company]
+ * @property {string} [location]
  * @property {string} [salary_range]
  * @property {string} [source]
  * @property {number|null} [match_score]
@@ -108,6 +109,9 @@ export function flattenCards(kanban) {
   })
   return all
 }
+
+/** 终态三段：看板默认收进「已结束」归档带，列表视图仍逐行可见。 */
+export const TERMINAL_COLUMN_KEYS = ['accepted', 'rejected', 'withdrawn']
 
 /** 漏斗只画"推进"的五段，入职/拒绝/放弃不进漏斗。 */
 export function funnelRows(counts) {

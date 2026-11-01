@@ -251,13 +251,6 @@
         </div>
 
         <template v-else-if="hasResults">
-          <div class="result-summary">
-            <span class="summary-text">
-              为你推荐 <strong>{{ visibleRecommendations.length }}</strong> 个岗位
-              <span v-if="appliedFilters" class="summary-filters">（已应用筛选条件）</span>
-            </span>
-          </div>
-
           <div v-if="!visibleRecommendations.length" class="job-feed-empty">
             没有找到匹配的岗位，试试清空搜索或调整筛选。
           </div>
@@ -294,7 +287,7 @@
                       <el-tag
                         size="small"
                         :type="recommendTagType(job.recommendation_type)"
-                        effect="dark"
+                        effect="light"
                         >{{ job.recommendation_type }}</el-tag
                       >
                       <el-button
@@ -302,24 +295,32 @@
                         text
                         class="dismiss-btn"
                         title="不再推荐该岗位，可在「已忽略」中恢复"
+                        aria-label="不感兴趣"
                         @click="dismissJob(job)"
                       >
-                        <el-icon><CircleClose /></el-icon> 不感兴趣
+                        <el-icon><CircleClose /></el-icon>
                       </el-button>
                     </div>
-                    <div class="job-company">
-                      <el-icon><OfficeBuilding /></el-icon>
-                      {{ job.company }}
+                    <div class="job-meta">
+                      <span class="job-company">{{ job.company || '未知公司' }}</span>
+                      <template v-if="job.location">
+                        <span class="job-meta-sep">·</span>
+                        <span>{{ job.location }}</span>
+                      </template>
+                      <span v-if="job.experience_requirement" class="job-exp">{{
+                        job.experience_requirement
+                      }}</span>
+                      <span v-if="job.salary_range" class="job-salary">{{ job.salary_range }}</span>
                     </div>
                   </div>
 
                   <!-- 匹配原因 -->
-                  <p class="match-reason">{{ job.match_reason }}</p>
+                  <p class="match-reason" :title="job.match_reason">{{ job.match_reason }}</p>
 
                   <!-- 技能标签 -->
                   <div class="skill-section">
                     <div v-if="job.skill_overlap?.length" class="skill-group">
-                      <span class="skill-label overlap-label">重合</span>
+                      <span class="skill-label"><i class="skill-dot is-overlap" />重合</span>
                       <el-tag
                         v-for="s in job.skill_overlap"
                         :key="s"
@@ -330,7 +331,7 @@
                       >
                     </div>
                     <div v-if="job.skill_gap?.length" class="skill-group">
-                      <span class="skill-label gap-label">缺失</span>
+                      <span class="skill-label"><i class="skill-dot is-gap" />待补</span>
                       <el-tag
                         v-for="s in job.skill_gap"
                         :key="s"
@@ -346,49 +347,60 @@
                   <div class="match-details">
                     <span
                       v-if="job.salary_match !== undefined"
-                      class="detail-tag"
-                      :class="job.salary_match ? 'dt-ok' : 'dt-no'"
+                      class="detail-item"
+                      :class="job.salary_match ? 'is-ok' : 'is-no'"
                     >
-                      <el-icon><Money /></el-icon> 薪资{{ job.salary_match ? '匹配' : '不匹配' }}
+                      <el-icon>
+                        <CircleCheckFilled v-if="job.salary_match" />
+                        <CircleCloseFilled v-else />
+                      </el-icon>
+                      薪资{{ job.salary_match ? '匹配' : '不匹配' }}
                     </span>
                     <span
                       v-if="job.location_match !== undefined"
-                      class="detail-tag"
-                      :class="job.location_match ? 'dt-ok' : 'dt-no'"
+                      class="detail-item"
+                      :class="job.location_match ? 'is-ok' : 'is-no'"
                     >
-                      <el-icon><Location /></el-icon> 地点{{
-                        job.location_match ? '匹配' : '不匹配'
-                      }}
+                      <el-icon>
+                        <CircleCheckFilled v-if="job.location_match" />
+                        <CircleCloseFilled v-else />
+                      </el-icon>
+                      地点{{ job.location_match ? '匹配' : '不匹配' }}
                     </span>
                     <span
                       v-if="job.experience_match !== undefined"
-                      class="detail-tag"
-                      :class="job.experience_match !== false ? 'dt-ok' : 'dt-no'"
+                      class="detail-item"
+                      :class="job.experience_match !== false ? 'is-ok' : 'is-no'"
                     >
-                      <el-icon><Timer /></el-icon> 经验{{
-                        job.experience_match !== false ? '匹配' : '不匹配'
-                      }}
+                      <el-icon>
+                        <CircleCheckFilled v-if="job.experience_match !== false" />
+                        <CircleCloseFilled v-else />
+                      </el-icon>
+                      经验{{ job.experience_match !== false ? '匹配' : '不匹配' }}
                     </span>
                   </div>
 
                   <!-- 操作 -->
                   <div class="card-actions">
-                    <el-button size="small" @click="viewDetail(job.jd_id)"> 查看详情 </el-button>
+                    <el-button size="small" type="primary" @click="addToKanban(job)">
+                      <el-icon><Grid /></el-icon> 加入看板
+                    </el-button>
+                    <span class="job-action-sep" aria-hidden="true" />
+                    <el-button size="small" text @click="viewDetail(job.jd_id)">查看详情</el-button>
                     <el-button
                       size="small"
+                      text
                       :loading="analyzingId === job.jd_id"
                       @click="analyzeJob(job.jd_id)"
                     >
                       立即分析
                     </el-button>
-                    <el-button size="small" type="primary" @click="addToKanban(job)">
-                      <el-icon><Grid /></el-icon> 加入看板
-                    </el-button>
-                    <el-button size="small" @click="generateInterviewPrep(job)">
+                    <el-button size="small" text @click="generateInterviewPrep(job)">
                       <el-icon><Microphone /></el-icon> 面试准备
                     </el-button>
                     <el-button
                       size="small"
+                      text
                       :type="job._bookmarked ? 'warning' : ''"
                       @click="toggleBookmark(job)"
                     >
@@ -396,17 +408,21 @@
                     </el-button>
                     <div class="feedback-btns">
                       <el-button
+                        size="small"
                         text
                         :type="job._feedback === 'like' ? 'success' : ''"
-                        :icon="job._feedback === 'like' ? 'ThumbsUp' : 'ThumbsUp'"
                         @click="toggleFeedback(job, 'like')"
-                      />
+                      >
+                        {{ job._feedback === 'like' ? '已喜欢' : '喜欢' }}
+                      </el-button>
                       <el-button
+                        size="small"
                         text
                         :type="job._feedback === 'dislike' ? 'danger' : ''"
-                        :icon="job._feedback === 'dislike' ? 'ThumbsDown' : 'ThumbsDown'"
                         @click="toggleFeedback(job, 'dislike')"
-                      />
+                      >
+                        不喜欢
+                      </el-button>
                     </div>
                   </div>
                 </div>
@@ -460,6 +476,14 @@
         <AppPanel class="job-settings">
           <template #title>推荐设置</template>
           <template #badge><span class="job-panel-note">改完自动重匹配</span></template>
+          <template #actions>
+            <div class="job-settings-head-actions">
+              <el-button size="small" text @click="resetFilters">重置</el-button>
+              <el-button size="small" :loading="loading.recommend" @click="loadRecommendations">
+                重新匹配
+              </el-button>
+            </div>
+          </template>
           <div class="job-field">
             <label>匹配简历</label>
             <el-select
@@ -534,7 +558,7 @@
             </el-select>
           </div>
 
-          <div class="job-field">
+          <div class="job-field job-field--wide">
             <label>最低薪资</label>
             <div class="job-salary">
               <el-slider
@@ -547,13 +571,6 @@
               />
               <span>{{ filters.salary_min || 0 }}k</span>
             </div>
-          </div>
-
-          <div class="job-settings-actions">
-            <el-button size="small" text @click="resetFilters">重置</el-button>
-            <el-button size="small" :loading="loading.recommend" @click="loadRecommendations">
-              重新匹配
-            </el-button>
           </div>
 
           <div v-if="importJob.jobId" class="import-status">
@@ -603,20 +620,20 @@
           <div class="job-buckets">
             <div v-for="bucket in scoreBuckets" :key="bucket.label" class="job-bucket">
               <span>{{ bucket.label }}</span>
-              <i class="job-bucket-track"><b :style="{ width: bucket.width + '%' }" /></i>
+              <i class="job-bucket-track"
+                ><b :class="`is-${bucket.tone}`" :style="{ width: bucket.width + '%' }"
+              /></i>
               <em>{{ bucket.count }}</em>
             </div>
           </div>
-          <p class="job-overview-note">
-            {{
-              priorityJobCount
-                ? '先处理高匹配岗位，再把有意向的机会加入投递节奏。'
-                : '调整筛选条件，或补全简历后重新匹配。'
-            }}
-          </p>
+          <button
+            type="button"
+            class="app-link job-overview-suppressed"
+            @click="openSuppressedDialog"
+          >
+            已忽略的岗位
+          </button>
         </AppPanel>
-
-        <button type="button" class="app-link" @click="openSuppressedDialog">已忽略的岗位</button>
       </aside>
     </div>
 
@@ -687,19 +704,18 @@ import {
 import { ElMessage } from '@/plugins/element-services'
 import {
   Location,
-  Money,
-  Timer,
   Grid,
   Microphone,
   Star,
   Refresh,
   CircleClose,
+  CircleCheckFilled,
+  CircleCloseFilled,
   Loading,
   Document,
   MoreFilled,
   Search,
 } from '@element-plus/icons-vue'
-import { OfficeBuilding } from '@element-plus/icons-vue'
 import { createJobPipelineEntry } from '@/api/targets'
 import { isTopTier, scoreToneFillClass } from '@/utils/scoreTone'
 import { salaryMid } from '@/features/jobs/lib/jobModel'
@@ -810,10 +826,10 @@ const visibleRecommendations = computed(() => {
 
 const scoreBuckets = computed(() => {
   const buckets = [
-    { label: '85+', min: 85, count: 0 },
-    { label: '75-84', min: 75, count: 0 },
-    { label: '60-74', min: 60, count: 0 },
-    { label: '<60', min: -Infinity, count: 0 },
+    { label: '85+', min: 85, tone: 'high', count: 0 },
+    { label: '75-84', min: 75, tone: 'good', count: 0 },
+    { label: '60-74', min: 60, tone: 'warn', count: 0 },
+    { label: '<60', min: -Infinity, tone: 'risk', count: 0 },
   ]
   recommendations.value.forEach((job) => {
     const score = Number(job.match_score)
@@ -1495,28 +1511,27 @@ function segmentStyle(value, total) {
   font-size: 12px;
   color: var(--app-muted);
 }
-/* ===== Feed + rail ===== */
+/* ===== Controls + feed ===== */
 .job-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.8fr);
-  gap: 16px;
-  align-items: start;
-  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 0;
 }
 
 .job-feed {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
 }
 
 .job-rail {
-  position: sticky;
-  top: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  order: -1;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  gap: 14px;
+  align-items: stretch;
 }
 
 .job-toolbar {
@@ -1570,7 +1585,21 @@ function segmentStyle(value, total) {
   font-size: 11px;
 }
 
-.job-settings :deep(.panel-body),
+.job-settings :deep(.panel-body) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 14px;
+  align-items: start;
+  padding: 14px 16px;
+}
+
+.job-settings-head-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
 .job-overview :deep(.panel-body) {
   padding: 14px 16px;
 }
@@ -1579,11 +1608,11 @@ function segmentStyle(value, total) {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  margin-bottom: 12px;
+  min-width: 0;
 }
 
-.job-field:last-of-type {
-  margin-bottom: 0;
+.job-field--wide {
+  grid-column: span 2;
 }
 
 .job-field label {
@@ -1614,21 +1643,20 @@ function segmentStyle(value, total) {
   text-align: right;
 }
 
-.job-settings-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--app-line);
+.job-settings .import-status,
+.job-settings-hint {
+  grid-column: 1 / -1;
 }
 
 .job-settings-hint {
-  margin: 10px 0 0;
+  margin: 0;
   color: var(--app-muted);
   font-size: 11px;
   line-height: 1.5;
+}
+
+.job-overview-suppressed {
+  margin-top: 12px;
 }
 
 .job-overview-stats {
@@ -1656,10 +1684,10 @@ function segmentStyle(value, total) {
 }
 
 .job-buckets {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin-top: 12px;
 }
 
 .job-bucket {
@@ -1687,7 +1715,19 @@ function segmentStyle(value, total) {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: var(--app-primary);
+  background: var(--app-score-good-fill);
+}
+
+.job-bucket-track b.is-high {
+  background: var(--app-score-high-fill);
+}
+
+.job-bucket-track b.is-warn {
+  background: var(--app-score-warn-fill);
+}
+
+.job-bucket-track b.is-risk {
+  background: var(--app-score-risk-fill);
 }
 
 .job-bucket em {
@@ -1697,16 +1737,6 @@ function segmentStyle(value, total) {
   font-size: 11px;
   font-style: normal;
   text-align: right;
-}
-
-.job-overview-note {
-  margin: 14px 0 0;
-  padding: 10px;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--app-primary), white 96%);
-  color: var(--app-primary);
-  font-size: 11px;
-  line-height: 1.6;
 }
 
 .job-feed-empty {
@@ -1719,25 +1749,12 @@ function segmentStyle(value, total) {
 }
 
 @media (max-width: 1180px) {
-  .job-layout {
+  .job-rail {
     grid-template-columns: 1fr;
   }
 
-  .job-rail {
-    position: static;
-    order: -1;
-  }
-
   .job-settings :deep(.panel-body) {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0 12px;
-  }
-
-  .job-settings-actions,
-  .job-settings .import-status,
-  .job-settings-hint {
-    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1745,23 +1762,19 @@ function segmentStyle(value, total) {
   .job-settings :deep(.panel-body) {
     grid-template-columns: 1fr;
   }
+
+  .job-field--wide {
+    grid-column: auto;
+  }
 }
 
-/* 结果 */
-.result-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 14px;
-  color: var(--app-text);
-}
-.summary-filters {
-  font-size: 12px;
-  color: var(--app-muted);
-}
 .dismiss-btn {
+  display: grid;
+  width: 24px;
+  height: 24px;
   margin-left: auto;
+  padding: 0;
+  place-items: center;
   color: var(--app-muted);
 }
 .dismiss-btn:hover {
@@ -1792,23 +1805,34 @@ function segmentStyle(value, total) {
   color: var(--app-muted);
 }
 
-/* 岗位 feed */
+/* 岗位 feed：宽屏两列，避免十几张卡排成一条长龙 */
 .card-grid {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
 .job-card {
+  display: flex;
+  flex-direction: column;
   position: relative;
   overflow: hidden;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.job-card:hover {
+  border-color: var(--app-line-strong);
+  box-shadow: var(--app-shadow-soft);
 }
 
 .job-card .panel-body {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
+  flex: 1;
   gap: 14px;
-  padding: 16px;
+  padding: 14px 16px 12px;
 }
 
 /* 匹配度徽标 */
@@ -1835,15 +1859,18 @@ function segmentStyle(value, total) {
 
 /* 卡片内容 */
 .card-body {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  height: 100%;
 }
 
 .job-title-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 6px;
+  margin-bottom: 3px;
 }
 
 .job-title {
@@ -1853,13 +1880,38 @@ function segmentStyle(value, total) {
   font-weight: 650;
 }
 
-.job-company {
+.job-meta {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
   color: var(--app-muted);
   font-size: 12px;
+}
+
+.job-company {
+  color: var(--app-text);
+  font-weight: 500;
+}
+
+.job-meta-sep {
+  color: var(--app-line-strong);
+}
+
+.job-exp {
+  padding: 1px 6px;
+  border: 1px solid var(--app-line);
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.job-salary {
+  margin-left: auto;
+  color: var(--app-text);
+  font-family: var(--app-font-mono);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .source-tag {
@@ -1874,22 +1926,26 @@ function segmentStyle(value, total) {
 }
 
 .match-reason {
-  margin: 8px 0;
-  padding: 8px 10px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  margin: 8px 0 0;
+  padding: 6px 9px;
   border: 1px solid var(--app-line);
-  border-radius: var(--app-radius-sm);
+  border-radius: var(--app-radius-xs);
   background: var(--app-surface-muted);
   color: var(--app-muted);
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 11px;
+  line-height: 1.55;
 }
 
 /* 技能标签 */
 .skill-section {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 10px 0;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 8px 0 0;
 }
 .skill-group {
   display: flex;
@@ -1898,16 +1954,22 @@ function segmentStyle(value, total) {
   gap: 4px;
 }
 .skill-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 2px;
+  color: var(--app-muted);
   font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 3px;
-  color: var(--el-color-white);
-  margin-right: 4px;
 }
-.overlap-label {
+.skill-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+.skill-dot.is-overlap {
   background: color-mix(in srgb, var(--app-success), black 25%);
 }
-.gap-label {
+.skill-dot.is-gap {
   background: color-mix(in srgb, var(--app-danger), black 20%);
 }
 
@@ -1915,23 +1977,22 @@ function segmentStyle(value, total) {
 .match-details {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin: 8px 0;
+  gap: 4px 10px;
+  margin: 8px 0 0;
 }
-.detail-tag {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  display: flex;
+.detail-item {
+  display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
+  font-size: 11px;
 }
-.dt-ok {
-  background: color-mix(in srgb, var(--app-success), white 92%);
+.detail-item .el-icon {
+  font-size: 12px;
+}
+.detail-item.is-ok {
   color: color-mix(in srgb, var(--app-success), black 35%);
 }
-.dt-no {
-  background: color-mix(in srgb, var(--app-danger), white 92%);
+.detail-item.is-no {
   color: color-mix(in srgb, var(--app-danger), black 25%);
 }
 
@@ -1940,15 +2001,43 @@ function segmentStyle(value, total) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-start;
-  gap: 6px;
-  margin-top: 10px;
-  padding-top: 10px;
+  gap: 2px;
+  margin-top: auto;
+  padding-top: 8px;
   border-top: 1px solid var(--app-line);
+}
+.card-actions .el-button + .el-button {
+  margin-left: 0;
+}
+.card-actions .el-button {
+  height: 26px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.card-actions .el-button--primary {
+  padding: 5px 11px;
+}
+.job-action-sep {
+  width: 1px;
+  height: 14px;
+  margin: 0 6px;
+  background: var(--app-line);
 }
 .feedback-btns {
   display: flex;
-  gap: 2px;
+  gap: 0;
+  margin-left: auto;
+}
+.feedback-btns .el-button {
+  margin-left: 0;
+  padding: 5px 6px;
+}
+
+/* 这一条必须写在 `.card-grid` 基础规则之后：同优先级下后写的赢。 */
+@media (max-width: 1180px) {
+  .card-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {

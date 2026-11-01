@@ -11,11 +11,11 @@
     </PageHeader>
 
     <!-- Input Card -->
-    <section class="panel">
+    <section class="panel analysis-input" :class="{ 'is-after-result': !!result }">
       <div class="panel-header">
         <div class="panel-title-row">
           <el-icon><MagicStick /></el-icon>
-          <span>生成求职分析</span>
+          <span>{{ result ? '重新分析' : '生成求职分析' }}</span>
         </div>
         <el-tag size="small">简历 · 岗位 · 行业资料</el-tag>
       </div>
@@ -94,7 +94,7 @@
             @click="onStartAnalysis"
           >
             <el-icon><Promotion /></el-icon>
-            {{ loading ? '正在分析…' : '生成求职分析' }}
+            {{ loading ? '正在分析…' : result ? '重新分析' : '生成求职分析' }}
           </el-button>
         </div>
       </div>
@@ -261,52 +261,6 @@
               <span class="data-value dim-val">{{ dimensionScore(result, 'industry') }}</span>
             </el-descriptions-item>
           </el-descriptions>
-
-          <!-- RAG Confidence -->
-          <div v-if="analysisConfidence" class="rag-confidence">
-            <div class="rag-confidence-main">
-              <div class="rag-badge" :class="`badge-${analysisConfidence.level || 'low'}`">
-                {{ analysisConfidence.score ?? 0 }}
-              </div>
-              <div class="rag-confidence-copy">
-                <div class="rag-confidence-title">
-                  参考依据充分度
-                  <el-tag size="small" :type="confidenceTagType(analysisConfidence.level)">
-                    {{ analysisConfidence.label || '-' }}
-                  </el-tag>
-                </div>
-                <div class="rag-confidence-summary">
-                  {{ analysisConfidence.summary || '暂无可信度说明' }}
-                </div>
-              </div>
-            </div>
-            <div class="rag-confidence-metrics">
-              <div class="rag-metric">
-                <span>参考资料</span>
-                <strong class="data-value">{{
-                  analysisConfidence.signals?.total_chunks ?? 0
-                }}</strong>
-              </div>
-              <div class="rag-metric">
-                <span>覆盖来源</span>
-                <strong class="data-value">{{
-                  analysisConfidence.signals?.unique_docs ?? 0
-                }}</strong>
-              </div>
-              <div class="rag-metric">
-                <span>平均相关度</span>
-                <strong class="data-value">{{
-                  analysisConfidence.signals?.avg_similarity ?? 0
-                }}</strong>
-              </div>
-              <div class="rag-metric">
-                <span>专业能力参考</span>
-                <strong class="data-value">{{
-                  analysisConfidence.signals?.has_skill_model ? '已匹配' : '未匹配'
-                }}</strong>
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -431,7 +385,6 @@ import {
   normalizeLocalizedTextList,
 } from '@/utils/analysisLocalization'
 import {
-  confidenceTagType,
   dimensionScore,
   groupInterviewQuestions,
   hasStructuredCareerGaps,
@@ -788,6 +741,11 @@ onMounted(() => {
   overflow: hidden;
 }
 
+/* 有结果时先看结果，输入表单降到最后作为"重新分析"。 */
+.analysis-input.is-after-result {
+  order: 2;
+}
+
 /* ===== Input split ===== */
 .input-split {
   display: grid;
@@ -1058,21 +1016,24 @@ onMounted(() => {
 /* ===== Results ===== */
 .results-section {
   display: flex;
+  order: 1;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .score-body {
-  padding: 24px;
+  padding: 18px;
 }
 
 .score-center {
   display: flex;
-  gap: 24px;
+  flex-direction: row;
   align-items: center;
-  padding-bottom: 20px;
-  margin-bottom: 20px;
+  gap: 24px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
   border-bottom: 1px solid var(--app-line);
+  text-align: left;
 }
 
 .score-value {
@@ -1087,6 +1048,7 @@ onMounted(() => {
 
 .score-meta {
   flex: 1;
+  min-width: 0;
 }
 
 .score-rec {
@@ -1148,108 +1110,16 @@ onMounted(() => {
   color: var(--app-primary);
 }
 
-/* RAG Confidence */
-.rag-confidence {
-  margin-top: 16px;
-  padding: 16px;
-  border-radius: var(--app-radius-sm, 12px);
-  background: var(--el-fill-color-light);
-  border: 1px solid var(--el-border-color);
-}
-
-.rag-confidence-main {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-}
-
-.rag-badge {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--app-radius-xs, 8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  font-weight: 700;
-  /* 这块本来要按置信度上色：模板挂的是 :class="badge-${analysisConfidence.level}"，但全仓
-     没有任何 .badge-high / .badge-mid / .badge-low 规则（现取：只有一条无关的 .badge-outline），
-     所以它一直是透明底 + 白字——**上色那条是死接线，没在这一刀里冒充修好**，等他拍。
-     这里只把写死的白换成前景令牌（深色面上 16.9 → 15.6:1，两者都远过 4.5）。 */
-  color: var(--app-text);
-  flex-shrink: 0;
-}
-
-/* 模板挂的是 `badge-${analysisConfidence.level}`，而这三条规则原本不存在（2026-10-07 现取：
-   全仓没有任何 .badge-high/.badge-mid/.badge-low，只有一条无关的 .badge-outline），
-   所以那块置信度方块从来没上过色。档位映射与 KnowledgeBase 的 .confidence-high/medium/low
-   保持一致（high=success、medium=primary、low=danger），域与后端出处在 constants/states.js
-   的 CONFIDENCE_LEVELS（high / medium / low），已由棘轮的 STATE_CLASS_SITES 双向钉住。
-   底与字用 B 那一套（深色面色偏 + tone 字），不抄同胞那三条 135deg 渐变。 */
-.badge-high {
-  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
-  color: var(--app-success);
-}
-.badge-medium {
-  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
-  color: color-mix(in srgb, var(--app-primary), white 25%);
-}
-.badge-low {
-  background: color-mix(in srgb, var(--app-danger), var(--app-bg) 86%);
-  color: color-mix(in srgb, var(--app-danger), white 20%);
-}
-
-.rag-confidence-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.rag-confidence-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.rag-confidence-summary {
-  margin-top: 4px;
-  color: var(--app-muted);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.rag-confidence-metrics {
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.rag-metric {
-  padding: 10px;
-  border-radius: var(--app-radius-xs, 8px);
-  background: var(--app-surface-strong);
-  border: 1px solid var(--el-border-color);
-}
-
-.rag-metric span {
-  display: block;
-  color: var(--app-muted);
-  font-size: 11px;
-  margin-bottom: 4px;
-}
-
-.rag-metric strong {
-  font-size: 16px;
-}
-
 /* Tab body */
 .tab-body {
   padding: 0;
 }
 .tab-body :deep(.el-tabs__header) {
-  margin: 0 20px;
+  margin: 0 16px;
+}
+.tab-body :deep(.el-tabs__item) {
+  padding: 0 10px;
+  font-size: 13px;
 }
 .tab-body :deep(.el-tabs__content) {
   padding: 16px 20px 20px;
@@ -1259,9 +1129,6 @@ onMounted(() => {
 @media (max-width: 1024px) {
   .input-split {
     grid-template-columns: 1fr;
-  }
-  .rag-confidence-metrics {
-    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -1275,9 +1142,6 @@ onMounted(() => {
     align-items: flex-start;
   }
   .pipeline-status {
-    grid-template-columns: 1fr;
-  }
-  .rag-confidence-metrics {
     grid-template-columns: 1fr;
   }
 }

@@ -50,7 +50,7 @@ const BUDGET = {
     'src/features/jobs/components/RecommendPane.vue': 7,
     /* P1-①（2026-10-07）：`.layout-shell` 那条浅色底换成 `var(--app-bg)`，34 → 33。同一刀把
        主题作用域加到 `documentElement` 上，因为 EP 的浮层是 teleport 到 `body` 子树的。 */
-    'src/features/shell/views/Profile.vue': 9,
+    /* 0：账号卡、锁定徽章与危险区的三组手挑色换成令牌；个人中心不再有硬编码色。 */
     'src/features/planning/views/CareerPlanning.vue': 27,
     'src/features/analysis/views/SmartAnalysis.vue': 4,
     /* D51 搬出「职业规划」面板时样式按 D44 的口径**复制**（父页面那 1092 行一行没删，因为静态切分
@@ -68,9 +68,8 @@ const BUDGET = {
        （22 → 8），D146 又把被覆写压住的深色渐变基座并进单层（8 → 0）。它从"硬编码色最多的
        页面之一"变成这一族的第一个清零样本。 */
     'src/features/resume/views/ResumeCompare.vue': 19,
-    /* 13 → 5：STAR 那五枚座（`.star-tag` + `.star-s/t/a/r`）与 `.interview-score` 收了 8 个
-       手挑 pastel；剩下 5 个是 `.daily-*` 与 `.weak-card`，属另一族。 */
-    'src/features/interview/views/Interview.vue': 5,
+    /* 0：`.daily-*` 与 `.weak-card` 那 5 个手挑暖色换成 warning 混 `--app-bg` 的座配方，
+       条目随之退出这一维。 */
     'src/features/pipeline/views/PipelineKanban.vue': 1,
     /* D62 把转化分析与版本表现两块面板搬出 PipelineKanban：样式照 D44 的口径**复制不切**
        （`.funnel-fill` 的配色走 `'fill-' + stage.accent` 这种动态类名，静态切分会把 6 条
@@ -106,7 +105,8 @@ const BUDGET = {
     'src/features/interview/components/RoomAside.vue': 2,
     'src/features/interview/components/StagePane.vue': 1,
     'src/features/auth/views/ResetPassword.vue': 12,
-    'src/features/interview/views/InterviewSetup.vue': 4,
+    /* 4 → 1：浅色渐变底与 journey 选中底换成令牌；剩下的 1 条是 `.stage-index` 的白色前景。 */
+    'src/features/interview/views/InterviewSetup.vue': 1,
     'src/features/eval/views/RecommendationEval.vue': 11,
     'src/features/analysis/views/ExplainMatch.vue': 9,
     'src/features/auth/views/NotFound.vue': 5,
@@ -1557,11 +1557,12 @@ describe('style debt ratchet', () => {
     {
       /* 2026-10-07：这一族原先是**死接线** —— 模板挂 `badge-${level}`，而三条规则根本不存在，
          所以置信度方块一直透明底白字。补上规则之后必须有这条双向守卫：域里少一档、或文件里
-         多出一个不在域内的 `badge-*`，都会红。hero 那颗 `.badge-dot` 随浅色改版出树，
-         siblings 因此为空；再长出一颗布局类时先在这里点名。 */
+         多出一个不在域内的 `badge-*`，都会红。hero 那颗 `.badge-dot` 随浅色改版出树。
+         D206：评分卡里与引用来源重复的那块可信度摘要已删，`badge-*` 唯一发出方搬到
+         ReferencesPane；规则也跟着搬，守卫指针同步改，否则它会指着一个不再发类的文件空转。 */
       prefix: 'badge',
       values: CONFIDENCE_LEVELS,
-      file: 'src/features/analysis/views/SmartAnalysis.vue',
+      file: 'src/features/analysis/components/ReferencesPane.vue',
       unstyled: [],
       siblings: [],
     },

@@ -145,7 +145,12 @@ defineProps({
 
 @media (max-width: 720px) {
   .snapshot-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .snapshot-item {
+    padding: 10px 12px;
   }
 }
 </style>

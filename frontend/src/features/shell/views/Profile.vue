@@ -2,7 +2,7 @@
   <div class="page-shell">
     <PageHeader
       title="个人中心"
-      subtitle="查看账号信息、求职数据与当前可用的功能。"
+      subtitle="查看账号信息、求职数据与账号安全设置。"
       eyebrow="个人账号"
     >
       <template #actions>
@@ -11,7 +11,7 @@
       </template>
     </PageHeader>
 
-    <section class="grid">
+    <section class="profile-top">
       <AppPanel class="identity-panel">
         <template #title>账号信息</template>
         <template #actions>
@@ -38,32 +38,52 @@
           </div>
         </dl>
       </AppPanel>
-    </section>
 
-    <AppPanel class="capability-panel">
-      <template #title>可用功能</template>
-      <template #actions>
-        <span class="panel-tip">当前已开启</span>
-      </template>
-      <div class="capability-list">
-        <div class="capability-item" :class="{ done: status.capabilities?.tool_calling }">
-          <strong>AI 分析</strong>
-          <span>{{ status.capabilities?.tool_calling ? '已开启' : '未开启' }}</span>
+      <AppPanel icon-color="var(--app-primary)">
+        <template #icon><DataAnalysis /></template>
+        <template #title>个人求职数据</template>
+        <template #actions>
+          <span class="panel-tip stats-tip">基于投递和面试记录统计</span>
+        </template>
+        <div v-if="statsLoading" class="empty-inline">
+          <el-icon class="is-loading"><Loading /></el-icon> 加载中...
         </div>
-        <div class="capability-item" :class="{ done: status.capabilities?.ocr_resume_parse }">
-          <strong>图片简历识别</strong>
-          <span>{{ status.capabilities?.ocr_resume_parse ? '已开启' : '未开启' }}</span>
+        <div v-else class="stats-dashboard">
+          <div class="stats-grid">
+            <div class="stat-card-v">
+              <span class="stat-label">投递总数</span
+              ><strong class="stat-num">{{ userStats.total_applications }}</strong>
+            </div>
+            <div class="stat-card-v">
+              <span class="stat-label">面试次数</span
+              ><strong class="stat-num stat-interview">{{ userStats.total_interviews }}</strong>
+            </div>
+            <div class="stat-card-v">
+              <span class="stat-label">Offer数</span
+              ><strong class="stat-num stat-offer">{{ userStats.total_offers }}</strong>
+            </div>
+            <div class="stat-card-v">
+              <span class="stat-label">面试转化率</span
+              ><strong class="stat-num">{{ userStats.interview_rate }}%</strong>
+            </div>
+            <div class="stat-card-v">
+              <span class="stat-label">Offer率</span
+              ><strong class="stat-num stat-offer">{{ userStats.offer_rate }}%</strong>
+            </div>
+            <div class="stat-card-v">
+              <span class="stat-label">简历数</span
+              ><strong class="stat-num">{{ userStats.resume_count }}</strong>
+            </div>
+          </div>
+          <div class="stats-footer">
+            <span
+              >已使用 {{ userStats.days_active }} 天 ·
+              {{ userStats.total_sessions }} 次模拟面试</span
+            >
+          </div>
         </div>
-        <div class="capability-item" :class="{ done: status.capabilities?.password_reset }">
-          <strong>密码找回</strong>
-          <span>{{ status.capabilities?.password_reset ? '已开启' : '未开启' }}</span>
-        </div>
-        <div class="capability-item" :class="{ done: status.capabilities?.social_login }">
-          <strong>快捷登录</strong>
-          <span>{{ status.capabilities?.social_login ? '已开启' : '未开启' }}</span>
-        </div>
-      </div>
-    </AppPanel>
+      </AppPanel>
+    </section>
 
     <!-- 求职成就里程碑 -->
     <AppPanel icon-color="var(--app-warning)">
@@ -97,159 +117,95 @@
       </div>
     </AppPanel>
 
-    <!-- 个人数据看板 -->
-    <AppPanel icon-color="var(--app-primary)">
-      <template #icon><DataAnalysis /></template>
-      <template #title>个人求职数据</template>
-      <template #actions>
-        <span class="panel-tip">基于投递和面试记录统计</span>
-      </template>
-      <div v-if="statsLoading" class="empty-inline">
-        <el-icon class="is-loading"><Loading /></el-icon> 加载中...
-      </div>
-      <div v-else class="stats-dashboard">
-        <div class="stats-grid">
-          <div class="stat-card-v">
-            <span class="stat-label">投递总数</span
-            ><strong class="stat-num">{{ userStats.total_applications }}</strong>
-          </div>
-          <div class="stat-card-v">
-            <span class="stat-label">面试次数</span
-            ><strong class="stat-num stat-interview">{{ userStats.total_interviews }}</strong>
-          </div>
-          <div class="stat-card-v">
-            <span class="stat-label">Offer数</span
-            ><strong class="stat-num stat-offer">{{ userStats.total_offers }}</strong>
-          </div>
-          <div class="stat-card-v">
-            <span class="stat-label">面试转化率</span
-            ><strong class="stat-num">{{ userStats.interview_rate }}%</strong>
-          </div>
-          <div class="stat-card-v">
-            <span class="stat-label">Offer率</span
-            ><strong class="stat-num stat-offer">{{ userStats.offer_rate }}%</strong>
-          </div>
-          <div class="stat-card-v">
-            <span class="stat-label">简历数</span
-            ><strong class="stat-num">{{ userStats.resume_count }}</strong>
-          </div>
-        </div>
-        <div class="stats-footer">
-          <span
-            >已使用 {{ userStats.days_active }} 天 · {{ userStats.total_sessions }} 次模拟面试</span
+    <section class="profile-lower">
+      <!-- 今日行动 -->
+      <AppPanel icon-color="var(--app-success)">
+        <template #icon><List /></template>
+        <template #title>今日行动</template>
+        <template #actions>
+          <el-tag
+            size="small"
+            :type="
+              dailyTasks.filter((t) => t.done).length === dailyTasks.length ? 'success' : 'warning'
+            "
           >
+            {{ dailyTasks.filter((t) => t.done).length }}/{{ dailyTasks.length }}
+          </el-tag>
+        </template>
+        <div class="daily-task-list">
+          <div v-for="task in dailyTasks" :key="task.id" class="daily-task-item">
+            <el-checkbox v-model="task.done" @change="onTaskChange">
+              <span :class="{ 'task-done-text': task.done }">{{ task.text }}</span>
+            </el-checkbox>
+            <el-button v-if="task.link" text size="small" @click="$router.push(task.link)">
+              {{ task.done ? '回看' : '去完成' }}
+            </el-button>
+          </div>
         </div>
-      </div>
-    </AppPanel>
+      </AppPanel>
 
-    <!-- 每日任务 -->
-    <AppPanel icon-color="var(--app-success)">
-      <template #icon><List /></template>
-      <template #title>今日求职任务</template>
-      <template #actions>
-        <el-tag
-          size="small"
-          :type="
-            dailyTasks.filter((t) => t.done).length === dailyTasks.length ? 'success' : 'warning'
-          "
-        >
-          {{ dailyTasks.filter((t) => t.done).length }}/{{ dailyTasks.length }}
-        </el-tag>
-      </template>
-      <div class="daily-task-list">
-        <div v-for="task in dailyTasks" :key="task.id" class="daily-task-item">
-          <el-checkbox v-model="task.done" @change="onTaskChange">
-            <span :class="{ 'task-done-text': task.done }">{{ task.text }}</span>
-          </el-checkbox>
-          <el-tag v-if="task.bonus" size="small" type="warning" effect="plain"
-            >+{{ task.bonus }} 积分</el-tag
-          >
-        </div>
-      </div>
-    </AppPanel>
-
-    <!-- 邀请好友 -->
-    <AppPanel icon-color="var(--app-warning)">
-      <template #icon><Share /></template>
-      <template #title>邀请好友</template>
-      <div class="invite-body">
-        <p class="invite-desc">邀请好友使用 Career Signal，双方均可获得额外权益</p>
-        <div class="invite-link-row">
-          <el-input v-model="inviteLink" readonly>
-            <template #append>
-              <el-button @click="copyInviteLink">复制邀请链接</el-button>
-            </template>
-          </el-input>
-        </div>
-        <div class="invite-stats">
-          <div class="invite-stat">
-            <strong>{{ inviteCount }}</strong
-            ><span>已邀请</span>
+      <!-- 账号安全与隐私 -->
+      <AppPanel class="settings-panel">
+        <template #title>账号安全与隐私</template>
+        <div class="settings-list">
+          <div class="setting-row">
+            <div class="setting-info">
+              <strong>邮箱验证</strong>
+              <span>验证邮箱以提高账号安全性</span>
+            </div>
+            <div class="setting-action">
+              <el-tag v-if="authStore.user?.email_verified" type="success" size="small"
+                >已验证</el-tag
+              >
+              <el-button
+                v-else
+                size="small"
+                type="primary"
+                @click="verifyEmail"
+                :loading="verifying"
+                >发送验证邮件</el-button
+              >
+            </div>
           </div>
-          <div class="invite-stat">
-            <strong>+{{ inviteBonus }}</strong
-            ><span>累计奖励</span>
+          <div class="setting-row">
+            <div class="setting-info">
+              <strong>修改密码</strong>
+              <span>定期更换密码保障账号安全</span>
+            </div>
+            <div class="setting-action">
+              <el-button size="small" @click="$router.push('/reset-password')">修改密码</el-button>
+            </div>
           </div>
-        </div>
-      </div>
-    </AppPanel>
-
-    <!-- 账号安全与隐私 -->
-    <AppPanel>
-      <template #title>账号安全与隐私</template>
-      <div class="settings-list">
-        <div class="setting-row">
-          <div class="setting-info">
-            <strong>邮箱验证</strong>
-            <span>验证邮箱以提高账号安全性</span>
+          <div class="setting-row">
+            <div class="setting-info">
+              <strong>数据导出</strong>
+              <span>导出你的所有数据（简历、投递记录、面试记录等）</span>
+            </div>
+            <div class="setting-action">
+              <el-button size="small" @click="exportData" :loading="exporting">导出数据</el-button>
+            </div>
           </div>
-          <div class="setting-action">
-            <el-tag v-if="authStore.user?.email_verified" type="success" size="small"
-              >已验证</el-tag
-            >
-            <el-button v-else size="small" type="primary" @click="verifyEmail" :loading="verifying"
-              >发送验证邮件</el-button
-            >
+          <div class="setting-row">
+            <div class="setting-info">
+              <strong>隐私设置</strong>
+              <span>控制简历和数据的可见范围</span>
+            </div>
+            <div class="setting-action">
+              <el-switch
+                v-model="privacySettings.resumePublic"
+                active-text="简历公开"
+                @change="savePrivacy"
+              />
+              <el-switch
+                v-model="privacySettings.allowRecommend"
+                active-text="允许推荐"
+                @change="savePrivacy"
+              />
+            </div>
           </div>
         </div>
-        <div class="setting-row">
-          <div class="setting-info">
-            <strong>修改密码</strong>
-            <span>定期更换密码保障账号安全</span>
-          </div>
-          <div class="setting-action">
-            <el-button size="small" @click="$router.push('/reset-password')">修改密码</el-button>
-          </div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-info">
-            <strong>数据导出</strong>
-            <span>导出你的所有数据（简历、投递记录、面试记录等）</span>
-          </div>
-          <div class="setting-action">
-            <el-button size="small" @click="exportData" :loading="exporting">导出数据</el-button>
-          </div>
-        </div>
-        <div class="setting-row">
-          <div class="setting-info">
-            <strong>隐私设置</strong>
-            <span>控制简历和数据的可见范围</span>
-          </div>
-          <div class="setting-action">
-            <el-switch
-              v-model="privacySettings.resumePublic"
-              active-text="简历公开"
-              @change="savePrivacy"
-            />
-            <el-switch
-              v-model="privacySettings.allowRecommend"
-              active-text="允许推荐"
-              @change="savePrivacy"
-            />
-          </div>
-        </div>
-      </div>
-    </AppPanel>
+      </AppPanel>
+    </section>
 
     <!-- 危险操作 -->
     <AppPanel class="danger-zone">
@@ -276,7 +232,6 @@ import PageHeader from '@/components/ui/PageHeader.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 
 import { sendVerificationEmail, exportMyData, deleteMyAccount } from '@/api/auth'
-import { getSystemStatus } from '@/api/system'
 import { getDashboardOverview } from '@/api/dashboard'
 import { getPerformanceTrend } from '@/api/interview'
 import { getMySubscription } from '@/api/subscription'
@@ -285,7 +240,6 @@ import { useAuthStore } from '@/stores/auth'
 import {
   DataAnalysis,
   List,
-  Share,
   Trophy,
   UploadFilled,
   Aim,
@@ -303,32 +257,6 @@ const authStore = useAuthStore()
 const loading = ref(false)
 const verifying = ref(false)
 const exporting = ref(false)
-// 邀请
-const inviteLink = ref('')
-const inviteCount = ref(0)
-const inviteBonus = ref(0)
-
-function generateInviteLink() {
-  const baseUrl = window.location.origin
-  const userId = authStore.user?.id || ''
-  inviteLink.value = baseUrl + '/register?ref=' + userId
-  inviteCount.value = Number(localStorage.getItem('recruit.inviteCount') || 0)
-  inviteBonus.value = inviteCount.value * 50
-}
-
-async function copyInviteLink() {
-  if (!inviteLink.value) generateInviteLink()
-  try {
-    await navigator.clipboard.writeText(inviteLink.value)
-    const count = inviteCount.value + 1
-    inviteCount.value = count
-    inviteBonus.value = count * 50
-    localStorage.setItem('recruit.inviteCount', String(count))
-    ElMessage.success('邀请链接已复制！')
-  } catch {
-    ElMessage.warning('复制失败，请手动复制')
-  }
-}
 
 const privacySettings = reactive({
   resumePublic: true,
@@ -337,16 +265,12 @@ const privacySettings = reactive({
 
 // 订阅状态
 const subTier = ref('free')
-const subQuota = ref([])
-const subEndAt = ref(null)
 
 async function loadSubscription() {
   try {
     const data = await getMySubscription()
     if (data) {
       subTier.value = data.tier || 'free'
-      subQuota.value = data.quota || []
-      subEndAt.value = data.end_at
     }
   } catch {
     // 订阅信息暂不可用时保留免费版默认状态。
@@ -504,11 +428,11 @@ async function loadUserStats() {
 
 // 每日任务
 const dailyTasks = ref([
-  { id: 1, text: '浏览今日岗位推荐', done: false, bonus: 10, link: '/jobs/recommend' },
-  { id: 2, text: '检查投递看板跟进状态', done: false, bonus: 10, link: '/jobs/pipeline/kanban' },
-  { id: 3, text: '完成一道面试练习题', done: false, bonus: 20, link: '/interview' },
-  { id: 4, text: '查看求职周报数据', done: false, bonus: 5, link: '/weekly-report' },
-  { id: 5, text: '检查是否有新消息', done: false, bonus: 5 },
+  { id: 1, text: '浏览今日岗位推荐', done: false, link: '/jobs/recommend' },
+  { id: 2, text: '检查投递看板跟进状态', done: false, link: '/jobs/pipeline/kanban' },
+  { id: 3, text: '完成一道面试练习题', done: false, link: '/interview' },
+  { id: 4, text: '查看求职周报数据', done: false, link: '/weekly-report' },
+  { id: 5, text: '检查是否有新消息', done: false },
 ])
 
 const LS_TASKS_KEY = 'recruit.dailyTasks'
@@ -539,22 +463,6 @@ function onTaskChange() {
     ElMessage.success('今日任务全部完成！')
   }
 }
-const status = reactive({
-  app_env: '',
-  orchestration_strategy: '',
-  orchestration_engine: '',
-  llm_provider: '',
-  embedding_provider: '',
-  reranker_provider: '',
-  demo_mode: false,
-  capabilities: {
-    tool_calling: false,
-    social_login: false,
-    password_reset: false,
-    ocr_resume_parse: false,
-  },
-})
-
 const avatarText = computed(() => {
   const name = String(authStore.user?.username || '').trim()
   return name ? name.slice(0, 1).toUpperCase() : 'U'
@@ -564,8 +472,6 @@ async function refreshAll() {
   loading.value = true
   try {
     await authStore.fetchMe()
-    const data = await getSystemStatus()
-    Object.assign(status, data || {})
   } finally {
     loading.value = false
   }
@@ -657,10 +563,18 @@ onMounted(async () => {
   font-weight: 600;
 }
 
-.grid {
+.profile-top {
   display: grid;
-  grid-template-columns: 1.1fr 1.4fr;
+  grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.35fr);
   gap: 18px;
+  align-items: stretch;
+}
+
+.profile-lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 18px;
+  align-items: stretch;
 }
 
 .identity-card {
@@ -669,7 +583,7 @@ onMounted(async () => {
   gap: 16px;
   padding: 18px;
   border-radius: var(--app-radius-md, 16px);
-  background: linear-gradient(135deg, #f4fbf6, #faf7ef);
+  background: var(--app-bg);
   border: 1px solid var(--app-line);
 }
 
@@ -743,12 +657,6 @@ onMounted(async () => {
   text-align: right;
 }
 
-.capability-list {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-}
-
 /* 成就系统 */
 .achievement-grid {
   display: grid;
@@ -770,9 +678,9 @@ onMounted(async () => {
 }
 
 .achievement-card.locked {
-  background: #f9fafb;
-  border: 1px dashed #d1d5db;
-  opacity: 0.6;
+  background: var(--app-bg);
+  border: 1px dashed var(--app-line);
+  opacity: 0.66;
 }
 
 .ach-icon {
@@ -879,37 +787,7 @@ onMounted(async () => {
   color: var(--app-muted);
 }
 
-/* 邀请 */
-.invite-body {
-  padding: 8px 0;
-}
-.invite-desc {
-  font-size: 14px;
-  color: var(--app-muted);
-  margin: 0 0 14px;
-}
-.invite-link-row {
-  display: flex;
-  gap: 8px;
-}
-.invite-stats {
-  display: flex;
-  gap: 24px;
-  margin-top: 16px;
-}
-.invite-stat {
-  text-align: center;
-}
-.invite-stat strong {
-  display: block;
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--app-primary);
-}
-.invite-stat span {
-  font-size: 12px;
-  color: var(--app-muted);
-} /* 每日任务 */
+/* 每日任务 */
 .daily-task-list {
   display: flex;
   flex-direction: column;
@@ -933,34 +811,6 @@ onMounted(async () => {
 .task-done-text {
   text-decoration: line-through;
   color: var(--app-muted);
-}
-
-.capability-item {
-  min-height: 120px;
-  padding: 18px;
-  border-radius: var(--app-radius-md, 16px);
-  background: linear-gradient(135deg, #fff7f7, #fffdfd);
-  border: 1px solid var(--app-line);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.capability-item.done {
-  background: linear-gradient(135deg, #f1fbf4, #f8fffd);
-  border-color: var(--app-line);
-}
-
-.capability-item strong {
-  color: var(--app-text);
-  font-size: 16px;
-  line-height: 1.5;
-}
-
-.capability-item span {
-  color: var(--app-muted);
-  font-size: 14px;
 }
 
 /* Settings list */
@@ -1002,7 +852,7 @@ onMounted(async () => {
 
 /* Danger zone */
 .danger-zone {
-  border-color: rgba(238, 180, 180, 0.9) !important;
+  border-color: color-mix(in srgb, var(--app-danger), var(--app-bg) 65%) !important;
 }
 
 .danger-tip {
@@ -1033,9 +883,67 @@ onMounted(async () => {
 }
 
 @media (max-width: 1080px) {
-  .grid,
-  .capability-list {
+  .profile-top,
+  .profile-lower {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .stats-tip {
+    display: none;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .achievement-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .achievement-card {
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .ach-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .ach-info strong {
+    font-size: 13px;
+  }
+
+  .ach-info span {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 11px;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .achievement-card .el-tag {
+    display: none;
+  }
+
+  .setting-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .setting-action {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .danger-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

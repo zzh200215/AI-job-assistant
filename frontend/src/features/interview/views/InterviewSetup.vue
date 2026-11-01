@@ -1,13 +1,10 @@
 <template>
   <div class="page-shell interview-setup-page">
-    <div class="page-header">
-      <div>
-        <h2>AI 模拟面试</h2>
-        <div class="page-header-sub">
-          围绕目标岗位生成一场更有节奏的模拟面试，先定设置，再进面试，最后看报告。
-        </div>
-      </div>
-    </div>
+    <PageHeader title="AI 模拟面试" eyebrow="面试" :subtitle="headerSubtitle">
+      <template #actions>
+        <el-button @click="router.push('/interview')">面试记录与训练</el-button>
+      </template>
+    </PageHeader>
 
     <section class="setup-journey" aria-label="面试创建步骤">
       <div
@@ -24,207 +21,130 @@
       </div>
     </section>
 
-    <div class="grid-3 stat-row">
-      <div class="stat-card">
-        <div class="stat-body">
-          <span class="stat-label">历史场次</span>
-          <strong>{{ stats.total }}</strong>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-body">
-          <span class="stat-label">已完成</span>
-          <strong>{{ stats.completed }}</strong>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-body">
-          <span class="stat-label">平均得分</span>
-          <strong>{{ stats.avgScore }}</strong>
-        </div>
-      </div>
-    </div>
-
     <div class="setup-grid">
-      <AppPanel>
-        <template #title>设置本场面试</template>
-        <template #actions>
-          <el-tag type="danger" effect="plain">基础版</el-tag>
-        </template>
-        <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="setup-form">
-          <el-form-item label="选择简历" prop="resume_id">
-            <el-select
-              v-model="form.resume_id"
-              placement="bottom-start"
-              :fallback-placements="['bottom-start']"
-              placeholder="选择要用于面试的简历"
-              filterable
-              :loading="loading.resume"
-            >
-              <el-option
-                v-for="resume in resumeList"
-                :key="resume.id"
-                :label="resume.name || resume.file_name"
-                :value="resume.id"
-              >
-                <div class="option-row">
-                  <span>{{ resume.name || resume.file_name }}</span>
-                  <span class="option-meta">{{
-                    resume.parsed?.current_title || resume.current_title || ''
-                  }}</span>
-                </div>
-              </el-option>
-            </el-select>
-          </el-form-item>
-
-          <el-form-item label="目标岗位" prop="jd_id">
-            <el-select
-              v-model="form.jd_id"
-              placement="bottom-start"
-              :fallback-placements="['bottom-start']"
-              placeholder="选择目标岗位"
-              filterable
-              :loading="loading.jd"
-            >
-              <el-option v-for="jd in jdList" :key="jd.id" :label="jd.title" :value="jd.id">
-                <div class="option-row">
-                  <span>{{ jd.title }}</span>
-                  <span class="option-meta">{{ jd.company || '未填写公司' }}</span>
-                </div>
-              </el-option>
-            </el-select>
-          </el-form-item>
-
-          <el-form-item label="面试风格" prop="interview_type">
-            <el-radio-group v-model="form.interview_type" class="type-group">
-              <el-radio-button v-for="item in typeOptions" :key="item.value" :value="item.value">
-                {{ item.label }}
-              </el-radio-button>
-            </el-radio-group>
-          </el-form-item>
-
-          <div class="type-preview">
-            <div class="type-title">
-              <strong>{{ typeConfig.label }}</strong>
-              <span>{{ typeConfig.persona }}</span>
-            </div>
-            <p>{{ typeConfig.description }}</p>
-            <div class="chip-row">
-              <span v-for="focus in typeConfig.focus" :key="focus" class="focus-chip">{{
-                focus
-              }}</span>
-            </div>
-          </div>
-
-          <div class="checklist">
-            <div class="check-item">
-              <span>预计题量</span>
-              <strong>{{ questionPlan.total }}</strong>
-            </div>
-            <div class="check-item">
-              <span>预计时长</span>
-              <strong>{{ questionPlan.duration }}</strong>
-            </div>
-            <div class="check-item">
-              <span>单题节奏</span>
-              <strong>按题型 45–120 秒</strong>
-            </div>
-          </div>
-
-          <!-- 题库配置 -->
-          <div class="question-bank-config">
-            <div class="qb-header">
-              <span class="qb-title">题目设置</span>
-              <span class="qb-subtitle"
-                >{{ questionPlan.total }} · 覆盖 {{ questionCategories.length }} 类题型</span
-              >
-            </div>
-            <div class="qb-grid">
-              <div v-for="cat in questionCategories" :key="cat.type" class="qb-item">
-                <div class="qb-icon" :class="'qb-' + cat.color">
-                  <el-icon :size="16"><component :is="cat.icon" /></el-icon>
-                </div>
-                <div class="qb-info">
-                  <span class="qb-name">{{ cat.label }}</span>
-                  <span class="qb-count">{{ cat.count }} 题</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <el-button
-            type="primary"
-            size="large"
-            class="start-btn"
-            :loading="loading.start"
-            :disabled="!form.resume_id || !form.jd_id"
-            @click="startInterview"
-          >
-            开始这场模拟面试
-          </el-button>
-        </el-form>
-      </AppPanel>
-
-      <div class="preview-column">
+      <div class="setup-column">
         <AppPanel>
-          <template #title>面试蓝图</template>
+          <template #title>设置本场面试</template>
           <template #actions>
-            <span class="panel-sub">进入房间前先看清楚这场面试会怎么问</span>
+            <span class="panel-sub">{{ questionPlan.total }} · {{ questionPlan.duration }}</span>
           </template>
-          <div class="brief-block">
-            <div class="brief-title">候选人画像</div>
-            <template v-if="selectedResume">
-              <h3>{{ selectedResume.name || selectedResume.file_name }}</h3>
-              <p>
-                {{
-                  selectedResume.parsed?.current_title ||
-                  selectedResume.current_title ||
-                  '未识别当前岗位'
-                }}
-              </p>
-              <div class="chip-row">
-                <span
-                  v-for="skill in extractResumeSkills(selectedResume).slice(0, 6)"
-                  :key="skill"
-                  class="plain-chip"
+          <el-form
+            ref="formRef"
+            :model="form"
+            :rules="rules"
+            label-position="top"
+            class="setup-form"
+          >
+            <el-form-item label="选择简历" prop="resume_id">
+              <el-select
+                v-model="form.resume_id"
+                placement="bottom-start"
+                :fallback-placements="['bottom-start']"
+                placeholder="选择要用于面试的简历"
+                filterable
+                :loading="loading.resume"
+              >
+                <el-option
+                  v-for="resume in resumeList"
+                  :key="resume.id"
+                  :label="resume.name || resume.file_name"
+                  :value="resume.id"
                 >
-                  {{ skill }}
-                </span>
-              </div>
-            </template>
-            <el-empty v-else description="选择简历后会展示候选人画像" :image-size="70" />
-          </div>
+                  <div class="option-row">
+                    <span>{{ resume.name || resume.file_name }}</span>
+                    <span class="option-meta">{{
+                      resume.parsed?.current_title || resume.current_title || ''
+                    }}</span>
+                  </div>
+                </el-option>
+              </el-select>
+            </el-form-item>
 
-          <div class="brief-block">
-            <div class="brief-title">岗位画像</div>
-            <template v-if="selectedJD">
-              <h3>{{ selectedJD.title }}</h3>
-              <p>
-                {{ selectedJD.company || '未填写公司' }} ·
-                {{ selectedJD.salary_range || '薪资待补充' }}
-              </p>
+            <el-form-item label="目标岗位" prop="jd_id">
+              <el-select
+                v-model="form.jd_id"
+                placement="bottom-start"
+                :fallback-placements="['bottom-start']"
+                placeholder="选择目标岗位"
+                filterable
+                :loading="loading.jd"
+              >
+                <el-option v-for="jd in jdList" :key="jd.id" :label="jd.title" :value="jd.id">
+                  <div class="option-row">
+                    <span>{{ jd.title }}</span>
+                    <span class="option-meta">{{ jd.company || '未填写公司' }}</span>
+                  </div>
+                </el-option>
+              </el-select>
+            </el-form-item>
+
+            <el-form-item label="面试风格" prop="interview_type">
+              <el-radio-group v-model="form.interview_type" class="type-group">
+                <el-radio-button v-for="item in typeOptions" :key="item.value" :value="item.value">
+                  {{ item.label }}
+                </el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+
+            <div class="type-preview">
+              <div class="type-title">
+                <strong>{{ typeConfig.label }}</strong>
+                <span>{{ typeConfig.persona }}</span>
+              </div>
+              <p>{{ typeConfig.description }}</p>
               <div class="chip-row">
-                <span
-                  v-for="skill in extractJDSkills(selectedJD).slice(0, 8)"
-                  :key="skill"
-                  class="plain-chip"
-                >
-                  {{ skill }}
-                </span>
-              </div>
-            </template>
-            <el-empty v-else description="选择岗位后会展示岗位画像" :image-size="70" />
-          </div>
-
-          <div class="blueprint-list">
-            <div v-for="stage in stagePlan" :key="stage.title" class="stage-card">
-              <span class="stage-index">{{ stage.index }}</span>
-              <div>
-                <strong>{{ stage.title }}</strong>
-                <p>{{ stage.desc }}</p>
+                <span v-for="focus in typeConfig.focus" :key="focus" class="focus-chip">{{
+                  focus
+                }}</span>
               </div>
             </div>
-          </div>
+
+            <div class="plan-stats">
+              <div>
+                <span>预计题量</span>
+                <strong>{{ questionPlan.total }}</strong>
+              </div>
+              <div>
+                <span>预计时长</span>
+                <strong>{{ questionPlan.duration }}</strong>
+              </div>
+              <div>
+                <span>单题节奏</span>
+                <strong>按题型 45–120 秒</strong>
+              </div>
+            </div>
+
+            <div class="question-bank-config">
+              <div class="qb-header">
+                <span class="qb-title">题目设置</span>
+                <span class="qb-subtitle"
+                  >{{ questionPlan.total }} · 覆盖 {{ questionCategories.length }} 类题型</span
+                >
+              </div>
+              <div class="qb-grid">
+                <div v-for="cat in questionCategories" :key="cat.type" class="qb-item">
+                  <div class="qb-icon" :class="'qb-' + cat.color">
+                    <el-icon :size="16"><component :is="cat.icon" /></el-icon>
+                  </div>
+                  <div class="qb-info">
+                    <span class="qb-name">{{ cat.label }}</span>
+                    <span class="qb-count">{{ cat.count }} 题</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <el-button
+              type="primary"
+              size="large"
+              class="start-btn"
+              :loading="loading.start"
+              :disabled="!form.resume_id || !form.jd_id"
+              @click="startInterview"
+            >
+              开始这场模拟面试
+            </el-button>
+          </el-form>
         </AppPanel>
 
         <AppPanel>
@@ -275,6 +195,71 @@
           />
           <el-empty v-else description="正在读取上一场画像" :image-size="70" />
         </AppPanel>
+      </div>
+
+      <div class="preview-column">
+        <AppPanel>
+          <template #title>面试蓝图</template>
+          <template #actions>
+            <span class="panel-sub">进入房间前先看清楚这场面试会怎么问</span>
+          </template>
+          <div class="brief-grid">
+            <div class="brief-block">
+              <div class="brief-title">候选人画像</div>
+              <template v-if="selectedResume">
+                <h3>{{ selectedResume.name || selectedResume.file_name }}</h3>
+                <p>
+                  {{
+                    selectedResume.parsed?.current_title ||
+                    selectedResume.current_title ||
+                    '未识别当前岗位'
+                  }}
+                </p>
+                <div class="chip-row">
+                  <span
+                    v-for="skill in extractResumeSkills(selectedResume).slice(0, 6)"
+                    :key="skill"
+                    class="plain-chip"
+                  >
+                    {{ skill }}
+                  </span>
+                </div>
+              </template>
+              <p v-else class="brief-empty">选择简历后展示候选人画像</p>
+            </div>
+
+            <div class="brief-block">
+              <div class="brief-title">岗位画像</div>
+              <template v-if="selectedJD">
+                <h3>{{ selectedJD.title }}</h3>
+                <p>
+                  {{ selectedJD.company || '未填写公司' }} ·
+                  {{ selectedJD.salary_range || '薪资待补充' }}
+                </p>
+                <div class="chip-row">
+                  <span
+                    v-for="skill in extractJDSkills(selectedJD).slice(0, 8)"
+                    :key="skill"
+                    class="plain-chip"
+                  >
+                    {{ skill }}
+                  </span>
+                </div>
+              </template>
+              <p v-else class="brief-empty">选择岗位后展示岗位画像</p>
+            </div>
+          </div>
+
+          <div class="blueprint-list">
+            <div v-for="stage in stagePlan" :key="stage.title" class="stage-card">
+              <span class="stage-index">{{ stage.index }}</span>
+              <div>
+                <strong>{{ stage.title }}</strong>
+                <p>{{ stage.desc }}</p>
+              </div>
+            </div>
+          </div>
+        </AppPanel>
 
         <AppPanel>
           <template #title>最近面试记录</template>
@@ -317,6 +302,7 @@
 import { userErrorCopy } from '@/utils/requestTracing'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
 import AppPanel from '@/components/ui/AppPanel.vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
@@ -557,6 +543,13 @@ const stats = computed(() => {
   return { total, completed, avgScore }
 })
 
+const headerSubtitle = computed(() => {
+  const base = '先定简历和岗位，进入一场有节奏的模拟面试；结束后直接看报告。'
+  if (!stats.value.total) return base
+  const avg = stats.value.avgScore !== '--' ? `，平均 ${stats.value.avgScore} 分` : ''
+  return `${base} 已完成 ${stats.value.completed}/${stats.value.total} 场${avg}。`
+})
+
 function extractResumeSkills(resume) {
   if (!resume) return []
   const parsed = resume.parsed || resume.parsed_json || {}
@@ -686,24 +679,8 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* ---- Stat row ---- */
-.stat-row {
-  margin-bottom: 20px;
-}
-
-.stat-row .stat-card {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.stat-row .stat-body strong {
-  font-size: 28px;
-  margin-top: 4px;
-}
-
 .interview-setup-page {
-  background: linear-gradient(135deg, #f7f9fd 0%, #f3f6fc 100%);
+  background: transparent;
 }
 
 .setup-journey {
@@ -742,7 +719,7 @@ onMounted(async () => {
 }
 
 .journey-step.active {
-  background: #f4f7ff;
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 94%);
   color: var(--app-text);
 }
 
@@ -793,8 +770,8 @@ onMounted(async () => {
 /* ---- Setup grid ---- */
 .setup-grid {
   display: grid;
-  grid-template-columns: minmax(340px, 420px) 1fr;
-  gap: 20px;
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  gap: 18px;
   align-items: start;
 }
 
@@ -903,31 +880,37 @@ onMounted(async () => {
   color: color-mix(in srgb, var(--app-success), black 35%);
 }
 
-/* ---- Checklist ---- */
-.checklist {
+/* ---- Plan stats ---- */
+.plan-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.check-item {
-  padding: 14px;
-  border-radius: var(--app-radius-sm, 12px);
-  background: var(--app-bg);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 12px;
   border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-sm, 12px);
+  overflow: hidden;
 }
 
-.check-item span {
+.plan-stats div {
+  padding: 12px 14px;
+  background: var(--app-surface-strong);
+}
+
+.plan-stats div + div {
+  border-left: 1px solid var(--app-line);
+}
+
+.plan-stats span {
   display: block;
-  font-size: 12px;
   color: var(--app-muted);
+  font-size: 12px;
 }
 
-.check-item strong {
+.plan-stats strong {
   display: block;
-  margin-top: 8px;
+  margin-top: 6px;
   color: var(--app-text);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .start-btn {
@@ -1025,14 +1008,41 @@ onMounted(async () => {
 }
 
 /* ---- Preview column ---- */
+.setup-column,
 .preview-column {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
+}
+
+.brief-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.brief-grid .brief-block + .brief-block {
+  margin-top: 0;
 }
 
 .brief-block + .brief-block {
   margin-top: 20px;
+}
+
+.brief-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 92px;
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--app-line);
+  border-radius: var(--app-radius-sm, 12px);
+  color: var(--app-muted);
+  font-size: 13px;
+  text-align: center;
 }
 
 .brief-title {
@@ -1093,7 +1103,7 @@ onMounted(async () => {
   line-height: 1.6;
 }
 
-.setup-grid > .panel:first-child {
+.setup-column > .panel:first-child {
   border-top: 3px solid var(--app-primary);
 }
 
@@ -1147,21 +1157,53 @@ onMounted(async () => {
 
 @media (max-width: 640px) {
   .setup-journey {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .journey-step {
-    min-height: 64px;
-    border-right: 0;
-    border-bottom: 1px solid var(--app-line);
-  }
-
-  .journey-step:last-child {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    min-height: 0;
+    padding: 10px;
+    border-right: 1px solid var(--app-line);
     border-bottom: 0;
   }
 
-  .checklist {
+  .journey-step:last-child {
+    border-right: 0;
+  }
+
+  .journey-step small {
+    display: none;
+  }
+
+  .journey-step strong {
+    font-size: 12px;
+  }
+
+  .journey-index {
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+  }
+
+  .brief-grid {
     grid-template-columns: 1fr;
+    gap: 14px;
+    padding-bottom: 14px;
+  }
+
+  .plan-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .plan-stats div {
+    padding: 10px 8px;
+  }
+
+  .plan-stats strong {
+    font-size: 12px;
   }
 
   .history-item,

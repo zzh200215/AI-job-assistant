@@ -220,6 +220,7 @@ const stageToRate = (from, to) => boardStageToRate(props.counts, from, to)
 
 /* 统计面板 */
 .stats-panel {
+  margin-bottom: 16px;
   background: var(--app-surface-strong);
   border-radius: var(--app-radius-sm, 8px);
   border: 1px solid var(--app-line);
@@ -361,5 +362,40 @@ const stageToRate = (from, to) => boardStageToRate(props.counts, from, to)
 .funnel-rate {
   color: var(--app-primary);
   font-weight: 600;
+}
+
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .version-performance-row {
+    border-right: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-body {
+    padding: 14px 16px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stats-funnel {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .funnel-bar-wrapper {
+    flex: none;
+  }
+
+  .funnel-arrow {
+    transform: rotate(90deg);
+    margin-left: 10px;
+  }
 }
 </style>

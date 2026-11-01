@@ -98,4 +98,37 @@ defineProps({
 .interview-room-page .stage-card {
   border-top: 3px solid var(--app-cyan);
 }
+
+/* 这一块在移动端会被三枚计时块挤成一条竖排标题：父页面的 `.stage-header` 媒体规则
+   跨不过 scoped 边界，必须在面板自己的样式里把断点补上。 */
+@media (max-width: 720px) {
+  .stage-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .stage-header h2 {
+    margin-bottom: 4px;
+    font-size: 24px;
+  }
+
+  .stage-meta {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .meta-pill {
+    padding: 10px;
+  }
+
+  .meta-pill strong {
+    margin-top: 4px;
+    font-size: 14px;
+  }
+
+  .stage-progress {
+    margin-top: 14px;
+  }
+}
 </style>

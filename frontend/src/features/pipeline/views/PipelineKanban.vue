@@ -1,11 +1,11 @@
 <template>
   <div class="page-shell pipeline-page">
-    <div class="page-header">
-      <div>
-        <h2>投递看板</h2>
-        <div class="page-header-sub">拖拽卡片在阶段间移动，追踪每一步投递进展</div>
-      </div>
-      <div class="header-actions">
+    <PageHeader
+      title="投递看板"
+      eyebrow="求职进度"
+      subtitle="拖动卡片推进阶段，先处理本周最该动的机会"
+    >
+      <template #actions>
         <el-button-group class="view-toggle">
           <el-button
             :type="viewMode === 'kanban' ? 'primary' : ''"
@@ -25,16 +25,21 @@
         <el-button @click="showStats = !showStats" size="small">
           <el-icon><TrendCharts /></el-icon> {{ showStats ? '隐藏' : '查看' }}统计
         </el-button>
-        <el-button @click="loadKanban">
+        <el-button @click="loadKanban" size="small">
           <el-icon><Refresh /></el-icon> 刷新
         </el-button>
-        <el-button type="primary" @click="showAddDialog = true">
+        <el-button type="primary" size="small" @click="showAddDialog = true">
           <el-icon><Plus /></el-icon> 新增投递
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
-    <section v-if="totalCards > 0" class="pipeline-focus-strip" aria-label="投递行动摘要">
+    <section
+      v-if="totalCards > 0"
+      class="pipeline-focus-strip"
+      :class="{ 'has-actions': counts.offer }"
+      aria-label="投递行动摘要"
+    >
       <div class="focus-message">
         <span class="focus-label">本周重点</span>
         <strong>{{ pipelineFocusTitle }}</strong>
@@ -54,16 +59,8 @@
           ><span>待决 Offer</span>
         </div>
       </div>
-      <div class="focus-actions">
-        <el-button size="small" @click="showStats = !showStats">
-          {{ showStats ? '收起转化分析' : '查看转化分析' }}
-        </el-button>
-        <el-button
-          v-if="counts.offer"
-          size="small"
-          type="primary"
-          @click="router.push('/offer/compare')"
-        >
+      <div v-if="counts.offer" class="focus-actions">
+        <el-button size="small" type="primary" @click="router.push('/offer/compare')">
           进入 Offer 决策
         </el-button>
       </div>
@@ -93,6 +90,7 @@
 
     <BoardPane
       v-else
+      v-show="viewMode === 'kanban' || totalCards === 0"
       :kanban="kanban"
       :columns="columns"
       :total-cards="totalCards"
@@ -300,6 +298,7 @@ import {
 } from '@/features/pipeline/lib/pipelineBoard'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
 import StatsPane from '@/features/pipeline/components/StatsPane.vue'
 import BoardPane from '@/features/pipeline/components/BoardPane.vue'
 import ListPane from '@/features/pipeline/components/ListPane.vue'
@@ -627,14 +626,9 @@ onMounted(() => {
   font-size: 13px;
 }
 
-.header-actions {
-  display: flex;
-  gap: 8px;
-}
-
 .pipeline-focus-strip {
   display: grid;
-  grid-template-columns: minmax(260px, 1.4fr) minmax(240px, 0.9fr) auto;
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.9fr);
   gap: 20px;
   align-items: center;
   margin-bottom: 16px;
@@ -644,6 +638,10 @@ onMounted(() => {
   border-left: 4px solid var(--app-primary);
   border-radius: var(--app-radius-sm, 8px);
   box-shadow: var(--app-shadow-soft);
+}
+
+.pipeline-focus-strip.has-actions {
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.9fr) auto;
 }
 
 .focus-label {
@@ -743,54 +741,51 @@ onMounted(() => {
 
 /* View toggle */
 .view-toggle {
-  margin-right: 4px;
+  margin-right: 0;
 }
 
 @media (max-width: 1024px) {
-  .pipeline-focus-strip {
-    grid-template-columns: 1fr 1fr;
+  .pipeline-focus-strip,
+  .pipeline-focus-strip.has-actions {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .focus-metrics {
+    border: 0;
+    border-top: 1px solid var(--app-line);
+    padding-top: 12px;
   }
 
   .focus-actions {
-    grid-column: 1 / -1;
     justify-content: flex-start;
-    padding-top: 12px;
-    border-top: 1px solid var(--app-line);
   }
 }
 
 @media (max-width: 768px) {
-  .pipeline-focus-strip,
-  .focus-metrics {
-    grid-template-columns: 1fr;
-  }
-
-  .focus-metrics {
-    gap: 8px;
-    border: 0;
-  }
-
-  .focus-metrics div,
-  .focus-metrics div + div {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 0;
-    border-top: 1px solid var(--app-line);
-    border-left: 0;
-    text-align: left;
-  }
-
   .load-error {
     align-items: flex-start;
     flex-direction: column;
   }
-  .page-shell .page-header {
-    flex-direction: column;
-    gap: 12px;
-  }
+
   .form-row {
     grid-template-columns: 1fr;
+  }
+
+  .pipeline-focus-strip {
+    padding: 16px;
+  }
+
+  .focus-metrics {
+    gap: 0;
+  }
+
+  .focus-metrics div {
+    padding: 2px 8px;
+  }
+
+  .focus-metrics b {
+    font-size: 20px;
   }
 }
 </style>

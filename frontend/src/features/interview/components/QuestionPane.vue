@@ -142,4 +142,19 @@ defineProps({
   background: #e7f1ff;
   color: #2461b7;
 }
+
+@media (max-width: 720px) {
+  .interviewer-avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  .question-card h3 {
+    font-size: 22px;
+  }
+
+  .structure-box {
+    padding: 12px;
+  }
+}
 </style>

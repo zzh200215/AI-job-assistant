@@ -252,6 +252,25 @@ code,
   background: #0e4092;
 }
 
+/* EP 的 plain 主按钮只把文字设成品牌蓝、底色仍是浅蓝；上面那条 `.el-button--primary`
+   把底色换成了实心品牌蓝，于是 plain 按钮变成"蓝底蓝字"——面试每日一练那颗就是这样
+   在屏幕上消失的。这里把 plain 变体还原成浅底 + 品牌蓝字，并补上 hover/按压态。 */
+.el-button--primary.is-plain {
+  --el-button-text-color: var(--app-primary);
+  --el-button-border-color: color-mix(in srgb, var(--app-primary), var(--app-line) 65%);
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 92%);
+}
+
+.el-button--primary.is-plain:hover,
+.el-button--primary.is-plain:focus-visible {
+  --el-button-text-color: var(--app-primary-dark);
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+}
+
+.el-button--primary.is-plain:active {
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 80%);
+}
+
 /* 浅色面上 danger 本体当文字只有 3.66–3.96：文字版按钮往黑里压一档。 */
 .el-button.is-text.el-button--danger,
 .el-button.is-link.el-button--danger {

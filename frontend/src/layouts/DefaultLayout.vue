@@ -281,8 +281,13 @@ onBeforeUnmount(() => {
 
 /* ===== Sidebar ===== */
 .aside-shell {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
   display: flex;
   flex-direction: column;
+  height: 100vh;
+  overflow-y: auto;
   padding: 20px 14px;
   background: var(--app-surface-strong);
   border-right: 1px solid var(--app-line);
@@ -491,7 +496,10 @@ onBeforeUnmount(() => {
   }
 
   .aside-shell {
+    position: static;
     width: 100% !important;
+    height: auto;
+    overflow: visible;
     padding: 10px 16px 0;
     border-right: none;
     border-bottom: 1px solid var(--app-line);

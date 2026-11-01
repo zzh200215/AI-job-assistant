@@ -254,6 +254,12 @@ watch([() => props.messages.length, () => props.status], scrollToEnd)
 }
 
 @media (max-width: 720px) {
+  .transcript-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
   .msg-shell {
     max-width: 100%;
   }

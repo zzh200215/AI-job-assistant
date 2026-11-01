@@ -3,7 +3,7 @@
     <ReturnToBanner />
     <section class="career-hero">
       <div class="hero-copy">
-        <div class="hero-kicker">职业规划</div>
+        <div class="hero-kicker">职业成长</div>
         <h2>职业规划</h2>
         <div class="page-header-sub">
           基于你的简历和目标岗位，找到能力差距，生成可执行的成长路线。
@@ -225,113 +225,132 @@
       @retry="loadSalaryMarket"
     />
 
-    <el-row
+    <el-card
       v-if="careerPaths.length || salaryMarket || !salaryMarketLoading"
-      :gutter="18"
-      class="result-grid"
+      class="direction-card market-card"
+      shadow="never"
     >
-      <el-col :md="12" :xs="24">
-        <el-card v-if="careerPaths.length" class="direction-card" shadow="never">
-          <template #header>
-            <div class="card-header">
-              <span>推荐职业方向（基于已收集岗位）</span>
-              <el-tag size="small" type="info">
-                {{ careerPathMeta.corpus.visible_jds || 0 }} 条可见岗位 ·
-                {{ careerPathMeta.corpus.directions_found || 0 }} 个方向
-              </el-tag>
-              <el-button text size="small" :loading="careerPathLoading" @click="loadCareerPaths">
-                刷新
-              </el-button>
-            </div>
-          </template>
+      <template #header>
+        <div class="card-header">
+          <span>岗位市场参考</span>
+          <span class="card-note">
+            {{ careerPathMeta.corpus.visible_jds || 0 }} 条可见岗位 ·
+            {{ careerPathMeta.corpus.directions_found || 0 }} 个方向
+          </span>
+          <el-button text size="small" :loading="careerPathLoading" @click="loadCareerPaths">
+            刷新
+          </el-button>
+        </div>
+      </template>
 
-          <div class="direction-list">
-            <article v-for="item in careerPaths" :key="item.direction_key" class="direction-item">
-              <div class="direction-top">
-                <strong>{{ item.label || item.direction_key }}</strong>
-                <el-tag v-if="item.category" size="small" type="info">{{ item.category }}</el-tag>
-                <span v-if="coveragePct(item) !== null" class="direction-cov">
-                  已覆盖该方向 {{ coveragePct(item) }}% 的明确要求
-                </span>
-                <span v-else class="direction-cov">该方向未列出可核对的硬性要求</span>
-              </div>
-              <p>{{ item.reason }}</p>
-              <ul class="direction-facts">
-                <li>基于 {{ item.sample_count }} 个已收集岗位</li>
-                <li v-if="item.salary?.has_data">
-                  薪资低位 / 中位 / 高位 = {{ item.salary.p25 }}/{{ item.salary.p50 }}/{{
-                    item.salary.p75
-                  }}
-                  K（{{ item.salary.sample_size }} 个岗位有薪资信息）
-                </li>
-                <li v-else>薪资：这些岗位暂时没有公开薪资区间</li>
-                <li v-if="gapFacts(item).length">
-                  主要缺口
-                  <ul class="direction-gaps">
-                    <li v-for="gap in gapFacts(item)" :key="gap.skill">
-                      {{ gap.skill }} — {{ gap.detail }}
-                      <span v-if="gap.interview" class="gap-interview">{{
-                        interviewGapText(gap.interview)
-                      }}</span>
-                    </li>
-                  </ul>
-                </li>
-              </ul>
-              <p v-if="item.degraded" class="direction-warn">
-                数据还不够：{{ (item.degrade_reasons || []).join('；') }}
-              </p>
-            </article>
+      <div class="market-summary">
+        <div class="salary-current">
+          <span class="salary-label">薪资参考 · 岗位方向</span>
+          <strong>{{ salaryMarket?.filters?.position || targetRole || '待填写目标岗位' }}</strong>
+        </div>
+        <div v-if="salaryMarketLoading" class="salary-empty">加载中…</div>
+        <div v-else-if="salaryMarket && salaryBands.length" class="salary-percentiles">
+          <div v-for="band in salaryBands" :key="band.key" class="salary-band">
+            <span class="salary-band-label">{{ band.label }}</span>
+            <strong class="salary-band-value">{{ band.value }}K</strong>
           </div>
-          <p v-if="careerPathMeta.summary" class="direction-summary">
-            {{ careerPathMeta.summary }}
-          </p>
-          <p
-            v-if="careerPathMeta.interview_profile?.has_data"
-            class="direction-summary interview-note"
-          >
-            上次面试留下 {{ careerPathMeta.interview_profile.weakness_count }} 个技能弱点，已在
-            {{ careerPathMeta.interview_profile.matched_gap_count }} 个缺口上标出证据。
-          </p>
-        </el-card>
-      </el-col>
-
-      <el-col :md="12" :xs="24">
-        <el-card class="salary-card" shadow="never">
-          <template #header>
-            <div class="card-header">
-              <span>薪资行情（基于已收集岗位）</span>
-              <el-tag v-if="salaryMarket" size="small" type="info">
-                基于 {{ salaryMarket.sample_size }} 个岗位
-              </el-tag>
-            </div>
+        </div>
+        <div v-else class="salary-empty">这个方向目前收集到的薪资信息还不够，暂不提供数字。</div>
+        <small v-if="salaryMarket" class="salary-note">
+          <template v-if="salaryMarket.low_confidence"
+            >目前只有 {{ salaryMarket.sample_size }} 个岗位有薪资信息，样本偏少 ·
           </template>
-          <div v-if="salaryMarketLoading" class="salary-empty">加载中…</div>
-          <div v-else-if="salaryMarket" class="salary-body">
-            <div class="salary-current">
-              <span class="salary-label">岗位方向</span>
-              <strong>{{ salaryMarket.filters?.position || '—' }}</strong>
-            </div>
-            <el-alert
-              v-if="salaryMarket.low_confidence"
-              type="warning"
-              :closable="false"
-              show-icon
-              :title="`目前只收集到 ${salaryMarket.sample_size} 个岗位的薪资信息，暂不足以代表市场`"
-            />
-            <div class="salary-percentiles">
-              <div v-for="band in salaryBands" :key="band.key" class="salary-band">
-                <span class="salary-band-label">{{ band.label }}</span>
-                <strong class="salary-band-value">{{ band.value }}K</strong>
-              </div>
-            </div>
-            <small class="salary-note">
-              薪资区间来自已收集岗位的公开信息，不代表个人实际报价。
-            </small>
+          基于公开薪资信息，不代表个人实际报价。
+        </small>
+      </div>
+
+      <div v-if="careerPaths.length" class="direction-list">
+        <article
+          v-for="item in visibleDirections"
+          :key="item.direction_key"
+          class="direction-item"
+          :class="{ expanded: isDirectionOpen(item) }"
+        >
+          <div class="direction-top">
+            <strong>{{ item.label || item.direction_key }}</strong>
+            <el-tag v-if="item.category" size="small" type="info">{{ item.category }}</el-tag>
           </div>
-          <div v-else class="salary-empty">这个方向目前收集到的薪资信息还不够，暂不提供数字。</div>
-        </el-card>
-      </el-col>
-    </el-row>
+          <div class="direction-meta">
+            <span v-if="coveragePct(item) !== null" class="direction-cov">
+              覆盖 {{ coveragePct(item) }}%
+            </span>
+            <span v-else class="direction-cov">无硬性要求</span>
+            <span class="direction-pay">{{ directionSalaryText(item) }}</span>
+          </div>
+          <p class="direction-gap">
+            <template v-if="gapFacts(item).length">主要缺口：{{ directionGapText(item) }}</template>
+            <template v-else>暂无明确技能缺口</template>
+            <span v-if="item.degraded" class="direction-flag">样本不足</span>
+          </p>
+          <p v-if="directionInterviewEvidence(item)" class="direction-evidence">
+            面试证据：{{ directionInterviewEvidence(item) }}
+          </p>
+
+          <div class="direction-foot">
+            <el-button text size="small" @click="toggleDirection(item)">
+              {{ isDirectionOpen(item) ? '收起详情' : '展开详情' }}
+            </el-button>
+          </div>
+
+          <div v-if="isDirectionOpen(item)" class="direction-detail">
+            <p>{{ item.reason }}</p>
+            <ul class="direction-facts">
+              <li>基于 {{ item.sample_count }} 个已收集岗位</li>
+              <li v-if="item.salary?.has_data">
+                薪资低位 / 中位 / 高位 = {{ item.salary.p25 }}/{{ item.salary.p50 }}/{{
+                  item.salary.p75
+                }}
+                K（{{ item.salary.sample_size }} 个岗位有薪资信息）
+              </li>
+              <li v-else>薪资：这些岗位暂时没有公开薪资区间</li>
+              <li v-if="gapFacts(item).length">
+                主要缺口
+                <ul class="direction-gaps">
+                  <li v-for="gap in gapFacts(item)" :key="gap.skill">
+                    {{ gap.skill }} — {{ gap.detail }}
+                    <span v-if="gap.interview" class="gap-interview">{{
+                      interviewGapText(gap.interview)
+                    }}</span>
+                  </li>
+                </ul>
+              </li>
+            </ul>
+            <p v-if="item.degraded" class="direction-warn">
+              数据还不够：{{ (item.degrade_reasons || []).join('；') }}
+            </p>
+          </div>
+        </article>
+      </div>
+
+      <div v-if="careerPaths.length" class="direction-footer">
+        <el-button
+          v-if="careerPaths.length > DIRECTION_PREVIEW_LIMIT"
+          text
+          type="primary"
+          @click="showAllDirections = !showAllDirections"
+        >
+          {{ showAllDirections ? '收起方向列表' : `展开全部 ${careerPaths.length} 个方向` }}
+        </el-button>
+        <p v-if="careerPathMeta.summary" class="direction-summary">
+          {{ careerPathMeta.summary }}
+        </p>
+      </div>
+      <p
+        v-if="
+          careerPathMeta.interview_profile?.has_data &&
+          careerPathMeta.interview_profile.weakness_count > 0
+        "
+        class="direction-summary interview-note"
+      >
+        上次面试留下 {{ careerPathMeta.interview_profile.weakness_count }} 个技能弱点，已在
+        {{ careerPathMeta.interview_profile.matched_gap_count }} 个缺口上标出证据。
+      </p>
+    </el-card>
 
     <section v-if="careerResult" class="career-focus-strip" aria-label="职业规划重点">
       <div class="career-focus-main">
@@ -967,6 +986,43 @@ const salaryBands = computed(() => {
     { key: 'p90', label: '头部（P90）', value: stats.p90 },
   ].filter((band) => Number.isFinite(band.value))
 })
+
+const DIRECTION_PREVIEW_LIMIT = 3
+const showAllDirections = ref(false)
+const expandedDirections = ref(new Set())
+const visibleDirections = computed(() =>
+  showAllDirections.value ? careerPaths.value : careerPaths.value.slice(0, DIRECTION_PREVIEW_LIMIT)
+)
+
+function isDirectionOpen(item) {
+  return expandedDirections.value.has(item.direction_key)
+}
+
+function toggleDirection(item) {
+  const next = new Set(expandedDirections.value)
+  if (next.has(item.direction_key)) next.delete(item.direction_key)
+  else next.add(item.direction_key)
+  expandedDirections.value = next
+}
+
+function directionSalaryText(item) {
+  if (!item.salary?.has_data) return '薪资未知'
+  const { p25, p75 } = item.salary
+  return p25 === p75 ? `${p25}K` : `${p25}-${p75}K`
+}
+
+function directionGapText(item) {
+  const gaps = gapFacts(item)
+  const names = gaps.slice(0, 3).map((gap) => gap.skill)
+  return `${names.join(' · ')}${gaps.length > names.length ? ` 等 ${gaps.length} 项` : ''}`
+}
+
+function directionInterviewEvidence(item) {
+  return gapFacts(item)
+    .filter((gap) => gap.interview)
+    .map((gap) => `${gap.skill} · ${interviewGapText(gap.interview)}`)
+    .join('；')
+}
 
 // 学习资源：只用规划报告里给出的条目。原先按技能关键词硬编码书名和课程名，
 // 还带上 '#' 假链接——那是把模板当成"为你找的资源"展示。
@@ -1951,6 +2007,168 @@ function buildGoalJDText() {
   color: var(--app-text);
 }
 
+/* 岗位市场参考：薪资摘要 + 前三个方向，详细信息按需展开，不再把 8 个方向全文铺开。 */
+.market-summary {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(0, 1.6fr);
+  gap: 12px 24px;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.market-summary .salary-current strong {
+  font-size: 16px;
+}
+
+.market-summary .salary-percentiles {
+  justify-content: flex-start;
+  gap: 22px;
+}
+
+.market-summary .salary-band {
+  flex: 0 1 auto;
+  text-align: left;
+}
+
+.market-summary .salary-empty {
+  grid-column: 2;
+  padding: 0;
+  text-align: left;
+}
+
+.market-summary .salary-note {
+  grid-column: 1 / -1;
+}
+
+.market-card .direction-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.market-card .direction-item {
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+}
+
+.market-card .direction-top {
+  align-items: center;
+}
+
+.market-card .direction-top strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.direction-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.direction-pay {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 92%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.direction-gap {
+  margin: 8px 0 0;
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.direction-flag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 90%);
+  color: color-mix(in srgb, var(--app-warning), black 38%);
+  font-size: 11px;
+}
+
+.direction-evidence {
+  margin: 6px 0 0;
+  color: color-mix(in srgb, var(--app-warning), black 38%);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.direction-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.direction-detail {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--app-line);
+}
+
+.direction-detail p {
+  margin: 8px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.direction-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--app-line);
+}
+
+.direction-footer .direction-summary {
+  margin: 0;
+}
+
+.market-card .card-header {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1100px) {
+  .market-card .direction-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .market-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .market-summary .salary-empty {
+    grid-column: 1;
+  }
+
+  .market-card .direction-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 .gap-interview {
   display: block;
   margin-top: 4px;
@@ -2007,12 +2225,37 @@ function buildGoalJDText() {
     font-size: 30px;
   }
 
-  .hero-summary,
   .career-focus-metrics,
   .progress-snapshot,
   .overview-grid,
   .project-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hero-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .summary-card {
+    min-height: 104px;
+    padding: 12px 12px 12px 52px;
+  }
+
+  .summary-card::before {
+    left: 12px;
+    top: 12px;
+    width: 30px;
+    height: 30px;
+  }
+
+  .summary-card strong {
+    font-size: 17px;
+  }
+
+  .summary-card span,
+  .summary-card small {
+    font-size: 11px;
   }
 
   .career-focus-action .el-button {

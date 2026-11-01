@@ -2,9 +2,7 @@
   <div class="app-page home-page">
     <PageHeader :title="pageTitle" :subtitle="headerSubtitle" :eyebrow="todayLabel">
       <template #actions>
-        <el-button v-if="hasResume" @click="go('/resume-center')">
-          <el-icon><UploadFilled /></el-icon> 上传简历
-        </el-button>
+        <el-button v-if="hasResume" @click="go('/resume-center')"> 简历中心 </el-button>
         <el-button type="primary" @click="go(primaryAction.link)">
           {{ primaryAction.label }}
           <el-icon class="el-icon--right"><ArrowRight /></el-icon>
@@ -89,7 +87,7 @@
 
     <div class="home-grid">
       <div class="home-main">
-        <section class="ui-card">
+        <section class="ui-card home-card home-card--tasks">
           <div class="ui-card-head">
             <div>
               <h2>今日推进</h2>
@@ -150,9 +148,19 @@
               </span>
             </button>
           </div>
+
+          <div v-if="!tasksLoading" class="home-task-foot">
+            <span>
+              今天 <strong>{{ todayCount }}</strong> 个投递 · 本周新增
+              <strong>{{ weeklyNew }}</strong> 个
+            </span>
+            <button type="button" class="ui-link" @click="go('/jobs/recommend')">
+              去挑一个岗位 <el-icon><ArrowRight /></el-icon>
+            </button>
+          </div>
         </section>
 
-        <section class="ui-card">
+        <section class="ui-card home-card home-card--board">
           <div class="ui-card-head">
             <div>
               <h2>投递管道</h2>
@@ -235,7 +243,7 @@
       </div>
 
       <aside class="home-rail">
-        <section class="ui-card">
+        <section class="ui-card home-card home-card--reco">
           <div class="ui-card-head">
             <div>
               <h2>推荐岗位</h2>
@@ -302,7 +310,7 @@
           </div>
         </section>
 
-        <section class="ui-card">
+        <section class="ui-card home-card home-card--week">
           <div class="ui-card-head">
             <div>
               <h2>本周投递节奏</h2>
@@ -330,7 +338,7 @@
           </div>
         </section>
 
-        <section class="ui-card">
+        <section class="ui-card home-card home-card--check">
           <div class="ui-card-head">
             <div>
               <h2>下一步检查</h2>
@@ -364,13 +372,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  ArrowRight,
-  CircleCheck,
-  DataAnalysis,
-  Document,
-  UploadFilled,
-} from '@element-plus/icons-vue'
+import { ArrowRight, CircleCheck, DataAnalysis, Document } from '@element-plus/icons-vue'
 
 import EmptyState from '@/components/ui/EmptyState.vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
@@ -498,12 +500,17 @@ const weekBars = computed(() =>
     const label = Number.isNaN(date.getTime()) ? '·' : weekdays[date.getDay()]
     return {
       label,
+      count: item.count || 0,
       height: Math.round(((item.count || 0) / trendMax.value) * 100),
       today: index === trend.value.length - 1,
     }
   })
 )
 const weeklyTotal = computed(() => trend.value.reduce((sum, item) => sum + (item.count || 0), 0))
+const todayCount = computed(() => {
+  const last = weekBars.value[weekBars.value.length - 1]
+  return last?.count || 0
+})
 
 const checklist = computed(() => [
   {
@@ -655,17 +662,44 @@ onMounted(loadDashboard)
 
 .home-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(300px, 0.9fr);
-  gap: 16px;
-  align-items: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-areas:
+    'tasks week'
+    'board board'
+    'reco check';
+  gap: 14px;
+  align-items: stretch;
 }
 
 .home-main,
 .home-rail {
+  display: contents;
+}
+
+.home-card {
   display: flex;
   flex-direction: column;
-  gap: 16px;
   min-width: 0;
+}
+
+.home-card--tasks {
+  grid-area: tasks;
+}
+
+.home-card--board {
+  grid-area: board;
+}
+
+.home-card--reco {
+  grid-area: reco;
+}
+
+.home-card--week {
+  grid-area: week;
+}
+
+.home-card--check {
+  grid-area: check;
 }
 
 /* ===== Stats ===== */
@@ -709,6 +743,25 @@ onMounted(loadDashboard)
 
 .home-task-list {
   padding: 2px 8px 8px;
+}
+
+.home-task-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: auto;
+  padding: 10px 16px;
+  border-top: 1px solid var(--app-line);
+  color: var(--app-muted);
+  font-size: 11px;
+}
+
+.home-task-foot strong {
+  color: var(--app-text);
+  font-family: var(--app-font-mono);
+  font-weight: 600;
 }
 
 .home-task-row {
@@ -1182,6 +1235,12 @@ onMounted(loadDashboard)
 @media (max-width: 1180px) {
   .home-grid {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      'tasks'
+      'week'
+      'board'
+      'reco'
+      'check';
   }
 
   .home-board {

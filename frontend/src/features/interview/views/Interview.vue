@@ -1,22 +1,25 @@
 <template>
   <div class="page-shell">
-    <div class="page-header">
-      <div>
-        <h2>面试作战室</h2>
-        <div class="page-header-sub">所有面试准备、实战记录和复盘集中管理</div>
-      </div>
-      <div class="header-actions">
+    <PageHeader
+      title="面试作战室"
+      eyebrow="面试"
+      subtitle="每日一练、薄弱项训练和面试复盘集中在这里"
+    >
+      <template #actions>
         <el-button @click="showIntroDialog = true">
           <el-icon><Document /></el-icon> 自我介绍
         </el-button>
         <el-button type="primary" @click="$router.push('/interview/setup')">
           <el-icon><Microphone /></el-icon> 开始模拟面试
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <!-- 即将到来的面试 -->
-    <AppPanel icon-color="var(--app-violet)">
+    <AppPanel
+      v-if="upcomingLoading || upcomingError || upcomingInterviews.length"
+      icon-color="var(--app-violet)"
+    >
       <template #icon><Clock /></template>
       <template #title>即将面试</template>
       <div v-if="upcomingLoading" class="loading-state">
@@ -237,34 +240,41 @@
       <div v-else-if="!sessions.length" class="empty-inline">
         还没有面试记录，开始一次模拟面试吧
       </div>
-      <div v-else class="interview-list">
-        <div
-          v-for="s in sessions"
-          :key="s.id"
-          class="interview-row"
-          @click="$router.push(`/interview/report/${s.id}`)"
-        >
-          <div class="interview-dot" :class="s.status === 'completed' ? 'green' : 'amber'" />
-          <div class="interview-info">
-            <strong>{{ s.jd_title || s.position || '模拟面试' }}</strong>
-            <span>{{ monthDayTime(s.created_at) }} · {{ sessionStatusLabel(s.status) }}</span>
-          </div>
-          <div v-if="s.overall_score" class="interview-score">
-            <strong>{{ s.overall_score }}</strong>
-            <span>分</span>
-          </div>
-          <!-- 没答完的会话以前只有一扇门：进去接着答。可 30 秒超时计时器与 `end` 消息都只在连接
-               活着时存在，标签页一关就永远停在"进行中"（P4 / D172）。这里给一条不需要
-               WebSocket 的收口。`created`（还没推过题）后端会拒，所以按钮不给它。 -->
-          <el-button
-            v-if="s.status === 'ongoing'"
-            size="small"
-            text
-            :loading="endingId === s.id"
-            @click.stop="endSession(s)"
-            >结束面试</el-button
+      <div v-else>
+        <div class="interview-list">
+          <div
+            v-for="s in visibleSessions"
+            :key="s.id"
+            class="interview-row"
+            @click="$router.push(`/interview/report/${s.id}`)"
           >
-          <el-icon class="interview-arrow"><ArrowRight /></el-icon>
+            <div class="interview-dot" :class="s.status === 'completed' ? 'green' : 'amber'" />
+            <div class="interview-info">
+              <strong>{{ sessionTitle(s) }}</strong>
+              <span>{{ sessionMeta(s) }}</span>
+            </div>
+            <div v-if="sessionScore(s) !== null" class="interview-score">
+              <strong>{{ sessionScore(s) }}</strong>
+              <span>分</span>
+            </div>
+            <!-- 没答完的会话以前只有一扇门：进去接着答。可 30 秒超时计时器与 `end` 消息都只在连接
+                 活着时存在，标签页一关就永远停在"进行中"（P4 / D172）。这里给一条不需要
+                 WebSocket 的收口。`created`（还没推过题）后端会拒，所以按钮不给它。 -->
+            <el-button
+              v-if="s.status === 'ongoing'"
+              size="small"
+              text
+              :loading="endingId === s.id"
+              @click.stop="endSession(s)"
+              >结束面试</el-button
+            >
+            <el-icon class="interview-arrow"><ArrowRight /></el-icon>
+          </div>
+        </div>
+        <div v-if="sessions.length > SESSION_PREVIEW_LIMIT" class="history-more">
+          <el-button text type="primary" @click="showAllSessions = !showAllSessions">
+            {{ showAllSessions ? '收起历史' : `查看全部 ${sessions.length} 场` }}
+          </el-button>
         </div>
       </div>
     </AppPanel>
@@ -319,6 +329,7 @@
 <script setup>
 import { userErrorCopy } from '@/utils/requestTracing'
 import AppPanel from '@/components/ui/AppPanel.vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -353,6 +364,30 @@ const upcomingError = ref('')
 const sessionsLoading = ref(true)
 const sessions = ref([])
 const sessionsError = ref('')
+const SESSION_PREVIEW_LIMIT = 5
+const showAllSessions = ref(false)
+const visibleSessions = computed(() =>
+  showAllSessions.value ? sessions.value : sessions.value.slice(0, SESSION_PREVIEW_LIMIT)
+)
+
+function sessionTitle(session) {
+  return session.jd_summary?.title || session.jd_title || session.position || '模拟面试'
+}
+
+function sessionScore(session) {
+  const score = session.overall_score ?? session.evaluation?.overall_score
+  return typeof score === 'number' ? Math.round(score) : null
+}
+
+function sessionMeta(session) {
+  return [
+    session.resume_summary?.name,
+    monthDayTime(session.created_at),
+    sessionStatusLabel(session.status),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
 
 const recordId = ref(null)
 const questionData = ref(null)
@@ -777,6 +812,12 @@ onMounted(() => {
   color: var(--app-muted);
 }
 
+.history-more {
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+}
+
 /* Question section */
 .question-load {
   display: flex;
@@ -838,8 +879,8 @@ onMounted(() => {
 .daily-question {
   padding: 16px;
   border-radius: var(--app-radius-sm, 12px);
-  background: #fffaf1;
-  border: 1px solid #f0d6a8;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 95%);
+  border: 1px solid color-mix(in srgb, var(--app-warning), var(--app-bg) 78%);
 }
 
 .daily-badge {
@@ -860,11 +901,11 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--app-warning);
+  color: color-mix(in srgb, var(--app-warning), black 38%);
   margin-bottom: 12px;
   padding: 8px 10px;
   border-radius: 6px;
-  background: #fff6e0;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 92%);
 }
 
 .daily-section {
@@ -954,8 +995,8 @@ onMounted(() => {
 .weak-card {
   padding: 14px;
   border-radius: var(--app-radius-sm, 12px);
-  background: #fffbf5;
-  border: 1px solid #f5d9b8;
+  background: color-mix(in srgb, var(--app-warning), var(--app-bg) 96%);
+  border: 1px solid color-mix(in srgb, var(--app-warning), var(--app-bg) 82%);
 }
 
 .weak-header {

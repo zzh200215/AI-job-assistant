@@ -1,6 +1,6 @@
 <script setup>
 import { MoreFilled, WarningFilled } from '@element-plus/icons-vue'
-import { monthDayTime } from '@/utils/format/date'
+import { monthDay, monthDayTime } from '@/utils/format/date'
 import { MATCH_SCORE_BANDS, scoreToneClass } from '@/utils/scoreTone'
 import {
   followUpDays,
@@ -77,84 +77,82 @@ const emit = defineEmits(['command', 'batch-move', 'clear-selection', 'selection
       size="small"
     >
       <el-table-column type="selection" width="40" />
-      <el-table-column prop="title" label="岗位" min-width="160">
+      <el-table-column prop="title" label="岗位" min-width="200">
         <template #default="{ row }">
           <div class="list-title">{{ row.title || '未命名' }}</div>
+          <div class="list-sub">{{ [row.company, row.source].filter(Boolean).join(' · ') }}</div>
         </template>
       </el-table-column>
-      <el-table-column prop="company" label="公司" width="120" />
-      <el-table-column label="简历版本" min-width="130">
+      <el-table-column label="简历版本" min-width="120">
         <template #default="{ row }">
           <span v-if="row.resume_version_label" class="version-cell">{{
             row.resume_version_label
           }}</span>
-          <span v-else class="follow-ok">未记录</span>
+          <span v-else class="list-muted">未记录</span>
         </template>
       </el-table-column>
-      <el-table-column label="阶段" width="100">
+      <el-table-column label="阶段" width="90">
         <template #default="{ row }">
           <el-tag size="small" :type="stageTagType(row.stage)">{{ stageLabel(row.stage) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="跟进" width="100">
+      <el-table-column label="跟进" width="96">
         <template #default="{ row }">
           <span v-if="needsFollowUp(row)" :class="'follow-' + followUpLevel(row, now)">
             <el-icon><WarningFilled /></el-icon> {{ followUpDays(row, now) }}天
           </span>
-          <span v-else class="follow-ok">-</span>
+          <span v-else class="list-muted">{{ monthDay(row.update_time || row.create_time) }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="salary_range" label="薪资" width="100" />
-      <el-table-column label="匹配度" width="80" align="center">
+      <el-table-column prop="salary_range" label="薪资" width="90" />
+      <el-table-column label="匹配度" width="70" align="center">
         <template #default="{ row }">
           <span
             v-if="row.match_score"
             :class="scoreToneClass(row.match_score, MATCH_SCORE_BANDS, 'score-level')"
             >{{ Math.round(row.match_score) }}分</span
           >
-          <span v-else class="follow-ok">-</span>
+          <span v-else class="list-muted">—</span>
         </template>
       </el-table-column>
-      <el-table-column label="面试时间" width="110">
+      <el-table-column label="面试时间" width="124">
         <template #default="{ row }">
           <span v-if="row.interview_at" class="follow-interview">{{
             monthDayTime(row.interview_at)
           }}</span>
-          <span v-else class="follow-ok">-</span>
+          <span v-else class="list-muted">—</span>
         </template>
       </el-table-column>
-      <el-table-column prop="source" label="来源" width="80" />
-      <el-table-column label="创建时间" width="90">
-        <template #default="{ row }">{{ monthDayTime(row.create_time) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column label="操作" width="150" fixed="right">
         <template #default="{ row }">
-          <el-button text size="small" @click="emit('command', 'detail', row)">详情</el-button>
-          <el-button text size="small" @click="emit('command', 'analyze', row)">AI</el-button>
-          <el-dropdown
-            trigger="click"
-            :disabled="writeBusy"
-            @command="(cmd) => emit('command', cmd, row)"
-          >
-            <el-button text size="small">
-              <el-icon><MoreFilled /></el-icon>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item v-if="row.stage === 'interview'" command="interview"
-                  >模拟面试</el-dropdown-item
-                >
-                <el-dropdown-item command="reject">标记拒绝</el-dropdown-item>
-                <el-dropdown-item command="abandon">放弃</el-dropdown-item>
-                <el-dropdown-item
-                  command="delete"
-                  divided
-                  style="color: color-mix(in srgb, var(--app-danger), white 20%)"
-                  >删除</el-dropdown-item
-                >
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
+          <div class="row-actions">
+            <el-button text size="small" @click="emit('command', 'detail', row)">详情</el-button>
+            <el-button text size="small" @click="emit('command', 'analyze', row)">AI</el-button>
+            <el-dropdown
+              trigger="click"
+              :disabled="writeBusy"
+              @command="(cmd) => emit('command', cmd, row)"
+            >
+              <el-button text size="small" aria-label="更多操作">
+                <el-icon><MoreFilled /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="row.stage === 'interview'" command="interview"
+                    >模拟面试</el-dropdown-item
+                  >
+                  <el-dropdown-item command="reject">标记拒绝</el-dropdown-item>
+                  <el-dropdown-item command="abandon">放弃</el-dropdown-item>
+                  <el-dropdown-item
+                    command="delete"
+                    divided
+                    style="color: color-mix(in srgb, var(--app-danger), white 20%)"
+                    >删除</el-dropdown-item
+                  >
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -177,6 +175,31 @@ const emit = defineEmits(['command', 'batch-move', 'clear-selection', 'selection
 .list-title {
   font-weight: 600;
   font-size: 14px;
+}
+
+.list-sub {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-muted {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.row-actions :deep(.el-button) {
+  margin-left: 0;
+  padding: 4px 5px;
 }
 
 /* 批量操作栏 */

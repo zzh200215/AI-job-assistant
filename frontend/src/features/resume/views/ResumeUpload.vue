@@ -10,7 +10,7 @@
         <el-button v-if="selectedResume" @click="openCompareRow(selectedResume)">
           版本对比
         </el-button>
-        <el-button :type="selectedResume ? 'default' : 'primary'" @click="showUpload = true">
+        <el-button v-else type="primary" @click="showUpload = true">
           <el-icon><UploadFilled /></el-icon> 上传简历
         </el-button>
       </template>
@@ -425,28 +425,26 @@
     </el-dialog>
 
     <!-- 简历工作台 -->
-    <div v-if="listLoading" class="resume-workspace resume-workspace--loading">
-      <aside class="resume-list">
-        <div class="resume-list-head"><strong>我的简历</strong><span>读取中…</span></div>
-        <div v-for="i in 3" :key="i" class="resume-list-skeleton">
-          <div class="app-skeleton" style="height: 14px; width: 62%" />
-          <div class="app-skeleton" style="height: 10px; width: 78%; margin-top: 8px" />
-          <div class="app-skeleton" style="height: 24px; width: 100%; margin-top: 12px" />
+    <div v-if="listLoading" class="resume-page-body">
+      <div class="resume-version-bar resume-version-bar--loading">
+        <div class="app-skeleton" style="height: 20px; width: 100px" />
+        <div class="app-skeleton" style="height: 56px; flex: 1" />
+      </div>
+      <div class="resume-workspace">
+        <div class="resume-detail">
+          <div class="resume-detail-head">
+            <div class="app-skeleton" style="height: 26px; width: 180px" />
+          </div>
+          <div class="resume-detail-body">
+            <div class="resume-preview"><div class="app-skeleton" style="height: 460px" /></div>
+            <aside class="resume-audit">
+              <div class="app-skeleton" style="height: 72px; width: 72px; border-radius: 50%" />
+              <div class="app-skeleton" style="height: 14px; width: 70%; margin-top: 16px" />
+              <div class="app-skeleton" style="height: 14px; width: 55%; margin-top: 10px" />
+            </aside>
+          </div>
         </div>
-      </aside>
-      <section class="resume-detail">
-        <div class="resume-detail-head">
-          <div class="app-skeleton" style="height: 26px; width: 180px" />
-        </div>
-        <div class="resume-detail-body">
-          <div class="resume-preview"><div class="app-skeleton" style="height: 460px" /></div>
-          <aside class="resume-audit">
-            <div class="app-skeleton" style="height: 72px; width: 72px; border-radius: 50%" />
-            <div class="app-skeleton" style="height: 14px; width: 70%; margin-top: 16px" />
-            <div class="app-skeleton" style="height: 14px; width: 55%; margin-top: 10px" />
-          </aside>
-        </div>
-      </section>
+      </div>
     </div>
 
     <div v-else-if="listError" class="app-inline-error">
@@ -465,295 +463,300 @@
       </template>
     </EmptyState>
 
-    <div v-else class="resume-workspace">
-      <aside class="resume-list">
-        <div class="resume-list-head">
-          <strong>我的简历</strong>
-          <span>{{ resumes.length }} 个版本</span>
+    <div v-else class="resume-page-body">
+      <section class="resume-version-bar" aria-label="简历版本">
+        <div class="resume-version-bar-head">
+          <strong>简历版本</strong>
+          <span>{{ resumes.length }} 份</span>
         </div>
-        <button
-          v-for="r in resumes"
-          :key="r.id"
-          type="button"
-          class="resume-list-item"
-          :class="{ 'is-active': r.id === selectedResumeId, 'is-default': isDefaultResume(r) }"
-          @click="selectResume(r)"
-        >
-          <span class="resume-doc">{{ fileTypeLabel(r) }}</span>
-          <span class="resume-list-main">
-            <span class="resume-list-title">
-              <strong>{{ resumeTitle(r) }}</strong>
-              <span v-if="isDefaultResume(r)" class="resume-default">默认</span>
-            </span>
-            <span class="resume-list-sub">
-              {{ r.parsed?.current_title || '尚未解析' }} · {{ monthDay(r.create_time) }}
-            </span>
-            <span class="resume-list-score">
-              <span class="resume-score-track">
-                <i
-                  v-if="scoreOf(r) !== null"
-                  class="score-fill"
-                  :style="{ width: scoreOf(r) + '%' }"
-                  :class="scoreToneFillClass(scoreOf(r))"
-                />
+        <div class="resume-version-list">
+          <button
+            v-for="r in resumes"
+            :key="r.id"
+            type="button"
+            class="resume-list-item"
+            :class="{ 'is-active': r.id === selectedResumeId, 'is-default': isDefaultResume(r) }"
+            @click="selectResume(r)"
+          >
+            <span class="resume-doc">{{ fileTypeLabel(r) }}</span>
+            <span class="resume-list-main">
+              <span class="resume-list-title">
+                <strong>{{ resumeTitle(r) }}</strong>
+                <span v-if="isDefaultResume(r)" class="resume-default">默认</span>
               </span>
-              <b :class="scoreOf(r) !== null ? scoreToneClass(scoreOf(r)) : ''">
-                {{ scoreOf(r) ?? (r._scoring ? '…' : '—') }}
-              </b>
+              <span class="resume-list-sub">
+                {{ r.parsed?.current_title || '尚未解析' }} · {{ monthDay(r.create_time) }}
+              </span>
+              <span class="resume-list-score">
+                <span class="resume-score-track">
+                  <i
+                    v-if="scoreOf(r) !== null"
+                    class="score-fill"
+                    :style="{ width: scoreOf(r) + '%' }"
+                    :class="scoreToneFillClass(scoreOf(r))"
+                  />
+                </span>
+                <b :class="scoreOf(r) !== null ? scoreToneClass(scoreOf(r)) : ''">
+                  {{ scoreOf(r) ?? (r._scoring ? '…' : '—') }}
+                </b>
+              </span>
             </span>
-          </span>
-        </button>
-        <div class="resume-list-foot">
-          <el-button @click="showUpload = true">上传新版本</el-button>
+          </button>
+          <button type="button" class="resume-upload-inline" @click="showUpload = true">
+            <el-icon><UploadFilled /></el-icon> 上传新版本
+          </button>
         </div>
-      </aside>
+        <span class="resume-version-note">选中的版本会用于下方预览与体检</span>
+      </section>
 
-      <section v-if="selectedResume" class="resume-detail">
-        <header class="resume-detail-head">
-          <div class="resume-detail-copy">
-            <div class="resume-detail-title">
-              <h2>{{ resumeTitle(selectedResume) }}</h2>
-              <el-tag
-                v-if="isDefaultResume(selectedResume)"
+      <section v-if="selectedResume" class="resume-workspace">
+        <div class="resume-detail">
+          <header class="resume-detail-head">
+            <div class="resume-detail-copy">
+              <div class="resume-detail-title">
+                <h2>{{ resumeTitle(selectedResume) }}</h2>
+                <el-tag
+                  v-if="isDefaultResume(selectedResume)"
+                  size="small"
+                  type="primary"
+                  effect="light"
+                  >默认</el-tag
+                >
+                <el-tag v-if="hasParsed(selectedResume)" size="small" type="success" effect="light"
+                  >已解析</el-tag
+                >
+                <el-tag v-else size="small" type="warning" effect="light">待解析</el-tag>
+                <el-tag v-if="selectedVersionCount" size="small" type="info" effect="plain">
+                  版本 {{ selectedVersionCount }}
+                </el-tag>
+              </div>
+              <p class="resume-detail-sub">
+                {{ fileTypeLabel(selectedResume) }} · {{ formatSize(selectedResume.file_size) }} ·
+                {{ monthDay(selectedResume.create_time) }} 更新
+              </p>
+            </div>
+            <div class="resume-detail-actions">
+              <el-button
+                v-if="hasParsed(selectedResume)"
                 size="small"
+                @click="handleCmd('diagnose', selectedResume)"
+              >
+                优化建议
+              </el-button>
+              <el-dropdown trigger="click" @command="(cmd) => handleCmd(cmd, selectedResume)">
+                <button class="more-button" type="button" aria-label="更多操作">
+                  <el-icon><MoreFilled /></el-icon>
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="parse">{{
+                      hasParsed(selectedResume) ? '重新解析' : '解析简历'
+                    }}</el-dropdown-item>
+                    <el-dropdown-item command="optimize">AI 优化</el-dropdown-item>
+                    <el-dropdown-item command="diagnose">AI 诊断</el-dropdown-item>
+                    <el-dropdown-item command="report" divided>评估报告</el-dropdown-item>
+                    <el-dropdown-item command="project">项目分析</el-dropdown-item>
+                    <el-dropdown-item command="portfolio">组合分析</el-dropdown-item>
+                    <el-dropdown-item command="compare">版本对比</el-dropdown-item>
+                    <el-dropdown-item
+                      v-if="!isDefaultResume(selectedResume)"
+                      command="setDefault"
+                      divided
+                      >设为默认</el-dropdown-item
+                    >
+                    <el-dropdown-item command="share" :divided="isDefaultResume(selectedResume)"
+                      >分享链接</el-dropdown-item
+                    >
+                    <el-dropdown-item command="desensitize">{{
+                      selectedResume._desensitized ? '取消脱敏' : '脱敏设置'
+                    }}</el-dropdown-item>
+                    <el-dropdown-item command="exportDocx">导出 Word</el-dropdown-item>
+                    <el-dropdown-item command="exportPdf">导出 PDF</el-dropdown-item>
+                    <el-dropdown-item
+                      command="delete"
+                      divided
+                      style="color: color-mix(in srgb, var(--app-danger), black 20%)"
+                      >删除</el-dropdown-item
+                    >
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <el-button
+                v-if="hasParsed(selectedResume)"
                 type="primary"
-                effect="light"
-                >默认</el-tag
+                size="small"
+                @click="goAnalysis(selectedResume)"
+                >去分析</el-button
               >
-              <el-tag v-if="hasParsed(selectedResume)" size="small" type="success" effect="light"
-                >已解析</el-tag
-              >
-              <el-tag v-else size="small" type="warning" effect="light">待解析</el-tag>
-              <el-tag v-if="selectedVersionCount" size="small" type="info" effect="plain">
-                版本 {{ selectedVersionCount }}
-              </el-tag>
+              <el-button v-else type="primary" size="small" @click="parseResumeRow(selectedResume)">
+                解析简历
+              </el-button>
             </div>
-            <p class="resume-detail-sub">
-              {{ fileTypeLabel(selectedResume) }} · {{ formatSize(selectedResume.file_size) }} ·
-              {{ monthDay(selectedResume.create_time) }} 更新
-            </p>
-          </div>
-          <div class="resume-detail-actions">
-            <el-button
-              v-if="hasParsed(selectedResume)"
-              size="small"
-              @click="handleCmd('diagnose', selectedResume)"
-            >
-              优化建议
-            </el-button>
-            <el-dropdown trigger="click" @command="(cmd) => handleCmd(cmd, selectedResume)">
-              <button class="more-button" type="button" aria-label="更多操作">
-                <el-icon><MoreFilled /></el-icon>
-              </button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="parse">{{
-                    hasParsed(selectedResume) ? '重新解析' : '解析简历'
-                  }}</el-dropdown-item>
-                  <el-dropdown-item command="optimize">AI 优化</el-dropdown-item>
-                  <el-dropdown-item command="diagnose">AI 诊断</el-dropdown-item>
-                  <el-dropdown-item command="report" divided>评估报告</el-dropdown-item>
-                  <el-dropdown-item command="project">项目分析</el-dropdown-item>
-                  <el-dropdown-item command="portfolio">组合分析</el-dropdown-item>
-                  <el-dropdown-item command="compare">版本对比</el-dropdown-item>
-                  <el-dropdown-item
-                    v-if="!isDefaultResume(selectedResume)"
-                    command="setDefault"
-                    divided
-                    >设为默认</el-dropdown-item
-                  >
-                  <el-dropdown-item command="share" :divided="isDefaultResume(selectedResume)"
-                    >分享链接</el-dropdown-item
-                  >
-                  <el-dropdown-item command="desensitize">{{
-                    selectedResume._desensitized ? '取消脱敏' : '脱敏设置'
-                  }}</el-dropdown-item>
-                  <el-dropdown-item command="exportDocx">导出 Word</el-dropdown-item>
-                  <el-dropdown-item command="exportPdf">导出 PDF</el-dropdown-item>
-                  <el-dropdown-item
-                    command="delete"
-                    divided
-                    style="color: color-mix(in srgb, var(--app-danger), black 20%)"
-                    >删除</el-dropdown-item
-                  >
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-            <el-button
-              v-if="hasParsed(selectedResume)"
-              type="primary"
-              size="small"
-              @click="goAnalysis(selectedResume)"
-              >去分析</el-button
-            >
-            <el-button v-else type="primary" size="small" @click="parseResumeRow(selectedResume)">
-              解析简历
-            </el-button>
-          </div>
-        </header>
+          </header>
 
-        <div class="resume-detail-body">
-          <div class="resume-preview">
-            <el-alert
-              v-if="parseDegraded(selectedResume)"
-              class="resume-alert"
-              type="warning"
-              title="解析不完整，建议检查原文格式"
-              :closable="false"
-              show-icon
-            />
-            <p v-if="parseDropped(selectedResume).length" class="resume-parse-note">
-              有 {{ parseDropped(selectedResume).length }} 段内容未纳入解析（{{
-                parseDropped(selectedResume).join('、')
-              }}），建议检查原文格式
-            </p>
-            <article class="resume-paper" :class="{ 'is-empty': !hasParsed(selectedResume) }">
-              <template v-if="hasParsed(selectedResume)">
-                <div class="paper-head">
-                  <strong class="paper-name">{{ selectedParsed.name || '未命名' }}</strong>
-                  <span class="paper-role">
-                    {{
-                      [
-                        selectedParsed.current_title,
-                        selectedParsed.years_exp ? `${selectedParsed.years_exp} 年经验` : '',
-                        selectedParsed.location,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')
-                    }}
-                  </span>
-                  <span v-if="maskedContact(selectedParsed)" class="paper-contact">
-                    {{ maskedContact(selectedParsed) }}
-                  </span>
+          <div class="resume-detail-body">
+            <div class="resume-preview">
+              <el-alert
+                v-if="parseDegraded(selectedResume)"
+                class="resume-alert"
+                type="warning"
+                title="解析不完整，建议检查原文格式"
+                :closable="false"
+                show-icon
+              />
+              <p v-if="parseDropped(selectedResume).length" class="resume-parse-note">
+                有 {{ parseDropped(selectedResume).length }} 段内容未纳入解析（{{
+                  parseDropped(selectedResume).join('、')
+                }}），建议检查原文格式
+              </p>
+              <article class="resume-paper" :class="{ 'is-empty': !hasParsed(selectedResume) }">
+                <template v-if="hasParsed(selectedResume)">
+                  <div class="paper-head">
+                    <strong class="paper-name">{{ selectedParsed.name || '未命名' }}</strong>
+                    <span class="paper-role">
+                      {{
+                        [
+                          selectedParsed.current_title,
+                          selectedParsed.years_exp ? `${selectedParsed.years_exp} 年经验` : '',
+                          selectedParsed.location,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')
+                      }}
+                    </span>
+                    <span v-if="maskedContact(selectedParsed)" class="paper-contact">
+                      {{ maskedContact(selectedParsed) }}
+                    </span>
+                  </div>
+                  <div class="paper-rule" />
+
+                  <section v-if="selectedParsed.work_experience?.length" class="paper-section">
+                    <h4>工作经历</h4>
+                    <div
+                      v-for="(work, i) in selectedParsed.work_experience"
+                      :key="i"
+                      class="paper-entry"
+                    >
+                      <div class="paper-entry-head">
+                        <strong>{{ work.company || work.project || '—' }}</strong>
+                        <span>{{ [work.start, work.end].filter(Boolean).join(' – ') }}</span>
+                      </div>
+                      <p v-if="work.title" class="paper-entry-role">{{ work.title }}</p>
+                      <p v-if="work.desc" class="paper-entry-desc">{{ work.desc }}</p>
+                    </div>
+                  </section>
+
+                  <section v-if="selectedParsed.project_experience?.length" class="paper-section">
+                    <h4>项目经历</h4>
+                    <div
+                      v-for="(project, i) in selectedParsed.project_experience"
+                      :key="i"
+                      class="paper-entry"
+                    >
+                      <div class="paper-entry-head">
+                        <strong>{{ project.name || project.title || '项目' }}</strong>
+                        <span>{{ [project.start, project.end].filter(Boolean).join(' – ') }}</span>
+                      </div>
+                      <p v-if="project.role" class="paper-entry-role">{{ project.role }}</p>
+                      <p v-if="project.desc" class="paper-entry-desc">{{ project.desc }}</p>
+                    </div>
+                  </section>
+
+                  <section
+                    v-if="selectedParsed.education || selectedParsed.major"
+                    class="paper-section"
+                  >
+                    <h4>教育经历</h4>
+                    <p class="paper-entry-desc">
+                      {{
+                        [selectedParsed.education, selectedParsed.major].filter(Boolean).join(' · ')
+                      }}
+                    </p>
+                  </section>
+
+                  <section v-if="selectedParsed.skills?.length" class="paper-section">
+                    <h4>技能</h4>
+                    <div class="paper-skills">
+                      <span v-for="skill in selectedParsed.skills" :key="skill">{{ skill }}</span>
+                    </div>
+                  </section>
+
+                  <section v-if="selectedParsed.self_evaluation" class="paper-section">
+                    <h4>自我评价</h4>
+                    <p class="paper-entry-desc">{{ selectedParsed.self_evaluation }}</p>
+                  </section>
+                </template>
+
+                <div v-else class="paper-empty">
+                  <el-icon :size="28"><Document /></el-icon>
+                  <strong>这份简历还没有解析</strong>
+                  <p>解析后才能生成文档预览、完整度检查和匹配分析。</p>
+                  <el-button size="small" type="primary" @click="parseResumeRow(selectedResume)">
+                    解析简历
+                  </el-button>
                 </div>
-                <div class="paper-rule" />
+              </article>
+            </div>
 
-                <section v-if="selectedParsed.work_experience?.length" class="paper-section">
-                  <h4>工作经历</h4>
-                  <div
-                    v-for="(work, i) in selectedParsed.work_experience"
-                    :key="i"
-                    class="paper-entry"
-                  >
-                    <div class="paper-entry-head">
-                      <strong>{{ work.company || work.project || '—' }}</strong>
-                      <span>{{ [work.start, work.end].filter(Boolean).join(' – ') }}</span>
-                    </div>
-                    <p v-if="work.title" class="paper-entry-role">{{ work.title }}</p>
-                    <p v-if="work.desc" class="paper-entry-desc">{{ work.desc }}</p>
-                  </div>
-                </section>
-
-                <section v-if="selectedParsed.project_experience?.length" class="paper-section">
-                  <h4>项目经历</h4>
-                  <div
-                    v-for="(project, i) in selectedParsed.project_experience"
-                    :key="i"
-                    class="paper-entry"
-                  >
-                    <div class="paper-entry-head">
-                      <strong>{{ project.name || project.title || '项目' }}</strong>
-                      <span>{{ [project.start, project.end].filter(Boolean).join(' – ') }}</span>
-                    </div>
-                    <p v-if="project.role" class="paper-entry-role">{{ project.role }}</p>
-                    <p v-if="project.desc" class="paper-entry-desc">{{ project.desc }}</p>
-                  </div>
-                </section>
-
-                <section
-                  v-if="selectedParsed.education || selectedParsed.major"
-                  class="paper-section"
-                >
-                  <h4>教育经历</h4>
-                  <p class="paper-entry-desc">
-                    {{
-                      [selectedParsed.education, selectedParsed.major].filter(Boolean).join(' · ')
-                    }}
-                  </p>
-                </section>
-
-                <section v-if="selectedParsed.skills?.length" class="paper-section">
-                  <h4>技能</h4>
-                  <div class="paper-skills">
-                    <span v-for="skill in selectedParsed.skills" :key="skill">{{ skill }}</span>
-                  </div>
-                </section>
-
-                <section v-if="selectedParsed.self_evaluation" class="paper-section">
-                  <h4>自我评价</h4>
-                  <p class="paper-entry-desc">{{ selectedParsed.self_evaluation }}</p>
-                </section>
-              </template>
-
-              <div v-else class="paper-empty">
-                <el-icon :size="28"><Document /></el-icon>
-                <strong>这份简历还没有解析</strong>
-                <p>解析后才能生成文档预览、完整度检查和匹配分析。</p>
-                <el-button size="small" type="primary" @click="parseResumeRow(selectedResume)">
-                  解析简历
-                </el-button>
+            <aside class="resume-audit">
+              <div class="audit-score">
+                <ScoreRing :score="selectedScore" :size="72" :stroke-width="6" />
+                <div class="audit-score-copy">
+                  <strong>{{
+                    selectedScore !== null ? `完整度 ${selectedGrade || ''}` : '还没有体检'
+                  }}</strong>
+                  <span>{{
+                    selectedScore !== null ? '系统检查结果，不是 AI 评分' : '解析后自动检查'
+                  }}</span>
+                </div>
               </div>
-            </article>
-          </div>
 
-          <aside class="resume-audit">
-            <div class="audit-score">
-              <ScoreRing :score="selectedScore" :size="72" :stroke-width="6" />
-              <div class="audit-score-copy">
+              <template v-if="selectedCompleteness">
+                <h3>待优化</h3>
+                <div v-if="selectedIssues.length" class="audit-issues">
+                  <div v-for="(issue, i) in selectedIssues" :key="i" class="audit-issue">
+                    <i>!</i><span>{{ issue }}</span>
+                  </div>
+                </div>
+                <p v-else class="audit-empty">本次检查没有发现明显缺失。</p>
+
+                <h3>内容检查</h3>
+                <div class="audit-checks">
+                  <div
+                    v-for="item in moduleChecklist"
+                    :key="item.key"
+                    class="audit-check"
+                    :class="{ 'is-done': item.done }"
+                  >
+                    <i>{{ item.done ? '✓' : '!' }}</i
+                    ><span>{{ item.label }}</span>
+                  </div>
+                </div>
+              </template>
+              <p v-else class="audit-empty">解析完成后，这里会给出完整度和缺失项。</p>
+
+              <div class="audit-target">
+                <span>下一步</span>
                 <strong>{{
-                  selectedScore !== null ? `完整度 ${selectedGrade || ''}` : '还没有体检'
+                  hasParsed(selectedResume) ? '用这份简历做一次匹配分析' : '先解析这份简历'
                 }}</strong>
-                <span>{{
-                  selectedScore !== null ? '系统检查结果，不是 AI 评分' : '解析后自动检查'
-                }}</span>
-              </div>
-            </div>
-
-            <template v-if="selectedCompleteness">
-              <h3>待优化</h3>
-              <div v-if="selectedIssues.length" class="audit-issues">
-                <div v-for="(issue, i) in selectedIssues" :key="i" class="audit-issue">
-                  <i>!</i><span>{{ issue }}</span>
-                </div>
-              </div>
-              <p v-else class="audit-empty">本次检查没有发现明显缺失。</p>
-
-              <h3>内容检查</h3>
-              <div class="audit-checks">
-                <div
-                  v-for="item in moduleChecklist"
-                  :key="item.key"
-                  class="audit-check"
-                  :class="{ 'is-done': item.done }"
+                <button
+                  type="button"
+                  class="app-link"
+                  @click="
+                    hasParsed(selectedResume)
+                      ? goAnalysis(selectedResume)
+                      : parseResumeRow(selectedResume)
+                  "
                 >
-                  <i>{{ item.done ? '✓' : '!' }}</i
-                  ><span>{{ item.label }}</span>
-                </div>
+                  {{ hasParsed(selectedResume) ? '去分析' : '解析简历' }}
+                </button>
               </div>
-            </template>
-            <p v-else class="audit-empty">解析完成后，这里会给出完整度和缺失项。</p>
-
-            <div class="audit-target">
-              <span>下一步</span>
-              <strong>{{
-                hasParsed(selectedResume) ? '用这份简历做一次匹配分析' : '先解析这份简历'
-              }}</strong>
-              <button
-                type="button"
-                class="app-link"
-                @click="
-                  hasParsed(selectedResume)
-                    ? goAnalysis(selectedResume)
-                    : parseResumeRow(selectedResume)
-                "
-              >
-                {{ hasParsed(selectedResume) ? '去分析' : '解析简历' }}
-              </button>
-            </div>
-            <p v-if="selectedVersionCount" class="audit-version">
-              版本历史 {{ selectedVersionCount }} 个
-            </p>
-          </aside>
+              <p v-if="selectedVersionCount" class="audit-version">
+                版本历史 {{ selectedVersionCount }} 个
+              </p>
+            </aside>
+          </div>
         </div>
       </section>
     </div>
@@ -1531,10 +1534,17 @@ async function showDiagnosisDialog(r) {
 }
 
 /* ===== Resume workspace ===== */
+.resume-page-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
 .resume-workspace {
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  min-height: 680px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius-md);
@@ -1542,69 +1552,88 @@ async function showDiagnosisDialog(r) {
   box-shadow: var(--app-shadow-soft);
 }
 
-.resume-workspace--loading {
-  grid-template-columns: 280px minmax(0, 1fr);
-}
-
-.resume-list {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  border-right: 1px solid var(--app-line);
-  background: color-mix(in srgb, var(--app-surface-muted), var(--app-surface-strong) 45%);
-}
-
-.resume-list-head {
+.resume-version-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 16px;
-  border-bottom: 1px solid var(--app-line);
+  gap: 14px;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface-strong);
+  box-shadow: var(--app-shadow-soft);
 }
 
-.resume-list-head strong {
+.resume-version-bar--loading {
+  align-items: center;
+  min-height: 76px;
+}
+
+.resume-version-bar-head {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 2px;
+  padding-right: 14px;
+  border-right: 1px solid var(--app-line);
+}
+
+.resume-version-bar-head strong {
   color: var(--app-text);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 650;
 }
 
-.resume-list-head span {
+.resume-version-bar-head span {
   color: var(--app-muted);
   font-size: 11px;
+}
+
+.resume-version-list {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .resume-list-item {
   position: relative;
   display: flex;
-  width: 100%;
-  gap: 10px;
-  padding: 14px 16px;
-  border: 0;
-  border-bottom: 1px solid var(--app-line);
-  background: transparent;
+  flex: 0 0 240px;
+  width: 240px;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface-strong);
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
 .resume-list-item:hover {
-  background: var(--app-surface-strong);
+  border-color: var(--app-line-strong);
+  background: var(--app-surface-muted);
 }
 
 .resume-list-item.is-active {
-  background: var(--app-surface-strong);
-  box-shadow: inset 3px 0 0 var(--app-primary);
+  border-color: color-mix(in srgb, var(--app-primary), white 55%);
+  background: color-mix(in srgb, var(--app-primary), white 96%);
 }
 
 .resume-doc {
   display: grid;
-  width: 32px;
-  height: 40px;
+  width: 30px;
+  height: 38px;
   flex-shrink: 0;
   place-items: center;
   border: 1px solid var(--app-line);
   border-radius: 4px;
-  background: var(--app-surface-strong);
+  background: var(--app-surface-muted);
   color: var(--app-muted);
   font-size: 9px;
   font-weight: 600;
@@ -1619,21 +1648,21 @@ async function showDiagnosisDialog(r) {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 
 .resume-list-title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
 }
 
 .resume-list-title strong {
   overflow: hidden;
   color: var(--app-text);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1652,7 +1681,7 @@ async function showDiagnosisDialog(r) {
 .resume-list-sub {
   overflow: hidden;
   color: var(--app-muted);
-  font-size: 11px;
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1660,8 +1689,8 @@ async function showDiagnosisDialog(r) {
 .resume-list-score {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 7px;
+  gap: 5px;
+  margin-top: 4px;
 }
 
 .resume-score-track {
@@ -1681,28 +1710,43 @@ async function showDiagnosisDialog(r) {
 .resume-list-score b {
   color: var(--app-muted);
   font-family: var(--app-font-mono);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
 }
 
-.resume-list-foot {
-  margin-top: auto;
-  padding: 14px 16px;
+.resume-upload-inline {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px dashed var(--app-line-strong);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface-strong);
+  color: var(--app-muted);
+  font-size: 11px;
+  cursor: pointer;
 }
 
-.resume-list-foot .el-button {
-  width: 100%;
+.resume-upload-inline:hover {
+  border-color: var(--app-primary);
+  color: var(--app-primary);
 }
 
-.resume-list-skeleton {
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--app-line);
+.resume-version-note {
+  flex-shrink: 0;
+  color: var(--app-muted);
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 .resume-detail {
   display: flex;
+  flex: 1;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 
 .resume-detail-head {
@@ -1935,14 +1979,14 @@ async function showDiagnosisDialog(r) {
   position: sticky;
   top: 0;
   align-self: start;
-  padding: 20px 18px;
+  padding: 16px;
 }
 
 .audit-score {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-bottom: 16px;
+  gap: 10px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--app-line);
 }
 
@@ -1962,7 +2006,7 @@ async function showDiagnosisDialog(r) {
 }
 
 .resume-audit h3 {
-  margin: 16px 0 8px;
+  margin: 12px 0 6px;
   color: var(--app-text);
   font-size: 12px;
   font-weight: 650;
@@ -1972,7 +2016,7 @@ async function showDiagnosisDialog(r) {
 .audit-checks {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .audit-issue {
@@ -2021,8 +2065,8 @@ async function showDiagnosisDialog(r) {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  margin-top: 16px;
-  padding: 12px;
+  margin-top: 12px;
+  padding: 10px;
   border: 1px solid color-mix(in srgb, var(--app-primary), white 75%);
   border-radius: 8px;
   background: color-mix(in srgb, var(--app-primary), white 96%);
@@ -2046,16 +2090,41 @@ async function showDiagnosisDialog(r) {
 }
 
 .audit-version {
-  margin: 12px 0 0;
+  margin: 8px 0 0;
   color: var(--app-muted);
   font-size: 10px;
 }
 
-@media (max-width: 1180px) {
+/* 桌面端：顶部版本条不随文档滚动，文档与体检各自滚动。
+   1180 以下回到整页滚动，避免窄屏出现双层滚动。 */
+@media (min-width: 1181px) {
   .resume-workspace {
-    grid-template-columns: 260px minmax(0, 1fr);
+    height: clamp(520px, calc(100dvh - 380px), 820px);
   }
 
+  .resume-detail {
+    min-height: 0;
+  }
+
+  .resume-detail-body {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .resume-preview {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .resume-audit {
+    position: static;
+    align-self: stretch;
+    max-height: 100%;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 1180px) {
   .resume-detail-body {
     grid-template-columns: 1fr;
   }
@@ -2071,17 +2140,21 @@ async function showDiagnosisDialog(r) {
 }
 
 @media (max-width: 900px) {
-  .resume-workspace {
-    grid-template-columns: 1fr;
+  .resume-version-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
   }
 
-  .resume-list {
+  .resume-version-bar-head {
+    flex-direction: row;
+    justify-content: space-between;
+    padding-right: 0;
     border-right: 0;
-    border-bottom: 1px solid var(--app-line);
   }
 
-  .resume-list-item {
-    padding: 12px 14px;
+  .resume-version-note {
+    display: none;
   }
 }
 

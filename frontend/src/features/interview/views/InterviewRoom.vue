@@ -7,7 +7,7 @@
         <p>{{ sessionSubtitle }}</p>
       </div>
       <div class="hero-actions">
-        <el-button text @click="goBack" :disabled="wsConnecting">返回</el-button>
+        <el-button text class="hero-back" @click="goBack" :disabled="wsConnecting">返回</el-button>
         <el-tag :type="statusTagType" effect="dark">{{ statusLabel }}</el-tag>
       </div>
     </section>
@@ -558,6 +558,15 @@ onUnmounted(() => {
 .interview-room-page .hero-actions {
   position: relative;
   z-index: 1;
+}
+
+/* 深色横幅上的文字按钮不能吃页面默认的深色字：它落在这块固定墨面上会变成"暗压暗"。 */
+.interview-room-page .hero-back {
+  --el-button-text-color: var(--el-color-white);
+  --el-button-hover-text-color: var(--el-color-white);
+  --el-button-hover-bg-color: color-mix(in srgb, var(--el-color-white), transparent 88%);
+  --el-button-active-bg-color: color-mix(in srgb, var(--el-color-white), transparent 82%);
+  --el-button-disabled-text-color: color-mix(in srgb, var(--el-color-white), transparent 58%);
 }
 
 .interview-room-page .structure-tips span {

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.core.database import get_db
-from app.models.history import Resume, ResumeVersion
+from app.models.history import AnalysisRecord, Resume, ResumeVersion
 from app.models.job_pipeline import (
     ACTIVE_STAGES,
     PIPELINE_STAGES,
@@ -52,12 +52,41 @@ def _get_owned_resume_version(
 # ============================================================
 
 
+def _analysis_score_map(db: Session, user_id: int, items: list[JobApplicationPipeline]) -> dict:
+    """(resume_id, jd_id) → 最近一次分析的匹配分。
+
+    看板卡片与列表的「匹配度」一直读 `card.match_score`，但 `to_dict()` 从来没有这个键，
+    于是那一列在真实数据里恒为占位符。分数住在分析记录里，按同一对简历/岗位取最新一条。
+    """
+    pairs = {(item.resume_id, item.jd_id) for item in items if item.resume_id and item.jd_id}
+    if not pairs:
+        return {}
+    records = (
+        db.query(AnalysisRecord)
+        .filter(
+            AnalysisRecord.user_id == user_id,
+            AnalysisRecord.is_deleted == 0,
+            AnalysisRecord.resume_id.in_({resume_id for resume_id, _ in pairs}),
+            AnalysisRecord.jd_id.in_({jd_id for _, jd_id in pairs}),
+        )
+        .order_by(AnalysisRecord.create_time.desc(), AnalysisRecord.id.desc())
+        .all()
+    )
+    scores = {}
+    for record in records:
+        key = (record.resume_id, record.jd_id)
+        if key in pairs and key not in scores and record.match_score is not None:
+            scores[key] = record.match_score
+    return scores
+
+
 @router.get("/pipeline/kanban", summary="看板视图（按阶段分组）")
 def kanban_view(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     items = db.query(JobApplicationPipeline).filter(JobApplicationPipeline.user_id == current_user.id).all()
+    scores = _analysis_score_map(db, current_user.id, items)
 
     stages: dict[str, list[dict]] = {s: [] for s in ACTIVE_STAGES}
     stages.update({s: [] for s in TERMINAL_STAGES})
@@ -65,6 +94,7 @@ def kanban_view(
 
     for item in items:
         d = item.to_dict()
+        d["match_score"] = scores.get((item.resume_id, item.jd_id))
         stage = item.stage
         if stage not in stages:
             stages[stage] = []

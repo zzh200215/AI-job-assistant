@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -5,7 +7,7 @@ from app.api.auth import router as auth_router
 from app.api.job_pipeline import router as pipeline_router
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password
-from app.models.history import Resume, ResumeVersion
+from app.models.history import AnalysisRecord, JobDescription, Resume, ResumeVersion
 from app.models.job_pipeline import JobApplicationPipeline
 from app.models.user import User
 
@@ -130,3 +132,63 @@ def test_pipeline_rejects_other_users_resume_version(db_session):
         )
         assert response.status_code == 200
         assert response.json()["code"] != 0
+
+
+def test_kanban_exposes_latest_analysis_match_score(db_session):
+    user = _user(db_session, "pipeline_kanban_score_owner")
+    resume, _ = _resume_version(db_session, user.id, "Score version")
+    jd = JobDescription(user_id=user.id, title="Backend Engineer", raw_text="Backend role")
+    db_session.add(jd)
+    db_session.commit()
+    db_session.refresh(jd)
+
+    db_session.add_all(
+        [
+            AnalysisRecord(
+                user_id=user.id,
+                resume_id=resume.id,
+                jd_id=jd.id,
+                match_score=61,
+                create_time=datetime(2026, 1, 1, 8, 0),
+            ),
+            AnalysisRecord(
+                user_id=user.id,
+                resume_id=resume.id,
+                jd_id=jd.id,
+                match_score=84,
+                create_time=datetime(2026, 2, 1, 8, 0),
+            ),
+        ]
+    )
+    db_session.add_all(
+        [
+            JobApplicationPipeline(
+                user_id=user.id,
+                resume_id=resume.id,
+                jd_id=jd.id,
+                title="Backend Engineer",
+                company="Acme",
+                stage="applied",
+            ),
+            JobApplicationPipeline(
+                user_id=user.id,
+                title="手动新增岗位",
+                company="Acme",
+                stage="todo",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    app = FastAPI()
+    app.include_router(auth_router, prefix="/auth")
+    app.include_router(pipeline_router, prefix="/jobs")
+
+    def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as client:
+        data = client.get("/jobs/pipeline/kanban", headers=_headers(user)).json()["data"]
+        assert data["stages"]["applied"][0]["match_score"] == 84
+        assert data["stages"]["todo"][0]["match_score"] is None

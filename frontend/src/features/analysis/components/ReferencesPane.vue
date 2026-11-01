@@ -151,6 +151,21 @@ const openDocs = computed({
   flex-shrink: 0;
 }
 
+.badge-high {
+  background: color-mix(in srgb, var(--app-success), var(--app-bg) 86%);
+  color: var(--app-success);
+}
+
+.badge-medium {
+  background: color-mix(in srgb, var(--app-primary), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-primary), white 25%);
+}
+
+.badge-low {
+  background: color-mix(in srgb, var(--app-danger), var(--app-bg) 86%);
+  color: color-mix(in srgb, var(--app-danger), white 20%);
+}
+
 .rag-confidence-copy {
   flex: 1;
   min-width: 0;
