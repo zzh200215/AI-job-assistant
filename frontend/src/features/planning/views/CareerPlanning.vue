@@ -1406,7 +1406,6 @@ function buildGoalJDText() {
 .gap-card,
 .direction-card,
 .next-card,
-.salary-card,
 .resource-card {
   border-radius: var(--app-radius-sm, 8px);
   border: 1px solid var(--app-line);
@@ -1414,25 +1413,17 @@ function buildGoalJDText() {
   box-shadow: var(--app-shadow-soft);
 }
 
-.salary-card :deep(.el-card__header),
 .resource-card :deep(.el-card__header) {
   padding: 22px 24px 16px;
   border-bottom: 1px solid var(--app-line);
   background: var(--app-bg);
 }
 
-.salary-card :deep(.el-card__body),
 .resource-card :deep(.el-card__body) {
   padding: 24px;
 }
 
 /* 薪资预测 */
-.salary-body {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
 .salary-current {
   text-align: left;
 }
