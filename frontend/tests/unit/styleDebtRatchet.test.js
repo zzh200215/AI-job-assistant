@@ -27,7 +27,9 @@ const BUDGET = {
        `score-tone` 那几族实测全部留在表里，`el-` 那类库里选择器一律不动）。
        下面这四个数就是量完剩下的"页面自己还在用"的那些。 */
     'src/features/interview/views/InterviewRoom.vue': 43,
-    'src/features/jobs/views/JobSearch.vue': 26,
+    /* 26 → 2：旧 hero、四张渐变指标卡与来源横幅随 PageHeader + 市场摘要条一并出树；
+       剩下的是两处页面级手挑底色，等下一次逐座收。 */
+    'src/features/jobs/views/JobSearch.vue': 2,
     'src/features/jobs/components/JobCompareDialog.vue': 1,
     'src/features/jobs/components/JobDetailDrawer.vue': 1,
     /* D44 搬两个面板时的**复制成本**，不是新写的色值：scoped 样式不跨组件边界，父页面那 27 条

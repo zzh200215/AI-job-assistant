@@ -83,7 +83,12 @@
   </div>
 
   <el-empty v-else-if="hasSearched" description="没有找到更贴近的岗位，换个关键词或城市试试。" />
-  <el-empty v-else description="先发起一次搜索，系统会把结果同步到你的岗位工作台。" />
+  <div v-else class="empty-search">
+    <el-empty description="先发起一次搜索，系统会把结果同步到你的岗位工作台。" />
+    <el-button v-if="warehouseCount" @click="$emit('open-warehouse')">
+      查看已保存的 {{ warehouseCount }} 个岗位
+    </el-button>
+  </div>
 </template>
 
 <script setup>
@@ -108,6 +113,7 @@ defineProps({
   isDemo: { type: Boolean, default: false },
   resultMode: { type: String, default: '' },
   savedCount: { type: Number, default: 0 },
+  warehouseCount: { type: Number, default: 0 },
   stateText: { type: String, default: '' },
   bannerTitle: { type: String, default: '' },
   bannerDesc: { type: String, default: '' },
@@ -121,7 +127,16 @@ defineProps({
   pipelineStatusText: { type: Function, required: true },
 })
 
-defineEmits(['open-compare', 'detail', 'pipeline', 'compare', 'shortlist', 'prefill', 'analyze'])
+defineEmits([
+  'open-compare',
+  'open-warehouse',
+  'detail',
+  'pipeline',
+  'compare',
+  'shortlist',
+  'prefill',
+  'analyze',
+])
 </script>
 
 <style scoped>
@@ -180,6 +195,18 @@ defineEmits(['open-compare', 'detail', 'pipeline', 'compare', 'shortlist', 'pref
   border-radius: var(--app-radius-sm, 12px);
   background: var(--app-bg);
   color: var(--app-muted);
+}
+
+.empty-search {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.empty-search .el-empty {
+  padding: 8px 0;
 }
 
 .result-grid {

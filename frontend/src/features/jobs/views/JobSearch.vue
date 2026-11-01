@@ -1,52 +1,40 @@
 <template>
   <div class="page-shell jobsearch-page">
-    <section class="hero">
-      <div class="hero-copy">
-        <div class="hero-title-row">
-          <h2>岗位市场</h2>
-          <div class="hero-orbits" aria-hidden="true">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-        </div>
-        <div class="hero-actions">
-          <el-button type="primary" size="large" :loading="searching" @click="runSearch">
-            <el-icon><Search /></el-icon>
-            搜索最新岗位
-          </el-button>
-          <el-button size="large" @click="seedDemoData" :loading="seeding">
-            <el-icon><Promotion /></el-icon>
-            导入示例岗位
-          </el-button>
-        </div>
-        <div class="source-banner" :class="sourceBannerClass">
-          <strong>{{ sourceBannerTitle }}</strong>
-          <span>{{ sourceBannerDesc }}</span>
-        </div>
-      </div>
+    <PageHeader
+      title="岗位市场"
+      eyebrow="求职市场"
+      subtitle="搜索、保存和比较岗位，把合适的放进投递流程。"
+    >
+      <template #actions>
+        <el-button type="primary" size="small" :loading="searching" @click="runSearch">
+          <el-icon><Search /></el-icon> 搜索最新岗位
+        </el-button>
+        <el-button size="small" @click="seedDemoData" :loading="seeding">
+          <el-icon><Promotion /></el-icon> 导入示例岗位
+        </el-button>
+      </template>
+    </PageHeader>
 
-      <div class="hero-metrics">
-        <div class="metric-card accent-orange">
-          <span class="metric-label">本次搜索</span>
-          <strong>{{ externalJobs.length }}</strong>
-          <small>{{ searchStateText }}</small>
-        </div>
-        <div class="metric-card accent-blue">
-          <span class="metric-label">已保存岗位</span>
-          <strong>{{ localJobs.length }}</strong>
-          <small>已保存可复用岗位</small>
-        </div>
-        <div class="metric-card accent-green">
-          <span class="metric-label">智能推荐</span>
-          <strong>{{ recommendations.length }}</strong>
-          <small>基于当前简历生成</small>
-        </div>
-        <div class="metric-card accent-dark">
-          <span class="metric-label">流程中岗位</span>
-          <strong>{{ pipelineActiveCount }}</strong>
-          <small>待投递到已约面统一跟踪</small>
-        </div>
+    <section class="market-metrics" aria-label="岗位市场摘要">
+      <div>
+        <span>本次搜索</span>
+        <strong>{{ externalJobs.length }}</strong>
+        <small>{{ searchStateText }}</small>
+      </div>
+      <div>
+        <span>已保存岗位</span>
+        <strong>{{ localJobs.length }}</strong>
+        <small>可复用岗位</small>
+      </div>
+      <div>
+        <span>智能推荐</span>
+        <strong>{{ recommendations.length }}</strong>
+        <small>基于当前简历</small>
+      </div>
+      <div>
+        <span>流程中岗位</span>
+        <strong>{{ pipelineActiveCount }}</strong>
+        <small>投递跟踪中</small>
       </div>
     </section>
 
@@ -156,6 +144,7 @@
               :fallback-placements="['bottom-start']"
               clearable
               size="small"
+              class="filter-select"
               placeholder="经验要求"
             >
               <el-option label="不限经验" value="" />
@@ -170,6 +159,7 @@
               :fallback-placements="['bottom-start']"
               clearable
               size="small"
+              class="filter-select"
               placeholder="学历"
             >
               <el-option label="不限学历" value="" />
@@ -261,6 +251,7 @@
                 :is-demo="isDemo"
                 :result-mode="resultMode"
                 :saved-count="savedCount"
+                :warehouse-count="localJobs.length"
                 :state-text="searchStateText"
                 :banner-title="sourceBannerTitle"
                 :banner-desc="sourceBannerDesc"
@@ -270,6 +261,7 @@
                 :is-shortlisted="isShortlisted"
                 :pipeline-status-text="pipelineStatusText"
                 @open-compare="openComparePanel"
+                @open-warehouse="activeTab = 'warehouse'"
                 @detail="(job) => openJobDetail(job, 'search')"
                 @pipeline="handlePipelineAction"
                 @compare="toggleCompare"
@@ -361,7 +353,10 @@
           </div>
 
           <div class="board-block">
-            <span class="board-label">市场观察</span>
+            <div class="board-row">
+              <span class="board-label">市场观察</span>
+              <small class="board-source">{{ marketInsightSource }}</small>
+            </div>
             <div class="insight-grid">
               <div class="insight-item">
                 <strong>{{ marketInsights.salaryBand }}</strong>
@@ -410,19 +405,12 @@
             <el-empty v-else :image-size="70" description="流程里还没有岗位" />
           </div>
 
-          <div class="board-block">
+          <div v-if="shortlist.length" class="board-block">
             <div class="board-row">
               <span class="board-label">待跟进清单</span>
-              <button
-                type="button"
-                class="text-btn"
-                @click="clearShortlist"
-                v-if="shortlist.length"
-              >
-                清空
-              </button>
+              <button type="button" class="text-btn" @click="clearShortlist">清空</button>
             </div>
-            <div v-if="shortlist.length" class="shortlist">
+            <div class="shortlist">
               <button
                 v-for="job in shortlist.slice(0, 6)"
                 :key="job.uid"
@@ -434,12 +422,11 @@
                 <span>{{ job.company }}</span>
               </button>
             </div>
-            <el-empty v-else :image-size="70" description="还没有加入任何岗位" />
           </div>
 
-          <div class="board-block">
+          <div v-if="priorityQueue.length" class="board-block">
             <span class="board-label">优先投递队列</span>
-            <div v-if="priorityQueue.length" class="shortlist">
+            <div class="shortlist">
               <button
                 v-for="job in priorityQueue"
                 :key="job.uid"
@@ -451,7 +438,6 @@
                 <span>{{ job.priorityLabel }} · {{ job.company }}</span>
               </button>
             </div>
-            <el-empty v-else :image-size="70" description="当前视图还没有足够岗位" />
           </div>
 
           <div class="board-block">
@@ -516,6 +502,7 @@ import { getJobDetail, seedDemoJobs, startFullAnalysis } from '@/api/jobs'
 import { useSelectionStore } from '@/stores/selection'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
+import PageHeader from '@/components/ui/PageHeader.vue'
 import JobCompareDialog from '@/features/jobs/components/JobCompareDialog.vue'
 import JobDetailDrawer from '@/features/jobs/components/JobDetailDrawer.vue'
 import PipelinePane from '@/features/jobs/components/PipelinePane.vue'
@@ -690,8 +677,22 @@ const marketDataset = computed(() => {
   return filteredExternalJobs.value
 })
 
+const insightDataset = computed(() => {
+  if (marketDataset.value.length) return marketDataset.value
+  if (filteredLocalJobs.value.length) return filteredLocalJobs.value
+  return normalizedRecommendations.value
+})
+
+const marketInsightSource = computed(() => {
+  if (activeTab.value === 'warehouse') return '基于已保存岗位'
+  if (activeTab.value === 'recommend') return '基于智能推荐'
+  if (filteredExternalJobs.value.length) return '基于本次搜索'
+  if (filteredLocalJobs.value.length) return '无搜索结果 · 按已保存岗位估算'
+  return '等待岗位数据'
+})
+
 const marketInsights = computed(() => {
-  const jobs = marketDataset.value
+  const jobs = insightDataset.value
   if (!jobs.length) {
     return {
       salaryBand: '--',
@@ -1052,198 +1053,46 @@ function goToSmartAnalysis() {
   color: var(--app-text);
 }
 
-.hero {
+.market-metrics {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 18px;
-  padding: 26px;
-  border-radius: var(--app-radius-md, 16px);
-  position: relative;
-  overflow: hidden;
-  background: var(--app-bg);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-sm, 8px);
+  background: var(--app-surface-strong);
   box-shadow: var(--app-shadow-soft);
+  overflow: hidden;
 }
 
-.hero::before {
-  content: '';
-  position: absolute;
-  inset: 18px auto auto 18px;
-  width: 120px;
-  height: 120px;
-  border-radius: var(--app-radius-md, 16px);
-  border: 1px solid var(--app-line);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.08));
-  transform: rotate(-10deg);
-  pointer-events: none;
+.market-metrics > div {
+  padding: 14px 18px;
+  border-left: 1px solid var(--app-line);
 }
 
-.hero::after {
-  content: '';
-  position: absolute;
-  right: 36px;
-  bottom: -28px;
-  width: 180px;
-  height: 180px;
-  border-radius: 50%;
-  border: 1px dashed var(--app-line);
-  pointer-events: none;
+.market-metrics > div:first-child {
+  border-left: 0;
 }
 
-.hero h2 {
-  margin: 0;
-  font-size: 38px;
-  line-height: 1.05;
-}
-
-.hero-copy {
-  position: relative;
-  z-index: 1;
-  min-height: 160px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.hero-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 20px;
-  border-radius: var(--app-radius-sm, 12px);
-  background: rgba(255, 255, 255, 0.52);
-  border: 1px solid var(--app-line);
-  backdrop-filter: blur(10px);
-}
-
-.hero-orbits {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.hero-orbits span {
+.market-metrics span {
   display: block;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--app-primary, #7c6cff), var(--app-primary, #9ca1ff));
-  box-shadow: 0 8px 18px rgba(124, 108, 255, 0.22);
-}
-
-.hero-orbits span:nth-child(1) {
-  width: 12px;
-  height: 12px;
-}
-
-.hero-orbits span:nth-child(2) {
-  width: 32px;
-  height: 10px;
-  opacity: 0.78;
-}
-
-.hero-orbits span:nth-child(3) {
-  width: 18px;
-  height: 18px;
-  opacity: 0.55;
-}
-
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 16px;
-  padding-left: 6px;
-}
-
-.source-banner,
-.result-source-note {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 16px;
-  padding: 12px 14px;
-  border-radius: var(--app-radius-xs, 8px);
-  border: 1px solid var(--app-line);
-  background: rgba(255, 255, 255, 0.58);
-}
-
-.source-banner strong,
-.result-source-note strong {
-  font-size: 13px;
-  color: var(--app-text);
-}
-
-.source-banner span,
-.result-source-note span {
   color: var(--app-muted);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 12px;
 }
 
-.source-banner.is-live,
-.result-source-note.is-live {
-  border-color: rgba(59, 130, 246, 0.16);
-  background: rgba(255, 255, 255, 0.62);
-}
-
-.source-banner.is-local,
-.result-source-note.is-local {
-  border-color: rgba(20, 184, 166, 0.18);
-  background: rgba(236, 253, 250, 0.9);
-}
-
-.source-banner.is-demo,
-.result-source-note.is-demo {
-  border-color: rgba(245, 158, 11, 0.18);
-  background: rgba(255, 247, 237, 0.94);
-}
-
-.source-banner.is-loading,
-.result-source-note.is-loading {
-  border-color: rgba(124, 108, 255, 0.16);
-}
-
-.hero-metrics {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  position: relative;
-  z-index: 1;
-}
-
-.metric-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 124px;
-  padding: 16px;
-  border-radius: var(--app-radius-sm, 12px);
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-}
-
-.metric-card strong {
-  font-size: 34px;
+.market-metrics strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--app-text);
+  font-size: 24px;
+  font-weight: 800;
   line-height: 1;
 }
 
-.metric-card small,
-.metric-label {
-  opacity: 0.9;
-}
-
-.accent-orange {
-  background: linear-gradient(135deg, var(--app-primary, #7c6cff), #9b8cff);
-}
-.accent-blue {
-  background: linear-gradient(135deg, #3b82f6, #6aa6ff);
-}
-.accent-green {
-  background: linear-gradient(135deg, #14b8a6, #39d2bf);
-}
-.accent-dark {
-  background: linear-gradient(135deg, #15202b, #314456);
+.market-metrics small {
+  display: block;
+  margin-top: 6px;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .layout-grid {
@@ -1273,7 +1122,7 @@ function goToSmartAnalysis() {
 
 .control-top {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: 1fr;
   gap: 14px;
 }
 
@@ -1285,8 +1134,13 @@ function goToSmartAnalysis() {
 
 .resume-row {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.resume-select {
+  width: min(100%, 360px);
 }
 
 .resume-label,
@@ -1372,6 +1226,10 @@ function goToSmartAnalysis() {
   width: 220px;
 }
 
+.filter-select {
+  width: 140px;
+}
+
 .board-header,
 .result-toolbar,
 .warehouse-toolbar,
@@ -1421,6 +1279,15 @@ function goToSmartAnalysis() {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--app-muted);
+}
+
+.board-source {
+  color: var(--app-muted);
+  font-size: 11px;
+}
+
+.board-row .board-label {
+  margin-bottom: 0;
 }
 
 .insight-grid {
@@ -1505,7 +1372,6 @@ function goToSmartAnalysis() {
 }
 
 @media (max-width: 1180px) {
-  .hero,
   .layout-grid,
   .control-top,
   .search-stack,
@@ -1516,34 +1382,29 @@ function goToSmartAnalysis() {
     grid-template-columns: 1fr;
   }
 
-  .side-column {
-    order: -1;
-  }
-
   .board-card {
     position: static;
+  }
+}
+
+@media (max-width: 900px) {
+  .market-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .market-metrics > div:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid var(--app-line);
+  }
+
+  .market-metrics > div:nth-child(4) {
+    border-top: 1px solid var(--app-line);
   }
 }
 
 @media (max-width: 768px) {
   .page-shell {
     padding-top: 8px;
-  }
-
-  .hero {
-    padding: 16px;
-  }
-
-  .hero-title-row {
-    padding: 16px;
-  }
-
-  .hero h2 {
-    font-size: 30px;
-  }
-
-  .hero-copy {
-    min-height: auto;
   }
 
   .filter-row,
@@ -1565,6 +1426,7 @@ function goToSmartAnalysis() {
   .mini-input,
   .warehouse-search,
   .skill-filter,
+  .filter-select,
   .pipeline-search,
   .pipeline-stage-select,
   .pipeline-date {

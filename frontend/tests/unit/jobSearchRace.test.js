@@ -117,9 +117,9 @@ function findTab(wrapper, label) {
   return tab
 }
 
-/** hero 区那几个数字常驻，不用切标签页就能读到：[本次搜索, 岗位仓库, 智能推荐, ...] */
+/** 市场摘要条那几个数字常驻，不用切标签页就能读到：[本次搜索, 已保存, 智能推荐, ...] */
 function heroNumbers() {
-  return [...document.querySelectorAll('.hero-metrics .metric-card strong')].map((n) =>
+  return [...document.querySelectorAll('.market-metrics strong')].map((n) =>
     n.textContent.trim()
   )
 }

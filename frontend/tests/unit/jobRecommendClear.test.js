@@ -47,9 +47,9 @@ function deferred() {
 
 const recommendCalls = []
 
-/** hero 那排数字的顺序就是标签页的顺序：[本次搜索, 岗位仓库, 智能推荐, ...] */
+/** 市场摘要条的数字顺序就是标签页的顺序：[本次搜索, 已保存, 智能推荐, ...] */
 function heroNumbers() {
-  return [...document.querySelectorAll('.hero-metrics .metric-card strong')].map((n) =>
+  return [...document.querySelectorAll('.market-metrics strong')].map((n) =>
     n.textContent.trim()
   )
 }
