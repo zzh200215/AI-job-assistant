@@ -49,7 +49,7 @@ async function mountFromBackendBytes(job = mockPortfolioJob) {
         name: 'portfolio-report',
         component: { template: '<div />' },
       },
-      { path: '/resume/center', name: 'resume-center', component: { template: '<div />' } },
+      { path: '/resume-center', name: 'resume-center', component: { template: '<div />' } },
     ],
   })
   await router.push({ name: 'portfolio-report', query: { resume_id: '1', job_id: '1' } })
@@ -217,7 +217,7 @@ describe('后端真输出的组合分析', () => {
           name: 'portfolio-report',
           component: { template: '<div />' },
         },
-        { path: '/resume/center', name: 'resume-center', component: { template: '<div />' } },
+        { path: '/resume-center', name: 'resume-center', component: { template: '<div />' } },
       ],
     })
     await router.push({ name: 'portfolio-report', query: { resume_id: '1', job_id: '1' } })

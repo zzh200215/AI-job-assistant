@@ -14,7 +14,15 @@ from app.core.rate_limiter import auth_limit, get_limiter, login_limit
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
 from app.core.user_roles import ADMIN_ROLE, CANDIDATE_ROLE, USER_ROLES
 from app.models.user import User
-from app.schemas.auth import AuthResp, LoginReq, PasswordResetReq, RegisterReq, UserInfo, UserProfileUpdateReq
+from app.schemas.auth import (
+    AuthResp,
+    LoginReq,
+    PasswordChangeReq,
+    RegisterReq,
+    TokenPasswordResetReq,
+    UserInfo,
+    UserProfileUpdateReq,
+)
 from app.utils.response import ERR_PARAM, fail, ok
 
 router = APIRouter()
@@ -139,24 +147,6 @@ def login(
     return _create_auth_response(user, message="登录成功")
 
 
-@router.post("/reset-password", summary="重置密码")
-@get_limiter().limit(login_limit())
-def reset_password(
-    request: Request,
-    response: Response,
-    payload: PasswordResetReq,
-    db: Session = Depends(get_db),
-):
-    user = _find_user_by_account(db, payload.account)
-    if not user or (user.email or "").strip().lower() != payload.email:
-        return fail(message="账户与注册邮箱不匹配", code=ERR_PARAM)
-
-    user.password = hash_password(payload.new_password)
-    db.add(user)
-    db.commit()
-    return ok(message="密码已重置，请使用新密码登录")
-
-
 def get_current_user(authorization: str = Header(None), db: Session = Depends(get_db)) -> User:
     """Extract current logged-in user or raise 401."""
     if not authorization or not authorization.startswith("Bearer "):
@@ -214,6 +204,27 @@ def update_profile(
     return ok(_build_user_info(current_user).model_dump(), message="个人资料已更新")
 
 
+@router.put("/me/password", summary="修改密码（需校验当前密码）")
+def change_password(
+    payload: PasswordChangeReq,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """已登录改密。
+
+    原先前端那颗"修改密码"跳去的是 `POST /auth/reset-password`——只收「账号 + 注册邮箱」，
+    两者都是公开信息，于是任何知道别人用户名与邮箱的人都能改掉别人的密码。
+    那条路径已删除；改密现在只剩两条，且都要凭据：这一条凭当前密码，`/reset-password-with-token` 凭邮件令牌。
+    """
+    if not verify_password(payload.old_password, current_user.password):
+        return fail(message="当前密码不正确", code=ERR_PARAM)
+
+    current_user.password = hash_password(payload.new_password)
+    db.add(current_user)
+    db.commit()
+    return ok(message="密码已修改，请使用新密码重新登录")
+
+
 @router.get("/admin/users", summary="管理员查询用户列表")
 def list_users(
     page: int = Query(1, ge=1),
@@ -248,6 +259,7 @@ def list_users(
 @get_limiter().limit(login_limit())
 def send_verification_email(
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -298,6 +310,7 @@ def verify_email(
 @get_limiter().limit(login_limit())
 def forgot_password(
     request: Request,
+    response: Response,
     payload: dict,
     db: Session = Depends(get_db),
 ):
@@ -323,19 +336,19 @@ def forgot_password(
 
 
 @router.post("/reset-password-with-token", summary="使用 Token 重置密码")
+@get_limiter().limit(login_limit())
 def reset_password_with_token(
-    payload: dict,
+    request: Request,
+    response: Response,
+    payload: TokenPasswordResetReq,
     db: Session = Depends(get_db),
 ):
-    """校验重置 token 并设置新密码。"""
-    token = payload.get("token", "")
-    new_password = payload.get("new_password", "")
-    if not token or not new_password:
-        return fail(message="token 和 new_password 必填", code=ERR_PARAM)
-    if len(new_password) < 6:
-        return fail(message="密码至少 6 位", code=ERR_PARAM)
+    """校验重置 token 并设置新密码。
 
-    payload_data = decode_access_token(token)
+    密码规则由 `TokenPasswordResetReq` 承担（与注册同一套）。原先这里只判"至少 6 位"，
+    比注册松一档，于是这条链成了绕过密码策略的后门。
+    """
+    payload_data = decode_access_token(payload.token)
     if not payload_data or payload_data.get("type") != "password_reset":
         return fail(message="重置链接无效或已过期", code=ERR_PARAM)
 
@@ -344,7 +357,7 @@ def reset_password_with_token(
     if not user:
         return fail(message="用户不存在", code=ERR_PARAM)
 
-    user.password = hash_password(new_password)
+    user.password = hash_password(payload.new_password)
     db.add(user)
     db.commit()
     return ok(message="密码已重置，请使用新密码登录")

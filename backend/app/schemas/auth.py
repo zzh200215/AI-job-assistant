@@ -115,29 +115,42 @@ class LoginReq(BaseModel):
         return value
 
 
-class PasswordResetReq(BaseModel):
-    account: str = Field(..., min_length=2, max_length=100, description="邮箱或用户名")
-    email: EmailStr = Field(..., description="注册邮箱")
+class PasswordChangeReq(BaseModel):
+    """已登录改密。
+
+    旧密码是必填的：这条链存在的意义就是让"知道别人用户名 + 邮箱"的人改不了别人的密码。
+    原先前端那颗"修改密码"跳去的是一条只收「账号 + 注册邮箱」的端点，等于把改密权交给了公开信息，
+    所以那条路径已删除，改密只剩这一条（要旧密码）和 token 那一条（要邮件里发的令牌）。
+    """
+
+    old_password: str = Field(..., min_length=1, max_length=100, description="当前密码")
     new_password: str = Field(..., min_length=8, max_length=100, description="新密码")
-    confirm_password: str = Field(..., min_length=8, max_length=100, description="确认密码")
-
-    @field_validator("account")
-    @classmethod
-    def normalize_account(cls, value: str) -> str:
-        return _normalize_account(value)
-
-    @field_validator("email", mode="before")
-    @classmethod
-    def normalize_email(cls, value) -> str:
-        return _normalize_email(value)
+    confirm_password: str = Field(..., min_length=8, max_length=100, description="确认新密码")
 
     @model_validator(mode="after")
     def validate_password(self):
-        _validate_password_strength(
-            self.new_password,
-            username=self.account,
-            email=self.email,
-        )
+        _validate_password_strength(self.new_password)
+        if self.new_password != self.confirm_password:
+            raise ValueError("两次输入的密码不一致")
+        if self.new_password == self.old_password:
+            raise ValueError("新密码不能与当前密码相同")
+        return self
+
+
+class TokenPasswordResetReq(BaseModel):
+    """忘记密码那条链的后半段：token 由 `/auth/forgot-password` 发。
+
+    密码规则与注册同一套——原先这个端点只判了"至少 6 位"，比注册松一档，
+    于是"改密"成了绕过密码策略的后门。
+    """
+
+    token: str = Field(..., min_length=1, max_length=2000, description="邮件里的重置令牌")
+    new_password: str = Field(..., min_length=8, max_length=100, description="新密码")
+    confirm_password: str = Field(..., min_length=8, max_length=100, description="确认新密码")
+
+    @model_validator(mode="after")
+    def validate_password(self):
+        _validate_password_strength(self.new_password)
         if self.new_password != self.confirm_password:
             raise ValueError("两次输入的密码不一致")
         return self

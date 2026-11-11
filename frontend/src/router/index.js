@@ -38,6 +38,21 @@ export const routes = [
     meta: { title: '重置密码', public: true },
   },
   {
+    /* 验证邮件里的链接指向这里。加上这条之前它是 404：能力齐了，只有"人能点进去"那一环缺着。 */
+    path: '/verify-email',
+    name: 'verify-email',
+    component: () => import('@/features/auth/views/VerifyEmail.vue'),
+    meta: { title: '验证邮箱', public: true },
+  },
+  {
+    /* 公开的法律页：注册页的同意勾选要靠它，所以它必须在登录前可达。
+       登录后的 `/privacy` 是另一回事（数据导出/分类删除/注销），那一页要身份。 */
+    path: '/terms',
+    name: 'terms',
+    component: () => import('@/features/legal/views/Terms.vue'),
+    meta: { title: '服务条款与隐私说明', public: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/features/auth/views/NotFound.vue'),

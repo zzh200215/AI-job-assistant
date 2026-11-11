@@ -436,12 +436,15 @@
         这一份有一项关键风险，暂不生成跨项目面试题。
       </p>
     </template>
+
+    <AiDisclaimer v-if="report" />
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import AiDisclaimer from '@/components/ui/AiDisclaimer.vue'
 import { ElMessage } from '@/plugins/element-services'
 import { createAgentTaskPoller } from '@/utils/agentTaskPolling'
 import { userErrorCopy } from '@/utils/requestTracing'
@@ -808,7 +811,7 @@ async function doDownload() {
 }
 
 function backToCenter() {
-  router.push('/resume/center')
+  router.push({ name: 'resume-center' })
 }
 </script>
 

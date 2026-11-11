@@ -7,7 +7,6 @@ import { readFileSync, writeFileSync } from 'node:fs'
    不在这一族里，判据按 catch 绑定名筛，不靠变量名猜。 */
 
 const FILES = {
-  'src/features/analysis/views/ExplainMatch.vue': 1,
   'src/features/analysis/views/AnalysisResult.vue': 2,
   'src/features/analysis/views/SmartAnalysis.vue': 2,
   'src/features/billing/views/Subscription.vue': 2,

@@ -146,50 +146,118 @@ class TestAccountDeletion:
         assert response.status_code == 200
         assert response.json()["code"] == 0
 
-    def test_reset_password_updates_credentials(self, client):
-        register_user(client, username="reset_user", email="reset@example.com")
+    def test_change_password_requires_current_password(self, client):
+        """改密必须凭当前密码。
 
-        reset_response = client.post(
-            "/auth/reset-password",
+        这条腿钉的是一次真实的安全修复：原先前端的"修改密码"跳去
+        `POST /auth/reset-password`，只收「账号 + 注册邮箱」——两者都是公开信息，
+        知道别人用户名与邮箱就能改掉别人的密码。那个端点已删除，改密只剩这条要旧密码的链。
+        """
+        registered = register_user(client, username="chg_user", email="chg@example.com")
+        token = registered.json()["data"]["access_token"]
+
+        wrong_old = client.put(
+            "/auth/me/password",
             json={
-                "account": "reset_user",
-                "email": "reset@example.com",
+                "old_password": "WrongP@ssw0rd",
                 "new_password": "Newpass123!",
                 "confirm_password": "Newpass123!",
             },
+            headers={"Authorization": f"Bearer {token}"},
         )
+        assert wrong_old.json()["code"] != 0
+        assert "当前密码" in wrong_old.json()["message"]
 
-        assert reset_response.status_code == 200
-        assert reset_response.json()["code"] == 0
+        # 旧密码错了就不许改：原来那一个还得能用
+        still_old = client.post(
+            "/auth/login",
+            json={"account": "chg_user", "password": "StrongP@ssw0rd"},
+        )
+        assert still_old.json()["code"] == 0
+
+        ok_resp = client.put(
+            "/auth/me/password",
+            json={
+                "old_password": "StrongP@ssw0rd",
+                "new_password": "Newpass123!",
+                "confirm_password": "Newpass123!",
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert ok_resp.json()["code"] == 0
 
         old_login = client.post(
             "/auth/login",
-            json={"account": "reset_user", "password": "StrongP@ssw0rd"},
+            json={"account": "chg_user", "password": "StrongP@ssw0rd"},
         )
-        assert old_login.status_code == 200
         assert old_login.json()["code"] != 0
 
         new_login = client.post(
             "/auth/login",
-            json={"account": "reset@example.com", "password": "Newpass123!"},
+            json={"account": "chg_user", "password": "Newpass123!"},
         )
-        assert new_login.status_code == 200
         assert new_login.json()["code"] == 0
 
-    def test_reset_password_rejects_email_mismatch(self, client):
-        register_user(client, username="mismatch_user", email="mismatch@example.com")
-
-        response = client.post(
-            "/auth/reset-password",
+    def test_change_password_requires_login(self, client):
+        response = client.put(
+            "/auth/me/password",
             json={
-                "account": "mismatch_user",
-                "email": "wrong@example.com",
+                "old_password": "StrongP@ssw0rd",
                 "new_password": "Newpass123!",
                 "confirm_password": "Newpass123!",
             },
         )
+        assert response.status_code == 401
 
-        assert response.status_code == 200
+    def test_public_reset_without_token_is_gone(self, client):
+        """不带凭据的直改路径已删除。
+
+        原 `POST /auth/reset-password` 只凭「账号 + 注册邮箱」就改密。留着它，
+        上面那条验旧密码的链等于白做——绕过去就行。所以这里是"路由不存在"，
+        不是"路由存在但拒绝"。
+        """
+        register_user(client, username="gone_user", email="gone@example.com")
+        response = client.post(
+            "/auth/reset-password",
+            json={
+                "account": "gone_user",
+                "email": "gone@example.com",
+                "new_password": "Newpass123!",
+                "confirm_password": "Newpass123!",
+            },
+        )
+        assert response.status_code in (404, 405)
+
+    def test_forgot_password_then_reset_with_token(self, client):
+        """忘记密码走 token 链，且新密码要过注册同一套策略。"""
+        register_user(client, username="forgot_user", email="forgot@example.com")
+
+        forgot = client.post("/auth/forgot-password", json={"email": "forgot@example.com"})
+        token = forgot.json()["data"]["token"]
+
+        weak = client.post(
+            "/auth/reset-password-with-token",
+            json={"token": token, "new_password": "weakpass", "confirm_password": "weakpass"},
+        )
+        assert weak.status_code == 422  # 密码策略由 schema 拦，比原先的"至少 6 位"严
+
+        ok_resp = client.post(
+            "/auth/reset-password-with-token",
+            json={"token": token, "new_password": "Newpass123!", "confirm_password": "Newpass123!"},
+        )
+        assert ok_resp.json()["code"] == 0
+
+        new_login = client.post(
+            "/auth/login",
+            json={"account": "forgot_user", "password": "Newpass123!"},
+        )
+        assert new_login.json()["code"] == 0
+
+    def test_reset_with_bad_token_rejected(self, client):
+        response = client.post(
+            "/auth/reset-password-with-token",
+            json={"token": "not-a-token", "new_password": "Newpass123!", "confirm_password": "Newpass123!"},
+        )
         assert response.json()["code"] != 0
 
     def test_get_me_requires_valid_token(self, client):

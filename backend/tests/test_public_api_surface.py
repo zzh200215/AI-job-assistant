@@ -40,7 +40,6 @@ PUBLIC_OPERATIONS = {
     # 登录 / 注册 / 找回：拿到身份之前必须可调
     ("POST", "/auth/register"),
     ("POST", "/auth/login"),
-    ("POST", "/auth/reset-password"),
     ("POST", "/auth/forgot-password"),
     ("POST", "/auth/verify-email"),
     ("POST", "/auth/reset-password-with-token"),

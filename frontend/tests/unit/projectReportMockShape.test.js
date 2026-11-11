@@ -47,7 +47,7 @@ async function mountFromBackendBytes() {
         name: 'project-report',
         component: { template: '<div />' },
       },
-      { path: '/resume/center', name: 'resume-center', component: { template: '<div />' } },
+      { path: '/resume-center', name: 'resume-center', component: { template: '<div />' } },
     ],
   })
   await router.push({ name: 'project-report', query: { resume_id: '1', job_id: '1' } })
@@ -198,7 +198,7 @@ describe('后端真输出的单项目分析', () => {
           name: 'project-report',
           component: { template: '<div />' },
         },
-        { path: '/resume/center', name: 'resume-center', component: { template: '<div />' } },
+        { path: '/resume-center', name: 'resume-center', component: { template: '<div />' } },
       ],
     })
     await router.push({ name: 'project-report', query: { resume_id: '1' } })

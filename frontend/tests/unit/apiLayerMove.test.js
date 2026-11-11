@@ -161,11 +161,11 @@ describe('agent.js：任务中心那四条是纯 drop-in（api 层早就有，�
    邮箱去空白并转小写，`login` 固定带 `notifyError: false`（401/密码错都不弹 toast，原因写在表单上方）。 */
 describe('auth.js：凭据端点与它自带的请求体形状', () => {
   it('四条端点的 URL、方法、body 形状与 config 照抄 store 里那一份', async () => {
-    const { login, register, resetPassword, getCurrentUser } = await import('@/api/auth')
+    const { login, register, changePassword, getCurrentUser } = await import('@/api/auth')
 
     await login('  Zzh@Example.COM  ', 'pw')
     await register('  Tom ', '  TOM@X.COM ', 'pw')
-    await resetPassword(' acct ', ' A@B.COM ', 'n', 'n')
+    await changePassword('old', 'new', 'new')
     await getCurrentUser()
 
     expect(sent[0]).toEqual({
@@ -175,11 +175,12 @@ describe('auth.js：凭据端点与它自带的请求体形状', () => {
       third: { notifyError: false },
     })
     expect(sent[1].second).toEqual({ username: 'Tom', email: 'tom@x.com', password: 'pw' })
-    expect(sent[2].second).toEqual({
-      account: 'acct',
-      email: 'a@b.com',
-      new_password: 'n',
-      confirm_password: 'n',
+    // 改密必须带当前密码：`old_password` 是这个端点的全部意义所在。
+    expect(sent[2]).toEqual({
+      method: 'put',
+      url: '/auth/me/password',
+      second: { old_password: 'old', new_password: 'new', confirm_password: 'new' },
+      third: undefined,
     })
     expect(sent[3]).toEqual(plain('get', '/auth/me'))
     // 4 个函数正好发 4 条，不多发

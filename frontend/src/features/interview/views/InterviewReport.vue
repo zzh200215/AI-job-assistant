@@ -268,12 +268,18 @@
     <el-empty v-else description="未找到面试报告">
       <el-button type="primary" @click="goSetup">去创建模拟面试</el-button>
     </el-empty>
+
+    <AiDisclaimer
+      v-if="report"
+      custom="本场评价由 AI 按你的回答生成，仅供参考；它不是你在这家公司的真实面试结果。"
+    />
   </div>
 </template>
 
 <script setup>
 import { userErrorCopy } from '@/utils/requestTracing'
 import AppPanel from '@/components/ui/AppPanel.vue'
+import AiDisclaimer from '@/components/ui/AiDisclaimer.vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'

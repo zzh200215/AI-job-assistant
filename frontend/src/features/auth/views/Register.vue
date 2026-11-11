@@ -111,6 +111,14 @@
 
         <p class="hint">注册后会自动进入对应工作台</p>
 
+        <el-form-item prop="agreed" class="agree-item">
+          <el-checkbox v-model="form.agreed" :disabled="loading">
+            我已阅读并同意<router-link class="agree-link" to="/terms" target="_blank">
+              《服务条款与隐私说明》
+            </router-link>
+          </el-checkbox>
+        </el-form-item>
+
         <el-form-item>
           <el-button
             type="primary"
@@ -151,6 +159,7 @@ const form = ref({
   email: '',
   password: '',
   confirmPassword: '',
+  agreed: false,
 })
 
 const validateConfirm = (_rule, value, callback) => {
@@ -198,6 +207,20 @@ const rules = {
   confirmPassword: [
     { required: true, message: '请确认密码', trigger: 'blur' },
     { validator: validateConfirm, trigger: 'blur' },
+  ],
+  /* 同意条款是**校验项**而不是提示语：没有它，"同意"就只是一个装饰。
+     链接指向匿名可达的 `/terms`——勾一个打不开的链接比不勾更糟。 */
+  agreed: [
+    {
+      validator: (_rule, value, callback) => {
+        if (!value) {
+          callback(new Error('请先阅读并同意服务条款与隐私说明'))
+          return
+        }
+        callback()
+      },
+      trigger: 'change',
+    },
   ],
 }
 
@@ -360,6 +383,21 @@ const handleRegister = async () => {
   color: #6f8096;
   font-size: 14px;
   line-height: 1.5;
+}
+
+/* 同意勾选：只排版、不引入新色值——这个文件的色值预算是只能降不能升的。
+   链接用 `color: inherit`，颜色跟着复选框文字走。 */
+.agree-item {
+  margin: 0 0 8px;
+}
+
+.agree-item :deep(.el-form-item__content) {
+  line-height: 1.6;
+}
+
+.agree-link {
+  color: inherit;
+  text-decoration: underline;
 }
 
 .submit {

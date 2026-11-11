@@ -111,21 +111,6 @@
       </template>
     </el-dialog>
 
-    <!-- 分享链接弹窗 -->
-    <el-dialog v-model="showShare" title="分享简历" width="480px">
-      <div class="share-body">
-        <p>将以下链接发送给 HR，对方即可查看你的简历详情。</p>
-        <el-input ref="shareUrlRef" v-model="shareUrl" readonly :rows="3">
-          <template #append>
-            <el-button @click="copyShareUrl">复制链接</el-button>
-          </template>
-        </el-input>
-        <div class="share-options">
-          <el-checkbox v-model="shareDesensitized">分享时隐藏联系方式</el-checkbox>
-        </div>
-      </div>
-    </el-dialog>
-
     <!-- AI 诊断报告弹窗 -->
     <el-dialog v-model="showDiagnosis" title="简历诊断报告" width="720px">
       <div v-if="diagnosisLoading" class="loading-state">
@@ -564,9 +549,6 @@
                       divided
                       >设为默认</el-dropdown-item
                     >
-                    <el-dropdown-item command="share" :divided="isDefaultResume(selectedResume)"
-                      >分享链接</el-dropdown-item
-                    >
                     <el-dropdown-item command="desensitize">{{
                       selectedResume._desensitized ? '取消脱敏' : '脱敏设置'
                     }}</el-dropdown-item>
@@ -814,7 +796,6 @@ const router = useRouter()
 
 const showUpload = ref(false)
 const showParsed = ref(false)
-const showShare = ref(false)
 const showDiagnosis = ref(false)
 const showOptimize = ref(false)
 const optimizeResumeRow = ref(null)
@@ -843,11 +824,6 @@ const uploadStageIndex = computed(() => {
   if (uploadStage.value === 'error') return uploadProgress.value >= 100 ? 1 : 0
   return 0
 })
-
-// 分享
-const shareUrl = ref('')
-const shareDesensitized = ref(false)
-const currentShareResume = ref(null)
 
 // 诊断
 const diagnosisLoading = ref(false)
@@ -1357,7 +1333,6 @@ const ROW_COMMANDS = {
   portfolio: openPortfolioRow,
   compare: openCompareRow,
   setDefault: setDefaultResumeRow,
-  share: showShareDialog,
   desensitize: toggleDesensitizeRow,
   exportDocx: (r) => doExport(r, 'docx'),
   exportPdf: (r) => doExport(r, 'pdf'),
@@ -1435,24 +1410,6 @@ async function doExport(r, format) {
     ElMessage.success('导出成功')
   } catch {
     ElMessage.error('导出失败')
-  }
-}
-
-// ---- 分享功能 ----
-function showShareDialog(r) {
-  currentShareResume.value = r
-  const baseUrl = window.location.origin
-  shareUrl.value = `${baseUrl}/shared/resume/${r.id}?token=${Date.now()}`
-  shareDesensitized.value = r._desensitized || false
-  showShare.value = true
-}
-
-async function copyShareUrl() {
-  try {
-    await navigator.clipboard.writeText(shareUrl.value)
-    ElMessage.success('链接已复制到剪贴板')
-  } catch {
-    ElMessage.warning('复制失败，请手动复制')
   }
 }
 
@@ -2200,17 +2157,6 @@ async function showDiagnosisDialog(r) {
 }
 
 .upload-error {
-  margin-top: 12px;
-}
-
-/* Share dialog */
-.share-body p {
-  margin-bottom: 12px;
-  color: var(--app-muted);
-  font-size: 14px;
-}
-
-.share-options {
   margin-top: 12px;
 }
 

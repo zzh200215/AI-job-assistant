@@ -148,6 +148,10 @@
               <el-link type="primary" underline="never" @click="goRegister">创建账号</el-link>
             </p>
           </el-form>
+
+          <p class="legal-link">
+            <router-link to="/terms" target="_blank">服务条款与隐私说明</router-link>
+          </p>
         </div>
       </section>
     </div>
@@ -421,6 +425,19 @@ const handleLogin = async () => {
   color: var(--app-muted);
   font-size: 13px;
   text-align: center;
+}
+
+/* 登录页页脚的法律入口：登录前就要能读到条款与隐私说明，所以链接指向匿名可达的 `/terms`。 */
+.legal-link {
+  margin: 14px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+
+.legal-link a {
+  color: inherit;
+  text-decoration: underline;
 }
 
 /* ===== Responsive ===== */

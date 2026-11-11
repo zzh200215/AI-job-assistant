@@ -24,13 +24,35 @@ export const register = (username, email, password) =>
     password,
   })
 
-export const resetPassword = (account, email, newPassword, confirmPassword) =>
-  request.post('/auth/reset-password', {
-    account: normalizeText(account),
-    email: normalizeEmail(email),
+/* 忘记密码拆两步，因为中间那一步要一个**凭据**。
+   原先这里是 `POST /auth/reset-password`，只收「账号 + 注册邮箱」就直接改密——
+   那两个都是公开信息，等于任何知道别人用户名与邮箱的人都能改掉别人的密码。
+   那条端点已从后端删除，改密现在只剩两条路，且都带凭据：
+   本文件下面这两条（token 链）与已登录那条 `changePassword`（当前密码）。 */
+
+/** 第一步：把重置令牌发到注册邮箱。本机没接邮件服务时，后端会把令牌放在响应的 `data.token` 里。 */
+export const requestPasswordReset = (email) =>
+  request.post('/auth/forgot-password', { email: normalizeEmail(email) })
+
+/** 第二步：凭令牌设新密码（密码规则与注册同一套，服务端 schema 校验）。 */
+export const resetPasswordWithToken = (token, newPassword, confirmPassword) =>
+  request.post('/auth/reset-password-with-token', {
+    token: String(token || '').trim(),
     new_password: newPassword,
     confirm_password: confirmPassword,
   })
+
+/** 已登录改密：必须带当前密码。 */
+export const changePassword = (oldPassword, newPassword, confirmPassword) =>
+  request.put('/auth/me/password', {
+    old_password: oldPassword,
+    new_password: newPassword,
+    confirm_password: confirmPassword,
+  })
+
+/** 邮箱验证落地页：token 来自验证邮件里的链接。 */
+export const verifyEmail = (token) =>
+  request.post('/auth/verify-email', { token: String(token || '').trim() })
 
 export const getCurrentUser = () => request.get('/auth/me')
 

@@ -22,7 +22,7 @@
           </el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="evaluation">推荐评测</el-dropdown-item>
+              <el-dropdown-item v-if="isAdmin" command="evaluation">推荐评测</el-dropdown-item>
               <el-dropdown-item command="seed">生成演示岗位</el-dropdown-item>
               <el-dropdown-item command="import">导入岗位</el-dropdown-item>
             </el-dropdown-menu>
@@ -727,10 +727,15 @@ import { isoMonthDay, monthDay } from '@/utils/format/date'
 import { useLatestCall } from '@/composables/useLatestCall'
 import { createAgentTaskPoller } from '@/utils/agentTaskPolling'
 import { useSelectionStore } from '@/stores/selection'
+import { useAuthStore } from '@/stores/auth'
+import { USER_ROLES } from '@/constants/roles'
 
 const router = useRouter()
 const route = useRoute()
 const selection = useSelectionStore()
+const authStore = useAuthStore()
+// 「推荐评测」是 ADMIN 路由，候选人点进去会被守卫静默弹回首页，所以入口只给管理员。
+const isAdmin = computed(() => authStore.role === USER_ROLES.admin)
 const selectedResumeId = ref(null)
 const resumeList = ref([])
 const recommendations = ref([])

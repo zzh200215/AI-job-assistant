@@ -1,4 +1,4 @@
-﻿import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -110,7 +110,6 @@ const BUDGET = {
     /* 4 → 1：浅色渐变底与 journey 选中底换成令牌；剩下的 1 条是 `.stage-index` 的白色前景。 */
     'src/features/interview/views/InterviewSetup.vue': 1,
     'src/features/eval/views/RecommendationEval.vue': 11,
-    'src/features/analysis/views/ExplainMatch.vue': 9,
     'src/features/auth/views/NotFound.vue': 5,
     'src/features/eval/views/RecommendationConfig.vue': 5,
     /* D109：订阅页摘掉企业版块（那块自带两条渐变字面量）与对比表的 ✗ 图标（一条灰色），
@@ -137,7 +136,7 @@ const BUDGET = {
      Google/GitHub 官方品牌色，**D145 把那两个假按钮摘了，这 5 处连同"品牌色本就该写死"
      这条豁免理由一起作废**；剩下 12 处是登录页左侧那幅装饰雷达插画的描边与网点
      （压在固定的品牌渐变上，不跟主题走）加一枚房子图标的白描边，属插画资产不是主题色。
-     其余 3 处是真债（DefaultLayout 1 + ExplainMatch 2），理由逐条写在下面。
+     其余真债已清零：DefaultLayout 那 1 处换成令牌，ExplainMatch 那 2 处随孤儿视图删除。
      本段一条都没换成 var()：`stroke="var(--app-…)"` 这类表现属性必须能在浏览器里看结果
      才敢改。 */
   /* 模板属性里的色值。三个维度里只有这一维必须逐条在真浏览器里看过才敢动（D1 第三段）。
@@ -148,12 +147,8 @@ const BUDGET = {
      留着只会误导下一个人。剩下的各有各的理由不动：
      - Login 12 处：装饰插画与图标描边，见上面那段（原来含品牌色的那 5 处随假按钮出树）；
      - DefaultLayout 这 1 处是品牌标记的白描边，压在 #6d3ce8 的紫色块上，是刻意的对比色，
-       不是"忘了用 token"（它等于 --app-surface-strong 也是巧合）；
-     - ExplainMatch 2 处：D16 查到这个视图**没有路由可达**（`explain-match` 是 redirect），
-       改了没人看见，等 §7 阶段 3 决定删不删。 */
-  templateColorLiterals: {
-    'src/features/analysis/views/ExplainMatch.vue': 2,
-  },
+       不是"忘了用 token"（它等于 --app-surface-strong 也是巧合）。 */
+  templateColorLiterals: {},
   /* 手写的 `class="panel-header"` 标记数——AppPanel（components/ui/AppPanel.vue）的迁移台账。
      样式早就集中在 styles/panels.css（main.js 全局引入），重复的只是那四层 div，所以这条数的是
      "还有多少处标记没搬进组件"。台账从 93 降到 35：D18 建组件并迁 WeeklyReport 5 处（241 元素
@@ -213,7 +208,6 @@ const BUDGET = {
     'src/features/pipeline/views/PipelineKanban.vue': 1,
     'src/features/admin/views/PromptTrace.vue': 7,
     'src/features/analysis/views/AnalysisResult.vue': 5,
-    'src/features/analysis/views/ExplainMatch.vue': 4,
     'src/features/jobs/views/JobTargets.vue': 4,
     'src/features/admin/views/Orders.vue': 3,
     'src/features/admin/views/Overview.vue': 3,
@@ -1060,6 +1054,7 @@ describe('style debt ratchet', () => {
   it('scans every .vue under src except the listed shell and ui components', () => {
     const UNSCANNED = [
       'src/App.vue',
+      'src/components/ui/AiDisclaimer.vue',
       'src/components/ui/AppLoadError.vue',
       'src/components/ui/AppPanel.vue',
       'src/components/ui/EmptyState.vue',
@@ -2762,6 +2757,10 @@ describe('style debt ratchet', () => {
       'src/features/auth/views/NotFound.vue',
       'src/features/auth/views/Register.vue',
       'src/features/auth/views/ResetPassword.vue',
+      // 2026-11-11：邮箱验证落地页与公开的法律页。两条都是"登录前就要能打开"的页面，
+      // 一个接验证邮件里的链接，一个接注册页的同意勾选——所以它们和上面四条同属浅色作用域。
+      'src/features/auth/views/VerifyEmail.vue',
+      'src/features/legal/views/Terms.vue',
     ])
     const FAMILIES = [
       'score-fill',

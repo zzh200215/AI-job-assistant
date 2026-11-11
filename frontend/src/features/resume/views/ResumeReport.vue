@@ -435,6 +435,8 @@
         <el-icon><ArrowUp /></el-icon>
       </el-button>
     </template>
+
+    <AiDisclaimer v-if="report" />
   </div>
 </template>
 
@@ -442,6 +444,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowUp, Download, Loading } from '@element-plus/icons-vue'
+import AiDisclaimer from '@/components/ui/AiDisclaimer.vue'
 import { ElMessage } from '@/plugins/element-services'
 import { createAgentTaskPoller } from '@/utils/agentTaskPolling'
 import { userErrorCopy } from '@/utils/requestTracing'

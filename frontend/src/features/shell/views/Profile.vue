@@ -173,7 +173,7 @@
               <span>定期更换密码保障账号安全</span>
             </div>
             <div class="setting-action">
-              <el-button size="small" @click="$router.push('/reset-password')">修改密码</el-button>
+              <el-button size="small" @click="openPasswordDialog">修改密码</el-button>
             </div>
           </div>
           <div class="setting-row">
@@ -224,12 +224,61 @@
       </div>
     </AppPanel>
   </div>
+
+  <!-- 改密要当前密码。
+       原先这颗按钮直接跳 `/reset-password`，而那个页面只凭「账号 + 注册邮箱」就改密——
+       两个都是公开信息，等于登录着的人和自己门外的人走的是同一条路。 -->
+  <el-dialog v-model="passwordDialog.visible" title="修改密码" width="420px" append-to-body>
+    <el-form
+      ref="passwordFormRef"
+      :model="passwordDialog.form"
+      :rules="passwordRules"
+      label-position="top"
+    >
+      <el-form-item label="当前密码" prop="oldPassword">
+        <el-input
+          v-model="passwordDialog.form.oldPassword"
+          type="password"
+          show-password
+          placeholder="请输入当前密码"
+          :disabled="passwordDialog.loading"
+        />
+      </el-form-item>
+      <el-form-item label="新密码" prop="newPassword">
+        <el-input
+          v-model="passwordDialog.form.newPassword"
+          type="password"
+          show-password
+          placeholder="至少 8 位，包含字母和数字"
+          :disabled="passwordDialog.loading"
+        />
+      </el-form-item>
+      <el-form-item label="确认新密码" prop="confirmPassword">
+        <el-input
+          v-model="passwordDialog.form.confirmPassword"
+          type="password"
+          show-password
+          placeholder="请再次输入新密码"
+          :disabled="passwordDialog.loading"
+        />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button :disabled="passwordDialog.loading" @click="passwordDialog.visible = false">
+        取消
+      </el-button>
+      <el-button type="primary" :loading="passwordDialog.loading" @click="submitPassword">
+        确认修改
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
 import AppPanel from '@/components/ui/AppPanel.vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import { sendVerificationEmail, exportMyData, deleteMyAccount } from '@/api/auth'
 import { getDashboardOverview } from '@/api/dashboard'
@@ -251,12 +300,98 @@ import {
   Loading,
 } from '@element-plus/icons-vue'
 import { dateTime } from '@/utils/format/date'
+import { passwordProblem } from '@/utils/passwordRules'
 import { INTERVIEW_SCORE_BANDS, isTopTier } from '@/utils/scoreTone'
 
 const authStore = useAuthStore()
+const router = useRouter()
 const loading = ref(false)
 const verifying = ref(false)
 const exporting = ref(false)
+
+/* ===== 修改密码 =====
+   走 `PUT /auth/me/password`，必须有当前密码。原先这颗按钮跳去的那条公开端点
+   只凭「账号 + 注册邮箱」就改密，等于把改密权交给了公开信息，已随安全修复删除。 */
+const passwordFormRef = ref()
+const passwordDialog = reactive({
+  visible: false,
+  loading: false,
+  form: { oldPassword: '', newPassword: '', confirmPassword: '' },
+})
+
+function openPasswordDialog() {
+  passwordDialog.form.oldPassword = ''
+  passwordDialog.form.newPassword = ''
+  passwordDialog.form.confirmPassword = ''
+  passwordDialog.visible = true
+  passwordFormRef.value?.clearValidate()
+}
+
+const passwordRules = {
+  oldPassword: [{ required: true, message: '请输入当前密码', trigger: 'blur' }],
+  newPassword: [
+    {
+      validator: (_rule, value, callback) => {
+        if (!value) {
+          callback(new Error('请输入新密码'))
+          return
+        }
+        const problem = passwordProblem(value, {
+          username: authStore.user?.username || '',
+          email: authStore.user?.email || '',
+        })
+        if (problem) {
+          callback(new Error(problem))
+          return
+        }
+        if (value === passwordDialog.form.oldPassword) {
+          callback(new Error('新密码不能与当前密码相同'))
+          return
+        }
+        callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+  confirmPassword: [
+    {
+      validator: (_rule, value, callback) => {
+        if (!value) {
+          callback(new Error('请再次输入新密码'))
+          return
+        }
+        if (value !== passwordDialog.form.newPassword) {
+          callback(new Error('两次输入的密码不一致'))
+          return
+        }
+        callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+}
+
+async function submitPassword() {
+  if (passwordDialog.loading) return
+  const valid = await passwordFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+
+  passwordDialog.loading = true
+  try {
+    await authStore.changePassword(
+      passwordDialog.form.oldPassword,
+      passwordDialog.form.newPassword,
+      passwordDialog.form.confirmPassword
+    )
+    passwordDialog.visible = false
+    ElMessage.success('密码已修改，请使用新密码重新登录')
+    // 改完密码旧令牌也还有效，但让用户重新登录一次，是这类操作该有的收尾。
+    authStore.logout()
+    router.push('/login')
+  } finally {
+    passwordDialog.loading = false
+  }
+}
 
 const privacySettings = reactive({
   resumePublic: true,

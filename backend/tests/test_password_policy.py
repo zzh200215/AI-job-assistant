@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.auth import PasswordResetReq, RegisterReq
+from app.schemas.auth import PasswordChangeReq, RegisterReq, TokenPasswordResetReq
 
 
 class TestPasswordPolicy:
@@ -56,19 +56,39 @@ class TestPasswordPolicy:
 
     def test_reset_password_validates_complexity(self):
         with pytest.raises(ValidationError):
-            PasswordResetReq(
-                account="user",
-                email="user@example.com",
+            TokenPasswordResetReq(
+                token="any-token",
                 new_password="weakpass",
                 confirm_password="weakpass",
             )
 
     def test_reset_password_mismatch_rejected(self):
         with pytest.raises(ValidationError) as exc_info:
-            PasswordResetReq(
-                account="user",
-                email="user@example.com",
+            TokenPasswordResetReq(
+                token="any-token",
                 new_password="StrongP@ssw0rd",
                 confirm_password="DifferentP@ssw0rd",
             )
         assert "不一致" in str(exc_info.value)
+
+    def test_change_password_validates_complexity(self):
+        """改密与注册共用同一套密码策略。
+
+        原先那条被删掉的「账号 + 邮箱」改密端点比注册松（只判 >=6 位），
+        这条腿钉的是"改密不再是绕过策略的后门"。
+        """
+        with pytest.raises(ValidationError):
+            PasswordChangeReq(
+                old_password="StrongP@ssw0rd",
+                new_password="weakpass",
+                confirm_password="weakpass",
+            )
+
+    def test_change_password_rejects_reusing_current_one(self):
+        with pytest.raises(ValidationError) as exc_info:
+            PasswordChangeReq(
+                old_password="StrongP@ssw0rd",
+                new_password="StrongP@ssw0rd",
+                confirm_password="StrongP@ssw0rd",
+            )
+        assert "当前密码相同" in str(exc_info.value)

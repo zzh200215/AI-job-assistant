@@ -3,31 +3,29 @@
     <section class="reset-card">
       <div class="copy">
         <p class="eyebrow">账号找回</p>
-        <h1>重置密码</h1>
-        <p class="desc">通过“账号 + 注册邮箱”完成本地身份校验，然后设置新密码。</p>
+        <h1>{{ step === 1 ? '找回密码' : '设置新密码' }}</h1>
+        <p class="desc" v-if="step === 1">
+          输入注册邮箱，我们会发一条重置链接。本机未接邮件服务时，令牌会直接给出来，供你走完这条链。
+        </p>
+        <p class="desc" v-else>
+          身份已校验，请设置新密码。<template v-if="tokenFromServer"
+            >本环境未配置邮件服务，令牌已自动填入。</template
+          >
+        </p>
       </div>
 
       <el-form
-        ref="formRef"
-        :model="form"
-        :rules="rules"
+        v-if="step === 1"
+        ref="step1Ref"
+        :model="step1"
+        :rules="step1Rules"
         label-position="top"
         class="form"
-        @keyup.enter="handleSubmit"
+        @keyup.enter="handleSend"
       >
-        <el-form-item label="邮箱或用户名" prop="account">
-          <el-input
-            v-model.trim="form.account"
-            size="large"
-            placeholder="请输入邮箱或用户名"
-            :prefix-icon="User"
-            :disabled="loading"
-          />
-        </el-form-item>
-
         <el-form-item label="注册邮箱" prop="email">
           <el-input
-            v-model.trim="form.email"
+            v-model.trim="step1.email"
             size="large"
             placeholder="请输入注册时使用的邮箱"
             :prefix-icon="Message"
@@ -35,9 +33,38 @@
           />
         </el-form-item>
 
+        <div class="actions">
+          <el-button class="ghost" size="large" @click="goLogin" :disabled="loading">
+            返回登录
+          </el-button>
+          <el-button type="primary" size="large" :loading="loading" @click="handleSend">
+            发送重置链接
+          </el-button>
+        </div>
+      </el-form>
+
+      <el-form
+        v-else
+        ref="step2Ref"
+        :model="step2"
+        :rules="step2Rules"
+        label-position="top"
+        class="form"
+        @keyup.enter="handleReset"
+      >
+        <el-form-item label="重置令牌" prop="token">
+          <el-input
+            v-model.trim="step2.token"
+            size="large"
+            placeholder="邮件里的重置令牌"
+            :prefix-icon="Key"
+            :disabled="loading"
+          />
+        </el-form-item>
+
         <el-form-item label="新密码" prop="newPassword">
           <el-input
-            v-model="form.newPassword"
+            v-model="step2.newPassword"
             size="large"
             type="password"
             show-password
@@ -49,7 +76,7 @@
 
         <el-form-item label="确认新密码" prop="confirmPassword">
           <el-input
-            v-model="form.confirmPassword"
+            v-model="step2.confirmPassword"
             size="large"
             type="password"
             show-password
@@ -60,10 +87,10 @@
         </el-form-item>
 
         <div class="actions">
-          <el-button class="ghost" size="large" @click="goLogin" :disabled="loading">
-            返回登录
+          <el-button class="ghost" size="large" @click="backToStepOne" :disabled="loading">
+            换一个邮箱
           </el-button>
-          <el-button type="primary" size="large" :loading="loading" @click="handleSubmit">
+          <el-button type="primary" size="large" :loading="loading" @click="handleReset">
             确认重置
           </el-button>
         </div>
@@ -73,33 +100,41 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { Lock, Message, User } from '@element-plus/icons-vue'
+import { onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Key, Lock, Message } from '@element-plus/icons-vue'
 
+import { requestPasswordReset, resetPasswordWithToken } from '@/api/auth'
 import { ElMessage } from '@/plugins/element-services'
-import { useAuthStore } from '@/stores/auth'
 import { passwordProblem } from '@/utils/passwordRules'
 
+const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
-const formRef = ref()
+const step1Ref = ref()
+const step2Ref = ref()
 const loading = ref(false)
+const step = ref(1)
+// 后端没有配置 SMTP 时会把令牌直接放在响应里（这条链在本机是完整可走的）。
+// 配了邮件服务就只有"已发送"，此时令牌要用户自己从邮件里复制。
+const tokenFromServer = ref(false)
 
-const form = reactive({
-  account: '',
-  email: '',
-  newPassword: '',
-  confirmPassword: '',
-})
+const step1 = reactive({ email: '' })
+const step2 = reactive({ token: '', newPassword: '', confirmPassword: '' })
+
+const step1Rules = {
+  email: [
+    { required: true, message: '请输入注册邮箱', trigger: 'blur' },
+    { type: 'email', message: '请输入有效邮箱', trigger: ['blur', 'change'] },
+  ],
+}
 
 const validatePassword = (_rule, value, callback) => {
   if (!value) {
     callback(new Error('请输入新密码'))
     return
   }
-  // 与 `PasswordResetReq` 同源：它把 strength 校验喂的是 account 与 email（不是用户名）。
-  const problem = passwordProblem(value, { username: form.account, email: form.email })
+  // 与后端 `TokenPasswordResetReq` 同源：注册那套强度规则（不再有"至少 6 位"的松档）。
+  const problem = passwordProblem(value, { email: step1.email })
   if (problem) {
     callback(new Error(problem))
     return
@@ -112,22 +147,15 @@ const validateConfirmPassword = (_rule, value, callback) => {
     callback(new Error('请再次输入新密码'))
     return
   }
-  if (value !== form.newPassword) {
+  if (value !== step2.newPassword) {
     callback(new Error('两次输入的密码不一致'))
     return
   }
   callback()
 }
 
-const rules = {
-  account: [
-    { required: true, message: '请输入邮箱或用户名', trigger: 'blur' },
-    { min: 2, message: '请输入有效的邮箱或用户名', trigger: 'blur' },
-  ],
-  email: [
-    { required: true, message: '请输入注册邮箱', trigger: 'blur' },
-    { type: 'email', message: '请输入有效邮箱', trigger: ['blur', 'change'] },
-  ],
+const step2Rules = {
+  token: [{ required: true, message: '请填写重置令牌', trigger: 'blur' }],
   newPassword: [{ validator: validatePassword, trigger: 'blur' }],
   confirmPassword: [{ validator: validateConfirmPassword, trigger: 'blur' }],
 }
@@ -136,20 +164,56 @@ function goLogin() {
   router.push('/login')
 }
 
-async function handleSubmit() {
+function backToStepOne() {
+  step.value = 1
+  tokenFromServer.value = false
+  step2.token = ''
+}
+
+async function handleSend() {
   if (loading.value) return
-  const valid = await formRef.value.validate().catch(() => false)
+  const valid = await step1Ref.value.validate().catch(() => false)
   if (!valid) return
 
   loading.value = true
   try {
-    await authStore.resetPassword(form.account, form.email, form.newPassword, form.confirmPassword)
+    const data = await requestPasswordReset(step1.email)
+    // 没有 SMTP 时 data.token 存在，直接进第二步；配了邮件就是空对象，要用户从邮件里拿令牌。
+    step2.token = data?.token || ''
+    tokenFromServer.value = Boolean(step2.token)
+    step.value = 2
+    ElMessage.success(
+      data?.token ? '本环境未配置邮件服务，令牌已填入' : '重置链接已发送，请查收邮件'
+    )
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleReset() {
+  if (loading.value) return
+  const valid = await step2Ref.value.validate().catch(() => false)
+  if (!valid) return
+
+  loading.value = true
+  try {
+    await resetPasswordWithToken(step2.token, step2.newPassword, step2.confirmPassword)
     ElMessage.success('密码已重置，请使用新密码登录')
     router.push('/login')
   } finally {
     loading.value = false
   }
 }
+
+// 配了邮件服务时，邮件里的链接长这样：`/reset-password?token=...`。
+// 带 token 进来就直接落在第二步，不必再让用户先填一次邮箱。
+onMounted(() => {
+  const fromLink = String(route.query.token || '').trim()
+  if (!fromLink) return
+  step2.token = fromLink
+  tokenFromServer.value = false
+  step.value = 2
+})
 </script>
 
 <style scoped>

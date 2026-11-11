@@ -57,7 +57,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   /* 端点、请求体形状与 `notifyError` 都归 `api/auth.js`（§10.22 拍的那条 ②）；这一层只管
      "拿到 token 之后 store 变成什么"。导入走命名空间，是为了 store 对外的方法名一个没改
-     ——`login` / `register` / `resetPassword` / `fetchMe` 全是别处在调的。 */
+     ——`login` / `register` / `changePassword` / `fetchMe` 全是别处在调的。 */
   async function login(account, password) {
     const data = await authApi.login(account, password)
     if (data?.access_token) {
@@ -74,8 +74,10 @@ export const useAuthStore = defineStore('auth', () => {
     return data
   }
 
-  function resetPassword(account, email, newPassword, confirmPassword) {
-    return authApi.resetPassword(account, email, newPassword, confirmPassword)
+  /* 改密走 `PUT /auth/me/password`，必须带当前密码。原先这里把「账号 + 注册邮箱」直接发给
+     一条公开端点就能改密，等于身份校验是一句空话；那条端点已删。 */
+  function changePassword(oldPassword, newPassword, confirmPassword) {
+    return authApi.changePassword(oldPassword, newPassword, confirmPassword)
   }
 
   async function fetchMe() {
@@ -106,7 +108,7 @@ export const useAuthStore = defineStore('auth', () => {
     clearAuth,
     login,
     register,
-    resetPassword,
+    changePassword,
     fetchMe,
     logout,
   }
