@@ -1,4 +1,4 @@
-// AppPanel 迁移器：把 `div.panel > div.panel-header > div.panel-title-row + div.panel-body`
+﻿// AppPanel 迁移器：把 `div.panel > div.panel-header > div.panel-title-row + div.panel-body`
 // 这四层手写标记搬进 components/ui/AppPanel.vue。样式本来就在 styles/panels.css，重复的只是标记。
 //
 // 用法（在 frontend/ 目录里跑）：
@@ -10,7 +10,7 @@
 //
 // 写盘之后要做的三件事：`npx prettier --write` 改过的视图 → `npm run build` → 把预算
 // `handRolledPanelHeaders` 降到扫描器报的新值；**并且**逐路由跑一次 getComputedStyle 差分
-// （方法记在 docs/upgrade-plan.md 的 D18/D26）。这个脚本只保证标记等价，不保证渲染等价。
+// （方法记在 docs/archive/upgrade-plan.md 的 D18/D26）。这个脚本只保证标记等价，不保证渲染等价。
 //
 // 拒因编号：1=本视图自己有 `.panel-header` 规则（scoped CSS 匹配不到子组件内部节点，标记搬走规则
 // 就失效）；2=包裹不是单独的 `<div class="panel…">`（可能是 `<section>`，也可能是动态 `:class`）；

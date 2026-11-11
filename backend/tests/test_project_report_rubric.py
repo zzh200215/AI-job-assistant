@@ -1,8 +1,8 @@
-"""六维项目尺的读法、位次、合计与两条代码判据。
+﻿"""六维项目尺的读法、位次、合计与两条代码判据。
 
 这批测试里**句子形状是从成品反推件里抄的**（那句"30 - 60 分钟缩短至 5 - 10 分钟"
 是 PL-02 里基线写得最好的一条），但只取句式不取内容：整段项目原文里带公司/客户信息，
-不进仓库（PII 口径见 `docs/upgrade-plan.md`）。
+不进仓库（PII 口径见 `docs/archive/upgrade-plan.md`）。
 """
 
 from app.services import project_report_rubric as rubric

@@ -1,4 +1,4 @@
-# Engineering Quality
+﻿# Engineering Quality
 
 This repository includes a lightweight delivery-quality baseline for demo, review, and resume presentation.
 
@@ -71,7 +71,7 @@ This repository includes a lightweight delivery-quality baseline for demo, revie
 
 `npm run format:check` — CI step "Check frontend formatting" — used to fail no
 matter what the change under review did. It is now green: one `npm run format`
-commit (`5662916`, recorded in `docs/upgrade-plan.md` as D13) moved the tree to
+commit (`5662916`, recorded in `docs/archive/upgrade-plan.md` as D13) moved the tree to
 prettier 3.9.5 rather than pinning the dep back to the 3.3 line.
 
 **Correcting the number this section used to carry: it said 95 files. The

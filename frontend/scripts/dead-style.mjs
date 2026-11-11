@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /* 死样式候选的**静态粗尺**。它只挑页、不判决——删一条规则仍然要 D67/D68 那套浏览器
    "删掉 → 比 44 条计算属性 + rect → 塞回去" 才允许动手。
    为什么要把它写进仓库而不是每次临时搭：D67/D68 的探针与脚本用完即删，于是每一轮都要重搭一次，
@@ -10,7 +10,7 @@
      3  模板字面量的静态片段 `node-${…}` → 前缀 node-
      4  :class="someVar" → 回到 script 把该变量可能返回的字符串全收出来
      5  'dot-' + x 这种**加号拼接** → 前缀 dot-，后缀取本文件里出现过的字符串字面量
-        （D68 的四条腿里没有这一条；实测它只在未清扫的那些页里出现，见 docs/upgrade-plan.md D75）
+        （D68 的四条腿里没有这一条；实测它只在未清扫的那些页里出现，见 docs/archive/upgrade-plan.md D75）
 
    用法：node scripts/dead-style.mjs [--json] [相对 frontend 的路径…]   默认扫 src 下所有 .vue
 */
@@ -261,7 +261,7 @@ function measure(file) {
     // 判据 7：`<transition name="X">` 的四个状态类是 **Vue 运行时**加的
     // （X-enter-active / X-enter-from / X-enter-to / X-leave-*），模板文本里永远看不见，
     // 而浏览器"删掉→比计算属性"也抓不到它——类只存在于动画那几十毫秒里。
-    // 见 docs/upgrade-plan.md D76：DefaultLayout.vue:131 的 `name="fade"` 就是这一族。
+    // 见 docs/archive/upgrade-plan.md D76：DefaultLayout.vue:131 的 `name="fade"` 就是这一族。
     const transitionClass = own.some((c) =>
       dyn.transitions.some(
         (t) =>
@@ -317,7 +317,7 @@ const totalCandidates = whys().length
 /**
  * `--selftest`：尺子的校准。D67/D68 用浏览器 A/B 把四页清到"两把尺子都归 0 候选"，
  * 所以这四页就是本尺的已知答案——报非 0 就说明尺子又坏了（这次修的过程中它红了三次，
- * 每一次都是一个解析缺陷，见 docs/upgrade-plan.md D75）。
+ * 每一次都是一个解析缺陷，见 docs/archive/upgrade-plan.md D75）。
  */
 if (args.includes('--selftest')) {
   const bad = swept.filter((r) => r.candidates.length)

@@ -1,8 +1,8 @@
 # 基于 Agentic RAG 与多智能体协作的智能招聘与职业规划平台
 
-> 一个以 **求职者职业发展** 为核心的全栈智能平台。平台通过 **Agentic RAG 引擎** 检索岗位 JD、行业知识、面试题库和职业发展资料，再由多个 AI Agent 协作完成简历优化、岗位匹配、模拟面试和职业规划；题库、评分规则与套餐按平台一处配置覆盖内置默认；审计、运行治理与外部能力 API 用于内部可观测。**企业/多租户那一侧已在 2026-10 的产品收缩中出树**（`docs/upgrade-plan.md` D132–D137）：数据库里的 `tenant_id` / `organization_id` 列与模型保留，但不再参与任何可见性判定。
+> 一个以 **求职者职业发展** 为核心的全栈智能平台。平台通过 **Agentic RAG 引擎** 检索岗位 JD、行业知识、面试题库和职业发展资料，再由多个 AI Agent 协作完成简历优化、岗位匹配、模拟面试和职业规划；题库、评分规则与套餐按平台一处配置覆盖内置默认；审计、运行治理与外部能力 API 用于内部可观测。**企业/多租户那一侧已在 2026-10 的产品收缩中出树**（`docs/archive/upgrade-plan.md` D132–D137）：数据库里的 `tenant_id` / `organization_id` 列与模型保留，但不再参与任何可见性判定。
 
-**当前状态（2026-10-30）**：后端 **1563 tests / 0 failed**，前端 **119 文件 / 770 条**，静态守卫 **50 条**；RAG / Agent / 推荐 / 解析四轨进 AI 发布门；简历与面试 P1–P5 已落地，过程账见 [`docs/简历与面试优化.md`](docs/简历与面试优化.md)。
+**当前状态（2026-11-11）**：后端 **1564 tests / 0 failed**，前端 **119 文件 / 771 条**，静态守卫 **50 条**；RAG / Agent / 推荐 / 解析四轨进 AI 发布门。**两轮计划（A–E 升级、P1–P5 专项）全部交付，在册待拍项 open = 0**——结论与已知限制见 [`docs/delivery-index.md`](docs/delivery-index.md)，逐条测量过程账归档在 [`docs/archive/`](docs/archive/)。
 
 ---
 
@@ -291,7 +291,7 @@ $env:LLM_PROVIDER="mock"; $env:EMBEDDING_PROVIDER="mock"; python scripts\eval_ag
 | **P4 回流闭环** | 跨会话画像、改写弱点提示、职业规划证据、下一场开场题序倾斜 | 画像只改追问焦点（D278）；开场倾斜建会话/个性化后都生效（D280）；rewrite 定向 2/2 real（复核后 **2 / 0**，初判 4 / 2；导入侧已加词面事实验证器，D284）；**career prompt v2 两发均 2/2 real、证据进理由（1 vs 0 ×2）**；完整规划缺口落库前补 canonical、历史记录由详情接口读取时补（存量半径 131 条、回填收益 0，故不回填）；设置页逐项标出"本场重点"（JD 必考项 ∩ 上场弱点，D282）；完整规划 prompt 也带画像（`career-agent-v2`，D283）；旧报告画像缺口半径量出 0 收益（D285）；完整规划画像真发 1 real / 1 fallback，证据句已命中（D289）；干净重跑三路 429（D290）；替代真模型拿到干净两臂 2 real（D291）；主模型截断已修（D292）；主模型 real 成功样张 9,786 tokens（D293） |
 | **P5 体验收尾** | 报告页闭环入口、重连 UI、解析进度三步条、失败文案分阶段 | 45/90/120 秒倒计时、断网 1006→1/3→2/3、TCP 切网/抖动已活页验证；报告→简历/规划带来源提示与回跳（D286）；旧 JD 跨页槽按 id 取回（D287）；上传→解析→诊断已活页验证（D288） |
 
-> 过程账与逐条判据：`docs/简历与面试优化.md`（P1–P5 独立编号，D240–D293）。真 provider 的干净延迟/质量仍受 429 与配额限制，这里只报已量到的读数。
+> 过程账与逐条判据：`docs/archive/简历与面试优化.md`（P1–P5 独立编号，D240–D293）。真 provider 的干净延迟/质量仍受 429 与配额限制，这里只报已量到的读数。
 
 ---
 
@@ -534,8 +534,8 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 │   ├── nginx.conf
 │   └── package.json
 ├── docs/
-│   ├── 简历与面试优化.md        # P1–P5 专项过程账（2026-10-16 起，D240–D293）
-│   ├── upgrade-plan.md          # 历史升级过程账（A–E 阶段，保留过程记录）
+│   ├── delivery-index.md        # 已交付索引：A–E 与 P1–P5 的结论、出口与已知限制
+│   ├── archive/                 # 历史过程账（只读）：upgrade-plan.md、简历与面试优化.md
 │   ├── knowledge-seeds/         # 内置知识库种子数据（CI 的 RAG 门用它做夹具）
 │   ├── schema-baseline.sql      # 表结构基线（测试与导出脚本的比对目标）
 │   ├── setup-and-security.md / engineering-quality.md / 面试消息协议.md
@@ -573,7 +573,7 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 
 ## 产品范围与保留的租户列
 
-**产品只做求职者侧**（2026-09-19 收缩，2026-10 起把企业/多租户那一侧真正删出树：`docs/upgrade-plan.md` D132–D137）。
+**产品只做求职者侧**（2026-09-19 收缩，2026-10 起把企业/多租户那一侧真正删出树：`docs/archive/upgrade-plan.md` D132–D137）。
 这一节写的是"删了什么、留了什么、为什么留的列不再参与判定"，因为只 grep 到 `tenant_id` 的人很容易读成"多租户还在"。
 
 ### 已经出树的能力
@@ -646,7 +646,7 @@ cd frontend && npm run test:unit   # vitest
 cd frontend && npm test            # 静态守卫（.mjs）
 ```
 
-当前基线（2026-10-30）：后端 **1563 passed / 0 failed**、ruff **481 文件**；前端 **119 文件 / 770 条**、静态守卫 **50 条**。
+当前基线（2026-11-11 复跑）：后端 **1564 passed / 0 failed**、ruff **481 文件**；前端 **119 文件 / 771 条**、静态守卫 **50 条**。
 
 当前测试文件覆盖（节选）：
 

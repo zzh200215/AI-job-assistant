@@ -1,4 +1,4 @@
-/* 浏览器探针的驱动模块：把共享 axios 实例换成夹具，让页面**不需要真后端**也能带数据画出来，
+﻿/* 浏览器探针的驱动模块：把共享 axios 实例换成夹具，让页面**不需要真后端**也能带数据画出来，
    然后提供 D67/D68 那套判据：`删掉这条规则 → 比全页计算属性 + rect → 塞回原位`。
    用法（在浏览器里）：
      await __probe.go('/knowledge')
@@ -9,7 +9,7 @@
      await __probe.audit({ selector: '.interview-room-page .stage-card', scope: P })
      __probe.dropRule('.interview-room-page .stage-card', P)
    scope 是那一页自己的 `__scopeId`（`__probe.scopes()` 列出全部），不靠猜构建哈希。
-   判据与限制写在 docs/upgrade-plan.md D76 / D79 / D85。 */
+   判据与限制写在 docs/archive/upgrade-plan.md D76 / D79 / D85。 */
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 

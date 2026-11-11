@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+﻿import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -230,7 +230,7 @@ const BUDGET = {
   },
   /* 失败被清成空态的存量（见 silentCatchCounts）。D5 把候选人侧 8 处接到了
      components/ui/AppLoadError；剩下的每一条都是明知故留，理由写在行内：
-     - admin/*：企业侧已冻结（见 docs/upgrade-plan.md 的范围决定），不再投入；
+     - admin/*：企业侧已冻结（见 docs/archive/upgrade-plan.md 的范围决定），不再投入；
      - ResumeUpload 的 loadVersionCount 失败时把 `_versionCount` 设为 null（=不知道），
        卡片因此不显示数字，也不再显示"0 个版本"——它没有作出假断言，只是少了一个按钮。
      - admin/Tenants 的 loadDomains：`notifyError: false` 且 `catch { domains[tid] = [] }`，

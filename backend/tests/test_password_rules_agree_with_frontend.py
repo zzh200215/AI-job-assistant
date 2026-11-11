@@ -1,8 +1,8 @@
-"""D107：把服务端的密码规则与前端那份镜像钉在一起。
+﻿"""D107：把服务端的密码规则与前端那份镜像钉在一起。
 
 前端 `src/utils/passwordRules.js` 是 `app/schemas/auth.py::_validate_password_strength` 的手抄镜像。
 手抄的东西会漂，而这里漂了的后果不是风格问题：表单放行、服务端 422，`model_validator` 的 `loc` 又塌成
-`body`，候选人屏幕上是一副英文骨架包着一句中文（docs/upgrade-plan.md D103 量过那一族，起因就是注册页
+`body`，候选人屏幕上是一副英文骨架包着一句中文（docs/archive/upgrade-plan.md D103 量过那一族，起因就是注册页
 只要求"字母 + 数字"而服务端对 8–11 位要求 4 类里 3 类）。
 
 所以这个文件做两件事：

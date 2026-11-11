@@ -1,4 +1,4 @@
-/* 岗位搜索页的数据形状层：从 JobSearch.vue 搬出来的一组纯函数与常量。
+﻿/* 岗位搜索页的数据形状层：从 JobSearch.vue 搬出来的一组纯函数与常量。
    搬它们是因为这页 1312 行脚本里，光是"把后端返回的 JD 归一成本地形状、把投递记录归一成卡片、
    给状态/来源/优先级配色配文案"就占了 ~150 行，而它们不读任何 ref、不发请求。
    `normalizeJob` / `calculateApplicationPriority` 是 D41 才搬的：前者调后者，后者原本直接读视图上的
@@ -298,7 +298,7 @@ export function pipelineEntryToJob(entry) {
 }
 
 /* 投递优先级。`city` 是调用方在取数那一刻传进来的 UI 城市筛选，命中它加 8 分——
-   这一条加分是否该存在是产品问题（见 docs/upgrade-plan.md §10），这里只负责让它可见。 */
+   这一条加分是否该存在是产品问题（见 docs/archive/upgrade-plan.md §10），这里只负责让它可见。 */
 export function calculateApplicationPriority(job, city) {
   let score = 45
   const reasons = []

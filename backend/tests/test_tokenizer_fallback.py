@@ -1,4 +1,4 @@
-"""中文分词到底走哪条分支（E25 的第二半，2026-10-07 D138 改了判据方向）。
+﻿"""中文分词到底走哪条分支（E25 的第二半，2026-10-07 D138 改了判据方向）。
 
 E25（2026-10-05）量到的事实是：`jieba` **不在** `backend/requirements.txt` 里，所以按 requirements
 装出来的任何环境（本机、CI、生产镜像）里 `import jieba` 必失败，两处 `_tokenize` 都走
@@ -7,7 +7,7 @@ E25（2026-10-05）量到的事实是：`jieba` **不在** `backend/requirements
 
 这条绊线在 2026-10-07 红了，按它自己写的规矩办：`jieba==0.42.1` 进 `requirements.txt`，
 文档随之改成"生产走 jieba，n-gram 是缺依赖时的兜底"，RAG 与 Recommend 两道评测门重跑（数字见
-`docs/upgrade-plan.md` D138）。本文件三条腿盯的就是这三件事，方向与 E25 那次**相反**，
+`docs/archive/upgrade-plan.md` D138）。本文件三条腿盯的就是这三件事，方向与 E25 那次**相反**，
 所以留着而不是重写历史：读的人能看到同一个判据在两个方向上各红过一次。
 """
 
@@ -105,5 +105,5 @@ def test_jieba_is_a_declared_dependency():
     }
     assert "jieba" in declared, (
         "jieba 不再是声明依赖 —— 线上分词会静默退回字符 n-gram。"
-        "请同步改写 docs/upgrade-plan.md §3.1 与 §8，并重跑 RAG/Recommend 评测门。"
+        "请同步改写 docs/archive/upgrade-plan.md §3.1 与 §8，并重跑 RAG/Recommend 评测门。"
     )

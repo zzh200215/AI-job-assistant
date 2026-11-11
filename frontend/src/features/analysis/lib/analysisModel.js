@@ -1,4 +1,4 @@
-/* 智能分析页的数据形状层：从 SmartAnalysis.vue 搬出来的一组纯函数与常量。
+﻿/* 智能分析页的数据形状层：从 SmartAnalysis.vue 搬出来的一组纯函数与常量。
    搬它们是因为这页的脚本里，"把一条 AnalysisRecord 读成能渲染的形状"（维度分、技能命中的两路
    回退、面试题的新旧字段分组、步骤名与状态文案、给置信度/复杂度配 el-tag 颜色）占了 110 行，
    而它们不发请求、不写任何状态。
@@ -7,7 +7,7 @@
    给 `calculateApplicationPriority` 加 `city` 参数那一刀）。 */
 
 /* 下面这几份 typedef 覆盖的是**四个面板读走的**字段，不是整份后端负载的契约。
-   职业规划与方向那一坨是模型直接生成的 JSON、后端不约束（docs/upgrade-plan.md §10.20 讲的就是
+   职业规划与方向那一坨是模型直接生成的 JSON、后端不约束（docs/archive/upgrade-plan.md §10.20 讲的就是
    这件事），所以这里的键全部可选：它记的是"面板假设有什么"，不是"服务端保证有什么"。
    rubric 那两条（strengths / gaps 的两代写法）**不在这里了**：D82 把它挪到
    `src/utils/analysisLocalization.js`，跟写它的那份生产者放在一起，三个屏幕共用一处判据。 */
