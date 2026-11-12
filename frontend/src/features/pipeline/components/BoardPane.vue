@@ -14,8 +14,10 @@ import {
 } from '@element-plus/icons-vue'
 import { monthDay } from '@/utils/format/date'
 import {
+  canMoveTo,
   followUpDays,
   followUpLevel,
+  menuMoveTargets,
   needsFollowUp,
   TERMINAL_COLUMN_KEYS,
 } from '@/features/pipeline/lib/pipelineBoard'
@@ -24,9 +26,11 @@ import {
    不一样：**它有写操作**，所以三条出口全部走 emit——
      · `command(cmd, card)`：卡片右上那个下拉（详情 / AI / 模拟面试 / 标记拒绝 / 放弃 / 删除），
        页面收到后交给 D58 那份共用分发器 `runCardCommand`；
-     · `move(card, stage)`：拖到某一列。被拖的是哪张卡是**这一块的本地状态**（dragCard 搬进来了），
+     · `move(card, stage)`：**两条入口、一发事件**——拖到某一列，或菜单里的「移至「X」」
+       （D4 补的那条：拖拽在触屏上收不到 `dragstart`、键盘也够不着，没有它手机上卡片只
+       能往"结束"走、不能往前推）。被拖的是哪张卡是**这一块的本地状态**（dragCard 搬进来了），
        而"要不要发这一发、失败怎么回滚、乐观更新改哪个数组"留在页面——那涉及写 `kanban`，
-       面板不该改 props；
+       面板不该改 props；菜单这条路也**不另起一套写**，同样交给页面那份 `moveCard`；
      · `go-recommend` / `open-add`：空态里那两个按钮。
    跟进提醒（几天没回复、什么颜色）按 D57 的口径吃入参 `now`：页面在渲染时把 `now()` 递进来，
    时机和搬之前一模一样（也是每次渲染现取），面板自己不调 Date.now()。
@@ -71,6 +75,19 @@ function onDrop(targetStage) {
   if (!dragCard.value) return
   emit('move', dragCard.value, targetStage)
   dragCard.value = null
+}
+
+/* 卡片菜单的出口只有一个，但载荷有两种：`move:<key>` 是"推进阶段"，
+   其余是页面那份共用分发器认识的动作名。前者转成 `move`——**和拖拽同一发**，
+   所以乐观更新、`writeBusy` 那把锁、失败回滚全落在页面的 `moveCard` 里，
+   面板不因为多了一条入口就多出一份写实现。 */
+const MOVE_COMMAND_PREFIX = 'move:'
+
+function onCardCommand(cmd, card) {
+  if (typeof cmd === 'string' && cmd.startsWith(MOVE_COMMAND_PREFIX)) {
+    return emit('move', card, cmd.slice(MOVE_COMMAND_PREFIX.length))
+  }
+  emit('command', cmd, card)
 }
 </script>
 
@@ -137,7 +154,7 @@ function onDrop(targetStage) {
                 <el-dropdown
                   trigger="click"
                   :disabled="writeBusy"
-                  @command="(cmd) => emit('command', cmd, card)"
+                  @command="(cmd) => onCardCommand(cmd, card)"
                 >
                   <button type="button" class="card-more" aria-label="更多操作">
                     <el-icon><MoreFilled /></el-icon>
@@ -149,15 +166,26 @@ function onDrop(targetStage) {
                       <el-dropdown-item v-if="col.key === 'interview'" command="interview"
                         >模拟面试</el-dropdown-item
                       >
+                      <!-- 推进阶段的第二条路（触及触屏与键盘）：拖拽认不到手指，
+                           也拿不到 Enter。发出去的事件和拖拽是同一个 `move`。
+                           选项来自后端那张状态机表（lib 的 `STAGE_TRANSITIONS` 镜像）：
+                           列不出来的和目标移过去一定被后端打回来的，是同一批。 -->
                       <el-dropdown-item
-                        v-if="!isTerminal(col.key)"
+                        v-for="(target, ti) in menuMoveTargets(col.key)"
+                        :key="target.key"
+                        :command="`move:${target.key}`"
+                        :divided="ti === 0"
+                        >移至「{{ target.label }}」</el-dropdown-item
+                      >
+                      <el-dropdown-item
+                        v-if="canMoveTo(col.key, 'rejected')"
                         command="reject"
                         divided
                         style="color: color-mix(in srgb, var(--app-danger), white 20%)"
                         >标记拒绝</el-dropdown-item
                       >
                       <el-dropdown-item
-                        v-if="!isTerminal(col.key)"
+                        v-if="canMoveTo(col.key, 'withdrawn')"
                         command="abandon"
                         style="color: var(--app-muted)"
                         >放弃</el-dropdown-item

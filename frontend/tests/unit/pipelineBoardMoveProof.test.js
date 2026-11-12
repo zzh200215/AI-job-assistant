@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  allowedStageTargets,
   avgResponseDays,
+  canMoveTo,
   conversionRate,
   flattenCards,
   followUpCount,
@@ -9,6 +11,9 @@ import {
   followUpLevel,
   funnelPercent,
   funnelRows,
+  isTerminalStage,
+  menuMoveTargets,
+  moveRefusalCopy,
   needsFollowUp,
   pipelineFocusDescription,
   pipelineFocusTitle,
@@ -268,5 +273,63 @@ describe('钉死每条判据（含被改成入参的那些时间）', () => {
       { id: 2 },
     ])
     expect(totalCardCount({ todo: [{}, {}], rejected: [{}] })).toBe(3)
+  })
+
+  /* D4 的"非拖拽通路"取值域，现在读的是后端那张状态机表的前端镜像。
+     这张镜像存在的唯一理由是：**能去哪必须在发请求之前就知道**——菜单要列选项、
+     拖拽要判断这一放行不行。那条守卫（tests/stageTransitionsMatchBackend.test.mjs）
+     解析后端 `job_pipeline.py` 的 VALID_TRANSITIONS 逐键比对，这里断的是**语义**：
+     哪些列会出现、终态为什么是空的、以及提示措辞不再露英文阶段键。 */
+  it('状态机镜像：推进链只能向前，终态一个出口都没有', () => {
+    expect(allowedStageTargets('todo').map((c) => c.key)).toEqual(['applied', 'withdrawn'])
+    expect(allowedStageTargets('applied').map((c) => c.key)).toEqual([
+      'written_test',
+      'interview',
+      'rejected',
+      'withdrawn',
+    ])
+    // 顺序跟列定义走，不跟字典里的书写顺序走
+    expect(allowedStageTargets('offer').map((c) => c.key)).toEqual([
+      'accepted',
+      'rejected',
+      'withdrawn',
+    ])
+    for (const terminal of ['accepted', 'rejected', 'withdrawn']) {
+      expect(allowedStageTargets(terminal), terminal).toEqual([])
+      expect(isTerminalStage(terminal), terminal).toBe(true)
+    }
+    expect(isTerminalStage('offer')).toBe(false)
+    // 不认识的阶段：当"哪条都不允许"，而不是"全都允许"
+    expect(allowedStageTargets('nope')).toEqual([])
+    expect(allowedStageTargets(undefined)).toEqual([])
+  })
+
+  it('菜单只列"还没专门命令"的那几段：拒绝/放弃各有自己的按钮，不重复一遍', () => {
+    // todo 卡：后端只给 applied / withdrawn，而 withdrawn 走「放弃」那颗
+    expect(menuMoveTargets('todo').map((c) => c.key)).toEqual(['applied'])
+    expect(menuMoveTargets('applied').map((c) => c.key)).toEqual(['written_test', 'interview'])
+    expect(menuMoveTargets('written_test').map((c) => c.key)).toEqual(['interview'])
+    expect(menuMoveTargets('interview').map((c) => c.key)).toEqual(['offer'])
+    // 「已入职」只有这一条路：offer 之后没有任何别的入口能到它
+    expect(menuMoveTargets('offer').map((c) => c.key)).toEqual(['accepted'])
+    expect(menuMoveTargets('rejected')).toEqual([])
+  })
+
+  it('canMoveTo 是上面两条的判据，正反两面都要对', () => {
+    expect(canMoveTo('applied', 'written_test')).toBe(true)
+    expect(canMoveTo('applied', 'todo')).toBe(false) // 后端就是这么拒的（D4 真撞过）
+    expect(canMoveTo('todo', 'interview')).toBe(false) // 跨段跳不行
+    expect(canMoveTo('offer', 'accepted')).toBe(true)
+    expect(canMoveTo('rejected', 'todo')).toBe(false) // 终态出不来
+    expect(canMoveTo(undefined, 'applied')).toBe(false)
+  })
+
+  it('被拒时说的是中文阶段名，不露 `applied` 这种键、也不带 request id', () => {
+    const refused = moveRefusalCopy('applied', 'todo')
+    expect(refused).toBe('不能从「已投递」直接到「待投递」')
+    expect(refused).not.toMatch(/applied|todo|\[web-/)
+    expect(moveRefusalCopy('rejected', 'applied')).toBe('「已拒绝」已经结束，不能再改阶段')
+    // 未知阶段不能把 undefined 塞进句子
+    expect(moveRefusalCopy('nope', 'applied')).not.toContain('undefined')
   })
 })

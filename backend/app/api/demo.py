@@ -19,14 +19,16 @@ from app.utils.response import ok
 router = APIRouter()
 
 
-@router.post("/seed", summary="一键写入演示数据（简历 + 岗位 + 投递记录）")
+@router.post("/seed", summary="一键写入演示数据（求职目标 + 简历 + 岗位 + 投递记录）")
 def seed_demo(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """三步各自幂等：重复点只会跳过已存在的行，不会灌重复。"""
+    """四步各自幂等：重复点只会跳过已存在的行，不会灌重复。"""
     data = seed_demo_dataset(db, current_user.id)
     parts = []
+    if data["target_created"]:
+        parts.append("1 个求职目标")
     if data["resume_created"]:
         parts.append("1 份简历")
     if data["jobs_inserted"]:

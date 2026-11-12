@@ -238,10 +238,12 @@
               ><el-icon><Search /></el-icon
             ></template>
           </el-input>
-          <span class="job-toolbar-count">
-            {{ visibleRecommendations.length }} 个岗位
-            <template v-if="priorityJobCount"> · {{ priorityJobCount }} 个优先</template>
-          </span>
+          <span v-if="overviewPending" class="job-toolbar-count">正在匹配…</span>
+          <span v-else class="job-toolbar-count"
+            >{{ visibleRecommendations.length }} 个岗位<template v-if="priorityJobCount">
+              · {{ priorityJobCount }} 个优先</template
+            ></span
+          >
         </div>
 
         <!-- 推荐结果 -->
@@ -605,15 +607,15 @@
           >
           <div class="job-overview-stats">
             <div>
-              <strong>{{ recommendations.length }}</strong
+              <strong>{{ overviewPending ? '—' : recommendations.length }}</strong
               ><span>匹配岗位</span>
             </div>
             <div>
-              <strong>{{ priorityJobCount }}</strong
+              <strong>{{ overviewPending ? '—' : priorityJobCount }}</strong
               ><span>优先投递</span>
             </div>
             <div>
-              <strong>{{ pipelineJobCount }}</strong
+              <strong>{{ overviewPending ? '—' : pipelineJobCount }}</strong
               ><span>已加入看板</span>
             </div>
           </div>
@@ -623,7 +625,7 @@
               <i class="job-bucket-track"
                 ><b :class="`is-${bucket.tone}`" :style="{ width: bucket.width + '%' }"
               /></i>
-              <em>{{ bucket.count }}</em>
+              <em>{{ overviewPending ? '—' : bucket.count }}</em>
             </div>
           </div>
           <button
@@ -782,6 +784,12 @@ const appliedFilters = computed(
 )
 
 const hasResults = computed(() => recommendations.value.length > 0)
+
+/* 匹配还没回来时，右栏那几个数是 **0 个**，而屏幕上同时转着"正在分析你的简历"。
+   D4 在手机上量到这一幕（375 宽、首屏 2.2 秒时的读数就是 0/0/0）：这不是"暂时没数字"，
+   是**在看板上写下了"你没有匹配岗位"这句话**——三秒后同一块地方变成 3 个，等于自己刚说错。
+   判据只看"还没拿到过结果"：二次匹配时手里有旧结果，那些数照旧显示（旧数不是假数）。 */
+const overviewPending = computed(() => loading.recommend && !hasResults.value)
 const hasFeedbackInsights = computed(() => (feedbackStats.value?.total || 0) > 0)
 const hasAnomalySignals = computed(() => {
   const signals = feedbackStats.value?.tuning_signals

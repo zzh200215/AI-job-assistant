@@ -1,8 +1,8 @@
-"""首次体验的演示数据：一次写完简历 / 岗位 / 投递记录，且可重复点。
+"""首次体验的演示数据：一次写完求职目标 / 简历 / 岗位 / 投递记录，且可重复点。
 
 判据分三层：
 
-1. **形状**：一次调用之后三张表都有东西，投递记录覆盖多个阶段（否则看板五列里四列是空的）；
+1. **形状**：一次调用之后四张表都有东西，投递记录覆盖多个阶段（否则看板五列里四列是空的）；
 2. **口径**：两个岗位 seed 入口灌的是**同一份清单**——这是本轮真正修的东西，
    原先 `api/job_search.py` 是 5 条中文、`api/job_recommend.py` 是 10 条英文标题，
    于是"点哪个按钮"决定了屏幕上是中国岗位还是英文岗位；
@@ -13,7 +13,14 @@ from __future__ import annotations
 
 from app.models.history import JobDescription, Resume
 from app.models.job_pipeline import ACTIVE_STAGES, JobApplicationPipeline
-from app.services.demo_seed_service import DEMO_RESUME, SEED_JDS, seed_demo_dataset, seed_jobs
+from app.models.job_target import JobTarget
+from app.services.demo_seed_service import (
+    DEMO_RESUME,
+    DEMO_TARGET,
+    SEED_JDS,
+    seed_demo_dataset,
+    seed_jobs,
+)
 
 
 class TestDemoSeed:
@@ -31,6 +38,27 @@ class TestDemoSeed:
         assert db_session.query(JobApplicationPipeline).filter(
             JobApplicationPipeline.user_id == normal_user.id
         ).count() == len(SEED_JDS)
+
+    def test_seed_creates_one_primary_target_matching_the_resume(self, db_session, normal_user):
+        """求职目标必须和简历里写的方向一致，否则"我要去哪"和"我是谁"讲的是两件事。"""
+        data = seed_demo_dataset(db_session, normal_user.id)
+        assert data["target_created"] is True
+
+        targets = db_session.query(JobTarget).filter(JobTarget.user_id == normal_user.id).all()
+        assert len(targets) == 1
+        target = targets[0]
+        assert target.is_primary == 1
+        assert target.status == "active"
+        assert target.name == DEMO_TARGET["name"]
+
+        resume = db_session.query(Resume).filter(Resume.user_id == normal_user.id).one()
+        parsed = resume.parsed_json
+        assert target.position == parsed["expected_position"]
+        assert target.cities == [parsed["expected_city"]]
+        assert (target.salary_min, target.salary_max) == (
+            parsed["expected_salary_min"],
+            parsed["expected_salary_max"],
+        )
 
     def test_applications_spread_across_stages(self, db_session, normal_user):
         """看板要有东西看：至少两个不同阶段，且有一条落在活跃阶段里。"""
@@ -53,6 +81,9 @@ class TestDemoSeed:
         assert second["jobs_inserted"] == 0
         assert second["applications_inserted"] == 0
         assert second["resume_created"] is False
+        assert second["target_created"] is False
+        # 求职目标同样按名称幂等：重跑不会灌出第二个主目标
+        assert db_session.query(JobTarget).filter(JobTarget.user_id == normal_user.id).count() == 1
         # 简历按姓名幂等，所以 resume_id 两次都指同一行
         assert second["resume_id"] == first["resume_id"]
 

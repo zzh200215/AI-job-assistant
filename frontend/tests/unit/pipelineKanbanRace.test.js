@@ -185,11 +185,17 @@ describe('对照组：这些修法不能把正常路径也废掉', () => {
 
   it('没有并发刷新时，拖动后的乐观更新照常生效', async () => {
     const wrapper = await renderKanban()
-    dragCardTo(wrapper, wrapper.vm.kanban.todo[0], '面试')
+    /* D4 把这里的目标从「面试」改成「已投递」：`todo → interview` 是后端**不允许**的流转
+       （`VALID_TRANSITIONS` 里 todo 只给 applied / withdrawn），当初这条用例能绿只是因为
+       `movePipelineStage` 被 mock 成了必然成功——它断言了一件后端会 422 的事。
+       状态机搬进前端之后（见 lib/pipelineBoard 的 STAGE_TRANSITIONS 与
+       tests/stageTransitionsMatchBackend.test.mjs），拖过去会被 `moveCard` 当场拦下，
+       这条用例于是红了；这红是对的，所以改的是用例的目标，不是判据。 */
+    dragCardTo(wrapper, wrapper.vm.kanban.todo[0], '已投递')
     await flushPromises()
     await settle(lastOf('movePipelineStage'), {})
 
-    expect(titlesIn('面试')).toEqual(['投递-1'])
+    expect(titlesIn('已投递')).toEqual(['投递-1'])
     expect(titlesIn('待投递')).toEqual([])
     wrapper.unmount()
   })

@@ -178,3 +178,69 @@ describe('两个视图走的是同一套命令实现', () => {
     expect(dialog.querySelector('textarea')?.value).toBe('二面被系统设计问住')
   })
 })
+
+/* D4 补的菜单推进（`move:<stage>`）**不是第二条写路径**：从下拉发出后仍然落到 `moveCard`，
+   也就是拖拽那一发。这条用例钉的正是"同一发"——同样的请求、同样的乐观更新（不重取）、
+   同样的提示措辞。如果哪天有人给菜单另抄一份实现，这三样里至少有两样会当场漂开。 */
+describe('菜单推进与拖拽是同一发（D4）', () => {
+  beforeEach(() => {
+    document.body.innerHTML = ''
+    vi.clearAllMocks()
+    api.getKanban.mockResolvedValue(boardOf({ ...CARD }))
+  })
+
+  it('移到「面试」：一次请求、卡片当场落到面试列、提示与拖拽逐字相同', async () => {
+    api.movePipelineStage.mockResolvedValue({ ok: true })
+    const view = kanbanView(await renderKanban())
+    const before = getKanban.mock.calls.length // 挂载那一次
+    await fire(view, 'move:interview')
+
+    expect(movePipelineStage).toHaveBeenLastCalledWith(41, 'interview')
+    // 拖拽那条路成功后提示 `已移至「X」`，菜单这条必须一字不差
+    expect(ElMessage.success).toHaveBeenLastCalledWith('已移至「面试」')
+    // 乐观更新：卡片自己搬过去，不等重取
+    expect(getKanban.mock.calls.length, '菜单推进不该重取').toBe(before)
+    const col = [...document.querySelectorAll('.kanban-col')].find((el) =>
+      el.querySelector('h3')?.textContent.includes('面试')
+    )
+    expect(col.querySelectorAll('.kanban-card')).toHaveLength(1)
+    const appliedCol = [...document.querySelectorAll('.kanban-col')].find((el) =>
+      el.querySelector('h3')?.textContent.includes('已投递')
+    )
+    expect(appliedCol.querySelectorAll('.kanban-card')).toHaveLength(0)
+  })
+
+  it('同一阶段发不起来（拖回原列也不发），所以菜单里也就不列它', async () => {
+    api.movePipelineStage.mockResolvedValue({ ok: true })
+    const view = kanbanView(await renderKanban())
+    await fire(view, 'move:applied')
+    expect(movePipelineStage).not.toHaveBeenCalled()
+    expect(getKanban.mock.calls.length).toBe(1)
+  })
+
+  /* 状态机那一半：后端 `VALID_TRANSITIONS` 不认的流转，前端**一发都不发**。
+     为什么要拦在前端：后端那句原文是 `不允许从 'applied' 流转到 'todo'，允许的目标: …`
+     再挂一串 request id——那是给开发看的话，不是给候选人看的。D4 在真浏览器里就是这么撞上的
+     （拖拽能拖到任何一列，菜单当时也把七种目标全列了出来）。 */
+  it('后端不允许的流转：不发请求、不乐观更新，说的是中文阶段名', async () => {
+    api.movePipelineStage.mockResolvedValue({ ok: true })
+    const view = kanbanView(await renderKanban())
+    await fire(view, 'move:todo') // CARD.stage 是 applied，applied → todo 是被拒的回头路
+    expect(movePipelineStage).not.toHaveBeenCalled()
+    expect(getKanban.mock.calls.length).toBe(1)
+    expect(ElMessage.warning).toHaveBeenLastCalledWith('不能从「已投递」直接到「待投递」')
+    // 卡片没动：还在已投递那列
+    const col = [...document.querySelectorAll('.kanban-col')].find((el) =>
+      el.querySelector('h3')?.textContent.includes('已投递')
+    )
+    expect(col.querySelectorAll('.kanban-card')).toHaveLength(1)
+  })
+
+  it('终态卡片的「标记拒绝」被同一张表挡住（列表视图那行是无条件画的）', async () => {
+    api.movePipelineStage.mockResolvedValue({ ok: true })
+    const view = kanbanView(await renderKanban('kanban', { ...CARD, stage: 'rejected' }))
+    await fire(view, 'reject')
+    expect(movePipelineStage).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenLastCalledWith('「已拒绝」已经结束，不能再改阶段')
+  })
+})

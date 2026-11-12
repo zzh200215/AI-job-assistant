@@ -113,6 +113,76 @@ export function flattenCards(kanban) {
 /** 终态三段：看板默认收进「已结束」归档带，列表视图仍逐行可见。 */
 export const TERMINAL_COLUMN_KEYS = ['accepted', 'rejected', 'withdrawn']
 
+/* 阶段状态机的**前端镜像**。权威出处是后端 `app/models/job_pipeline.py` 的 `VALID_TRANSITIONS`
+   （`api/job_pipeline.py:517` 就是拿它判流转的）。镜像不是为了省一个请求，而是因为"能去哪"
+   必须**发请求之前**就知道：菜单要列出可选目标、拖拽要判断这一放行不行。
+
+   两处一旦分叉，屏幕上就会出现"点得到、但一定失败"的选项——D4 在真浏览器里撞到过一次：
+   从「已投递」点「移至「待投递」」，回来的是 `不允许从 'applied' 流转到 'todo'，允许的目标:
+   interview, rejected, withdrawn, written_test [web-…]`——阶段键是英文、后缀是 request id，
+   候选人读起来既不像规则也不像话。分叉由 `tests/stageTransitionsMatchBackend.test.mjs`
+   钉住：那条守卫直接解析后端那份字典逐键比对，改一边不改另一边会当场红。 */
+export const STAGE_TRANSITIONS = {
+  todo: ['applied', 'withdrawn'],
+  applied: ['written_test', 'interview', 'rejected', 'withdrawn'],
+  written_test: ['interview', 'rejected', 'withdrawn'],
+  interview: ['offer', 'rejected', 'withdrawn'],
+  offer: ['accepted', 'rejected', 'withdrawn'],
+  accepted: [],
+  rejected: [],
+  withdrawn: [],
+}
+
+/**
+ * 这一阶段后端允许去到的列，按 `columns` 的顺序排——菜单从上往下读和看板从左往右读同向。
+ * 终态（已入职 / 已拒绝 / 已放弃）返回空数组：后端一个目标都不给。
+ * @param {string} [stage]
+ * @returns {BoardColumn[]}
+ */
+export function allowedStageTargets(stage) {
+  const allowed = STAGE_TRANSITIONS[stage] || []
+  return columns.filter((col) => allowed.includes(col.key))
+}
+
+/**
+ * @param {string} [stage]
+ * @param {string} [target]
+ * @returns {boolean}
+ */
+export function canMoveTo(stage, target) {
+  return (STAGE_TRANSITIONS[stage] || []).includes(target)
+}
+
+/**
+ * 卡片菜单里「移至「X」」这一族：合法的目标里去掉**已有专门命令**的两段——已拒绝走「标记拒绝」、
+ * 已放弃走「放弃」。同一条路给两种措辞只会让提示打架；而这两条命令本身也按同一张表收口，
+ * 所以 todo 卡（后端只允许 → applied / withdrawn）菜单里只有「移至「已投递」」和「放弃」。
+ * @param {string} [stage]
+ * @returns {BoardColumn[]}
+ */
+export function menuMoveTargets(stage) {
+  return allowedStageTargets(stage).filter((col) => !['rejected', 'withdrawn'].includes(col.key))
+}
+
+/** @param {string} [stage] */
+export function isTerminalStage(stage) {
+  return (STAGE_TRANSITIONS[stage] || []).length === 0
+}
+
+/**
+ * 这一放被拒时对候选人说的话。菜单已经列不出非法目标，所以这句是给**拖拽**用的——
+ * 拖拽没有"只能拖到哪几列"的视觉约束，只能事后解释，而且必须解释成中文阶段名
+ * （后端那句原文里是 `'applied'` / `'todo'` 这种键，还挂着一串 request id）。
+ * @param {string} [fromStage]
+ * @param {string} [toStage]
+ */
+export function moveRefusalCopy(fromStage, toStage) {
+  if (isTerminalStage(fromStage)) {
+    return `「${stageLabel(fromStage)}」已经结束，不能再改阶段`
+  }
+  return `不能从「${stageLabel(fromStage)}」直接到「${stageLabel(toStage)}」`
+}
+
 /** 漏斗只画"推进"的五段，入职/拒绝/放弃不进漏斗。 */
 export function funnelRows(counts) {
   return columns

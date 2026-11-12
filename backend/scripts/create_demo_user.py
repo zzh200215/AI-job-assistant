@@ -108,6 +108,7 @@ def main() -> int:
         data = seed_demo_dataset(db, user.id)
         print(
             "演示数据："
+            f"求职目标 {'新建' if data['target_created'] else '已存在'}、"
             f"简历 {'新建' if data['resume_created'] else '已存在'}、"
             f"岗位 +{data['jobs_inserted']}（跳过 {data['jobs_skipped']}）、"
             f"投递 +{data['applications_inserted']}（跳过 {data['applications_skipped']}）"

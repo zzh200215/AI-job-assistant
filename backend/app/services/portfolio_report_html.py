@@ -170,7 +170,10 @@ def _scorecard(report: PortfolioReport) -> str:
         "<h3>1.1 组合六项评分卡</h3>"
         + _scroll(
             _table(
-                ["评分项", "得分", "满分", "落档", "主要扣分理由"], rows, "tbl scorecard", min_px=rubric.SCORECARD_MIN_PX
+                ["评分项", "得分", "满分", "落档", "主要扣分理由"],
+                rows,
+                "tbl scorecard",
+                min_px=rubric.SCORECARD_MIN_PX,
             )
         )
         + scale

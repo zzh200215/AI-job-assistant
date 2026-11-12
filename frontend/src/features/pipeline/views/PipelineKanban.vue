@@ -3,7 +3,7 @@
     <PageHeader
       title="投递看板"
       eyebrow="求职进度"
-      subtitle="拖动卡片推进阶段，先处理本周最该动的机会"
+      subtitle="拖卡片或用卡片菜单推进阶段，先处理本周最该动的机会"
     >
       <template #actions>
         <el-button-group class="view-toggle">
@@ -287,9 +287,11 @@ import {
 import { monthDayTime } from '@/utils/format/date'
 import {
   avgResponseDays as boardAvgResponseDays,
+  canMoveTo,
   columns,
   flattenCards,
   followUpCount as boardFollowUpCount,
+  moveRefusalCopy,
   pipelineFocusDescription as boardFocusDescription,
   pipelineFocusTitle as boardFocusTitle,
   stageCounts,
@@ -406,12 +408,22 @@ async function loadResumeVersions() {
   }
 }
 
-/* 面板把"拖的是哪张卡"发过来，这一趟的去留由页面判：同阶段不发、有写在飞不发（D59 那把锁），
-   发出去之后乐观更新改的是页面的 `kanban`——所以这段不能跟着面板走。 */
+/* 面板把"拖的是哪张卡"发过来，这一趟的去留由页面判：同阶段不发、有写在飞不发（D59 那把锁）、
+   **后端状态机不允许的不发**（D4），发出去之后乐观更新改的是页面的 `kanban`——所以这段
+   不能跟着面板走。
+
+   D4 加第三条判据的前因：拖拽到任何一列都能拖得下去，于是从「已投递」拖回「待投递」时，
+   请求真的发出去了，回来的是后端原文 `不允许从 'applied' 流转到 'todo'，允许的目标: …`。
+   菜单那条路更糟——它把七种目标列成菜单，其中一半后端根本不认。现在两边读同一张表
+   （`STAGE_TRANSITIONS`，由 `stageTransitionsMatchBackend` 守卫钉住），菜单列不出的也发不出，
+   而拖拽这种"没有视觉约束"的入口在这里被拦下并换成中文。 */
 async function moveCard(card, targetStage) {
   if (card.stage === targetStage) return
   if (writeBusy.value) return
-
+  if (!canMoveTo(card.stage, targetStage)) {
+    ElMessage.warning(moveRefusalCopy(card.stage, targetStage))
+    return
+  }
   const oldStage = card.stage
   writeBusy.value = true
   try {
@@ -489,6 +501,12 @@ function goInterviewFor(card) {
 }
 
 async function markStage(card, stage, doneMessage) {
+  /* 列表视图那行里的「标记拒绝 / 放弃」是**无条件**画出来的（看板列的菜单按状态机收口，
+    那一份不归它管），所以这条判据放在函数里而不是模板上：两条视图共用这一个入口。 */
+  if (!canMoveTo(card.stage, stage)) {
+    ElMessage.warning(moveRefusalCopy(card.stage, stage))
+    return
+  }
   writeBusy.value = true
   try {
     await movePipelineStage(card.id, stage)

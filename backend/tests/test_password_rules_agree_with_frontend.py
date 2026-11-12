@@ -1,4 +1,4 @@
-﻿"""D107：把服务端的密码规则与前端那份镜像钉在一起。
+"""D107：把服务端的密码规则与前端那份镜像钉在一起。
 
 前端 `src/utils/passwordRules.js` 是 `app/schemas/auth.py::_validate_password_strength` 的手抄镜像。
 手抄的东西会漂，而这里漂了的后果不是风格问题：表单放行、服务端 422，`model_validator` 的 `loc` 又塌成

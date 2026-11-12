@@ -28,6 +28,7 @@ from app.models.job_pipeline import (
     STAGE_WRITTEN_TEST,
     JobApplicationPipeline,
 )
+from app.models.job_target import JobTarget
 
 # 演示岗位清单：中文岗位、真实公司名、带技能标签与硬性要求。
 # 这批数据同时服务两个入口（岗位市场的"一键导入演示岗位"与首页的"用示例数据体验"）。
@@ -143,6 +144,39 @@ DEMO_RESUME = {
         "做过一个小规模的检索原型，希望把工程能力和模型能力接到一起。",
     },
 }
+
+
+# 演示求职目标：与简历里的期望方向**逐字一致**（AI 应用开发工程师 / 杭州 / 25-40K）。
+# 为什么要有它：`/targets`（求职目标）是主链上"我要去哪"那一步，也是那一页唯一的数据源。
+# 只灌简历与投递时不灌目标，导航上有这一项、点进去是"还没有求职目标"，而首页的下一步检查
+# 同时写着"设定目标岗位 已完成"——两屏互相矛盾，比空态更难解释。
+DEMO_TARGET = {
+    "name": "AI 应用开发方向",
+    "position": "AI 应用开发工程师",
+    "industry": "人工智能",
+    "cities": ["杭州"],
+    "salary_min": 25,
+    "salary_max": 40,
+    "skills": ["Python", "FastAPI", "RAG", "LLM"],
+    "priority": "high",
+    "notes": "演示数据：三年后端经验，往大模型应用方向转。",
+}
+
+
+def seed_target(db: Session, user_id: int) -> bool:
+    """灌一个主求职目标，按名称幂等。返回是否新增。
+
+    `is_primary=1`：页面上的"主目标"是推荐链路的默认方向，没有主目标时那一屏
+    只能显示"还没有求职目标"——所以幂等键选名称而不是"有没有任何目标"，
+    重跑不会把一个已经被用户改成别的名字的目标又灌回来。
+    """
+    existing = db.query(JobTarget).filter(JobTarget.user_id == user_id, JobTarget.name == DEMO_TARGET["name"]).first()
+    if existing:
+        return False
+
+    db.add(JobTarget(user_id=user_id, status="active", is_primary=1, **DEMO_TARGET))
+    db.flush()
+    return True
 
 
 def seed_jobs(db: Session, user_id: int) -> tuple[int, int]:
@@ -278,7 +312,8 @@ def seed_pipeline(db: Session, user_id: int, resume_id: int | None) -> tuple[int
 
 
 def seed_demo_dataset(db: Session, user_id: int) -> dict:
-    """一次写完演示数据。三步各自幂等，重复点只会跳过，不会灌重复。"""
+    """一次写完演示数据。四步各自幂等，重复点只会跳过，不会灌重复。"""
+    target_created = seed_target(db, user_id)
     resume_created = seed_resume(db, user_id)
     jobs_inserted, jobs_skipped = seed_jobs(db, user_id)
 
@@ -288,6 +323,7 @@ def seed_demo_dataset(db: Session, user_id: int) -> dict:
     db.commit()
 
     return {
+        "target_created": target_created,
         "resume_created": resume_created,
         "jobs_inserted": jobs_inserted,
         "jobs_skipped": jobs_skipped,
