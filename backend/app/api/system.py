@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from time import perf_counter
 from uuid import uuid4
 
@@ -35,8 +35,13 @@ from app.services.orchestration_runner import get_queue_health
 from app.utils.file_parser import is_ocr_available
 from app.utils.http_errors import api_error
 from app.utils.response import ERR_AUTH, ERR_PARAM, ok
+from app.utils.time_helper import utc_now_naive
 
 router = APIRouter()
+
+# "最近 30 分钟内有降级"才算当前降级中。窗口太长会让一次历史降级永久挂着一条横幅，
+# 窗口太短又会在一次慢请求里闪一下就没——30 分钟是按"人看一眼屏幕"的量级取的。
+DEGRADED_WINDOW_MINUTES = 30
 
 
 def _is_mock(provider: str | None) -> bool:
@@ -184,10 +189,22 @@ def _probe_embedding() -> dict:
 
 
 @router.get("/status", summary="Get runtime system status")
-async def get_system_status(_current_user: User = Depends(get_current_user)):
+def get_system_status(
+    _current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     llm_provider = str(settings.LLM_PROVIDER or "").strip().lower()
     embedding_provider = str(settings.EMBEDDING_PROVIDER or "").strip().lower()
     reranker_provider = str(settings.RERANKER_PROVIDER or "").strip().lower()
+
+    # 候选人侧的唯一降级信号。原先 `degraded` 只活在管理员的 PromptTrace 页面里，
+    # 于是"AI 其实降级了"这件事对真正在读结果的人是静默的——整套诚实性工作只有管理员看得见。
+    # 判据是"最近 30 分钟内有没有一发降级"，不是"历史上有过"：有过一次不代表现在还在降。
+    degraded_since = utc_now_naive() - timedelta(minutes=DEGRADED_WINDOW_MINUTES)
+    ai_degraded_recent = (
+        db.query(PromptTrace.id).filter(PromptTrace.degraded == 1, PromptTrace.created_at >= degraded_since).first()
+        is not None
+    )
 
     model_runtime = _model_runtime_status()
     status = {
@@ -215,6 +232,8 @@ async def get_system_status(_current_user: User = Depends(get_current_user)):
             ),
             "knowledge_seed_ready": True,
             "queue_health": get_queue_health(),
+            "ai_degraded_recent": ai_degraded_recent,
+            "ai_degraded_window_minutes": DEGRADED_WINDOW_MINUTES,
         },
     }
     return ok(status)

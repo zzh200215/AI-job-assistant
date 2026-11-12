@@ -12,6 +12,11 @@
         <el-button size="small" @click="seedDemoData" :loading="seeding">
           <el-icon><Promotion /></el-icon> 导入示例岗位
         </el-button>
+        <!-- 目标岗位输入原先是一条零入口的路由（/jd/input，只能手敲 URL）。
+             它和这一页是同一个动作的两半——"搜一个岗位"与"贴一个岗位"——所以入口放在这里。 -->
+        <el-button size="small" @click="goJdInput">
+          <el-icon><DocumentAdd /></el-icon> 粘贴 JD
+        </el-button>
       </template>
     </PageHeader>
 
@@ -494,7 +499,7 @@ import { userErrorCopy } from '@/utils/requestTracing'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from '@/plugins/element-services'
-import { ArrowRight, Promotion, RefreshRight, Search } from '@element-plus/icons-vue'
+import { ArrowRight, DocumentAdd, Promotion, RefreshRight, Search } from '@element-plus/icons-vue'
 import { getResume, getResumeList } from '@/api/resume'
 import { explainMatch } from '@/api/analysis'
 import { queryRewriteTest } from '@/api/knowledge'
@@ -830,6 +835,11 @@ async function refreshActiveTab() {
   }
 }
 
+/** 目标岗位输入与这一页是同一个动作的两半，所以入口放在这一页的页头。 */
+function goJdInput() {
+  router.push('/jd/input')
+}
+
 async function seedDemoData() {
   seeding.value = true
   try {
@@ -952,8 +962,11 @@ async function explainCurrentJob() {
       resume_id: selectedResumeId.value,
       jd_id: detailJob.value.id,
     })
-  } catch {
+  } catch (e) {
+    // 原先这里只把 explainResult 置空：抽屉里那块面板空着，读起来像"这个岗位没有解释"，
+    // 而实际是这一次请求失败了。
     explainResult.value = null
+    ElMessage.error(userErrorCopy(e, '解释生成失败，请稍后重试'))
   } finally {
     explainLoading.value = false
   }

@@ -118,12 +118,6 @@ export const routes = [
         component: () => import('@/features/legal/views/Privacy.vue'),
         meta: { title: '隐私与数据', roles: CANDIDATE },
       },
-      {
-        path: 'subscription',
-        name: 'subscription',
-        component: () => import('@/features/billing/views/Subscription.vue'),
-        meta: { title: '订阅方案', roles: CANDIDATE },
-      },
 
       // ===== C 端次要页面（通过核心页面导航可达） =====
       {

@@ -573,7 +573,12 @@ def test_indirect_scan_is_not_vacuous():
     且**这个群体明显小于全部路由**（后者就是"两种形状又混起来了"的探针）。
     """
     _, async_routes = indirect_offenders()
-    assert async_routes >= 20, f"只扫到 {async_routes} 条 async 路由，多半是判据失效了"
+    # 2026-11-12：20 → 19。`GET /system/status` 从 `async def` 改回 `def`——它现在要查一次
+    # `prompt_trace`（给候选人侧那条"AI 降级中"提示用），而 async 路由里做同步 DB 正是本文件
+    # 盯着的东西。改法照 D110 的先例（改 `def`，让它在 anyio 线程池里跑），不是把它挪进
+    # `run_in_threadpool`——一次小查询不值得多一层 handoff。所以 async 路由群体少了一条，
+    # 阈值跟着降一格；这不是把尺子放松，是"同一把尺子量同一批路由"的读数变了。
+    assert async_routes >= 19, f"只扫到 {async_routes} 条 async 路由，多半是判据失效了"
     funcs, _imports = _build_graph(APP_ROOT)
     all_routes = sum(1 for fn in funcs.values() if fn.is_route)
     assert all_routes > async_routes * 3, (

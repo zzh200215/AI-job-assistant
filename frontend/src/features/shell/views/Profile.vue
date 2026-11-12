@@ -48,6 +48,11 @@
         <div v-if="statsLoading" class="empty-inline">
           <el-icon class="is-loading"><Loading /></el-icon> 加载中...
         </div>
+        <!-- 失败原先只弹一个会消失的 toast，页面上是一排 0 分卡片——读起来像"你的数据是空的"。 -->
+        <div v-else-if="statsError" class="app-inline-error">
+          <span>{{ statsError }}</span>
+          <el-button size="small" text type="primary" @click="loadUserStats">重新加载</el-button>
+        </div>
         <div v-else class="stats-dashboard">
           <div class="stats-grid">
             <div class="stat-card-v">
@@ -301,6 +306,7 @@ import {
 } from '@element-plus/icons-vue'
 import { dateTime } from '@/utils/format/date'
 import { passwordProblem } from '@/utils/passwordRules'
+import { userErrorCopy } from '@/utils/requestTracing'
 import { INTERVIEW_SCORE_BANDS, isTopTier } from '@/utils/scoreTone'
 
 const authStore = useAuthStore()
@@ -497,6 +503,7 @@ function daysSinceRegistration(createdAt) {
 
 // 用户统计数据
 const statsLoading = ref(false)
+const statsError = ref('')
 const userStats = ref({
   total_applications: 0,
   total_interviews: 0,
@@ -511,6 +518,7 @@ const userStats = ref({
 
 async function loadUserStats() {
   statsLoading.value = true
+  statsError.value = ''
   try {
     const data = await getDashboardOverview()
     const funnel = data?.funnel || {}
@@ -554,8 +562,9 @@ async function loadUserStats() {
     } catch {
       // 读不到面试表现就不解锁这颗成就：那是"不知道"的形状，不该顺手把已知的统计也丢掉。
     }
-  } catch {
-    // 统计信息不可用时保留默认计数。
+  } catch (e) {
+    // 原先这里是空 catch：失败时页面把默认值画成一排 0 分卡片，读起来像"你的数据是空的"。
+    statsError.value = userErrorCopy(e, '统计数据加载失败，请稍后重试')
   } finally {
     statsLoading.value = false
   }

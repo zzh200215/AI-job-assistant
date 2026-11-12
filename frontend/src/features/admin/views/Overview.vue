@@ -14,7 +14,14 @@
       </div>
     </section>
 
-    <section class="metrics-grid">
+    <!-- 指标卡的数据没取到时不能照常画：四张卡会变成"注册 0 / 付费 0"，比空着更像真数据 -->
+    <AppLoadError
+      v-if="analyticsError"
+      title="运营指标加载失败"
+      :message="analyticsError"
+      @retry="loadAnalytics"
+    />
+    <section v-else class="metrics-grid">
       <article v-for="item in metricCards" :key="item.label" class="metric-card" :class="item.tone">
         <div class="metric-icon">
           <el-icon><component :is="item.icon" /></el-icon>
@@ -35,21 +42,29 @@
             </div>
           </div>
         </template>
-        <div class="funnel-list">
-          <div v-for="s in funnelSteps" :key="s.key" class="funnel-row">
-            <span class="funnel-label">{{ s.label }}</span>
-            <div class="funnel-track">
-              <span :style="{ width: s.width }" />
-            </div>
-            <b>{{ s.count }}</b>
-            <em>{{ s.rate }}%</em>
-          </div>
-        </div>
-        <el-empty
-          v-if="!funnelSteps.length && !loading"
-          description="暂无漏斗数据"
-          :image-size="72"
+        <AppLoadError
+          v-if="analyticsError"
+          title="转化漏斗加载失败"
+          :message="analyticsError"
+          @retry="loadAnalytics"
         />
+        <template v-else>
+          <div class="funnel-list">
+            <div v-for="s in funnelSteps" :key="s.key" class="funnel-row">
+              <span class="funnel-label">{{ s.label }}</span>
+              <div class="funnel-track">
+                <span :style="{ width: s.width }" />
+              </div>
+              <b>{{ s.count }}</b>
+              <em>{{ s.rate }}%</em>
+            </div>
+          </div>
+          <el-empty
+            v-if="!funnelSteps.length && !loading"
+            description="暂无漏斗数据"
+            :image-size="72"
+          />
+        </template>
       </el-card>
 
       <el-card shadow="never" class="panel action-panel">
@@ -62,16 +77,24 @@
             <el-button text @click="router.push('/admin/orders')">查看订单</el-button>
           </div>
         </template>
-        <div class="status-list">
-          <div v-for="item in orderBreakdown" :key="item.label" class="status-row">
-            <span class="status-label"><i :class="item.tone" />{{ item.label }}</span>
-            <div class="status-track">
-              <span :class="item.tone" :style="{ width: item.width }" />
+        <AppLoadError
+          v-if="ordersError"
+          title="订单状态加载失败"
+          :message="ordersError"
+          @retry="loadOrders"
+        />
+        <template v-else>
+          <div class="status-list">
+            <div v-for="item in orderBreakdown" :key="item.label" class="status-row">
+              <span class="status-label"><i :class="item.tone" />{{ item.label }}</span>
+              <div class="status-track">
+                <span :class="item.tone" :style="{ width: item.width }" />
+              </div>
+              <b>{{ item.value }}</b>
             </div>
-            <b>{{ item.value }}</b>
           </div>
-        </div>
-        <el-empty v-if="!orders.length && !loading" description="暂无订单数据" :image-size="72" />
+          <el-empty v-if="!orders.length && !loading" description="暂无订单数据" :image-size="72" />
+        </template>
       </el-card>
     </section>
 
@@ -85,7 +108,18 @@
           <el-button type="primary" plain @click="router.push('/admin/orders')">管理订单</el-button>
         </div>
       </template>
-      <el-table v-if="orders.length" :data="orders.slice(0, 6)" size="small" style="width: 100%">
+      <AppLoadError
+        v-if="ordersError"
+        title="最新订单加载失败"
+        :message="ordersError"
+        @retry="loadOrders"
+      />
+      <el-table
+        v-else-if="orders.length"
+        :data="orders.slice(0, 6)"
+        size="small"
+        style="width: 100%"
+      >
         <el-table-column prop="id" label="订单号" width="88"
           ><template #default="{ row }">#{{ row.id }}</template></el-table-column
         >
@@ -117,12 +151,18 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { CreditCard, Refresh, Tickets, User, UserFilled } from '@element-plus/icons-vue'
+import AppLoadError from '@/components/ui/AppLoadError.vue'
 import { getAnalyticsSummary, getAdminRevenue, getAnalyticsFunnel } from '@/api/analytics'
 import { getAdminOrders } from '@/api/subscription'
 import { dateTime } from '@/utils/format/date'
+import { userErrorCopy } from '@/utils/requestTracing'
 
 const router = useRouter()
 const loading = ref(false)
+/* 两个数据源各留一个错误位：概览指标（指标卡 + 漏斗）和订单来自两个接口，
+   共用一个布尔位会让"订单挂了"把漏斗一起判死，重试按钮也说不清该重调哪个加载函数。 */
+const analyticsError = ref('')
+const ordersError = ref('')
 const summary = ref(/** @type {import('@/api/analytics').AnalyticsSummaryPayload} */ ({}))
 const revenue = ref(/** @type {import('@/api/analytics').AnalyticsRevenuePayload} */ ({}))
 const funnel = ref(/** @type {import('@/api/analytics').AnalyticsFunnelPayload} */ ({}))
@@ -214,10 +254,16 @@ async function loadAnalytics() {
     summary.value = summaryRes || {}
     revenue.value = revenueRes || {}
     funnel.value = funnelRes || {}
-  } catch {
+    // 成功一次就把横幅撤掉，否则重试成功后那条"加载失败"会一直挂在页面上
+    analyticsError.value = ''
+  } catch (e) {
+    /* 失败时把旧值清掉：错误面只负责"这一次失败了"，不能让上一次的数字留在下面被当成这一次的结果。
+       上屏那句只认 userErrorCopy——axios 自带的是英文技术串（Network Error / status code 500），
+       用户读不懂，也不该由视图翻译。 */
     summary.value = {}
     revenue.value = {}
     funnel.value = {}
+    analyticsError.value = userErrorCopy(e, '暂时取不到运营数据，请稍后重试')
   } finally {
     loading.value = false
   }
@@ -228,8 +274,12 @@ async function loadOrders() {
     const res = await getAdminOrders({ page: 1, page_size: 100 }, { notifyError: false })
     const data = res?.data || res || {}
     orders.value = data.items || []
-  } catch {
+    ordersError.value = ''
+  } catch (e) {
+    /* 这里原来是 `catch { orders.value = [] }`：GET 失败不弹提示，页面于是画出"暂无订单数据"，
+       把服务端的 500 说成"你今天没有订单"。失败必须留下自己的状态位，由模板画出错误面。 */
     orders.value = []
+    ordersError.value = userErrorCopy(e, '暂时取不到订单数据，请稍后重试')
   }
 }
 

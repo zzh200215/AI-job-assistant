@@ -101,6 +101,13 @@
     </section>
 
     <!-- Agent Pipeline Progress -->
+    <section v-if="runError && !loading" class="panel">
+      <div class="panel-body app-inline-error">
+        <span>{{ runError }}</span>
+        <el-button size="small" text type="primary" @click="onStartAnalysis"> 重新分析 </el-button>
+      </div>
+    </section>
+
     <section v-if="loading && agentSteps.length" class="panel">
       <div class="panel-header">
         <div class="panel-title-row">
@@ -400,6 +407,8 @@ const router = useRouter()
 const route = useRoute()
 
 const loading = ref(false)
+/* 分析这一发的失败面。原先只有 ElMessage：toast 一消失，屏幕上什么都不剩。 */
+const runError = ref('')
 const resumeInfo = ref(null)
 const jdInfo = ref(null)
 const result = ref(null)
@@ -623,6 +632,7 @@ const onStartAnalysis = async () => {
   taskOutcome.value = 'idle'
   result.value = null
   agentSteps.value = []
+  runError.value = ''
   /* 三条链一起作废，而不是只把值清掉：上一轮的响应可能还在飞，只清值等于让它待会儿
      把旧简历/旧 JD 的结果写在新一轮的屏幕上。 */
   clearExplain()
@@ -636,7 +646,8 @@ const onStartAnalysis = async () => {
     })
     const taskId = startRes?.task_id
     if (!taskId) {
-      ElMessage.error('启动求职分析失败')
+      runError.value = '启动求职分析失败，请稍后重试'
+      ElMessage.error(runError.value)
       return
     }
     await pollAgentTask(taskId, {
@@ -648,7 +659,8 @@ const onStartAnalysis = async () => {
         taskOutcome.value = taskData?.status || 'completed'
         const recordId = taskData?.analysis_record_id
         if (!recordId) {
-          ElMessage.error('任务完成但未生成分析记录')
+          runError.value = '任务已经完成，但没有生成分析记录'
+          ElMessage.error(runError.value)
           return
         }
         const data = await getAnalysis(recordId)
@@ -661,19 +673,25 @@ const onStartAnalysis = async () => {
       },
       onFailed(error) {
         taskOutcome.value = 'failed'
-        ElMessage.error(`求职分析失败: ${userErrorCopy(error, '未知错误')}`)
+        // 失败要留在页面上，不能只留一个 5 秒后消失的 toast：这一发通常要跑几十秒，
+        // 人回头看到的"什么都没发生"会被读成按钮没生效。
+        runError.value = `求职分析失败：${userErrorCopy(error, '未知错误')}`
+        ElMessage.error(runError.value)
       },
       onCancelled(error) {
         taskOutcome.value = 'cancelled'
-        ElMessage.warning(userErrorCopy(error, '分析任务已取消'))
+        runError.value = userErrorCopy(error, '分析任务已取消')
+        ElMessage.warning(runError.value)
       },
       onTimeout() {
         taskOutcome.value = 'timeout'
-        ElMessage.warning('分析超时，请稍后查看历史记录')
+        runError.value = '分析超时，可以稍后到分析历史里查看结果'
+        ElMessage.warning(runError.value)
       },
     })
-  } catch {
-    /* request.js 已提示 */
+  } catch (e) {
+    runError.value = userErrorCopy(e, '分析请求失败，请稍后重试')
+    /* request.js 已提示过网络层，这里只补一条留在页面上的。 */
   } finally {
     loading.value = false
   }

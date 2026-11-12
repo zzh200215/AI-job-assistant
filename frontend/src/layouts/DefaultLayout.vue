@@ -86,7 +86,7 @@
                   <el-dropdown-item command="profile">个人中心</el-dropdown-item>
                   <el-dropdown-item command="tasks">任务记录</el-dropdown-item>
                   <el-dropdown-item command="history">分析历史</el-dropdown-item>
-                  <el-dropdown-item command="subscription">订阅方案</el-dropdown-item>
+                  <el-dropdown-item command="privacy">隐私与数据</el-dropdown-item>
                   <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -96,6 +96,7 @@
       </el-header>
 
       <el-main class="main-shell">
+        <RuntimeBanners />
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
             <component :is="Component" />
@@ -109,7 +110,9 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import RuntimeBanners from '@/components/ui/RuntimeBanners.vue'
 import {
+  Aim,
   ArrowDown,
   Clock,
   Coin,
@@ -154,6 +157,14 @@ const candidateNavItems = [
     matches: ['/jobs/recommend', '/jobs/search'],
   },
   {
+    /* 四个"零入口"页面里的两个。求职目标是推荐的输入、薪资洞察是职业规划的参照，
+       也就是说它们是主链的**上游**，而原先只能靠手敲 URL 才到得了。 */
+    path: '/targets',
+    icon: Aim,
+    label: '求职目标',
+    matches: ['/targets'],
+  },
+  {
     path: '/interview/setup',
     icon: Microphone,
     label: 'AI 模拟面试',
@@ -172,10 +183,16 @@ const candidateNavItems = [
     matches: ['/career-planning'],
   },
   {
+    path: '/salary',
+    icon: Coin,
+    label: '薪资洞察',
+    matches: ['/salary'],
+  },
+  {
     path: '/profile',
     icon: List,
     label: '个人中心',
-    matches: ['/profile', '/subscription'],
+    matches: ['/profile'],
   },
 ]
 
@@ -249,8 +266,8 @@ function handleCommand(cmd) {
     router.push('/history')
     return
   }
-  if (cmd === 'subscription') {
-    router.push('/subscription')
+  if (cmd === 'privacy') {
+    router.push('/privacy')
     return
   }
   if (cmd !== 'logout') return

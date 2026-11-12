@@ -112,9 +112,6 @@ const BUDGET = {
     'src/features/eval/views/RecommendationEval.vue': 11,
     'src/features/auth/views/NotFound.vue': 5,
     'src/features/eval/views/RecommendationConfig.vue': 5,
-    /* D109：订阅页摘掉企业版块（那块自带两条渐变字面量）与对比表的 ✗ 图标（一条灰色），
-       5 → 2。剩的是 `#d1d5db` 之外仍在用的那两处。 */
-    'src/features/billing/views/Subscription.vue': 2,
     'src/features/knowledge/views/KnowledgeBase.vue': 4,
     'src/features/shell/views/WeeklyReport.vue': 4,
     'src/features/shell/views/TaskCenter.vue': 3,
@@ -225,6 +222,8 @@ const BUDGET = {
   /* 失败被清成空态的存量（见 silentCatchCounts）。D5 把候选人侧 8 处接到了
      components/ui/AppLoadError；剩下的每一条都是明知故留，理由写在行内：
      - admin/*：企业侧已冻结（见 docs/archive/upgrade-plan.md 的范围决定），不再投入；
+       2026-11-12 有一处例外：概览页的 `loadOrders` 按需求改成写 `ordersError` + AppLoadError
+       错误面，于是本表已无 admin 条目；冻结口径仍然管着其余 admin 页。
      - ResumeUpload 的 loadVersionCount 失败时把 `_versionCount` 设为 null（=不知道），
        卡片因此不显示数字，也不再显示"0 个版本"——它没有作出假断言，只是少了一个按钮。
      - admin/Tenants 的 loadDomains：`notifyError: false` 且 `catch { domains[tid] = [] }`，
@@ -233,11 +232,16 @@ const BUDGET = {
        窗口，它才现形（代码没变，是尺子的视野变了）。企业侧冻结，所以进预算不修。
      - JobSearch 的 explainCurrentJob 是 **POST**：`request.js` 对非 GET 会弹提示，所以它不属于
        "失败演成没有数据"，只是解读块不出来时要用户自己再点一次"投递解读"。判据按形状数、不看
-       动词，所以它留在账上；D15 把窗口收到函数作用域后新暴露的三处里，两处 GET 已经修掉了。 */
+       动词，所以它曾留在账上；D15 把窗口收到函数作用域后新暴露的三处里，两处 GET 已经修掉了。
+       现在这一处也补上了 `ElMessage.error(userErrorCopy(...))`，条目随之退出本表。 */
   silentEmptyCatches: {
     /* 2026-10-06 真删企业侧（D132）：loadTenants 那个 `catch { tenants.value = [] }` 随函数一起没了，2 → 1。 */
-    'src/features/admin/views/Overview.vue': 1,
-    'src/features/jobs/views/JobSearch.vue': 1,
+    /* admin/Overview 的 1 条已清零并退出本表：`loadOrders` 原来的 `catch { orders.value = [] }`
+       把 GET 失败画成"暂无订单数据"，现在改写成 `ordersError` 并由 AppLoadError 画错误面，
+       概览页不再有一个把失败说成空态的 catch。所以 admin/* 里已没有这一族的存量。 */
+    /* 这一条是有意留的：`loadVersions` 里 `_versionCount = null` 表示"数不出来"，
+       卡片上因此**不显示数字**（而不是显示 0 个版本）——那是失败与空态的正确区分。
+       同文件原先那个把岗位下拉画成"你没有岗位"的 catch 已改成内联错误面。 */
     'src/features/resume/views/ResumeUpload.vue': 1,
   },
   themeCompatWildcards: 27,
@@ -252,7 +256,9 @@ const BUDGET = {
   /* 2026-10-06 真删企业侧（§10.2，D132）：`OrganizationWorkspace.vue` 整文件出树，19 → 18。
      同批把 `handRolledPanelHeaders` 14 → 11、`STANDALONE_PANEL_HEADERS` 9 → 6（那 3 处随视图一起没了）、
      `statusTagEntries` 与 `silentEmptyCatches` 里 Tenants/OrganizationWorkspace 两个键直接删掉。 */
-  pageShellRedeclarations: 18,
+  /* 2026-11-12：`billing/Subscription.vue` 整文件出树（订阅入口摘除），它自己那份 `.page-shell`
+     随之消失，18 → 17。 */
+  pageShellRedeclarations: 17,
   /* `viewsBypassingApiLayer` 这个键在 §10.22 落地后**删掉了**：那一维以前复用 `viewSources`
      （被 `JS_OUT_OF_SCOPE_ROOTS` 豁免了 `src/stores`），所以它的 `0` 只说得出"视图没绕过"。
      现在那条守卫自带文件集、判据是硬零，不需要一个预算数字在旁边。 */
@@ -1060,6 +1066,10 @@ describe('style debt ratchet', () => {
       'src/components/ui/EmptyState.vue',
       'src/components/ui/PageHeader.vue',
       'src/components/ui/ReturnToBanner.vue',
+      // 布局层的全局运行态提示条：只在 DefaultLayout 里挂一次，读的是 /system/status 的两个布尔位，
+      // 没有列表、没有空态、也不画请求失败面（探测失败就静默），与 ReturnToBanner 同属布局层，
+      // 所以不进各视图的预算扫描。
+      'src/components/ui/RuntimeBanners.vue',
       'src/components/ui/ScoreRing.vue',
     ]
     const scanned = viewSources.map(({ rel }) => rel)

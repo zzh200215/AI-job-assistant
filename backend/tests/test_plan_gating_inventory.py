@@ -11,15 +11,9 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
-import pytest
-
 API_DIR = Path(__file__).resolve().parents[1] / "app" / "api"
-FRONTEND_PAGE = (
-    Path(__file__).resolve().parents[2] / "frontend" / "src" / "features" / "billing" / "views" / "Subscription.vue"
-)
 
 # 唯一真门（resume.py 的简历数量）+ 通用查询端点（subscription.py）
 QUOTA_CALLER_ALLOWLIST = {"resume.py", "subscription.py"}
@@ -60,21 +54,9 @@ def test_resume_is_the_only_gated_resource():
         assert f'"{resource}"' not in routed, f"{resource} 现在被某个路由判了；订阅页的「各套餐一致」措辞要重判"
 
 
-@pytest.mark.parametrize("marker", ["ENFORCED_PLAN_KEYS", "各套餐一致"])
-def test_frontend_still_carries_the_enforcement_list(marker):
-    """反向证据的一半：前端若把名单或那句正面陈述删掉，这里必须红，而不是安静地放行。"""
-    page = FRONTEND_PAGE.read_text(encoding="utf-8")
-    assert marker in page, f"前端 Subscription.vue 里找不到 {marker}：权益表的诚实性没人管了"
-
-
-def test_the_enforcement_list_holds_only_the_resume_key():
-    page = FRONTEND_PAGE.read_text(encoding="utf-8")
-    start = page.index("const ENFORCED_PLAN_KEYS")
-    chunk = page[start : start + 200]
-    open_at = chunk.index("new Set([") + len("new Set([")
-    body = chunk[open_at : chunk.index("])")]
-    # 只取引号里的成员，不比较整行文本：prettier 改引号或换行不该让这条红（D107 刚为这事红过一次）
-    keys = set(re.findall(r"""['"]([^'"]+)['"]""", body))
-    assert keys == {
-        "resume_limit"
-    }, f"前端名单不再是「只有简历数量」这一项：{sorted(keys)}——后端加了门就要同步改权益表措辞"
+# 2026-11-12：原先这里还有三条"前端必须带着这份名单"的腿，它们读的是
+# `frontend/src/features/billing/views/Subscription.vue` 里的 `ENFORCED_PLAN_KEYS` 与那句「各套餐一致」。
+# 那一页已整族删除（定价页没有购买入口、也不显示当前套餐，留着只会让人问"点了买不了"），
+# 于是**屏幕上不再有任何关于套餐权益的陈述**——没有陈述，也就没有"说假话"的对象。
+# 所以这三条随页面一起退场，而不是被改松：留下来只会变成"必须维护一个没人读的常量"。
+# 仍然有效的是上面两条：真门只有 resume.py 的 resume_count，其余四个资源在服务端没人判。

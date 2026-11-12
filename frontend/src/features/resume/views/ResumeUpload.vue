@@ -401,6 +401,14 @@
           :value="jd.id"
         />
       </el-select>
+      <!-- 失败原先只进 console.warn：下拉框空着，看起来像"你库里没有岗位"。
+           现在说清是读不到，并且能重试。 -->
+      <p v-if="optimizeJdError" class="optimize-jd-error">
+        <span>{{ optimizeJdError }}</span>
+        <el-button size="small" text type="primary" @click="loadOptimizeJdOptions">
+          重试
+        </el-button>
+      </p>
       <template #footer>
         <el-button @click="showOptimize = false">取消</el-button>
         <el-button type="primary" :loading="optimizeSubmitting" @click="confirmOptimize">
@@ -802,6 +810,7 @@ const optimizeResumeRow = ref(null)
 const optimizeJdId = ref(null)
 const optimizeJdOptions = ref([])
 const optimizeJdLoading = ref(false)
+const optimizeJdError = ref('')
 const optimizeSubmitting = ref(false)
 const currentParsed = ref(null)
 const parsedResumeId = ref(null)
@@ -1364,12 +1373,13 @@ function jdLabel(jd) {
 
 async function loadOptimizeJdOptions() {
   optimizeJdLoading.value = true
+  optimizeJdError.value = ''
   try {
     const data = await getJDList({ page: 1, page_size: 100 })
     optimizeJdOptions.value = data?.items || []
   } catch (error) {
     optimizeJdOptions.value = []
-    console.warn('读取岗位列表失败', error)
+    optimizeJdError.value = userErrorCopy(error, '暂时读不到你的岗位列表')
   } finally {
     optimizeJdLoading.value = false
   }
@@ -2168,6 +2178,15 @@ async function showDiagnosisDialog(r) {
 
 .optimize-select {
   width: 100%;
+}
+
+.optimize-jd-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--app-danger);
 }
 
 /* Diagnosis dialog */

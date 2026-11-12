@@ -10,80 +10,92 @@
         ><el-icon><Refresh /></el-icon>刷新</el-button
       >
     </section>
-    <section class="summary-grid">
-      <div>
-        <span>当前页订单</span><strong>{{ orders.length }}</strong>
-      </div>
-      <div>
-        <span>已支付</span><strong class="is-green">{{ paidCount }}</strong>
-      </div>
-      <div>
-        <span>待支付</span><strong class="is-amber">{{ pendingCount }}</strong>
-      </div>
-      <div>
-        <span>当前页已收款</span><strong>{{ formatMoney(paidRevenue) }}</strong>
-      </div>
-    </section>
-    <el-card shadow="never" class="panel">
-      <div class="toolbar">
-        <el-input
-          v-model="keyword"
-          class="search-input"
-          placeholder="搜索订单号、用户 ID 或交易号"
-          clearable
-          :prefix-icon="Search"
-        /><el-select v-model="statusFilter" class="status-select"
-          ><el-option label="全部状态" value="all" /><el-option
-            label="已支付"
-            value="paid" /><el-option label="待支付" value="pending" /><el-option
-            label="已取消"
-            value="cancelled" /></el-select
-        ><span class="result-count">显示 {{ filteredOrders.length }} / {{ orders.length }} 条</span>
-      </div>
-      <el-table
-        v-loading="loading"
-        :data="filteredOrders"
-        size="small"
-        style="width: 100%"
-        empty-text="未找到匹配的订单"
-        ><el-table-column label="订单" min-width="100"
-          ><template #default="{ row }"
-            ><strong class="order-id">#{{ row.id }}</strong></template
-          ></el-table-column
-        ><el-table-column label="用户" width="100"
-          ><template #default="{ row }">用户 {{ row.user_id }}</template></el-table-column
-        ><el-table-column label="套餐" width="110"
-          ><template #default="{ row }">{{ planLabel(row.plan_tier) }}</template></el-table-column
-        ><el-table-column label="金额" width="110"
-          ><template #default="{ row }">{{ formatMoney(row.amount) }}</template></el-table-column
-        ><el-table-column label="状态" width="110"
-          ><template #default="{ row }"
-            ><el-tag :type="statusType(row.status)" size="small">{{
-              statusLabel(row.status)
-            }}</el-tag></template
-          ></el-table-column
-        ><el-table-column label="创建时间" min-width="170"
-          ><template #default="{ row }">{{
-            dateTime(row.created_at, '-')
-          }}</template></el-table-column
-        ><el-table-column label="操作" width="84" fixed="right"
-          ><template #default="{ row }"
-            ><el-button text type="primary" @click="openDetail(row)">详情</el-button></template
-          ></el-table-column
-        ></el-table
-      >
-      <div class="table-footer">
-        <span>每页 {{ pageSize }} 条</span
-        ><el-pagination
-          v-if="total > pageSize"
-          v-model:current-page="page"
-          :page-size="pageSize"
-          :total="total"
-          layout="prev, pager, next"
-          @current-change="loadOrders"
-        />
-      </div>
-    </el-card>
+    <!-- 失败与"没有数据"是两件事：错误面不能数出条数，摘要与表格整块让开，免得露出一排 0 -->
+    <AppLoadError
+      v-if="loadError"
+      title="订单列表加载失败"
+      :message="loadError"
+      @retry="loadOrders"
+    />
+    <template v-else>
+      <section class="summary-grid">
+        <div>
+          <span>当前页订单</span><strong>{{ orders.length }}</strong>
+        </div>
+        <div>
+          <span>已支付</span><strong class="is-green">{{ paidCount }}</strong>
+        </div>
+        <div>
+          <span>待支付</span><strong class="is-amber">{{ pendingCount }}</strong>
+        </div>
+        <div>
+          <span>当前页已收款</span><strong>{{ formatMoney(paidRevenue) }}</strong>
+        </div>
+      </section>
+      <el-card shadow="never" class="panel">
+        <div class="toolbar">
+          <el-input
+            v-model="keyword"
+            class="search-input"
+            placeholder="搜索订单号、用户 ID 或交易号"
+            clearable
+            :prefix-icon="Search"
+          /><el-select v-model="statusFilter" class="status-select"
+            ><el-option label="全部状态" value="all" /><el-option
+              label="已支付"
+              value="paid" /><el-option label="待支付" value="pending" /><el-option
+              label="已取消"
+              value="cancelled" /></el-select
+          ><span class="result-count"
+            >显示 {{ filteredOrders.length }} / {{ orders.length }} 条</span
+          >
+        </div>
+        <el-table
+          v-loading="loading"
+          :data="filteredOrders"
+          size="small"
+          style="width: 100%"
+          empty-text="未找到匹配的订单"
+          ><el-table-column label="订单" min-width="100"
+            ><template #default="{ row }"
+              ><strong class="order-id">#{{ row.id }}</strong></template
+            ></el-table-column
+          ><el-table-column label="用户" width="100"
+            ><template #default="{ row }">用户 {{ row.user_id }}</template></el-table-column
+          ><el-table-column label="套餐" width="110"
+            ><template #default="{ row }">{{ planLabel(row.plan_tier) }}</template></el-table-column
+          ><el-table-column label="金额" width="110"
+            ><template #default="{ row }">{{ formatMoney(row.amount) }}</template></el-table-column
+          ><el-table-column label="状态" width="110"
+            ><template #default="{ row }"
+              ><el-tag :type="statusType(row.status)" size="small">{{
+                statusLabel(row.status)
+              }}</el-tag></template
+            ></el-table-column
+          ><el-table-column label="创建时间" min-width="170"
+            ><template #default="{ row }">{{
+              dateTime(row.created_at, '-')
+            }}</template></el-table-column
+          ><el-table-column label="操作" width="84" fixed="right"
+            ><template #default="{ row }"
+              ><el-button text type="primary" @click="openDetail(row)">详情</el-button></template
+            ></el-table-column
+          ></el-table
+        >
+        <div class="table-footer">
+          <span>每页 {{ pageSize }} 条</span
+          ><el-pagination
+            v-if="total > pageSize"
+            v-model:current-page="page"
+            :page-size="pageSize"
+            :total="total"
+            layout="prev, pager, next"
+            @current-change="loadOrders"
+          />
+        </div>
+      </el-card>
+    </template>
+
     <el-drawer v-model="drawerVisible" title="订单详情" size="420px"
       ><template v-if="selectedOrder"
         ><div class="drawer-order">
@@ -121,14 +133,17 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
-import { ElMessage } from '@/plugins/element-services'
+import AppLoadError from '@/components/ui/AppLoadError.vue'
 import { getAdminOrders } from '@/api/subscription'
 import { dateTime } from '@/utils/format/date'
+import { userErrorCopy } from '@/utils/requestTracing'
 
 const orders = ref([])
 const total = ref(0)
 const page = ref(1)
 const loading = ref(false)
+// 拉列表失败的原因。空串 = 没失败；模板用它决定画错误面还是画表格。
+const loadError = ref('')
 const keyword = ref('')
 const statusFilter = ref('all')
 const selectedOrder = ref(null)
@@ -182,8 +197,12 @@ async function loadOrders() {
     const data = res?.data || res || {}
     orders.value = data.items || []
     total.value = data.total || 0
-  } catch {
-    ElMessage.error('订单列表加载失败')
+    // 重试成功后必须把错误位清掉，否则表格回来了、红条还挂着
+    loadError.value = ''
+  } catch (e) {
+    /* 以前这里只弹一条 ElMessage：提示一消失，表格就只剩"未找到匹配的订单"，
+       一次 500 于是被读成"你没有订单"。错误位比 toast 活得久，由模板画出带重试的错误面。 */
+    loadError.value = userErrorCopy(e, '暂时取不到订单数据，请稍后重试')
   } finally {
     loading.value = false
   }

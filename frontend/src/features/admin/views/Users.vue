@@ -4,91 +4,106 @@
       <div>
         <p class="section-kicker">账户运营</p>
         <h2>用户管理</h2>
-        <p class="page-header-sub">{{ total }} 个账户，支持按当前加载数据搜索和筛选。</p>
+        <p class="page-header-sub">
+          {{
+            loadError
+              ? '账户数据暂时取不到，可重试后再看。'
+              : `${total} 个账户，支持按当前加载数据搜索和筛选。`
+          }}
+        </p>
       </div>
       <el-button :loading="loading" @click="loadUsers"
         ><el-icon><Refresh /></el-icon>刷新</el-button
       >
     </section>
 
-    <section class="summary-grid">
-      <div>
-        <span>当前页用户</span><strong>{{ users.length }}</strong>
-      </div>
-      <div>
-        <span>管理员</span><strong>{{ adminCount }}</strong>
-      </div>
-      <div>
-        <span>近 7 天注册</span><strong>{{ recentCount }}</strong>
-      </div>
-    </section>
+    <!-- 失败与"没有数据"是两件事：这条横幅必须在，摘要与表格则整块不画，免得露出一排 0 -->
+    <AppLoadError
+      v-if="loadError"
+      title="用户列表加载失败"
+      :message="loadError"
+      @retry="loadUsers"
+    />
+    <template v-else>
+      <section class="summary-grid">
+        <div>
+          <span>当前页用户</span><strong>{{ users.length }}</strong>
+        </div>
+        <div>
+          <span>管理员</span><strong>{{ adminCount }}</strong>
+        </div>
+        <div>
+          <span>近 7 天注册</span><strong>{{ recentCount }}</strong>
+        </div>
+      </section>
 
-    <el-card shadow="never" class="panel">
-      <div class="toolbar">
-        <el-input
-          v-model="keyword"
-          class="search-input"
-          placeholder="搜索用户名、邮箱或 ID"
-          clearable
-          :prefix-icon="Search"
-        />
-        <el-select v-model="roleFilter" class="role-select">
-          <el-option label="全部角色" value="all" /><el-option
-            label="管理员"
-            value="admin"
-          /><el-option label="普通用户" value="user" />
-        </el-select>
-        <span class="result-count">显示 {{ filteredUsers.length }} / {{ users.length }} 条</span>
-      </div>
-      <el-table
-        v-loading="loading"
-        :data="filteredUsers"
-        size="small"
-        style="width: 100%"
-        empty-text="未找到匹配的用户"
-      >
-        <el-table-column label="用户" min-width="210">
-          <template #default="{ row }"
-            ><div class="user-cell">
-              <span class="avatar">{{ initials(row.username) }}</span
-              ><span
-                ><strong>{{ row.username || '未命名用户' }}</strong
-                ><small>#{{ row.id }}</small></span
-              >
-            </div></template
+      <el-card shadow="never" class="panel">
+        <div class="toolbar">
+          <el-input
+            v-model="keyword"
+            class="search-input"
+            placeholder="搜索用户名、邮箱或 ID"
+            clearable
+            :prefix-icon="Search"
+          />
+          <el-select v-model="roleFilter" class="role-select">
+            <el-option label="全部角色" value="all" /><el-option
+              label="管理员"
+              value="admin"
+            /><el-option label="普通用户" value="user" />
+          </el-select>
+          <span class="result-count">显示 {{ filteredUsers.length }} / {{ users.length }} 条</span>
+        </div>
+        <el-table
+          v-loading="loading"
+          :data="filteredUsers"
+          size="small"
+          style="width: 100%"
+          empty-text="未找到匹配的用户"
+        >
+          <el-table-column label="用户" min-width="210">
+            <template #default="{ row }"
+              ><div class="user-cell">
+                <span class="avatar">{{ initials(row.username) }}</span
+                ><span
+                  ><strong>{{ row.username || '未命名用户' }}</strong
+                  ><small>#{{ row.id }}</small></span
+                >
+              </div></template
+            >
+          </el-table-column>
+          <el-table-column prop="email" label="邮箱" min-width="220" />
+          <el-table-column label="角色" width="120"
+            ><template #default="{ row }"
+              ><el-tag size="small" :type="row.is_admin ? 'warning' : 'info'">{{
+                row.is_admin ? '管理员' : '普通用户'
+              }}</el-tag></template
+            ></el-table-column
           >
-        </el-table-column>
-        <el-table-column prop="email" label="邮箱" min-width="220" />
-        <el-table-column label="角色" width="120"
-          ><template #default="{ row }"
-            ><el-tag size="small" :type="row.is_admin ? 'warning' : 'info'">{{
-              row.is_admin ? '管理员' : '普通用户'
-            }}</el-tag></template
-          ></el-table-column
-        >
-        <el-table-column label="注册时间" min-width="180"
-          ><template #default="{ row }">{{
-            dateTime(row.created_at, '-')
-          }}</template></el-table-column
-        >
-        <el-table-column label="操作" width="84" fixed="right"
-          ><template #default="{ row }"
-            ><el-button text type="primary" @click="openDetail(row)">详情</el-button></template
-          ></el-table-column
-        >
-      </el-table>
-      <div class="table-footer">
-        <span>每页 {{ pageSize }} 条</span
-        ><el-pagination
-          v-if="total > pageSize"
-          v-model:current-page="page"
-          :page-size="pageSize"
-          :total="total"
-          layout="prev, pager, next"
-          @current-change="loadUsers"
-        />
-      </div>
-    </el-card>
+          <el-table-column label="注册时间" min-width="180"
+            ><template #default="{ row }">{{
+              dateTime(row.created_at, '-')
+            }}</template></el-table-column
+          >
+          <el-table-column label="操作" width="84" fixed="right"
+            ><template #default="{ row }"
+              ><el-button text type="primary" @click="openDetail(row)">详情</el-button></template
+            ></el-table-column
+          >
+        </el-table>
+        <div class="table-footer">
+          <span>每页 {{ pageSize }} 条</span
+          ><el-pagination
+            v-if="total > pageSize"
+            v-model:current-page="page"
+            :page-size="pageSize"
+            :total="total"
+            layout="prev, pager, next"
+            @current-change="loadUsers"
+          />
+        </div>
+      </el-card>
+    </template>
 
     <el-drawer v-model="drawerVisible" title="用户详情" size="420px">
       <template v-if="selectedUser"
@@ -116,14 +131,17 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
-import { ElMessage } from '@/plugins/element-services'
+import AppLoadError from '@/components/ui/AppLoadError.vue'
 import { getAdminUsers } from '@/api/auth'
 import { dateTime } from '@/utils/format/date'
+import { userErrorCopy } from '@/utils/requestTracing'
 
 const users = ref([])
 const total = ref(0)
 const page = ref(1)
 const loading = ref(false)
+// 拉列表失败的原因。空串 = 没失败；它同时是模板里"画错误面还是画表格"的唯一开关。
+const loadError = ref('')
 const keyword = ref('')
 const roleFilter = ref('all')
 const selectedUser = ref(null)
@@ -172,8 +190,12 @@ async function loadUsers() {
     const data = res?.data || res || {}
     users.value = data.items || []
     total.value = data.total || 0
-  } catch {
-    ElMessage.error('用户列表加载失败')
+    // 重试成功后必须把错误位清掉，否则表格回来了、红条还挂着
+    loadError.value = ''
+  } catch (e) {
+    /* 以前这里只弹一条 ElMessage：提示一消失，表格就只剩"未找到匹配的用户"，
+       于是一次 500 被读成"没有这个用户"。错误位比 toast 活得久，由模板画出带重试的错误面。 */
+    loadError.value = userErrorCopy(e, '暂时取不到用户数据，请稍后重试')
   } finally {
     loading.value = false
   }
