@@ -24,6 +24,20 @@
       </template>
     </el-alert>
 
+    <!-- 首次体验：空库进来是六块空态，每一步都要求人先有数据。
+         这里给一条能一次走完主链的路，而不是让人自己去找四五颗按钮——
+         那几颗按钮原先还各自灌不同口径的数据（英文岗位 / 中文岗位）。 -->
+    <section v-if="showFirstRun" class="home-first-run">
+      <div class="home-first-run-copy">
+        <strong>还没有简历，工作台现在是空的</strong>
+        <p>
+          可以先用一份示例简历和几个岗位把整条链路走一遍：诊断 → 匹配 → 投递 → 模拟面试。
+          走完之后换成你自己的简历就行。
+        </p>
+      </div>
+      <el-button type="primary" :loading="seedingDemo" @click="seedDemo">用示例数据体验</el-button>
+    </section>
+
     <section class="ui-stat-strip" aria-label="求职关键指标">
       <div class="ui-stat">
         <span class="ui-stat-label">简历完整度</span>
@@ -380,10 +394,13 @@ import ScoreRing from '@/components/ui/ScoreRing.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSelectionStore } from '@/stores/selection'
 import { getDashboardOverview, getTodayTasks } from '@/api/dashboard'
+import { seedDemoDataset } from '@/api/demo'
 import { getJobRecommendations } from '@/api/jobs'
 import { getKanban } from '@/api/targets'
 import { getResumeList, getResumeQuickScore } from '@/api/resume'
+import { ElMessage } from '@/plugins/element-services'
 import { monthDay } from '@/utils/format/date'
+import { userErrorCopy } from '@/utils/requestTracing'
 import { scoreToneClass } from '@/utils/scoreTone'
 
 const router = useRouter()
@@ -435,6 +452,27 @@ const taskCount = computed(() => tasks.value.high_priority || taskItems.value.le
 const hasResume = computed(
   () => resumeList.value.length > 0 || (summary.value.total_resumes || 0) > 0
 )
+
+/* 首次体验的入口：概览已经落地、没报错、而且确实一份简历都没有，才让它出现。
+   `overviewLoaded` 是判据而不是 `!loading`——概览在途时画一条"你还没有简历"是错的。 */
+const seedingDemo = ref(false)
+const showFirstRun = computed(
+  () => overviewLoaded.value && !overviewError.value && !hasResume.value
+)
+
+async function seedDemo() {
+  if (seedingDemo.value) return
+  seedingDemo.value = true
+  try {
+    const data = await seedDemoDataset()
+    ElMessage.success(data?.message || '演示数据已生成')
+    await loadDashboard()
+  } catch (e) {
+    ElMessage.error(userErrorCopy(e, '生成演示数据失败，请稍后重试'))
+  } finally {
+    seedingDemo.value = false
+  }
+}
 const activeApplications = computed(() => summary.value.active_applications || 0)
 const totalApplications = computed(() => summary.value.total_applications || 0)
 const weeklyNew = computed(() => overview.value.weekly_new || 0)
@@ -658,6 +696,40 @@ onMounted(loadDashboard)
 
 .home-alert {
   margin: 0;
+}
+
+/* 首次体验条：只在新库（一份简历都没有）出现。
+   颜色全走令牌——这一页的色值预算只能降不能升。 */
+.home-first-run {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--app-line);
+  border-left: 3px solid var(--app-primary);
+  border-radius: 12px;
+  background: var(--app-surface-muted);
+}
+
+.home-first-run-copy strong {
+  display: block;
+  font-size: 15px;
+  color: var(--app-text);
+}
+
+.home-first-run-copy p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--app-muted);
+}
+
+@media (max-width: 768px) {
+  .home-first-run {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 .home-grid {

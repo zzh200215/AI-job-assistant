@@ -688,7 +688,7 @@ import { getResumeList } from '@/api/resume'
 import {
   getJobRecommendations,
   getJobFeedbackStats,
-  seedMockJobs,
+  seedDemoJobs,
   batchImportJobs,
   getJobImportTask,
   cancelJobImportTask,
@@ -1008,7 +1008,7 @@ async function loadFeedbackStats() {
 async function seedData() {
   loading.seed = true
   try {
-    const data = await seedMockJobs()
+    const data = await seedDemoJobs()
     ElMessage.success(data?.message || `模拟岗位数据写入成功`)
     if (selectedResumeId.value) {
       await loadRecommendations()

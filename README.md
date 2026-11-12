@@ -443,6 +443,28 @@ python scripts/import_knowledge.py ../docs/knowledge-seeds/career_path --doc-typ
 - 系统状态页将标识当前处于 `demo mode`
 - 岗位数据可通过 `批量导入` 或 `种子数据` 功能快速填充
 
+### demo 账号（一次走完整条主链）
+
+新注册的账号进来是空的：没有简历就没有诊断、没有推荐、看板五列全空。想直接看效果，用这个脚本建好一个带数据的账号：
+
+```bash
+cd backend
+python scripts/create_demo_user.py          # 首次创建并灌数据
+python scripts/create_demo_user.py --force  # 已存在时重置口令并补灌
+```
+
+它会做三件事：建 `demo` 账号 → 填好求职意向 → 写入 **1 份简历 + 5 个中文岗位 + 5 条不同阶段的投递记录**（三步各自幂等，重复跑不灌重复）。
+
+默认口令 **`Demo@12345`**，可用 `DEMO_USER_PASSWORD` 覆盖：
+
+```bash
+DEMO_USER_PASSWORD='YourOwn@Pass1' python scripts/create_demo_user.py --force
+```
+
+> **部署到公网前务必改掉这个口令**，或者干脆不要在那个环境跑这个脚本。
+
+登录之后首页右上角还有一颗 **「用示例数据体验」**，只在一份简历都没有的时候出现——它调的是同一个入口（`POST /api/demo/seed`），所以注册用户不必跑脚本也能一键把主链填满。
+
 > **提示**：接入真实大模型后，在 `.env` 中配置 `LLM_API_KEY` 并设置 `LLM_PROVIDER=openai` 或 `dashscope`，分析质量和多样性将显著提升。
 
 ---

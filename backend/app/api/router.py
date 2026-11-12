@@ -9,6 +9,7 @@ from app.api import (
     auth,
     career_path,
     dashboard,
+    demo,
     evaluation,
     external,
     history,
@@ -107,6 +108,8 @@ api_router.include_router(
     dependencies=SESSION_GUARD,
 )
 api_router.include_router(reminder.router, prefix="/reminders", tags=["reminders"], dependencies=SESSION_GUARD)
+# 首次体验的演示数据入口：一次写简历、岗位、投递记录三张表，所以它有自己的前缀。
+api_router.include_router(demo.router, prefix="/demo", tags=["demo"], dependencies=SESSION_GUARD)
 api_router.include_router(subscription.router, prefix="/subscription", tags=["subscription"])
 # 外部能力 API（M6）：主 app 挂载前缀 /api + 此处 /v1 → /api/v1/external/...
 # 这一段走 X-API-Key（app/api/external/auth.py），不是会话，不能挂 SESSION_GUARD。

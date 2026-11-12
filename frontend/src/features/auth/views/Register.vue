@@ -112,11 +112,12 @@
         <p class="hint">注册后会自动进入对应工作台</p>
 
         <el-form-item prop="agreed" class="agree-item">
-          <el-checkbox v-model="form.agreed" :disabled="loading">
-            我已阅读并同意<router-link class="agree-link" to="/terms" target="_blank">
-              《服务条款与隐私说明》
-            </router-link>
-          </el-checkbox>
+          <!-- 链接刻意放在 checkbox 外面：塞进 label 里的话，点"我已阅读并同意"那几个字会命中链接
+               而不是勾选（真浏览器里点出来的），而这里最想要的动作是勾选。 -->
+          <el-checkbox v-model="form.agreed" :disabled="loading"> 我已阅读并同意 </el-checkbox>
+          <router-link class="agree-link" to="/terms" target="_blank">
+            《服务条款与隐私说明》
+          </router-link>
         </el-form-item>
 
         <el-form-item>

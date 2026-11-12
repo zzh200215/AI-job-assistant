@@ -12,6 +12,7 @@ from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.history import JobDescription
 from app.models.user import User
+from app.services.demo_seed_service import SEED_JDS, seed_jobs
 from app.services.job_spider import JobItem, JobSpider
 from app.utils.job_access import visible_job_filter
 from app.utils.response import ERR_COMMON, fail, ok
@@ -34,65 +35,6 @@ SUPPORTED_CITIES = [
     {"name": "苏州", "code": "101190400"},
     {"name": "重庆", "code": "101040100"},
     {"name": "全国", "code": ""},
-]
-
-
-SEED_JDS = [
-    {
-        "title": "Python 后端开发工程师",
-        "company": "字节跳动",
-        "location": "杭州",
-        "salary_range": "25-40K·16薪",
-        "experience": "3-5年",
-        "education": "本科",
-        "skill_tags": ["Python", "Django", "MySQL", "Redis", "Docker", "Kafka"],
-        "industry": "互联网科技",
-        "raw_text": "负责电商后端服务开发，使用 Python/Django 构建高并发订单系统。",
-    },
-    {
-        "title": "AI 大模型算法工程师",
-        "company": "阿里巴巴",
-        "location": "杭州",
-        "salary_range": "35-60K·16薪",
-        "experience": "3-5年",
-        "education": "硕士",
-        "skill_tags": ["Python", "PyTorch", "LLM", "RAG", "LangChain", "Transformer"],
-        "industry": "人工智能",
-        "raw_text": "负责大模型训练、微调与 RAG 应用落地，参与 Agent 框架设计。",
-    },
-    {
-        "title": "前端开发工程师",
-        "company": "腾讯",
-        "location": "深圳",
-        "salary_range": "20-35K·15薪",
-        "experience": "2-4年",
-        "education": "本科",
-        "skill_tags": ["Vue3", "React", "TypeScript", "Vite", "Node.js"],
-        "industry": "互联网科技",
-        "raw_text": "负责管理后台和业务中台前端开发，推进组件化和工程化建设。",
-    },
-    {
-        "title": "数据分析师",
-        "company": "美团",
-        "location": "北京",
-        "salary_range": "18-30K·15薪",
-        "experience": "2-4年",
-        "education": "本科",
-        "skill_tags": ["SQL", "Python", "Tableau", "Hive", "Spark"],
-        "industry": "互联网科技",
-        "raw_text": "负责业务数据分析、指标体系建设与实验效果评估。",
-    },
-    {
-        "title": "DevOps 工程师",
-        "company": "京东",
-        "location": "北京",
-        "salary_range": "22-38K·14薪",
-        "experience": "3-5年",
-        "education": "本科",
-        "skill_tags": ["Docker", "Kubernetes", "Jenkins", "Linux", "Prometheus"],
-        "industry": "电商",
-        "raw_text": "负责 CI/CD 流水线与容器集群运维，保障核心系统稳定交付。",
-    },
 ]
 
 
@@ -398,48 +340,12 @@ def seed_demo_jobs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    inserted = 0
-    skipped = 0
+    """岗位市场的演示数据入口。
 
-    for item in SEED_JDS:
-        existing = (
-            db.query(JobDescription)
-            .filter(
-                JobDescription.user_id == current_user.id,
-                JobDescription.title == item["title"],
-                JobDescription.company == item["company"],
-            )
-            .first()
-        )
-        if existing:
-            skipped += 1
-            continue
-
-        db.add(
-            JobDescription(
-                user_id=current_user.id,
-                source="imported",
-                is_active=1,
-                title=item["title"],
-                company=item["company"],
-                location=item["location"],
-                salary_range=item["salary_range"],
-                raw_text=item["raw_text"],
-                education_requirement=item["education"],
-                experience_requirement=item["experience"],
-                industry=item["industry"],
-                skill_tags=item["skill_tags"],
-                parsed_json={
-                    "experience_requirement": item["experience"],
-                    "education_requirement": item["education"],
-                    "industry": item["industry"],
-                    "required_skills": item["skill_tags"],
-                    "jd_summary": item["raw_text"][:200],
-                },
-            )
-        )
-        inserted += 1
-
+    真正的写入逻辑在 `services/demo_seed_service`：那份岗位清单原先这里一份、推荐页一份，
+    两个 seed 端点灌的东西不一样，所以清单与写入都收到了那一个模块里。
+    """
+    inserted, skipped = seed_jobs(db, current_user.id)
     db.commit()
     return ok(
         data={"inserted": inserted, "skipped": skipped, "total": len(SEED_JDS)},

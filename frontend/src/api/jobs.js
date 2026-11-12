@@ -4,9 +4,6 @@ import request from './request'
 // 获取岗位推荐
 export const getJobRecommendations = (params) => request.get('/jobs/recommend', { params })
 
-// 写入模拟数据
-export const seedMockJobs = () => request.post('/jobs/seed')
-
 // 批量导入 JD —— D226：这条现在只建作业，入库在后台跑，返回的是作业载荷（job_id/status/total）
 export const batchImportJobs = (file, source = 'imported') => {
   const form = new FormData()
@@ -110,7 +107,7 @@ export const fetchJobDetail = (source, url) =>
 // 获取支持的城市列表
 export const getCities = () => request.get('/jobs/cities')
 
-// 一键导入演示岗位数据 (10 条本地 JD，便于体验推荐)
+// 一键导入演示岗位数据（5 条中文 JD，与首页"用示例数据体验"同一份清单）
 export const seedDemoJobs = () => request.post('/jobs/seed-demo')
 
 // === 职业方向推荐 ===
