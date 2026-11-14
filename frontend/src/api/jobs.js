@@ -100,10 +100,6 @@ export const startFullAnalysis = (resumeId, jdId) =>
 export const searchExternalJobs = (params) =>
   request.post('/jobs/search-external', null, { params })
 
-// 抓取岗位详情
-export const fetchJobDetail = (source, url) =>
-  request.post('/jobs/fetch-detail', null, { params: { source, url } })
-
 // 获取支持的城市列表
 export const getCities = () => request.get('/jobs/cities')
 

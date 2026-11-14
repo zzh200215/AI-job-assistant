@@ -3,8 +3,6 @@ import request from './request'
 // 求职目标
 export const getTargets = (params = {}) => request.get('/targets/list', { params })
 
-export const getTargetDetail = (id) => request.get(`/targets/${id}`)
-
 export const createTarget = (data) => request.post('/targets', data)
 
 export const updateTarget = (id, data) => request.put(`/targets/${id}`, data)
@@ -18,8 +16,6 @@ export const getKanban = (params = {}) => request.get('/jobs/pipeline/kanban', {
 
 export const movePipelineStage = (id, stage, data = {}) =>
   request.post(`/jobs/pipeline/${id}/transition`, { target_stage: stage, ...data })
-
-export const getPipelineDetail = (id) => request.get(`/jobs/pipeline/${id}`)
 
 export const createJobPipelineEntry = (data) => request.post('/jobs/pipeline', data)
 

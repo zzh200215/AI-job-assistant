@@ -1,4 +1,4 @@
-﻿# Engineering Quality
+# Engineering Quality
 
 This repository includes a lightweight delivery-quality baseline for demo, review, and resume presentation.
 
@@ -26,6 +26,46 @@ This repository includes a lightweight delivery-quality baseline for demo, revie
 - New anonymous operations are not allowed by omission. They have to be listed in
   `PUBLIC_OPERATIONS` in `tests/test_public_api_surface.py` with a reason; that test walks the real
   router graph and fails otherwise.
+
+## Frontend API layer has no dead exports
+
+`frontend/src/api/*.js` is a thin wrapper per endpoint, and nothing forces a wrapper to have a caller.
+After `runMatch` was deleted (2026-11-14, `docs/真provider实测.md` §7) a scan of the whole layer found
+**16 exports nobody imported** — 15 more of the same shape, plus one WS helper:
+
+| Export | Backend endpoint | Why it went |
+| --- | --- | --- |
+| `dashboard.getNextActions` | `GET /dashboard/next-actions` alive | Home renders from `/dashboard/overview`; no next-actions block exists |
+| `interview.deleteInterview` | `DELETE /interview/sessions/{id}` alive | Interview history has no delete action (deliberate: the record is the history) |
+| `interview.getQuestionCategories` | `GET /interview/question-bank/categories` alive | The bank page filters from `getQuestionBank`'s own payload |
+| `interview.getInterviewPrep` | `GET /interview/preparation/{jd_id}` alive | The screen shows `preparation_tips` inside each question instead |
+| `interview.isWSConnected` | n/a (client state) | No caller ever checked connection state directly |
+| `jobs.fetchJobDetail` | `POST /jobs/fetch-detail` alive | External search returns detail inline; import uses the server-side fetcher |
+| `knowledge.getKnowledgeDoc` | `GET /knowledge/{id}` alive | The drawer reads `getKnowledgeChunks` only |
+| `multi_agent.startMultiAgent` | `POST /multi-agent/start` alive | The page uses `/multi-agent/auto` + `/run/{id}/detail` (the manual-entry pair) |
+| `multi_agent.getMultiAgentRun` | `GET /multi-agent/run/{id}` alive | Same: the detail endpoint replaced the status one |
+| `resume.getAccessibleResumeList` | `GET /resume/accessible-list` alive | Enterprise resume pool has no screen; candidate pages use `/resume/list` |
+| `resume.seedDemoResumes` | `POST /resume/seed-demo` alive | Superseded by D2's `POST /demo/seed` |
+| `subscription.getSubscriptionPlans` | `GET /subscription/plans` alive (public) | No screen shows the plan table |
+| `subscription.checkQuota` | `POST /subscription/check-quota` alive | The server judges quota on the action; the UI never pre-checks |
+| `subscription.getMyOrders` | `GET /subscription/orders` alive | Candidate side has no orders page (admin uses `/subscription/admin/orders`) |
+| `targets.getTargetDetail` | `GET /targets/{id}` alive | The list row already carries what the dialog shows |
+| `targets.getPipelineDetail` | **no such route** (`PUT`/`DELETE` only) | Would 405 if called |
+
+Two things this table is careful about: the **endpoints stay** (a dead client wrapper is not a dead
+capability — several of these are backend features with no entry point yet), and only the one whose
+route never existed was actually broken.
+
+The guard is `frontend/tests/unit/apiLayerNoDeadExports.test.js`. It does not grep for the name in
+file text — a comment mentioning an export would then keep it alive, which is exactly how a dead
+export survives review. It resolves the **import graph** instead: named imports, default imports, and
+`import * as ns` member access (`auth` is consumed that way). Scope is `src/**` — an export used only
+by a test still counts as dead, because a test vouching for dead code is not a user.
+
+Two anti-vacuity checks are part of the guard: a synthetic case proves the detector reds on an unused
+export, and another proves a prose mention does **not** count. Measured on the real tree: adding
+`export const mutationProbe` to `src/api/jobs.js` made it fail with exactly `jobs.js::mutationProbe`;
+removing it went green again.
 
 ## Frontend verification
 

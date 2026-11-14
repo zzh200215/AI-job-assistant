@@ -19,9 +19,6 @@ export const getInterviewDetail = (sessionId) => request.get(`/interview/session
 export const getInterviewEvaluations = (sessionId) =>
   request.get(`/interview/sessions/${sessionId}/evaluations`)
 
-// 删除面试
-export const deleteInterview = (sessionId) => request.delete(`/interview/sessions/${sessionId}`)
-
 /**
  * 主动结束一场面试并出报告。收口不再只有"挂着 WebSocket 时点结束"一条路：
  * 30 秒超时计时器与 `end` 消息都只在连接活着时存在，标签页一关，会话就永远停在进行中（P4 / D172）。
@@ -31,12 +28,6 @@ export const endInterviewSession = (sessionId) =>
 
 // 获取题库浏览（支持分类/难度/关键词过滤）
 export const getQuestionBank = (params = {}) => request.get('/interview/question-bank', { params })
-
-// 获取题库分类统计
-export const getQuestionCategories = () => request.get('/interview/question-bank/categories')
-
-// 获取针对 JD 的面试准备建议
-export const getInterviewPrep = (jdId) => request.get(`/interview/preparation/${jdId}`)
 
 /**
  * `GET /interview/performance` 的载荷（`backend/app/api/interview_rest.py` 的
@@ -298,9 +289,4 @@ function clearReconnect() {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
   }
-}
-
-// WS 连接状态检查
-export function isWSConnected() {
-  return ws && ws.readyState === WebSocket.OPEN
 }

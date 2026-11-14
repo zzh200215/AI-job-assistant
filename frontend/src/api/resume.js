@@ -156,10 +156,3 @@ export const downloadResumeExport = (resumeId, format, version, versionId = null
   })
 
 export const getResumeList = (params = {}) => request.get('/resume/list', { params })
-
-// 企业筛选：获取当前招聘者自己可用于筛选的简历池
-export const getAccessibleResumeList = (params = {}) =>
-  request.get('/resume/accessible-list', { params })
-
-// 企业筛选：一键生成演示候选人简历
-export const seedDemoResumes = () => request.post('/resume/seed-demo')

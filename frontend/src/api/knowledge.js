@@ -8,8 +8,6 @@ export const uploadKnowledge = (formData, onUploadProgress) =>
 
 export const listKnowledge = (params = {}) => request.get('/knowledge/list', { params })
 
-export const getKnowledgeDoc = (id) => request.get(`/knowledge/${id}`)
-
 export const getKnowledgeChunks = (id) => request.get(`/knowledge/${id}/chunks`)
 
 export const deleteKnowledgeDoc = (id) => request.delete(`/knowledge/${id}`)

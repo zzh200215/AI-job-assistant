@@ -253,11 +253,13 @@ task 100 仍然是 `failed`：主模型全程 429，`ResumeOptimizeAgent` 那一
 前端 **120 文件 / 790 条**、静态守卫 **55 条** 全绿（`runMatch` 无任何测试引用）；
 `ruff check` 与 `ruff format --check` 全绿。
 
-### 7.5 一个顺手量出来的欠账
+### 7.5 一个顺手量出来的欠账（D8 当天已清）
 
 清 `runMatch` 时把 `src/api/` 下所有导出扫了一遍：**还有 15 个导出无人 import**
 （`getSubscriptionPlans`、`checkQuota`、`getMyOrders`、`startMultiAgent`、`getMultiAgentRun`、
 `seedDemoResumes`、`fetchJobDetail`、`getKnowledgeDoc`、`getQuestionCategories`、`getInterviewPrep`、
 `deleteInterview`、`getNextActions`、`getAccessibleResumeList`、`getTargetDetail`、`getPipelineDetail`）。
-它们对应的接口大多还在，所以"删"不是这次的射程——但据此**没有**加"前端 API 不许有死导出"的守卫：
-那会立刻红 15 条，只能配一张 15 行的 allowlist，等于把欠账抄进判据。要加，先做一次清查。
+
+当天就做完了清查（D8）：**16 条**（多出来那条是 `interview.isWSConnected`，没有任何调用方）全部删除，
+后端端点一个没动，并立了 `apiLayerNoDeadExports` 守卫。逐条理由与守卫设计见
+[engineering-quality.md](engineering-quality.md) 的 "Frontend API layer has no dead exports"。

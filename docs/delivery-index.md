@@ -7,7 +7,7 @@
 
 ## 1. 一句话现状
 
-后端 **1593 tests / 0 failed**（2026-11-14 复跑，188.1s）、前端 **120 文件 / 790 条**、静态守卫 **55 条**；
+后端 **1593 tests / 0 failed**（2026-11-14 复跑，188.1s）、前端 **121 文件 / 793 条**、静态守卫 **55 条**；
 首屏 **406 kB gzip**（预算 420，`tests/bundleBudget.test.mjs`）；eslint / prettier / ruff format 三条格式门全绿。
 RAG / Agent / 推荐 / 解析四轨进 AI 发布门；简历与面试 P1–P5 已落地。
 
@@ -57,8 +57,9 @@ C7a `fd1272b`；B3 `5d7508a`/`999f509`；D 阶段 0 `3987eb0`、机械重组 `ac
 | **D5** | 六族组件样式缺失补齐（**组件能渲染但裸奔**）+ 首屏字节天花板 + lint/format 清零 | ✅ 已交付 | `<el-checkbox>`/`<el-rate>`/`<el-steps>`/`<el-button-group>`/`<el-date-picker>` 不再用浏览器默认样子；`bundleBudget` 钉住 420 kB；eslint 0 warning |
 | **D6** | 真 provider 跑一轮主链（读数见 [真provider实测.md](真provider实测.md)），顺手把"后台任务空转 733 秒"的根因修掉 | ✅ 已交付 | **没有进程消费队列**这件事从此可观测 + 入口拒绝：`worker_alive` 进 `queue_health`、没活人时 `/analysis/full` 503 不发任务号、从没开始的任务在读路径收口并写清原因 |
 | **D7** | 出树 `POST /analysis/match`（一次性三步、整发 500、前端从未调用），连同 `match_service.py` 与前端 `runMatch` | ✅ 已交付 | `AnalysisRecord` 只剩一个写入方（`strategies.py`），并由一条判据钉住；整条链只剩 `/analysis/full` 一条路，详见 [真provider实测.md](真provider实测.md) §7 |
+| **D8** | 前端 API 层清查：**16 条**零调用导出要么接上要么删（含 D7 剩下的 15 条 + 一条 WS 助手），并立一条"不许再长出来"的守卫 | ✅ 已交付 | 死导出清零；`apiLayerNoDeadExports` 按**引用图**判（注释提到不算用），自带两条反证 + 真实树变异证据，清单见 [engineering-quality.md](engineering-quality.md) |
 
-关键提交：D1 `3dd0d76`；D2 `d6fe3da`；D3 `5403ba4`；D4 `f8ff273`；D5 `7fed706`；D6 `c32507e`；D7（本条）。
+关键提交：D1 `3dd0d76`；D2 `d6fe3da`；D3 `5403ba4`；D4 `f8ff273`；D5 `7fed706`；D6 `c32507e`；D7 `4ad6874`；D8（本条）。
 
 D5 里那条**样式缺口**值得单记一笔，因为它是"守卫只看一个方向"的典型：`elementRegistration.test.js`
 一直有一条"`element.css` 不许导入没人用的样式"，于是它钉住的是**多余的**，而不是**缺的**。
@@ -88,7 +89,6 @@ D5 里那条**样式缺口**值得单记一笔，因为它是"守卫只看一个
 | 11 | 首屏 245 kB gzip 是 Element Plus | 接受 D90 的产品决定；实测 91 个组件目录是 54 个标签的**传递闭包**（桶文件不在包里），没有可摇的死重 | 想再降只能减少 UI 组件族，或把 `el-date-picker` 这类重样式改成按页加载 |
 | 12 | 首页四颗 `ui-link` 触控高度 19px | 2.5.8 有"间距例外"，且它是全仓共用 primitive | 要改就是一次版式决定（二十屏一起动），不是单页修补 |
 | 13 | 简历版本横条在 375 下溢出 27px | 设计如此：横滑轮播露半格是在说"还有更多" | 若改成折行，先定"版本 ≥3 时怎么排" |
-| 14 | 前端 `src/api/` 里还有 15 个导出**无人 import**（`getSubscriptionPlans` / `checkQuota` / `startMultiAgent` / `seedDemoResumes` …） | D7 只清掉了 `runMatch`（它对应的接口已出树）；其余大多是"接口还在、页面没接"的储备 | 要加"前端 API 层不许有死导出"的守卫，先做一次清查——现在加只能配一张 15 行 allowlist，等于把欠账抄进判据 |
 
 ---
 
