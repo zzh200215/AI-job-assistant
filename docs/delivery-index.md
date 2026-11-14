@@ -7,7 +7,7 @@
 
 ## 1. 一句话现状
 
-后端 **1593 tests / 0 failed**（2026-11-14 复跑，188.1s）、前端 **124 文件 / 805 条**、静态守卫 **55 条**；
+后端 **1593 tests / 0 failed**（2026-11-14 复跑，188.1s）、前端 **126 文件 / 810 条**、静态守卫 **55 条**；
 首屏 **406 kB gzip**（预算 420，`tests/bundleBudget.test.mjs`）；eslint / prettier / ruff format 三条格式门全绿。
 RAG / Agent / 推荐 / 解析四轨进 AI 发布门；简历与面试 P1–P5 已落地。
 
@@ -59,8 +59,9 @@ C7a `fd1272b`；B3 `5d7508a`/`999f509`；D 阶段 0 `3987eb0`、机械重组 `ac
 | **D7** | 出树 `POST /analysis/match`（一次性三步、整发 500、前端从未调用），连同 `match_service.py` 与前端 `runMatch` | ✅ 已交付 | `AnalysisRecord` 只剩一个写入方（`strategies.py`），并由一条判据钉住；整条链只剩 `/analysis/full` 一条路，详见 [真provider实测.md](真provider实测.md) §7 |
 | **D8** | 前端 API 层清查：**16 条**零调用导出要么接上要么删（含 D7 剩下的 15 条 + 一条 WS 助手），并立一条"不许再长出来"的守卫 | ✅ 已交付 | 死导出清零；`apiLayerNoDeadExports` 按**引用图**判（注释提到不算用），自带两条反证 + 真实树变异证据，清单见 [engineering-quality.md](engineering-quality.md) |
 | **D9** | 异步任务加"排队中"态：`progress=0` 那一屏不再是一个不动的进度条 | ✅ 已交付 | `taskPhase()` 由共享轮询器递出，三个消费方各自说同一句话；"没开始就失败"由前端自己的措辞说（服务端原文不上屏）；真浏览器四条读数见 [engineering-quality.md](engineering-quality.md) |
+| **D10** | 把"排队/失败要说清楚"铺到剩下两屏：分析结果页的失败留在页面上（不只 5 秒 toast），任务中心区分排队与卡住 | ✅ 已交付 | 分析结果页有行内错误 + 重新分析；任务中心排队不画 0% 进度条、失败卡片用同一句前端措辞；"未知错误"这类兜底清掉（`FAILURE_FALLBACK`） |
 
-关键提交：D1 `3dd0d76`；D2 `d6fe3da`；D3 `5403ba4`；D4 `f8ff273`；D5 `7fed706`；D6 `c32507e`；D7 `4ad6874`；D8 `c07ad15`；D9（本条）。
+关键提交：D1 `3dd0d76`；D2 `d6fe3da`；D3 `5403ba4`；D4 `f8ff273`；D5 `7fed706`；D6 `c32507e`；D7 `4ad6874`；D8 `c07ad15`；D9 `c644275`；D10（本条）。
 
 D5 里那条**样式缺口**值得单记一笔，因为它是"守卫只看一个方向"的典型：`elementRegistration.test.js`
 一直有一条"`element.css` 不许导入没人用的样式"，于是它钉住的是**多余的**，而不是**缺的**。

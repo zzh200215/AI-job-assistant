@@ -70,14 +70,13 @@
             <strong>{{ task.name }}</strong>
             <span>{{ dateTime(task.create_time) }}</span>
           </div>
-          <el-tag :type="statusType(task.status)" size="small">{{
-            statusLabel(task.status)
-          }}</el-tag>
+          <el-tag :type="statusType(task.status)" size="small">{{ statusLabel(task) }}</el-tag>
         </div>
 
         <!-- 进度条 -->
         <div v-if="task.progress !== undefined" class="task-progress">
           <el-progress
+            v-if="!task.queued"
             :percentage="task.progress"
             :status="
               task.status === 'failed'
@@ -88,6 +87,10 @@
             "
             :stroke-width="8"
           />
+          <!-- 排队中：0% 的进度条和"卡住"长得一样，所以这一档不画条，直接说清在等什么 -->
+          <p v-else class="task-queued-hint">
+            排队中：任务已提交，后台还没开始跑第一步。正常情况下几秒内就会进入进度。
+          </p>
         </div>
 
         <div class="task-meta">
@@ -96,8 +99,12 @@
         </div>
 
         <div v-if="task.error_message" class="task-error">
+          <!-- 没跑第一步就失败的那一档，原因我们自己在服务端写过一遍；这里说的是同一件事的前端版本，
+               不把 `error_msg` 原文端上来（服务端/模型原文不上屏，全仓同一条规矩）。 -->
           <el-alert
-            title="任务没有完成，可以重试或稍后再看"
+            :title="
+              task.failed_before_start ? NEVER_STARTED_FAILURE : '任务没有完成，可以重试或稍后再看'
+            "
             type="error"
             :closable="false"
             show-icon
@@ -136,6 +143,12 @@ import { Refresh, Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import { getAgentTasks, getAgentTaskSummary, retryAgentTask, cancelAgentTask } from '@/api/agent'
 import { TASK_STATUS_TAGS, tagTypeFor } from '@/utils/statusTone'
+import {
+  NEVER_STARTED_FAILURE,
+  TASK_PHASE,
+  failedBeforeFirstStep,
+  taskPhase,
+} from '@/utils/taskPhase'
 import { dateTime } from '@/utils/format/date'
 import { useLatestCall } from '@/composables/useLatestCall'
 
@@ -224,6 +237,16 @@ function normalizeTask(task) {
     current_step: step?.label || step?.name || task.current_step || '',
     duration_ms: progress?.duration_ms ?? task.duration_ms ?? null,
     error_message: task.error_message || task.error_msg || '',
+    /* 排队中：任务已落库、worker 还没写第一条步骤（判据在 `utils/taskPhase.js`）。
+       这一屏以前对"排队"与"跑起来了但没动"给的是同一个 0%，看起来都像卡死。
+       只认 `running`：`pending` 有它自己的词（"等待中"）——那一条还没被派发，
+       和"派发了但 worker 没接"是两件事。 */
+    queued: String(task.status) === 'running' && taskPhase(task) === TASK_PHASE.QUEUED,
+    /* 失败在"没跑第一步"这一档：原因前端自己说，不 echo 后端 `error_msg`。 */
+    failed_before_start: failedBeforeFirstStep({
+      status: task.status,
+      progress: { step_counts: progress?.step_counts },
+    }),
     result_url:
       task.result_url || (task.analysis_record_id ? `/analysis/${task.analysis_record_id}` : ''),
   }
@@ -240,7 +263,9 @@ function statusType(s) {
   return tagTypeFor(TASK_STATUS_TAGS, s)
 }
 
-function statusLabel(s) {
+function statusLabel(task) {
+  if (task?.queued) return '排队中'
+  const s = typeof task === 'string' ? task : task?.status
   const map = {
     completed: '已完成',
     partial: '部分完成',
@@ -499,6 +524,13 @@ onUnmounted(() => {
 
 .task-progress {
   margin-bottom: 8px;
+}
+
+/* 排队中的那一行替掉进度条：0% 的条和"卡住"看不出区别。 */
+.task-queued-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--app-muted);
 }
 
 .task-meta {

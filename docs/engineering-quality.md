@@ -102,6 +102,16 @@ outer `catch` overwrote the specific message `onFailed` had just written, leavin
 重试" while the database held a fully explained failure. It now only applies its fallback when nothing
 was written.
 
+A later pass extended the same treatment to the two surfaces that still lost it:
+
+- **`AnalysisResult`** used to answer a failure with a 5-second toast only. It now keeps an inline
+  alert with the reason and a 重新分析 button, next to the existing load-error alert — a person who
+  looks back at the screen 30 seconds later no longer sees "nothing happened". It also stopped saying
+  "未知错误": the fallback is now 任务没有完成，可以稍后重试（`FAILURE_FALLBACK`）.
+- **`TaskCenter`** drew one 0 % bar for both "queued" and "running but stuck". A running task with
+  zero steps now says 排队中 and draws no bar at all, and its failed-before-first-step card carries
+  the same frontend-owned sentence instead of the generic 任务没有完成.
+
 Measured on a real screen (1366×900, demo account, worker stopped but heartbeat freshly planted so the
 door accepts exactly one task):
 
@@ -110,6 +120,9 @@ door accepts exactly one task):
 | after clicking 生成求职分析, 0 steps | info panel「排队中：后台还没开始跑第一步」+ the two sentences; the 分析进度 panel is absent |
 | 2 min later, converged | inline error「任务还没开始执行就被收口了：后台没有可用的 worker。请稍后重试；如果一直这样，请联系管理员启动编排 worker。」+ 重新分析 |
 | a run with a live worker | 分析进度 4 / 6 步，步骤时间线逐条点亮（匹配度 0 那一格是因为 embedding 欠费，不是阶段判断） |
+| 任务中心，排队中 | 卡片标签「排队中」+「排队中：任务已提交，后台还没开始跑第一步。正常情况下几秒内就会进入进度。」+ 耗时 + 取消，**没有进度条** |
+| 任务中心，收口后 | 同一张卡片变成「失败 / 耗时：2.0 分钟」+ the same frontend sentence + 重试；服务端 `error_msg` 一个字没上屏 |
+| 分析结果页，排队中 → 收口 | 排队块换成行内错误 + 重新分析，服务端原文同样没上屏 |
 
 ## Frontend verification
 

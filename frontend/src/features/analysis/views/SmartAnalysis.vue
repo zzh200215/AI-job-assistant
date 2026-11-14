@@ -402,6 +402,7 @@ import {
   QUEUED_COPY,
   TASK_PHASE,
   NEVER_STARTED_FAILURE,
+  FAILURE_FALLBACK,
   failedBeforeFirstStep,
 } from '@/utils/taskPhase'
 import {
@@ -708,7 +709,7 @@ const onStartAnalysis = async () => {
            不需要把服务端原文搬上来。 */
         runError.value = failedBeforeFirstStep(error?.task)
           ? NEVER_STARTED_FAILURE
-          : `求职分析失败：${userErrorCopy(error, '未知错误')}`
+          : `求职分析失败：${userErrorCopy(error, FAILURE_FALLBACK)}`
         ElMessage.error(runError.value)
       },
       onCancelled(error) {

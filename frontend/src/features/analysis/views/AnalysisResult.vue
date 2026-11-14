@@ -78,6 +78,17 @@
       </template>
     </el-alert>
 
+    <!-- 这一发失败时留在页面上的一句：toast 5 秒就没了，而人往往是几十秒后才回头看这一屏 -->
+    <div v-if="runError" class="panel">
+      <div class="panel-body">
+        <el-alert type="error" :closable="false" show-icon :title="runError">
+          <template #default>
+            <el-button size="small" type="primary" plain @click="onAnalyze">重新分析</el-button>
+          </template>
+        </el-alert>
+      </div>
+    </div>
+
     <!-- 排队中：进度条那时是 0%，得说清是"等后台接单"不是"卡住" -->
     <div class="panel" v-if="loading && isQueued">
       <div class="panel-body">
@@ -415,6 +426,7 @@ import {
   QUEUED_COPY,
   TASK_PHASE,
   NEVER_STARTED_FAILURE,
+  FAILURE_FALLBACK,
   failedBeforeFirstStep,
 } from '@/utils/taskPhase'
 const selection = useSelectionStore()
@@ -439,6 +451,8 @@ const { pollTask: pollAgentTask } = useAgentTaskPolling()
 const taskPhase = ref(TASK_PHASE.IDLE)
 const isQueued = computed(() => taskPhase.value === TASK_PHASE.QUEUED)
 const queuedCopy = QUEUED_COPY
+/** 这一发失败的原因，留在页面上（不只一个 5 秒的 toast）。 */
+const runError = ref('')
 
 const form = reactive({ resume_id: null, jd_id: null })
 
@@ -645,6 +659,7 @@ const onAnalyze = async () => {
   }
   loading.value = true
   taskPhase.value = TASK_PHASE.IDLE
+  runError.value = ''
   result.value = null
   agentSteps.value = []
 
@@ -666,28 +681,31 @@ const onAnalyze = async () => {
       async onCompleted(taskData) {
         const recordId = taskData?.analysis_record_id
         if (!recordId) {
-          ElMessage.error('分析完成但未生成记录')
+          runError.value = '分析完成但未生成记录'
+          ElMessage.error(runError.value)
           return
         }
 
         const data = await getAnalysis(recordId)
         result.value = data
+        runError.value = ''
         selection.rememberRecord(data.record_id || data.id || recordId)
         ElMessage.success(`分析完成，匹配度 ${data.match_score}`)
         tab.value = 'match'
       },
       onFailed(error) {
-        ElMessage.error(
-          failedBeforeFirstStep(error?.task)
-            ? NEVER_STARTED_FAILURE
-            : `分析失败: ${userErrorCopy(error, '未知错误')}`
-        )
+        runError.value = failedBeforeFirstStep(error?.task)
+          ? NEVER_STARTED_FAILURE
+          : `分析失败：${userErrorCopy(error, FAILURE_FALLBACK)}`
+        ElMessage.error(runError.value)
       },
       onCancelled(error) {
-        ElMessage.warning(userErrorCopy(error, '分析任务已取消'))
+        runError.value = userErrorCopy(error, '分析任务已取消')
+        ElMessage.warning(runError.value)
       },
       onTimeout() {
-        ElMessage.warning('分析超时，请稍后刷新查看结果')
+        runError.value = '分析超时，请稍后刷新查看结果'
+        ElMessage.warning(runError.value)
       },
     })
   } catch {
