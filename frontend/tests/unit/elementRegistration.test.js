@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createApp } from 'vue'
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 import { installElement } from '@/plugins/element'
@@ -131,13 +131,78 @@ describe('Element 注册表与真实使用必须互相对得上', () => {
     expect(unused, `解析器声明了这些指令却没有 v-* 用法：${unused.join(', ')}`).toEqual([])
   })
 
+  /* `el-date-picker` 的样式整个在 `el-date-picker-panel.css` 里（28.9 kB，`.el-date-editor`
+     也在里面），所以"标签名 = 样式文件名"这条默认假设有一个例外，写在这里而不是散在判断里。 */
+  const STYLE_ALIAS = { 'el-date-picker': 'el-date-picker-panel' }
+
   it('every element.css import belongs to a component the app can render', () => {
     const css = readFileSync('src/plugins/element.css', 'utf8')
     const imported = [...css.matchAll(/el-([a-z0-9-]+)\.css/g)].map((m) => `el-${m[1]}`)
-    // 这三类没有 <el-*> 标签，但样式必须在：v-loading 指令，以及 ElMessage / ElMessageBox 两个服务
+    // 这三类没有 <el-*> 标签，但样式必须在：v-loading 指令，以及 ElMessage / ElMessageBox 两个服务；
+    // 另有一类"给别的标签代管样式"的文件（见 STYLE_ALIAS），同理不算孤儿。
     const NO_TAG_BUT_USED = ['el-loading', 'el-overlay', 'el-message', 'el-message-box']
-    const orphan = imported.filter((name) => !usedTags.has(name) && !NO_TAG_BUT_USED.includes(name))
+    const aliasTargets = Object.values(STYLE_ALIAS).map((name) => `el-${name.replace(/^el-/, '')}`)
+    const orphan = imported.filter(
+      (name) =>
+        !usedTags.has(name) && !NO_TAG_BUT_USED.includes(name) && !aliasTargets.includes(name)
+    )
     expect(orphan, `element.css 导入了渲染不出来的组件样式：${orphan.join(', ')}`).toEqual([])
+  })
+
+  /* D5：上一条只判**多了的**（导入了没人用的样式），不判**少了的**——于是两份手写清单漂了一个
+     反方向的口子，而且漂了很久：`<el-checkbox>`（登录/注册页那一颗）、`<el-rate>`（Offer 六维
+     打分与投递反馈）、`<el-steps>`（简历上传那三步）、`<el-button-group>`（看板视图切换）、
+     `<el-date-picker>`（面试时间）全都在用，而它们的主题 CSS 一个都没导入——组件能渲染，
+     只是长成浏览器默认的样子。上一条守卫当时是绿的，因为它只往一个方向看。
+
+     判据按**磁盘上的真实文件**写，不按人记得的名单：
+       · 自己的 `theme-chalk/<tag>.css` 非空 → 必须导入；
+       · 那个文件是 0 字节 → 样式住在父组件里（`el-dropdown-item` / `el-menu-item` /
+         `el-tab-pane` 都是 0 字节），不用导入，天然豁免；
+       · 样式住在别的文件名里 → 在 STYLE_ALIAS 里写明（`el-date-picker` 的样式整个在
+         `el-date-picker-panel.css`，28.9 kB，`.el-date-editor` 也在里面）。
+     这样"新增一个组件却忘了样式"会在 CI 红，而不是等谁在浏览器里觉得"这颗星星有点怪"。 */
+  const THEME_CHALK = 'node_modules/element-plus/theme-chalk'
+
+  it('每一个用到且确有自己样式表的组件，样式都必须真的被导入了（D5 补的另一半）', () => {
+    const css = readFileSync('src/plugins/element.css', 'utf8')
+    const imported = new Set([...css.matchAll(/el-([a-z0-9-]+)\.css/g)].map((m) => `el-${m[1]}`))
+    const missing = []
+    const checked = []
+    for (const tag of [...usedTags.keys()].sort()) {
+      const sheet = STYLE_ALIAS[tag] || tag
+      if (imported.has(tag) || imported.has(sheet)) {
+        checked.push(tag)
+        continue
+      }
+      let size = 0
+      try {
+        size = statSync(path.join(THEME_CHALK, `${sheet}.css`)).size
+      } catch {
+        // 没有这个文件 = 这个组件没有独立样式表，交给组件自己兜（例如 el-checkbox-group 的 45 B
+        // 是 `@import` 桩，`el-tabs` 的子项是 0 B）。不在这里判，但也不静默当"通过"。
+        continue
+      }
+      if (size === 0) continue // 0 字节：样式住在父级，天然豁免
+      missing.push(`${tag}（${sheet}.css，${size} B）`)
+    }
+    expect(
+      missing,
+      `这些组件在视图里用了、主题样式也存在，却没被导入——它们只会长成浏览器默认样式：${missing.join(', ')}`
+    ).toEqual([])
+    // 防空转：真扫到了一批"已导入且确有样式"的组件，而不是一个都没走到
+    expect(checked.length).toBeGreaterThan(40)
+  })
+
+  it('反证：把 el-checkbox 那行删掉，上面那条判据必须重新报它', () => {
+    const css = readFileSync('src/plugins/element.css', 'utf8')
+    expect(css).toContain("el-checkbox.css'")
+    const reverted = css.replace(/@import 'element-plus\/theme-chalk\/el-checkbox\.css';\r?\n/, '')
+    expect(reverted, '反证前提不成立：原文里找不到那行 import').not.toBe(css)
+    const imported = new Set(
+      [...reverted.matchAll(/el-([a-z0-9-]+)\.css/g)].map((m) => `el-${m[1]}`)
+    )
+    expect(imported.has('el-checkbox')).toBe(false)
   })
 
   /* P1-④（2026-10-07，§10 记忆里的第 23 条）：**图标用了没 import，过去任何门都不响**。

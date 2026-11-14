@@ -819,7 +819,6 @@ const resumes = ref([])
 const listError = ref('')
 const defaultResumeId = ref(null)
 const selectedResumeId = ref(null)
-const go = (path) => router.push(path)
 
 const uploading = ref(false)
 const uploadProgress = ref(0)

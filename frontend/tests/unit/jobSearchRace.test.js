@@ -119,9 +119,7 @@ function findTab(wrapper, label) {
 
 /** 市场摘要条那几个数字常驻，不用切标签页就能读到：[本次搜索, 已保存, 智能推荐, ...] */
 function heroNumbers() {
-  return [...document.querySelectorAll('.market-metrics strong')].map((n) =>
-    n.textContent.trim()
-  )
+  return [...document.querySelectorAll('.market-metrics strong')].map((n) => n.textContent.trim())
 }
 
 function selectResume(wrapper, id) {

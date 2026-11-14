@@ -28,6 +28,14 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
+      /* D5 试过并**撤掉**的一刀，记在这里免得下一个人再试一遍：
+         把 `treeshake.moduleSideEffects` 对 element-plus 的 JS 模块改成 false，指望摇掉
+         "注册表里没有的组件"。实测**一个字节没变**（vendor-element 774.67 kB、连 hash 都相同
+         `DtCJoJLQ`），说明那条路上没有可摇的东西——解析器本来就按组件引
+         （`element-plus/es/components/<名字>/index.mjs`，构建产物里 87 个这样的入口），
+         桶文件根本不在包里；774 kB 里那 91 个组件目录是**被用到的 ~50 个的传递闭包**
+         （select 拉 input/tooltip/tag，table 拉 checkbox/scrollbar…），不是"整包进来了"。
+         D90 当年那句"解析器从全量入口引组件"是**成因写错了**，数字没错；成因以这一段为准。 */
       onwarn(warning, defaultHandler) {
         // Element Plus pulls @vueuse/core; Rollup reports harmless pure-annotation comments in that dependency.
         if (

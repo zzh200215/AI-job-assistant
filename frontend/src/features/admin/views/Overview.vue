@@ -168,7 +168,10 @@ const revenue = ref(/** @type {import('@/api/analytics').AnalyticsRevenuePayload
 const funnel = ref(/** @type {import('@/api/analytics').AnalyticsFunnelPayload} */ ({}))
 const orders = ref([])
 
-const paidOrders = computed(() => orders.value.filter((order) => order.status === 'paid'))
+/* 这里原先还有一条 `paidOrders = computed(() => orders.value.filter(o => o.status === 'paid'))`，
+   D5 清 lint 时发现它**全文件无人引用**（模板里那块用的是 `paidOrderCount`，读的是 summary 的
+   `paid_orders`）。留着它是两份口径：一份数"手上这页订单里状态为 paid 的"，一份数后端总数，
+   而页面上只显示后者——删掉，别让下一个人以为订单里的 paid 数被算过。 */
 const proUsers = computed(() => summary.value.pro_users || 0)
 const totalUsers = computed(() => summary.value.total_users || 0)
 const paidOrderCount = computed(() => summary.value.paid_orders || 0)

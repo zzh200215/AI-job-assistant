@@ -49,9 +49,7 @@ const recommendCalls = []
 
 /** 市场摘要条的数字顺序就是标签页的顺序：[本次搜索, 已保存, 智能推荐, ...] */
 function heroNumbers() {
-  return [...document.querySelectorAll('.market-metrics strong')].map((n) =>
-    n.textContent.trim()
-  )
+  return [...document.querySelectorAll('.market-metrics strong')].map((n) => n.textContent.trim())
 }
 
 let router
