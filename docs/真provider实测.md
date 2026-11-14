@@ -205,6 +205,10 @@ task 100 仍然是 `failed`：主模型全程 429，`ResumeOptimizeAgent` 那一
 - 现场的队首化石（6 月那条 `task_id=1`）已清掉；`task_id=98` 由 worker 正常消费（它的策略入口看到
   `cancelled` 就地收口，没有发一次模型调用）。
 
+**屏幕侧**：守门之后多了一个"任务在、但一步都没跑"的状态，而它以前长得和一个卡住的 0% 一模一样。
+D9 给它补了说法（排队中说"等后台接单"、没开始就失败说"后台没有可用的 worker"），
+见 [engineering-quality.md](engineering-quality.md) 的 "Async tasks have a queued phase"。
+
 ---
 
 ## 7. 当天出树：`POST /analysis/match`（缺陷 1 + 3）

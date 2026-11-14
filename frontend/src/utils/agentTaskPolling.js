@@ -1,8 +1,17 @@
 /**
  * 这条链自己挂在 Error 上的三个字段；`code` 是 'task_cancelled' / 'task_failed' 这类
  * 调用方拿来分流的字符串，与 ApiError 那四个字段是两套约定。
+ *
+ * **刻意不挂 `userMessage`**：`.message` 里那句可能来自后端 `error_msg`，而全仓的错误出口
+ * （`userErrorCopy`）只认 `userMessage`——挂上去就等于把服务端/模型原文推给候选人。
+ * 几条作业轮询的用例（resumeRewriteJobPolling / resumeReportPage / careerPlanningUnmountNoToast）
+ * 钉的就是这条。要说话，由视图用自己的措辞说（见 `utils/taskPhase.js`）。
  * @typedef {Error & { code?: string, taskStatus?: string | null, task?: any }} PollingError
  */
+
+/* 显式带扩展名：`tests/agentTaskPolling.test.mjs` 用 **Node** 直接 import 这个文件
+   （不经 vite，扩展名不会被补全）。vite 两种写法都认。 */
+import { taskPhase } from './taskPhase.js'
 
 function createPollingError(message, code, taskData = null) {
   /** @type {PollingError} */
@@ -114,7 +123,9 @@ export function createAgentTaskPoller(apiClient, runtimeOptions = {}) {
           const status = taskData?.status || 'running'
 
           if (onProgress) {
-            await onProgress(taskData, steps)
+            /* 第三个参数是**排队/执行**的区分（`utils/taskPhase.js`）：步骤数还是 0 时，
+               屏幕上那句"0%"要说清楚是"已提交、等后台接单"，而不是"跑起来了但没动"。 */
+            await onProgress(taskData, steps, taskPhase(taskData))
           }
 
           if (successStatuses.includes(status)) {

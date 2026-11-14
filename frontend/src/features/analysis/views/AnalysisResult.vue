@@ -78,6 +78,19 @@
       </template>
     </el-alert>
 
+    <!-- 排队中：进度条那时是 0%，得说清是"等后台接单"不是"卡住" -->
+    <div class="panel" v-if="loading && isQueued">
+      <div class="panel-body">
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          :title="queuedCopy.title"
+          :description="queuedCopy.description"
+        />
+      </div>
+    </div>
+
     <div class="panel" v-if="loading && agentSteps.length">
       <div class="panel-header">
         <div class="panel-title-row">
@@ -398,6 +411,12 @@ import {
   rubricRow,
 } from '@/utils/analysisLocalization'
 import { useSelectionStore } from '@/stores/selection'
+import {
+  QUEUED_COPY,
+  TASK_PHASE,
+  NEVER_STARTED_FAILURE,
+  failedBeforeFirstStep,
+} from '@/utils/taskPhase'
 const selection = useSelectionStore()
 
 const router = useRouter()
@@ -416,6 +435,10 @@ const optionsError = ref('')
 const resumeOptions = ref([])
 const jdOptions = ref([])
 const { pollTask: pollAgentTask } = useAgentTaskPolling()
+/* 排队那一屏：已提交、但一条步骤都还没写（判据在 `utils/taskPhase.js`）。 */
+const taskPhase = ref(TASK_PHASE.IDLE)
+const isQueued = computed(() => taskPhase.value === TASK_PHASE.QUEUED)
+const queuedCopy = QUEUED_COPY
 
 const form = reactive({ resume_id: null, jd_id: null })
 
@@ -621,6 +644,7 @@ const onAnalyze = async () => {
     return
   }
   loading.value = true
+  taskPhase.value = TASK_PHASE.IDLE
   result.value = null
   agentSteps.value = []
 
@@ -632,9 +656,12 @@ const onAnalyze = async () => {
       return
     }
 
+    /* 任务号一到手就是"已提交、还没开始跑"：排队那句话立刻上屏，不等第一跳轮询。 */
+    taskPhase.value = TASK_PHASE.QUEUED
     await pollAgentTask(taskId, {
-      onProgress(taskData, steps) {
+      onProgress(taskData, steps, phase) {
         agentSteps.value = steps
+        taskPhase.value = phase || TASK_PHASE.IDLE
       },
       async onCompleted(taskData) {
         const recordId = taskData?.analysis_record_id
@@ -650,7 +677,11 @@ const onAnalyze = async () => {
         tab.value = 'match'
       },
       onFailed(error) {
-        ElMessage.error(`分析失败: ${userErrorCopy(error, '未知错误')}`)
+        ElMessage.error(
+          failedBeforeFirstStep(error?.task)
+            ? NEVER_STARTED_FAILURE
+            : `分析失败: ${userErrorCopy(error, '未知错误')}`
+        )
       },
       onCancelled(error) {
         ElMessage.warning(userErrorCopy(error, '分析任务已取消'))

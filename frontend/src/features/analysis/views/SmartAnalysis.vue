@@ -108,6 +108,19 @@
       </div>
     </section>
 
+    <!-- 排队中：任务已提交，后台还没开始跑第一步（进度条那时是 0%，得说清是"等"不是"卡"） -->
+    <section v-if="loading && isQueued" class="panel">
+      <div class="panel-body">
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          :title="queuedCopy.title"
+          :description="queuedCopy.description"
+        />
+      </div>
+    </section>
+
     <section v-if="loading && agentSteps.length" class="panel">
       <div class="panel-header">
         <div class="panel-title-row">
@@ -386,6 +399,12 @@ import SkillsPane from '@/features/analysis/components/SkillsPane.vue'
 import { scoreToneColor } from '@/utils/scoreTone'
 import { monthDay } from '@/utils/format/date'
 import {
+  QUEUED_COPY,
+  TASK_PHASE,
+  NEVER_STARTED_FAILURE,
+  failedBeforeFirstStep,
+} from '@/utils/taskPhase'
+import {
   localizeRecommendationText,
   localizeSentence,
   normalizeLocalizedObjectList,
@@ -418,6 +437,11 @@ const genOptimizing = ref(false)
 const genRedirecting = ref(false)
 const { pollTask: pollAgentTask } = useAgentTaskPolling()
 const taskOutcome = ref('idle')
+/* 排队那一屏：任务已提交、但一条步骤都还没写。判据在 `utils/taskPhase.js`，
+   这里只负责“轮到它就说那句真话”。 */
+const taskPhase = ref(TASK_PHASE.IDLE)
+const isQueued = computed(() => taskPhase.value === TASK_PHASE.QUEUED)
+const queuedCopy = QUEUED_COPY
 
 const jdForm = reactive({ title: '', company: '', raw_text: '' })
 
@@ -630,6 +654,7 @@ const onStartAnalysis = async () => {
 
   loading.value = true
   taskOutcome.value = 'idle'
+  taskPhase.value = TASK_PHASE.IDLE
   result.value = null
   agentSteps.value = []
   runError.value = ''
@@ -650,9 +675,13 @@ const onStartAnalysis = async () => {
       ElMessage.error(runError.value)
       return
     }
+    /* 任务号一到手就是"已提交、还没开始跑"：不等第一跳轮询，排队那句话立刻上屏，
+       否则拿到 task_id 到第一次轮询之间（2 秒）屏幕上是空的。 */
+    taskPhase.value = TASK_PHASE.QUEUED
     await pollAgentTask(taskId, {
-      onProgress(taskData, steps) {
+      onProgress(taskData, steps, phase) {
         agentSteps.value = steps
+        taskPhase.value = phase || TASK_PHASE.IDLE
         taskOutcome.value = taskData?.status || 'running'
       },
       async onCompleted(taskData) {
@@ -673,9 +702,13 @@ const onStartAnalysis = async () => {
       },
       onFailed(error) {
         taskOutcome.value = 'failed'
-        // 失败要留在页面上，不能只留一个 5 秒后消失的 toast：这一发通常要跑几十秒，
-        // 人回头看到的"什么都没发生"会被读成按钮没生效。
-        runError.value = `求职分析失败：${userErrorCopy(error, '未知错误')}`
+        /* 失败要留在页面上，不能只留一个 5 秒后消失的 toast：这一发通常要跑几十秒，
+           人回头看到的"什么都没发生"会被读成按钮没生效。
+           "没跑第一步就失败"单独说一句——这一档的原因是我们自己知道的（没有 worker 消费），
+           不需要把服务端原文搬上来。 */
+        runError.value = failedBeforeFirstStep(error?.task)
+          ? NEVER_STARTED_FAILURE
+          : `求职分析失败：${userErrorCopy(error, '未知错误')}`
         ElMessage.error(runError.value)
       },
       onCancelled(error) {
@@ -690,7 +723,9 @@ const onStartAnalysis = async () => {
       },
     })
   } catch (e) {
-    runError.value = userErrorCopy(e, '分析请求失败，请稍后重试')
+    /* 只在这一轮还没写过原因时才兜底：任务失败那一支已经由 `onFailed` 写下带后端原因的那句
+       （例如"排队 2 分钟仍未开始执行：…"），这里再覆盖一次就把它换成一句没有信息量的通用话。 */
+    if (!runError.value) runError.value = userErrorCopy(e, '分析请求失败，请稍后重试')
     /* request.js 已提示过网络层，这里只补一条留在页面上的。 */
   } finally {
     loading.value = false

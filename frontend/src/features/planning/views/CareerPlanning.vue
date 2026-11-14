@@ -866,6 +866,7 @@ const {
   taskStatusLabel,
   analysisStatusLabel,
   latestMatchLabel,
+  failureCopy,
   startCareerPlanning,
 } = useCareerPlanningRun({
   getResumeId: () => selectedResumeId.value,
@@ -1153,9 +1154,10 @@ async function onSubmitPlanning() {
   }
   const outcome = await startCareerPlanning()
   /* 只在"真跑失败"时说话。`polling-stopped` 是这一页在任务跑完之前被卸载了：
-     点这一句的人已经不在这一屏，弹出来的错误只会出现在他接下来看到的那一页。 */
+     点这一句的人已经不在这一屏，弹出来的错误只会出现在他接下来看到的那一页。
+     "没跑第一步就失败"这一档由运行链给出自己的措辞（服务端原文不上屏）。 */
   if (outcome.reason === 'run-failed') {
-    ElMessage.error(userErrorCopy(outcome.error, '职业规划生成失败'))
+    ElMessage.error(failureCopy.value || userErrorCopy(outcome.error, '职业规划生成失败'))
   }
 }
 

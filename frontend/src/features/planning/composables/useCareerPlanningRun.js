@@ -4,6 +4,12 @@ import { getAnalysis, runFullAnalysis } from '@/api/analysis'
 import { useAgentTaskPolling } from '@/composables/useAgentTaskPolling'
 import { stepLabel } from '@/features/planning/lib/planningModel'
 import { localizeSentence } from '@/utils/analysisLocalization'
+import {
+  NEVER_STARTED_FAILURE,
+  QUEUED_COPY,
+  TASK_PHASE,
+  failedBeforeFirstStep,
+} from '@/utils/taskPhase'
 import { useSelectionStore } from '@/stores/selection'
 
 /* 规划运行链：D56 从 CareerPlanning.vue 搬出来。这一条是"点一次按钮跑一整条 agent 链路"，
@@ -21,6 +27,10 @@ export function useCareerPlanningRun({ getResumeId, resolveJdId, onAnalysisFinis
   const selection = useSelectionStore()
   const running = ref(false)
   const taskStatus = ref('pending')
+  /** 已提交、后台还没开始跑第一步（判据在 `utils/taskPhase.js`）。 */
+  const queued = ref(false)
+  /** 失败时给页面用的那句话：只有"没跑第一步就失败"这一档由前端自己说，其余留空走原兜底。 */
+  const failureCopy = ref('')
   const agentSteps = ref([])
   const analysisRecordId = ref(null)
   const analysisResult = ref(null)
@@ -46,17 +56,19 @@ export function useCareerPlanningRun({ getResumeId, resolveJdId, onAnalysisFinis
     const lastStep = [...agentSteps.value].reverse().find((item) => item.status === 'completed')
     return lastStep ? stepLabel(lastStep.step_name) : '等待启动'
   })
-  const taskStatusLabel = computed(
-    () =>
-      ({
+  const taskStatusLabel = computed(() => {
+    if (queued.value) return '排队中'
+    return (
+      {
         pending: '等待中',
         running: '执行中',
         completed: '已完成',
         partial: '部分完成',
         cancelled: '已取消',
         failed: '失败',
-      })[taskStatus.value] || taskStatus.value
-  )
+      }[taskStatus.value] || taskStatus.value
+    )
+  })
 
   const analysisStatusLabel = computed(() => {
     if (running.value) return '分析中'
@@ -68,7 +80,7 @@ export function useCareerPlanningRun({ getResumeId, resolveJdId, onAnalysisFinis
     return '待启动'
   })
   const latestMatchLabel = computed(() => {
-    if (running.value) return 'Agent 正在生成职业规划'
+    if (running.value) return queued.value ? QUEUED_COPY.title : 'Agent 正在生成职业规划'
     if (careerResult.value) return `匹配度 ${latestMatchScore.value}`
     if (analysisRecordId.value) return '完整分析已生成，但职业规划内容为空'
     if (taskStatus.value === 'failed') return '生成失败，请重试'
@@ -79,6 +91,8 @@ export function useCareerPlanningRun({ getResumeId, resolveJdId, onAnalysisFinis
   async function startCareerPlanning() {
     running.value = true
     taskStatus.value = 'running'
+    queued.value = false
+    failureCopy.value = ''
     analysisResult.value = null
     analysisRecordId.value = null
     agentSteps.value = []
@@ -93,13 +107,17 @@ export function useCareerPlanningRun({ getResumeId, resolveJdId, onAnalysisFinis
       if (!startRes?.task_id) {
         throw new Error('未拿到 task_id')
       }
+      /* 任务号一到手就是"已提交、还没开始跑"：不等第一跳轮询，排队那句话立刻上屏。 */
+      queued.value = true
       await pollTask(startRes.task_id, {
         timeoutMessage: '职业规划生成超时，请稍后重试',
-        onProgress(taskData, steps) {
+        onProgress(taskData, steps, phase) {
           taskStatus.value = taskData?.status || 'running'
+          queued.value = phase === TASK_PHASE.QUEUED
           agentSteps.value = steps
         },
         async onCompleted(taskData) {
+          queued.value = false
           taskStatus.value = taskData?.status || 'completed'
           analysisRecordId.value = taskData?.analysis_record_id || null
           if (!analysisRecordId.value) {
@@ -108,13 +126,17 @@ export function useCareerPlanningRun({ getResumeId, resolveJdId, onAnalysisFinis
           analysisResult.value = await getAnalysis(analysisRecordId.value)
           selection.rememberRecord(analysisRecordId.value)
         },
-        onFailed() {
+        onFailed(error) {
+          queued.value = false
           taskStatus.value = 'failed'
+          failureCopy.value = failedBeforeFirstStep(error?.task) ? NEVER_STARTED_FAILURE : ''
         },
         onCancelled() {
+          queued.value = false
           taskStatus.value = 'cancelled'
         },
         onTimeout() {
+          queued.value = false
           taskStatus.value = 'failed'
         },
       })
@@ -128,16 +150,22 @@ export function useCareerPlanningRun({ getResumeId, resolveJdId, onAnalysisFinis
            更不把它报成 run-failed——那是页面弹错误 toast 的开关。 */
         return { ok: false, reason: 'polling-stopped', error }
       }
+      queued.value = false
       taskStatus.value = error?.code === 'task_cancelled' ? 'cancelled' : 'failed'
       return { ok: false, reason: 'run-failed', error }
     } finally {
       running.value = false
+      /* 这条链只在**正在轮询**时才知道任务处于哪个阶段。轮询一结束（完成/失败/卸载打断），
+         任何"排队中"的说法都过期了——留着它会让下一次进这一屏的人看到一句没人能保证的话。 */
+      queued.value = false
     }
   }
 
   return {
     running,
     taskStatus,
+    queued,
+    failureCopy,
     agentSteps,
     analysisRecordId,
     analysisResult,

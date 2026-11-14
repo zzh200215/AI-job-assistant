@@ -67,6 +67,50 @@ export, and another proves a prose mention does **not** count. Measured on the r
 `export const mutationProbe` to `src/api/jobs.js` made it fail with exactly `jobs.js::mutationProbe`;
 removing it went green again.
 
+## Async tasks have a queued phase
+
+`/analysis/full` only accepts a task when a worker is consuming the queue (otherwise 503 — see
+`docs/真provider实测.md` §6). So "after we have a task id" has two genuinely different waits, and the
+screen used to render both as the same motionless 0%:
+
+- **queued** — the row exists, `progress.step_counts.total === 0`, nobody has written the first
+  `agent_step_log` yet;
+- **running** — steps exist, the progress panel has something to show.
+
+`frontend/src/utils/taskPhase.js` owns the classification (`taskPhase`) and the two sentences. The
+shared poller passes it as the third argument of `onProgress(taskData, steps, phase)`, so all three
+consumers of `useAgentTaskPolling` (SmartAnalysis, AnalysisResult, the career-planning run chain) make
+the same call. The judgement reads the payload only — never the clock: a long wait may just mean the
+worker is busy with the previous task, and the frontend cannot see the queue length.
+
+Two copy rules came out of building it:
+
+1. **The queued panel says what is and is not guaranteed.** It promises "progress within seconds" and
+   "a failure with a reason in about two minutes **if no worker is available**" — the conditional is
+   load-bearing, because a busy worker is allowed to take longer and will not fail.
+2. **The frontend writes the failure sentence itself.** A task that fails before its first step is a
+   state the frontend can see (`status === 'failed'` + zero steps), so `failedBeforeFirstStep()` picks
+   `NEVER_STARTED_FAILURE` instead of echoing the backend's `error_msg`. That is the same rule the job
+   pollers already enforce from the other side: the shared poller deliberately does **not** put
+   `error_msg` on `error.userMessage`, because three tests (`resumeRewriteJobPolling`,
+   `resumeReportPage`, `careerPlanningUnmountNoToast`) prove that server or model text must never
+   reach a candidate's screen. A first attempt at this echoed `error_msg` and those three went red —
+   the guard was right.
+
+The first attempt was also wrong in a second way, caught by a real-browser run: `SmartAnalysis`'s
+outer `catch` overwrote the specific message `onFailed` had just written, leaving "分析请求失败，请稍后
+重试" while the database held a fully explained failure. It now only applies its fallback when nothing
+was written.
+
+Measured on a real screen (1366×900, demo account, worker stopped but heartbeat freshly planted so the
+door accepts exactly one task):
+
+| moment | what the screen shows |
+| --- | --- |
+| after clicking 生成求职分析, 0 steps | info panel「排队中：后台还没开始跑第一步」+ the two sentences; the 分析进度 panel is absent |
+| 2 min later, converged | inline error「任务还没开始执行就被收口了：后台没有可用的 worker。请稍后重试；如果一直这样，请联系管理员启动编排 worker。」+ 重新分析 |
+| a run with a live worker | 分析进度 4 / 6 步，步骤时间线逐条点亮（匹配度 0 那一格是因为 embedding 欠费，不是阶段判断） |
+
 ## Frontend verification
 
 - `npm run test` runs Node-based frontend unit tests for request tracing helpers.
