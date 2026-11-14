@@ -143,11 +143,16 @@ recommend embedding work for resume=83: scanned=5 reused=0 embedded=0 failed=5
 | 条件 | 怎么确认 |
 |---|---|
 | 主模型配额恢复（或兜底稳定） | 探针一发：`provenance.source` 是 `real` 且 `degraded=false` |
-| embedding 账号正常 | `POST /embeddings` 不再返回 `type: Arrearage` |
+| embedding 账号正常 | 一条命令（打的是 provider，不是我们的 API）：`python -c "from app.services.embedding_service import embed_text; print(len(embed_text('探针')))"` —— 打出向量维度就是好了；打 `Embedding API 调用失败(HTTP 400)；响应体：{"error": {…"type": "Arrearage"…}}` 就是还欠着 |
 | 依赖都绿之后 | `python scripts/measure_real_chain.py --allow-real`（会花钱，会写 `prompt_trace`） |
 
 重跑时要一起记的四个数：**每步耗时、`response_source`、prompt/completion tokens、以及"这一步有没有落库"**。
 前三个是性能，第四个是"用户到底拿到了什么"——今天恰恰是第四个先坏的。
+
+> 2026-11-14 晚补的一句：`embed_text` 现在会把**响应体**带进异常信息（以前只有一句
+> `400 Client Error: Bad Request`，于是"欠费"被读成"接口挂了"）。上面那条探针的实际输出是
+> `{"error": {"message": "Access denied, please make sure your account is in good standing…",
+> "type": "Arrearage"}}`——这就是 §2 里那个判断的来源。
 
 脚本结尾现在会自己印一段结论，直接抄进本文档即可：
 

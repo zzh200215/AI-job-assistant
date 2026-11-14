@@ -7,7 +7,7 @@
 
 ## 1. 一句话现状
 
-后端 **1601 tests / 0 failed**（2026-11-14 复跑，188.1s）、前端 **127 文件 / 814 条**、静态守卫 **57 条**；
+后端 **1602 tests / 0 failed**（2026-11-14 复跑，188.1s）、前端 **127 文件 / 814 条**、静态守卫 **57 条**；
 首屏 **406 kB gzip**（预算 420，`tests/bundleBudget.test.mjs`）；eslint / prettier / ruff format 三条格式门全绿。
 RAG / Agent / 推荐 / 解析四轨进 AI 发布门；简历与面试 P1–P5 已落地。
 

@@ -49,7 +49,7 @@
 const rulers = [
   {
     name: '后端测试',
-    value: '1601 passed / 0 failed',
+    value: '1602 passed / 0 failed',
     command: 'cd backend && python -m pytest -q',
   },
   {

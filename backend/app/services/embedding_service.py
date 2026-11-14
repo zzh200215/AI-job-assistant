@@ -9,7 +9,9 @@ Embedding 服务 — 可替换接口
 通过环境变量 EMBEDDING_PROVIDER 切换，默认 mock。
 """
 
+import contextlib
 import hashlib
+import json
 import logging
 import math
 import threading
@@ -350,9 +352,23 @@ def _openai_embed(texts: list[str]) -> list[list[float]]:
         raise EmbeddingTimeoutError(f"Embedding API 调用超时: {e}") from e
     except requests.HTTPError as e:
         status = e.response.status_code if e.response is not None else 0
+        # 供应商把"为什么"写在响应体里：DashScope 欠费是 {"code":"Arrearage",…}，而 `str(e)` 只有
+        # 一句 "400 Client Error: Bad Request for url: …"。不带上响应体，排查的人只知道"400"，
+        # 不知道是欠费、模型名错、还是维度不匹配——2026-11-14 那次欠费就是这样被读成"接口挂了"的。
+        detail = ""
+        if e.response is not None:
+            with contextlib.suppress(Exception):
+                # 响应体常是 `{"code":"Arrearage","message":"账户已欠费"}`；直接拼原文会把中文
+                # 印成 `\u8d26\u6237…`，读日志的人还是不懂。能解析就按 UTF-8 再序列化一遍。
+                try:
+                    body = json.dumps(e.response.json(), ensure_ascii=False)
+                except ValueError:
+                    body = e.response.text or ""
+                detail = " ".join(body.split())[:200]
+        suffix = f"；响应体：{detail}" if detail else ""
         if status in (401, 403):
-            raise EmbeddingAuthError(f"Embedding API 鉴权失败(HTTP {status}): {e}") from e
-        raise EmbeddingProviderError(f"Embedding API 调用失败(HTTP {status}): {e}") from e
+            raise EmbeddingAuthError(f"Embedding API 鉴权失败(HTTP {status}){suffix}: {e}") from e
+        raise EmbeddingProviderError(f"Embedding API 调用失败(HTTP {status}){suffix}: {e}") from e
     except requests.RequestException as e:
         raise EmbeddingProviderError(f"Embedding API 调用失败: {e}") from e
 

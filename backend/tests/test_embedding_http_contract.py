@@ -196,6 +196,23 @@ def test_a_401_is_not_retried_and_keeps_its_own_class(provider):
     assert type(info.value) is EmbeddingAuthError, f"异常类型退化成了 {type(info.value).__name__}"
 
 
+def test_a_4xx_body_reaches_the_error_message(provider):
+    """供应商把"为什么"写在响应体里，而 `str(HTTPError)` 只有一句 "400 Client Error"。
+
+    2026-11-14 的欠费就是这样读错的：DashScope 回的是 `{"code":"Arrearage",…}`，我们把它丢了，
+    于是日志里只剩"接口挂了"——`scripts/measure_verdict.py` 也就没法按 Arrearage 分类。
+    """
+    settings.EMBEDDING_MAX_RETRIES = 0
+    provider.responses = [(400, {"code": "Arrearage", "message": "账户已欠费，请充值后重试"})]
+
+    with pytest.raises(EmbeddingProviderError) as info:
+        embedding_service.embed_texts(["欠费场景"])
+
+    message = str(info.value)
+    assert "Arrearage" in message, f"响应体没进错误信息：{message}"
+    assert "欠费" in message
+
+
 def test_the_timeout_floor_is_five_seconds_not_the_configured_value(provider):
     """`timeout=max(5, settings.EMBEDDING_TIMEOUT)`：配 1 秒实际给 requests 的是 5 秒。
     这条把那个下限钉成事实——慢 1.6 秒的请求在"配 1 秒"的口径下本该超时，实际没有。"""
