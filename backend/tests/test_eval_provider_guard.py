@@ -49,9 +49,13 @@ def test_the_judge_reads_settings_not_a_constant(monkeypatch):
     assert non_mock_providers() == {}
 
 
-@pytest.mark.parametrize("script", ["eval_rag.py", "eval_recommend.py", "eval_agent.py"])
+@pytest.mark.parametrize("script", ["eval_rag.py", "eval_recommend.py", "eval_agent.py", "measure_real_chain.py"])
 def test_every_eval_script_is_wired(script):
-    """三个入口都得接线；漏一个就等于没闸。"""
+    """四个入口都得接线；漏一个就等于没闸。
+
+    `measure_real_chain.py` 是 2026-11-14 之后补进来的：它同样会打真 provider（还会建任务、写
+    `prompt_trace`），但当时的清单里只有三个 `eval_*.py`——闸在脚本里，而"它接没接线"没人管。
+    """
     from pathlib import Path
 
     source = (Path(__file__).resolve().parents[1] / "scripts" / script).read_text(encoding="utf-8")

@@ -149,6 +149,46 @@ recommend embedding work for resume=83: scanned=5 reused=0 embedded=0 failed=5
 重跑时要一起记的四个数：**每步耗时、`response_source`、prompt/completion tokens、以及"这一步有没有落库"**。
 前三个是性能，第四个是"用户到底拿到了什么"——今天恰恰是第四个先坏的。
 
+脚本结尾现在会自己印一段结论，直接抄进本文档即可：
+
+```
+========== 结论（可直接贴进 docs/真provider实测.md） ==========
+[analysis] partial · 6/7 步（失败 1） · 记录已落库
+[arms]     3 条推荐：0 条带向量分 · 3 条只有规则分 · 方法 rubric_6dim_v2
+[traces]   real 0 · fallback 3 · 失败 4
+[blockers] 3/3 条推荐没有向量分（vector_score 为空）——分数只来自规则臂，不能当模型效果读；embedding 账号欠费（Arrearage）；模型侧限流（429）
+[verdict]  链路跑通，产出已落库；不能用于模型质量结论
+```
+
+那段结论由 `backend/scripts/measure_verdict.py` 算（纯函数，`tests/test_measure_verdict.py` 钉着）。
+它存在的理由写在那个模块的注释里：**2026-11-14 那次的分数是 57/40/33，排序看着合理，实际上
+`vector_score` 全空**——如果只看"分数非空"，这在任何一版读数里都挑不出来。
+
+### 5.1 彩排（2026-11-14 晚，脚本 v2）
+
+修完两处超时之后按"续费那天"的姿势真跑了一遍（`--allow-real --poll-seconds 600 --step-timeout 90`）。
+**它不是质量读数**（embedding 仍欠费），但它证明了一件事：这条命令现在能在十分钟内自己给出结论，
+不用人去翻 JSON：
+
+```
+[analysis] completed · 7/7 步（失败 0） · 记录已落库
+[arms]     5 条推荐：0 条带向量分 · 5 条只有规则分 · 方法 rubric_6dim_v2
+[traces]   real 1 · fallback 1 · 失败 4
+[blockers] 5/5 条推荐没有向量分（vector_score 为空）——分数只来自规则臂，不能当模型效果读
+[verdict]  链路跑通，产出已落库；不能用于模型质量结论
+```
+
+三点值得记：
+
+1. **这一发链路是 `completed`**（7/7，220.9 秒），而 §2 那一次是 `partial`：差别在兜底模型
+   （`glm-5.2`）这次答上来了（trace `src=fallback_model`，44 秒）。429 仍占 4/7 条调用——
+   "能跑完"与"配额够"是两件事。
+2. **`blockers` 里没有出现 Arrearage 字样**，但结论照样拦住了：判据读的是 `vector_score` 为空，
+   不是错误串。这一条正好说明为什么不能把"错误串匹配"当主证据。
+3. 彩排还撞出两个真问题并已修掉：轮询窗口原来默认 180 秒（那条链要跑 220 秒以上，会把 `running`
+   当成终态写进结论）；`/jobs/recommend` 在 embedding 欠费时曾挂十几分钟（现在单发接口各自
+   `--step-timeout`，超时会被记成一条读数而不是让脚本卡死）。
+
 ---
 
 ## 6. 当天修掉的缺陷 2：根本原因不是"缺一个超时"

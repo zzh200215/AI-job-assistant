@@ -49,7 +49,7 @@
 const rulers = [
   {
     name: '后端测试',
-    value: '1593 passed / 0 failed',
+    value: '1601 passed / 0 failed',
     command: 'cd backend && python -m pytest -q',
   },
   {
@@ -64,7 +64,7 @@ const rulers = [
   },
   {
     name: '格式门',
-    value: 'eslint 0 error / 0 warning；prettier 与 ruff format 486 文件全绿',
+    value: 'eslint 0 error / 0 warning；prettier 与 ruff format 488 文件全绿',
     command: 'npm run lint && npm run format:check',
   },
   {

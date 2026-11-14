@@ -27,10 +27,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from scripts.measure_verdict import classify_run, format_verdict  # noqa: E402
 from scripts.provider_guard import require_mock  # noqa: E402
 
 
-def http(method: str, url: str, token: str | None = None, body: dict | None = None, timeout: int = 900):
+def http(
+    method: str,
+    url: str,
+    token: str | None = None,
+    body: dict | None = None,
+    timeout: int = 900,
+):
+    """一次读数。
+
+    `timeout` 默认 900 秒是给"跟一条后台任务到底"用的；**单发接口必须各自收窄**——
+    2026-11-14 的彩排里 `/jobs/recommend` 在 embedding 欠费时挂了十几分钟（后端在重试退避），
+    脚本就卡在那儿，看上去像脚本自己死了。
+    """
     data = json.dumps(body).encode("utf-8") if body is not None else None
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Content-Type", "application/json")
@@ -53,14 +66,36 @@ def http(method: str, url: str, token: str | None = None, body: dict | None = No
     return {"status": status, "elapsed": round(time.perf_counter() - started, 2), "payload": payload}
 
 
+def utf8_console() -> None:
+    """这份读数里全是中文（章节名、结论、失败原因）；Windows 控制台默认按本地码页解，
+    会把它们印成问号或乱码，量测的人读不懂等于白测。可在 `--help` 之前调用。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> int:
+    utf8_console()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--allow-real", action="store_true", help="显式允许打真 provider（会花钱）")
     parser.add_argument("--base", default="http://127.0.0.1:8001/api")
     parser.add_argument("--account", default="demo")
     parser.add_argument("--password", default="Demo@12345")
     parser.add_argument("--jd-id", type=int, default=None)
-    parser.add_argument("--poll-seconds", type=int, default=180, help="后台任务最多跟多久")
+    parser.add_argument(
+        "--poll-seconds",
+        type=int,
+        default=600,
+        help="后台任务最多跟多久（2026-11-14 实测一条 7 步的链跑了 4 分 37 秒，180 秒会中途放弃）",
+    )
+    parser.add_argument(
+        "--step-timeout",
+        type=int,
+        default=120,
+        help="单个同步接口最多等多久；embedding 欠费时 /jobs/recommend 会长时间不退",
+    )
     args = parser.parse_args()
 
     mode = require_mock("measure_real_chain.py", allow_real=args.allow_real)
@@ -111,18 +146,24 @@ def main() -> int:
     task_id = (started.get("payload") or {}).get("data", {}).get("task_id")
     print(f"   status={started['status']} {started['elapsed']}s task_id={task_id}")
     task_timeline = []
+    last_progress: dict = {}
+    final_task_payload: dict = {}
+    polled_to_terminal = False
     if task_id:
         t0 = time.perf_counter()
         while time.perf_counter() - t0 < args.poll_seconds:
-            got = http("GET", f"{args.base}/agent/task/{task_id}", token=token)
+            got = http("GET", f"{args.base}/agent/task/{task_id}", token=token, timeout=30)
             data = (got.get("payload") or {}).get("data") or {}
+            final_task_payload = data
             progress = data.get("progress") or {}
+            last_progress = progress
             snap = {
                 "at": round(time.perf_counter() - t0, 1),
                 "status": data.get("status"),
                 "percent": progress.get("progress_percent"),
                 "total_steps": progress.get("total_steps"),
-                "current_step": progress.get("current_step"),
+                "finished_steps": progress.get("finished_steps"),
+                "current_step": (progress.get("current_step") or {}).get("label"),
             }
             if (
                 not task_timeline
@@ -131,16 +172,32 @@ def main() -> int:
             ):
                 task_timeline.append(snap)
                 print(
-                    f"   t+{snap['at']:>6}s status={snap['status']} pct={snap['percent']} steps={snap['total_steps']}"
+                    f"   t+{snap['at']:>6}s status={snap['status']} pct={snap['percent']} "
+                    f"steps={snap['finished_steps']}/{snap['total_steps']} 当前={snap['current_step']}"
                 )
             if snap["status"] not in {"pending", "running"}:
+                polled_to_terminal = True
                 break
             time.sleep(5)
+    if task_id and not polled_to_terminal:
+        print(
+            f"   ⚠ 跟了 {args.poll_seconds} 秒还没到终态（最后 status={last_progress and final_task_payload.get('status')}）；"
+            "结论会标成'读数不完整'——要跟完就把 --poll-seconds 调大"
+        )
     report["steps"].append({"step": "analysis/full", "accept": started, "timeline": task_timeline})
+    report["step_counts"] = last_progress.get("step_counts") or {}
+    report["polled_to_terminal"] = polled_to_terminal
+    # "有没有落库"是这三件读数里最容易漏掉的一件：接口 200 不等于记录真的写进去了
+    report["analysis_record_id"] = (final_task_payload or {}).get("analysis_record_id")
 
     # ② 推荐（会走 embedding）
     print("\n② GET /jobs/recommend", flush=True)
-    rec = http("GET", f"{args.base}/jobs/recommend?resume_id={resume_id}&limit=5", token=token)
+    rec = http(
+        "GET",
+        f"{args.base}/jobs/recommend?resume_id={resume_id}&limit=5",
+        token=token,
+        timeout=args.step_timeout,
+    )
     rec_data = (rec.get("payload") or {}).get("data") or {}
     recs = rec_data.get("recommendations") or []
     print(f"   status={rec['status']} {rec['elapsed']}s scores={[r.get('match_score') for r in recs]}")
@@ -150,6 +207,17 @@ def main() -> int:
             "status": rec["status"],
             "elapsed": rec["elapsed"],
             "scores": [r.get("match_score") for r in recs],
+            # 分数是哪条臂算的：`vector_score` 为空就说明向量臂没参与，那次的分数不能当模型效果读
+            "recommendations": [
+                {
+                    "jd_id": r.get("jd_id"),
+                    "match_score": r.get("match_score"),
+                    "rule_score": r.get("rule_score"),
+                    "vector_score": r.get("vector_score"),
+                    "match_score_method": r.get("match_score_method"),
+                }
+                for r in recs
+            ],
         }
     )
 
@@ -160,6 +228,7 @@ def main() -> int:
         f"{args.base}/interview/sessions",
         token=token,
         body={"resume_id": resume_id, "jd_id": jd_id, "interview_type": "tech"},
+        timeout=args.step_timeout,
     )
     iv_data = (iv.get("payload") or {}).get("data") or {}
     print(
@@ -216,10 +285,17 @@ def main() -> int:
     )
     print("\n[提醒] 分数分布只有在 embedding 通道正常时才说明模型效果；见 docs/真provider实测.md §2.4")
 
+    # 把三件读数归成一句结论：这一步存在的理由见 scripts/measure_verdict.py 的模块注释
+    # （2026-11-14 那次分数看着像模像样、实际全是规则臂，而没有任何东西会红）。
+    verdict = classify_run(report)
+    report["verdict"] = verdict
+    print("\n========== 结论（可直接贴进 docs/真provider实测.md） ==========")
+    print(format_verdict(verdict))
+
     out = Path("reports/measure_real_chain.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"[out] {out}")
+    print(f"\n[out] {out}")
     return 0
 
 
