@@ -76,6 +76,16 @@ export const NEVER_STARTED_FAILURE =
 export const FAILURE_FALLBACK = '任务没有完成，可以稍后重试'
 
 /**
+ * 报告类作业（简历报告 / 项目分析 / 作品集分析）排队时的说法。
+ *
+ * 它们的后端形状与编排任务不同：**没有 `progress`**，只有 `pending / running / completed / failed`
+ * 四个状态（`report_job_service.serialize_job`）。所以"排队"就是 `pending`——那一行已经在库里、
+ * 已投进本地线程池，只是还没被 worker 领走。`taskPhase()` 对 `pending` 本来就返回 queued，
+ * 这一族直接复用，不必另写判据。
+ */
+export const JOB_QUEUED_COPY = '排队中：任务已提交，后台还没开始跑（前面可能还有别的作业）。'
+
+/**
  * 任务是否"没跑第一步就失败了"。
  *
  * 只在载荷带 `progress` 时下判断：作业类任务没有这个形状，硬猜会让它们的失败也换成这句话。

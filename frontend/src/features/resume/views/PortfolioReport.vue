@@ -48,6 +48,8 @@
         </el-button>
         <el-button link @click="backToCenter">回简历中心</el-button>
       </div>
+      <p v-if="job.loading && jobQueued" class="pf-loading">{{ JOB_QUEUED_COPY }}</p>
+      <p v-else-if="job.loading" class="pf-loading">正在逐节生成，请稍候</p>
       <p v-if="pageError" class="pf-error">{{ pageError }}</p>
     </div>
 
@@ -447,6 +449,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AiDisclaimer from '@/components/ui/AiDisclaimer.vue'
 import { ElMessage } from '@/plugins/element-services'
 import { createAgentTaskPoller } from '@/utils/agentTaskPolling'
+import { JOB_QUEUED_COPY, TASK_PHASE } from '@/utils/taskPhase'
 import { userErrorCopy } from '@/utils/requestTracing'
 import {
   createPortfolioQuestionsJob,
@@ -507,6 +510,8 @@ const optionsLoading = ref(false)
 const form = reactive({ resumeId: null, indices: [], jdId: null })
 
 const job = reactive({ id: null, status: '', loading: false })
+/* 还没被 worker 领走（`pending`）：与"逐节生成"分开说，判据在 `utils/taskPhase.js`。 */
+const jobQueued = ref(false)
 const questionsJob = reactive({ id: null, loading: false })
 const report = ref(null)
 const pageError = ref('')
@@ -746,12 +751,17 @@ async function runJob(jobId, knownStatus = '') {
   if (!jobId) return
   job.id = jobId
   job.status = knownStatus || 'pending'
+  jobQueued.value = job.status === 'pending'
   try {
     const data = await poller.pollTask(jobId, {
       maxPollCount: POLL_MAX_ATTEMPTS,
       intervalMs: POLL_INTERVAL_MS,
       timeoutMessage: '这一份组合分析这次没跑完，稍后再试',
       failedMessage: '这一份组合分析没能生成，稍后再试',
+      onProgress(taskData, _steps, phase) {
+        if (taskData?.status) job.status = taskData.status
+        jobQueued.value = phase === TASK_PHASE.QUEUED
+      },
     })
     if (!alive) return
     job.status = data?.status || 'completed'

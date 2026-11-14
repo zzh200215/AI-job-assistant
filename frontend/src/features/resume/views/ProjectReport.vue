@@ -79,7 +79,8 @@
         >
           {{ job.id ? '重新生成前三节' : '开始生成前三节' }}
         </el-button>
-        <span v-if="job.loading" class="pr-loading">正在逐节生成，请稍候</span>
+        <span v-if="job.loading && jobQueued" class="pr-loading">{{ JOB_QUEUED_COPY }}</span>
+        <span v-else-if="job.loading" class="pr-loading">正在逐节生成，请稍候</span>
         <span v-else-if="job.status === 'failed'" class="pr-loading"
           >这一份项目分析没能生成，可以再点一次</span
         >
@@ -568,6 +569,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AiDisclaimer from '@/components/ui/AiDisclaimer.vue'
 import { ElMessage } from '@/plugins/element-services'
 import { createAgentTaskPoller } from '@/utils/agentTaskPolling'
+import { JOB_QUEUED_COPY, TASK_PHASE } from '@/utils/taskPhase'
 import { userErrorCopy } from '@/utils/requestTracing'
 import {
   createProjectQuestionsJob,
@@ -611,6 +613,8 @@ const optionsLoading = ref(false)
 const form = reactive({ resumeId: null, projectIndex: null, jdId: null })
 
 const job = reactive({ id: null, status: '', loading: false })
+/* 还没被 worker 领走（`pending`）：与"正在逐节生成"分开说，判据在 `utils/taskPhase.js`。 */
+const jobQueued = ref(false)
 const questionsJob = reactive({ id: null, loading: false })
 const report = ref(null)
 const pageError = ref('')
@@ -877,12 +881,17 @@ async function runJob(jobId, knownStatus = '') {
   if (!jobId) return
   job.id = jobId
   job.status = knownStatus || 'pending'
+  jobQueued.value = job.status === 'pending'
   try {
     const data = await poller.pollTask(jobId, {
       maxPollCount: POLL_MAX_ATTEMPTS,
       intervalMs: POLL_INTERVAL_MS,
       timeoutMessage: '这一份项目分析这次没跑完，稍后再试',
       failedMessage: '这一份项目分析没能生成，稍后再试',
+      onProgress(taskData, _steps, phase) {
+        if (taskData?.status) job.status = taskData.status
+        jobQueued.value = phase === TASK_PHASE.QUEUED
+      },
     })
     if (!alive) return
     job.status = data?.status || 'completed'

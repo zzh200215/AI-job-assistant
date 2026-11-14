@@ -62,7 +62,8 @@
         >
           {{ job.id ? '重新生成报告' : '开始生成报告' }}
         </el-button>
-        <span v-if="job.loading" class="rr-loading">
+        <span v-if="job.loading && jobQueued" class="rr-loading">{{ JOB_QUEUED_COPY }}</span>
+        <span v-else-if="job.loading" class="rr-loading">
           <el-icon class="is-loading"><Loading /></el-icon>
           正在逐节生成，请稍候
         </span>
@@ -447,6 +448,7 @@ import { ArrowUp, Download, Loading } from '@element-plus/icons-vue'
 import AiDisclaimer from '@/components/ui/AiDisclaimer.vue'
 import { ElMessage } from '@/plugins/element-services'
 import { createAgentTaskPoller } from '@/utils/agentTaskPolling'
+import { JOB_QUEUED_COPY, TASK_PHASE } from '@/utils/taskPhase'
 import { userErrorCopy } from '@/utils/requestTracing'
 import {
   applyReportRedline,
@@ -485,6 +487,9 @@ const optionsLoading = ref(false)
 const form = reactive({ resumeId: null, jdId: null, targetPosition: '' })
 
 const job = reactive({ id: null, status: '', loading: false })
+/* 这一份作业还没被 worker 领走（`pending`）：那句话与"正在逐节生成"是两回事——
+   以前两者都只有"正在逐节生成"，看起来像已经开跑了。判据在 `utils/taskPhase.js`。 */
+const jobQueued = ref(false)
 const report = ref(null)
 const pageError = ref('')
 const activeAnchor = ref(MODULES[0].anchor)
@@ -792,12 +797,17 @@ async function runJob(jobId, knownStatus = '') {
   if (!jobId) return
   job.id = jobId
   job.status = knownStatus || 'pending'
+  jobQueued.value = job.status === 'pending'
   try {
     const data = await poller.pollTask(jobId, {
       maxPollCount: REPORT_POLL_MAX_ATTEMPTS,
       intervalMs: REPORT_POLL_INTERVAL_MS,
       timeoutMessage: '这一份报告这次没跑完，稍后再试',
       failedMessage: '这一份报告没能生成，稍后再试',
+      onProgress(taskData, _steps, phase) {
+        if (taskData?.status) job.status = taskData.status
+        jobQueued.value = phase === TASK_PHASE.QUEUED
+      },
     })
     if (!alive) return
     job.status = data?.status || 'completed'

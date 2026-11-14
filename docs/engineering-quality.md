@@ -124,6 +124,19 @@ door accepts exactly one task):
 | 任务中心，收口后 | 同一张卡片变成「失败 / 耗时：2.0 分钟」+ the same frontend sentence + 重试；服务端 `error_msg` 一个字没上屏 |
 | 分析结果页，排队中 → 收口 | 排队块换成行内错误 + 重新分析，服务端原文同样没上屏 |
 
+A fourth family uses the same poller with a **different payload shape**: the three report jobs
+(`ResumeReport`, `ProjectReport`, `PortfolioReport`) have no `progress` at all — only
+`pending / running / completed / failed`. "Queued" there is simply `pending` (the row exists and is
+submitted to the local pool but no worker has claimed it), and `taskPhase()` already answers `queued`
+for that status, so the classifier did not grow a second rule. All three used to say 正在逐节生成 while
+queued; they now say 排队中…（前面可能还有别的作业）until the job is claimed.
+
+Evidence boundary, stated because it differs from the rows above: those three are covered by
+component-level tests (`reportJobsQueuedCopy`, real components + the real poller + a `pending`
+payload), **not** by a browser screenshot. Catching that window in a browser needs the report pool
+saturated; the copy branch is one `v-if`, and the same machinery is browser-verified on the two
+screens above.
+
 ## Frontend verification
 
 - `npm run test` runs Node-based frontend unit tests for request tracing helpers.
