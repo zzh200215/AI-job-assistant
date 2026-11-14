@@ -21,6 +21,16 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
+class OrchestrationUnavailable(RuntimeError):
+    """没有任何消费者能跑这个任务。
+
+    入口必须把它翻成 4xx/5xx 的**明确拒绝**，而不是先落一个 task_id 再让它空转：
+    2026-11-14 的实测现场就是后者——`/analysis/full` 回了 200 + task_id，
+    `ORCHESTRATION_BACKEND=redis_queue` 却没有任何 worker 进程，任务在队列里躺了
+    733 秒（`steps=0`、`trace=0`），屏幕上只有一个永远转的圈。
+    """
+
+
 @dataclass
 class TaskPayload:
     strategy_name: str
@@ -111,6 +121,37 @@ class RedisQueueOrchestrationBackend(OrchestrationBackend):
         self._client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
         return self._client
 
+    # ---- worker 心跳：让"队列有活人"这件事可观测 ----
+
+    def heartbeat_ttl_seconds(self) -> int:
+        return max(1, int(settings.ORCHESTRATION_WORKER_HEARTBEAT_TTL_SECONDS or 90))
+
+    def beat(self, client=None) -> None:
+        """写一次心跳。worker 每 TTL/3 刷一遍，值就是写入时刻。"""
+        client = client if client is not None else self._get_client()
+        client.set(
+            worker_heartbeat_key(settings.ORCHESTRATION_QUEUE_NAME),
+            repr(time.time()),
+            ex=self.heartbeat_ttl_seconds(),
+        )
+
+    def worker_status(self, client=None) -> tuple[bool, float | None]:
+        """(有没有活着的消费者, 心跳距今几秒)。键不存在 = **没有**，不是"未知"。
+
+        刻意 fail-closed：没写心跳的部署（升级前的旧 worker）会被判成"没人消费"，
+        入口于是拒绝接单。方向是有意的——拒绝会立刻暴露，而"照收但没人跑"要好几分钟
+        才以转圈的形式暴露，且最后怪在模型头上。
+        """
+        client = client if client is not None else self._get_client()
+        raw = client.get(worker_heartbeat_key(settings.ORCHESTRATION_QUEUE_NAME))
+        if not raw:
+            return False, None
+        try:
+            age = max(0.0, time.time() - float(raw))
+        except (TypeError, ValueError):
+            return True, None
+        return True, round(age, 1)
+
     def submit(self, payload: TaskPayload, runner: Callable[[TaskPayload], None]) -> None:
         # runner 在这里被刻意忽略：闭包过不了 Redis 这道进程边界。
         # 所以 payload 必须自带执行所需的一切（含 run_id），worker 端统一走
@@ -130,6 +171,7 @@ class RedisQueueOrchestrationBackend(OrchestrationBackend):
         client = self._get_client()
         queue, processing, dead, deadlines = self._names()
         try:
+            worker_alive, worker_age = self.worker_status(client)
             return {
                 "ok": bool(client.ping()),
                 "backend": "redis_queue",
@@ -139,9 +181,14 @@ class RedisQueueOrchestrationBackend(OrchestrationBackend):
                 "processing_length": int(client.llen(processing)),
                 "dead_letter_length": int(client.llen(dead)),
                 "inflight_tracked": int(client.zcard(deadlines)),
+                # D6 现场缺的就是这两个数：队列 ok、长度 2、死信 0，看上去一切正常，
+                # 而实际上没有任何进程在消费——只看这三个数的仪表对这一类事故是瞎的。
+                "worker_alive": worker_alive,
+                "worker_last_seen_seconds": worker_age,
             }
         except Exception as exc:
-            return {"ok": False, "error": str(exc), "queue_name": queue}
+            # 连不上 Redis 时也把 worker 判成"没有"：没有连接就没有消费者，入口该拒绝。
+            return {"ok": False, "error": str(exc), "queue_name": queue, "worker_alive": False}
 
     def worker_loop(
         self,
@@ -153,8 +200,37 @@ class RedisQueueOrchestrationBackend(OrchestrationBackend):
         三条边界都是这次改动要买的东西：worker 被杀不再丢任务（以前 `blpop` 先删后跑，
         进程一死元素就没了）、毒消息不会永远重放（attempts 上限 → 死信）、
         崩在交接与登记之间的元素会被**领养**而不是永久卡在 processing。
+
+        心跳是独立线程写的：主循环会阻塞在一次十几分钟的 runner 里，把心跳挂在循环体上
+        就等于"worker 越忙越像死了"，而入口守门看的正是这个键。
         """
         client = self._get_client()
+        heartbeat_stop = Event()
+        self._start_heartbeat(client, heartbeat_stop=heartbeat_stop)
+        try:
+            self._consume(client, runner, stop_event)
+        finally:
+            heartbeat_stop.set()
+
+    def _start_heartbeat(self, client, *, heartbeat_stop: Event) -> None:
+        interval = max(1.0, self.heartbeat_ttl_seconds() / 3)
+        # 第一拍同步写：worker 起来的第一秒入口就该能接单，否则启动后要空等一个 TTL。
+        try:
+            self.beat(client)
+        except Exception as exc:  # noqa: BLE001 - 心跳写失败不该让 worker 起不来
+            logger.warning("worker 心跳写入失败，入口会把它判成没有消费者：%s", exc)
+
+        def _loop() -> None:
+            while not heartbeat_stop.wait(interval):
+                try:
+                    self.beat(client)
+                except Exception as exc:  # noqa: BLE001 - 一次失败下一拍再来
+                    logger.warning("worker 心跳写入失败：%s", exc)
+
+        name = "orchestration-worker-heartbeat"
+        threading.Thread(target=_loop, name=name, daemon=True).start()
+
+    def _consume(self, client, runner: Callable[[TaskPayload], None], stop_event: Event | None) -> None:
         queue, processing, _dead, deadlines = self._names()
         poll_seconds = max(1, int(round(float(settings.ORCHESTRATION_QUEUE_POLL_SECONDS or 1.0))))
         while True:
@@ -240,6 +316,11 @@ class RedisQueueOrchestrationBackend(OrchestrationBackend):
         client.lpush(_queue, _envelope(payload_data, attempts=next_attempt))
 
 
+def worker_heartbeat_key(queue_name: str) -> str:
+    """worker 心跳键。与队列同前缀，`KEYS analysis-tasks:*` 就能把"队列 + 活人"一起看全。"""
+    return f"{queue_name}:worker-heartbeat"
+
+
 def _deadline() -> float:
     return time.time() + max(1.0, float(settings.ORCHESTRATION_VISIBILITY_SECONDS or 3600.0))
 
@@ -291,4 +372,13 @@ def health_snapshot() -> dict[str, Any]:
         snapshot = backend.queue_health()
         snapshot["backend"] = "redis_queue"
         return snapshot
-    return {"ok": True, "backend": "thread", "queue_name": None, "queue_length": 0}
+    # 线程后端的"消费者"就是这个进程本身，没有"没人消费"这种形态：
+    # 给 None 而不是 True，是为了让告警判据能用 `is False` 精确区分"不适用"与"确实没有"。
+    return {
+        "ok": True,
+        "backend": "thread",
+        "queue_name": None,
+        "queue_length": 0,
+        "worker_alive": None,
+        "worker_last_seen_seconds": None,
+    }

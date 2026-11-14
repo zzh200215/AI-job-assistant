@@ -16,6 +16,7 @@ from app.schemas.analysis import ExplainMatchReq, FullAnalysisReq, MatchReq
 from app.services import interview_service, match_service, optimize_service
 from app.services.analysis_service import run_smart_analysis
 from app.services.match_explainer_service import MatchExplainer
+from app.services.orchestration_backend import OrchestrationUnavailable
 from app.services.rag_confidence_service import confidence_from_flat_results
 from app.services.rag_service import get_knowledge_references
 from app.services.skill_gap import build_skill_gap, canonicalize_skill_rows, jd_skill_union, resume_skill_names
@@ -202,6 +203,10 @@ def full_smart_analysis(
             user_id=current_user.id,
         )
         return ok(data={"task_id": task_id}, message="智能分析已启动")
+    except OrchestrationUnavailable as exc:
+        # 503 而不是 500：这不是"分析失败"，是**现在没人能跑**——换个时间/起一个 worker 就好。
+        # 也刻意不回 task_id：发一个没人会跑的任务号，前端就只能一直转圈。
+        raise api_error(503, str(exc), ERR_AI) from exc
     except Exception as exc:
         traceback.print_exc()
         raise api_error(500, f"启动分析失败: {exc}", ERR_COMMON) from exc

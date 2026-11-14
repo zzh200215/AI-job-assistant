@@ -157,6 +157,25 @@ def _usage_by_task(db: Session, tasks: list[AgentTask]) -> dict[int, dict]:
     return usage
 
 
+def _converge_orphans(db: Session, tasks: list[AgentTask]) -> None:
+    """读任务状态时顺手把"没有人会再推进"的任务收口。
+
+    为什么收口挂在读路径上而不是只靠定时清扫：轮询 `/agent/task/{id}` 的那条请求**就是**
+    在等这个任务的那条请求（前端每 2 秒一跳，`maxPollCount=120` 约 4 分钟）。
+    在它下一次轮询里把状态改成 failed 并带上原因，用户立刻看到一个能读懂的失败，
+    而不是再等下一次进程重启（`mark_stale_running_tasks_failed` 只在启动时扫一遍）。
+    另一个理由是 `RUN_SCHEDULER=false` 是签进树的合法配置：定时任务未必存在。
+
+    收口判据本身在 `orchestration_runner.converge_running_task`：只收"从没开始 + 确认没有
+    活着的消费者"的那种，别在这里另写一份。
+    """
+    from app.services.orchestration_runner import converge_running_task
+
+    for task in tasks:
+        if task.status == "running":
+            converge_running_task(task, db)
+
+
 def list_user_tasks(
     db: Session,
     *,
@@ -177,6 +196,8 @@ def list_user_tasks(
         .all()
     )
     task_ids = [task.id for task in tasks]
+    if task_ids:
+        _converge_orphans(db, tasks)
     step_rows = (
         db.query(AgentStepLog)
         .filter(AgentStepLog.task_id.in_(task_ids))
@@ -209,6 +230,9 @@ def get_task_with_progress(db: Session, *, task_id: int, user_id: int) -> tuple[
     task = db.query(AgentTask).filter(AgentTask.id == task_id, AgentTask.user_id == user_id).first()
     if not task:
         return None, None
+
+    # 这一跳就是前端每 2 秒轮询的那一跳：在这里收口，转圈会在下一次轮询时变成一条可读的失败。
+    _converge_orphans(db, [task])
 
     steps = db.query(AgentStepLog).filter(AgentStepLog.task_id == task_id).order_by(AgentStepLog.step_index.asc()).all()
     payload = serialize_task(task, steps)

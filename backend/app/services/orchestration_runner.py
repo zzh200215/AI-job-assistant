@@ -17,6 +17,7 @@ from app.models.agent_run import AgentMessage, AgentRun
 from app.orchestration.registry import DEFAULT_REGISTRY
 from app.orchestration.strategies import StrategyFactory
 from app.services.orchestration_backend import (
+    OrchestrationUnavailable,
     RedisQueueOrchestrationBackend,
     TaskPayload,
     get_orchestration_backend,
@@ -34,6 +35,44 @@ def _get_backend():
     if _BACKEND is None:
         _BACKEND = get_orchestration_backend()
     return _BACKEND
+
+
+def _ensure_dispatchable(backend) -> None:
+    """收单之前先确认"有人会跑它"。没有人就抛 `OrchestrationUnavailable`，由接口翻成 503。
+
+    改前的形状是"照收不误"：`submit` 只往 list 里 LPUSH 一行，接口立刻回"智能分析已启动"。
+    2026-11-14 的实测就是被这一条坑到 —— `.env` 写着 `ORCHESTRATION_BACKEND=redis_queue`
+    而机器上没有任何 worker 进程，`/analysis/full` 回 200 + task_id，任务在队列里躺了 733 秒
+    （`steps=0`、`prompt_trace=0`），候选人屏幕上只有一个永远转的圈。
+
+    宁可当场拒绝并说清怎么修，也不要发一个没人会跑的任务号：拒绝是可恢复的，转圈不是。
+    """
+    if not isinstance(backend, RedisQueueOrchestrationBackend):
+        # 线程后端的消费者就是本进程，进程活着就有人跑 —— 这里没有可判的东西。
+        return
+    health = backend.queue_health()
+    if not health.get("ok", False):
+        raise OrchestrationUnavailable(
+            f"分析服务暂不可用：任务队列连不上（{health.get('error') or 'Redis 不可用'}），请稍后重试"
+        )
+    if not health.get("worker_alive", False):
+        logger.error(
+            "拒绝创建分析任务：redis_queue 后端没有活着的 worker（queue=%s length=%s）。"
+            "启动：cd backend && ./.venv/Scripts/python.exe -m scripts.run_orchestration_worker",
+            health.get("queue_name"),
+            health.get("queue_length"),
+        )
+        raise OrchestrationUnavailable(
+            "分析服务暂不可用：后台任务队列没有 worker 在消费，创建了也没人执行。"
+            "请先启动编排 worker（`python -m scripts.run_orchestration_worker`）后重试"
+        )
+
+
+def _naive(value):
+    """DB 读回的时间是 naive，与 `utc_now()` 的 aware 值相减会 TypeError。"""
+    if value is None or value.tzinfo is None:
+        return value
+    return value.replace(tzinfo=None)
 
 
 def _run_task_payload(payload: TaskPayload) -> None:
@@ -138,6 +177,8 @@ def run_strategy_async(
     retry_of_task_id: int | None = None,
 ) -> int:
     """Create a task and execute the given strategy using the configured backend."""
+    backend = _get_backend()
+    _ensure_dispatchable(backend)
     task_id = create_task(
         resume_id,
         jd_id,
@@ -145,7 +186,12 @@ def run_strategy_async(
         strategy_name=strategy_name,
         retry_of_task_id=retry_of_task_id,
     )
-    start_strategy_thread(strategy_name, task_id, resume_id, jd_id, user_id=user_id)
+    try:
+        start_strategy_thread(strategy_name, task_id, resume_id, jd_id, user_id=user_id)
+    except Exception as exc:
+        # 投递这一步失败的话，行已经落库了：不收口就是一个新的"永远 running"。
+        fail_task(task_id, f"任务投递失败：{exc}")
+        raise OrchestrationUnavailable(f"任务投递失败：{exc}") from exc
     return task_id
 
 
@@ -165,6 +211,27 @@ def start_strategy_thread(
         user_id=user_id,
     )
     return _get_backend().submit(payload, _run_task_payload)
+
+
+def fail_task(task_id: int, message: str, *, db: Session | None = None) -> None:
+    """把一条还没收口的任务就地判失败。投递失败与"没人消费"都走这一个出口。"""
+    session = db or SessionLocal()
+    owns_session = db is None
+    try:
+        task = session.get(AgentTask, task_id)
+        if not task or task.status != "running":
+            return
+        task.status = "failed"
+        task.error_msg = message[:500]
+        task.end_time = utc_now()
+        session.add(task)
+        session.commit()
+    except Exception:  # noqa: BLE001 - 收口失败不能盖掉真正要抛给调用方的那个原因
+        session.rollback()
+        logger.warning("收口任务失败 task_id=%s", task_id, exc_info=True)
+    finally:
+        if owns_session:
+            session.close()
 
 
 def create_legacy_run(
@@ -299,6 +366,98 @@ def mark_stale_running_tasks_failed(
             session.close()
 
 
+def _has_any_progress(db: Session, task_id: int) -> bool:
+    """这条任务有没有"有人开始跑它"的痕迹：步骤行，或挂在它下面的节点消息。
+
+    两条都要查：分层策略是先建 running 步骤再并发，legacy 路径可能先落节点消息。
+    只在 "已经超过启动超时" 时才走到这里，所以这两次查询不落在热路径上。
+    """
+    if db.query(AgentStepLog.id).filter(AgentStepLog.task_id == task_id).first():
+        return True
+    return bool(
+        db.query(AgentMessage.id)
+        .join(AgentRun, AgentMessage.run_id == AgentRun.id)
+        .filter(AgentRun.task_id == task_id)
+        .first()
+    )
+
+
+def _consumer_state(backend) -> tuple[bool, str]:
+    """(有没有活着的消费者, 给用户看的现场)。线程后端恒为"有"。
+
+    线程后端的消费者就是本进程：任务投进本地线程池，进程活着就一定会有人跑它
+    （哪怕要排队等 `ORCHESTRATION_MAX_WORKERS` 释放）。这一点很重要 —— 离线时
+    它让"从没开始"这条判据对线程后端**完全不起作用**，否则一次并发排队就会被判死。
+    """
+    if not isinstance(backend, RedisQueueOrchestrationBackend):
+        return True, ""
+    health = backend.queue_health()
+    if not health.get("ok", False):
+        return False, f"任务队列连不上（{(health.get('error') or '')[:120]}）"
+    if health.get("worker_alive", False):
+        return True, ""
+    queued = int(health.get("queue_length") or 0)
+    return False, f"任务队列里没有活着的 worker（心跳键不存在，当前 {queued} 条任务在等它）"
+
+
+def converge_running_task(
+    task: AgentTask,
+    db: Session | None = None,
+    *,
+    backend=None,
+    now: datetime | None = None,
+) -> str | None:
+    """把"没有人会再推进"的 running 任务就地收口成 failed；返回收口原因（没动就是 None）。
+
+    补的是 `mark_stale_running_tasks_failed` 管不到、而在 D6 实测里真把用户等了 733 秒的那个洞：
+    它的判据是"最后一次活动超过 30 分钟"，可**从没开始过的任务根本没有活动行** ——
+    只要进程不重启，它就永远停在 running，前端就永远转圈。
+
+    判据刻意收得很窄，只收"确定没有人会跑它"的那种：
+    1. 没有步骤行、也没有节点消息（worker 还没拿到它）；
+    2. 已经过了 `ORCHESTRATION_START_TIMEOUT_MINUTES`；
+    3. 并且确认当前**没有活着的消费者**（Redis 后端看 worker 心跳；线程后端恒有）。
+
+    第 3 条不能省：worker 活着时它只是排在别人后面，判死会在几分钟后与真正的完成撞车
+    —— 任务被标成 failed，随后又落了一条 AnalysisRecord，两处说法不一致。
+
+    代价是每次调用只多一次 Redis 健康查询，且只在"已经超过启动超时、又没有任何进度行"
+    时才发生 —— 正常态下这条路一次都不会走到。
+    """
+    if task is None or task.status != "running" or task.start_time is None:
+        return None
+
+    timeout = max(1, int(settings.ORCHESTRATION_START_TIMEOUT_MINUTES or 2))
+    current = now or utc_now_naive()
+    age = current - _naive(task.start_time)
+    if age < timedelta(minutes=timeout):
+        return None
+    session = db or SessionLocal()
+    owns_session = db is None
+    try:
+        if _has_any_progress(session, task.id):
+            # 已经开始了：剩下的交给"开始后静默"那条判据（30 分钟、按最后一次活动）。
+            return None
+        alive, note = _consumer_state(backend or _get_backend())
+        if alive:
+            return None
+        reason = f"排队 {timeout} 分钟仍未开始执行：{note}。任务没有跑过，按未启动收口"
+        task.status = "failed"
+        task.error_msg = reason[:500]
+        task.end_time = utc_now()
+        session.add(task)
+        session.commit()
+        logger.warning("converged never-started agent task id=%s: %s", task.id, reason)
+        return reason
+    except Exception:
+        session.rollback()
+        logger.warning("收口未启动任务失败 task_id=%s", getattr(task, "id", None), exc_info=True)
+        return None
+    finally:
+        if owns_session:
+            session.close()
+
+
 def shutdown_orchestration_executor() -> None:
     """Stop accepting new background work during application shutdown."""
     backend = _get_backend()
@@ -345,6 +504,9 @@ def retry_task(
         if task.status in {"pending", "running"}:
             return task
 
+        backend = _get_backend()
+        # 重试也是收单：没有消费者时同样不该发一个新的任务号。
+        _ensure_dispatchable(backend)
         strategy_name = task.strategy_name or fallback_strategy
         new_task_id = create_task(
             task.resume_id,
@@ -354,7 +516,11 @@ def retry_task(
             retry_of_task_id=task.id,
             db=session,
         )
-        start_strategy_thread(strategy_name, new_task_id, task.resume_id, task.jd_id, user_id=user_id)
+        try:
+            start_strategy_thread(strategy_name, new_task_id, task.resume_id, task.jd_id, user_id=user_id)
+        except Exception as exc:
+            fail_task(new_task_id, f"任务投递失败：{exc}", db=session)
+            raise OrchestrationUnavailable(f"任务投递失败：{exc}") from exc
         logger.info(
             "Task retried original_task_id=%s new_task_id=%s strategy=%s",
             task.id,

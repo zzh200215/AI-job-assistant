@@ -65,6 +65,29 @@ def collect_operational_alerts(
             )
         )
 
+    # 队列 ok + 长度>0 + 死信 0 + 在途 0 是一种"看起来完全正常"的形状，而 D6 的实测现场
+    # 正是它：两条任务在队列里排了 11 分钟，机器上根本没有 worker 进程。上面那三条规则
+    # 一条都不会红（ping 通、长度 2 远低于阈值、死信为空）。所以必须有这一条，
+    # 而且判据只能是"有没有活人"，不能是"队列连不连得上"。
+    if queue_health.get("backend") == "redis_queue" and queue_health.get("worker_alive") is False:
+        alerts.append(
+            _alert(
+                "orchestration_queue_no_worker",
+                "critical",
+                "异步任务队列没有消费者",
+                "队列连得上、也没有积压告警，但没有 worker 在消费：此后创建的分析任务不会被执行"
+                f"（当前 {queue_length} 条排在队列里）。"
+                "启动 worker（`cd backend && ./.venv/Scripts/python.exe -m scripts.run_orchestration_worker`）"
+                "后本告警自动恢复；在此之前 `/api/analysis/full` 会直接 503 拒绝接单。",
+                {
+                    "queue_length": queue_length,
+                    "worker_alive": queue_health.get("worker_alive"),
+                    "worker_last_seen_seconds": queue_health.get("worker_last_seen_seconds"),
+                    "queue_name": queue_health.get("queue_name"),
+                },
+            )
+        )
+
     failed_tasks = db.query(AgentTask).filter(AgentTask.status == "failed", AgentTask.end_time >= since).count()
     if failed_tasks >= settings.OPERATIONS_ALERT_TASK_FAILURE_THRESHOLD:
         alerts.append(

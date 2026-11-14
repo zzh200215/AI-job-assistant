@@ -15,11 +15,12 @@ from app.models.user import User
 from app.schemas.agent import AgentStartReq
 from app.services.agent_workflow import run_workflow
 from app.services.analysis_service import get_configured_strategy_name
+from app.services.orchestration_backend import OrchestrationUnavailable
 from app.services.orchestration_runner import cancel_task, retry_task
 from app.services.task_center_service import get_task_with_progress, get_user_task_summary, list_user_tasks
 from app.utils.http_errors import api_error
 from app.utils.job_access import get_accessible_job
-from app.utils.response import ERR_COMMON, ERR_PARAM, ok
+from app.utils.response import ERR_AI, ERR_COMMON, ERR_PARAM, ok
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -50,6 +51,8 @@ def start_analysis(
     try:
         task_id = run_workflow(payload.resume_id, payload.jd_id, user_id=current_user.id)
         return ok(data={"task_id": task_id}, message="workflow started")
+    except OrchestrationUnavailable as exc:
+        raise api_error(503, str(exc), ERR_AI) from exc
     except Exception as exc:
         logger.exception("Failed to start legacy workflow resume_id=%s jd_id=%s", payload.resume_id, payload.jd_id)
         raise api_error(500, f"failed to start workflow: {exc}", ERR_COMMON) from exc
@@ -92,12 +95,15 @@ def retry_agent_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    task = retry_task(
-        task_id,
-        current_user.id,
-        fallback_strategy=get_configured_strategy_name(),
-        db=db,
-    )
+    try:
+        task = retry_task(
+            task_id,
+            current_user.id,
+            fallback_strategy=get_configured_strategy_name(),
+            db=db,
+        )
+    except OrchestrationUnavailable as exc:
+        raise api_error(503, str(exc), ERR_AI) from exc
     if not task:
         raise api_error(404, "task not found", ERR_PARAM)
     if task.id == task_id and task.status in {"pending", "running"}:

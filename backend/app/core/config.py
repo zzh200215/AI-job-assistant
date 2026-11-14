@@ -66,6 +66,16 @@ class Settings(BaseSettings):
     ORCHESTRATION_STALE_TASK_MINUTES: int = 30
     ORCHESTRATION_QUEUE_NAME: str = "analysis-tasks"
     ORCHESTRATION_QUEUE_POLL_SECONDS: float = 1.0
+    # 排队多久还没被任何 worker 领走就判"没有人会跑它"。
+    # **只在确认没有活着的消费者时才用这个数**（见 `orchestration_runner.converge_running_task`）：
+    # worker 活着的时候，一条排队 5 分钟的任务只是排在别人后面，按这个数判死会在几分钟后
+    # 与真正的完成撞车——任务被标 failed，随后又落了一条 AnalysisRecord。
+    ORCHESTRATION_START_TIMEOUT_MINUTES: int = 2
+    # worker 心跳的存活窗口。worker 每 TTL/3 秒刷一次，所以"它死了"最多滞后 TTL 秒。
+    # 取 90 而不是 30：一次 GC 或宿主机暂停不该让入口把整条链路判成不可用（那会让候选人看到
+    # 503，而实际只是 worker 打了个盹）。它同时是入口守门的**失效窗口**——worker 刚起来
+    # 第一拍就写心跳（不等 TTL），所以这个窗口只在"真没有 worker"时成立。
+    ORCHESTRATION_WORKER_HEARTBEAT_TTL_SECONDS: int = 90
     # 只作用于 redis_queue 后端。可见性超时必须**大于**单条编排任务的真实最长耗时：
     # 短于它就会把一个还在跑的 TaskPayload 重投，两个 worker 同时跑同一个 run（LLM 白付两遍、
     # 结果互相覆盖）。3600 是刻意取在 ORCHESTRATION_STALE_TASK_MINUTES(30 分钟) 之上的。

@@ -183,6 +183,9 @@ class TestLinearStrategy:
 
         task = db_session.get(AgentTask, task_id)
         assert task.status == "failed"
+        # 那句"关键步骤执行失败"等于没说：屏幕上只有它的时候，没人知道该看哪一步。
+        assert "IntentAgent" in task.error_msg
+        assert "模拟 Agent 执行失败" in task.error_msg
 
     def test_non_critical_failure_continues(self, db_session, make_resume, make_jd, mock_registry):
         """非关键 Agent 失败时，流水线应继续执行并标记为 partial。"""

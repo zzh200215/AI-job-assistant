@@ -81,6 +81,8 @@ recommend embedding work for resume=83: scanned=5 reused=0 embedded=0 failed=5
 | 岗位推荐 | `GET /jobs/recommend` | 200，5 个岗位 | 首轮 10.7 s（embedding 重试），之后 0.03 s（缓存） |
 | 面试建会话 | `POST /interview/sessions` | 200，`total_questions=10` | 0.04 s（题目在后台生成，那一发同样 429） |
 
+第一行（后台任务空转）当天就查明根因并修掉了，见 **§6**——根因不是"缺一个超时"，是**没有进程在消费队列**。
+
 `/analysis/match` 的 500 原文（产品自己的话，不是我把异常吞了）：
 
 ```
@@ -118,12 +120,15 @@ recommend embedding work for resume=83: scanned=5 reused=0 embedded=0 failed=5
 | 2 | `/analysis/full` 的后台任务**既不失败也不超时** | 733 秒、`progress_percent=0`、`step_counts.total=0`、`current_step=None`、**0 条 trace** | 依赖全挂时它不知道该收场，屏幕上就是一个永不结束的转圈 |
 | 3 | 前端 `runMatch` 定义了但**无人调用** | `src/api/analysis.js:31` 只有定义，`SmartAnalysis` / `careerPlanning` 打的都是 `/full` | 公开面里挂着一颗没有用户、也没有兜底的按钮/接口；真要有人调它，就是缺陷 1 |
 
+> 缺陷 2 当天修掉并复验，见 §6（根因不是"缺超时"：**根本没有进程在消费队列**，而且系统里没有一个数能看出这件事）。
+
 ---
 
 ## 4. 修复建议（按性价比）
 
 1. **给后台任务加总超时与失败收敛**（缺陷 2）。目标：3 分钟内明确失败并说明"卡住的是哪一步、为什么"，
    而不是让 `progress=0` 无限转。这一条最值：它把"不知道发生了什么"变成"知道发生了什么"。
+   **→ 当天已按更准的根因修掉，见 §6。**
 2. **`/analysis/match` 分步返回，或直接下线**（缺陷 1 + 3）。前端既然不用它，先下线最省；
    要留就得分步返回（匹配 / 优化 / 面试题各自成功各自落库）。
 3. **embedding 欠费是账号问题，不是代码问题**：续费或换 key 之后，本节 §2.2 / §2.4 必须重跑——
@@ -141,3 +146,59 @@ recommend embedding work for resume=83: scanned=5 reused=0 embedded=0 failed=5
 
 重跑时要一起记的四个数：**每步耗时、`response_source`、prompt/completion tokens、以及"这一步有没有落库"**。
 前三个是性能，第四个是"用户到底拿到了什么"——今天恰恰是第四个先坏的。
+
+---
+
+## 6. 当天修掉的缺陷 2：根本原因不是"缺一个超时"
+
+排查的第一个发现把 §3 那张表的前提推翻了：**733 秒里没有任何进程在消费队列**。
+
+```
+$ python -c "…health_snapshot()…"
+backend=redis_queue  queue_length=2  processing_length=0  dead_letter=0
+$ redis> LRANGE analysis-tasks 0 -1
+{"v":1,"attempts":0,"payload":{"strategy_name":"linear","task_id":98,…}}   ← 今天这一发
+{"v":1,"attempts":0,"payload":{"strategy_name":"linear","task_id":1, …}}   ← 6 月留下的化石
+```
+
+`.env` 写的是 `ORCHESTRATION_BACKEND=redis_queue`，而机器上没有 worker 进程；
+`submit` 只是往 list 里 `LPUSH` 一行，接口立刻回"已启动"。加一个超时也救不了它——
+超时只能让转圈提前结束，说不了"为什么"。
+
+### 6.1 五处改动
+
+| 原来的形状 | 现在的形状 |
+|---|---|
+| 队列有没有活人，**看不出来**（`ok` / 长度 / 死信三个数都正常） | worker 写心跳（`analysis-tasks:worker-heartbeat`，TTL 90 s，每 30 s 一刷），`queue_health` 多两列：`worker_alive` / `worker_last_seen_seconds` |
+| 没有消费者时照样收单：200 + `task_id` | 收单前先问一句，`worker_alive=false` → **503**，**不落任务行**、不发任务号 |
+| 从没开始的任务**没有任何活动行**，`mark_stale_running_tasks_failed`（30 分钟、按"最后一次活动"判）永远抓不到它 | 读任务状态那一跳收口：`排队 ≥ ORCHESTRATION_START_TIMEOUT_MINUTES(2)` + 没有步骤行 + **确认没有活着的消费者** → `failed`，原因写进 `error_msg` |
+| 运维告警只认"连不上 / 积压阈值 / 死信" | 新增 `orchestration_queue_no_worker`（critical）——判据是 `worker_alive is False`，`thread` 后端的 `None`（不适用）不会误报 |
+| 关键步骤失败只写一句"关键步骤执行失败" | 写成 `IntentAgent 执行失败: <原因>`（分层策略一直是这个形状，线性这条漏了） |
+
+第二条判据（"确认没有活着的消费者"）不能省：worker 活着时，一条排队中的任务只是排在别人后面；
+判死会在几分钟后与真正的完成撞车——任务被标 `failed`，随后又落了一条 `AnalysisRecord`。
+
+### 6.2 复验读数（同一天，本机真栈）
+
+| 检查 | 结果 |
+|---|---|
+| **没有 worker** 时 `POST /analysis/full` | **503**，`code=-4`，message 开头是"分析服务暂不可用：后台任务队列没有 worker 在消费…"；库里 `max(agent_task.id)` **不变**（98） |
+| 起 worker 后 `/system/status` | `worker_alive: true`、`worker_last_seen_seconds: 6.2` |
+| 起 worker 后 `POST /analysis/full` | 200 + `task_id=100`；第 1 条步骤（`intent_recognition` running）在 **22 秒**后出现——这 22 秒它排在 task 99 后面，不是空转 |
+| task 100 全程 | 7 个步骤全部跑过，17:50:34 → 17:55:11（**4 分 37 秒**）收口成 `failed`，`error_msg` 带步骤名 |
+| worker **活着**时读一条"排队 6 分钟、零步骤"的任务（直接插库造的现场） | **保持 running**——判据不误伤排队中的任务 |
+| 停 worker、删心跳键后**同一跳** | `failed`，`error_msg` = "排队 2 分钟仍未开始执行：任务队列里没有活着的 worker（心跳键不存在，当前 0 条任务在等它）。任务没有跑过，按未启动收口" |
+
+task 100 仍然是 `failed`：主模型全程 429，`ResumeOptimizeAgent` 那一步把重试打满。
+**但这一次是"有原因的失败"，不是"没有尽头的等待"**——差别就是这一节的全部内容。
+
+### 6.3 代价与残余
+
+- `redis_queue` 的部署从此**必须**同时起 worker：`python -m scripts.run_orchestration_worker`。
+  升级顺序上要先升 worker 再升 web（旧 worker 不写心跳，会被判成"没人消费"——方向是对的，
+  窗口只有 worker 启动后的一两秒）。README 的本地开发块、`backend/.env.example`、
+  `docs/演示脚本.md` 的"开演前 60 秒"都已补上这一条。
+- `thread` 后端不受影响：消费者就是本进程，`worker_alive` 为 `None`（不适用），守门与收口都不生效。
+  它那条"任务投进本地线程池、进程一死没人捡"的老口径没变（见 `delivery-index.md` §3 第 5 条）。
+- 现场的队首化石（6 月那条 `task_id=1`）已清掉；`task_id=98` 由 worker 正常消费（它的策略入口看到
+  `cancelled` 就地收口，没有发一次模型调用）。

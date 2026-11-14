@@ -2,7 +2,7 @@
 
 > 一个以 **求职者职业发展** 为核心的全栈智能平台。平台通过 **Agentic RAG 引擎** 检索岗位 JD、行业知识、面试题库和职业发展资料，再由多个 AI Agent 协作完成简历优化、岗位匹配、模拟面试和职业规划；题库、评分规则与套餐按平台一处配置覆盖内置默认；审计、运行治理与外部能力 API 用于内部可观测。**企业/多租户那一侧已在 2026-10 的产品收缩中出树**（`docs/archive/upgrade-plan.md` D132–D137）：数据库里的 `tenant_id` / `organization_id` 列与模型保留，但不再参与任何可见性判定。
 
-**当前状态（2026-11-14）**：后端 **1576 tests / 0 failed**，前端 **120 文件 / 790 条**，静态守卫 **55 条**；RAG / Agent / 推荐 / 解析四轨进 AI 发布门。**三轮计划（A–E 升级、P1–P5 专项、D1–D5 体验与演示收口）全部交付，在册待拍项 open = 0**——结论与已知限制见 [`docs/delivery-index.md`](docs/delivery-index.md)，逐条测量过程账归档在 [`docs/archive/`](docs/archive/)。
+**当前状态（2026-11-14）**：后端 **1594 tests / 0 failed**，前端 **120 文件 / 790 条**，静态守卫 **55 条**；RAG / Agent / 推荐 / 解析四轨进 AI 发布门。**三轮计划（A–E 升级、P1–P5 专项、D1–D5 体验与演示收口）全部交付，在册待拍项 open = 0**——结论与已知限制见 [`docs/delivery-index.md`](docs/delivery-index.md)，逐条测量过程账归档在 [`docs/archive/`](docs/archive/)。
 
 ---
 
@@ -368,6 +368,11 @@ pip install -r requirements.txt
 alembic upgrade head
 python -m uvicorn app.main:app --reload --port 8000
 
+# 编排 worker（**仅** ORCHESTRATION_BACKEND=redis_queue 时需要，另开一个终端）
+#   不起它时 /api/analysis/full 会直接 503「后台任务队列没有 worker 在消费」，
+#   而不是回一个永远转圈的任务号 —— 这条守门是 2026-11-14 真环境实测后加的。
+python -m scripts.run_orchestration_worker
+
 # 前端
 cd frontend
 cp .env.example .env
@@ -668,7 +673,7 @@ cd frontend && npm run test:unit   # vitest
 cd frontend && npm test            # 静态守卫（.mjs）
 ```
 
-当前基线（2026-11-14 复跑）：后端 **1576 passed / 0 failed**、ruff **485 文件**；前端 **120 文件 / 790 条**、静态守卫 **55 条**；eslint **0 error / 0 warning**、prettier 与 `ruff format --check` 均全绿；首屏 **406 kB gzip**（`tests/bundleBudget.test.mjs` 钉着 420 kB 的天花板）。
+当前基线（2026-11-14 复跑）：后端 **1594 passed / 0 failed**、ruff **487 文件**；前端 **120 文件 / 790 条**、静态守卫 **55 条**；eslint **0 error / 0 warning**、prettier 与 `ruff format --check` 均全绿；首屏 **406 kB gzip**（`tests/bundleBudget.test.mjs` 钉着 420 kB 的天花板）。
 
 当前测试文件覆盖（节选）：
 

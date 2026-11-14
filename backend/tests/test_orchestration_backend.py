@@ -40,6 +40,7 @@ class FakeRedis:
     def __init__(self) -> None:
         self.lists: dict[str, list[str]] = defaultdict(list)
         self.zsets: dict[str, dict[str, float]] = defaultdict(dict)
+        self.strings: dict[str, str] = {}
         # 真 Redis 的 BRPOPLPUSH 会阻塞 timeout 秒，所以产品的 `if not raw: continue` 不会空转；
         # 假客户端立刻返回 None，就得由这个钩子告诉测试"队列空了，可以停了"。
         # 没有它，凡是"元素没走到 runner"的用例（比如坏数据直接进死信）都会自旋到超时。
@@ -99,6 +100,14 @@ class FakeRedis:
 
     def ping(self):
         return True
+
+    # ---- strings（worker 心跳用）----
+    def set(self, name, value, ex=None):
+        self.strings[name] = value
+        return True
+
+    def get(self, name):
+        return self.strings.get(name)
 
 
 @pytest.fixture

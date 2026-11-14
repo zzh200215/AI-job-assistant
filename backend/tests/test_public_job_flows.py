@@ -17,6 +17,8 @@ from app.core.security import create_access_token, hash_password
 from app.models.agent_run import AgentRun
 from app.models.history import JobDescription, Resume
 from app.models.user import User
+from app.services.orchestration_backend import OrchestrationUnavailable
+from app.utils.response import ERR_AI
 
 
 @pytest.fixture
@@ -111,6 +113,37 @@ def test_analysis_full_accepts_public_job(flow_client, db_session, monkeypatch):
     body = response.json()
     assert body["code"] == 0
     assert body["data"]["task_id"] == 99
+
+
+def test_analysis_full_returns_503_when_no_worker_can_run_the_task(flow_client, db_session, monkeypatch):
+    """没有消费者时不许回 200 + task_id：那正是 D6 里转圈 733 秒的那一发。
+
+    判据在 `run_strategy_async` 那一层（`tests/test_orchestration_dispatch_guard.py` 盯它的三条），
+    这里只钉接口层的翻译：必须是 503，不能退化成 500 或"已启动"。
+    """
+    user = _create_user(db_session, "no_worker_user", "no_worker@example.com")
+    resume = _create_resume(db_session, user_id=user.id)
+    public_job = _create_public_job(db_session, title="No Worker Job")
+
+    def explode(*args, **kwargs):
+        raise OrchestrationUnavailable("分析服务暂不可用：后台任务队列没有 worker 在消费")
+
+    monkeypatch.setattr(analysis_api, "run_smart_analysis", explode)
+
+    response = flow_client.post(
+        "/analysis/full",
+        json={"resume_id": resume.id, "jd_id": public_job.id},
+        headers=_auth_headers(user),
+    )
+
+    assert response.status_code == 503
+    body = response.json()
+    # 这个夹具用的是裸 FastAPI（没挂 `app.main` 那个 HTTPException 收尾器），所以 body 是
+    # `{"detail": {...}}`；product 里同一个 detail 会被摊平成 `{code, message, data}`。
+    detail = body.get("detail") or body
+    assert detail["code"] == ERR_AI
+    assert "worker" in detail["message"]
+    assert not (detail.get("data") or {}).get("task_id"), "拒绝了还回一个 task_id，前端只能继续转圈"
 
 
 def test_interview_session_accepts_public_job(flow_client, db_session, monkeypatch):
