@@ -1,7 +1,9 @@
 """
 简历优化建议服务
-- 当前被 match_service 一并调用；
-- 拆出来便于前端单独触发「重新生成建议」
+- 只给「重新生成建议」这一个入口用（`POST /analysis/{id}/optimize/regenerate`）；
+  整条分析的优化建议由编排链路（`ResumeOptimizeAgent`）写；
+- 2026-11-14 之前它还被 `match_service.run_full_analysis` 一并调用，那个一次性三步的接口
+  （`POST /analysis/match`）与 match_service 一起出树了，见 `docs/真provider实测.md` §7
 """
 
 import json

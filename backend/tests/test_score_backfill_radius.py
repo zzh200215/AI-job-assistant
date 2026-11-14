@@ -3,10 +3,10 @@
 "70 条历史要不要回算"这个问题在没有半径表之前无法回答，而半径表本身是脚本产的——所以脚本的
 判据必须钉住三件事，每一件都是"错了不会报错、只会安静地给出一张看起来正常的表"：
 
-* **进半径的判据是落库路径自己盖的权威标记**，不是分数、不是日期。而这两条路径的标记**拼法不一样**
-  （strategies 写 `score_method`、match_service 写 `match_score_method`），两种都必须认。判据写错的
-  方向是 *多算*（把已经走权威的行走进去回算），所以这里给一条带标记的行塞进一个离谱的分（99），
-  要求它压根不进桶；再把标记抹掉，同一行必须立刻进桶。
+* **进半径的判据是落库路径自己盖的权威标记**，不是分数、不是日期。而历史上两条路径的标记**拼法不一样**
+  （编排链路写 `score_method`、已出树的 `match_service` 写 `match_score_method`），两种都必须认——
+  旧键已经落在历史行里，只认一种就会把那些行当成没算过。判据写错的方向是 *多算*（把已经走权威的行走进去回算），
+  所以这里给一条带标记的行塞进一个离谱的分（99），要求它压根不进桶；再把标记抹掉，同一行必须立刻进桶。
 * **算不出来的行不能猜**。简历或岗位已经不在了 → 单独报 `not_recomputable` 和原因，绝不进分桶。
 * **一条都不写**。回算（写路径）是另一件事、要另一次拍板，所以"这个脚本只读"必须可证伪：
   下面把 `Session.commit` / `Session.flush` 换成"一调用就红"，再跑一次 `main()`，
@@ -153,11 +153,12 @@ def test_the_marker_decides_who_is_in_the_radius(db_session, pair):
 
 
 def test_both_spellings_of_the_marker_are_honoured(db_session, pair):
-    """两条落库路径给同一个事实用了两个键名，判据必须都认。
+    """同一件事历史上被盖过两个键名，判据必须都认。
 
-    `strategies.py:262` 写 `score_method`，`match_service.py:103` 写 `match_score_method`，
-    而树里除了这个脚本没有第三个读者。只认前一种的话，经 `POST /analysis/match` 写的行会被当成
-    旧形状再算一遍——值相同、Δ0，屏幕上什么错都看不见，但半径表虚高，而这张表唯一的用途就是定半径。
+    编排链路写 `score_method`；已出树的 `match_service` 曾写 `match_score_method`
+    （2026-11-14 随 `POST /analysis/match` 一起下线，见 `docs/真provider实测.md` §7），
+    而它写下的行还躺在库里。只认前一种的话，那些行会被当成旧形状再算一遍——值相同、Δ0，
+    屏幕上什么错都看不见，但半径表虚高，而这张表唯一的用途就是定半径。
     """
     resume, jd = pair
     _record(db_session, resume, jd, row_id=20, score=99, report={"match_score_method": SCORE_METHOD})

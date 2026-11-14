@@ -457,9 +457,7 @@ class LinearStrategy(ExecutionStrategy):
             # 说清是**哪一步**：任务卡住时前端只显示这一句，写"关键步骤执行失败"等于没说。
             # 分层策略一直是这个形状（`f"{name} 执行失败: {error}"`），线性这条以前漏了。
             task.error_msg = (
-                f"{failed['agent_name']} 执行失败: {failed['error'] or '未知错误'}"
-                if failed
-                else "关键步骤执行失败"
+                f"{failed['agent_name']} 执行失败: {failed['error'] or '未知错误'}" if failed else "关键步骤执行失败"
             )[:500]
         else:
             failed_steps = [s for s in step_results if s["status"] == "failed"]

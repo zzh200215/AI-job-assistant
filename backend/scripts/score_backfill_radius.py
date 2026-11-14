@@ -4,6 +4,8 @@
 为什么先要这张表：A4 定了匹配分的唯一权威（`canonical_match_score`），而两条落库路径是**分别**接上它的：
 
 * `app/services/match_service.py:99`（`POST /analysis/match`）在 `e1054c9`（2026-09-19）接上；
+  **这条路径 2026-11-14 已出树**（一次性三步，任一步失败整发 500，前端从来没有调用过），
+  它写下的行还在库里，所以本脚本照样得认它那种键名；
 * `app/orchestration/strategies.py:260`（"一键智能分析"走的编排路径）在 `1d4e16a`（2026-09-20）接上，
   并把模型自报数降级成 `match_report["model_reported_score"]`。
 
@@ -48,10 +50,11 @@ AUTHORITY_LANDED_AT = datetime(2026, 9, 20)
 
 # 权威标记的键名。**D166 之前两条落库路径拼法不一样**：
 #   · `app/orchestration/strategies.py:262` 一直写 `score_method`
-#   · `app/services/match_service.py:103` 曾写 `match_score_method`（2026-10-09 已对齐成前者）
+#   · 已出树的 `app/services/match_service.py:103` 曾写 `match_score_method`（2026-10-09 对齐成前者，
+#     2026-11-14 随 `POST /analysis/match` 一起删掉）
 # 旧键已经落在历史行里，所以判据**继续认两种**——只认新的那一种会把已有行当成没人管过的旧形状
 # 重算一遍（值相同、Δ0，看不出错，只有半径虚高）。新写入只许一种，由
-# `test_match_score_single_source.test_only_one_spelling_of_the_authority_marker_is_written` 钉住。
+# `test_match_score_single_source.test_the_one_write_path_that_is_left_stamps_the_canonical_vocabulary` 钉住。
 AUTHORITY_MARKER_KEYS = ("score_method", "match_score_method")
 
 

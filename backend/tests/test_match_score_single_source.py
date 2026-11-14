@@ -273,12 +273,13 @@ def test_orchestration_marks_the_score_unavailable_instead_of_borrowing_the_llm_
 
 
 MARKER_WRITE = re.compile(r'([A-Za-z_]\w*)\["(\w*(?:method|cap|gap|raw)\w*)"\]\s*=')
+RECORD_WRITE = re.compile(r"=\s*AnalysisRecord\(")
 
-# 这两条路径**都**该写的权威量，基准是 `strategies.py:262-264`。
+# 该写的权威量，基准是 `strategies.py:262-264`。
 CANONICAL_REPORT_KEYS = {"score_method", "cap_applied", "skill_gap"}
-# 词表：这一族里允许出现在新写入中的键名。`match_score_raw` 只有 match_service 写（strategies 不落
-# 这个量），留着但不算分叉。
-ALLOWED_REPORT_KEYS = CANONICAL_REPORT_KEYS | {"match_score_raw"}
+# 词表：这一族里允许出现在新写入中的键名。`match_score_raw` 曾经只有 match_service 写，
+# 那个写入方 2026-11-14 随 `POST /analysis/match` 一起出树，所以词表收回到这三个。
+ALLOWED_REPORT_KEYS = set(CANONICAL_REPORT_KEYS)
 
 
 def _app_sources():
@@ -300,39 +301,51 @@ def report_keys_written_into_a_match_report(sources: dict) -> dict[str, list[str
     return found
 
 
-def test_both_write_paths_stamp_the_same_canonical_vocabulary():
-    """D166 + D169：权威算出来的那几个量，两条落库路径必须用**同一组键名**。
+def test_analysis_record_has_exactly_one_writer():
+    """`AnalysisRecord` 只能有一个写入方：编排链路的 `_save_analysis_record`。
 
-    历史欠账：`strategies.py` 写 `score_method` / `cap_applied` / `skill_gap`，而 `match_service.py`
-    曾写 `match_score_method` / `match_score_cap_applied` 且不写 `skill_gap`。全树唯一的读者是两个
-    回算脚本，所以分叉的后果不是报错而是**半径虚高**——已经被权威管着的行被当成旧形状重算一遍，
-    值相同、Δ0，屏幕上什么都没有，而那张表唯一的用途就是定半径。
+    2026-11-14 之前有两个：`match_service.run_full_analysis`（`POST /analysis/match` 那条一次性三步）
+    也直接 `AnalysisRecord(...)`。两条路径的 `match_report` 键名曾经分叉，而分叉的后果只有回算脚本
+    看得见（值相同、Δ0、半径虚高）——所以"只有一个写入方"不只是整洁，它是上面那条词表判据能成立的
+    前提：一旦出现第二个写入方，你就得重新证明两份词表一致，而不能靠"本来就只有一条"。
+    """
+    sources = _app_sources()
+    writers = sorted(path.name for path, text in sources.items() if RECORD_WRITE.search(text))
 
-    判据（`score_backfill_radius.AUTHORITY_MARKER_KEYS`）继续认历史那两种拼法，因为旧键已经落在
-    历史行里；但**新写入只许这一组词表**，长出第三个名字就红。
+    assert writers == ["strategies.py"], f"分析记录的写入方不止一个：{writers}"
+
+
+def test_the_one_write_path_that_is_left_stamps_the_canonical_vocabulary():
+    """A4 + D166/D169 的收敛版：`AnalysisRecord.match_report` 现在只有一个写入方。
+
+    原来这条钉的是"两条落库路径必须用同一组键名"——`strategies.py` 与 `match_service.py`
+    曾经分叉（后者写 `match_score_method` / `match_score_cap_applied` 且不写 `skill_gap`），
+    而全树唯一的读者是回算脚本，所以后果不是报错而是**半径虚高**。
+
+    2026-11-14，那个一次性三步的 `POST /analysis/match`（连同 `match_service`）出树
+    （见 `docs/真provider实测.md` §7）：分叉的两条路只剩一条，"对齐"这件事由**没有第二条可对齐**
+    代替。门不能因此退化成"没人写就不算分叉"——词表外的键名照样红，而且现在要求每个权威量
+    恰好只有那一个写入方。
 
     射程：`xxx["key"] = ` 这种赋值形式，且目标变量名里得带 `match`（不然被 `method_totals` 顶出
     假阳性）。`job_recommend_engine.py:222` 的 `"match_score_method": …` 是**推荐接口自己的响应字段**
-    （dict 字面量，不是这种赋值），不在这一条里——别把它读成"还有第三种拼法"。
+    （dict 字面量，不是这种赋值），不在这一条里——别把它读成"还有第二种拼法"。
     """
     sources = _app_sources()
     written = report_keys_written_into_a_match_report(sources)
 
     assert set(written) <= ALLOWED_REPORT_KEYS, f"这一族里出现了词表外的键名：{written}"
     for key in CANONICAL_REPORT_KEYS:
-        assert sorted(written.get(key, [])) == [
-            "match_service.py",
-            "strategies.py",
-        ], f"{key} 不是两条路径都写：{written.get(key)}"
+        assert written.get(key) == ["strategies.py"], f"{key} 的写入方不唯一：{written.get(key)}"
 
     # 反证（打在副本上，不动工作树）：D166 那个旧标记键、D169 那个旧 cap 键，塞回去都必须被认出来。
-    match_service = next(f for f in sources if f.name == "match_service.py")
+    strategies = next(p for p in sources if p.name == "strategies.py")
     for old, new in (
-        ('match["score_method"]', 'match["match_score_method"]'),
-        ('match["cap_applied"]', 'match["match_score_cap_applied"]'),
+        ('match_result["score_method"]', 'match_result["match_score_method"]'),
+        ('match_result["cap_applied"]', 'match_result["match_score_cap_applied"]'),
     ):
-        assert old in sources[match_service], f"锚点变了（{old}），反证落不进副本"
-        discovered = report_keys_written_into_a_match_report({match_service: sources[match_service].replace(old, new)})
+        assert old in sources[strategies], f"锚点变了（{old}），反证落不进副本"
+        discovered = report_keys_written_into_a_match_report({strategies: sources[strategies].replace(old, new)})
         bad = new.split('"')[1]
         assert bad in discovered, f"{bad} 这种拼法必须被这条门认出来"
         assert not set(discovered) <= ALLOWED_REPORT_KEYS, f"{bad} 竟然还算在词表里——等于没装门"

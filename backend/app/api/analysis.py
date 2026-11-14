@@ -12,8 +12,8 @@ from app.models.agent import AgentStepLog, AgentTask, RetrievalLog
 from app.models.history import AnalysisRecord, Resume
 from app.models.user import User
 from app.orchestration.protocol import normalize_step_name
-from app.schemas.analysis import ExplainMatchReq, FullAnalysisReq, MatchReq
-from app.services import interview_service, match_service, optimize_service
+from app.schemas.analysis import ExplainMatchReq, FullAnalysisReq
+from app.services import interview_service, optimize_service
 from app.services.analysis_service import run_smart_analysis
 from app.services.match_explainer_service import MatchExplainer
 from app.services.orchestration_backend import OrchestrationUnavailable
@@ -210,47 +210,6 @@ def full_smart_analysis(
     except Exception as exc:
         traceback.print_exc()
         raise api_error(500, f"启动分析失败: {exc}", ERR_COMMON) from exc
-
-
-@router.post("/match", summary="一键分析：匹配度 + 优化 + 面试题")
-def full_match(
-    payload: MatchReq,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    resume = db.query(Resume).filter(Resume.id == payload.resume_id, Resume.user_id == current_user.id).first()
-    jd = get_accessible_job(db, payload.jd_id, current_user)
-    if not resume or not jd:
-        raise api_error(404, "简历或 JD 不存在，或无权限访问", ERR_PARAM)
-
-    try:
-        record = match_service.run_full_analysis(
-            db,
-            payload.resume_id,
-            payload.jd_id,
-            remark=payload.remark if hasattr(payload, "remark") else "",
-            user_id=current_user.id,
-        )
-    except ValueError as exc:
-        raise api_error(400, str(exc), ERR_PARAM) from exc
-    except RuntimeError as exc:
-        raise api_error(502, f"AI 服务出错: {exc}", ERR_AI) from exc
-    except Exception as exc:
-        traceback.print_exc()
-        raise api_error(500, f"分析失败: {exc}", ERR_COMMON) from exc
-
-    references = getattr(record, "_references", [])
-    return ok(
-        {
-            "record_id": record.id,
-            "match_score": record.match_score,
-            "match_report": _normalize_dimension_scores(_deep_parse_json(record.match_report)),
-            "optimize_suggestions": _deep_parse_json(record.optimize_suggestions),
-            "interview_questions": _normalize_interview_questions(_deep_parse_json(record.interview_questions)),
-            "references": references,
-        },
-        message="分析完成",
-    )
 
 
 @router.post("/{record_id}/optimize/regenerate", summary="重新生成简历优化建议")

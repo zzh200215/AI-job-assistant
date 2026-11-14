@@ -25,12 +25,6 @@ export const regenOptimize = (id) => request.post(`/analysis/${id}/optimize/rege
 export const regenInterview = (id) => request.post(`/analysis/${id}/interview/regenerate`)
 
 /**
- * 一键分析（旧接口，直接调用 LLM 匹配）
- * POST /api/analysis/match
- */
-export const runMatch = (data) => request.post('/analysis/match', data)
-
-/**
  * 获取分析引用的知识库来源
  * GET /api/analysis/:id/references
  */

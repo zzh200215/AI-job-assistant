@@ -121,6 +121,7 @@ recommend embedding work for resume=83: scanned=5 reused=0 embedded=0 failed=5
 | 3 | 前端 `runMatch` 定义了但**无人调用** | `src/api/analysis.js:31` 只有定义，`SmartAnalysis` / `careerPlanning` 打的都是 `/full` | 公开面里挂着一颗没有用户、也没有兜底的按钮/接口；真要有人调它，就是缺陷 1 |
 
 > 缺陷 2 当天修掉并复验，见 §6（根因不是"缺超时"：**根本没有进程在消费队列**，而且系统里没有一个数能看出这件事）。
+> 缺陷 1 + 3 也在同一天收口：**那个接口整条出树**，见 §7。
 
 ---
 
@@ -131,6 +132,7 @@ recommend embedding work for resume=83: scanned=5 reused=0 embedded=0 failed=5
    **→ 当天已按更准的根因修掉，见 §6。**
 2. **`/analysis/match` 分步返回，或直接下线**（缺陷 1 + 3）。前端既然不用它，先下线最省；
    要留就得分步返回（匹配 / 优化 / 面试题各自成功各自落库）。
+   **→ 当天选了"下线"，见 §7。**
 3. **embedding 欠费是账号问题，不是代码问题**：续费或换 key 之后，本节 §2.2 / §2.4 必须重跑——
    在没有向量的情况下，任何"推荐质量"的结论都不成立。
 
@@ -202,3 +204,60 @@ task 100 仍然是 `failed`：主模型全程 429，`ResumeOptimizeAgent` 那一
   它那条"任务投进本地线程池、进程一死没人捡"的老口径没变（见 `delivery-index.md` §3 第 5 条）。
 - 现场的队首化石（6 月那条 `task_id=1`）已清掉；`task_id=98` 由 worker 正常消费（它的策略入口看到
   `cancelled` 就地收口，没有发一次模型调用）。
+
+---
+
+## 7. 当天出树：`POST /analysis/match`（缺陷 1 + 3）
+
+### 7.1 为什么是删，不是修
+
+按 §4 的第 2 条，两条路：分步返回，或者直接下线。选下线，因为它三条指标同时指向同一个结论：
+
+| 判据 | 读数 |
+|---|---|
+| 有没有用户 | **没有**。前端唯一的调用方 `runMatch`（`src/api/analysis.js:31`）全树无人 import；两个分析页打的都是 `/analysis/full` |
+| 有没有替代 | 有，而且更好：`/analysis/full` 是异步任务，**每步落 `agent_step_log`、失败不丢已完成步骤、进度可轮询** |
+| 失败形状好不好 | 不好，而且是最坏的那种：串行三步，第 3 步炸了整发 500、`analysis_record` 一行不落——用户等 221 秒，拿到一条空 |
+
+留着一个没人用、一用就丢活的同步入口，不是在"保留能力"，是在等下一次有人点它。
+
+### 7.2 删了什么
+
+| 位置 | 内容 |
+|---|---|
+| `app/api/analysis.py` | `POST /match` 整个端点（45 行），`MatchReq` / `match_service` 两个 import |
+| `app/services/match_service.py` | **整份文件**（192 行）：`run_full_analysis` 串行调 3 个 prompt、拼 RAG、写 `AnalysisRecord` |
+| `app/schemas/analysis.py` + `schemas/__init__.py` | `MatchReq` 模型与它的导出 |
+| `frontend/src/api/analysis.js` | `runMatch`（4 行，含注释） |
+| 测试 | `test_service_access_guards.py` 里只针对 `match_service` 的 2 条 |
+
+**没删的**：库里已有的历史行，以及回算脚本对那批行的认法（`AUTHORITY_MARKER_KEYS` 继续认
+`match_score_method`，因为旧键已经落在行里）。`scripts/score_backfill_radius.py` 的 docstring 与
+`tests/test_score_backfill_radius.py` 的说明改成过去时。
+
+### 7.3 顺带把判据收紧成"只有一个写入方"
+
+删掉 `match_service` 之后有两件事必须重新表态，否则门会变成空的：
+
+1. `test_match_score_single_source.py` 原来钉的是"**两条**落库路径用同一组键名"，判据里写着
+   `sorted(written[key]) == ["match_service.py", "strategies.py"]`。改成单写入方的版本——
+   词表外的键名照样红，但要求变成 `== ["strategies.py"]`，反证（把 `score_method` 改回历史那个
+   旧拼法）打在 `strategies.py` 的副本上。**门没有退化成"没人写就不算分叉"。**
+2. 新增 `test_analysis_record_has_exactly_one_writer`：全树扫 `= AnalysisRecord(`，只许命中
+   `strategies.py`。这条不是洁癖——它是上面那条词表判据的前提：一旦出现第二个写入方，
+   你就得**重新证明**两份词表一致，而不能靠"本来就只有一条"。
+
+### 7.4 门
+
+后端 **1593 passed / 0 failed**（删 2 条 `match_service` 用例、加 1 条单写入方判据）；
+前端 **120 文件 / 790 条**、静态守卫 **55 条** 全绿（`runMatch` 无任何测试引用）；
+`ruff check` 与 `ruff format --check` 全绿。
+
+### 7.5 一个顺手量出来的欠账
+
+清 `runMatch` 时把 `src/api/` 下所有导出扫了一遍：**还有 15 个导出无人 import**
+（`getSubscriptionPlans`、`checkQuota`、`getMyOrders`、`startMultiAgent`、`getMultiAgentRun`、
+`seedDemoResumes`、`fetchJobDetail`、`getKnowledgeDoc`、`getQuestionCategories`、`getInterviewPrep`、
+`deleteInterview`、`getNextActions`、`getAccessibleResumeList`、`getTargetDetail`、`getPipelineDetail`）。
+它们对应的接口大多还在，所以"删"不是这次的射程——但据此**没有**加"前端 API 不许有死导出"的守卫：
+那会立刻红 15 条，只能配一张 15 行的 allowlist，等于把欠账抄进判据。要加，先做一次清查。

@@ -23,12 +23,6 @@ class ExplainMatchResp(BaseModel):
     weights_used: dict
 
 
-class MatchReq(BaseModel):
-    resume_id: int = Field(..., description="简历 ID")
-    jd_id: int = Field(..., description="岗位 JD ID")
-    remark: str | None = Field("", description="可选备注")
-
-
 class FullAnalysisReq(BaseModel):
     """一键智能分析请求"""
 

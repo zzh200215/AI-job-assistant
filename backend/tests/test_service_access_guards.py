@@ -2,9 +2,7 @@ import pytest
 
 from app.models.history import AnalysisRecord, JobDescription, Resume
 from app.models.user import User
-from app.services import interview_service, match_service, optimize_service, resume_export_service
-from app.services.match_score_service import canonical_match_score
-from app.services.scoring_config import SCORE_METHOD
+from app.services import interview_service, optimize_service, resume_export_service
 
 
 def _create_user(db_session, username: str, email: str) -> User:
@@ -72,84 +70,6 @@ def _create_record(db_session, *, user_id: int, resume_id: int, jd_id: int) -> A
     db_session.commit()
     db_session.refresh(record)
     return record
-
-
-def test_match_service_allows_owned_resume_with_public_jd(db_session, monkeypatch):
-    owner = _create_user(db_session, "svc_owner", "svc_owner@example.com")
-    resume = _create_resume(
-        db_session,
-        user_id=owner.id,
-        parsed_json={"skills": ["python"], "name": "Owner"},
-    )
-    public_job = _create_job(
-        db_session,
-        user_id=None,
-        title="Public Backend",
-        parsed_json={"title": "Public Backend", "required_skills": ["python"], "keywords": ["fastapi"]},
-    )
-
-    monkeypatch.setattr(
-        match_service,
-        "build_rag_context_multi",
-        lambda query, db, **kwargs: {
-            "all": "",
-            "resume_templates": "",
-            "skill_models": "",
-            "interview_questions": "",
-        },
-    )
-    monkeypatch.setattr(match_service, "get_knowledge_references", lambda query, db, **kwargs: [])
-
-    responses = iter(
-        [
-            {"match_score": 90, "reason": "good fit"},
-            {"summary": "optimize"},
-            {"questions": ["q1"]},
-        ]
-    )
-    monkeypatch.setattr(match_service, "chat_json", lambda prompt: next(responses))
-
-    record = match_service.run_full_analysis(
-        db_session,
-        resume.id,
-        public_job.id,
-        user_id=owner.id,
-    )
-
-    assert record.user_id == owner.id
-    assert record.resume_id == resume.id
-    assert record.jd_id == public_job.id
-    # A4: the stored score is the canonical rubric score, not whatever number the
-    # model happened to emit. This test is about access control, but the score
-    # assertion now guards the single-source rule from regressing. AnalysisRecord
-    # .match_score is an Integer column, so compare within one point rather than
-    # depending on whether the database truncates or rounds.
-    assert record.match_score != 90
-    canonical = canonical_match_score(db_session, resume, public_job, user_id=owner.id, persist=False)["score"]
-    assert abs(record.match_score - canonical) < 1
-    # D166/D169：权威算出来的那几个量，两条落库路径必须用同一组键名。以前这一路写的是
-    # `match_score_method` / `match_score_cap_applied` 且不写 `skill_gap`，而唯一的读者是回算脚本
-    # ——分叉的后果不是报错，是把已经走权威的当成旧形状再算一遍（半径虚高）。
-    assert record.match_report["score_method"] == SCORE_METHOD
-    assert record.match_report["cap_applied"] in (True, False), "cap 那一位得是 bool，和 strategies 同型"
-    assert isinstance(record.match_report["skill_gap"], list)
-    assert "match_score_method" not in record.match_report
-    assert "match_score_cap_applied" not in record.match_report
-
-
-def test_match_service_blocks_cross_user_resume_service_bypass(db_session):
-    owner = _create_user(db_session, "resume_owner", "resume_owner@example.com")
-    outsider = _create_user(db_session, "resume_outsider", "resume_outsider@example.com")
-    foreign_resume = _create_resume(db_session, user_id=owner.id)
-    public_job = _create_job(db_session, user_id=None, title="Public Job")
-
-    with pytest.raises(ValueError):
-        match_service.run_full_analysis(
-            db_session,
-            foreign_resume.id,
-            public_job.id,
-            user_id=outsider.id,
-        )
 
 
 def test_optimize_and_interview_services_block_cross_user_record(db_session):

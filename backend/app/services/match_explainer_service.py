@@ -109,9 +109,10 @@ class MatchExplainer:
     def compute_rubric(self, resume: Resume, jd: JobDescription) -> dict[str, Any]:
         """Score a resume against a JD with the 6-dimension rubric. No LLM.
 
-        Split out of `explain` so the recommend engine and match_service can take
-        their displayed score from this one rubric instead of each inventing a
-        number. `explain` adds only the natural-language layer on top.
+        Split out of `explain` so the recommend engine and the orchestration
+        pipeline can take their displayed score from this one rubric instead of
+        each inventing a number. `explain` adds only the natural-language layer
+        on top.
 
         The two copies below are load-bearing: `parsed_json` is a live dict on an
         ORM row, and the compatibility backfills further down would otherwise
