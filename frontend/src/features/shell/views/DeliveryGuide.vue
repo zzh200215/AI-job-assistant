@@ -4,7 +4,9 @@
       <p class="eyebrow">Delivery Guide</p>
       <h2>交付与验收说明</h2>
       <div class="page-header-sub">
-        这一页把项目当前可演示范围、生产边界、知识库维护方式和验收建议集中展示，避免信息分散在文档和代码里。
+        两个口径放一页：<b>产品口径</b>是可演示范围、生产边界、知识库维护与验收建议；
+        <b>工程口径</b>是 D1–D11 改了什么、凭什么说改对了、还差什么（与仓库
+        <code>docs/交付摘要.md</code> 对齐，数字由一条守卫钉住）。
       </div>
       <div class="hero-actions">
         <el-button type="primary" @click="router.push('/system-status')">查看系统状态</el-button>
@@ -12,44 +14,58 @@
       </div>
     </el-card>
 
-    <section class="grid-two">
-      <el-card shadow="never" class="panel-card">
-        <template #header><span>当前交付范围</span></template>
-        <ul class="bullet-list">
-          <li v-for="item in deliveryScope" :key="item">{{ item }}</li>
-        </ul>
-      </el-card>
+    <el-tabs v-model="activeTab" class="guide-tabs">
+      <el-tab-pane label="产品口径" name="product">
+        <section class="grid-two">
+          <el-card shadow="never" class="panel-card">
+            <template #header><span>当前交付范围</span></template>
+            <ul class="bullet-list">
+              <li v-for="item in deliveryScope" :key="item">{{ item }}</li>
+            </ul>
+          </el-card>
 
-      <el-card shadow="never" class="panel-card">
-        <template #header><span>演示与生产边界</span></template>
-        <ul class="bullet-list">
-          <li v-for="item in runtimeBoundaries" :key="item">{{ item }}</li>
-        </ul>
-      </el-card>
-    </section>
+          <el-card shadow="never" class="panel-card">
+            <template #header><span>演示与生产边界</span></template>
+            <ul class="bullet-list">
+              <li v-for="item in runtimeBoundaries" :key="item">{{ item }}</li>
+            </ul>
+          </el-card>
+        </section>
 
-    <section class="grid-two">
-      <el-card shadow="never" class="panel-card">
-        <template #header><span>知识库维护</span></template>
-        <ul class="bullet-list">
-          <li v-for="item in knowledgeOps" :key="item">{{ item }}</li>
-        </ul>
-      </el-card>
+        <section class="grid-two">
+          <el-card shadow="never" class="panel-card">
+            <template #header><span>知识库维护</span></template>
+            <ul class="bullet-list">
+              <li v-for="item in knowledgeOps" :key="item">{{ item }}</li>
+            </ul>
+          </el-card>
 
-      <el-card shadow="never" class="panel-card">
-        <template #header><span>验收建议</span></template>
-        <ul class="bullet-list">
-          <li v-for="item in acceptanceChecklist" :key="item">{{ item }}</li>
-        </ul>
-      </el-card>
-    </section>
+          <el-card shadow="never" class="panel-card">
+            <template #header><span>验收建议</span></template>
+            <ul class="bullet-list">
+              <li v-for="item in acceptanceChecklist" :key="item">{{ item }}</li>
+            </ul>
+          </el-card>
+        </section>
+      </el-tab-pane>
+
+      <!-- 工程口径：给"只有浏览器、没有仓库"的读者。内容与 docs/交付摘要.md 对齐，
+           数字由 tests/deliveryNumbersAgree.test.mjs 钉住。 -->
+      <el-tab-pane label="工程口径" name="engineering">
+        <DeliveryGuideEngineering />
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
+import DeliveryGuideEngineering from './DeliveryGuideEngineering.vue'
+
 const router = useRouter()
+const activeTab = ref('product')
 
 const deliveryScope = [
   '简历解析、JD 解析、匹配分析、优化建议、面试题生成',
@@ -94,6 +110,10 @@ const acceptanceChecklist = [
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.guide-tabs {
+  margin-top: 16px;
 }
 
 .grid-two {
