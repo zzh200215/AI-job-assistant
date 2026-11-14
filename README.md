@@ -703,6 +703,7 @@ cd frontend && npm test            # 静态守卫（.mjs）
 项目具备可演示、可答辩与可部署的基础能力；生产启用前仍应完成真实模型联调与备份恢复演练。推荐结合以下入口做统一说明：
 
 - **交付范围与验收建议**：前端 `/delivery-guide`
+- **三分钟演示脚本**（当着人怎么走一遍，含"别点哪里"）：[`docs/演示脚本.md`](docs/演示脚本.md)
 - **系统当前运行模式**：前端 `/system-status`
 - **知识库维护与验证**：`docs/knowledge-seeds/README.md`
 - **多租户列**：保留的模型/列见 `docs/schema-baseline.sql` 与 `backend/app/models/`（企业侧已出树）
