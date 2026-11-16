@@ -21,7 +21,8 @@ def regenerate_interview(db: Session, record_id: int, user_id: int | None = None
         get_owned_analysis_record(db, record_id, user_id) if user_id is not None else db.get(AnalysisRecord, record_id)
     )
     if not record:
-        raise ValueError("record not found")
+        # 这两句会经 `api_error(400, str(exc))` 原样上屏：写给候选人看，不是写给日志看。
+        raise ValueError("找不到这条分析记录")
 
     resume = (
         get_owned_resume(db, record.resume_id, user_id) if user_id is not None else db.get(Resume, record.resume_id)
@@ -32,7 +33,7 @@ def regenerate_interview(db: Session, record_id: int, user_id: int | None = None
         else db.get(JobDescription, record.jd_id)
     )
     if not resume or not jd:
-        raise ValueError("resume or jd missing")
+        raise ValueError("找不到这份简历或目标岗位")
 
     prompt = render_prompt(
         INTERVIEW_PROMPT,

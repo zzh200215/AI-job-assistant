@@ -27,6 +27,35 @@ This repository includes a lightweight delivery-quality baseline for demo, revie
   `PUBLIC_OPERATIONS` in `tests/test_public_api_surface.py` with a reason; that test walks the real
   router graph and fails otherwise.
 
+## Every `api_error(...)` message is candidate-facing
+
+There is exactly one channel that puts a server string on a candidate's screen: `request.js` turns
+`body.message` into an `ElMessage` toast on `code != 0`, and stores it as `error.userMessage` so the
+views' `userErrorCopy()` reuse it. Anything written into that field is read verbatim.
+
+That makes two classes of text a defect rather than a style nit:
+
+- **English technical sentences** — `api_error(404, "task not found")` becomes an English toast. The
+  task center really hit this on cancel/retry.
+- **Exception text** — `api_error(500, f"启动分析失败: {exc}")` puts the provider's
+  `HTTP 429 / fallback 链路均未成功` on screen. Found by opening a result page during the 2026-11-16
+  sweep (same family as D15's `analysis unavailable: …` in the *payload*, but this one comes through
+  the HTTP error body).
+
+Both are now static-source guards (`backend/tests/test_api_error_copy.py`, AST-based, 16 call sites):
+
+| rule | what it allows |
+| --- | --- |
+| literal message | must contain Chinese |
+| `f"…{exc}…"` | never — interpolating an exception is the leak |
+| `str(exc)` | only inside `except OrchestrationUnavailable` — that class is ours and its Chinese (「没有活着的 worker」) is the 503 reason the user is supposed to read |
+
+Mutation check: putting back `"task is still running"` and `f"failed to start workflow: {exc}"` makes
+it red with both lines named; restoring them makes it green. The sweep also fixed four sites in
+`analysis.py` (`启动分析失败: {exc}`, `重新生成失败: {exc}` ×2, `查询失败: {exc}`) and the two
+`ValueError` echoes — those now answer with a fixed sentence instead of echoing whatever the service
+raised.
+
 ## Frontend API layer has no dead exports
 
 `frontend/src/api/*.js` is a thin wrapper per endpoint, and nothing forces a wrapper to have a caller.

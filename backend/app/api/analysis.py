@@ -210,7 +210,9 @@ def full_smart_analysis(
         raise api_error(503, str(exc), ERR_AI) from exc
     except Exception as exc:
         traceback.print_exc()
-        raise api_error(500, f"启动分析失败: {exc}", ERR_COMMON) from exc
+        # 这句会**原样上屏**（`request.js` 把 `message` 当 toast）：异常原文里常带着 provider 的
+        # "HTTP 429 / fallback 链路均未成功"。证据留在上面那次 traceback，屏幕只说下一步。
+        raise api_error(500, "启动分析失败，请稍后重试", ERR_COMMON) from exc
 
 
 @router.post("/{record_id}/optimize/regenerate", summary="重新生成简历优化建议")
@@ -230,10 +232,12 @@ def regen_optimize(
     try:
         record = optimize_service.regenerate_optimize(db, record_id, user_id=current_user.id)
     except ValueError as exc:
-        raise api_error(400, str(exc), ERR_PARAM) from exc
+        # 不带 `str(exc)`：这一支几乎到不了（上面已经查过一次 404），但 message 会原样上屏，
+        # 而且 `ValueError` 不是我们自己的异常类型——文案固定成一句更稳。
+        raise api_error(400, "找不到这条分析记录，或你没有访问权限", ERR_PARAM) from exc
     except Exception as exc:
         traceback.print_exc()
-        raise api_error(502, f"重新生成失败: {exc}", ERR_AI) from exc
+        raise api_error(502, "重新生成失败，请稍后重试", ERR_AI) from exc
 
     return ok(
         {
@@ -261,10 +265,12 @@ def regen_interview(
     try:
         record = interview_service.regenerate_interview(db, record_id, user_id=current_user.id)
     except ValueError as exc:
-        raise api_error(400, str(exc), ERR_PARAM) from exc
+        # 不带 `str(exc)`：这一支几乎到不了（上面已经查过一次 404），但 message 会原样上屏，
+        # 而且 `ValueError` 不是我们自己的异常类型——文案固定成一句更稳。
+        raise api_error(400, "找不到这条分析记录，或你没有访问权限", ERR_PARAM) from exc
     except Exception as exc:
         traceback.print_exc()
-        raise api_error(502, f"重新生成失败: {exc}", ERR_AI) from exc
+        raise api_error(502, "重新生成失败，请稍后重试", ERR_AI) from exc
 
     return ok(
         {
@@ -330,7 +336,7 @@ def get_record(
             .first()
         )
     except Exception as exc:
-        raise api_error(500, f"查询失败: {exc}", ERR_DB) from exc
+        raise api_error(500, "查询失败，请稍后重试", ERR_DB) from exc
 
     if not rec:
         raise api_error(404, "记录不存在，或无权限访问", ERR_PARAM)

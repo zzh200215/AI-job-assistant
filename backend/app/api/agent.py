@@ -33,7 +33,7 @@ def start_analysis(
     current_user: User = Depends(get_current_user),
 ):
     if not payload.resume_id or not payload.jd_id:
-        raise api_error(400, "resume_id and jd_id are required", ERR_PARAM)
+        raise api_error(400, "请先选择简历和目标岗位", ERR_PARAM)
 
     resume = (
         db.query(Resume)
@@ -46,7 +46,7 @@ def start_analysis(
     )
     jd = get_accessible_job(db, payload.jd_id, current_user)
     if not resume or not jd:
-        raise api_error(404, "resume or job description not found", ERR_PARAM)
+        raise api_error(404, "找不到这份简历或目标岗位，或者你没有访问权限", ERR_PARAM)
 
     try:
         task_id = run_workflow(payload.resume_id, payload.jd_id, user_id=current_user.id)
@@ -55,7 +55,7 @@ def start_analysis(
         raise api_error(503, str(exc), ERR_AI) from exc
     except Exception as exc:
         logger.exception("Failed to start legacy workflow resume_id=%s jd_id=%s", payload.resume_id, payload.jd_id)
-        raise api_error(500, f"failed to start workflow: {exc}", ERR_COMMON) from exc
+        raise api_error(500, "启动分析任务失败，请稍后重试", ERR_COMMON) from exc
 
 
 @router.get("/tasks", summary="List current user's agent tasks")
@@ -85,7 +85,7 @@ def cancel_agent_task(
 ):
     task = cancel_task(task_id, current_user.id, db=db)
     if not task:
-        raise api_error(404, "task not found", ERR_PARAM)
+        raise api_error(404, "任务不存在", ERR_PARAM)
     return ok(data=task.to_dict(), message="task cancelled")
 
 
@@ -105,9 +105,9 @@ def retry_agent_task(
     except OrchestrationUnavailable as exc:
         raise api_error(503, str(exc), ERR_AI) from exc
     if not task:
-        raise api_error(404, "task not found", ERR_PARAM)
+        raise api_error(404, "任务不存在", ERR_PARAM)
     if task.id == task_id and task.status in {"pending", "running"}:
-        raise api_error(409, "task is still running", ERR_PARAM)
+        raise api_error(409, "任务还在跑，等它结束再重试", ERR_PARAM)
     return ok(data=task.to_dict(), message="retry task started")
 
 
@@ -119,7 +119,7 @@ def get_task(
 ):
     task, payload = get_task_with_progress(db, task_id=task_id, user_id=current_user.id)
     if not task or not payload:
-        raise api_error(404, "task not found", ERR_PARAM)
+        raise api_error(404, "任务不存在", ERR_PARAM)
     return ok(data=payload)
 
 
@@ -131,7 +131,7 @@ def get_task_steps(
 ):
     task, payload = get_task_with_progress(db, task_id=task_id, user_id=current_user.id)
     if not task or not payload:
-        raise api_error(404, "task not found", ERR_PARAM)
+        raise api_error(404, "任务不存在", ERR_PARAM)
 
     steps = db.query(AgentStepLog).filter(AgentStepLog.task_id == task_id).order_by(AgentStepLog.step_index).all()
     retrievals = db.query(RetrievalLog).filter(RetrievalLog.task_id == task_id).all()
