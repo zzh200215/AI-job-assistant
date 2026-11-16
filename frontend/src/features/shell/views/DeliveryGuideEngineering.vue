@@ -3,8 +3,8 @@
     <el-card shadow="never" class="panel-card">
       <template #header><span>一句话</span></template>
       <p class="eng-intro">
-        D1–D16
-        分两半：前五轮把"能演"做实（一条主链从空库走到结果），后十一轮把"说的每句话站得住"做实
+        D1–D17
+        分两半：前五轮把"能演"做实（一条主链从空库走到结果），后十二轮把"说的每句话站得住"做实
         ——失败会说清原因、排队会被看见、读数自己会说"这次不能用"、没人用的东西被删掉。
       </p>
     </el-card>
@@ -21,7 +21,7 @@
     </el-card>
 
     <el-card shadow="never" class="panel-card">
-      <template #header><span>十六轮：之前 / 现在</span></template>
+      <template #header><span>十七轮：之前 / 现在</span></template>
       <div v-for="round in rounds" :key="round.id" class="eng-round">
         <h4>{{ round.id }}</h4>
         <p><span class="eng-label">之前</span>{{ round.before }}</p>
@@ -50,7 +50,7 @@
 const rulers = [
   {
     name: '后端测试',
-    value: '1610 passed / 0 failed',
+    value: '1620 passed / 0 failed',
     command: 'cd backend && python -m pytest -q',
   },
   {
@@ -65,7 +65,7 @@ const rulers = [
   },
   {
     name: '格式门',
-    value: 'eslint 0 error / 0 warning；prettier 与 ruff format 491 文件全绿',
+    value: 'eslint 0 error / 0 warning；prettier 与 ruff format 492 文件全绿',
     command: 'npm run lint && npm run format:check',
   },
   {
@@ -159,6 +159,11 @@ const rounds = [
     id: 'D16',
     before: '接口错误的 message 会原样变成 toast，里面还有 7 条英文与 4 处异常原文。',
     after: '11 处换成我们自己的中文，并立一条静态判据：f-string 里插异常对象从此进不了门。',
+  },
+  {
+    id: 'D17',
+    before: '怀疑报告载荷把内部诊断（stage_errors）带进候选人浏览器——查完是我错。',
+    after: '缺陷不存在，但证据太薄：三份报告的"内证据不上屏"改成对齐判据，任一边单方面收缩都红。',
   },
 ]
 
