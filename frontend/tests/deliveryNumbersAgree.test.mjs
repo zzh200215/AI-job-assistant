@@ -27,7 +27,7 @@ const PAGE = path.join(
 )
 
 /* 必须两边都在的读数：后端用例数、前端用例数、前端文件数、静态守卫条数、首屏与天花板、ruff 文件数。 */
-const SHARED_NUMBERS = ['1602', '814', '127', '57', '406', '420', '488']
+const SHARED_NUMBERS = ['1609', '817', '128', '57', '406', '420', '490']
 
 const doc = fs.readFileSync(DOC, 'utf8')
 const page = fs.readFileSync(PAGE, 'utf8')
@@ -35,7 +35,7 @@ const page = fs.readFileSync(PAGE, 'utf8')
 test('两处都写着的那组读数，任一处缺了就红', () => {
   /* 非空断言：文件挪了/编码坏了会让下面的比对变成"两边都空"的假绿。 */
   assert.ok(doc.length > 2000, `交付摘要.md 读出来只有 ${doc.length} 字符，路径或编码不对`)
-  assert.ok(doc.includes('D1–D11'), '交付摘要.md 里找不到标题里的 D1–D11，读的可能是别的文件')
+  assert.ok(doc.includes('D1–D15'), '交付摘要.md 里找不到标题里的 D1–D15，读的可能是别的文件')
   assert.ok(page.includes('D1') && page.includes('D11'), '工程口径组件里找不到 D 系列轮次')
 
   for (const value of SHARED_NUMBERS) {
@@ -44,8 +44,8 @@ test('两处都写着的那组读数，任一处缺了就红', () => {
   }
 })
 
-test('十一轮一条都不许缺：页面与文档的轮次集合必须相同', () => {
-  const rounds = Array.from({ length: 11 }, (_, index) => `D${index + 1}`)
+test('十五轮一条都不许缺：页面与文档的轮次集合必须相同', () => {
+  const rounds = Array.from({ length: 15 }, (_, index) => `D${index + 1}`)
   const countIn = (text, id) => (text.match(new RegExp(`\\b${id}\\b`, 'g')) || []).length
 
   for (const id of rounds) {

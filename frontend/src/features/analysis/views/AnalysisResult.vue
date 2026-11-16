@@ -185,6 +185,8 @@
               <strong class="score-value">{{ result.match_score }}</strong>
               <p class="score-rec">{{ localizedMatchRecommendation || '待评估' }}</p>
               <p class="score-summary">{{ localizedMatchSummary || '暂无摘要' }}</p>
+              <!-- 这一屏最该说的实话：这个分数是几发调用换来的、其中几发没成功 -->
+              <p v-if="provenanceNote" class="score-provenance">{{ provenanceNote }}</p>
               <div class="score-actions">
                 <el-button
                   size="small"
@@ -587,6 +589,26 @@ const primaryGap = computed(() => {
   if (!gap) return '当前没有识别到需要优先补齐的明显差距。'
   return gap.label || gap.action || gap.impact || '查看完整匹配报告。'
 })
+
+/**
+ * 这份结果是"谁答的"。
+ *
+ * 后端把这条记录那次任务的模型调用按 `prompt_trace` 汇总成 `provenance`（几发、谁答的、
+ * 几发没成功）。干净的一发不发回来就不显示——**"没话说"和"全都没问题"不是一回事**，
+ * 但屏幕上也不该为一次正常分析加一句免责声明。
+ */
+const provenanceNote = computed(() => {
+  const provenance = result.value?.provenance
+  if (!provenance || !provenance.calls) return ''
+  if (!provenance.failed && !provenance.degraded) return ''
+  const real = provenance.by_source?.real || 0
+  const fallback = provenance.by_source?.fallback_model || 0
+  const parts = [`本次分析共 ${provenance.calls} 发模型调用`]
+  if (real) parts.push(`${real} 发真实模型`)
+  if (fallback) parts.push(`${fallback} 发兜底模型`)
+  if (provenance.failed) parts.push(`${provenance.failed} 发没成功`)
+  return `${parts.join(' · ')}；没成功的那几处由兜底规则补出，相关小节可能不如平时准确。`
+})
 const priorityAction = computed(() => {
   const gap = localizedGaps.value[0]
   if (gap?.action) return gap.action
@@ -957,6 +979,14 @@ const goJobMarket = () => router.push('/jobs/search')
   margin: 10px 0 0;
   color: var(--app-muted);
   line-height: 1.8;
+}
+
+/* 底账那句比摘要轻一档：它是脚注，不是结论。 */
+.score-provenance {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--app-muted);
+  line-height: 1.7;
 }
 
 .score-actions {

@@ -10,6 +10,7 @@ from app.api.auth import get_current_user
 from app.core.database import get_db
 from app.models.agent import AgentStepLog, AgentTask, RetrievalLog
 from app.models.history import AnalysisRecord, Resume
+from app.models.prompt_trace import PromptTrace
 from app.models.user import User
 from app.orchestration.protocol import normalize_step_name
 from app.schemas.analysis import ExplainMatchReq, FullAnalysisReq
@@ -274,6 +275,48 @@ def regen_interview(
     )
 
 
+def _load_provenance(db, record_id: int, user_id: int) -> dict | None:
+    """这条结果的"底账"：几发模型调用、谁答的、几发没成功。
+
+    数据本来就在库里——`AgentTask.analysis_record_id` 指回记录、`PromptTrace.task_id` 指回任务——
+    只是没人把它们接起来。于是 2026-11-14 那次 7 发调用里 4 发 429、分数只来自规则臂，
+    而结果页上只写着"分析完成，匹配度 57"。这一屏从此自己会说这件事。
+
+    没有任务（老记录、或非编排路径写进来的记录）就返回 None：**不造一个全零的底账**，
+    那会让"查不到"和"跑了但全失败"长得一样。
+    """
+    task = (
+        db.query(AgentTask)
+        .filter(AgentTask.analysis_record_id == record_id, AgentTask.user_id == user_id)
+        .order_by(AgentTask.id.desc())
+        .first()
+    )
+    if not task:
+        return None
+
+    rows = (
+        db.query(PromptTrace.response_source, PromptTrace.status, PromptTrace.degraded)
+        .filter(PromptTrace.task_id == task.id)
+        .all()
+    )
+    if not rows:
+        return None
+
+    by_source: dict[str, int] = {}
+    for source, _status, _degraded in rows:
+        key = source or "unknown"
+        by_source[key] = by_source.get(key, 0) + 1
+
+    return {
+        "task_id": task.id,
+        "task_status": task.status,
+        "calls": len(rows),
+        "by_source": by_source,
+        "failed": sum(1 for _s, status, _d in rows if status != "success"),
+        "degraded": sum(1 for _s, _st, flagged in rows if flagged),
+    }
+
+
 @router.get("/{record_id}", summary="获取单条分析结果详情")
 def get_record(
     record_id: int,
@@ -333,6 +376,8 @@ def get_record(
             "final_report": final_report,
             "career_planning": career_planning,
             "rag_confidence": rag_confidence,
+            # 这份结果是"谁答的"：几发调用、几发失败、几发降级。没有就是 None（老记录）。
+            "provenance": _load_provenance(db, rec.id, current_user.id),
             "create_time": rec.create_time.isoformat() if rec.create_time else None,
         }
     )

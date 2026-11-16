@@ -79,7 +79,7 @@ Return strict JSON with this schema:
                 max_tool_rounds=8,
             )
             result.setdefault("match_score", 0)
-            result.setdefault("summary", "analysis incomplete")
+            result.setdefault("summary", "这一发拿到了回复，但里面没有匹配摘要。")
             result.setdefault("strengths", [])
             result.setdefault("gaps", [])
             result.setdefault("risk_points", [])
@@ -90,12 +90,17 @@ Return strict JSON with this schema:
             result.setdefault("recommendation", "hold")
             return result
         except (RuntimeError, ValueError) as exc:
+            # 这几个字段会**原样上屏**（结果页的"匹配度"下面那句、差距清单、风险点），所以只能用
+            # 我们自己的话。以前这里写的是 `analysis unavailable: {str(exc)[:80]}`，于是候选人
+            # 在匹配度下面读到的是 `[LLM-Tools] 调用失败（已重试 2 次）: AI 接口调用失败(HTTP 429)`
+            # ——服务端原文上屏，正是这条链反复在收的那件事（2026-11-16 真浏览器验收撞见）。
+            # 原始异常仍然留在 `_error` 里：运维要的证据在，只是不给候选人看。
             return {
                 "match_score": 0,
-                "summary": f"analysis unavailable: {str(exc)[:80]}",
+                "summary": "这一发没能拿到模型的匹配分析，下面的分数来自规则口径，先按未评估计。",
                 "strengths": [],
-                "gaps": ["system analysis failed, retry later"],
-                "risk_points": ["analysis incomplete, risks cannot be assessed reliably"],
+                "gaps": ["匹配分析没有完成，这份结果的差距清单不完整——稍后重试一次。"],
+                "risk_points": ["分析未完成，风险点暂时无法可靠评估。"],
                 "dimension_scores": {"skills": 0, "experience": 0, "education": 0, "industry": 0},
                 "recommendation": "hold",
                 "_error": str(exc)[:200],

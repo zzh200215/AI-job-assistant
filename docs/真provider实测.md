@@ -194,6 +194,28 @@ recommend embedding work for resume=83: scanned=5 reused=0 embedded=0 failed=5
    当成终态写进结论）；`/jobs/recommend` 在 embedding 欠费时曾挂十几分钟（现在单发接口各自
    `--step-timeout`，超时会被记成一条读数而不是让脚本卡死）。
 
+### 5.2 结果页自己会说"这 57 是怎么来的"（2026-11-16）
+
+彩排那批记录留在库里，正好拿来看屏幕：打开 `/analysis/85`，匹配度下面多了一行
+
+> 本次分析共 10 发模型调用 · 1 发真实模型 · 2 发兜底模型 · 7 发没成功；没成功的那几处由兜底规则
+> 补出，相关小节可能不如平时准确。
+
+数字来自 `GET /analysis/{id}` 新增的 `provenance`：后端按 `AgentTask.analysis_record_id` 找到任务、
+再按 `PromptTrace.task_id` 汇总——这两列本来就在库里，只是没人把它们接起来。
+
+同一屏还**抓出一处泄漏**：那句话上面写的是
+
+```
+analysis unavailable: [LLM-Tools] 调用失败（已重试 2 次）: AI 接口调用失败(HTTP 429)，请稍后重试
+```
+
+也就是 `match_analysis_agent` 在失败分支把 provider 的异常原文塞进了 `summary`，而 `summary`
+是直接渲染的。已改成我们自己的话，原始异常只留 `_error`；判据见
+`tests/test_match_agent_user_facing_copy.py`（变异：把旧写法塞回去，3 条里红 1 条）。
+**注意**：库里 2026-11-14 之前写下的老记录仍然带着旧文案——它记的是当时真实发生的失败，
+不清洗历史数据。
+
 ---
 
 ## 6. 当天修掉的缺陷 2：根本原因不是"缺一个超时"

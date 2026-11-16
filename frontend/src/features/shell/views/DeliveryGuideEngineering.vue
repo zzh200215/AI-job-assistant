@@ -3,8 +3,8 @@
     <el-card shadow="never" class="panel-card">
       <template #header><span>一句话</span></template>
       <p class="eng-intro">
-        D1–D11 分两半：前五轮把"能演"做实（一条主链从空库走到结果），后六轮把"说的每句话站得住"做实
-        ——失败会说清原因、排队会被看见、没人用的东西被删掉。
+        D1–D15 分两半：前五轮把"能演"做实（一条主链从空库走到结果），后十轮把"说的每句话站得住"做实
+        ——失败会说清原因、排队会被看见、读数自己会说"这次不能用"、没人用的东西被删掉。
       </p>
     </el-card>
 
@@ -20,7 +20,7 @@
     </el-card>
 
     <el-card shadow="never" class="panel-card">
-      <template #header><span>十一轮：之前 / 现在</span></template>
+      <template #header><span>十五轮：之前 / 现在</span></template>
       <div v-for="round in rounds" :key="round.id" class="eng-round">
         <h4>{{ round.id }}</h4>
         <p><span class="eng-label">之前</span>{{ round.before }}</p>
@@ -49,12 +49,12 @@
 const rulers = [
   {
     name: '后端测试',
-    value: '1602 passed / 0 failed',
+    value: '1609 passed / 0 failed',
     command: 'cd backend && python -m pytest -q',
   },
   {
     name: '前端测试',
-    value: '127 文件 / 814 条',
+    value: '128 文件 / 817 条',
     command: 'cd frontend && npx vitest run',
   },
   {
@@ -64,7 +64,7 @@ const rulers = [
   },
   {
     name: '格式门',
-    value: 'eslint 0 error / 0 warning；prettier 与 ruff format 488 文件全绿',
+    value: 'eslint 0 error / 0 warning；prettier 与 ruff format 490 文件全绿',
     command: 'npm run lint && npm run format:check',
   },
   {
@@ -131,6 +131,28 @@ const rounds = [
     id: 'D11',
     before: '三份报告作业（简历 / 项目 / 作品集）排队时也说"正在逐节生成"。',
     after: '排队就说排队，被领走之后才说逐节生成。',
+  },
+  {
+    id: 'D12',
+    before: '工程口径只存在于仓库里，只有浏览器的人读不到。',
+    after: '交付说明页分成「产品口径 / 工程口径」，后者就是交付摘要；两处读数由一条守卫钉住。',
+  },
+  {
+    id: 'D13',
+    before: '量测脚本打完就把数扔给人看：分数看着像模像样，其实是规则臂算的。',
+    after:
+      '脚本结尾自己给结论——几发调用、谁答的、几发没成功；欠费/限流/没跟到终态都会进 blockers。',
+  },
+  {
+    id: 'D14',
+    before: '结果页只说"分析完成，匹配度 57"，不说这 57 是几发调用换来的、几发失败了。',
+    after: '分数下面多一行底账：几发调用、几发真实、几发兜底、几发没成功；干净的一发不显示。',
+  },
+  {
+    id: 'D15',
+    before:
+      '匹配分析失败时，结果页把 provider 的异常原文当摘要上屏（analysis unavailable: … HTTP 429）。',
+    after: '上屏字段改成我们自己的话；原始异常只留在 _error 里给运维看。',
   },
 ]
 
