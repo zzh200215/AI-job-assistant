@@ -3,8 +3,8 @@
     <el-card shadow="never" class="panel-card">
       <template #header><span>一句话</span></template>
       <p class="eng-intro">
-        D1–D17
-        分两半：前五轮把"能演"做实（一条主链从空库走到结果），后十二轮把"说的每句话站得住"做实
+        D1–D18
+        分两半：前五轮把"能演"做实（一条主链从空库走到结果），后十三轮把"说的每句话站得住"做实
         ——失败会说清原因、排队会被看见、读数自己会说"这次不能用"、没人用的东西被删掉。
       </p>
     </el-card>
@@ -21,7 +21,7 @@
     </el-card>
 
     <el-card shadow="never" class="panel-card">
-      <template #header><span>十七轮：之前 / 现在</span></template>
+      <template #header><span>十八轮：之前 / 现在</span></template>
       <div v-for="round in rounds" :key="round.id" class="eng-round">
         <h4>{{ round.id }}</h4>
         <p><span class="eng-label">之前</span>{{ round.before }}</p>
@@ -50,12 +50,12 @@
 const rulers = [
   {
     name: '后端测试',
-    value: '1620 passed / 0 failed',
+    value: '1624 passed / 0 failed',
     command: 'cd backend && python -m pytest -q',
   },
   {
     name: '前端测试',
-    value: '128 文件 / 817 条',
+    value: '129 文件 / 825 条',
     command: 'cd frontend && npx vitest run',
   },
   {
@@ -65,7 +65,7 @@ const rulers = [
   },
   {
     name: '格式门',
-    value: 'eslint 0 error / 0 warning；prettier 与 ruff format 492 文件全绿',
+    value: 'eslint 0 error / 0 warning；prettier 与 ruff format 493 文件全绿',
     command: 'npm run lint && npm run format:check',
   },
   {
@@ -164,6 +164,12 @@ const rounds = [
     id: 'D17',
     before: '怀疑报告载荷把内部诊断（stage_errors）带进候选人浏览器——查完是我错。',
     after: '缺陷不存在，但证据太薄：三份报告的"内证据不上屏"改成对齐判据，任一边单方面收缩都红。',
+  },
+  {
+    id: 'D18',
+    before: '看板终态（已入职 / 已拒绝 / 已放弃）误点一下只能删除重建，历史跟着一起丢。',
+    after:
+      '菜单多了「撤销这一步（退回「X」）」：只退回最后一次真实转移的那一段；状态机里终态仍没有出边。',
   },
 ]
 

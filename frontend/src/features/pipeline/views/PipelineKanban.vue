@@ -278,6 +278,7 @@ import { ElMessage, ElMessageBox } from '@/plugins/element-services'
 import {
   getKanban,
   movePipelineStage,
+  undoPipelineTerminal,
   createJobPipelineEntry,
   deleteJobPipelineEntry,
   getPipelineResumeVersions,
@@ -297,6 +298,7 @@ import {
   stageCounts,
   stageLabel,
   totalCardCount,
+  undoTargetStage,
 } from '@/features/pipeline/lib/pipelineBoard'
 import { useLatestCall } from '@/composables/useLatestCall'
 import AppLoadError from '@/components/ui/AppLoadError.vue'
@@ -543,7 +545,27 @@ async function runCardCommand(cmd, card) {
   if (cmd === 'interview') return goInterviewFor(card)
   if (cmd === 'reject') return markStage(card, 'rejected', COMMAND_LABELS.rejected)
   if (cmd === 'abandon') return markStage(card, 'withdrawn', COMMAND_LABELS.abandon)
+  if (cmd === 'undo-terminal') return undoTerminal(card)
   if (cmd === 'delete') return removeCard(card)
+}
+
+/* 撤销误点的终态。它不是"流转"——状态机里终态仍没有出边，这里走的是另一条端点：
+   只退回那次转移自己记下的 `from_stage`（面板那颗菜单项只在历史里有它时才画）。
+   成功后整板重读，不做乐观更新：这一类操作一年用不了几次，让服务端那份 `stage_history`
+   和屏幕保持一致比省一次请求重要。 */
+async function undoTerminal(card) {
+  const target = undoTargetStage(card)
+  if (!target || writeBusy.value) return
+  writeBusy.value = true
+  try {
+    await undoPipelineTerminal(card.id)
+    ElMessage.success(`已撤销，退回「${columns.find((c) => c.key === target)?.label || target}」`)
+    await loadKanban()
+  } catch {
+    // 失败消息由统一请求层提示；看板保持原样
+  } finally {
+    writeBusy.value = false
+  }
 }
 
 /* §10.21：同一个动作原先有两句提示——看板那句带"为"，列表那句少一个"为"（D58 合并实现时

@@ -17,6 +17,9 @@ export const getKanban = (params = {}) => request.get('/jobs/pipeline/kanban', {
 export const movePipelineStage = (id, stage, data = {}) =>
   request.post(`/jobs/pipeline/${id}/transition`, { target_stage: stage, ...data })
 
+/** 撤销误点的终态（已入职 / 已拒绝 / 已放弃）：退回它进来之前的那一段。 */
+export const undoPipelineTerminal = (id) => request.post(`/jobs/pipeline/${id}/undo-terminal`)
+
 export const createJobPipelineEntry = (data) => request.post('/jobs/pipeline', data)
 
 export const updateJobPipelineEntry = (id, data) => request.put(`/jobs/pipeline/${id}`, data)

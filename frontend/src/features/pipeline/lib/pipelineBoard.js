@@ -170,6 +170,28 @@ export function isTerminalStage(stage) {
 }
 
 /**
+ * 这条记录能不能"撤销误点的终态"，以及退回到哪一段。
+ *
+ * 判据是**历史里那一步自己记下的 `from_stage`**，不猜：早期记录没有 `stage_history`，
+ * 就返回 `null`——屏幕上宁可没有这颗按钮，也不要退到一个没人点过的阶段。
+ * 后端 `POST /jobs/pipeline/{id}/undo-terminal` 用的是同一条判据（找不到就拒绝）。
+ * @param {{ stage?: string, stage_history?: Array<Record<string, any>> }} [card]
+ * @returns {string | null}
+ */
+export function undoTargetStage(card) {
+  if (!card || !isTerminalStage(card.stage)) return null
+  const history = Array.isArray(card.stage_history) ? card.stage_history : []
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const item = history[index]
+    if (!item || item.stage !== card.stage) continue
+    const from = item.from_stage
+    const known = columns.some((col) => col.key === from)
+    return from && known && from !== card.stage ? from : null
+  }
+  return null
+}
+
+/**
  * 这一放被拒时对候选人说的话。菜单已经列不出非法目标，所以这句是给**拖拽**用的——
  * 拖拽没有"只能拖到哪几列"的视觉约束，只能事后解释，而且必须解释成中文阶段名
  * （后端那句原文里是 `'applied'` / `'todo'` 这种键，还挂着一串 request id）。

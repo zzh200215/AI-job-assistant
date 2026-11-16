@@ -20,6 +20,7 @@ import {
   menuMoveTargets,
   needsFollowUp,
   TERMINAL_COLUMN_KEYS,
+  undoTargetStage,
 } from '@/features/pipeline/lib/pipelineBoard'
 
 /* 看板列，D63 从 PipelineKanban.vue 搬出来。归属仍是 D44 的 A 方案，但这一块和统计那块
@@ -189,6 +190,14 @@ function onCardCommand(cmd, card) {
                         command="abandon"
                         style="color: var(--app-muted)"
                         >放弃</el-dropdown-item
+                      >
+                      <el-dropdown-item
+                        v-if="undoTargetStage(card)"
+                        command="undo-terminal"
+                        :divided="isTerminal(col.key)"
+                        >撤销这一步（退回「{{
+                          columns.find((c) => c.key === undoTargetStage(card))?.label
+                        }}」）</el-dropdown-item
                       >
                       <el-dropdown-item
                         command="delete"

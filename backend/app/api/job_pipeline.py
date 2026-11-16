@@ -568,6 +568,81 @@ def transition_stage(
     return ok(entry.to_dict(), message=f"已从 '{current_stage}' 流转到 '{target_stage}'")
 
 
+def _previous_stage_from_history(entry: JobApplicationPipeline) -> str | None:
+    """这条记录是怎么走到当前阶段的：`stage_history` 里最后一条"进入当前阶段"的记录。
+
+    历史是**追加**的（流转时 append 一条 `{stage, from_stage, at}`），所以倒着找第一条
+    `stage == 当前阶段` 就是那一步。返回 `None` 表示找不到——早期记录没有历史，
+    那时不能猜一个阶段回去，只能如实说"没有可回退的记录"。
+    """
+    for item in reversed(entry.stage_history or []):
+        if not isinstance(item, dict):
+            continue
+        if item.get("stage") != entry.stage:
+            continue
+        previous = item.get("from_stage")
+        if previous in PIPELINE_STAGES and previous != entry.stage:
+            return previous
+        return None
+    return None
+
+
+@router.post("/pipeline/{entry_id}/undo-terminal", summary="撤销误点的终态")
+def undo_terminal_stage(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """把一次误点的终态（已入职 / 已拒绝 / 已放弃）退回到**它进来之前的那一段**。
+
+    为什么不是给状态机加一条反向边：`VALID_TRANSITIONS` 里终态是空集是有意的——那三段是
+    "这件事结束了"，允许从它们流出会让看板上的归档带失去意义。但"点错一下就只能删除重建"
+    是另一个问题（D4 起前端不再假装有路，误点的人只能重建一条记录，把历史一起丢掉）。
+
+    所以这里是**撤销**而不是**流转**：它只回退到最后一次真实的转移，凭的是 `stage_history`
+    里那一步自己记下的 `from_stage`，不猜。撤销本身也追加一条历史（`action: "undo"`），
+    不删旧条目——历史是账，不是栈。
+    """
+    entry = (
+        db.query(JobApplicationPipeline)
+        .filter(
+            JobApplicationPipeline.id == entry_id,
+            JobApplicationPipeline.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not entry:
+        return fail(message="投递记录不存在或无权限", code=ERR_PARAM)
+
+    if entry.stage not in TERMINAL_STAGES:
+        return fail(message="只有终态（已入职 / 已拒绝 / 已放弃）才能撤销", code=ERR_PARAM)
+
+    previous = _previous_stage_from_history(entry)
+    if previous is None:
+        return fail(
+            message="这条记录没有可回退的阶段历史（早期记录），只能自己重新建一条",
+            code=ERR_PARAM,
+        )
+
+    history = list(entry.stage_history or [])
+    history.append(
+        {
+            "stage": previous,
+            "from_stage": entry.stage,
+            "action": "undo",
+            "at": utc_now_iso(),
+            "note": "撤销误点的终态",
+        }
+    )
+    entry.stage = previous
+    entry.stage_history = history
+
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return ok(entry.to_dict(), message=f"已撤销：从终态退回 '{previous}'")
+
+
 @router.put("/pipeline/{entry_id}", summary="更新投递流程记录")
 def update_pipeline_entry(
     entry_id: int,
