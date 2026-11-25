@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,10 @@ from pathlib import Path
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
+
+# Settings reads .env relative to the process cwd; the repo-root .env holds the
+# Docker credentials, not the local MySQL password. Pin the backup to backend/.env.
+os.chdir(_BACKEND_DIR)
 
 from app.core.config import settings  # noqa: E402
 
