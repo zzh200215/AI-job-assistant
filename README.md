@@ -402,6 +402,16 @@ powershell -ExecutionPolicy Bypass -File scripts/local-demo.ps1 -Stop
 - 日志与 `pids.json` 在 `backend/reports/local-demo/`（gitignored）；`-SkipSeed` 跳过重灌数据，`-OpenBrowser` 启动后打开页面。
 - 与方式二的区别：固定 8001/5173（匹配 `frontend/.env.local`），不需要另起 worker，适合当面演示。
 
+**本地演示长什么样**（1440×900，mock 数据）：
+
+| 首页 | 分析结果 |
+|---|---|
+| ![首页](docs/assets/demo/home.png) | ![分析结果](docs/assets/demo/analysis-result.png) |
+| **投递看板** | **AI 模拟面试** |
+| ![投递看板](docs/assets/demo/pipeline.png) | ![AI 模拟面试](docs/assets/demo/interview-room.png) |
+
+完整 8 格分镜与口播见 [docs/本地演示分镜.md](docs/本地演示分镜.md)。截图为本地 mock 数据，不代表真实 provider 质量。
+
 ---
 
 ## 环境配置

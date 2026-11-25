@@ -99,7 +99,7 @@ D5 里那条**样式缺口**值得单记一笔，因为它是"守卫只看一个
 | 项 | 内容 | 状态 | 出口 |
 |---|---|---|---|
 | 本地一键演示 | `scripts/local-demo.ps1`：mock + thread、demo 账号、8001/5173、`-Stop` 只停这两个端口的监听进程 | ✅ 已交付 | 启动 / 二次运行 / 停止 / 重启四态实测；README「方式三」 |
-| 3 分钟分镜 | [本地演示分镜.md](本地演示分镜.md)：8 格时间轴 + 8 张 1440×900 桌面截图（`backend/reports/local-demo/`，gitignored） | ✅ 本机 | 登录 → 首页 → 简历 → 结果 → 看板 → 面试设置 → Q1 → 作答 |
+| 3 分钟分镜 | [本地演示分镜.md](本地演示分镜.md)：8 格时间轴 + 8 张 1440×900 桌面截图（已入 `docs/assets/demo/`） | ✅ 已入仓库 | 登录 → 首页 → 简历 → 结果 → 看板 → 面试设置 → Q1 → 作答 |
 | 首页今日任务 500 | `utc_now()` 带 tzinfo，MySQL 读回 naive，相减抛 `TypeError`；四处统一 `utc_now_naive()`，周报 ISO 时间先归一到 naive UTC | ✅ 已修复 | `test_dashboard_today_tasks` 先红后绿；全量 1631 passed |
 | SummaryAgent mock 摘要 | mock 返回字符串 `summary`，`_make_summary` 只认 dict；改为 dict/str 兼容 | ✅ 已修复 | 3 条 `test_summary_agent`；第 7 步不再 500 |
 
