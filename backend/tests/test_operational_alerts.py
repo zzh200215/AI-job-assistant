@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api import system
 from app.api.auth import router as auth_router
 from app.api.system import router as system_router
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password
 from app.models.operational_alert import OperationalAlert
@@ -94,3 +97,50 @@ def test_alert_endpoints_require_admin_and_record_acknowledgement(db_session, mo
         listing = client.get("/system/alerts", headers=_headers(admin))
         assert listing.status_code == 200
         assert listing.json()["data"]["alerts"][0]["status"] == "acknowledged"
+
+
+def test_new_alert_posts_to_webhook_once(db_session, monkeypatch):
+    calls = []
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b"ok"
+
+    def fake_urlopen(req, timeout=None):
+        calls.append((req.full_url, req.data, timeout))
+        return _Response()
+
+    monkeypatch.setattr(settings, "OPERATIONS_ALERT_WEBHOOK_URL", "https://alerts.example/hook")
+    monkeypatch.setattr("app.services.operational_alert_service.urllib.request.urlopen", fake_urlopen)
+
+    evaluate_operational_alerts(db_session, **_snapshot(ready=False))
+    evaluate_operational_alerts(db_session, **_snapshot(ready=False))
+
+    assert len(calls) == 1
+    url, body, timeout = calls[0]
+    assert url == "https://alerts.example/hook"
+    assert timeout == settings.OPERATIONS_ALERT_WEBHOOK_TIMEOUT_SECONDS
+    payload = json.loads(body)
+    assert payload["event"] == "operational_alert.opened"
+    assert payload["alert_key"] == "model_runtime_unavailable"
+    assert payload["occurrences"] == 1
+
+
+def test_webhook_failure_does_not_block_alert_persistence(db_session, monkeypatch):
+    monkeypatch.setattr(settings, "OPERATIONS_ALERT_WEBHOOK_URL", "https://alerts.example/hook")
+
+    def boom(req, timeout=None):
+        raise RuntimeError("webhook down")
+
+    monkeypatch.setattr("app.services.operational_alert_service.urllib.request.urlopen", boom)
+
+    alerts = evaluate_operational_alerts(db_session, **_snapshot(ready=False))
+
+    assert len(alerts) == 1
+    assert db_session.query(OperationalAlert).count() == 1

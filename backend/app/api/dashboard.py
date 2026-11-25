@@ -14,7 +14,7 @@ from app.models.job_pipeline import ACTIVE_STAGES, JobApplicationPipeline
 from app.models.notification import Notification
 from app.models.user import User
 from app.utils.response import ok
-from app.utils.time_helper import utc_now
+from app.utils.time_helper import utc_now_naive
 
 router = APIRouter()
 
@@ -25,7 +25,7 @@ def dashboard_overview(
     current_user: User = Depends(get_current_user),
 ):
     uid = current_user.id
-    now = utc_now()
+    now = utc_now_naive()
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)
 
@@ -166,7 +166,7 @@ def weekly_report(
     current_user: User = Depends(get_current_user),
 ):
     uid = current_user.id
-    now = utc_now()
+    now = utc_now_naive()
     week_ago = now - timedelta(days=7)
 
     # 本周新增投递
@@ -190,6 +190,8 @@ def weekly_report(
 
                 try:
                     at = datetime.fromisoformat(h["at"].replace("Z", "+00:00"))
+                    if at.tzinfo is not None:
+                        at = at.astimezone(datetime.timezone.utc).replace(tzinfo=None)
                     if at >= week_ago:
                         stage_changes.append(
                             {
@@ -282,7 +284,7 @@ def today_tasks(
 ):
     """聚合今日待办事项：面试、Offer截止、跟进投递、推荐岗位等"""
     uid = current_user.id
-    now = utc_now()
+    now = utc_now_naive()
     today_end = now + timedelta(days=1)
 
     tasks = []
@@ -423,7 +425,7 @@ def next_actions(
     不使用 AI 措辞。
     """
     uid = current_user.id
-    now = utc_now()
+    now = utc_now_naive()
     week_ago = now - timedelta(days=7)
 
     # 收集上下文

@@ -194,6 +194,9 @@ class Settings(BaseSettings):
     # 越过 `DB_POOL_TIMEOUT` 的等待 = 直接抛 TimeoutError（路由 500 / 后台作业 failed），
     # 一次就要醒：它是"已经在丢请求"，不是"有点慢"。
     OPERATIONS_ALERT_DB_TIMEOUT_SAMPLES: int = 1
+    # 外部告警通知：告警第一次打开时 POST 一条 JSON；留空 = 不发送。
+    OPERATIONS_ALERT_WEBHOOK_URL: str = ""
+    OPERATIONS_ALERT_WEBHOOK_TIMEOUT_SECONDS: float = 5.0
 
     # AI release governance. Every configured report type must have current, thresholded evidence.
     AI_RELEASE_REQUIRED_EVALUATION_TYPES: str = "rag,agent,recommend,parse"

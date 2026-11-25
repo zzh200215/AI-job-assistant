@@ -77,6 +77,25 @@ def _normalize_dimension_scores(match_report):
     return report
 
 
+def _complete_match_report(match_report, score, matched, missing):
+    """展示层兜底：模型没给摘要/证据时，用权威分与技能覆盖把话说完整。"""
+    if not isinstance(match_report, dict):
+        return match_report
+    report = dict(match_report)
+    summary = report.get("summary")
+    if not summary or "没有匹配摘要" in str(summary):
+        covered = f"已覆盖 {len(matched)} 项岗位技能" if matched else "暂无已覆盖的岗位技能"
+        missing_text = f"缺少 {', '.join(missing[:4])}" if missing else "没有明显技能缺口"
+        report["summary"] = f"按六维规则当前匹配度 {score}；{covered}，{missing_text}。"
+    if not report.get("strengths") and matched:
+        report["strengths"] = [f"已覆盖岗位技能：{', '.join(matched[:5])}"]
+    if not report.get("gaps") and missing:
+        report["gaps"] = [f"缺少岗位技能：{', '.join(missing[:5])}"]
+    if not report.get("risk_points") and missing:
+        report["risk_points"] = ["关键技能缺口可能影响简历初筛。"]
+    return report
+
+
 def _normalize_interview_questions(interview_questions):
     """Normalize old basic/tech/project/scenario output and new *_questions output."""
     if not isinstance(interview_questions, dict):
@@ -358,7 +377,12 @@ def get_record(
     matched = report_gap.matched_required + report_gap.matched_nice_to_have
     missing = report_gap.missing_required + report_gap.missing_nice_to_have
 
-    parsed_match = _normalize_dimension_scores(_deep_parse_json(rec.match_report))
+    parsed_match = _complete_match_report(
+        _normalize_dimension_scores(_deep_parse_json(rec.match_report)),
+        rec.match_score,
+        matched,
+        missing,
+    )
     parsed_interview = _normalize_interview_questions(_deep_parse_json(rec.interview_questions))
     final_report, career_planning, rag_confidence = _load_task_outputs(db, current_user.id, rec.id)
 

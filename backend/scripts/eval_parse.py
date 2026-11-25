@@ -6,7 +6,8 @@
   截断发生率、丢段分布、**段尾那份最新经历有没有保住**、以及"判卷器本身可用"（gold 喂回
   判卷器必须满分——仪器不自检，数字就没意义）。
 * 抽取臂（不碰 provider，CI 可门，2026-10-24 补）：`raw_text` 必须是文件里拆出来的那份。
-  一路是清单夹具（TXT、临时生成的 DOCX 往返、坏 PDF 的**用户可见报错**），另一路是语料里
+  一路是清单夹具（TXT、临时生成的 DOCX 往返、临时生成的 ASCII PDF、已提交的 reportlab 中文 PDF、
+  坏 PDF 的**用户可见报错**），另一路是语料里
   带 `source_file` 的真文本行（4 份），抽取产物与 `raw_text` 归一化后必须逐字相同。
 * 语义臂（要 provider，真跑才出门数）：走产品那条路（`guarded_parse`：预算内取文本 →
   单发解析 → 结构校验 → 一次自纠），量字段级 P/R/F1 与**首发一次通过率**。真文本臂的
@@ -643,7 +644,7 @@ def main() -> int:
     ap.add_argument(
         "--extraction-manifest",
         default=DEFAULT_EXTRACTION_MANIFEST,
-        help="抽取臂夹具清单（TXT/DOCX 往返/坏 PDF 报错）",
+        help="抽取臂夹具清单（TXT/DOCX 往返/ASCII PDF/reportlab 中文 PDF/坏 PDF 报错）",
     )
     ap.add_argument(
         "--min-extract-match",

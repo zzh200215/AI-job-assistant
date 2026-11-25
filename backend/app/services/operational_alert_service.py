@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import urllib.request
 from datetime import timedelta
 from typing import Any
 
@@ -13,6 +16,8 @@ from app.models.agent import AgentTask
 from app.models.operational_alert import OperationalAlert
 from app.models.prompt_trace import PromptTrace
 from app.utils.time_helper import utc_now
+
+logger = logging.getLogger(__name__)
 
 
 def collect_operational_alerts(
@@ -246,16 +251,55 @@ def collect_operational_alerts(
     return alerts
 
 
+def _post_alert_webhook(alert: dict[str, Any]) -> None:
+    url = (settings.OPERATIONS_ALERT_WEBHOOK_URL or "").strip()
+    if not url:
+        return
+    payload = {
+        "event": "operational_alert.opened",
+        "alert_key": alert["alert_key"],
+        "severity": alert["severity"],
+        "title": alert["title"],
+        "description": alert["description"],
+        "context": alert.get("context") or {},
+        "occurrences": alert.get("occurrences", 1),
+        "first_seen_at": alert.get("first_seen_at"),
+        "last_seen_at": alert.get("last_seen_at"),
+        "app_env": settings.APP_ENV,
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8"),
+        method="POST",
+    )
+    req.add_header("Content-Type", "application/json; charset=utf-8")
+    req.add_header("User-Agent", "career-signal-alerts/1.0")
+    try:
+        with urllib.request.urlopen(req, timeout=settings.OPERATIONS_ALERT_WEBHOOK_TIMEOUT_SECONDS) as resp:
+            resp.read()
+    except Exception as exc:  # noqa: BLE001 - 外发失败不能把已落库的告警评估拖崩
+        logger.warning("Operational alert webhook failed: %s", exc)
+
+
 def evaluate_operational_alerts(db: Session, **snapshot: dict[str, Any]) -> list[OperationalAlert]:
     """Upsert active conditions and mark no-longer-breached alerts resolved."""
     candidates = collect_operational_alerts(db, **snapshot)
     active_keys = {candidate["alert_key"] for candidate in candidates}
     now = utc_now()
+    new_alerts: list[dict[str, Any]] = []
 
     for candidate in candidates:
         alert = db.query(OperationalAlert).filter(OperationalAlert.alert_key == candidate["alert_key"]).one_or_none()
         if alert is None:
             db.add(OperationalAlert(**candidate, first_seen_at=now, last_seen_at=now))
+            new_alerts.append(
+                {
+                    **candidate,
+                    "first_seen_at": now.isoformat(),
+                    "last_seen_at": now.isoformat(),
+                    "occurrences": 1,
+                }
+            )
             continue
         alert.severity = candidate["severity"]
         alert.title = candidate["title"]
@@ -276,6 +320,8 @@ def evaluate_operational_alerts(db: Session, **snapshot: dict[str, Any]) -> list
             alert.resolved_at = now
 
     db.commit()
+    for new_alert in new_alerts:
+        _post_alert_webhook(new_alert)
     return (
         db.query(OperationalAlert)
         .filter(OperationalAlert.resolved_at.is_(None))

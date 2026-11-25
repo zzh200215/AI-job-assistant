@@ -211,7 +211,7 @@
 
         <AppPanel class="summary-card">
           <template #title>这份结果告诉你什么</template>
-          <div class="metric-grid">
+          <div v-if="hasDimensionScores" class="metric-grid">
             <div class="metric-item">
               <span>技能</span>
               <strong>{{ result.match_report?.dimension_scores?.skills?.score ?? 0 }}</strong>
@@ -229,6 +229,9 @@
               <strong>{{ result.match_report?.dimension_scores?.industry?.score ?? 0 }}</strong>
             </div>
           </div>
+          <p v-else class="metric-empty">
+            本次分析未返回维度分，结论以上方的匹配度与技能覆盖为准。
+          </p>
 
           <div class="next-actions">
             <el-button type="primary" @click="goInterview">
@@ -584,6 +587,14 @@ const localizedGaps = computed(() =>
 const localizedRiskPoints = computed(() =>
   normalizeLocalizedTextList(result.value?.match_report?.risk_points)
 )
+const hasDimensionScores = computed(() => {
+  const scores = result.value?.match_report?.dimension_scores || {}
+  return ['skills', 'experience', 'education', 'industry'].some((key) => {
+    const value = scores[key]
+    const score = typeof value === 'object' ? value?.score : value
+    return Number(score) > 0
+  })
+})
 const primaryGap = computed(() => {
   const gap = localizedGaps.value[0]
   if (!gap) return '当前没有识别到需要优先补齐的明显差距。'
@@ -1020,6 +1031,13 @@ const goJobMarket = () => router.push('/jobs/search')
   margin-top: 8px;
   font-size: 26px;
   color: var(--app-text);
+}
+
+.metric-empty {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .next-actions {

@@ -50,7 +50,7 @@
 const rulers = [
   {
     name: '后端测试',
-    value: '1624 passed / 0 failed',
+    value: '1631 passed / 0 failed',
     command: 'cd backend && python -m pytest -q',
   },
   {
@@ -65,12 +65,12 @@ const rulers = [
   },
   {
     name: '格式门',
-    value: 'eslint 0 error / 0 warning；prettier 与 ruff format 493 文件全绿',
+    value: 'eslint 0 error / 0 warning；prettier 与 ruff format 498 文件全绿',
     command: 'npm run lint && npm run format:check',
   },
   {
     name: '首屏',
-    value: '406 kB gzip（天花板 420，其中 245 kB 是 Element Plus）',
+    value: '406 kB gzip（天花板 420，其中 239 kB 是 Element Plus）',
     command: 'tests/bundleBudget.test.mjs 跑真构建量的',
   },
 ]
@@ -131,7 +131,7 @@ const rounds = [
   {
     id: 'D11',
     before: '三份报告作业（简历 / 项目 / 作品集）排队时也说"正在逐节生成"。',
-    after: '排队就说排队，被领走之后才说逐节生成。',
+    after: '排队就说排队，被领走之后才说逐节生成；排队态浏览器截图已补（2026-11-20）。',
   },
   {
     id: 'D12',
@@ -176,7 +176,9 @@ const rounds = [
 const gaps = [
   '真 provider 今天跑不通：主模型 429、embedding 账号欠费，所以推荐分数来自规则臂，不是模型。配额恢复后一条命令重跑，在那之前任何"推荐质量"的结论都不成立。',
   'ORCHESTRATION_BACKEND=redis_queue 时必须另起编排 worker；不起它，分析接口会直接 503（这是故意的，比回一个没人跑的任务号诚实）。升级时先升 worker 再升 web。',
-  '投递看板的终态（已入职 / 已拒绝 / 已放弃）没有出口，误点只能删除重建——后端状态机里这三个是空集，加"撤销"是领域决定，不是代码债。',
+  '投递看板的终态（已入职 / 已拒绝 / 已放弃）现在可以「撤销这一步」，但只退回最后一次真实转移的那一段；任意回退是另一个领域决定，没做。',
+  '本机已跑通备份恢复（56 表校验和一致）与只读接口 smoke（0 错），运行告警已支持可配置 webhook（默认关闭）；生产环境的告警通道联调、备份恢复演练与容量压测仍待做。',
+  '解析夹具：reportlab 中文 PDF 已补（抽取臂 9/9）；本机仍缺单份 >15000 真实简历（库内最长 9,597 且为自拼件，真文本最长 4,761），需要一份真实长简历上传。',
 ]
 </script>
 

@@ -27,7 +27,7 @@ const PAGE = path.join(
 )
 
 /* 必须两边都在的读数：后端用例数、前端用例数、前端文件数、静态守卫条数、首屏与天花板、ruff 文件数。 */
-const SHARED_NUMBERS = ['1624', '825', '129', '57', '406', '420', '493']
+const SHARED_NUMBERS = ['1631', '825', '129', '57', '406', '420', '498']
 
 const doc = fs.readFileSync(DOC, 'utf8')
 const page = fs.readFileSync(PAGE, 'utf8')

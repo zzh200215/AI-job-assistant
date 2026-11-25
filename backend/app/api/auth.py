@@ -328,11 +328,14 @@ def forgot_password(
         data={"sub": str(user.id), "type": "password_reset"},
         expires_delta=timedelta(hours=1),
     )
-    # TODO: 接入真实邮件服务
-    # reset_url = f"{settings.frontend_url}/reset-password?token={token}"
-    # send_email(user.email, "重置密码", f"点击链接重置: {reset_url}")
+    from app.services.email_service import send_password_reset_email
 
-    return ok(data={"token": token}, message="如果该邮箱已注册，重置链接已发送")
+    send_password_reset_email(user.email, token)
+
+    return ok(
+        data={"token": token} if not settings.SMTP_HOST else {},
+        message="如果该邮箱已注册，重置链接已发送",
+    )
 
 
 @router.post("/reset-password-with-token", summary="使用 Token 重置密码")

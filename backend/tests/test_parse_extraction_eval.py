@@ -33,8 +33,8 @@ def test_extraction_arm_matches_fixtures_and_real_source_files():
     rows = load_eval_set(EVAL_SET)
     result = extraction_arm(rows, FIXTURES / "manifest.json", EVAL_SET)
 
-    assert result["cases"] == 8, "4 条清单夹具 + 4 条真文本来源"
-    assert result["matched"] == 8
+    assert result["cases"] == 9, "5 条清单夹具 + 4 条真文本来源"
+    assert result["matched"] == 9
     assert result["match_rate"] == 1.0
     assert result["errors"] == []
 
@@ -42,6 +42,7 @@ def test_extraction_arm_matches_fixtures_and_real_source_files():
     assert by_id["txt_zh"]["exact"] is True
     assert by_id["docx_zh_roundtrip"]["normalized"] is True
     assert by_id["pdf_ascii_roundtrip"]["normalized"] is True
+    assert by_id["pdf_reportlab_zh"]["normalized"] is True
     assert by_id["broken_pdf"]["ok"] is True
     real = [detail for detail in result["details"] if detail["source"] == "real"]
     assert len(real) == 4

@@ -83,10 +83,10 @@ run_or_echo() {
 # Restore database
 if [ -f "${SQL_FILE}" ]; then
     if [ "$DRY_RUN" = true ]; then
-        echo "[DRY-RUN] Would run: mysql --host=${MYSQL_HOST} --port=${MYSQL_PORT} --user=${MYSQL_USER} ${MYSQL_DB} < ${SQL_FILE}"
+        echo "[DRY-RUN] Would run: mysql --default-character-set=utf8mb4 --host=${MYSQL_HOST} --port=${MYSQL_PORT} --user=${MYSQL_USER} ${MYSQL_DB} < ${SQL_FILE}"
     else
-        echo "Running: mysql --host=${MYSQL_HOST} --port=${MYSQL_PORT} --user=${MYSQL_USER} ${MYSQL_DB} < ${SQL_FILE}"
-        MYSQL_PWD="${MYSQL_PASSWORD}" mysql --host="${MYSQL_HOST}" --port="${MYSQL_PORT}" --user="${MYSQL_USER}" "${MYSQL_DB}" < "${SQL_FILE}"
+        echo "Running: mysql --default-character-set=utf8mb4 --host=${MYSQL_HOST} --port=${MYSQL_PORT} --user=${MYSQL_USER} ${MYSQL_DB} < ${SQL_FILE}"
+        MYSQL_PWD="${MYSQL_PASSWORD}" mysql --default-character-set=utf8mb4 --host="${MYSQL_HOST}" --port="${MYSQL_PORT}" --user="${MYSQL_USER}" "${MYSQL_DB}" < "${SQL_FILE}"
     fi
 else
     echo "Warning: SQL dump not found at ${SQL_FILE}, skipping database restore." >&2

@@ -58,8 +58,13 @@ class SummaryAgent(BaseAgent):
         return result
 
     def _make_summary(self, result: dict[str, Any]) -> str:
-        score = result.get("summary", {}).get("match_score", 0)
-        rec = result.get("summary", {}).get("recommendation", "")
+        summary = result.get("summary")
+        if isinstance(summary, dict):
+            score = summary.get("match_score", 0)
+            rec = summary.get("recommendation", "")
+        else:
+            score = result.get("match_score", 0)
+            rec = summary if isinstance(summary, str) else ""
         return f"汇总报告: 综合匹配 {score}/100 | {rec}"
 
 

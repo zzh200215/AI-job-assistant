@@ -2,7 +2,7 @@
 
 > 一个以 **求职者职业发展** 为核心的全栈智能平台。平台通过 **Agentic RAG 引擎** 检索岗位 JD、行业知识、面试题库和职业发展资料，再由多个 AI Agent 协作完成简历优化、岗位匹配、模拟面试和职业规划；题库、评分规则与套餐按平台一处配置覆盖内置默认；审计、运行治理与外部能力 API 用于内部可观测。**企业/多租户那一侧已在 2026-10 的产品收缩中出树**（`docs/archive/upgrade-plan.md` D132–D137）：数据库里的 `tenant_id` / `organization_id` 列与模型保留，但不再参与任何可见性判定。
 
-**当前状态（2026-11-14）**：后端 **1624 tests / 0 failed**，前端 **129 文件 / 825 条**，静态守卫 **57 条**；RAG / Agent / 推荐 / 解析四轨进 AI 发布门。**三轮计划（A–E 升级、P1–P5 专项、D1–D5 体验与演示收口）全部交付，在册待拍项 open = 0**——结论与已知限制见 [`docs/delivery-index.md`](docs/delivery-index.md)，逐条测量过程账归档在 [`docs/archive/`](docs/archive/)。
+**当前状态（2026-11-25）**：后端 **1631 tests / 0 failed**，前端 **129 文件 / 825 条**，静态守卫 **57 条**；RAG / Agent / 推荐 / 解析四轨进 AI 发布门。**三轮计划（A–E 升级、P1–P5 专项、D1–D5 体验与演示收口）全部交付，在册待拍项 open = 0**——结论与已知限制见 [`docs/delivery-index.md`](docs/delivery-index.md)，逐条测量过程账归档在 [`docs/archive/`](docs/archive/)。
 
 ---
 
@@ -232,7 +232,7 @@ User Query → Retrieval Planner (LLM 决策 / 启发式回退)
 | **RAG 检索** | `tests/eval/rag_eval.jsonl`（50 条） | `scripts/eval_rag.py` | 融合路 / 词法路（BM25）：recall@5、MRR、keyword_hit_rate、per_doc_type_recall；同语料随机基线；CI 门窗法路，mock 下语义门槛直接判红 |
 | **Agent 匹配** | `tests/eval/agent_eval.jsonl`（25 对简历×JD） | `scripts/eval_agent.py` | MAE、Spearman ρ、偏差分布；同场报出**不用模型的基线**（常量/随机），门槛赢不过它就判红 |
 | **岗位推荐** | `tests/eval/recommend_eval.jsonl` | `scripts/eval_recommend.py` | 技能匹配准确率、JD 解释一致性、推荐可解释性、面试分数稳定性、反馈一致率 |
-| **简历 / JD 解析** | `tests/eval/parse_eval.jsonl`（42 条，含 4 条真文本） | `scripts/eval_parse.py` | 确定性臂（截断率 / 段尾保全）、抽取臂（TXT/DOCX/合法 PDF/坏 PDF，8/8）、语义臂（结构一次通过率、skills/work/project 列表 F1）；发布门槛 `min_field_f1=0.75`（只门列表字段） |
+| **简历 / JD 解析** | `tests/eval/parse_eval.jsonl`（42 条，含 4 条真文本） | `scripts/eval_parse.py` | 确定性臂（截断率 / 段尾保全）、抽取臂（TXT/DOCX/合法 PDF/坏 PDF，9/9）、语义臂（结构一次通过率、skills/work/project 列表 F1）；发布门槛 `min_field_f1=0.75`（只门列表字段） |
 | **面试决策** | `tests/eval/interview_dynamic_cases.json` | `scripts/eval_interview_dynamic.py` | 动态 vs 静态：必考技能覆盖率、零额外等待率、追问降级与耗时；脚本评分只验证选题与追问，不代表模型打分质量 |
 
 ```bash
@@ -286,7 +286,7 @@ $env:LLM_PROVIDER="mock"; $env:EMBEDDING_PROVIDER="mock"; python scripts\eval_ag
 | 阶段 | 已落地 | 关键读数 / 证据 |
 | --- | --- | --- |
 | **P1 解析地基** | 15000 字符预算 + 结构化截断、两档 Schema、一次自纠、前端截断/降级提示 | 真实文本 13 份 / 70 段、0 份认不出；15 条护栏；真 provider 20/20 首发过校验 |
-| **P2 解析评测** | 42 条语料（含 4 条真文本）、确定性 + 抽取 + 语义三臂、人工 gold、parse 进 AI 发布门 | 抽取臂 **8/8**；真臂 skills F1 **0.8660** / work **1.0** / project **0.8182**；发布报告 skills **0.76**（边缘，2 real / 2 fallback） |
+| **P2 解析评测** | 42 条语料（含 4 条真文本）、确定性 + 抽取 + 语义三臂、人工 gold、parse 进 AI 发布门 | 抽取臂 **9/9**；真臂 skills F1 **0.8660** / work **1.0** / project **0.8182**；发布报告 skills **0.76**（边缘，2 real / 2 fallback） |
 | **P3 动态面试** | 三节点决策器、动态追问、45/90/120 秒题型预算、断线重连与 resume | 弱点覆盖 静态 **0 → 动态 0.75–1.00**（脚本评分）；真 provider 八发仍 429（**23/96** 真组织）；延迟探针 **8/8 real、均值 5.54s / max 10.5s（3/8 > 6s cap）**；**关思考链已上产品路径**：完整评测 **9/12 真组织**（mid 3/6、weak 6/6），weak max **2.95s**，6s cap 保持 |
 | **P4 回流闭环** | 跨会话画像、改写弱点提示、职业规划证据、下一场开场题序倾斜 | 画像只改追问焦点（D278）；开场倾斜建会话/个性化后都生效（D280）；rewrite 定向 2/2 real（复核后 **2 / 0**，初判 4 / 2；导入侧已加词面事实验证器，D284）；**career prompt v2 两发均 2/2 real、证据进理由（1 vs 0 ×2）**；完整规划缺口落库前补 canonical、历史记录由详情接口读取时补（存量半径 131 条、回填收益 0，故不回填）；设置页逐项标出"本场重点"（JD 必考项 ∩ 上场弱点，D282）；完整规划 prompt 也带画像（`career-agent-v2`，D283）；旧报告画像缺口半径量出 0 收益（D285）；完整规划画像真发 1 real / 1 fallback，证据句已命中（D289）；干净重跑三路 429（D290）；替代真模型拿到干净两臂 2 real（D291）；主模型截断已修（D292）；主模型 real 成功样张 9,786 tokens（D293） |
 | **P5 体验收尾** | 报告页闭环入口、重连 UI、解析进度三步条、失败文案分阶段 | 45/90/120 秒倒计时、断网 1006→1/3→2/3、TCP 切网/抖动已活页验证；报告→简历/规划带来源提示与回跳（D286）；旧 JD 跨页槽按 id 取回（D287）；上传→解析→诊断已活页验证（D288） |
@@ -386,6 +386,22 @@ npm run dev
 | 后端 | `http://localhost:8000` |
 | Swagger | `http://localhost:8000/docs` |
 
+### 方式三：一键本地演示（Windows / mock）
+
+已装好 `backend/.venv`、`frontend/node_modules`，且本机 MySQL 8 在 `127.0.0.1:3306` 时：
+
+```powershell
+# 启动：灌 demo 账号和演示数据，后端 8001 + 前端 5173
+powershell -ExecutionPolicy Bypass -File scripts/local-demo.ps1
+
+# 停止：只停 8001/5173 的监听进程
+powershell -ExecutionPolicy Bypass -File scripts/local-demo.ps1 -Stop
+```
+
+- 默认 `LLM_PROVIDER=mock` + `ORCHESTRATION_BACKEND=thread`，不会调用真实 provider；演示账号 `demo / Demo@12345`。
+- 日志与 `pids.json` 在 `backend/reports/local-demo/`（gitignored）；`-SkipSeed` 跳过重灌数据，`-OpenBrowser` 启动后打开页面。
+- 与方式二的区别：固定 8001/5173（匹配 `frontend/.env.local`），不需要另起 worker，适合当面演示。
+
 ---
 
 ## 环境配置
@@ -415,7 +431,7 @@ npm run dev
 | `FRONTEND_URL` | `http://localhost:5173` | 前端地址（用于邮件跳转链接） |
 | `RATE_LIMIT_*` | 见配置文件 | 全局 / 认证 / 登录接口限流 |
 | `BACKUP_KEEP_DAYS` | `7` | 备份保留天数 |
-| `OPERATIONS_ALERT_*` | 见配置文件 | 告警窗口、队列积压、失败数和错误率阈值 |
+| `OPERATIONS_ALERT_*` | 见配置文件 | 告警窗口、队列积压、失败数和错误率阈值；`OPERATIONS_ALERT_WEBHOOK_URL` 留空则不外发告警 |
 | `AI_RELEASE_*` | 见配置文件 | AI 发布评测类型、阈值和评测时效要求 |
 
 ---
@@ -551,7 +567,7 @@ DEMO_USER_PASSWORD='YourOwn@Pass1' python scripts/create_demo_user.py --force
 ├── frontend/
 │   ├── src/
 │   │   ├── api/                 # Axios 封装（按领域拆分）
-│   │   ├── features/            # 13 个功能域、44 个页面（admin / analysis / interview / resume / ...）
+│   │   ├── features/            # 12 个功能域、44 个页面（admin / analysis / interview / resume / ...）
 │   │   ├── components/          # 通用组件
 │   │   ├── layouts/             # 页面布局
 │   │   ├── router/              # 路由配置与角色守卫
@@ -580,6 +596,7 @@ DEMO_USER_PASSWORD='YourOwn@Pass1' python scripts/create_demo_user.py --force
 
 - **生产模式**：`APP_ENV=production` 时拒绝弱密钥、默认密码、DEBUG 模式、mock LLM/Embedding
 - **密码策略**：强制复杂度校验 + 弱密码黑名单，bcrypt 轮数可配置
+- **密码重置**：忘记密码走"发信 → 凭 token 设新密"两步；配置 SMTP 时 token 只随邮件发送，未配置时才在响应里返回供本机走通
 - **管理员角色**：`role=admin` 用户拥有管理接口权限，通过 `backend/scripts/create_admin.py` 初始化
 - **限流防护**：基于 slowapi。带有效令牌的请求按**登录用户**计额度，匿名请求（登录/注册/重置密码等）仍按**来源地址**计，默认 `100/minute` / `5/minute`，支持 Redis 后端
 - **文件隔离**：简历和知识库文件不通过静态目录暴露，下载需登录 + 权限校验
@@ -656,12 +673,12 @@ DEMO_USER_PASSWORD='YourOwn@Pass1' python scripts/create_demo_user.py --force
 
 ## AI 治理与运行保障
 
-- **运行告警**：模型运行时、队列可用性与积压、工作流失败、LLM 失败、HTTP 错误率会形成持久化告警；告警可自动恢复、人工确认并审计。
+- **运行告警**：模型运行时、队列可用性与积压、工作流失败、LLM 失败、HTTP 错误率会形成持久化告警；告警可自动恢复、人工确认并审计；告警首次打开时可通过 `OPERATIONS_ALERT_WEBHOOK_URL` 外发 JSON（默认关闭）。
 - **Prompt Trace 与成本归因**：记录模型调用、Prompt 版本、token 与成本增量，管理员可通过 `/api/prompt-traces` 查看。
 - **AI 发布门禁**：发布记录固化模型、提供方、Prompt 版本、评测证据、阈值、门禁结果与审批信息；RAG、Agent 和推荐评测报告须满足配置要求后才能通过。
 - **隐私与删除**：`/api/auth/data-summary` 提供个人数据概览；删除简历时同步删除对应版本记录。
 
-生产运营仍应完成外部告警通知、备份恢复演练与压力测试后再进入正式发布流程。
+外部告警 webhook 已实现（默认关闭，需配置通道地址），备份恢复与只读接口压测已在本机演练通过；生产运营仍应完成外部告警通道联调、生产库备份恢复演练与容量压测后再进入正式发布流程。
 
 ---
 
@@ -673,7 +690,7 @@ cd frontend && npm run test:unit   # vitest
 cd frontend && npm test            # 静态守卫（.mjs）
 ```
 
-当前基线（2026-11-14 复跑）：后端 **1624 passed / 0 failed**、ruff **493 文件**；前端 **129 文件 / 825 条**、静态守卫 **57 条**；eslint **0 error / 0 warning**、prettier 与 `ruff format --check` 均全绿；首屏 **406 kB gzip**（`tests/bundleBudget.test.mjs` 钉着 420 kB 的天花板）。
+当前基线（2026-11-25 复跑）：后端 **1631 passed / 0 failed**、ruff **498 文件**；前端 **129 文件 / 825 条**、静态守卫 **57 条**；eslint **0 error / 0 warning**、prettier 与 `ruff format --check` 均全绿；首屏 **406 kB gzip**（`tests/bundleBudget.test.mjs` 钉着 420 kB 的天花板）。
 
 当前测试文件覆盖（节选）：
 
@@ -697,8 +714,9 @@ cd frontend && npm test            # 静态守卫（.mjs）
 | `test_subscription_plans.py` | 三档套餐与自定义套餐 |
 | `test_external_api.py` | 外部能力 API 鉴权、配额与计费 |
 | `test_schema_baseline.py` | ORM 与 schema 基线一致性 |
+| `test_report_job_migrations.py` | 报告作业表 id 主键/自增的修复迁移在链头且覆盖三张表 |
 | `test_system_status.py` / `test_system_health.py` / `test_prometheus_metrics.py` | 运行状态 / 健康检查 / 监控指标 |
-| `test_operational_alerts.py` / `test_ai_release_governance.py` | 运行告警 / AI 发布门禁 |
+| `test_operational_alerts.py` / `test_ai_release_governance.py` | 运行告警（含 webhook 外发）/ AI 发布门禁 |
 | `test_candidate_journey_e2e.py` | 求职者全流程端到端 |
 
 ---
@@ -729,9 +747,10 @@ cd frontend && npm test            # 静态守卫（.mjs）
 - **P3.2 已工程收口**：no-thinking 上产品路径后完整评测 **9/12 真组织**（weak max 2.95s），6s cap 不动；429 仍在 mid 侧（外部配额）。质量 9 条已于 2026-10-30 按现值确认（原 assistant-preliminary）。
 - **P4 真 provider 质量**：rewrite 定向 2/2 real（复核后 2 / 0；导入侧词面事实验证器把 6 条建议拦到 1 条）；career prompt v2 后 2/2 real、证据进理由（cites_interview 1 vs 0）。两臂均小样本，更多样本仍待做；完整规划的别名匹配已收（新规划落库前补 canonical，历史记录读取时补；存量不回填，半径量出 0 收益）。
 - **物理切网**：Wi-Fi→蜂窝与真实运营商抖动需要第二台设备；TCP 层切网/抖动已验。
-- **长简历与有效 PDF 夹具**：本机仍缺 >15000 字符真样本与可写库生成的 PDF；当前用合成长简历 + 坏 PDF 覆盖截断与报错路径。
+- **长简历与有效 PDF 夹具**：有效 PDF 已补 reportlab 生成的中文版式夹具（`tests/eval/resume_files/sample_resume_zh_reportlab.pdf`，抽取臂 8→9 条）；本机仍缺 >15000 字符的**单份真实**简历（库内最长 9,597，且是四份真文本的自拼件；四份真文本最长 4,761），当前用合成长简历覆盖截断路径。
 - **外部岗位渠道**：BOSS 直聘风控墙（纯 HTTP 与真浏览器都被验证页拦住），保留演示与本地回退。
-- 执行备份恢复演练与负载测试。
+- **备份恢复演练**：2026-11-20 本机已跑通（56 张表校验和一致，uploads / chroma 恢复哈希一致；顺带补了 `restore.sh` 的 utf8mb4 参数）；生产环境仍需按真实体量复跑。
+- **负载测试**：本机 mock 后端只读 smoke 已过（health 3000 发/50 并发 329.8 rps、jobs/list 1500 发/30 并发 135.5 rps，0 错）；生产容量压测仍待做。
 
 ---
 
@@ -743,7 +762,7 @@ cd frontend && npm test            # 静态守卫（.mjs）
 4. **工程化**：前后端分离、Docker Compose、Alembic 迁移、JWT 鉴权、用户级数据隔离、测试覆盖
 5. **配置化而非硬编码**：题库、评分规则与套餐是「平台配置 → 内置默认」两级回落，加一档配置不用改代码
 6. **外部能力 API**：X-API-Key 鉴权 + 用量计费 + 签名 Webhook，开放 AI 能力给第三方集成方
-7. **治理与运维**：审计、运行告警、AI 发布门禁与提示溯源已落地；外部告警通知与备份恢复演练仍待生产环境验证（企业/多租户一侧已出树）
+7. **治理与运维**：审计、运行告警、AI 发布门禁与提示溯源已落地；外部告警 webhook 已实现（默认关闭）、备份恢复与只读接口压测已在本机演练通过，仍待在真实生产环境验证（企业/多租户一侧已出树）
 8. **体验闭环**：简历、分析、面试、投递、Offer、职业规划与周报均提供状态、依据和下一步操作；智能任务与 RAG 检索可回看执行痕迹
 9. **解析质量可度量**：15000 预算截断 + 结构化校验 + 文件抽取层 + 三臂评测（确定性 / 抽取 / 语义），parse 已进 AI 发布门
 10. **面试反馈闭环**：三节点决策器 → 动态追问 → 跨会话画像 → 改写弱点提示 / 职业规划证据 / 下一场开场题序
